@@ -48,7 +48,7 @@ not as PR comments from a subagent. GitHub automatically emails issue notificati
 
 See `docs/automations.md` → Escalation Rules.
 
-## CI Self-Checks (claude.test.directives only)
+## CI Self-Checks (this repo's own validation CI)
 
 | Check | Script | What it verifies |
 |---|---|---|

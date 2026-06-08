@@ -13,7 +13,7 @@ Step-by-step guide for deploying the QA pipeline to a new project repo. Follow i
 ## Prerequisites
 
 - Target repo exists on GitHub with source files committed to `main`
-- `claude.test.directives` is accessible (public repo) for fetching templates
+- `claude.directives` is accessible (public repo) for fetching templates
 - Project's `CLAUDE.md` contains the app URL and auth credential
 - Claude Code session is active with GitHub MCP access to the target repo
 
@@ -21,19 +21,19 @@ Step-by-step guide for deploying the QA pipeline to a new project repo. Follow i
 
 ## Step 1 — Copy workflow templates
 
-Copy all three workflow templates from `claude.test.directives` into the target repo's `.github/workflows/`:
+Copy all three workflow templates from `claude.directives` into the target repo's `.github/workflows/`:
 
 ```bash
 mkdir -p .github/workflows
 
 # Fetch from the public template repo
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/workflows/qa.yml \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa.yml \
   -o .github/workflows/qa.yml
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/workflows/qa-live.yml \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-live.yml \
   -o .github/workflows/qa-live.yml
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/workflows/qa-response.yml \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-response.yml \
   -o .github/workflows/qa-response.yml
 ```
 
@@ -54,13 +54,13 @@ Copy the Playwright test scaffold into the target repo if not already present:
 ```bash
 mkdir -p .github/scripts/ui-tests/tests
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/ui-tests/playwright.config.js \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/playwright.config.js \
   -o .github/scripts/ui-tests/playwright.config.js
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/ui-tests/package.json \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/package.json \
   -o .github/scripts/ui-tests/package.json
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/ui-tests/tests/app.spec.js \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/app.spec.js \
   -o .github/scripts/ui-tests/tests/app.spec.js
 ```
 
@@ -133,7 +133,7 @@ Copy the template and **edit the `workflow_run.workflows` list** to match your p
 CI workflow names (`grep '^name:' .github/workflows/*.yml` to find them):
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/workflows/ci-monitor.yml \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
 # Edit workflow_run.workflows: replace 'QA — Directive Validation' with your project's CI workflow name(s)
 ```
@@ -152,7 +152,7 @@ on failure, opens or updates a single `ci-failure` tracking issue. Uses only
 Drop-in, no customization needed:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/workflows/codex-monitor.yml \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/codex-monitor.yml \
   -o .github/workflows/codex-monitor.yml
 ```
 

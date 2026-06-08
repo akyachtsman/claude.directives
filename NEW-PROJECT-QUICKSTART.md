@@ -118,7 +118,7 @@ Copy the canonical workflow files from `claude.directives/templates/workflows/` 
 - `ci-monitor.yml` — event-driven CI failure tracker
 - `codex-monitor.yml` — Codex PR review monitor
 
-Copy agent definitions from `claude.directives/templates/agents/` into `.claude/agents/`. Skip any that exist.
+Copy agent definitions from `claude.directives/templates/agents/` into `.claude/agents/`, preserving the subdirectory structure (e.g. `qa/`) so the project inherits the same organized layout. Skip any that exist.
 
 ⚠️ After copying `ci-monitor.yml`: open `qa.yml` and copy its exact `name:` value into the `workflow_run` trigger's `workflows:` list. A mismatch means the monitor never fires.
 

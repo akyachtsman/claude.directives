@@ -100,18 +100,20 @@ At the start of every session:
 ## Skill Bootstrap
 
 At session start, bootstrap personal skills **and agents** from this repo using
-the `gh` CLI:
+the `gh` CLI. Agents are organized into purpose-based subfolders (e.g. `qa/`), so
+this walks the tree recursively and preserves the subdirectory layout:
 ```bash
 for dir in skills agents; do
-  mkdir -p .claude/$dir
-  gh api repos/akyachtsman/claude.directives/contents/.claude/$dir \
-    --jq '.[].name' | while read f; do
-    gh api repos/akyachtsman/claude.directives/contents/.claude/$dir/$f \
-      --jq '.content' | base64 -d > .claude/$dir/$f
+  gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
+    --jq ".tree[] | select(.type==\"blob\" and (.path|startswith(\".claude/$dir/\"))) | .path" \
+  | while read -r p; do
+    [ -f "$p" ] && continue            # skip files that already exist
+    mkdir -p "$(dirname "$p")"
+    gh api "repos/akyachtsman/claude.directives/contents/$p" --jq '.content' | base64 -d > "$p"
   done
 done
 ```
-Run this silently. Skip files that already exist. Once populated, skills are invoked by typing the skill name (e.g. `my.list`, `env.chk`, `doc.comp`); agents load automatically from `.claude/agents/`. Do NOT maintain a per-skill or per-agent URL list — the directories are the source of truth. Adding a skill or agent means dropping one file into `.claude/skills/` or `.claude/agents/` here and nothing else changes.
+Run this silently. Skip files that already exist. Once populated, skills are invoked by typing the skill name (e.g. `my.list`, `env.chk`, `doc.comp`); agents load automatically from `.claude/agents/` (Claude Code scans it recursively — agent identity comes from the `name:` frontmatter, not the path, and `name:` values must stay unique across the whole tree). Do NOT maintain a per-skill or per-agent URL list — the directories are the source of truth. Adding a skill or agent means dropping one file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket here and nothing else changes.
 
 See docs/session-automations.md for monitor setup, escalation rules, and tool use discipline.
 See docs/ci-triage.md for CI and Codex failure triage rules.

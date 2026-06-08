@@ -17,16 +17,18 @@ This is the exportable directive for downstream projects. Import it into your pr
 - `docs/how-to-copy-into-project.md` — How to install agents locally into a project
 - `docs/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
 
-### .claude/agents/ — read ALL agent definitions
-These load automatically into sessions on this repo. An installable copy for
-downstream projects lives in `templates/agents/` (copy into a project's `.claude/agents/`).
-- `.claude/agents/test-monitor.md` — thin in-session CI status helper (one-pass check, not the always-on monitor)
-- `.claude/agents/test-verifier.md` — independent QA verification agent
-- `.claude/agents/code-reviewer.md` — code quality review agent
-- `.claude/agents/security-reviewer.md` — security vulnerability review agent
-- `.claude/agents/pr-readiness-reviewer.md` — final merge gate agent
-- `.claude/agents/qa-pipeline.md` — full pipeline orchestrator
-- `.claude/agents/ui-tester.md` — Playwright browser testing agent
+### .claude/agents/qa/ — read ALL agent definitions
+Agents are organized into purpose-based subfolders (`qa/` today; `scrape/`,
+`data/`, … as new types appear) and load recursively into sessions on this repo.
+An installable copy for downstream projects lives in `templates/agents/` (copy
+into a project's `.claude/agents/`, preserving the subfolders).
+- `.claude/agents/qa/test-monitor.md` — thin in-session CI status helper (one-pass check, not the always-on monitor)
+- `.claude/agents/qa/test-verifier.md` — independent QA verification agent
+- `.claude/agents/qa/code-reviewer.md` — code quality review agent
+- `.claude/agents/qa/security-reviewer.md` — security vulnerability review agent
+- `.claude/agents/qa/pr-readiness-reviewer.md` — final merge gate agent
+- `.claude/agents/qa/qa-pipeline.md` — full pipeline orchestrator
+- `.claude/agents/qa/ui-tester.md` — Playwright browser testing agent
 
 ### templates/ — reference when scaffolding a new project
 - `templates/CLAUDE-template.md` — CLAUDE.md starter with all required sections
@@ -44,7 +46,7 @@ downstream projects lives in `templates/agents/` (copy into a project's `.claude
 - `templates/ui-tests/playwright.config.js` — copy to .github/scripts/ui-tests/
 - `templates/ui-tests/tests/app.spec.js` — copy to .github/scripts/ui-tests/tests/
 - `templates/ui-tests/package.json` — copy to .github/scripts/ui-tests/
-- `templates/agents/` — installable copy of the 7 agent definitions; copy into a project's `.claude/agents/`
+- `templates/agents/qa/` — installable copy of the 7 agent definitions; copy `templates/agents/` into a project's `.claude/agents/`, preserving subfolders
 
 ## Session start — required actions
 

@@ -10,8 +10,8 @@ everything else autonomously.
 
 **Guard — check first:** If `CLAUDE.md` already exists in the repo root, STOP
 immediately. Do not scaffold anything. Tell the human: "This repo is already
-bootstrapped — type `/session.start` instead." Only proceed when `CLAUDE.md` is
-absent.
+bootstrapped — a new session will auto-bootstrap from CLAUDE.md automatically.
+No command needed." Only proceed when `CLAUDE.md` is absent.
 
 Every step is first-run scaffolding and must be re-run safe: before creating
 anything, check whether it already exists; if so, skip and verify instead.
@@ -90,6 +90,12 @@ Execute in order:
    4. Prefer `qa-pipeline`; run agents individually only if it fails:
       `test-verifier` → `code-reviewer` → `security-reviewer` → `pr-readiness-reviewer`
    5. Open PR to `main`
+
+   ## Session Start
+   1. Read all Imported Directive URLs above fully
+   2. Bootstrap skills and agents per the Skill Bootstrap block in global.md
+   3. Confirm active branch: `git branch --show-current`
+   4. Run `env.chk` and report status
    ```
 
 5. **Install CI/CD workflows.** Copy the 4 canonical workflow files from

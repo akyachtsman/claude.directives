@@ -21,12 +21,3 @@ Open a Claude Code session scoped to the new repo and type:
 ```
 
 That's it. Claude handles everything else autonomously.
-
----
-
-## For existing projects — starting a new session
-Open a Claude Code session scoped to the repo and type:
-
-```
-/session.start
-```

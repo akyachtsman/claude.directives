@@ -44,7 +44,7 @@ no session required, no polling, no Gmail.
 
 **To install in a project:**
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/workflows/ci-monitor.yml \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
 # Then edit workflow_run.workflows to match your CI workflow names
 ```
@@ -68,7 +68,7 @@ especially under auto-merge.
 
 **To install:**
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.test.directives/main/templates/workflows/codex-monitor.yml \
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/codex-monitor.yml \
   -o .github/workflows/codex-monitor.yml
 ```
 

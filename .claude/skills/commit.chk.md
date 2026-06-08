@@ -4,7 +4,7 @@ description: Manual backup trigger for the pre-push verification directive (run 
 trigger: slash_command_and_auto
 ---
 This is the manual backup for the standing verify-locally-before-pushing
-directive in claude.global.directives. The directive should run this
+directive in claude.directives. The directive should run this
 automatically; invoke this skill explicitly when the auto-check did not fire or
 you want to force a verification pass.
 

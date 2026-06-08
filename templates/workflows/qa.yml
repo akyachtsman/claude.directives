@@ -1,0 +1,83 @@
+# qa.yml — Static checks + Playwright against a local server.
+# Copy to .github/workflows/qa.yml in your project.
+# Triggers on push and pull_request to main and feature branches.
+#
+# Required setup:
+#   - Add TEST_AUTH_CREDENTIAL as a repository secret (value from CLAUDE.md)
+#   - Set UI_TESTS_DIR below to the path of your Playwright test directory
+
+name: QA — Static + UI Tests
+
+on:
+  push:
+    branches: [main, 'feature/**', 'fix/**', 'claude/**']
+  pull_request:
+    branches: [main]
+
+env:
+  # Path to the directory containing playwright.config.js and package.json
+  UI_TESTS_DIR: .github/scripts/ui-tests
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Secret scan ────────────────────────────────────────────────────────
+      # Flags common API token patterns before any tests run.
+      - name: Secret scan
+        run: |
+          if grep -rE \
+            'pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-[A-Za-z0-9-]{20,}' \
+            --include="*.js" --include="*.html" --include="*.css" --include="*.json" \
+            --exclude-dir=node_modules --exclude-dir=.git .; then
+            echo "ERROR: potential API token found in source files"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ env.UI_TESTS_DIR }}/package-lock.json
+
+      - name: Install test dependencies
+        run: npm install
+        working-directory: ${{ env.UI_TESTS_DIR }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+        working-directory: ${{ env.UI_TESTS_DIR }}
+
+      # ── Start local server ─────────────────────────────────────────────────
+      # Adjust '.' to your build output directory if needed (e.g. dist, public).
+      - name: Start local server
+        run: |
+          npx http-server . -p 8080 --silent &
+          sleep 2
+
+      # UI Tests against the local server are non-blocking: the backend API is
+      # unreachable on CI runners, so API-dependent scenarios fail with
+      # "API status: no call" by design. The authoritative UI gate is qa-live.yml.
+      - name: Run Playwright tests
+        continue-on-error: true
+        env:
+          APP_URL: http://localhost:8080
+          TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+        run: npx playwright test --reporter=list
+        working-directory: ${{ env.UI_TESTS_DIR }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-local
+          path: |
+            .agent-reports/screenshots/
+            .agent-reports/playwright-results.json
+          retention-days: 7

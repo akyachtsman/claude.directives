@@ -1,0 +1,47 @@
+name: QA — Directive Validation
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate Directives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check internal URLs resolve (hard fail)
+        run: node .github/scripts/check-links.js --internal
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check file paths in CLAUDE.md exist
+        run: node .github/scripts/check-paths.js
+
+      - name: Check required sections present
+        run: node .github/scripts/check-sections.js
+
+      - name: Validate workflow YAML
+        run: |
+          python3 -c "
+          import yaml, sys, glob
+          files = glob.glob('.github/workflows/*.yml')
+          for f in files:
+              yaml.safe_load(open(f))
+              print(f'OK: {f}')
+          "
+
+  check-external-links:
+    name: Check External Links (warn only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check external URLs resolve
+        run: node .github/scripts/check-links.js --external
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

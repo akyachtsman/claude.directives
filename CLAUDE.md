@@ -43,15 +43,11 @@ relocate the export into this file.
 - Never commit directly to `main`.
 - Open a draft PR immediately after first push; squash-merge when CI is green.
 
-## Session-start steps
-At the start of every session working in this repo:
-1. Read the files under `directives/` — the exported directives are the source of
-   truth for downstream behavior.
-2. Check that `QA — Directive Validation` CI is green on `main` before editing.
-3. Subscribe to active PRs (`claude/*` branches) via `subscribe_pr_activity`.
-4. Check for open `ci-failure` issues and `codex-flagged` PR labels.
-5. Confirm `ci-monitor.yml` and `codex-monitor.yml` exist in `.github/workflows/`.
-6. Bootstrap personal skills and agents per the Skill Bootstrap section below.
+## Session Start
+1. Read all Imported Directive URLs above fully
+2. Bootstrap skills and agents per the Skill Bootstrap block in global.md
+3. Confirm active branch: `git branch --show-current`
+4. Run `env.chk` and report status
 
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.

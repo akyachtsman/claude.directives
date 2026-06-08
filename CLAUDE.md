@@ -43,8 +43,11 @@ relocate the export into this file.
 - Never commit directly to `main`.
 - Open a draft PR immediately after first push; squash-merge when CI is green.
 
-## Session-start steps
-Type `/session.start` to bootstrap this session.
+## Session Start
+1. Read all Imported Directive URLs above fully
+2. Bootstrap skills and agents per the Skill Bootstrap block in global.md
+3. Confirm active branch: `git branch --show-current`
+4. Run `env.chk` and report status
 
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.

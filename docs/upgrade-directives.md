@@ -19,7 +19,7 @@ The upgrade adds:
 
 | Diagnostic result | Root cause | Fix |
 |---|---|---|
-| API status 401/403 | Invalid or missing token | Check the backend API token / `SUPABASE_SERVICE_KEY` in app config |
+| API status 401/403 | Invalid or missing token | Check the backend API token / service key in app config |
 | API status 404 | Wrong project/connection or table | Verify the backend project ref and table name |
 | No API call made | JS error before fetch | Check console errors |
 | Rows returned but field/column names are unexpected | Wrong query or field mapping | Check the query params and that the backend returns the expected column names |
@@ -58,7 +58,7 @@ async function captureApiCalls(page) {
       const res = await orig(...args);
       const clone = res.clone();
       clone.json().then(body => {
-        // Backend-agnostic: Supabase/REST returns an array of row objects; some
+        // Backend-agnostic: most REST backends return an array of row objects; some
         // backends wrap rows as { records: [{ fields: {...} }] }.
         const rows = Array.isArray(body) ? body : (body?.records ?? null);
         const firstRow = rows?.[0];

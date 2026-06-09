@@ -43,4 +43,4 @@ full context without loss of history.
 ---
 
 ## Key IDs and Config
-[Project-specific: Supabase project ref, table/column names, Pages URL, branch name]
+[Project-specific: backend project ref / connection, table/column names, Pages URL, branch name]

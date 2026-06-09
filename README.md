@@ -7,7 +7,7 @@ The exported, downstream-imported directives live in `directives/`:
 - `directives/global.md` — global agent behavior standard
 - `directives/design.md` — UI design system
 - `directives/test.md` — test / QA directive
-- `directives/data.md` — data / backend directive (Supabase, RLS, MCP config)
+- `directives/data.md` — data / backend directive (backend provider, keys, RLS, MCP config)
 
 Repo-internal operating instructions are in `CLAUDE.md`, and project bootstrap
 lives in `NEW-PROJECT-QUICKSTART.md`. Supporting directories:

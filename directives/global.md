@@ -36,12 +36,11 @@ index.html       ← complete single-page app
 ```
 
 ## Backend
-- Supabase is the default backend — see the data directive (`data.md`) for the full
-  rules (RLS always on, service-role key server-side only, publishable key safe
-  client-side, per-repo `.claude/mcp.json`).
-- Never hardcode connection details or keys — store the service-role key as
-  `SUPABASE_SERVICE_KEY` (GitHub Secret, server-side only) and the project URL as
-  `SUPABASE_URL` (repo variable).
+- All backend/data rules — the provider, connection config, keys, RLS, and MCP
+  setup — are governed by the **data directive** (`data.md`). Read it before
+  touching any backend code; it is the single source of truth for the backend.
+- Never hardcode connection details or keys — store them as the GitHub
+  Secrets/variables named in `data.md`.
 - Project/connection IDs and table/column names are defined at project level in
   each repo's CLAUDE.md.
 

@@ -53,6 +53,18 @@ index.html       ← complete single-page app
 - Subscribe to PR activity; fix CI before marking ready
 - GitHub Pages for project web apps only
 
+## Repository Scope
+- The GitHub MCP is **hard-scoped to the repo(s) this session was opened on.** You
+  cannot read, write, branch, or open PRs against any other repo from here.
+- **Before offering to add, reach, or act on a _different_ repo, first confirm the
+  `add_repo` / `list_repos` tools (claude-code-remote server) actually exist in
+  this session (check via ToolSearch).** Never offer cross-repo capability you have
+  not verified — in many sessions those tools are absent and another repo simply
+  cannot be brought in. Do not assume the generic "you can add repos" docs apply.
+- If you cannot reach a repo, say so plainly and note the work must happen in a
+  session scoped to that repo — don't offer to "add" it. Conversely, don't declare
+  a repo inaccessible without checking `list_repos` first when that tool exists.
+
 ## Hosting
 - GitHub Pages only
 - No Vercel, no Netlify, no external hosting

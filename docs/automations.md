@@ -36,17 +36,15 @@ no session required, no polling, no Gmail.
 
 **Template:** `templates/workflows/ci-monitor.yml`
 
-**Per-project setup required (template, not drop-in):**
-1. Copy the template to `.github/workflows/ci-monitor.yml`
-2. Replace the `workflow_run.workflows` list with your project's actual CI workflow names
-   (`grep '^name:' .github/workflows/*.yml` to find them)
-3. Verify with a manual `workflow_dispatch` run before relying on it
+**Drop-in:** ships pre-wired to watch the QA workflow that comes with it
+(`qa.yml` → `QA — Static + UI Tests`), so copying both verbatim needs no edits.
+Only change `workflow_run.workflows` if you rename `qa.yml`'s `name:` or want it to
+watch extra workflows. Optionally verify with a manual `workflow_dispatch` run.
 
 **To install in a project:**
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
-# Then edit workflow_run.workflows to match your CI workflow names
 ```
 
 ---

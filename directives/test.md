@@ -42,7 +42,7 @@ committed — there is no separate template copy.
 - `templates/workflows/qa.yml` — copy to .github/workflows/
 - `templates/workflows/qa-live.yml` — copy to .github/workflows/
 - `templates/workflows/qa-response.yml` — copy to .github/workflows/
-- `templates/workflows/ci-monitor.yml` — event-driven CI failure tracker (workflow_run + workflow_dispatch); copy to .github/workflows/ and confirm watched workflow name
+- `templates/workflows/ci-monitor.yml` — event-driven CI failure tracker (workflow_run + workflow_dispatch); drop-in, pre-wired to watch the QA workflow shipped with it (`QA — Static + UI Tests`)
 - `templates/workflows/codex-monitor.yml` — Codex PR review monitor; drop-in, copy to .github/workflows/
 - `templates/ui-tests/playwright.config.js` — copy to .github/scripts/ui-tests/
 - `templates/ui-tests/tests/app.spec.js` — copy to .github/scripts/ui-tests/tests/

@@ -21,10 +21,10 @@ covers only how to operate *on this repo*.
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-PROJECT-QUICKSTART.md` | Bootstrap guide for spinning up a new project repo |
 | `.claude/skills/` | Personal skill files, invoked by typing the skill name |
-| `.claude/agents/` | Agent definitions in purpose-based subfolders (`qa/` today); loaded recursively into sessions on this repo |
+| `.claude/agents/` | Agent definitions in purpose-based subfolders (`qa/` and `data/` today); loaded recursively into sessions on this repo |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
-| `templates/agents/` | Installable copy of the agents (same `qa/` subfolder layout) for downstream projects |
+| `templates/agents/` | Installable copy of the agents (same `qa/`/`data/` subfolder layout) for downstream projects |
 | `docs/` | Reference docs (automations, CI triage, testing, code review, handoff, …) |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
@@ -104,5 +104,5 @@ done
 ```
 Run this silently. Skip files that already exist. To add a skill or agent, drop a
 `.md` file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket
-here (`qa/` today; `scrape/`, `data/`, … as new types appear). `name:` values must
+here (`qa/` and `data/` today; `scrape/`, … as new types appear). `name:` values must
 stay unique across the whole agent tree — the subfolder does not disambiguate.

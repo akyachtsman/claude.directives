@@ -111,7 +111,7 @@ At the start of every session:
 ## Skill Bootstrap
 
 At session start, bootstrap personal skills **and agents** from this repo using
-the `gh` CLI. Agents are organized into purpose-based subfolders (e.g. `qa/`), so
+the `gh` CLI. Agents are organized into purpose-based subfolders (e.g. `qa/`, `data/`), so
 this walks the tree recursively and preserves the subdirectory layout:
 ```bash
 for dir in skills agents; do

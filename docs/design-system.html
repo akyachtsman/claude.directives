@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design System Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── Variables (verbatim from DIRECTIVE.md) ── */
+    :root {
+      --color-bg:             #F5F5F3;
+      --color-surface:        #FFFFFF;
+      --color-border:         #E2E0DB;
+      --color-border-hover:   #C8C5BE;
+      --color-text-primary:   #1A1A1A;
+      --color-text-secondary: #6B6860;
+      --color-accent:         #3D6B4F;
+      --color-accent-hover:   #2F5540;
+      --color-accent-light:   #EAF2ED;
+      --color-danger:         #C0392B;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04);
+      --font-xs:   12px;
+      --font-sm:   13px;
+      --font-base: 15px;
+      --font-lg:   17px;
+      --font-xl:   20px;
+      --font-2xl:  24px;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --space-1:  4px;
+      --space-2:  8px;
+      --space-3:  12px;
+      --space-4:  16px;
+      --space-5:  20px;
+      --space-6:  24px;
+      --space-8:  32px;
+      --space-10: 40px;
+    }
+
+    /* ── Reset + Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-size: var(--font-base);
+      line-height: 1.5;
+    }
+
+    /* ── Page layout ── */
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: var(--space-10);
+    }
+
+    /* ── Notice banner ── */
+    .notice {
+      background: var(--color-accent-light);
+      border: 1px solid var(--color-accent);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      margin-bottom: 32px;
+      font-size: var(--font-sm);
+      color: var(--color-accent-hover);
+      font-weight: 500;
+    }
+
+    /* ── Page title ── */
+    .page-title {
+      font-size: var(--font-2xl);
+      font-weight: 600;
+      color: var(--color-text-primary);
+      margin-bottom: 8px;
+    }
+    .page-subtitle {
+      font-size: var(--font-base);
+      color: var(--color-text-secondary);
+      margin-bottom: 40px;
+    }
+
+    /* ── Section header ── */
+    .section-label {
+      font-size: var(--font-sm);
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 16px;
+    }
+    .card.interactive {
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .card.interactive:hover {
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-border-hover);
+    }
+    .card.demo-hover {
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-border-hover);
+    }
+
+    /* ── Section wrapper ── */
+    .section { margin-bottom: 48px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      min-width: 44px;
+      border-radius: var(--radius-md);
+      font-family: inherit;
+      font-size: var(--font-base);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--color-accent);
+      color: #ffffff;
+      border: none;
+      padding: 12px 24px;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-primary:hover, .btn-primary:focus-visible {
+      background: var(--color-accent-hover);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active {
+      transform: translateY(0);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-secondary {
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      border: 1px solid var(--color-border);
+      padding: 11px 22px;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-secondary:hover, .btn-secondary:focus-visible {
+      background: var(--color-accent-light);
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* ── Checkboxes & Task Rows ── */
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 8px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.15s ease;
+      user-select: none;
+    }
+    .task-row:hover, .task-row.hovered {
+      background: var(--color-accent-light);
+    }
+    .task-row + .task-row {
+      margin-top: 4px;
+    }
+    .checkbox {
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      border: 2px solid var(--color-border);
+      border-radius: 6px;
+      background: var(--color-surface);
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .task-row:hover .checkbox, .task-row.hovered .checkbox {
+      border-color: var(--color-accent);
+      background: var(--color-accent-light);
+    }
+    .task-row.done .checkbox {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+    }
+    .checkbox-check {
+      display: none;
+    }
+    .task-row.done .checkbox-check {
+      display: block;
+    }
+    .task-label {
+      font-size: var(--font-base);
+      color: var(--color-text-primary);
+    }
+    .task-row.done .task-label {
+      color: var(--color-text-secondary);
+      text-decoration: line-through;
+    }
+
+    /* ── Form Inputs ── */
+    .input {
+      width: 100%;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: var(--font-base);
+      font-family: inherit;
+      min-height: 48px;
+      transition: border-color 0.15s ease;
+      color: var(--color-text-primary);
+      outline: none;
+    }
+    .input:focus, .input.focused {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px rgba(61,107,79,0.12);
+    }
+    .input + .input {
+      margin-top: 12px;
+    }
+    .input-label {
+      display: block;
+      font-size: var(--font-sm);
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      margin-bottom: 6px;
+    }
+    .input-group {
+      margin-bottom: 12px;
+    }
+    .input-group:last-child { margin-bottom: 0; }
+
+    /* ── Typography ── */
+    .type-row {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .type-row:last-child { border-bottom: none; }
+    .type-meta {
+      font-size: var(--font-xs);
+      color: var(--color-text-secondary);
+      min-width: 130px;
+      flex-shrink: 0;
+    }
+    .type-samples {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .type-sample { color: var(--color-text-primary); }
+
+    /* ── Colour Palette ── */
+    .swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .swatch-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .swatch {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+    .swatch-hex {
+      font-size: var(--font-xs);
+      color: var(--color-text-primary);
+      font-weight: 500;
+    }
+    .swatch-name {
+      font-size: 10px;
+      color: var(--color-text-secondary);
+      text-align: center;
+      max-width: 80px;
+      line-height: 1.3;
+    }
+
+    /* ── Spacing Scale ── */
+    .space-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 6px 0;
+    }
+    .space-meta {
+      font-size: var(--font-xs);
+      color: var(--color-text-secondary);
+      min-width: 120px;
+      flex-shrink: 0;
+    }
+    .space-bar {
+      height: 16px;
+      background: var(--color-accent);
+      border-radius: 3px;
+      opacity: 0.7;
+    }
+
+    /* ── Dashboard / Heatmap Example ── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      transition: all 0.15s ease;
+    }
+    .stat-card:hover {
+      box-shadow: var(--shadow-md);
+      border-color: var(--color-border-hover);
+    }
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stat-icon-green { background: var(--color-accent-light); color: var(--color-accent); }
+    .stat-icon-red   { background: #FBEAE8; color: var(--color-danger); }
+    .stat-icon-blue  { background: #E8EEF5; color: #3A6491; }
+    .stat-icon-amber { background: #FBF1E2; color: #B7791F; }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: var(--font-2xl);
+      font-weight: 600;
+      color: var(--color-text-primary);
+      line-height: 1.1;
+    }
+    .stat-sub {
+      font-size: var(--font-sm);
+      color: var(--color-text-secondary);
+      margin-top: 4px;
+    }
+
+    /* heatmap */
+    .heatmap { --cell: 32px; --cell-gap: 6px; overflow-x: auto; }
+    .heat-months {
+      display: flex;
+      margin-left: 40px;
+      margin-bottom: 8px;
+    }
+    .heat-month {
+      width: calc(var(--cell) + var(--cell-gap));
+      font-size: var(--font-xs);
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+    .heat-body { display: flex; }
+    .heat-days {
+      display: grid;
+      grid-template-rows: repeat(7, var(--cell));
+      row-gap: var(--cell-gap);
+      margin-right: 8px;
+      width: 32px;
+    }
+    .heat-day {
+      font-size: var(--font-xs);
+      color: var(--color-text-secondary);
+      display: flex;
+      align-items: center;
+      height: var(--cell);
+    }
+    .heat-grid {
+      display: grid;
+      grid-template-rows: repeat(7, var(--cell));
+      grid-auto-flow: column;
+      grid-auto-columns: var(--cell);
+      gap: var(--cell-gap);
+    }
+    .heat-cell {
+      width: var(--cell);
+      height: var(--cell);
+      border-radius: 8px;
+      background: #F4F3F1;
+      border: 1px solid var(--color-border);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.15s ease;
+    }
+    .heat-cell[data-level="1"] { background: #E8B3BE; border-color: transparent; }
+    .heat-cell[data-level="2"] { background: #C25C72; border-color: transparent; }
+    .heat-cell[data-level="3"] { background: #9E1F3C; border-color: transparent; }
+    .heat-cell:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+    .heat-cell.outlined { border: 1px solid #9BB4CE; }
+    .heat-cell.selected { outline: 2px solid #3A6491; outline-offset: 2px; }
+
+    /* detail panel */
+    .detail-panel {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      box-shadow: var(--shadow-sm);
+      margin-top: 16px;
+    }
+    .detail-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--color-border);
+      margin-bottom: 16px;
+    }
+    .badge {
+      font-size: var(--font-xs);
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .badge-level { background: #7A1730; color: #ffffff; }
+    .badge-critical { background: #FBE0E6; color: #9E1F3C; }
+    .detail-date { font-size: var(--font-lg); font-weight: 600; color: var(--color-text-primary); }
+    .detail-date-sub { font-size: var(--font-sm); color: var(--color-text-secondary); }
+    .detail-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      border-radius: var(--radius-sm);
+      color: var(--color-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease;
+    }
+    .detail-close:hover { background: var(--color-bg); }
+    .detail-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .detail-stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .detail-stat-value {
+      font-size: var(--font-xl);
+      font-weight: 600;
+      color: var(--color-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .detail-stat-value.danger { color: var(--color-danger); }
+    .detail-stat-value.accent { color: var(--color-accent); }
+
+    @media (max-width: 640px) {
+      .stat-grid, .detail-stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <div class="notice">
+      Design System Reference — demonstrates the system defined in DIRECTIVE.md.
+      Do not copy this file into new projects.
+    </div>
+
+    <h1 class="page-title">Design System Reference</h1>
+    <p class="page-subtitle">Visual showcase of every token and component defined in DIRECTIVE.md.</p>
+
+    <!-- BUTTONS -->
+    <div class="section">
+      <div class="section-label">Buttons</div>
+      <div class="card">
+        <div class="btn-row">
+          <button class="btn btn-primary">Save Changes</button>
+          <button class="btn btn-secondary">Cancel</button>
+        </div>
+        <p style="margin-top:16px;font-size:var(--font-xs);color:var(--color-text-secondary);">
+          Hover to see raise effect · Primary: translateY(-1px) + shadow-md · Secondary: accent-light tint
+        </p>
+      </div>
+    </div>
+
+    <!-- CHECKBOXES & TASK ROWS -->
+    <div class="section">
+      <div class="section-label">Checkboxes &amp; Task Rows</div>
+      <div class="card" id="task-card">
+
+        <div class="task-row done" id="row-1" onclick="toggleDone(this)">
+          <div class="checkbox">
+            <svg class="checkbox-check" width="13" height="10" viewBox="0 0 13 10" fill="none">
+              <path d="M1.5 5L5 8.5L11.5 1.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="task-label">Review design tokens (pre-checked)</span>
+        </div>
+
+        <div class="task-row hovered" id="row-2" onclick="toggleDone(this)">
+          <div class="checkbox">
+            <svg class="checkbox-check" width="13" height="10" viewBox="0 0 13 10" fill="none">
+              <path d="M1.5 5L5 8.5L11.5 1.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="task-label">Update component library (hover state demo)</span>
+        </div>
+
+        <div class="task-row" id="row-3" onclick="toggleDone(this)">
+          <div class="checkbox">
+            <svg class="checkbox-check" width="13" height="10" viewBox="0 0 13 10" fill="none">
+              <path d="M1.5 5L5 8.5L11.5 1.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="task-label">Publish to GitHub Pages (unchecked default)</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FORM INPUTS -->
+    <div class="section">
+      <div class="section-label">Form Inputs</div>
+      <div class="card">
+        <div class="input-group">
+          <label class="input-label">Default input</label>
+          <input class="input" type="text" placeholder="Enter value...">
+        </div>
+        <div class="input-group">
+          <label class="input-label">Focused input (demo state)</label>
+          <input class="input focused" type="text" placeholder="Enter value..." value="Focused state">
+        </div>
+      </div>
+    </div>
+
+    <!-- TYPOGRAPHY -->
+    <div class="section">
+      <div class="section-label">Typography</div>
+      <div class="card">
+
+        <div class="type-row">
+          <div class="type-meta">--font-xs · 12px</div>
+          <div class="type-samples">
+            <span class="type-sample" style="font-size:12px;font-weight:400;">Regular 400</span>
+            <span class="type-sample" style="font-size:12px;font-weight:500;">Medium 500</span>
+            <span class="type-sample" style="font-size:12px;font-weight:600;">Bold 600</span>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">--font-sm · 13px</div>
+          <div class="type-samples">
+            <span class="type-sample" style="font-size:13px;font-weight:400;">Regular 400</span>
+            <span class="type-sample" style="font-size:13px;font-weight:500;">Medium 500</span>
+            <span class="type-sample" style="font-size:13px;font-weight:600;">Bold 600</span>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">--font-base · 15px</div>
+          <div class="type-samples">
+            <span class="type-sample" style="font-size:15px;font-weight:400;">Regular 400</span>
+            <span class="type-sample" style="font-size:15px;font-weight:500;">Medium 500</span>
+            <span class="type-sample" style="font-size:15px;font-weight:600;">Bold 600</span>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">--font-lg · 17px</div>
+          <div class="type-samples">
+            <span class="type-sample" style="font-size:17px;font-weight:400;">Regular 400</span>
+            <span class="type-sample" style="font-size:17px;font-weight:500;">Medium 500</span>
+            <span class="type-sample" style="font-size:17px;font-weight:600;">Bold 600</span>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">--font-xl · 20px</div>
+          <div class="type-samples">
+            <span class="type-sample" style="font-size:20px;font-weight:400;">Regular 400</span>
+            <span class="type-sample" style="font-size:20px;font-weight:500;">Medium 500</span>
+            <span class="type-sample" style="font-size:20px;font-weight:600;">Bold 600</span>
+          </div>
+        </div>
+
+        <div class="type-row">
+          <div class="type-meta">--font-2xl · 24px</div>
+          <div class="type-samples">
+            <span class="type-sample" style="font-size:24px;font-weight:400;">Regular 400</span>
+            <span class="type-sample" style="font-size:24px;font-weight:500;">Medium 500</span>
+            <span class="type-sample" style="font-size:24px;font-weight:600;">Bold 600</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- COLOUR PALETTE -->
+    <div class="section">
+      <div class="section-label">Colour Palette</div>
+      <div class="card">
+        <div class="swatches">
+          <div class="swatch-item">
+            <div class="swatch" style="background:#F5F5F3;"></div>
+            <div class="swatch-hex">#F5F5F3</div>
+            <div class="swatch-name">--color-bg</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#FFFFFF;"></div>
+            <div class="swatch-hex">#FFFFFF</div>
+            <div class="swatch-name">--color-surface</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#E2E0DB;"></div>
+            <div class="swatch-hex">#E2E0DB</div>
+            <div class="swatch-name">--color-border</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#C8C5BE;"></div>
+            <div class="swatch-hex">#C8C5BE</div>
+            <div class="swatch-name">--color-border-hover</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#1A1A1A;"></div>
+            <div class="swatch-hex">#1A1A1A</div>
+            <div class="swatch-name">--color-text-primary</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#6B6860;"></div>
+            <div class="swatch-hex">#6B6860</div>
+            <div class="swatch-name">--color-text-secondary</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#3D6B4F;"></div>
+            <div class="swatch-hex">#3D6B4F</div>
+            <div class="swatch-name">--color-accent</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#2F5540;"></div>
+            <div class="swatch-hex">#2F5540</div>
+            <div class="swatch-name">--color-accent-hover</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#EAF2ED;"></div>
+            <div class="swatch-hex">#EAF2ED</div>
+            <div class="swatch-name">--color-accent-light</div>
+          </div>
+          <div class="swatch-item">
+            <div class="swatch" style="background:#C0392B;"></div>
+            <div class="swatch-hex">#C0392B</div>
+            <div class="swatch-name">--color-danger</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARDS -->
+    <div class="section">
+      <div class="section-label">Cards</div>
+
+      <div class="card">
+        <p style="font-size:var(--font-sm);font-weight:600;color:var(--color-text-secondary);margin-bottom:8px;">Static card</p>
+        <p>This card has no interaction. It sits at rest with shadow-sm and a 1px border.</p>
+      </div>
+
+      <div class="card interactive">
+        <p style="font-size:var(--font-sm);font-weight:600;color:var(--color-text-secondary);margin-bottom:8px;">Interactive card — hover me</p>
+        <p>On hover: border shifts to --color-border-hover and shadow upgrades to shadow-md.</p>
+      </div>
+
+      <div class="card">
+        <p>
+          Placeholder text demonstrates how body copy sits inside a card at --font-base (15px) with
+          --color-text-primary (#1A1A1A). Line height is 1.5. The card padding is 20px 24px, giving
+          generous breathing room around the content on both iPad and desktop.
+        </p>
+      </div>
+    </div>
+
+    <!-- SPACING SCALE -->
+    <div class="section">
+      <div class="section-label">Spacing Scale</div>
+      <div class="card">
+
+        <div class="space-row">
+          <div class="space-meta">--space-1 · 4px</div>
+          <div class="space-bar" style="width:4px;"></div>
+        </div>
+        <div class="space-row">
+          <div class="space-meta">--space-2 · 8px</div>
+          <div class="space-bar" style="width:8px;"></div>
+        </div>
+        <div class="space-row">
+          <div class="space-meta">--space-3 · 12px</div>
+          <div class="space-bar" style="width:12px;"></div>
+        </div>
+        <div class="space-row">
+          <div class="space-meta">--space-4 · 16px</div>
+          <div class="space-bar" style="width:16px;"></div>
+        </div>
+        <div class="space-row">
+          <div class="space-meta">--space-5 · 20px</div>
+          <div class="space-bar" style="width:20px;"></div>
+        </div>
+        <div class="space-row">
+          <div class="space-meta">--space-6 · 24px</div>
+          <div class="space-bar" style="width:24px;"></div>
+        </div>
+        <div class="space-row">
+          <div class="space-meta">--space-8 · 32px</div>
+          <div class="space-bar" style="width:32px;"></div>
+        </div>
+        <div class="space-row">
+          <div class="space-meta">--space-10 · 40px</div>
+          <div class="space-bar" style="width:40px;"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- DASHBOARD / HEATMAP EXAMPLE -->
+    <div class="section">
+      <div class="section-label">Dashboard Example — Activity Heatmap</div>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          </div>
+          <div>
+            <div class="stat-label">Latest Completion</div>
+            <div class="stat-value">53%</div>
+            <div class="stat-sub">Jun 4</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-red">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div>
+            <div class="stat-label">Missed Tasks</div>
+            <div class="stat-value">30</div>
+            <div class="stat-sub">as of Jun 4</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>
+          </div>
+          <div>
+            <div class="stat-label">7-Day Average</div>
+            <div class="stat-value">8%</div>
+            <div class="stat-sub">last 7 days with data</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div>
+            <div class="stat-label">Worst Day (7d)</div>
+            <div class="stat-value">0%</div>
+            <div class="stat-sub">Thu, May 21</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <p style="font-size:var(--font-xs);color:var(--color-text-secondary);margin-bottom:16px;">
+          Daily team task completion over the past 14 weeks · click any cell for details
+        </p>
+        <div class="heatmap">
+          <div class="heat-months" id="heat-months"></div>
+          <div class="heat-body">
+            <div class="heat-days">
+              <div class="heat-day">Mon</div>
+              <div class="heat-day"></div>
+              <div class="heat-day">Wed</div>
+              <div class="heat-day"></div>
+              <div class="heat-day">Fri</div>
+              <div class="heat-day"></div>
+              <div class="heat-day">Sun</div>
+            </div>
+            <div class="heat-grid" id="heat-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-panel" id="detail-panel">
+        <div class="detail-head">
+          <span class="badge badge-level" id="d-level">L5</span>
+          <span class="badge badge-critical" id="d-crit">Critical</span>
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <span class="detail-date" id="d-date">Thursday, May 7, 2026</span>
+            <span class="detail-date-sub" id="d-week">May 4</span>
+          </div>
+          <button class="detail-close" id="d-close" aria-label="Close">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="detail-stats">
+          <div>
+            <div class="detail-stat-label">Completed</div>
+            <div class="detail-stat-value" id="d-completed">0</div>
+          </div>
+          <div>
+            <div class="detail-stat-label">Rate</div>
+            <div class="detail-stat-value accent" id="d-rate">0%</div>
+          </div>
+          <div>
+            <div class="detail-stat-label">Missed</div>
+            <div class="detail-stat-value danger" id="d-missed">64</div>
+          </div>
+          <div>
+            <div class="detail-stat-label">Cell</div>
+            <div class="detail-stat-value" id="d-cell">0/64</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function toggleDone(row) {
+      row.classList.toggle('done');
+      row.classList.remove('hovered');
+    }
+
+    /* ── Activity heatmap (demo data) ── */
+    (function () {
+      const HEAT_WEEKS = 14;
+      const TODAY = new Date(2026, 5, 4);       // Jun 4, 2026
+      const MAY7  = new Date(2026, 4, 7);        // default selection
+      const JUN5  = new Date(2026, 5, 5);        // outlined empty cell
+      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const CHECK = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      const ALERT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+
+      function mondayOf(d) {
+        const x = new Date(d);
+        const day = (x.getDay() + 6) % 7;   // 0 = Mon
+        x.setDate(x.getDate() - day);
+        x.setHours(0, 0, 0, 0);
+        return x;
+      }
+      function sameDay(a, b) {
+        return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      }
+      function heatData(d) {
+        const may4 = new Date(2026, 4, 4), may24 = new Date(2026, 4, 24);
+        if (d > TODAY) return null;                 // future: no data
+        if (d >= may4 && d <= may24) {              // the "bad streak"
+          return { total: 64, completed: (d.getDate() * 13) % 41 };
+        }
+        return null;                                // other days: no data logged
+      }
+      function levelOf(data) {
+        if (!data) return 0;
+        const rate = data.completed / data.total;
+        if (rate < 0.10) return 3;
+        if (rate < 0.30) return 2;
+        return 1;
+      }
+
+      const start = mondayOf(TODAY);
+      start.setDate(start.getDate() - (HEAT_WEEKS - 1) * 7);
+
+      const monthsEl = document.getElementById('heat-months');
+      const gridEl = document.getElementById('heat-grid');
+      let prevMonth = -1, defaultCell = null, defaultDate = null, defaultData = null;
+
+      for (let c = 0; c < HEAT_WEEKS; c++) {
+        const mon = new Date(start);
+        mon.setDate(mon.getDate() + c * 7);
+        const span = document.createElement('span');
+        span.className = 'heat-month';
+        span.textContent = mon.getMonth() !== prevMonth ? MONTHS[mon.getMonth()] : '';
+        prevMonth = mon.getMonth();
+        monthsEl.appendChild(span);
+
+        for (let r = 0; r < 7; r++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + c * 7 + r);
+          const data = heatData(d);
+          const cell = document.createElement('div');
+          cell.className = 'heat-cell';
+          cell.dataset.level = levelOf(data);
+          cell.title = d.toDateString();
+          if (sameDay(d, JUN5)) cell.classList.add('outlined');
+          cell.addEventListener('click', () => selectCell(cell, d, data));
+          gridEl.appendChild(cell);
+          if (sameDay(d, MAY7)) { defaultCell = cell; defaultDate = d; defaultData = data; }
+        }
+      }
+
+      const panel = document.getElementById('detail-panel');
+
+      function selectCell(cell, date, data) {
+        document.querySelectorAll('.heat-cell.selected').forEach(c => c.classList.remove('selected'));
+        cell.classList.add('selected');
+        panel.style.display = 'block';
+
+        document.getElementById('d-date').textContent =
+          date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        document.getElementById('d-week').textContent =
+          mondayOf(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        const lvlEl = document.getElementById('d-level');
+        const critEl = document.getElementById('d-crit');
+        const cEl = document.getElementById('d-completed');
+        const rEl = document.getElementById('d-rate');
+        const mEl = document.getElementById('d-missed');
+        const cellEl = document.getElementById('d-cell');
+
+        if (!data) {
+          lvlEl.textContent = '—';
+          critEl.textContent = 'No data';
+          cEl.textContent = '—';
+          rEl.textContent = '—';
+          mEl.textContent = '—';
+          cellEl.textContent = '0/0';
+          return;
+        }
+        const rate = data.completed / data.total;
+        let lv, cr;
+        if (rate < 0.10) { lv = 'L5'; cr = 'Critical'; }
+        else if (rate < 0.30) { lv = 'L3'; cr = 'Low'; }
+        else { lv = 'L1'; cr = 'Fair'; }
+        lvlEl.textContent = lv;
+        critEl.textContent = cr;
+        cEl.textContent = data.completed;
+        rEl.innerHTML = CHECK + Math.round(rate * 100) + '%';
+        mEl.innerHTML = ALERT + (data.total - data.completed);
+        cellEl.textContent = data.completed + '/' + data.total;
+      }
+
+      document.getElementById('d-close').addEventListener('click', function () {
+        panel.style.display = 'none';
+        document.querySelectorAll('.heat-cell.selected').forEach(c => c.classList.remove('selected'));
+      });
+
+      if (defaultCell) selectCell(defaultCell, defaultDate, defaultData);
+    })();
+  </script>
+</body>
+</html>

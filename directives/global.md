@@ -86,12 +86,14 @@ that runs the same checks on demand when this auto-check did not fire.
 
 ## Async Operations
 - After triggering any long-running async operation (CI run, workflow dispatch,
-  deploy), never block on a `sleep` loop waiting for it to finish.
-- If `send_later` is available, schedule a self check-in to re-poll the result
-  when it should be ready.
-- Otherwise, end the turn and explicitly tell the user you will report back when
-  the operation completes — then resume when the result arrives (e.g. via a
-  webhook/subscription event) rather than polling in a blocking loop.
+  deployment), never block on a `sleep` loop waiting for results.
+- If `send_later` is available, schedule a follow-up check-in to re-poll the
+  result when it should be ready.
+- Otherwise, end the turn and explicitly tell the user "I'll report back when it
+  completes," then resume when the result arrives (e.g. via a webhook/subscription
+  event) rather than polling in a blocking loop.
+- The goal is that the result surfaces proactively — the user should never have to
+  re-prompt to learn the outcome.
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic

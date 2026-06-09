@@ -1,45 +1,35 @@
 # Usage Guide
 
-This repository stores reusable Claude Code review and verification templates. Use it as a starting point for each software project, not as a centralized runtime dependency.
+How agents and skills get into a project, and where their reports go. Agents and
+skills are **not** a committed runtime dependency — they bootstrap fresh from
+`claude.directives` each session.
 
-## Basic Setup
+## Installation
 
-1. Clone or download this repository.
-2. From a target project, run `scripts/install-agents.sh` or `scripts/install-agents.ps1`.
-3. Edit the generated `CLAUDE.md` in the target project.
-4. Customize local `.claude/agents/*.md` files if the project needs special review rules.
-5. Add `.agent-reports/` to your workflow for implementation summaries and review reports.
+- **New project:** run `/new.repo` (see `NEW-PROJECT-QUICKSTART.md`). It scaffolds
+  `CLAUDE.md`, the CI workflows, the Playwright kit, and the hooks, and bootstraps
+  skills + agents from this repo.
+- **Existing project:** at session start the Skill Bootstrap block (in
+  `directives/global.md`) fetches `.claude/skills/` and `.claude/agents/` fresh.
+  Agents are gitignored — re-fetched each session, never committed.
 
-## What Gets Installed
+Agents available: the `qa/` reviewers (`test-verifier`, `code-reviewer`,
+`security-reviewer`, `pr-readiness-reviewer`, `qa-pipeline`, `ui-tester`,
+`test-monitor`) and `data/supabase`.
 
-- `.claude/agents/test-verifier.md`
-- `.claude/agents/code-reviewer.md`
-- `.claude/agents/security-reviewer.md`
-- `.claude/agents/pr-readiness-reviewer.md`
-- `CLAUDE.md` if it does not already exist
+## Project-Specific Commands
 
-## Define Project-Specific Commands
-
-Every target project should document these commands in `CLAUDE.md`:
-
-- Install command
-- Test command
-- Targeted test command
-- Lint command
-- Typecheck command
-- Build command
-- Format command
-- Security or dependency audit command
-- Environment setup command
-- Database migration, seed, reset, and mock setup commands
-- CI expectations and required checks
+Document the project's validation commands in its `CLAUDE.md` (e.g. HTML and
+workflow-YAML validation, plus lint/tests where applicable) — agents run these as
+part of review.
 
 ## Reports
 
-Recommended report paths:
+Agents write evidence to `.agent-reports/`:
 
 - `.agent-reports/implementation-summary.md`
 - `.agent-reports/test-report.md`
+- `.agent-reports/ui-test-report.md`
 - `.agent-reports/code-review-report.md`
 - `.agent-reports/security-review-report.md`
 - `.agent-reports/pr-readiness-report.md`

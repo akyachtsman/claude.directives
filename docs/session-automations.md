@@ -1,4 +1,4 @@
-## Session Automations
+# Session Automations
 
 ### Infrastructure Monitors (always on, no session required)
 CI and Codex monitoring runs entirely in GitHub Actions — event-driven, no session

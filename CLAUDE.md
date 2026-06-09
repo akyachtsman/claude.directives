@@ -96,21 +96,9 @@ Stop and ask the user before:
 
 ## Skill Bootstrap
 
-At session start, bootstrap personal skills **and agents** from this repo using
-the `gh` CLI. Agents live in purpose-based subfolders (e.g. `qa/`), so this walks
-the tree recursively and preserves the subdirectory layout:
-```bash
-for dir in skills agents; do
-  gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
-    --jq ".tree[] | select(.type==\"blob\" and (.path|startswith(\".claude/$dir/\"))) | .path" \
-  | while read -r p; do
-    [ -f "$p" ] && continue            # skip files that already exist
-    mkdir -p "$(dirname "$p")"
-    gh api "repos/akyachtsman/claude.directives/contents/$p" --jq '.content' | base64 -d > "$p"
-  done
-done
-```
-Run this silently. Skip files that already exist. To add a skill or agent, drop a
+Skills and agents bootstrap from this repo's `.claude/` at session start — the
+canonical fetch block lives in `directives/global.md` (don't duplicate it here).
+To add a skill or agent, drop a
 `.md` file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket
 here (`qa/` and `data/` today; `scrape/`, … as new types appear). `name:` values must
 stay unique across the whole agent tree — the subfolder does not disambiguate.

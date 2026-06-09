@@ -1,4 +1,4 @@
-# claude.test.directives — Agent Directive
+# Claude Test & QA Directives
 
 This is the exportable directive for downstream projects. Import it into your project's `CLAUDE.md` or agent configuration.
 
@@ -10,7 +10,6 @@ This is the exportable directive for downstream projects. Import it into your pr
 - `docs/upgrade-directives.md` — S2 diagnostic protocol, captureApiCalls(), Playwright config rules
 - `docs/session-handoff.md` — Per-project handoff template
 - `docs/agent-workflow.md` — 11-step builder → reviewer sequence
-- `docs/monitor-agent.md` — RETIRED; explains why Gmail polling was replaced by ci-monitor.yml
 - `docs/testing-standard.md` — What to validate, report format requirements
 - `docs/code-review-standard.md` — Blocking vs. non-blocking review criteria
 - `docs/usage-guide.md` — Agent installation and .agent-reports/ organization

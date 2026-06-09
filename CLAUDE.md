@@ -17,6 +17,7 @@ covers only how to operate *on this repo*.
 | `directives/global.md` | Exported global directive (was global's DIRECTIVE.md) |
 | `directives/design.md` | Exported design system (was design's DIRECTIVE.md) |
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
+| `directives/data.md` | Exported data/backend directive (Supabase, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-PROJECT-QUICKSTART.md` | Bootstrap guide for spinning up a new project repo |
 | `.claude/skills/` | Personal skill files, invoked by typing the skill name |
@@ -34,6 +35,7 @@ Projects import each directive by raw URL — the consolidated paths are:
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
 ```
 When you change an exported directive, edit the file under `directives/` — never
 relocate the export into this file.

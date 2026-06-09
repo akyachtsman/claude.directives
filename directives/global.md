@@ -123,3 +123,4 @@ These directives inherit from this file — they are downstream consumers, not o
 They now live alongside this file in the consolidated `claude.directives` repo:
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md

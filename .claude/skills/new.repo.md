@@ -19,11 +19,12 @@ Never overwrite an existing workflow, agent, or test file.
 
 Execute in order:
 
-1. **Fetch and internalize all three directives.** Read each fully before
+1. **Fetch and internalize all four directives.** Read each fully before
    proceeding:
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md`
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md`
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md`
+   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md`
 
 2. **Bootstrap skills and agents.** Run the Skill Bootstrap block from
    `global.md` (the `gh api` tree walk that fetches `.claude/skills/` and
@@ -59,6 +60,7 @@ Execute in order:
    https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md
    https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
    https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
+   https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
 
    ---
 
@@ -111,11 +113,14 @@ Execute in order:
    that as the `workflow_run` → `workflows:` entry in `ci-monitor.yml`. A
    mismatch means the monitor never fires.
 
-6. **Gitignore bootstrap-only agents.** Do NOT copy or commit agent definitions
-   into the project repo. Ensure the project's `.gitignore` contains
-   `.claude/agents/` (create `.gitignore` if absent; append the line if missing).
-   Agents are bootstrap-only — step 2 fetches them fresh from `claude.directives`
-   each session, so they must never be committed to the project.
+6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
+   definitions into the project repo. Ensure the project's `.gitignore` contains
+   (create `.gitignore` if absent; append any missing line):
+   - `.claude/agents/` — bootstrap-only; step 2 fetches them fresh from
+     `claude.directives` each session, so they are never committed
+   - `.claude/mcp.json` — per-repo MCP/backend config; holds connection details
+     and must never be committed (see the data directive)
+   - `.env` and `.env.*` — local key/secret files must never be committed
 
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:

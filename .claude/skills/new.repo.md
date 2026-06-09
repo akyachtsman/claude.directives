@@ -111,10 +111,11 @@ Execute in order:
    that as the `workflow_run` → `workflows:` entry in `ci-monitor.yml`. A
    mismatch means the monitor never fires.
 
-6. **Install agent definitions.** Copy `claude.directives/templates/agents/`
-   into `.claude/agents/`, **preserving the subdirectory structure** (e.g. `qa/`).
-   Skip any agent that already exists. (If step 2's bootstrap already populated
-   `.claude/agents/`, this is a no-op verify.)
+6. **Gitignore bootstrap-only agents.** Do NOT copy or commit agent definitions
+   into the project repo. Ensure the project's `.gitignore` contains
+   `.claude/agents/` (create `.gitignore` if absent; append the line if missing).
+   Agents are bootstrap-only — step 2 fetches them fresh from `claude.directives`
+   each session, so they must never be committed to the project.
 
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:

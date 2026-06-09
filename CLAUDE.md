@@ -64,6 +64,12 @@ A directive repo must pass its own CI before it can be trusted downstream.
 See `docs/session-automations.md` for monitor detail and escalation rules.
 See `docs/ci-triage.md` for triage on `ci-failure` issues and `codex-flagged` PRs.
 
+## Skills
+Personal skills live in `.claude/skills/` and are the live source of truth —
+type `my.list` for the current menu. Notable operational skills:
+- `do.repo` — run a command (`inspect` / `compare <target>` / `audit`) against
+  any public GitHub repo via `gh api`, read-only, without cloning.
+
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, verify locally using this repo's scripts:
 ```

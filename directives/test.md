@@ -32,10 +32,10 @@ committed — there is no separate template copy.
 ### templates/ — reference when scaffolding a new project
 - `templates/CICD-SETUP.md` — 9-step CI/CD setup checklist
 - `templates/implementation-summary-template.md` — required before invoking reviewers
-- `templates/test-report-template.md` — test-verifier report format
-- `templates/code-review-report-template.md` — code-reviewer report format
 - `templates/pr-checklist.md` — PR readiness checklist
 - `templates/project-test-plan-template.md` — test plan structure
+  (the test-verifier and code-reviewer report formats live inline in their agent
+  definitions under `.claude/agents/qa/`)
 - `templates/workflows/qa.yml` — copy to .github/workflows/
 - `templates/workflows/qa-live.yml` — copy to .github/workflows/
 - `templates/workflows/qa-response.yml` — copy to .github/workflows/

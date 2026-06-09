@@ -31,6 +31,9 @@ const urls = new Set();
 for (const file of findMarkdown('.')) {
   const content = readFileSync(file, 'utf8');
   for (const url of content.match(URL_RE) ?? []) {
+    // Skip template placeholder URLs (e.g. .../<repo>/<ref>/<path>) — they are
+    // documentation examples, not real links to resolve.
+    if (url.includes('<')) continue;
     urls.add(url);
   }
 }

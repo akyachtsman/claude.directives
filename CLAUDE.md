@@ -28,7 +28,7 @@ covers only how to operate *on this repo*.
 | `templates/agents/` | Installable copy of the agents (same `qa/`/`data/` subfolder layout) for downstream projects |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (hooks) that `new.repo` installs into new projects |
 | `docs/` | Reference docs (automations, CI triage, testing, code review, handoff, …) |
-| `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`) |
+| `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 
 ## How it's imported downstream
@@ -62,6 +62,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   opens/updates a deduplicated `ci-failure` tracking issue.
 - `codex-monitor.yml` — fires on Codex PR reviews; adds a `codex-flagged` label
   when Codex raised concerns.
+- `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
+  deploy is live and on a problem opens/updates a deduplicated
+  `pages-deploy-failure` issue (success → job summary only). The zero-model
+  counterpart to the `update.pages` skill.
 
 See `docs/session-automations.md` for monitor detail and escalation rules.
 See `docs/ci-triage.md` for triage on `ci-failure` issues and `codex-flagged` PRs.

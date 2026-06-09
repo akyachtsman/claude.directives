@@ -100,12 +100,14 @@ Execute in order:
    4. Run `env.chk` and report status
    ```
 
-5. **Install CI/CD workflows.** Copy the 4 canonical workflow files from
+5. **Install CI/CD workflows.** Copy the 5 canonical workflow files from
    `claude.directives/templates/workflows/` into `.github/workflows/`:
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages
    - `ci-monitor.yml` — event-driven CI failure tracker
    - `codex-monitor.yml` — Codex PR review monitor
+   - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
+     every `page_build`; portable as-is, no edits needed)
 
    ⚠️ **Fix the monitor trigger.** The template `ci-monitor.yml` ships pinned to
    this directive repo's CI name. After copying, open the project's `qa.yml`,

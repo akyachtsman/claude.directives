@@ -19,7 +19,7 @@
 Open a Claude Code session scoped to the new repo and type:
 
 ```
-/new.repo
+new.repo
 ```
 
 That's it. Claude handles everything else autonomously.

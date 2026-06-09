@@ -18,10 +18,11 @@ This is the exportable directive for downstream projects. Import it into your pr
 - `docs/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
 
 ### .claude/agents/qa/ — read ALL agent definitions
-Agents are organized into purpose-based subfolders (`qa/` today; `scrape/`,
-`data/`, … as new types appear) and load recursively into sessions on this repo.
-An installable copy for downstream projects lives in `templates/agents/` (copy
-into a project's `.claude/agents/`, preserving the subfolders).
+Agents are organized into purpose-based subfolders (`qa/` and `data/` today;
+`scrape/`, … as new types appear) and load recursively into sessions on this repo.
+Downstream projects inherit them by fetching `.claude/agents/` fresh from
+`claude.directives` each session (the Skill Bootstrap), gitignored and never
+committed — there is no separate template copy.
 - `.claude/agents/qa/test-monitor.md` — thin in-session CI status helper (one-pass check, not the always-on monitor)
 - `.claude/agents/qa/test-verifier.md` — independent QA verification agent
 - `.claude/agents/qa/code-reviewer.md` — code quality review agent
@@ -46,7 +47,6 @@ into a project's `.claude/agents/`, preserving the subfolders).
 - `templates/ui-tests/playwright.config.js` — copy to .github/scripts/ui-tests/
 - `templates/ui-tests/tests/app.spec.js` — copy to .github/scripts/ui-tests/tests/
 - `templates/ui-tests/package.json` — copy to .github/scripts/ui-tests/
-- `templates/agents/qa/` — installable copy of the 7 agent definitions; copy `templates/agents/` into a project's `.claude/agents/`, preserving subfolders
 
 ## Session start — required actions
 

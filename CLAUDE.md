@@ -21,10 +21,12 @@ covers only how to operate *on this repo*.
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-PROJECT-QUICKSTART.md` | Bootstrap guide for spinning up a new project repo |
 | `.claude/skills/` | Personal skill files, invoked by typing the skill name |
+| `.claude/settings.json` | Claude Code hooks for this repo (incl. the `update.pages` reminder on Pages-file edits) |
 | `.claude/agents/` | Agent definitions in purpose-based subfolders (`qa/` and `data/` today); loaded recursively into sessions on this repo |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
 | `templates/agents/` | Installable copy of the agents (same `qa/`/`data/` subfolder layout) for downstream projects |
+| `templates/claude-settings.json` | Project `.claude/settings.json` template (hooks) that `new.repo` installs into new projects |
 | `docs/` | Reference docs (automations, CI triage, testing, code review, handoff, …) |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |

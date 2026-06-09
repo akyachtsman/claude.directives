@@ -122,6 +122,11 @@ Execute in order:
      and must never be committed (see the data directive)
    - `.env` and `.env.*` — local key/secret files must never be committed
 
+   Also install the Claude Code hooks: copy
+   `claude.directives/templates/claude-settings.json` to `.claude/settings.json`
+   (merge into any existing `settings.json`). This adds the `update.pages`
+   reminder hook so edits to Pages-served files prompt a deploy-and-watch.
+
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:
    - `playwright.config.js`

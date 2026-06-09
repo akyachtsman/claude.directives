@@ -27,10 +27,10 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
 
 ## Keys
 - **Service-role key** — full access, bypasses RLS. **Server-side only**: store as
-  the `SUPABASE_SERVICE_KEY` GitHub Actions secret, use it in workflows and server
+  the `DB_SERVICE_KEY` GitHub Actions secret, use it in workflows and server
   functions, and never ship it to the browser.
 - **Publishable / anon key** — safe to expose **client-side**, because RLS is the
-  enforcement boundary. Pair it with the `SUPABASE_URL` repo variable.
+  enforcement boundary. Pair it with the `DB_URL` repo variable.
 - Client-side safety depends entirely on RLS being correct. Never compensate for a
   missing or wrong policy by moving the service-role key client-side.
 

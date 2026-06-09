@@ -45,11 +45,11 @@ Required repository secrets:
 | Secret | Purpose |
 |---|---|
 | `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test |
-| `SUPABASE_SERVICE_KEY` | Supabase service-role key — server-side only (required for the backend/heatmap workflow) |
+| `DB_SERVICE_KEY` | Backend service-role key — server-side only (required for the backend/heatmap workflow) |
 
 Required repository variables:
 
 | Variable | Purpose |
 |---|---|
 | `APP_URL` | Live GitHub Pages URL (e.g. `https://username.github.io/repo/`) |
-| `SUPABASE_URL` | Supabase project URL (safe in a variable; the publishable/anon key relies on RLS) |
+| `DB_URL` | Backend project/connection URL (safe in a variable; the client/anon key relies on RLS) |

@@ -38,9 +38,9 @@ full context without loss of history.
 ---
 
 ## Critical Code Patterns
-[Project-specific invariants agents must never violate — e.g. field ID usage, timezone handling, DOM safety rules]
+[Project-specific invariants agents must never violate — e.g. backend field/column usage, timezone handling, DOM safety rules]
 
 ---
 
 ## Key IDs and Config
-[Project-specific: Airtable base ID, table IDs, field IDs, Pages URL, branch name]
+[Project-specific: Supabase project ref, table/column names, Pages URL, branch name]

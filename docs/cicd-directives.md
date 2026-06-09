@@ -45,10 +45,11 @@ Required repository secrets:
 | Secret | Purpose |
 |---|---|
 | `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test |
-| `AIRTABLE_API_KEY` | Airtable personal access token (if using Airtable backend) |
+| `SUPABASE_SERVICE_KEY` | Supabase service-role key — server-side only (required for the backend/heatmap workflow) |
 
-Required repository variable:
+Required repository variables:
 
 | Variable | Purpose |
 |---|---|
 | `APP_URL` | Live GitHub Pages URL (e.g. `https://username.github.io/repo/`) |
+| `SUPABASE_URL` | Supabase project URL (safe in a variable; the publishable/anon key relies on RLS) |

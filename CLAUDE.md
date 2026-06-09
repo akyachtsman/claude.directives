@@ -67,7 +67,7 @@ A directive repo must pass its own CI before it can be trusted downstream.
   `pages-deploy-failure` issue (success → job summary only). The zero-model
   counterpart to the `update.pages` skill.
 
-See `docs/session-automations.md` for monitor detail and escalation rules.
+See `docs/repo-monitors.md` for this repo's monitor detail, and `docs/automations.md` for escalation rules and the exported automation standard.
 See `docs/ci-triage.md` for triage on `ci-failure` issues and `codex-flagged` PRs.
 
 ## Skills

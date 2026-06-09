@@ -153,7 +153,7 @@ done
 ```
 Run this silently. Skip files that already exist. Once populated, skills are invoked by typing the skill name (e.g. `my.list`, `env.chk`, `doc.comp`); agents load automatically from `.claude/agents/` (Claude Code scans it recursively — agent identity comes from the `name:` frontmatter, not the path, and `name:` values must stay unique across the whole tree). Do NOT maintain a per-skill or per-agent URL list — the directories are the source of truth. Adding a skill or agent means dropping one file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket here and nothing else changes.
 
-See docs/session-automations.md for monitor setup, escalation rules, and tool use discipline.
+See docs/automations.md for monitor setup, escalation rules, and tool use discipline.
 See docs/ci-triage.md for CI and Codex failure triage rules.
 
 ## Imported Directives

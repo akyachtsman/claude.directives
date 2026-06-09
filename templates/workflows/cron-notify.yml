@@ -38,11 +38,12 @@ jobs:
           # DB_URL: ${{ vars.DB_URL }}
           # DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}
           # --- email transport (consumed by notify-email.js) ---
-          ALERT_TO:   ${{ vars.ALERT_TO }}
-          ALERT_FROM: ${{ secrets.ALERT_FROM }}
-          SMTP_HOST:  ${{ secrets.SMTP_HOST }}
-          SMTP_PORT:  ${{ secrets.SMTP_PORT }}
-          SMTP_USER:  ${{ secrets.SMTP_USER }}
+          # Host/port/user/from are non-sensitive → Variables; only SMTP_PASS is a secret.
+          ALERT_TO:   ${{ vars.ALERT_TO || vars.SMTP_USER }}   # workflow fallback (script requires ALERT_TO)
+          ALERT_FROM: ${{ vars.ALERT_FROM }}                   # empty → notify-email.js defaults to SMTP_USER
+          SMTP_HOST:  ${{ vars.SMTP_HOST }}
+          SMTP_PORT:  ${{ vars.SMTP_PORT }}
+          SMTP_USER:  ${{ vars.SMTP_USER }}
           SMTP_PASS:  ${{ secrets.SMTP_PASS }}
           FORCE:      ${{ github.event.inputs.force }}
         run: node your-task.js

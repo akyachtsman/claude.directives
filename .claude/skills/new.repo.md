@@ -142,7 +142,8 @@ Execute in order:
    Optional — **scheduled email notifications**: if the project needs a cron job
    that emails alerts, also copy `cron-notify.yml` + `keepalive.yml` from
    `templates/workflows/` and `templates/scripts/notify-email.js`, then follow
-   `docs/cron-email-notifications.md` (SMTP secrets, `ALERT_TO`, `KEEPALIVE_PAT`).
+   `docs/cron-email-notifications.md` (SMTP host/port/user + `ALERT_TO` variables;
+   `SMTP_PASS` + `KEEPALIVE_PAT` secrets).
 
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains

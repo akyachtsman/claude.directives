@@ -94,6 +94,14 @@ that runs the same checks on demand when this auto-check did not fire.
   event) rather than polling in a blocking loop.
 - The goal is that the result surfaces proactively — the user should never have to
   re-prompt to learn the outcome.
+- **Never spawn an unbounded background "wait for X" task.** A backgrounded poll
+  (Bash `run_in_background` / Monitor with a `sleep`/`until` loop, e.g. "wait for
+  the qa-live run") is still a blocking wait — it just hides in the background, and
+  with no cap it can run for *hours*. Any background watcher MUST set a hard
+  `timeout` (minutes, sized to the operation's expected duration — not hours) and
+  exit on **every** terminal state: success, failure, AND timeout. A waiter that
+  outlives the operation it watches is a bug. When in doubt, end the turn and
+  resume on the event instead of polling.
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic

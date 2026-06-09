@@ -21,6 +21,14 @@ on:
         description: 'Override live app URL (optional)'
         required: false
 
+# Only one live run per ref at a time; a newer trigger cancels the older/queued
+# one. Without this, repeated Pages deploys queue up qa-live runs that can sit
+# for hours (the job timeout below does not start counting until a runner is
+# assigned, so a queued run is not bounded by it).
+concurrency:
+  group: qa-live-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   UI_TESTS_DIR: .github/scripts/ui-tests
 
@@ -50,10 +58,12 @@ jobs:
         working-directory: ${{ env.UI_TESTS_DIR }}
 
       - name: Install Playwright browsers
+        timeout-minutes: 8
         run: npx playwright install --with-deps chromium webkit
         working-directory: ${{ env.UI_TESTS_DIR }}
 
       - name: Run Playwright tests (live)
+        timeout-minutes: 12
         env:
           # workflow_dispatch input overrides repo variable if provided
           APP_URL: ${{ github.event.inputs.app_url || vars.APP_URL }}

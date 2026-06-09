@@ -25,7 +25,15 @@ against GitHub's 60-day scheduler auto-disable.
 **Variables** (non-sensitive) → *Variables* tab:
 | Name | Value |
 |---|---|
+| `NOTIFY_MODE` | `log` (default — formats the report into the run log, no SMTP secrets needed) or `email` |
 | `ALERT_TO` | recipient address (change anytime, no redeploy) |
+
+> **Start in log mode.** `NOTIFY_MODE` defaults to `log` — the report is formatted
+> into the workflow run log and **no SMTP secrets are required**. Set
+> `NOTIFY_MODE=email` only when you're ready to send; the `SMTP_*` secrets (and
+> `ALERT_TO`) are needed only then. Call `notify({ subject, text })` from your task
+> (it routes to log or email by mode); `sendEmail(...)` is still exported for the
+> always-email path.
 
 > The task's own backend inputs (e.g. `DB_URL` / `DB_SERVICE_KEY` — see the data
 > directive `data.md`) are separate and added to the workflow's `env:` block.

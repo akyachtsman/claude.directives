@@ -20,4 +20,14 @@ async function sendEmail({ subject, text, html, to = process.env.ALERT_TO }) {
   console.log(`Email sent to ${to}`);
 }
 
-module.exports = { sendEmail };
+// log by default; email only when NOTIFY_MODE=email
+async function notify({ subject, text, html }) {
+  const mode = (process.env.NOTIFY_MODE || 'log').trim().toLowerCase();
+  if (mode !== 'email') {
+    console.log(`\n----- NOTIFICATION (mode=${mode} — formatted, not sent) -----\nSubject: ${subject}\n\n${text}\n----- end notification -----`);
+    return;
+  }
+  return sendEmail({ subject, text, html });   // existing SMTP path
+}
+
+module.exports = { sendEmail, notify };

@@ -37,7 +37,8 @@ jobs:
           # --- your task's own inputs (example; names match the data directive) ---
           # DB_URL: ${{ vars.DB_URL }}
           # DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}
-          # --- email transport (consumed by notify-email.js) ---
+          # --- notification mode + email transport (consumed by notify-email.js) ---
+          NOTIFY_MODE: ${{ vars.NOTIFY_MODE }}    # 'log' (default) or 'email'
           ALERT_TO:   ${{ vars.ALERT_TO }}
           ALERT_FROM: ${{ secrets.ALERT_FROM }}
           SMTP_HOST:  ${{ secrets.SMTP_HOST }}

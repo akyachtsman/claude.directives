@@ -69,7 +69,7 @@ Personal skills live in `.claude/skills/` and are the live source of truth —
 type `my.list` for the current menu. Notable operational skills:
 - `do.repo` — run a command (`inspect` / `compare <target>` / `audit`) against
   any public GitHub repo via `gh api`, read-only, without cloning.
-- `deploy.watch` — standard procedure for any change that updates the Pages site:
+- `update.pages` — standard procedure for any change that updates the Pages site:
   run gates, push, watch the deploy to a terminal state, and report live / stuck
   / failed proactively (encodes the stuck-pipeline toggle and cache gotchas).
 

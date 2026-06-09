@@ -1,5 +1,5 @@
 ---
-name: deploy.watch
+name: update.pages
 description: Standard procedure for ANY change that updates a GitHub Pages site (root/docs index.html, design-system.html, served CSS/HTML/content, or Pages config). Ship it, watch the deploy end-to-end, and proactively report live / stuck / failed so the user never has to re-prompt or babysit it.
 trigger: slash_command_and_auto
 ---

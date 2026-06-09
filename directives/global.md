@@ -35,11 +35,15 @@ index.html       ← complete single-page app
   ui-tests/
 ```
 
-## Airtable
-- Always use REST API directly — no SDK
-- Always include `returnFieldsByFieldId=true` in all list/filter calls
-- Never hardcode tokens — store as `AIRTABLE_API_KEY` in GitHub Secrets
-- Base IDs and table IDs are defined at project level in each repo's CLAUDE.md
+## Backend
+- Supabase is the default backend — see the data directive (`data.md`) for the full
+  rules (RLS always on, service-role key server-side only, publishable key safe
+  client-side, per-repo `.claude/mcp.json`).
+- Never hardcode connection details or keys — store the service-role key as
+  `SUPABASE_SERVICE_KEY` (GitHub Secret, server-side only) and the project URL as
+  `SUPABASE_URL` (repo variable).
+- Project/connection IDs and table/column names are defined at project level in
+  each repo's CLAUDE.md.
 
 ## Automations
 - Scheduled and event-driven automations run as GitHub Actions workflows

@@ -49,16 +49,19 @@ async function captureApiCalls(page) {
       const res = await orig(...args);
       const clone = res.clone();
       clone.json().then(body => {
-        const records = body?.records;
-        const firstFieldKey = records?.[0]?.fields
-          ? Object.keys(records[0].fields)[0]
+        // Backend-agnostic: Supabase/REST returns an array of row objects; some
+        // backends wrap rows as { records: [{ fields: {...} }] }.
+        const rows = Array.isArray(body) ? body : (body?.records ?? null);
+        const firstRow = rows?.[0];
+        const firstFieldKey = firstRow
+          ? Object.keys(firstRow.fields ?? firstRow)[0] ?? null
           : null;
         window.__apiCalls.push({
           url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
           status: res.status,
-          recordCount: records?.length ?? null,
+          recordCount: Array.isArray(rows) ? rows.length : null,
           firstFieldKey,
-          error: body?.error ?? null,
+          error: body?.error ?? body?.message ?? null,
         });
       }).catch(() => {});
       return res;
@@ -212,9 +215,9 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       onscreenError: errText,
       consoleErrors,
       apiCalls,
-      fieldKeyFormat: firstKey
-        ? (/^fld/.test(firstKey) ? 'ID-keyed (correct)' : `name-keyed: "${firstKey}" — add returnFieldsByFieldId=true`)
-        : 'no records returned',
+      responseShape: firstKey
+        ? `rows returned, first field "${firstKey}"`
+        : (apiCalls[0]?.status >= 400 ? `non-2xx (${apiCalls[0]?.status})` : 'no rows returned — check query / RLS / auth'),
     };
     test.info().attach('auth-diagnostics', {
       body: JSON.stringify(diag, null, 2),
@@ -224,7 +227,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       `S2 FAIL | mechanism: ${mechanism} | onscreenError: "${errText}" | ` +
       `API status: ${apiCalls[0]?.status ?? 'no call'} | ` +
       `recordCount: ${apiCalls[0]?.recordCount ?? 'n/a'} | ` +
-      `fieldKeyFormat: ${diag.fieldKeyFormat} | ` +
+      `responseShape: ${diag.responseShape} | ` +
       `consoleErrors: ${consoleErrors.join('; ') || 'none'}`
     );
   }

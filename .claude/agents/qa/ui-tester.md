@@ -92,7 +92,7 @@ auth-diagnostics attachment:
   credentialUsed: <value from CLAUDE.md, masked if sensitive>
   authMechanism: <detected type>
   apiCalls: <from captureApiCalls>
-  fieldKeyFormat: <ID-keyed | name-keyed | no records>
+  responseShape: <rows returned, first field "<name>" | no rows — check query/RLS/auth | non-2xx>
   consoleErrors: <list>
   onscreenError: <visible error text>
 ```
@@ -124,16 +124,19 @@ async function captureApiCalls(page) {
       const res = await orig(...args);
       const clone = res.clone();
       clone.json().then(body => {
-        const records = body?.records;
-        const firstFieldKey = records?.[0]?.fields
-          ? Object.keys(records[0].fields)[0]
+        // Backend-agnostic: Supabase/REST returns an array of row objects; some
+        // backends wrap rows as { records: [{ fields: {...} }] }.
+        const rows = Array.isArray(body) ? body : (body?.records ?? null);
+        const firstRow = rows?.[0];
+        const firstFieldKey = firstRow
+          ? Object.keys(firstRow.fields ?? firstRow)[0] ?? null
           : null;
         window.__apiCalls.push({
           url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
           status: res.status,
-          recordCount: records?.length ?? null,
+          recordCount: Array.isArray(rows) ? rows.length : null,
           firstFieldKey,
-          error: body?.error ?? null,
+          error: body?.error ?? body?.message ?? null,
         });
       }).catch(() => {});
       return res;

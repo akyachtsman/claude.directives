@@ -7,6 +7,10 @@ The complete design directive for all projects. Import this one file and follow
 it exactly — there is nothing to choose. Every rule below applies; use the parts
 your screens need and ignore the rest.
 
+**Visual reference:** every token and component below is rendered live at
+https://akyachtsman.github.io/claude.directives/docs/design-system.html
+(browse all demos at https://akyachtsman.github.io/claude.directives/docs/).
+
 ## Source of Truth
 All generated HTML/CSS must follow these rules exactly. The values below are
 authoritative. If a `screen_recording.webm` exists at the repo root AND `ffmpeg`

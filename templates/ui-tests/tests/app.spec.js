@@ -49,7 +49,7 @@ async function captureApiCalls(page) {
       const res = await orig(...args);
       const clone = res.clone();
       clone.json().then(body => {
-        // Backend-agnostic: Supabase/REST returns an array of row objects; some
+        // Backend-agnostic: most REST backends return an array of row objects; some
         // backends wrap rows as { records: [{ fields: {...} }] }.
         const rows = Array.isArray(body) ? body : (body?.records ?? null);
         const firstRow = rows?.[0];

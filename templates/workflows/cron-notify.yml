@@ -1,0 +1,48 @@
+name: Scheduled Notification
+
+# Generic scheduled job: runs a Node task that can email a notification.
+# Copy + rename per project, point the final step at your script, and add the
+# task's own env below. See docs/cron-email-notifications.md for setup.
+
+on:
+  schedule:
+    # GitHub cron is UTC-only and best-effort (can run several minutes late).
+    # For a fixed LOCAL time across DST, use TWO entries bracketing the offset
+    # plus a time-guard in the script (see the docs "DST-safe scheduling").
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bypass any in-script time guard (manual run)'
+        required: false
+        default: 'false'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10            # always cap scheduled jobs so a hang can't run for hours
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: .github/scripts/package.json
+      - name: Install deps
+        working-directory: .github/scripts
+        run: npm install
+      - name: Run task
+        working-directory: .github/scripts
+        env:
+          # --- your task's own inputs (example; names match the data directive) ---
+          # DB_URL: ${{ vars.DB_URL }}
+          # DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}
+          # --- email transport (consumed by notify-email.js) ---
+          ALERT_TO:   ${{ vars.ALERT_TO }}
+          ALERT_FROM: ${{ secrets.ALERT_FROM }}
+          SMTP_HOST:  ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:  ${{ secrets.SMTP_PORT }}
+          SMTP_USER:  ${{ secrets.SMTP_USER }}
+          SMTP_PASS:  ${{ secrets.SMTP_PASS }}
+          FORCE:      ${{ github.event.inputs.force }}
+        run: node your-task.js

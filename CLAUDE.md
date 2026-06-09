@@ -25,6 +25,7 @@ covers only how to operate *on this repo*.
 | `.claude/agents/` | Agent definitions in purpose-based subfolders (`qa/` and `data/` today); loaded recursively into sessions on this repo |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
+| `templates/scripts/` | Optional scheduled-task scripts (`notify-email.js`) projects copy into `.github/scripts/` |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (hooks) that `new.repo` installs into new projects |
 | `docs/` | Reference docs (automations, CI triage, testing, code review, handoff, …) |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |

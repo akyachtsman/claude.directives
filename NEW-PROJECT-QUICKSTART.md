@@ -23,3 +23,11 @@ new.repo
 ```
 
 That's it. Claude handles everything else autonomously.
+
+---
+
+### Optional — scheduled email notifications
+To add a cron job that emails alerts (e.g. a nightly report), copy
+`templates/workflows/cron-notify.yml` + `templates/workflows/keepalive.yml` and
+`templates/scripts/notify-email.js`, then follow `docs/cron-email-notifications.md`
+to set the `SMTP_*` secrets, the `ALERT_TO` variable, and `KEEPALIVE_PAT`.

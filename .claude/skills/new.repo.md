@@ -139,6 +139,11 @@ Execute in order:
    (`qa.yml` → `QA — Static + UI Tests`); only touch its `workflows:` list if you
    rename `qa.yml`'s `name:`.
 
+   Optional — **scheduled email notifications**: if the project needs a cron job
+   that emails alerts, also copy `cron-notify.yml` + `keepalive.yml` from
+   `templates/workflows/` and `templates/scripts/notify-email.js`, then follow
+   `docs/cron-email-notifications.md` (SMTP secrets, `ALERT_TO`, `KEEPALIVE_PAT`).
+
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains
    (create `.gitignore` if absent; append any missing line):

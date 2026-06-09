@@ -84,6 +84,15 @@ that runs the same checks on demand when this auto-check did not fire.
 - Mark PR ready only when all checks pass
 - Never force-push to `main`
 
+## Async Operations
+- After triggering any long-running async operation (CI run, workflow dispatch,
+  deploy), never block on a `sleep` loop waiting for it to finish.
+- If `send_later` is available, schedule a self check-in to re-poll the result
+  when it should be ready.
+- Otherwise, end the turn and explicitly tell the user you will report back when
+  the operation completes — then resume when the result arrives (e.g. via a
+  webhook/subscription event) rather than polling in a blocking loop.
+
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic
 - Stop and ask if CI has failed 3+ times on the same issue without progress

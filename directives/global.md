@@ -64,6 +64,8 @@ index.html       ← complete single-page app
 - If you cannot reach a repo, say so plainly and note the work must happen in a
   session scoped to that repo — don't offer to "add" it. Conversely, don't declare
   a repo inaccessible without checking `list_repos` first when that tool exists.
+- Run the `scope.chk` skill to establish and report this — at session start and
+  any time the session drifts toward offering work on a repo it may not reach.
 
 ## Hosting
 - GitHub Pages only
@@ -124,9 +126,11 @@ that runs the same checks on demand when this auto-check did not fire.
 ## Session Start
 At the start of every session:
 1. Read this file fully and fetch all imported directive URLs.
-2. Confirm the active branch is not `main` before writing any code.
-3. Review open PRs for this repo before starting new work.
-4. Subscribe to active PRs via `subscribe_pr_activity`.
+2. Run `scope.chk` to confirm which repo(s) this session can actually act on (and
+   whether other repos can be added) before promising anything cross-repo.
+3. Confirm the active branch is not `main` before writing any code.
+4. Review open PRs for this repo before starting new work.
+5. Subscribe to active PRs via `subscribe_pr_activity`.
 
 ## Skill Bootstrap
 

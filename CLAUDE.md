@@ -77,6 +77,9 @@ type `my.list` for the current menu. Notable operational skills:
 - `update.pages` — standard procedure for any change that updates the Pages site:
   run gates, push, watch the deploy to a terminal state, and report live / stuck
   / failed proactively (encodes the stuck-pipeline toggle and cache gotchas).
+- `scope.chk` — report the session's true repository scope (which repos the GitHub
+  MCP can act on, whether others can be added) so cross-repo access is never
+  overclaimed; run at startup or whenever a session drifts.
 
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, verify locally using this repo's scripts:

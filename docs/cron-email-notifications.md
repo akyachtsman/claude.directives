@@ -12,27 +12,35 @@ against GitHub's 60-day scheduler auto-disable.
 
 ## GitHub settings (Settings → Secrets and variables → Actions)
 
-**Secrets** (sensitive):
+**Secrets** (credentials only) → *Secrets* tab:
 | Name | Value |
 |---|---|
-| `SMTP_HOST` | e.g. `smtp.gmail.com` |
-| `SMTP_USER` | the sending account |
 | `SMTP_PASS` | app password / API key |
-| `SMTP_PORT` | optional, default `587` |
-| `ALERT_FROM` | optional, default = `SMTP_USER` |
 | `KEEPALIVE_PAT` | PAT (fine-grained, this repo, **Contents: read/write**) |
 
 **Variables** (non-sensitive) → *Variables* tab:
 | Name | Value |
 |---|---|
-| `ALERT_TO` | recipient address (change anytime, no redeploy) |
+| `SMTP_HOST` | e.g. `smtp.gmail.com` |
+| `SMTP_PORT` | optional, default `587` |
+| `SMTP_USER` | the sending account |
+| `ALERT_FROM` | optional, default = `SMTP_USER` |
+| `ALERT_TO` | recipient address; defaults to `SMTP_USER` (change anytime, no redeploy) |
 
-> The task's own backend inputs (e.g. `DB_URL` / `DB_SERVICE_KEY` — see the data
-> directive `data.md`) are separate and added to the workflow's `env:` block.
+> Only the **credential** (`SMTP_PASS`) is a Secret — host, port, user, and the
+> alert addresses are non-sensitive, so they live in *Variables* where they stay
+> editable without a redeploy. **On a public repo, never put a credential
+> (`SMTP_PASS`, any key or PAT) in a Variable — Variables are world-readable.**
+
+> The task's own backend inputs are separate, added to the workflow's `env:`
+> block: `DB_URL` is a **Variable**, `DB_SERVICE_KEY` is a **Secret** (see the
+> data directive `data.md`).
 
 ### Getting a Gmail / Google Workspace app password
 1. Enable **2-Step Verification** (myaccount.google.com → Security).
 2. Go to **myaccount.google.com/apppasswords** → create one → copy the 16-char value.
+   **It is shown once and cannot be retrieved later** — if you lose it, delete that
+   app password and generate a new one.
 3. Enter it as `SMTP_PASS` **without spaces**. Set `SMTP_HOST=smtp.gmail.com`,
    `SMTP_PORT=587`, `SMTP_USER`=your address, `ALERT_FROM`=same address (Gmail
    forces From = the signed-in account).

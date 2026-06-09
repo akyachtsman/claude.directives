@@ -93,6 +93,31 @@ Execute in order:
       `test-verifier` → `code-reviewer` → `security-reviewer` → `pr-readiness-reviewer`
    5. Open PR to `main`
 
+   ## UI Test Configuration
+   Read by `ui-tester` and the Playwright kit at runtime — fill in before invoking agents:
+   | Key | Value |
+   |---|---|
+   | App URL | `https://akyachtsman.github.io/[repo-name]/` |
+   | Valid test credential | `[a real read-only TEST_AUTH_CREDENTIAL]` |
+   | Invalid test credential | `[any value the app rejects]` |
+   | Primary nav button | `[label of the first feature button]` |
+   | Primary content selector | `[CSS selector for loaded content, e.g. .task]` |
+   | Nav cards | `[top-level menu labels, e.g. ['Morning','Evening','Dashboard']]` |
+   | Playwright test directory | `.github/scripts/ui-tests` |
+   | Key selectors | `[login / home / error element selectors]` |
+
+   ## Reporting Requirements
+   Agents write evidence to `.agent-reports/`:
+   - `implementation-summary.md`, `test-report.md`, `ui-test-report.md`
+   - `playwright-results.json`, `screenshots/` (on failure)
+   - `code-review-report.md`, `security-review-report.md`, `pr-readiness-report.md`
+
+   ## Safety Rules for Agents
+   - Reviewer agents must not edit code unless explicitly instructed.
+   - Test commands must not require production credentials.
+   - Destructive commands, data resets, migrations, or deploys require explicit approval.
+   - If a check can't run locally, explain why and name the closest substitute.
+
    ## Session Start
    1. Read all Imported Directive URLs above fully
    2. Bootstrap skills and agents per the Skill Bootstrap block in global.md

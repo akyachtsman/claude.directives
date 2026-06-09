@@ -14,7 +14,6 @@ This is the exportable directive for downstream projects. Import it into your pr
 - `docs/testing-standard.md` — What to validate, report format requirements
 - `docs/code-review-standard.md` — Blocking vs. non-blocking review criteria
 - `docs/usage-guide.md` — Agent installation and .agent-reports/ organization
-- `docs/how-to-copy-into-project.md` — How to install agents locally into a project
 - `docs/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
 
 ### .claude/agents/qa/ — read ALL agent definitions
@@ -32,7 +31,6 @@ committed — there is no separate template copy.
 - `.claude/agents/qa/ui-tester.md` — Playwright browser testing agent
 
 ### templates/ — reference when scaffolding a new project
-- `templates/CLAUDE-template.md` — CLAUDE.md starter with all required sections
 - `templates/CICD-SETUP.md` — 9-step CI/CD setup checklist
 - `templates/implementation-summary-template.md` — required before invoking reviewers
 - `templates/test-report-template.md` — test-verifier report format

@@ -17,7 +17,7 @@ covers only how to operate *on this repo*.
 | `directives/global.md` | Exported global directive (was global's DIRECTIVE.md) |
 | `directives/design.md` | Exported design system (was design's DIRECTIVE.md) |
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
-| `directives/data.md` | Exported data/backend directive (Supabase, RLS, MCP config) |
+| `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-PROJECT-QUICKSTART.md` | Bootstrap guide for spinning up a new project repo |
 | `.claude/skills/` | Personal skill files, invoked by typing the skill name |

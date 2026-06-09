@@ -62,14 +62,14 @@ relax its security rules to make something work.
 
 ### Run the heatmap script manually
 - Find the heatmap script path in `CLAUDE.md`. Run it with `Bash`, supplying
-  `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` from the environment — never paste key
+  `DB_URL` and `DB_SERVICE_KEY` from the environment — never paste key
   values into the report or logs.
 - After it runs, verify its effect with a row-count / freshness query rather than
   trusting exit code alone.
 
 ### Validate secrets/variables configuration
-- Confirm the project is configured for the heatmap workflow: `SUPABASE_SERVICE_KEY`
-  as an Actions **secret** (server-side only) and `SUPABASE_URL` as an Actions
+- Confirm the project is configured for the heatmap workflow: `DB_SERVICE_KEY`
+  as an Actions **secret** (server-side only) and `DB_URL` as an Actions
   **variable**, per the quickstart setup steps.
 - Verify presence and correct placement (secret vs variable), never the values.
   Cross-check that the workflow YAML references them by the expected names and
@@ -106,8 +106,8 @@ Use when relevant and available:
 - Per table: RLS enabled? policies present? <table → enabled / policies / advisor findings>
 
 ## Configuration
-- SUPABASE_SERVICE_KEY (secret): Present / Missing — placement correct? Yes / No
-- SUPABASE_URL (variable): Present / Missing — placement correct? Yes / No
+- DB_SERVICE_KEY (secret): Present / Missing — placement correct? Yes / No
+- DB_URL (variable): Present / Missing — placement correct? Yes / No
 - Notes: <locations/types only; never include secret values>
 
 ## Recommended Actions

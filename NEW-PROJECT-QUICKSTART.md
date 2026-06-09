@@ -9,11 +9,11 @@
 4. Set repo Watch: **Watch → All Activity**
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):
    - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests
-   - `SUPABASE_SERVICE_KEY` — Supabase service-role key (required before the heatmap workflow can run)
+   - `DB_SERVICE_KEY` — backend service-role key (required before the heatmap workflow can run)
    - Any project-specific secrets the app requires
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
-   - `SUPABASE_URL` — your Supabase project URL (required before the heatmap workflow can run)
+   - `DB_URL` — your backend project/connection URL (required before the heatmap workflow can run)
 
 ### Step 2 — Bootstrap the project
 Open a Claude Code session scoped to the new repo and type:

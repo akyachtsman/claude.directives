@@ -7,8 +7,6 @@ This is the exportable directive for downstream projects. Import it into your pr
 ### docs/
 - `docs/automations.md` — CI monitor workflow, PR lifecycle rules, escalation rules
 - `docs/cicd-directives.md` — qa.yml / qa-live.yml / qa-response.yml workflow templates
-- `docs/upgrade-directives.md` — S2 diagnostic protocol, captureApiCalls(), Playwright config rules
-- `docs/session-handoff.md` — Per-project handoff template
 - `docs/agent-workflow.md` — 11-step builder → reviewer sequence
 - `docs/testing-standard.md` — What to validate, report format requirements
 - `docs/code-review-standard.md` — Blocking vs. non-blocking review criteria
@@ -33,6 +31,7 @@ committed — there is no separate template copy.
 - `templates/CICD-SETUP.md` — 9-step CI/CD setup checklist
 - `templates/implementation-summary-template.md` — required before invoking reviewers
 - `templates/pr-checklist.md` — PR readiness checklist
+- `templates/session-handoff-template.md` — per-project handoff (copy to `.claude/session-handoff.md`)
 - `templates/project-test-plan-template.md` — test plan structure
   (the test-verifier and code-reviewer report formats live inline in their agent
   definitions under `.claude/agents/qa/`)
@@ -49,7 +48,7 @@ committed — there is no separate template copy.
 
 Execute these steps at the start of every session, before any task work:
 1. Fetch and read every file listed under "Key docs" above
-2. Read `docs/session-handoff.md` in the target project (`.claude/session-handoff.md`) for current project state
+2. Read the target project's `.claude/session-handoff.md` (template: `templates/session-handoff-template.md`) for current project state
 3. Subscribe to PR activity on all open PRs via `subscribe_pr_activity`
 4. Poll GitHub Actions API (`mcp__github__actions_list`) for any failures since the last session
 5. Confirm `ci-monitor.yml` is present in `.github/workflows/` — add it if missing (see `templates/workflows/ci-monitor.yml`)

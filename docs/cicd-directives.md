@@ -1,4 +1,7 @@
-# Directives: CI/CD Automation
+# CI/CD Automation — Reference Standard
+
+> Supporting reference for the exported directives in `directives/`, not a
+> canonical directive itself.
 
 Apply the following templates and instructions to each new project so that QA runs automatically in CI/CD with minimal per-project configuration.
 

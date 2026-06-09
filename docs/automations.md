@@ -89,7 +89,7 @@ When a Claude Code session is live, it subscribes to PR activity for fast feedba
 - [ ] Confirm `codex-monitor.yml` is present
 - [ ] Check for any open `ci-failure` tracking issues before starting work
 - [ ] Subscribe to PR activity: `subscribe_pr_activity` on any open PRs
-- [ ] Read `session-handoff.md` for full project context
+- [ ] Read the project's `.claude/session-handoff.md` for full context (template: `templates/session-handoff-template.md`)
 
 ---
 

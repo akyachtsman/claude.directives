@@ -7,7 +7,7 @@ tools: Read, Glob, Grep, Bash
 ## Session Initialization
 
 Read `CLAUDE.md` before starting. All project-specific values — app URL, branch name,
-Airtable base and table IDs, field IDs, test credentials, script paths, workflow names —
+backend project/connection IDs, table and column names, test credentials, script paths, workflow names —
 come from `CLAUDE.md`. Do not hardcode these values here.
 
 # Code Reviewer Subagent

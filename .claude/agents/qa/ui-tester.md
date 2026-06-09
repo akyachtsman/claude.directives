@@ -7,7 +7,7 @@ tools: Read, Glob, Grep, Bash
 ## Session Initialization
 
 Read `CLAUDE.md` before starting. All project-specific values — app URL, branch name,
-Airtable base and table IDs, field IDs, test credentials, script paths, workflow names —
+backend project/connection IDs, table and column names, test credentials, script paths, workflow names —
 come from `CLAUDE.md`. Do not hardcode these values here.
 
 ## UI Tester Agent
@@ -104,7 +104,7 @@ auth-diagnostics attachment:
 | API status 401/403 | Invalid or missing auth token | Check API token in app config |
 | API status 404 | Wrong resource ID | Verify base/table/endpoint IDs in config |
 | No API call made | JS error before fetch | Check console errors |
-| Records returned, field key is human name (e.g. `"Active"`, `"Name"`) | Missing field-ID mode on fetch | Add `returnFieldsByFieldId=true` or equivalent to fetch params |
+| Data API returns empty / non-2xx, or rows in an unexpected shape | Wrong query, auth/RLS, or field mapping | Check the query params, the auth/RLS policy, and that the backend returns the expected field names |
 | Records returned, field key is ID, active rows = 0 | Active/status field filter mismatch | Check field value type: checkbox → `true`/`undefined`, not `1`/`0` |
 | Records returned, active rows found, no credential match | Credential type mismatch | Check for leading-zero stripping if credential stored as number vs string |
 

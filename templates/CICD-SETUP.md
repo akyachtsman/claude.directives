@@ -129,17 +129,16 @@ Confirm in the Actions tab that:
 
 ### 9a — CI Monitor
 
-Copy the template and **edit the `workflow_run.workflows` list** to match your project's
-CI workflow names (`grep '^name:' .github/workflows/*.yml` to find them):
+Drop-in — copy it verbatim. It ships pre-wired to watch the QA workflow that comes
+with it (`qa.yml` → `QA — Static + UI Tests`):
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
-# Edit workflow_run.workflows: replace 'QA — Directive Validation' with your project's CI workflow name(s)
 ```
 
-This is a **template, not a drop-in** — skipping the name edit means the monitor
-never fires on real CI events.
+Only edit `workflow_run.workflows` if you rename `qa.yml`'s `name:` or want it to
+watch additional workflows (`grep '^name:' .github/workflows/*.yml` to find them).
 
 After pushing, verify with a manual `workflow_dispatch` run before relying on it.
 

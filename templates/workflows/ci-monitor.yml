@@ -1,16 +1,20 @@
 name: CI Monitor
 
-# Event-driven CI failure monitor for this directive repo. Fires the moment the
-# repo's validation workflow completes; on failure it opens/updates a single
-# deduplicated tracking issue. The trigger is the completed workflow run itself,
-# GitHub-side — no session, no commit-hook. Uses only GITHUB_TOKEN — no Gmail,
-# no OAuth. workflow_dispatch is kept only for manual testing (window scan).
-# Listing watched workflows by name also prevents self-recursion (CI Monitor /
-# Codex Monitor are not in the list).
+# Event-driven CI failure monitor. Fires the moment the project's QA workflow
+# completes; on failure it opens/updates a single deduplicated tracking issue.
+# The trigger is the completed workflow run itself, GitHub-side — no session, no
+# commit-hook. Uses only GITHUB_TOKEN — no Gmail, no OAuth. workflow_dispatch is
+# kept only for manual testing (window scan).
+#
+# Drop-in: the watched name below matches the QA workflow shipped in the same
+# template (qa.yml -> 'QA — Static + UI Tests'), so copying both verbatim needs
+# no edits. Only change this list if you rename qa.yml's `name:`. Listing watched
+# workflows by name also prevents self-recursion (CI Monitor / Codex Monitor are
+# not in the list).
 on:
   workflow_run:
     workflows:
-      - 'QA — Directive Validation'
+      - 'QA — Static + UI Tests'
     types: [completed]
   workflow_dispatch:
     inputs:

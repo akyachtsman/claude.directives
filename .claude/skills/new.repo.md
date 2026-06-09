@@ -109,11 +109,10 @@ Execute in order:
    - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
      every `page_build`; portable as-is, no edits needed)
 
-   ⚠️ **Fix the monitor trigger.** The template `ci-monitor.yml` ships pinned to
-   this directive repo's CI name. After copying, open the project's `qa.yml`,
-   read its exact `name:` value (currently `QA — Static + UI Tests`), and set
-   that as the `workflow_run` → `workflows:` entry in `ci-monitor.yml`. A
-   mismatch means the monitor never fires.
+   All five are drop-in — copy them verbatim, no edits. `ci-monitor.yml` is
+   pre-wired to watch the QA workflow shipped alongside it
+   (`qa.yml` → `QA — Static + UI Tests`); only touch its `workflows:` list if you
+   rename `qa.yml`'s `name:`.
 
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains

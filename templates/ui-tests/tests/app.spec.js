@@ -246,6 +246,10 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 // SCENARIO 3 — Element Mapping & Interaction Sweep
 // ─────────────────────────────────────────────────────────────────────────────
 test('S3: interactive elements discovered and exercised without errors', async ({ page }) => {
+  // The sweep scales with element count (~1.5s settle per element plus
+  // navigation waits) and cannot fit the 30s global timeout on element-rich
+  // apps or mobile-emulated projects.
+  test.setTimeout(240_000);
   if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential — skipping interaction sweep (auth required to reach app content)');
   const consoleErrors = [];
   const apiAnomalies  = [];

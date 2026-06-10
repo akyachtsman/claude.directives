@@ -34,6 +34,33 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
 - Client-side safety depends entirely on RLS being correct. Never compensate for a
   missing or wrong policy by moving the service-role key client-side.
 
+## Client Auth Pattern (static app + anon key)
+The reference hardening recipe for the standard stack — static HTML/JS served
+from Pages, anon key in the client, no Supabase Auth. Proven in production;
+never ship `USING (true)` write policies instead of this.
+- **Login** goes through a `SECURITY DEFINER` function (e.g.
+  `login_with_pin(text)`): pin `search_path`, return only the columns the app
+  actually consumes, and revoke EXECUTE from `authenticated` (Supabase
+  default-grants functions broadly) so only `anon` can call it.
+- **The credential column is never anon-readable**: revoke table SELECT and
+  re-grant column-level SELECT on everything except the credential. (Filtering
+  on a column requires SELECT on it — which is why login must be the function,
+  not a client-side `.eq()` query.)
+- **Writes**: `INSERT` constrained via `WITH CHECK` (row must reference an
+  active actor; values bounded). `UPDATE`/`DELETE` restricted to the editable
+  window (e.g. same-day rows). Column-level UPDATE grants for only the fields
+  the app edits.
+- **Rollout order matters**: apply the additive pieces first (function + new
+  policies), deploy the app change, verify the **live served HTML** uses the
+  new path — past the CDN cache window (~10 min) — and only then revoke the
+  old access path. Each migration separate and reversible.
+- **Verify after every step**: re-run the security advisors, and run the live
+  QA suite against production before and after the revoke.
+- **Record accepted residuals** in the project CLAUDE.md security-constraints
+  section (e.g. editable-window rows remain anon-mutable, credential space is
+  brute-forceable through the login function, public objects reachable by
+  exact URL). RLS cannot rate-limit — say so rather than pretend.
+
 ## Escalation
 - Stop and ask before disabling RLS on any table.
 - Stop and ask before using the service-role key anywhere a browser can reach it.

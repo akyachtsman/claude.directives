@@ -1,6 +1,6 @@
 ---
 name: env.chk
-description: Full environment readiness check — session context, git health, CI status, validation gates, directive freshness, and a connectors/tools inventory
+description: Full environment readiness check — session context, git health, CI status, validation gates, directive freshness, a connectors/tools inventory, and the scope.chk repo-scope verification
 trigger: slash_command_and_auto
 ---
 Run a comprehensive environment readiness check and report a single pass/fail
@@ -25,9 +25,13 @@ verdict. Read-only — do NOT modify files. Execute in order:
    snapshot — if no snapshot exists, establish one now and report "baseline
    recorded"). Flag cross-repo contradictions.
 7. Connectors & tools — Inventory the session's actual capabilities. Discover
-   values LIVE from this session (do not hardcode); verify anything uncertain —
-   repo scope, whether a tool exists (e.g. send_later) — with ToolSearch rather
-   than assuming. Report in exactly this layout:
+   values LIVE from this session (do not hardcode). For the repo-scope limit,
+   **run the `scope.chk` verification** — confirm via ToolSearch whether the
+   `add_repo` / `list_repos` tools (claude-code-remote) actually exist, and report
+   the session's true actionable repo scope rather than assuming. Verify any other
+   uncertain tool (e.g. `send_later`) the same way. This is the always-run home of
+   the scope check for sessions whose Session Start invokes `env.chk`; `scope.chk`
+   remains available standalone for mid-session drift. Report in exactly this layout:
 
    ## Connectors (MCP servers)
    - **<Name>** — <one-line scope/role>

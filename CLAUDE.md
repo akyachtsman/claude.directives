@@ -51,7 +51,8 @@ relocate the export into this file.
 1. Read all Imported Directive URLs above fully
 2. Bootstrap skills and agents per the Skill Bootstrap block in global.md
 3. Confirm active branch: `git branch --show-current`
-4. Run `env.chk` and report status
+4. Run `env.chk` and report status — this includes the `scope.chk` repo-scope
+   verification (global.md's Session Start step 2), so it need not be run separately here
 
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.

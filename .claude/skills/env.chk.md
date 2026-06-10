@@ -1,6 +1,6 @@
 ---
 name: env.chk
-description: Full environment readiness check — session context, git health, CI status, validation gates, and directive freshness
+description: Full environment readiness check — session context, git health, CI status, validation gates, directive freshness, and a connectors/tools inventory
 trigger: slash_command_and_auto
 ---
 Run a comprehensive environment readiness check and report a single pass/fail
@@ -24,6 +24,28 @@ verdict. Read-only — do NOT modify files. Execute in order:
    imported?), and content drift (compare against .claude/directive-sync.json
    snapshot — if no snapshot exists, establish one now and report "baseline
    recorded"). Flag cross-repo contradictions.
+7. Connectors & tools — Inventory the session's actual capabilities. Discover
+   values LIVE from this session (do not hardcode); verify anything uncertain —
+   repo scope, whether a tool exists (e.g. send_later) — with ToolSearch rather
+   than assuming. Report in exactly this layout:
 
-Output a compact checklist with a checkmark or X per item. End with a one-line
-"ready / not ready" verdict and any actions needed before starting work.
+   ## Connectors (MCP servers)
+   - **<Name>** — <one-line scope/role>
+
+   ## Built-in tools
+   `Tool` · `Tool` · …
+
+   ## Deferred (via ToolSearch)
+   `Tool` · `Tool` · …
+
+   ## Sub-agents (via Agent)
+   `agent` · `agent` · …
+
+   ## Limits
+   - <key access limit, e.g. GitHub single-repo scope>
+   - <key access limit, e.g. no send_later / no gh / no browser>
+
+Output a compact checklist with a checkmark or X per item for steps 1–6. End
+with a one-line "ready / not ready" verdict and any actions needed before
+starting work, then append the step-7 connectors/tools inventory below the
+verdict (reference info, not pass/fail).

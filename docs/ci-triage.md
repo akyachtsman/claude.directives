@@ -70,16 +70,21 @@ Every project using these agents runs two Playwright workflows:
 
 ### Expected failures — do not investigate
 
-- `UI Tests (local server)` S2/S3 failures (and any backend-dependent S5+ project
-  scenarios) with `API status: no call` or `API status: 4xx`
+> Scenario **numbers are per-project** — projects renumber as their suite grows
+> (check the project CLAUDE.md scenario table). Match rules by the scenario's
+> **role**, never by its number alone.
+
+- `UI Tests (local server)` failures in the **auth scenario** or **interaction
+  sweep** (upstream kit: S2/S3) — and any backend-dependent project scenarios —
+  with `API status: no call` or `API status: 4xx`
   → Backend API is blocked on GitHub Actions runners — expected, non-blocking, `continue-on-error: true`
 - Any sandbox-run Playwright failure with "Host not in allowlist"
   → Environment network policy blocks the live URL — not an app defect
 
 ### Real failures — must investigate
 
-- S1 failure in local runner → app fails to load entirely, investigate immediately
-- S4 failure in local runner → responsive-layout check, no backend dependency, should always pass
+- **Page-load scenario** failure (upstream kit: S1) in local runner → app fails to load entirely, investigate immediately
+- **Responsive-layout scenario** failure (upstream kit: S4) in local runner → layout-only, no backend dependency, should always pass
 - Any failure in `qa-live.yml` → real failure against the live app, must fix before done
 
 ### Checking for a post-event workflow run

@@ -180,7 +180,9 @@ If an expected workflow run, deployment, or status does not exist:
 
 Before writing any application code, identify which UI features or data behaviors
 are not covered by the 4 generic Playwright scenarios (S1–S4) and document them
-in CLAUDE.md under a new section:
+in CLAUDE.md under a new section. (S1–S4/S5+ is the upstream kit's numbering for
+NEW projects; an existing project's CLAUDE.md scenario table is authoritative for
+its own numbering — match scenarios by role, not number.)
 
 ```markdown
 ## Project-Specific Test Scenarios

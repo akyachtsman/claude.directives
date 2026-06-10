@@ -4,7 +4,7 @@
   "directives": {
     "directives/global.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md",
-      "sha256": "ac3eb10e0f9571567656768d320317d47447f79cc7ccd451cf1897fc85281f99"
+      "sha256": "2d70be83d38b48914e7909d496226cec00b1595bbcb6439b2486c1a8751f9266"
     },
     "directives/design.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md",

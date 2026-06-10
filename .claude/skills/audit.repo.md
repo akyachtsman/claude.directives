@@ -1,5 +1,5 @@
 ---
-name: self.repo.audit
+name: audit.repo
 description: Audit current repo for drift between directive files and actual code, a full recursive code-correctness sweep, and structural soundness — always weighing whether re-organizing files would make the layout clearer and more error-proof
 trigger: slash_command_and_auto
 ---

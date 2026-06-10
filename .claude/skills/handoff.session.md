@@ -12,10 +12,14 @@ First, settle the working state — a handoff over a messy tree is worthless:
 - Commit and push every change; confirm `git status` is clean and nothing is unpushed.
 - Drive every open PR to a terminal state (merged or closed) — leave nothing dangling.
 - Clean up branches: a session should end with **no stray `claude/<name>` branches**.
-  Delete every merged/dead branch you can. For any the session **cannot** delete
-  itself (tooling or permission limits, e.g. the host blocks ref deletion), list it
-  in the handoff as an explicit **manual user action** — name the branch and where to
-  remove it (GitHub → Branches) — so it is never silently left behind.
+  **Enumerate the actual remote branches** — `git ls-remote --heads origin` or the
+  host's branch list/API — **not just local `git branch`**; a clean local tree says
+  nothing about merged refs still on the remote. Delete every merged/dead branch you
+  can. For any the session **cannot** delete itself (tooling or permission limits,
+  e.g. the host blocks remote ref deletion via the git proxy), list it in the handoff
+  as an explicit **manual user action** — name the branch and where to remove it
+  (GitHub → Branches) — so it is never silently left behind. **"No stray branches"
+  must be verified against the remote, not asserted from local state.**
 
 Lead the handoff with this pointer, verbatim:
 > CLAUDE.md is the source of truth — read it first. This file holds only what the

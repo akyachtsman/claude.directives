@@ -139,6 +139,9 @@ Execute in order:
    (`qa.yml` → `QA — Static + UI Tests`); only touch its `workflows:` list if you
    rename `qa.yml`'s `name:`.
 
+   Optional — **event-driven QA dispatch**: copy `qa-response.yml` too if
+   sessions/automations should be able to trigger QA via `repository_dispatch`.
+
    Optional — **scheduled email notifications**: if the project needs a cron job
    that emails alerts, also copy `cron-notify.yml` + `keepalive.yml` from
    `templates/workflows/` and `templates/scripts/notify-email.js`, then follow

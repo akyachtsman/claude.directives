@@ -72,7 +72,32 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 
 ---
 
-## Automation 4 — In-Session Reactive Subscription
+## Automation 4 — Pages Monitor Workflow (infra-resident, event-driven)
+
+**Goal:** Catch a broken GitHub Pages deploy the moment it happens — build errored
+or live URL not serving — with no session required.
+
+**How it works:**
+- Trigger: `page_build` — fires on every Pages build. `workflow_dispatch` allows a
+  manual liveness re-check.
+- Reads the build status from the event and verifies the live URL
+  (`https://<owner>.github.io/<repo>/`) returns 200, with cache-busted retries.
+- On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
+  issue. A healthy deploy closes it and reports green in the job summary only.
+- The live URL is derived generically — the file is portable to any project as-is.
+- Uses `GITHUB_TOKEN` only.
+
+**Template:** `templates/workflows/pages-monitor.yml` — drop-in, no customization needed.
+
+**To install:**
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
+  -o .github/workflows/pages-monitor.yml
+```
+
+---
+
+## Automation 5 — In-Session Reactive Subscription
 
 When a Claude Code session is live, it subscribes to PR activity for fast feedback:
 - Call `subscribe_pr_activity` on every open PR at session start
@@ -87,6 +112,7 @@ When a Claude Code session is live, it subscribes to PR activity for fast feedba
 
 - [ ] Confirm `ci-monitor.yml` is present and its `workflow_run.workflows` list is correct
 - [ ] Confirm `codex-monitor.yml` is present
+- [ ] Confirm `pages-monitor.yml` is present (any project with a GitHub Pages site)
 - [ ] Check for any open `ci-failure` tracking issues before starting work
 - [ ] Subscribe to PR activity: `subscribe_pr_activity` on any open PRs
 - [ ] Read `CLAUDE.md` for full project context
@@ -153,14 +179,14 @@ If an expected workflow run, deployment, or status does not exist:
 ## Bootstrap Step — Identify Project-Specific Test Scenarios
 
 Before writing any application code, identify which UI features or data behaviors
-are not covered by the 8 generic Playwright scenarios (S1–S8) and document them
+are not covered by the 4 generic Playwright scenarios (S1–S4) and document them
 in CLAUDE.md under a new section:
 
 ```markdown
 ## Project-Specific Test Scenarios
 | # | Feature | What to verify | Failure indicator |
 |---|---|---|---|
-| S9 | [feature name] | [what correct behavior looks like] | [what broken looks like] |
+| S5 | [feature name] | [what correct behavior looks like] | [what broken looks like] |
 ```
 
 Rules for identifying gaps:
@@ -170,6 +196,6 @@ Rules for identifying gaps:
 - Any feature where layout or structure depends on data shape (grids, sections, cards)
 - Any multi-step interaction beyond a single task toggle
 
-This table becomes the input to the ui-tester agent when adding S9+ scenarios
+This table becomes the input to the ui-tester agent when adding S5+ scenarios
 to app.spec.js. If the table is empty, the agent must explicitly confirm that
-S1–S8 fully cover the app's critical paths before proceeding.
+S1–S4 fully cover the app's critical paths before proceeding.

@@ -274,8 +274,11 @@ test('S3: interactive elements discovered and exercised without errors', async (
     const snapBefore   = await domSnapshot(page);
 
     try {
+      // CSS.escape is browser-only — in this Node context it throws, and the
+      // catch below would silently skip every id-bearing element. JSON.stringify
+      // yields a CSS-string-compatible escape for the [id="…"] selector.
       const locator = el.id
-        ? page.locator(`#${CSS.escape(el.id)}`)
+        ? page.locator(`[id=${JSON.stringify(el.id)}]`)
         : page.locator(el.selector).nth(el.index);
 
       if (!await locator.isVisible().catch(() => false)) continue;

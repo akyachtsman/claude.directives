@@ -17,7 +17,7 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 ### Operating Rules
 
 1. Read `CLAUDE.md` first — extract app URL and auth credentials (look for keys named `Test PIN`, `Valid PIN`, `Test credentials`, `Test password`, or similar)
-2. Check for pre-installed Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` before running `npx playwright install`
+2. Check for pre-installed Playwright browsers before running `npx playwright install` — look under `$PLAYWRIGHT_BROWSERS_PATH` if set, else `ls /opt/pw-browsers/` (the bundled version changes with the runner image; never assume a specific `chromium-<build>` directory)
 3. Install npm dependencies: `cd <Playwright test directory from CLAUDE.md> && npm install`
 4. Set `APP_URL` env var before running: use live URL for post-deploy runs, `http://localhost:8080` for local runs
 5. For local runs: start a server first with `npx http-server . -p 8080 --silent &` then `sleep 2`
@@ -43,25 +43,39 @@ Credentials are read from `CLAUDE.md` at runtime — not hardcoded. After auth a
 
 After auth (or immediately for public apps), enumerate all interactive elements:
 
+> The runnable copy lives in `templates/ui-tests/tests/app.spec.js`
+> (`discoverElements`) — that file is the source of truth. Keep the snippet
+> below in sync with it if either changes.
+
 ```javascript
-// Query all interactive elements visible in the current DOM state
-const elements = await page.evaluate(() => {
-  const tags = ['button', 'a[href]', 'input', 'select', 'textarea', '[role=button]', '[onclick]', '[tabindex]'];
-  return tags.flatMap(sel =>
-    [...document.querySelectorAll(sel)]
-      .filter(el => {
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0; // visible only
-      })
-      .map(el => ({
-        tag: el.tagName.toLowerCase(),
-        role: el.getAttribute('role') ?? null,
-        label: el.textContent?.trim().slice(0, 60) || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('name') || '',
-        type: el.getAttribute('type') ?? null,
-        id: el.id || null,
-      }))
-  );
-});
+async function discoverElements(page) {
+  return page.evaluate(() => {
+    const selectors = ['button', 'a[href]', 'input:not([type=hidden])', 'select', 'textarea',
+                       '[role=button]', '[onclick]'];
+    return selectors.flatMap(sel =>
+      [...document.querySelectorAll(sel)]
+        // Index BEFORE filtering: page.locator(sel).nth(i) counts every DOM match,
+        // hidden included, so the recorded index must count them too.
+        .map((el, index) => ({ el, index }))
+        .filter(({ el }) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        })
+        .map(({ el, index }) => ({
+          selector: sel,
+          index,
+          tag: el.tagName.toLowerCase(),
+          type: el.getAttribute('type') ?? null,
+          label: (el.textContent?.trim().slice(0, 60) ||
+                  el.getAttribute('aria-label') ||
+                  el.getAttribute('placeholder') ||
+                  el.getAttribute('name') ||
+                  el.id || '').slice(0, 60),
+          id: el.id || null,
+        }))
+    );
+  });
+}
 ```
 
 Record all discovered elements. This map drives Phase 3.

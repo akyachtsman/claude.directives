@@ -106,6 +106,14 @@ Execute in order:
    | Playwright test directory | `.github/scripts/ui-tests` |
    | Key selectors | `[login / home / error element selectors]` |
 
+   ## Project-Specific Test Scenarios
+   Authoritative list of coverage beyond the generic S1–S4 suite — the ui-tester
+   adds one `app.spec.js` scenario per row, numbered from S5. Fill in before
+   invoking agents (the ui-tester stops and asks if this table is missing).
+   | # | Feature | What to verify | Failure indicator |
+   |---|---|---|---|
+   | S5 | [feature name] | [what correct behavior looks like] | [what broken looks like] |
+
    ## Reporting Requirements
    Agents write evidence to `.agent-reports/`:
    - `implementation-summary.md`, `test-report.md`, `ui-test-report.md`

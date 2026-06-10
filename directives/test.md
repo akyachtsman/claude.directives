@@ -6,7 +6,7 @@ This is the exportable directive for downstream projects. Import it into your pr
 
 ### docs/
 - `docs/automations.md` — CI monitor workflow, PR lifecycle rules, escalation rules
-- `docs/cicd-directives.md` — qa.yml / qa-live.yml / qa-response.yml workflow templates
+- `docs/cicd-setup.md` — canonical CI/CD install procedure (workflow templates, monitors, secrets/variables)
 - `docs/agent-workflow.md` — 11-step builder → reviewer sequence
 - `docs/testing-standard.md` — What to validate, report format requirements
 - `docs/code-review-standard.md` — Blocking vs. non-blocking review criteria
@@ -28,7 +28,7 @@ committed — there is no separate template copy.
 - `.claude/agents/qa/ui-tester.md` — Playwright browser testing agent
 
 ### templates/ — reference when scaffolding a new project
-- `templates/CICD-SETUP.md` — 9-step CI/CD setup checklist
+- `docs/cicd-setup.md` — 9-step CI/CD setup checklist (also listed under Key docs)
 - `templates/implementation-summary-template.md` — required before invoking reviewers
 - `templates/pr-checklist.md` — PR readiness checklist
 - `templates/project-test-plan-template.md` — test plan structure

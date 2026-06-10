@@ -44,7 +44,7 @@ Round 1:  Invoke ui-tester → receive structured result
           If Pass → continue to step 3
           If Fail → analyze root cause from result
             If S2 (login) fails:
-              Read the s2-diagnostics attachment and structured error message first
+              Read the auth-diagnostics attachment and structured error message first
               Use the diagnostic decision tree in ui-tester.md to identify exact root cause
               Implement the targeted fix, wait for deployment (~60s), re-run ui-tester
             If other scenarios fail:

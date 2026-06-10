@@ -10,6 +10,26 @@
 
 Step-by-step guide for deploying the QA pipeline to a new project repo. Follow in order — each step must complete before the next.
 
+> This is the **single canonical install procedure** (it absorbed the former
+> `docs/cicd-directives.md`). Other docs link here rather than carrying their
+> own copy of these instructions.
+
+## Overview
+
+Two GitHub Actions workflows replace manual agent invocation for the mechanical parts of the QA pipeline:
+
+| Workflow | Trigger | What it runs |
+|---|---|---|
+| `qa.yml` | PR to main, push to feature branches | Static checks + Playwright against local server |
+| `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
+| `qa-response.yml` *(optional)* | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
+
+Three event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` (Step 9).
+
+The AI agent steps (code-reviewer, security-reviewer, pr-readiness-reviewer) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
+
+Do not edit the templates in place in `claude.directives` — copy to the target project, then customize.
+
 ## Prerequisites
 
 - Target repo exists on GitHub with source files committed to `main`
@@ -188,6 +208,31 @@ it on the next healthy deploy. Uses only `GITHUB_TOKEN`.
 
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.
+
+---
+
+## Reference — placeholders, secrets, and variables
+
+Key values to customize after copying:
+
+| Value | What to substitute |
+|---|---|
+| `REPLACE_WITH_YOUR_APP_URL` (`playwright.config.js`) | Live app URL fallback when the `APP_URL` env var is unset |
+| `UI_TESTS_DIR` (all qa workflows) | Path to your Playwright test directory (default: `.github/scripts/ui-tests`) |
+
+Required repository secrets:
+
+| Secret | Purpose |
+|---|---|
+| `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test |
+| `DB_SERVICE_KEY` | Backend service-role key — server-side only (required by the project's scheduled data workflow, if any) |
+
+Required repository variables:
+
+| Variable | Purpose |
+|---|---|
+| `APP_URL` | Live GitHub Pages URL (e.g. `https://<username>.github.io/<repo>/`) |
+| `DB_URL` | Backend project/connection URL (safe in a variable; the client/anon key relies on RLS) |
 
 ---
 

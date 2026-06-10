@@ -91,7 +91,7 @@ On session start:
 1. Call `subscribe_pr_activity` on the project PR — fast-feedback layer while session is live
 2. Poll `mcp__github__actions_list` for any failures since the last session — diagnose before proceeding
 3. Check for any open `ci-failure` tracking issues (filed by `ci-monitor.yml`)
-4. Confirm both `ci-monitor.yml` and `codex-monitor.yml` are present in `.github/workflows/`
+4. Confirm `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` are present in `.github/workflows/`
 
 ### Required Output Format
 

@@ -21,7 +21,7 @@ Step-by-step guide for deploying the QA pipeline to a new project repo. Follow i
 
 ## Step 1 — Copy workflow templates
 
-Copy all three workflow templates from `claude.directives` into the target repo's `.github/workflows/`:
+Copy the two core QA workflow templates from `claude.directives` into the target repo's `.github/workflows/`:
 
 ```bash
 mkdir -p .github/workflows
@@ -32,7 +32,12 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-live.yml \
   -o .github/workflows/qa-live.yml
+```
 
+Optional — event-driven QA dispatch hook (add if sessions/automations should be
+able to trigger QA via `repository_dispatch`):
+
+```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-response.yml \
   -o .github/workflows/qa-response.yml
 ```
@@ -62,6 +67,15 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/app.spec.js \
   -o .github/scripts/ui-tests/tests/app.spec.js
+```
+
+Then generate and **commit** the lockfile — required: `qa.yml`, `qa-live.yml`, and
+`qa-response.yml` key setup-node's npm cache to `package-lock.json`, and setup-node
+hard-fails ("Dependencies lock file is not found") without it:
+
+```bash
+cd .github/scripts/ui-tests && npm install && cd -
+git add .github/scripts/ui-tests/package-lock.json
 ```
 
 After copying, review which UI features are not covered by the generic S1–S4 test scenarios (e.g. data grouping, section rendering, feature-specific layouts, multi-step flows). Add project-specific scenarios for these gaps directly in `app.spec.js` (starting at S5) before the first CI run.
@@ -158,8 +172,22 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 **What it does:** fires when the Codex bot submits a PR review with concerns; adds
 a `codex-flagged` label to the PR. Uses only `GITHUB_TOKEN`.
 
-At the start of every new session, check for open `ci-failure` issues and
-`codex-flagged` PR labels before starting work.
+### 9c — Pages Monitor
+
+Drop-in, portable as-is (the live URL is derived from the repo):
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
+  -o .github/workflows/pages-monitor.yml
+```
+
+**What it does:** fires on every GitHub Pages build (`page_build`); verifies the
+build status and that the live URL serves HTTP 200 (cache-busted retries); on a
+problem opens/updates a single `pages-deploy-failure` tracking issue, and closes
+it on the next healthy deploy. Uses only `GITHUB_TOKEN`.
+
+At the start of every new session, check for open `ci-failure` /
+`pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.
 
 ---
 
@@ -167,9 +195,11 @@ At the start of every new session, check for open `ci-failure` issues and
 
 - [ ] `.github/workflows/qa.yml` present and triggering on push/PR
 - [ ] `.github/workflows/qa-live.yml` present and triggering after Pages deploy
-- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch
+- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch (optional)
 - [ ] `.github/workflows/ci-monitor.yml` present, `workflow_run.workflows` filled in, manual dispatch verified
 - [ ] `.github/workflows/codex-monitor.yml` present
+- [ ] `.github/workflows/pages-monitor.yml` present
+- [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret
 - [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions

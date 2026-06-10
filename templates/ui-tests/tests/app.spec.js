@@ -139,13 +139,16 @@ async function discoverElements(page) {
                        '[role=button]', '[onclick]'];
     return selectors.flatMap(sel =>
       [...document.querySelectorAll(sel)]
-        .filter(el => {
+        // Index BEFORE filtering: page.locator(sel).nth(i) counts every DOM match,
+        // hidden included, so the recorded index must count them too.
+        .map((el, index) => ({ el, index }))
+        .filter(({ el }) => {
           const r = el.getBoundingClientRect();
           return r.width > 0 && r.height > 0;
         })
-        .map((el, i) => ({
+        .map(({ el, index }) => ({
           selector: sel,
-          index: i,
+          index,
           tag: el.tagName.toLowerCase(),
           type: el.getAttribute('type') ?? null,
           label: (el.textContent?.trim().slice(0, 60) ||
@@ -265,6 +268,9 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
   for (const el of elements) {
     const errorsBefore = consoleErrors.length;
+    // Like errorsBefore: only calls made by THIS interaction count as findings.
+    // (A navigation resets window.__apiCalls; slice() then yields [] — safe.)
+    const callsBefore  = ((await getApiCalls()) ?? []).length;
     const snapBefore   = await domSnapshot(page);
 
     try {
@@ -288,8 +294,8 @@ test('S3: interactive elements discovered and exercised without errors', async (
       const snapAfter      = await domSnapshot(page);
       const domTransition  = JSON.stringify(snapBefore) !== JSON.stringify(snapAfter);
       const newErrors      = consoleErrors.slice(errorsBefore);
-      const apiCalls       = await getApiCalls();
-      const recentBadCalls = apiCalls.filter(c => c.status >= 400);
+      const apiCalls       = (await getApiCalls()) ?? [];
+      const recentBadCalls = apiCalls.slice(callsBefore).filter(c => c.status >= 400);
 
       if (newErrors.length > 0 || recentBadCalls.length > 0) {
         findings.push({

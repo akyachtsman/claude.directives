@@ -31,8 +31,11 @@ index.html       ← complete single-page app
   workflows/
     qa.yml
     qa-live.yml
+    ci-monitor.yml
+    codex-monitor.yml
+    pages-monitor.yml
   scripts/
-  ui-tests/
+    ui-tests/
 ```
 
 ## Backend
@@ -81,7 +84,7 @@ index.html       ← complete single-page app
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo
 - Never echo secrets in workflow logs
-- Security scan before every PR (canonical pattern — keep identical to the `qa.yml` / `qa-response.yml` secret-scan): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-" --include="*.js" --include="*.html" .`
+- Security scan before every PR (canonical pattern — keep identical to the `qa.yml` / `qa-response.yml` secret-scan): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-" --include="*.js" --include="*.html" --include="*.css" --include="*.json" --exclude-dir=node_modules --exclude-dir=.git .`
 
 ## Pre-Push Verification (Local Gate)
 Before committing or pushing to any branch, verify locally — do not rely on
@@ -157,6 +160,22 @@ for dir in skills agents; do
     gh api "repos/akyachtsman/claude.directives/contents/$p" --jq '.content' | base64 -d > "$p"
   done
 done
+```
+If `gh` is unavailable (common in remote/web sessions), use the tarball fallback —
+the bootstrap must not silently no-op just because `gh` is missing:
+```bash
+tmp=$(mktemp -d)
+curl -sL https://codeload.github.com/akyachtsman/claude.directives/tar.gz/main \
+  | tar -xz -C "$tmp" --strip-components=1
+for dir in skills agents; do
+  [ -d "$tmp/.claude/$dir" ] || continue
+  ( cd "$tmp" && find ".claude/$dir" -type f ) | while read -r p; do
+    [ -f "$p" ] && continue            # skip files that already exist
+    mkdir -p "$(dirname "$p")"
+    cp "$tmp/$p" "$p"
+  done
+done
+rm -rf "$tmp"
 ```
 Run this silently. Skip files that already exist. **Because it skips existing files, the bootstrap never updates a skill or agent already present — to pull upstream changes into files you already have, run the `refresh.repo` skill (it re-fetches and overwrites in place, flags upstream-removed orphans for confirmed deletion, and reports drift in template-derived files).** Once populated, skills are invoked by typing the skill name (e.g. `my.list`, `env.chk`, `doc.comp`); agents load automatically from `.claude/agents/` (Claude Code scans it recursively — agent identity comes from the `name:` frontmatter, not the path, and `name:` values must stay unique across the whole tree). Do NOT maintain a per-skill or per-agent URL list — the directories are the source of truth. Adding a skill or agent means dropping one file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket here and nothing else changes.
 

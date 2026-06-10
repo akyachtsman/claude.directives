@@ -1,5 +1,5 @@
 ---
-name: refresh
+name: refresh.repo
 description: Re-fetch skills and agents from claude.directives mid-session, updating .claude/skills/ and .claude/agents/ in place
 trigger: slash_command_and_auto
 ---
@@ -9,7 +9,7 @@ latest personal skills and agents **mid-session**, updating `.claude/skills/` an
 and you want it live without restarting the session.
 
 This mirrors the Session Start bootstrap, with one difference: Session Start
-**skips** files that already exist; `refresh` **overwrites** them so you get the
+**skips** files that already exist; `refresh.repo` **overwrites** them so you get the
 latest version. New files are added, existing files are replaced. (It does not
 delete local files that no longer exist upstream — remove those by hand if
 needed.)

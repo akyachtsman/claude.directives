@@ -8,6 +8,12 @@ the repo already records. It is NOT a project summary: CLAUDE.md, the README, an
 the workflow files already cover that, and re-stating them just creates a second
 file to keep in sync that goes stale the moment they change.
 
+Produce it as a **paste-ready chat message** for the human to copy — do **NOT**
+create or write `.claude/session-handoff.md` (or any handoff file). The handoff is
+generated on demand from the live session context; there is no persisted handoff
+file. Anything durable belongs in CLAUDE.md (per the exclude rule below), not a
+sidecar file.
+
 First, settle the working state — a handoff over a messy tree is worthless:
 - Commit and push every change; confirm `git status` is clean and nothing is unpushed.
 - Drive every open PR to a terminal state (merged or closed) — leave nothing dangling.

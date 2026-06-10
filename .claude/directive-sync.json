@@ -1,0 +1,22 @@
+{
+  "recorded": "2026-06-10",
+  "source": "env.chk baseline",
+  "directives": {
+    "directives/global.md": {
+      "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md",
+      "sha256": "ac3eb10e0f9571567656768d320317d47447f79cc7ccd451cf1897fc85281f99"
+    },
+    "directives/design.md": {
+      "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md",
+      "sha256": "02f48b9b3b22fd056d898dacd9512c1f3455b54c93e2cf140d02eedba917c931"
+    },
+    "directives/test.md": {
+      "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md",
+      "sha256": "421d45722bfe4c61fb7bdde510a19622a217c6ceef26533a0743900d1b41e591"
+    },
+    "directives/data.md": {
+      "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md",
+      "sha256": "85c3aa6fcfd7f399975dbb3917dd7be07a8592f2296b5b0d5ea3d5fee2fda276"
+    }
+  }
+}

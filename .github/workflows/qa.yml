@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: validation only reads the repo.
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Validate Directives

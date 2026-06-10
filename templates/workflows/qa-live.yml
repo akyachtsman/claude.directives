@@ -29,6 +29,10 @@ concurrency:
   group: qa-live-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: read the repo and run tests against the live URL.
+permissions:
+  contents: read
+
 env:
   UI_TESTS_DIR: .github/scripts/ui-tests
 

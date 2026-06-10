@@ -62,7 +62,7 @@ jobs:
             echo "Scanning $REPO for failed runs since $since"
             runs=$(gh api "repos/$REPO/actions/runs?per_page=50&status=completed" \
               --jq "[.workflow_runs[]
-                     | select(.conclusion==\"failure\" or .conclusion==\"timed_out\")
+                     | select(.conclusion==\"failure\" or .conclusion==\"timed_out\" or .conclusion==\"startup_failure\")
                      | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\")
                      | select(.updated_at >= \"$since\")
                      | {name, id, sha: .head_sha[0:7], branch: .head_branch, url: .html_url}]")
@@ -76,11 +76,19 @@ jobs:
           # gh issue/label need explicit --repo: no git checkout in this job.
           gh label create "$ISSUE_LABEL" --repo "$REPO" --color B60205 \
             --description "Open CI failure tracked by CI Monitor" 2>/dev/null || true
-          existing=$(gh issue list --repo "$REPO" --state open --label "$ISSUE_LABEL" \
-            --json number --jq '.[0].number // empty')
-          if [ -n "$existing" ]; then
-            echo "Updating existing tracking issue #$existing"
-            gh issue comment "$existing" --repo "$REPO" --body "CI failures detected at $stamp:
+          # Dedupe across ALL states so a previously-closed issue is reopened
+          # rather than duplicated. Pick the most recent tracking issue.
+          existing=$(gh issue list --repo "$REPO" --state all --label "$ISSUE_LABEL" \
+            --json number,state --jq 'sort_by(.number) | last // empty')
+          num=$(echo "$existing" | jq -r '.number // empty')
+          state=$(echo "$existing" | jq -r '(.state // "") | ascii_downcase')
+          if [ -n "$num" ]; then
+            if [ "$state" = "closed" ]; then
+              echo "Reopening tracking issue #$num"
+              gh issue reopen "$num" --repo "$REPO"
+            fi
+            echo "Commenting on tracking issue #$num"
+            gh issue comment "$num" --repo "$REPO" --body "CI failures detected at $stamp:
           $body"
           else
             echo "Opening new tracking issue"

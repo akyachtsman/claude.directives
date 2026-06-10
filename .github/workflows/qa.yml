@@ -32,11 +32,21 @@ jobs:
         run: |
           python3 -c "
           import yaml, sys, glob
-          files = glob.glob('.github/workflows/*.yml')
+          files = glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml') \
+                + glob.glob('templates/workflows/*.yml') + glob.glob('templates/workflows/*.yaml')
           for f in files:
               yaml.safe_load(open(f))
               print(f'OK: {f}')
           "
+
+      # These pairs are intentionally byte-identical (the template IS the live copy).
+      # ci-monitor.yml is exempt: its watched-workflow list intentionally differs.
+      - name: Check intentionally-identical file pairs
+        run: |
+          diff .claude/settings.json templates/claude-settings.json
+          diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
+          diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
+          echo "OK: paired files in sync"
 
   check-external-links:
     name: Check External Links (warn only)

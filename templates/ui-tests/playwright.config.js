@@ -1,4 +1,4 @@
-// Playwright configuration template for apfp-style static HTML apps.
+// Playwright configuration template for static HTML apps.
 // Copy to .github/scripts/ui-tests/playwright.config.js and customize.
 // Replace all REPLACE_* placeholders before use.
 

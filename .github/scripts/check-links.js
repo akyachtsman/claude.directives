@@ -6,7 +6,7 @@ import { execSync } from 'child_process';
 function findMarkdown(dir) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '.git') continue;
+    if (['node_modules', '.git', 'dist', 'build', 'out'].includes(entry.name)) continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...findMarkdown(full));
@@ -25,15 +25,18 @@ function findMarkdown(dir) {
 const mode = process.argv[2] ?? '--all';
 
 const REPO = 'akyachtsman/claude.directives';
-const URL_RE = /https:\/\/raw\.githubusercontent\.com\/[^\s)>'"`]+/g;
+// All https links, not just raw.githubusercontent.com — otherwise the external
+// job silently skips Pages URLs, API endpoints, and other outbound references.
+const URL_RE = /https:\/\/[^\s)>'"`]+/g;
 
 const urls = new Set();
 for (const file of findMarkdown('.')) {
   const content = readFileSync(file, 'utf8');
-  for (const url of content.match(URL_RE) ?? []) {
+  for (let url of content.match(URL_RE) ?? []) {
+    url = url.replace(/[.,;:]+$/, ''); // strip trailing prose punctuation
     // Skip template placeholder URLs (e.g. .../<repo>/<ref>/<path>) — they are
-    // documentation examples, not real links to resolve.
-    if (url.includes('<')) continue;
+    // documentation examples, not real links to resolve. [bracketed] likewise.
+    if (url.includes('<') || url.includes('[')) continue;
     urls.add(url);
   }
 }
@@ -53,8 +56,13 @@ const targets = [...urls].filter(url =>
   true
 );
 
-const token = process.env.GITHUB_TOKEN;
-const authHeader = token ? `-H "Authorization: Bearer ${token}"` : '';
+// Auth only for GitHub-hosted URLs; the token is expanded by the shell from the
+// environment, never interpolated into the command string (process-listing safe).
+const hasToken = Boolean(process.env.GITHUB_TOKEN);
+const authHeaderFor = url =>
+  hasToken && /https:\/\/(raw\.githubusercontent\.com|api\.github\.com|github\.com)\//.test(url)
+    ? '-H "Authorization: Bearer $GITHUB_TOKEN"'
+    : '';
 
 let failed = false;
 
@@ -76,7 +84,7 @@ for (const url of externalTargets) {
   let ok = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      execSync(`curl -sf --max-time 10 ${authHeader} "${url}" -o /dev/null`, { stdio: 'pipe' });
+      execSync(`curl -sfL --max-time 10 ${authHeaderFor(url)} "${url}" -o /dev/null`, { stdio: 'pipe' });
       ok = true;
       break;
     } catch {

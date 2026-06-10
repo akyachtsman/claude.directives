@@ -22,8 +22,9 @@ verdict. Read-only — do NOT modify files. Execute in order:
 6. Directive freshness — Read CLAUDE.md and extract every imported directive
    URL. For each: check reachability (404?), coverage (any upstream files not
    imported?), and content drift (compare against .claude/directive-sync.json
-   snapshot — if no snapshot exists, establish one now and report "baseline
-   recorded"). Flag cross-repo contradictions.
+   snapshot — if no snapshot exists, do NOT create one; report "no baseline"
+   as a finding and suggest recording one as an explicit follow-up task, so
+   this check stays read-only). Flag cross-repo contradictions.
 7. Connectors & tools — Inventory the session's actual capabilities. Discover
    values LIVE from this session (do not hardcode). For the repo-scope limit,
    **run the `scope.chk` verification** — confirm via ToolSearch whether the

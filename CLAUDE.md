@@ -44,8 +44,12 @@ relocate the export into this file.
 
 ## Branch policy
 - Develop all changes on `claude/<name>` branches.
+- Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
+  next from updated `main` rather than reusing/force-pushing one long-lived branch.
 - Never commit directly to `main`.
 - Open a draft PR immediately after first push; squash-merge when CI is green.
+- Before merging, confirm the PR's diff is only the files you intended — a surprise
+  file count means a stale/tangled branch; verify against GitHub, not the local clone.
 
 ## Session Start
 1. Read all Imported Directive URLs above fully

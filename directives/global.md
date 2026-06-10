@@ -53,6 +53,10 @@ index.html       ← complete single-page app
 - Work happens in Claude Code sessions (web, desktop, or CLI) scoped to a repo
 - Full terminal, git, and `gh` CLI are available — use them
 - All code changes go through a `claude/<name>` branch and a PR to `main`
+- Use a **fresh** `claude/<name>` branch per change — don't reuse one branch across
+  multiple PRs. After a squash-merge, cut the next branch from updated `main`.
+  Recycling a branch (repeated force-pushes, especially against a stale local clone)
+  drifts it into a tangled lineage and can attach the wrong diff to a PR.
 - Subscribe to PR activity; fix CI before marking ready
 - GitHub Pages for project web apps only
 
@@ -99,6 +103,9 @@ that runs the same checks on demand when this auto-check did not fire.
 - Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
 - Fix all CI failures before marking ready for review
 - Mark PR ready only when all checks pass
+- Before merging, confirm the PR's file list is **only** what you changed. A surprise
+  file count signals a stale or tangled branch — verify against GitHub's own PR diff,
+  not a possibly-stale local clone (re-fetch/prune, or re-cut from `main`, if they disagree)
 - Never force-push to `main`
 
 ## Async Operations

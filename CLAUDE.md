@@ -58,6 +58,17 @@ relocate the export into this file.
 4. Run `env.chk` and report status — this includes the `scope.chk` repo-scope
    verification (global.md's Session Start step 2), so it need not be run separately here
 
+## Mid-session change semantics
+What a live session sees when these files change mid-session — don't assume
+everything hot-reloads:
+- `.claude/skills/` — **live at next invocation** (skill files are read when typed).
+- `CLAUDE.md` and `directives/` — **stale until re-read**: the copy injected at
+  session start does not update. The PostToolUse hook reminds on CLAUDE.md
+  edits; `refresh.repo` Phase 0 re-reads CLAUDE.md + directives explicitly.
+- `.claude/settings.json` hooks and `.claude/agents/` — **loaded at session
+  start only**; changes take effect in the NEXT session (the hook says so when
+  these files are edited).
+
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.
 - `qa.yml` — `QA — Directive Validation`: internal link check (hard fail, verified

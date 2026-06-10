@@ -13,6 +13,14 @@ a file GitHub Pages serves (root `index.html`, `docs/index.html`,
 configuration. Don't wait to be asked: if the change you just made will change
 what `*.github.io` serves, run these steps and report when it's live.
 
+> **Coverage, honestly.** The `.claude/settings.json` PostToolUse hook that surfaces
+> this reminder is a **best-effort nudge** — it fires only on `Edit`/`Write` of
+> `index.html` / `docs/*.html` / `.css`, so `.js`, Bash-driven edits, and other served
+> assets slip past it silently. Don't treat the hook as complete coverage. The
+> **complete, reliable guarantee is `pages-monitor.yml`**, which verifies *every*
+> `page_build` server-side regardless of how the change was made. Hook = fast
+> in-session nudge; monitor = the safety net.
+
 Run in order:
 
 1. **Pre-flight (local gate).** Before pushing, run the repo's validation:

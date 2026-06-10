@@ -1,8 +1,30 @@
 ---
 name: handoff.session
-description: Generate a paste-ready handoff summary for a fresh Claude session
+description: Write a delta-only handoff for a fresh session — only what no other repo file already captures
 trigger: slash_command_and_auto
 ---
-Summarize everything done in this session. List open threads, decisions pending,
-or partial work. Format as a paste-ready handoff for a fresh Claude session.
-Include the next 3 logical steps.
+Write a session handoff that captures ONLY the delta — the things no other file in
+the repo already records. It is NOT a project summary: CLAUDE.md, the README, and
+the workflow files already cover that, and re-stating them just creates a second
+file to keep in sync that goes stale the moment they change.
+
+Lead the handoff with this pointer, verbatim:
+> CLAUDE.md is the source of truth — read it first. This file holds only what the
+> repo doesn't capture.
+
+Include only:
+- **Open loose ends with no other tracker** — pending manual steps that need a human
+  or a UI action, credential/secret expiry dates, unbuilt backlog items; anything
+  half-done that no PR or issue is already tracking.
+- **Out-of-band context that lives in no file** — the cross-repo coordination model,
+  which files are vendored or generated (don't hand-edit), scope limits; anything you
+  had to be *told* rather than read.
+- **Gotchas** a fresh session would otherwise re-learn the hard way — a non-obvious
+  failure mode, an ordering constraint, a "looks broken but isn't."
+
+Explicitly exclude anything already in CLAUDE.md, the README, or workflow files. If a
+fact belongs in a repo file, put it THERE and leave it out of the handoff — the
+handoff is the home only for facts that have no home.
+
+Self-check before writing: for each line ask — is this already in a repo file? If
+yes, drop it.

@@ -18,14 +18,21 @@ First, settle the working state — a handoff over a messy tree is worthless:
 - Commit and push every change; confirm `git status` is clean and nothing is unpushed.
 - Drive every open PR to a terminal state (merged or closed) — leave nothing dangling.
 - Clean up branches: a session should end with **no stray `claude/<name>` branches**.
+  **The real fix is one-time, not per-session:** enable **Settings → General →
+  Automatically delete head branches** on the repo — GitHub then deletes each head
+  branch the moment its PR merges, so this checklist self-empties and no hand-deletion
+  is needed. Recommend enabling it whenever the list below is non-empty.
   **Enumerate the actual remote branches** — `git ls-remote --heads origin` or the
   host's branch list/API — **not just local `git branch`**; a clean local tree says
   nothing about merged refs still on the remote. Delete every merged/dead branch you
-  can. For any the session **cannot** delete itself (tooling or permission limits,
-  e.g. the host blocks remote ref deletion via the git proxy), list it in the handoff
-  as an explicit **manual user action** — name the branch and where to remove it
-  (GitHub → Branches) — so it is never silently left behind. **"No stray branches"
-  must be verified against the remote, not asserted from local state.**
+  can. For any the session **cannot** delete itself (tooling/permission limits, e.g.
+  the host blocks remote ref deletion), list it as an explicit **manual user action**
+  with a **reliable removal path**: *open the branch's merged PR → "Delete branch"*
+  (always present on a merged PR), or the repo's **`/branches/all`** page (search the
+  name). **Do not** send the user to the plain Branches overview — it often omits
+  merged branches, so they can't find them there. Only branches predating the
+  auto-delete setting should ever need this. **"No stray branches" must be verified
+  against the remote, not asserted from local state.**
 
 Lead the handoff with this pointer, verbatim:
 > CLAUDE.md is the source of truth — read it first. This file holds only what the
@@ -52,8 +59,10 @@ yes, drop it.
 **End the handoff with a consolidated `Branches to delete` checklist** — the very
 last thing in the message. Re-run `git ls-remote --heads origin 'refs/heads/claude/*'`
 and list **every** stray `claude/<name>` branch still on the remote as a plain
-checklist (branch name + "GitHub → Branches → 🗑"), since the session can't delete
-them itself. This is a hard exit gate: invoking the handoff means the session is
-about to be deleted, so the human needs one clear list to clear before closing —
-nothing orphaned. If `git ls-remote` returns no `claude/*` branches, say exactly
-"Branches to delete: none — remote is clean."
+checklist, each with a **reliable removal path**: *open its merged PR → "Delete
+branch"*, or the **`/branches/all`** page (search the name) — **not** the plain
+Branches overview, which often omits merged branches. The session can't delete them
+itself. This is a hard exit gate: invoking the handoff means the session is about to
+be deleted, so the human needs one clear list to clear before closing — nothing
+orphaned. With **Automatically delete head branches** enabled (see above), this
+should almost always print exactly "Branches to delete: none — remote is clean."

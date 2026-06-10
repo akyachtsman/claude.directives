@@ -29,6 +29,10 @@ const REPO = 'akyachtsman/claude.directives';
 // job silently skips Pages URLs, API endpoints, and other outbound references.
 const URL_RE = /https:\/\/[^\s)>'"`]+/g;
 
+// Hosts that bot-protect plain curl (always non-2xx even when the URL is valid).
+// Checking them is pure noise — e.g. the claude.ai/code signature link.
+const SKIP_HOSTS = ['claude.ai'];
+
 const urls = new Set();
 for (const file of findMarkdown('.')) {
   const content = readFileSync(file, 'utf8');
@@ -37,6 +41,7 @@ for (const file of findMarkdown('.')) {
     // Skip template placeholder URLs (e.g. .../<repo>/<ref>/<path>) — they are
     // documentation examples, not real links to resolve. [bracketed] likewise.
     if (url.includes('<') || url.includes('[')) continue;
+    if (SKIP_HOSTS.some(h => url.startsWith(`https://${h}/`))) continue;
     urls.add(url);
   }
 }

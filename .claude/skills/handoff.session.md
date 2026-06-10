@@ -42,3 +42,12 @@ handoff is the home only for facts that have no home.
 
 Self-check before writing: for each line ask — is this already in a repo file? If
 yes, drop it.
+
+**End the handoff with a consolidated `Branches to delete` checklist** — the very
+last thing in the message. Re-run `git ls-remote --heads origin 'refs/heads/claude/*'`
+and list **every** stray `claude/<name>` branch still on the remote as a plain
+checklist (branch name + "GitHub → Branches → 🗑"), since the session can't delete
+them itself. This is a hard exit gate: invoking the handoff means the session is
+about to be deleted, so the human needs one clear list to clear before closing —
+nothing orphaned. If `git ls-remote` returns no `claude/*` branches, say exactly
+"Branches to delete: none — remote is clean."

@@ -1,15 +1,25 @@
 ---
 name: refresh.repo
-description: Re-sync this project with claude.directives mid-session — update .claude/skills/ and .claude/agents/ in place, flag upstream-removed orphans, and report drift in template-derived files (workflows, ui-tests kit, settings hooks)
+description: Re-sync this project with claude.directives mid-session — re-read CLAUDE.md + the imported directives first, update .claude/skills/ and .claude/agents/ in place, flag upstream-removed orphans, and report drift in template-derived files (workflows, ui-tests kit, settings hooks)
 trigger: slash_command_and_auto
 ---
 Re-sync the project against `akyachtsman/claude.directives` **mid-session**, in
-three phases. Use this after anything has changed upstream and you want it live
+four phases. Use this after anything has changed upstream and you want it live
 without restarting the session.
 
 This mirrors the Session Start bootstrap, with one difference: Session Start
 **skips** files that already exist; `refresh.repo` **overwrites** them so you get the
 latest version.
+
+## Phase 0 — Re-read the rules (context refresh)
+
+The session's working rules were loaded at session start and do NOT update
+themselves. Before syncing any files, re-fetch and re-read the four imported
+directive URLs from CLAUDE.md, and re-read CLAUDE.md itself, so the session's
+in-context knowledge matches what Phases 1–3 are about to sync. Note: hook
+config (`.claude/settings.json`) and agent definitions still reload only on a
+NEW session — flag any of those that Phase 1/3 changes as "live next session"
+in the report rather than assuming they are active.
 
 ## Phase 1 — Skills & agents (overwrite in place)
 
@@ -81,5 +91,6 @@ via `gh api`/raw URL.
 ## Report
 
 Run silently, then type `my.list` to confirm the refreshed skill menu and
-report: skills/agents added or updated, orphan candidates and their resolution,
+report: directives re-read (Phase 0), skills/agents added or updated (with any
+marked "live next session"), orphan candidates and their resolution,
 and template drift found (and what, if anything, was applied).

@@ -14,6 +14,10 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: these jobs only read the repo and run tests.
+permissions:
+  contents: read
+
 env:
   # Path to the directory containing playwright.config.js and package.json
   UI_TESTS_DIR: .github/scripts/ui-tests
@@ -31,14 +35,18 @@ jobs:
       # Flags common API token patterns before any tests run.
       - name: Secret scan
         run: |
+          # Canonical secret-scan pattern — keep identical to global.md and qa-response.yml.
           if grep -rE \
-            'pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-[A-Za-z0-9-]{20,}' \
+            'pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-' \
             --include="*.js" --include="*.html" --include="*.css" --include="*.json" \
             --exclude-dir=node_modules --exclude-dir=.git .; then
             echo "ERROR: potential API token found in source files"
             exit 1
           fi
 
+      # `cache: npm` requires a committed package-lock.json at the path below.
+      # Generate it once (`npm install` in UI_TESTS_DIR) and COMMIT it, or this
+      # step fails with "Dependencies lock file is not found".
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

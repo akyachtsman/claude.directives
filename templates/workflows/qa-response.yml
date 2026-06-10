@@ -30,6 +30,10 @@ on:
         required: false
         default: 'Manual session trigger'
 
+# Least privilege: read the repo and run tests.
+permissions:
+  contents: read
+
 env:
   UI_TESTS_DIR: .github/scripts/ui-tests
 
@@ -42,16 +46,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Event data is passed through env, never interpolated directly into the
+      # run: script — a repository_dispatch client_payload is attacker-influenceable,
+      # and inlining `${{ github.event.* }}` into a shell body is a script-injection vector.
       - name: Log trigger reason
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
         run: |
-          echo "Trigger: ${{ github.event_name }}"
-          echo "Event type: ${{ github.event.action }}"
-          echo "Payload: ${{ toJson(github.event.client_payload) }}"
+          echo "Trigger: $EVENT_NAME"
+          echo "Event type: $EVENT_ACTION"
+          echo "Payload: $CLIENT_PAYLOAD"
 
       - name: Secret scan
         run: |
+          # Canonical secret-scan pattern — keep identical to global.md and qa.yml.
           if grep -rE \
-            'pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-[A-Za-z0-9-]{20,}' \
+            'pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-' \
             --include="*.js" --include="*.html" --include="*.css" --include="*.json" \
             --exclude-dir=node_modules --exclude-dir=.git .; then
             echo "ERROR: potential API token found in source files"

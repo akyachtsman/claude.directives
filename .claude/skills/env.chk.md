@@ -6,8 +6,8 @@ trigger: slash_command_and_auto
 Run a comprehensive environment readiness check and report a single pass/fail
 verdict. Read-only — do NOT modify files. Execute in order:
 
-1. Context — Read session-handoff.md (or the repo's handoff/README) and
-   summarize current project state.
+1. Context — Read `CLAUDE.md` (and the repo's README) and summarize current
+   project state.
 2. Branch and git health — Report the current branch (compare against the
    branch policy in CLAUDE.md if defined) and flag any uncommitted changes or
    merge conflicts against the default branch.

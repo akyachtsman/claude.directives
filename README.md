@@ -12,12 +12,11 @@ The exported, downstream-imported directives live in `directives/`:
 Repo-internal operating instructions are in `CLAUDE.md`, and project bootstrap
 lives in `NEW-REPO-USER-INSTRUCTIONS.md`. Supporting directories:
 
-- `.claude/skills/` — personal skills, invoked by typing the skill name (type
-  `my.list` for the menu); bootstrapped fresh from this repo each session
-- `.claude/agents/` — agent definitions in purpose-based subfolders (`qa/`, `data/`)
+- `plugins/directives-toolkit/` — the installable toolkit (commands, auto-skills,
+  QA/data agents, guard hooks); this repo doubles as its plugin marketplace
 - `docs/` — reference material, including the rendered design system reference at
   `docs/design-system.html`
-- `templates/` — installable workflows, agents, and the Playwright test kit
+- `templates/` — installable workflows and the Playwright test kit
 
 **Live demos:** https://akyachtsman.github.io/claude.directives/ — rendered UI
 references, including the [design system reference](https://akyachtsman.github.io/claude.directives/docs/design-system.html).

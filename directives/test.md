@@ -15,29 +15,28 @@ never touch.
 - `docs/usage-guide.md` — Agent installation, review boundaries, and .agent-reports/ organization
 - `docs/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
 
-### .claude/agents/qa/ — loaded automatically
-Agents load recursively from `.claude/agents/` at session start (the harness
-scans the tree) — there is no need to read the definition files manually; the
-full body loads when an agent is invoked. Downstream projects inherit them by
-fetching `.claude/agents/` fresh from `claude.directives` each session (the
-Skill Bootstrap), gitignored and never committed — there is no separate
-template copy. Inventory (subfolders are purpose-based: `qa/` and `data/`
-today; `scrape/`, … as new types appear):
-- `.claude/agents/qa/test-monitor.md` — thin in-session CI status helper (one-pass check, not the always-on monitor)
-- `.claude/agents/qa/test-verifier.md` — independent QA verification agent
-- `.claude/agents/qa/code-reviewer.md` — code quality review agent
-- `.claude/agents/qa/security-reviewer.md` — security vulnerability review agent
-- `.claude/agents/qa/pr-readiness-reviewer.md` — final merge gate agent
-- `.claude/agents/qa/qa-pipeline.md` — full pipeline orchestrator
-- `.claude/agents/qa/ui-tester.md` — Playwright browser testing agent
+### QA/data agents — ship in the directives-toolkit plugin
+Agents arrive via the `directives-toolkit` plugin (see global.md → Skill
+Bootstrap; web environments install it in the setup script) and are namespaced
+`directives-toolkit:*`. Nothing is fetched into `.claude/`; the full body loads
+when an agent is invoked. Inventory (source:
+`claude.directives/plugins/directives-toolkit/agents/`):
+- `test-monitor` — thin in-session CI status helper (one-pass check, not the always-on monitor)
+- `test-verifier` — independent QA verification agent
+- `code-reviewer` — code quality review agent
+- `security-reviewer` — security vulnerability review agent
+- `pr-readiness-reviewer` — final merge gate agent
+- `qa-pipeline` — full pipeline orchestrator
+- `ui-tester` — Playwright browser testing agent
+- `supabase` — data/backend specialist (per `data.md`)
 
 ### templates/ — fill-in artifacts
-- `templates/CLAUDE-template.md` — project CLAUDE.md scaffold (used by `new.repo`)
+- `templates/CLAUDE-template.md` — project CLAUDE.md scaffold (used by `/new-repo`)
 - `templates/implementation-summary-template.md` — required before invoking reviewers
 - `templates/pr-checklist.md` — PR readiness checklist
 - `templates/project-test-plan-template.md` — test plan structure
   (the test-verifier and code-reviewer report formats live inline in their agent
-  definitions under `.claude/agents/qa/`)
+  definitions inside the plugin)
 
 Workflow and Playwright-kit installation — which template goes where, and the
 monitors — is `docs/cicd-setup.md`'s job; don't re-derive it from the tree.

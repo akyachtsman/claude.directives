@@ -6,12 +6,13 @@ skills are **not** a committed runtime dependency — they bootstrap fresh from
 
 ## Installation
 
-- **New project:** run `/new.repo` (see `NEW-REPO-USER-INSTRUCTIONS.md`). It scaffolds
-  `CLAUDE.md`, the CI workflows, the Playwright kit, and the hooks, and bootstraps
-  skills + agents from this repo.
-- **Existing project:** at session start the Skill Bootstrap block (in
-  `directives/global.md`) fetches `.claude/skills/` and `.claude/agents/` fresh.
-  Agents are gitignored — re-fetched each session, never committed.
+- **New project:** run `/new-repo` (see `NEW-REPO-USER-INSTRUCTIONS.md` — its
+  step 7 puts the plugin install in the environment setup script). It scaffolds
+  `CLAUDE.md`, the CI workflows, the Playwright kit, and the plugin-enable
+  settings.
+- **Existing project:** the `directives-toolkit` plugin delivers all commands,
+  skills, agents, and hooks (global.md → Skill Bootstrap). Nothing is fetched
+  into `.claude/`; updates track this repo's `main` automatically.
 
 Agents available: the `qa/` reviewers (`test-verifier`, `code-reviewer`,
 `security-reviewer`, `pr-readiness-reviewer`, `qa-pipeline`, `ui-tester`,

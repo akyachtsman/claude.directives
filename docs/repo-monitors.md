@@ -20,7 +20,7 @@ build status from the event, verifies the live URL (`https://<owner>.github.io/<
 returns 200 with cache-busted retries, and on a problem (build errored or site not
 serving) opens/updates a deduplicated `pages-deploy-failure` tracking issue; a healthy
 deploy closes that issue and reports green in the job summary only. This is the
-zero-model counterpart to the `update.pages` skill: the deploy already happens on push
+zero-model counterpart to the `update-pages` skill: the deploy already happens on push
 (branch-source Pages), and this adds the verify + notify layer with no session required.
 The live URL is derived generically, so the file is portable to any project as-is.
 

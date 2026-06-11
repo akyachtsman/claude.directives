@@ -3,5 +3,5 @@
   { "file": "directives/design.md", "sections": ["Color Palette", "Typography", "iPad Rules"] },
   { "file": "directives/test.md", "sections": ["Session start", "Playwright", "CI triage", "Escalation"] },
   { "file": "directives/data.md", "sections": ["Preferred Backend", "Row-Level Security (RLS)", "Keys", "Escalation"] },
-  { "file": "NEW-PROJECT-QUICKSTART.md", "sections": ["HUMAN STEPS"] }
+  { "file": "NEW-REPO-USER-INSTRUCTIONS.md", "sections": ["HUMAN STEPS"] }
 ]

@@ -31,5 +31,5 @@ Referenced by the exported directives and the qa agents.
 | `design-system.html` | Rendered design-system showcase (the visual companion to `directives/design.md`) |
 | `index.html` | Redirect so `/docs/` resolves to the site root gallery |
 
-> Fill-in **templates** (PR checklist, test plan, implementation summary)
-> live in `../templates/`, not here.
+> Fill-in **templates** (project CLAUDE.md scaffold, PR checklist, test plan,
+> implementation summary) live in `../templates/`, not here.

@@ -163,22 +163,21 @@ Confirm in the Actions tab that:
 
 ### 9a — CI Monitor
 
-Drop-in — copy it verbatim. It ships pre-wired to watch the QA workflow that comes
-with it (`qa.yml` → `QA — Static + UI Tests`):
+Drop-in — copy it verbatim. It ships pre-wired to watch both QA workflows that
+come with it (`qa.yml` and `qa-live.yml`):
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
 ```
 
-Only edit `workflow_run.workflows` if you rename `qa.yml`'s `name:` or want it to
-watch additional workflows (`grep '^name:' .github/workflows/*.yml` to find them).
+Only edit `workflow_run.workflows` if you rename those workflows' `name:` values
+or want to watch additional workflows (`grep '^name:' .github/workflows/*.yml`).
 
 After pushing, verify with a manual `workflow_dispatch` run before relying on it.
 
-**What it does:** fires the instant a watched CI workflow finishes (`workflow_run`);
-on failure, opens or updates a single `ci-failure` tracking issue. Uses only
-`GITHUB_TOKEN`. No secrets required.
+**What it does:** files a deduplicated `ci-failure` issue when a watched
+workflow fails. Behavior detail: `docs/automations.md` → Automation 2.
 
 ### 9b — Codex Monitor
 
@@ -189,8 +188,8 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/workflows/codex-monitor.yml
 ```
 
-**What it does:** fires when the Codex bot submits a PR review with concerns; adds
-a `codex-flagged` label to the PR. Uses only `GITHUB_TOKEN`.
+**What it does:** adds a `codex-flagged` label when Codex raises concerns.
+Behavior detail: `docs/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor
 
@@ -201,10 +200,9 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/workflows/pages-monitor.yml
 ```
 
-**What it does:** fires on every GitHub Pages build (`page_build`); verifies the
-build status and that the live URL serves HTTP 200 (cache-busted retries); on a
-problem opens/updates a single `pages-deploy-failure` tracking issue, and closes
-it on the next healthy deploy. Uses only `GITHUB_TOKEN`.
+**What it does:** verifies every Pages build is live and tracks problems via a
+deduplicated `pages-deploy-failure` issue. Behavior detail: `docs/automations.md`
+→ Automation 4.
 
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.

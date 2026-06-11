@@ -3,66 +3,43 @@ name: handoff.session
 description: Write a delta-only handoff for a fresh session — only what no other repo file already captures
 trigger: slash_command_and_auto
 ---
-Write a session handoff that captures ONLY the delta — the things no other file in
-the repo already records. It is NOT a project summary: CLAUDE.md, the README, and
-the workflow files already cover that, and re-stating them just creates a second
-file to keep in sync that goes stale the moment they change.
+Produce a session handoff as a **paste-ready chat message** — never write a
+handoff file (anything durable belongs in CLAUDE.md, not a sidecar that goes
+stale the moment the repo changes). Capture ONLY the delta: facts no repo file
+records.
 
-Produce it as a **paste-ready chat message** for the human to copy — do **NOT**
-create or write `.claude/session-handoff.md` (or any handoff file). The handoff is
-generated on demand from the live session context; there is no persisted handoff
-file. Anything durable belongs in CLAUDE.md (per the exclude rule below), not a
-sidecar file.
+## 1. Settle the working state first
+A handoff over a messy tree is worthless:
+- Commit and push everything; `git status` clean, nothing unpushed.
+- Drive every open PR to a terminal state — merged or closed, nothing dangling.
+- Branch hygiene — **verify against the remote, never assert from local state**:
+  `git ls-remote --heads origin` (local `git branch` says nothing about merged
+  refs still on the remote). Delete every merged/dead branch you can.
+  With **Settings → General → "Automatically delete head branches"** enabled
+  (the standard — recommend enabling it wherever it's off), merged branches
+  self-delete and this step is a no-op.
 
-First, settle the working state — a handoff over a messy tree is worthless:
-- Commit and push every change; confirm `git status` is clean and nothing is unpushed.
-- Drive every open PR to a terminal state (merged or closed) — leave nothing dangling.
-- Clean up branches: a session should end with **no stray `claude/<name>` branches**.
-  **The real fix is one-time, not per-session:** enable **Settings → General →
-  Automatically delete head branches** on the repo — GitHub then deletes each head
-  branch the moment its PR merges, so this checklist self-empties and no hand-deletion
-  is needed. Recommend enabling it whenever the list below is non-empty.
-  **Enumerate the actual remote branches** — `git ls-remote --heads origin` or the
-  host's branch list/API — **not just local `git branch`**; a clean local tree says
-  nothing about merged refs still on the remote. Delete every merged/dead branch you
-  can. For any the session **cannot** delete itself (tooling/permission limits, e.g.
-  the host blocks remote ref deletion), list it as an explicit **manual user action**
-  with a **reliable removal path**: *open the branch's merged PR → "Delete branch"*
-  (always present on a merged PR), or the repo's **`/branches/all`** page (search the
-  name). **Do not** send the user to the plain Branches overview — it often omits
-  merged branches, so they can't find them there. Only branches predating the
-  auto-delete setting should ever need this. **"No stray branches" must be verified
-  against the remote, not asserted from local state.**
-
-Lead the handoff with this pointer, verbatim:
-> CLAUDE.md is the source of truth — read it first. This file holds only what the
-> repo doesn't capture.
+## 2. Write the handoff
+Lead with this pointer, verbatim:
+> CLAUDE.md is the source of truth — read it first. This file holds only what
+> the repo doesn't capture.
 
 Include only:
-- **Open loose ends with no other tracker** — pending manual steps that need a human
-  or a UI action (incl. any leftover branch the session couldn't delete itself),
-  credential/secret expiry dates, unbuilt backlog items; anything half-done that no
-  PR or issue is already tracking.
-- **Out-of-band context that lives in no file** — the cross-repo coordination model,
-  which files are vendored or generated (don't hand-edit), scope limits; anything you
-  had to be *told* rather than read.
-- **Gotchas** a fresh session would otherwise re-learn the hard way — a non-obvious
-  failure mode, an ordering constraint, a "looks broken but isn't."
+- **Loose ends with no tracker** — pending manual/UI steps, credential or
+  secret expiry dates, half-done work no PR or issue records.
+- **Out-of-band context that lives in no file** — cross-repo coordination,
+  vendored/generated files (don't hand-edit), scope limits; anything you were
+  *told* rather than read.
+- **Gotchas** a fresh session would otherwise re-learn the hard way.
 
-Explicitly exclude anything already in CLAUDE.md, the README, or workflow files. If a
-fact belongs in a repo file, put it THERE and leave it out of the handoff — the
-handoff is the home only for facts that have no home.
+Self-check every line: if it's already in CLAUDE.md, the README, or a workflow
+file, drop it — or move it THERE and drop it.
 
-Self-check before writing: for each line ask — is this already in a repo file? If
-yes, drop it.
-
-**End the handoff with a consolidated `Branches to delete` checklist** — the very
-last thing in the message. Re-run `git ls-remote --heads origin 'refs/heads/claude/*'`
-and list **every** stray `claude/<name>` branch still on the remote as a plain
-checklist, each with a **reliable removal path**: *open its merged PR → "Delete
-branch"*, or the **`/branches/all`** page (search the name) — **not** the plain
-Branches overview, which often omits merged branches. The session can't delete them
-itself. This is a hard exit gate: invoking the handoff means the session is about to
-be deleted, so the human needs one clear list to clear before closing — nothing
-orphaned. With **Automatically delete head branches** enabled (see above), this
-should almost always print exactly "Branches to delete: none — remote is clean."
+## 3. End with the branch checklist (hard exit gate)
+Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` and close the
+message with a `Branches to delete` checklist: every stray branch the session
+could not delete itself, each with the reliable removal path — *its merged PR →
+"Delete branch"*, or the repo's **`/branches/all`** page (the plain Branches
+overview often omits merged branches; don't send the human there). With
+auto-delete enabled this should read: "Branches to delete: none — remote is
+clean."

@@ -10,7 +10,7 @@ The exported, downstream-imported directives live in `directives/`:
 - `directives/data.md` — data / backend directive (backend provider, keys, RLS, MCP config)
 
 Repo-internal operating instructions are in `CLAUDE.md`, and project bootstrap
-lives in `NEW-PROJECT-QUICKSTART.md`. Supporting directories:
+lives in `NEW-REPO-USER-INSTRUCTIONS.md`. Supporting directories:
 
 - `.claude/skills/` — personal skills, invoked by typing the skill name (type
   `my.list` for the menu); bootstrapped fresh from this repo each session

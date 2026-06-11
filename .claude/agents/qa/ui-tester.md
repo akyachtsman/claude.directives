@@ -41,42 +41,14 @@ Credentials are read from `CLAUDE.md` at runtime — not hardcoded. After auth a
 
 ### Phase 2 — Element Mapping
 
-After auth (or immediately for public apps), enumerate all interactive elements:
+After auth (or immediately for public apps), enumerate all interactive elements.
 
-> The runnable copy lives in `templates/ui-tests/tests/app.spec.js`
-> (`discoverElements`) — that file is the source of truth. Keep the snippet
-> below in sync with it if either changes.
-
-```javascript
-async function discoverElements(page) {
-  return page.evaluate(() => {
-    const selectors = ['button', 'a[href]', 'input:not([type=hidden])', 'select', 'textarea',
-                       '[role=button]', '[onclick]'];
-    return selectors.flatMap(sel =>
-      [...document.querySelectorAll(sel)]
-        // Index BEFORE filtering: page.locator(sel).nth(i) counts every DOM match,
-        // hidden included, so the recorded index must count them too.
-        .map((el, index) => ({ el, index }))
-        .filter(({ el }) => {
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0;
-        })
-        .map(({ el, index }) => ({
-          selector: sel,
-          index,
-          tag: el.tagName.toLowerCase(),
-          type: el.getAttribute('type') ?? null,
-          label: (el.textContent?.trim().slice(0, 60) ||
-                  el.getAttribute('aria-label') ||
-                  el.getAttribute('placeholder') ||
-                  el.getAttribute('name') ||
-                  el.id || '').slice(0, 60),
-          id: el.id || null,
-        }))
-    );
-  });
-}
-```
+> Runnable source of truth: **`discoverElements()` in
+> `templates/ui-tests/tests/app.spec.js`** — do not duplicate its body here.
+> Key semantics: enumerates visible interactive elements (`button`, `a[href]`,
+> non-hidden `input`, `select`, `textarea`, `[role=button]`, `[onclick]`) and
+> records each element's DOM-order index **before** visibility filtering, so
+> `locator(sel).nth(index)` replay stays aligned with hidden elements present.
 
 Record all discovered elements. This map drives Phase 3.
 
@@ -124,41 +96,12 @@ auth-diagnostics attachment:
 
 ### captureApiCalls Helper
 
-> The runnable copy lives in `templates/ui-tests/tests/app.spec.js` — that file is the
-> source of truth. Keep the snippet below in sync with it if either changes.
-
-Must be called before `page.goto()` — uses `addInitScript` to wrap `window.fetch` before page load:
-
-```javascript
-async function captureApiCalls(page) {
-  await page.addInitScript(() => {
-    const orig = window.fetch;
-    window.__apiCalls = [];
-    window.fetch = async (...args) => {
-      const res = await orig(...args);
-      const clone = res.clone();
-      clone.json().then(body => {
-        // Backend-agnostic: most REST backends return an array of row objects; some
-        // backends wrap rows as { records: [{ fields: {...} }] }.
-        const rows = Array.isArray(body) ? body : (body?.records ?? null);
-        const firstRow = rows?.[0];
-        const firstFieldKey = firstRow
-          ? Object.keys(firstRow.fields ?? firstRow)[0] ?? null
-          : null;
-        window.__apiCalls.push({
-          url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
-          status: res.status,
-          recordCount: Array.isArray(rows) ? rows.length : null,
-          firstFieldKey,
-          error: body?.error ?? body?.message ?? null,
-        });
-      }).catch(() => {});
-      return res;
-    };
-  });
-  return () => page.evaluate(() => window.__apiCalls);
-}
-```
+> Runnable source of truth: **`captureApiCalls()` in
+> `templates/ui-tests/tests/app.spec.js`** — do not duplicate its body here.
+> Key semantics: must be called **before** `page.goto()` (it uses
+> `addInitScript` to wrap `window.fetch` before page load); records per call
+> `url`, `status`, `recordCount`, `firstFieldKey`, and `error`, backend-agnostic
+> (plain row arrays or `{ records: [{ fields: {...} }] }` wrappers).
 
 ### Phase 5 — Responsive Layout Check
 

@@ -36,10 +36,11 @@ no session required, no polling, no Gmail.
 
 **Template:** `templates/workflows/ci-monitor.yml`
 
-**Drop-in:** ships pre-wired to watch the QA workflow that comes with it
-(`qa.yml` → `QA — Static + UI Tests`), so copying both verbatim needs no edits.
-Only change `workflow_run.workflows` if you rename `qa.yml`'s `name:` or want it to
-watch extra workflows. Optionally verify with a manual `workflow_dispatch` run.
+**Drop-in:** ships pre-wired to watch both QA workflows that come with it
+(`qa.yml` → `QA — Static + UI Tests`, `qa-live.yml` → `QA — UI Tests (live)`),
+so copying them verbatim needs no edits. Only change `workflow_run.workflows`
+if you rename those `name:` values or want it to watch extra workflows.
+Optionally verify with a manual `workflow_dispatch` run.
 
 **To install in a project:**
 ```bash

@@ -31,22 +31,16 @@ today; `scrape/`, … as new types appear):
 - `.claude/agents/qa/qa-pipeline.md` — full pipeline orchestrator
 - `.claude/agents/qa/ui-tester.md` — Playwright browser testing agent
 
-### templates/ — reference when scaffolding a new project
-- `docs/cicd-setup.md` — 9-step CI/CD setup checklist (also listed under Key docs)
+### templates/ — fill-in artifacts
+- `templates/CLAUDE-template.md` — project CLAUDE.md scaffold (used by `new.repo`)
 - `templates/implementation-summary-template.md` — required before invoking reviewers
 - `templates/pr-checklist.md` — PR readiness checklist
 - `templates/project-test-plan-template.md` — test plan structure
   (the test-verifier and code-reviewer report formats live inline in their agent
   definitions under `.claude/agents/qa/`)
-- `templates/workflows/qa.yml` — copy to .github/workflows/
-- `templates/workflows/qa-live.yml` — copy to .github/workflows/
-- `templates/workflows/qa-response.yml` — copy to .github/workflows/
-- `templates/workflows/ci-monitor.yml` — event-driven CI failure tracker (workflow_run + workflow_dispatch); drop-in, pre-wired to watch the QA workflow shipped with it (`QA — Static + UI Tests`)
-- `templates/workflows/codex-monitor.yml` — Codex PR review monitor; drop-in, copy to .github/workflows/
-- `templates/workflows/pages-monitor.yml` — zero-model Pages deploy monitor (`page_build` verify + notify); drop-in, copy to .github/workflows/
-- `templates/ui-tests/playwright.config.js` — copy to .github/scripts/ui-tests/
-- `templates/ui-tests/tests/app.spec.js` — copy to .github/scripts/ui-tests/tests/
-- `templates/ui-tests/package.json` — copy to .github/scripts/ui-tests/
+
+Workflow and Playwright-kit installation — which template goes where, and the
+monitors — is `docs/cicd-setup.md`'s job; don't re-derive it from the tree.
 
 ## Session start — required actions
 

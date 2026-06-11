@@ -6,7 +6,7 @@ skills are **not** a committed runtime dependency — they bootstrap fresh from
 
 ## Installation
 
-- **New project:** run `/new.repo` (see `NEW-PROJECT-QUICKSTART.md`). It scaffolds
+- **New project:** run `/new.repo` (see `NEW-REPO-USER-INSTRUCTIONS.md`). It scaffolds
   `CLAUDE.md`, the CI workflows, the Playwright kit, and the hooks, and bootstraps
   skills + agents from this repo.
 - **Existing project:** at session start the Skill Bootstrap block (in

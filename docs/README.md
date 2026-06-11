@@ -12,9 +12,7 @@ Referenced by the exported directives and the qa agents.
 | `automations.md` | The agent-session automation standard — email + CI/Codex monitors, in-session subscription, PR lifecycle, escalation rules, tool-use discipline, test-scenario bootstrap |
 | `cicd-setup.md` | Canonical CI/CD install procedure — workflow templates to copy, monitors, secrets/variables, verification checklist |
 | `ci-triage.md` | CI triage — expected vs real failures, two-tier CI, when to trigger `qa-live.yml` |
-| `testing-standard.md` | What to validate, coverage areas, command selection, report format |
 | `code-review-standard.md` | Blocking vs non-blocking review criteria and output format |
-| `agent-workflow.md` | Builder → reviewer agent sequence and responsibility boundaries |
 
 ## Setup guides
 | File | What it covers |

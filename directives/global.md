@@ -13,10 +13,7 @@ every project unless explicitly overridden at repo level.
 
 ## Behavior Rules
 - Always read CLAUDE.md and any imported directive URLs before starting any task
-- Always confirm understanding before writing code
-- Ask clarifying questions if requirements are ambiguous
 - Never deviate from the imported design directive without explicit approval
-- Prefer simple solutions over complex ones
 - No frameworks, no npm, no build steps unless explicitly asked
 - Plain HTML + JS is the default stack
 - All code must work on iPad Safari
@@ -54,28 +51,25 @@ index.html       ← complete single-page app
 
 ## GitHub Workflow
 - Work happens in Claude Code sessions (web, desktop, or CLI) scoped to a repo
-- Full terminal, git, and `gh` CLI are available — use them
+- Terminal and git are always available; `gh` CLI only sometimes — remote/web
+  sessions often lack it (use the GitHub MCP tools, or the tarball fallback in
+  Skill Bootstrap below)
 - All code changes go through a `claude/<name>` branch and a PR to `main`
-- Use a **fresh** `claude/<name>` branch per change — don't reuse one branch across
-  multiple PRs. After a squash-merge, cut the next branch from updated `main`.
-  Recycling a branch (repeated force-pushes, especially against a stale local clone)
-  drifts it into a tangled lineage and can attach the wrong diff to a PR.
+- Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
+  after each squash-merge — recycling branches tangles lineage and can attach
+  the wrong diff to a PR.
 - Subscribe to PR activity; fix CI before marking ready
 - GitHub Pages for project web apps only
 
 ## Repository Scope
-- The GitHub MCP is **hard-scoped to the repo(s) this session was opened on.** You
-  cannot read, write, branch, or open PRs against any other repo from here.
-- **Before offering to add, reach, or act on a _different_ repo, first confirm the
-  `add_repo` / `list_repos` tools (claude-code-remote server) actually exist in
-  this session (check via ToolSearch).** Never offer cross-repo capability you have
-  not verified — in many sessions those tools are absent and another repo simply
-  cannot be brought in. Do not assume the generic "you can add repos" docs apply.
-- If you cannot reach a repo, say so plainly and note the work must happen in a
-  session scoped to that repo — don't offer to "add" it. Conversely, don't declare
-  a repo inaccessible without checking `list_repos` first when that tool exists.
-- Run the `scope.chk` skill to establish and report this — at session start and
-  any time the session drifts toward offering work on a repo it may not reach.
+- The GitHub MCP is **hard-scoped to the repo(s) this session was opened on** —
+  no reads, writes, branches, or PRs against any other repo.
+- **Never offer cross-repo capability you have not verified**: confirm the
+  `add_repo` / `list_repos` tools (claude-code-remote server) exist via ToolSearch
+  before offering to add or act on another repo. If absent, the work must happen
+  in a session scoped to that repo — say so plainly.
+- Run the `scope.chk` skill at session start and whenever the session drifts
+  toward another repo.
 
 ## Hosting
 - GitHub Pages only
@@ -87,19 +81,13 @@ index.html       ← complete single-page app
 - Security scan before every PR (canonical pattern — keep identical to the `qa.yml` / `qa-response.yml` secret-scan): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-" --include="*.js" --include="*.html" --include="*.css" --include="*.json" --exclude-dir=node_modules --exclude-dir=.git .`
 
 ## Pre-Push Verification (Local Gate)
-Before committing or pushing to any branch, verify locally — do not rely on
-CI alone to catch failures:
-- Run the repo's full test suite.
-- Run lint and type checks if configured.
-- Check current CI/Actions status; if a run is in progress, wait for green.
-- Confirm no unintended uncommitted changes were introduced (review `git status`
-  and the diff before staging).
+Before committing or pushing, verify locally — never rely on CI alone:
+- Run the repo's full test suite, plus lint/type checks if configured.
+- Check current CI status; if a run is in progress, wait for green.
+- Review `git status` and the diff — no unintended changes staged.
 
-Report the verification result before opening a PR or pushing. If any check
-fails, fix it before pushing rather than pushing and fixing on the PR.
-
-This is the canonical local gate. The `commit.chk` skill is a manual backup
-that runs the same checks on demand when this auto-check did not fire.
+Report the result before pushing; fix failures locally rather than on the PR.
+The `commit.chk` skill is the manual backup when this auto-check did not fire.
 
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
@@ -112,23 +100,13 @@ that runs the same checks on demand when this auto-check did not fire.
 - Never force-push to `main`
 
 ## Async Operations
-- After triggering any long-running async operation (CI run, workflow dispatch,
-  deployment), never block on a `sleep` loop waiting for results.
-- If `send_later` is available, schedule a follow-up check-in to re-poll the
-  result when it should be ready.
-- Otherwise, end the turn and explicitly tell the user "I'll report back when it
-  completes," then resume when the result arrives (e.g. via a webhook/subscription
-  event) rather than polling in a blocking loop.
-- The goal is that the result surfaces proactively — the user should never have to
-  re-prompt to learn the outcome.
-- **Never spawn an unbounded background "wait for X" task.** A backgrounded poll
-  (Bash `run_in_background` / Monitor with a `sleep`/`until` loop, e.g. "wait for
-  the qa-live run") is still a blocking wait — it just hides in the background, and
-  with no cap it can run for *hours*. Any background watcher MUST set a hard
-  `timeout` (minutes, sized to the operation's expected duration — not hours) and
-  exit on **every** terminal state: success, failure, AND timeout. A waiter that
-  outlives the operation it watches is a bug. When in doubt, end the turn and
-  resume on the event instead of polling.
+- After triggering a long-running operation (CI, deploy, dispatch), don't block
+  waiting: if `send_later` exists, schedule a check-in; otherwise end the turn
+  with "I'll report back when it completes" and resume on the event.
+- The result must surface proactively — the user never re-prompts for an outcome.
+- Any background watcher MUST set a hard timeout sized to the operation and exit
+  on every terminal state (success, failure, timeout). A waiter that outlives
+  what it watches is a bug.
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic
@@ -179,7 +157,8 @@ rm -rf "$tmp"
 ```
 Run this silently. Skip files that already exist. **Because it skips existing files, the bootstrap never updates a skill or agent already present — to pull upstream changes into files you already have, run the `refresh.repo` skill (it re-fetches and overwrites in place, flags upstream-removed orphans for confirmed deletion, and reports drift in template-derived files).** Once populated, skills are invoked by typing the skill name (e.g. `my.list`, `env.chk`, `doc.comp`); agents load automatically from `.claude/agents/` (Claude Code scans it recursively — agent identity comes from the `name:` frontmatter, not the path, and `name:` values must stay unique across the whole tree). Do NOT maintain a per-skill or per-agent URL list — the directories are the source of truth. Adding a skill or agent means dropping one file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket here and nothing else changes.
 
-See docs/automations.md for monitor setup, escalation rules, and tool use discipline.
+See docs/automations.md for monitor setup and the automation-specific
+PR-lifecycle/escalation additions.
 See docs/ci-triage.md for CI and Codex failure triage rules.
 
 ## Imported Directives

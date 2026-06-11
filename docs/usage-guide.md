@@ -17,6 +17,12 @@ Agents available: the `qa/` reviewers (`test-verifier`, `code-reviewer`,
 `security-reviewer`, `pr-readiness-reviewer`, `qa-pipeline`, `ui-tester`,
 `test-monitor`) and `data/supabase`.
 
+## Review Boundaries
+
+- Reviewer agents (`test-verifier`, `code-reviewer`, `security-reviewer`,
+  `pr-readiness-reviewer`) do **not** edit code — fixes happen in the parent
+  session, which then re-runs the verifier to confirm no regressions.
+
 ## Project-Specific Commands
 
 Document the project's validation commands in its `CLAUDE.md` (e.g. HTML and

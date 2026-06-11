@@ -2,23 +2,27 @@
 
 This is the exportable directive for downstream projects. Import it into your project's `CLAUDE.md` or agent configuration.
 
-## Key docs — read ALL of these before starting any task
+## Key docs — index (read on demand)
+
+Know this index; fetch a doc when working in its area. Do **not** bulk-read
+everything at session start — that burns context on material the task may
+never touch.
 
 ### docs/
-- `docs/automations.md` — CI monitor workflow, PR lifecycle rules, escalation rules
+- `docs/automations.md` — CI monitor workflow, PR lifecycle additions, escalation additions
 - `docs/cicd-setup.md` — canonical CI/CD install procedure (workflow templates, monitors, secrets/variables)
-- `docs/agent-workflow.md` — 11-step builder → reviewer sequence
-- `docs/testing-standard.md` — What to validate, report format requirements
 - `docs/code-review-standard.md` — Blocking vs. non-blocking review criteria
-- `docs/usage-guide.md` — Agent installation and .agent-reports/ organization
+- `docs/usage-guide.md` — Agent installation, review boundaries, and .agent-reports/ organization
 - `docs/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
 
-### .claude/agents/qa/ — read ALL agent definitions
-Agents are organized into purpose-based subfolders (`qa/` and `data/` today;
-`scrape/`, … as new types appear) and load recursively into sessions on this repo.
-Downstream projects inherit them by fetching `.claude/agents/` fresh from
-`claude.directives` each session (the Skill Bootstrap), gitignored and never
-committed — there is no separate template copy.
+### .claude/agents/qa/ — loaded automatically
+Agents load recursively from `.claude/agents/` at session start (the harness
+scans the tree) — there is no need to read the definition files manually; the
+full body loads when an agent is invoked. Downstream projects inherit them by
+fetching `.claude/agents/` fresh from `claude.directives` each session (the
+Skill Bootstrap), gitignored and never committed — there is no separate
+template copy. Inventory (subfolders are purpose-based: `qa/` and `data/`
+today; `scrape/`, … as new types appear):
 - `.claude/agents/qa/test-monitor.md` — thin in-session CI status helper (one-pass check, not the always-on monitor)
 - `.claude/agents/qa/test-verifier.md` — independent QA verification agent
 - `.claude/agents/qa/code-reviewer.md` — code quality review agent
@@ -47,12 +51,11 @@ committed — there is no separate template copy.
 ## Session start — required actions
 
 Execute these steps at the start of every session, before any task work:
-1. Fetch and read every file listed under "Key docs" above
-2. Read `CLAUDE.md` for current project state (and any Project-Specific Test Scenarios)
-3. Subscribe to PR activity on all open PRs via `subscribe_pr_activity`
-4. Poll GitHub Actions API (`mcp__github__actions_list`) for any failures since the last session
-5. Confirm `ci-monitor.yml` is present in `.github/workflows/` — add it if missing (see `templates/workflows/ci-monitor.yml`)
-6. Confirm `codex-monitor.yml` is present in `.github/workflows/` — add it if missing (see `templates/workflows/codex-monitor.yml`)
+1. Read `CLAUDE.md` for current project state (and any Project-Specific Test Scenarios)
+2. Subscribe to PR activity on all open PRs via `subscribe_pr_activity`
+3. Poll GitHub Actions API (`mcp__github__actions_list`) for any failures since the last session
+4. Confirm `ci-monitor.yml`, `codex-monitor.yml`, and (for Pages projects) `pages-monitor.yml`
+   are present in `.github/workflows/` — add any missing from `templates/workflows/`
 
 ## Playwright
 - Always use `page.goto('./')`, never `page.goto('/')`
@@ -66,7 +69,6 @@ Execute these steps at the start of every session, before any task work:
 - Workflow YAML is validated on every CI run — keep it parseable
 
 ## Escalation
-- Stop and ask before deleting any file that exists on `main`.
-- Stop and ask before modifying any workflow file's trigger conditions.
-- Stop and ask if CI has failed 3+ times on the same issue without progress.
-- Stop and ask if a change touches more than one file's core logic.
+Canonical stop-and-ask gates live in `global.md` → Escalation Rules; they apply
+here unchanged (file deletion, workflow triggers, 3+ CI failures, multi-file
+core logic).

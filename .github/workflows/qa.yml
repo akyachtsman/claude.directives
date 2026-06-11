@@ -1,9 +1,12 @@
 name: QA — Directive Validation
 
 on:
-  push:
-    branches: [main, 'claude/**']
   pull_request:
+    branches: [main]
+  # push covers only main (the post-merge run). Branch commits are covered by
+  # the pull_request trigger — listing claude/** here too made every PR commit
+  # run the whole workflow twice.
+  push:
     branches: [main]
 
 # Least privilege: validation only reads the repo.

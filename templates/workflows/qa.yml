@@ -1,10 +1,20 @@
 # qa.yml — Static checks + Playwright against a local server.
 # Copy to .github/workflows/qa.yml in your project.
-# Triggers on push and pull_request to main and feature branches.
+#
+# Jobs:
+#   static-checks — secret scan; the blocking gate, runs on every trigger.
+#   ui-changes    — diffs the PR against its base and decides whether the
+#                   browser job is needed. Non-PR events (push to main)
+#                   always run UI tests.
+#   ui-tests      — Playwright against a local server; runs only when
+#                   UI-relevant paths changed. Non-blocking here (the
+#                   backend is unreachable on CI runners); qa-live.yml is
+#                   the authoritative UI gate.
 #
 # Required setup:
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret (value from CLAUDE.md)
 #   - Set UI_TESTS_DIR below to the path of your Playwright test directory
+#   - Adjust the UI_PATHS regex in the ui-changes job to your project layout
 
 name: QA — Static + UI Tests
 
@@ -28,9 +38,10 @@ env:
   UI_TESTS_DIR: .github/scripts/ui-tests
 
 jobs:
-  qa:
+  static-checks:
+    name: Static Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
@@ -48,6 +59,52 @@ jobs:
             echo "ERROR: potential API token found in source files"
             exit 1
           fi
+
+  ui-changes:
+    name: Detect UI-relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ui: ${{ steps.diff.outputs.ui }}
+
+    steps:
+      - name: Checkout (full history for base diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Diff against PR base
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Per-project: paths whose changes warrant a browser run.
+          UI_PATHS: '^(index\.html$|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
+        run: |
+          # Non-PR events (push to main) always run UI tests unconditionally.
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            echo "Non-PR event — UI tests run unconditionally."
+            exit 0
+          fi
+          if git diff --name-only "$BASE_SHA"...HEAD | grep -qE "$UI_PATHS"; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            echo "UI-relevant changes detected."
+          else
+            echo "ui=false" >> "$GITHUB_OUTPUT"
+            echo "No UI-relevant changes — skipping browser job."
+          fi
+
+  ui-tests:
+    name: UI Tests (local server)
+    needs: [static-checks, ui-changes]
+    if: needs.ui-changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       # `cache: npm` requires a committed package-lock.json at the path below.
       # Generate it once (`npm install` in UI_TESTS_DIR) and COMMIT it, or this

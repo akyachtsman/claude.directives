@@ -25,6 +25,14 @@ verdict. Read-only — do NOT modify files. Execute in order:
    snapshot — if no snapshot exists, do NOT create one; report "no baseline"
    as a finding and suggest recording one as an explicit follow-up task, so
    this check stays read-only). Flag cross-repo contradictions.
+   **Staleness alarm (multi-project critical):** compare the sync stamp
+   `.upstream.sha` in .claude/directive-sync.json against the live HEAD of
+   claude.directives `main` (one API call:
+   `repos/akyachtsman/claude.directives/commits/main`). If they differ — or no
+   stamp exists — report "upstream has moved since this project's last sync
+   (N commits behind) — run `refresh.repo`" as a ⚠️ finding. Session Start
+   bootstrap skips existing files, so without this alarm a project can run
+   indefinitely on stale skills/agents.
 7. Connectors & tools — Inventory the session's actual capabilities. Discover
    values LIVE from this session (do not hardcode). For the repo-scope limit,
    **run the `scope.chk` verification** — confirm via ToolSearch whether the

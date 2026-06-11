@@ -24,10 +24,11 @@ Execute in order:
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md`
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md`
 
-2. **Bootstrap skills and agents.** Run the Skill Bootstrap block from
-   `global.md` — it carries both the `gh api` tree walk and the tarball
-   fallback for `gh`-less sessions (both skip files that already exist).
-   Type `my.list` to confirm skills are available before continuing.
+2. **Verify the directives-toolkit plugin attached** (it carries this very
+   command, all skills, the QA/data agents, and the guard hooks). If its
+   commands don't resolve, the environment's setup script didn't run the
+   install — stop and have the human fix the environment per
+   `NEW-REPO-USER-INSTRUCTIONS.md` step 7 before continuing.
 
 3. **Create the feature branch.** Use the session's existing branch if it is a
    `claude/<name>` branch; otherwise create `claude/<name>`. Never work on `main`.
@@ -66,16 +67,14 @@ Execute in order:
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains
    (create `.gitignore` if absent; append any missing line):
-   - `.claude/agents/` — bootstrap-only; step 2 fetches them fresh from
-     `claude.directives` each session, so they are never committed
    - `.claude/mcp.json` — per-repo MCP/backend config; holds connection details
      and must never be committed (see the data directive)
    - `.env` and `.env.*` — local key/secret files must never be committed
 
-   Also install the Claude Code hooks: copy
-   `claude.directives/templates/claude-settings.json` to `.claude/settings.json`
-   (merge into any existing `settings.json`). This adds the `update.pages`
-   reminder hook so edits to Pages-served files prompt a deploy-and-watch.
+   Also copy `claude.directives/templates/claude-settings.json` to
+   `.claude/settings.json` (merge into any existing one): it registers the
+   claude-directives marketplace and enables the directives-toolkit plugin
+   for every session on this repo. Hooks ship inside the plugin.
 
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:

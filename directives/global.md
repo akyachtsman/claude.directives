@@ -52,8 +52,7 @@ index.html       ← complete single-page app
 ## GitHub Workflow
 - Work happens in Claude Code sessions (web, desktop, or CLI) scoped to a repo
 - Terminal and git are always available; `gh` CLI only sometimes — remote/web
-  sessions often lack it (use the GitHub MCP tools, or the tarball fallback in
-  Skill Bootstrap below)
+  sessions often lack it (use the GitHub MCP tools instead)
 - All code changes go through a `claude/<name>` branch and a PR to `main`
 - Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
   after each squash-merge — recycling branches tangles lineage and can attach
@@ -68,8 +67,8 @@ index.html       ← complete single-page app
   `add_repo` / `list_repos` tools (claude-code-remote server) exist via ToolSearch
   before offering to add or act on another repo. If absent, the work must happen
   in a session scoped to that repo — say so plainly.
-- Run the `scope.chk` skill at session start and whenever the session drifts
-  toward another repo.
+- The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk`
+  runs the same verification at session start.
 
 ## Hosting
 - GitHub Pages only
@@ -87,7 +86,8 @@ Before committing or pushing, verify locally — never rely on CI alone:
 - Review `git status` and the diff — no unintended changes staged.
 
 Report the result before pushing; fix failures locally rather than on the PR.
-The `commit.chk` skill is the manual backup when this auto-check did not fire.
+`/commit-chk` is the manual backup when this auto-check did not fire (the
+plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
 
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
@@ -117,45 +117,35 @@ The `commit.chk` skill is the manual backup when this auto-check did not fire.
 ## Session Start
 At the start of every session:
 1. Read this file fully and fetch all imported directive URLs.
-2. Run `scope.chk` to confirm which repo(s) this session can actually act on (and
-   whether other repos can be added) before promising anything cross-repo.
+2. Verify the `directives-toolkit` plugin attached (commands/agents resolve —
+   see Skill Bootstrap below), and run `/env-chk`'s scope verification to
+   confirm which repo(s) this session can actually act on before promising
+   anything cross-repo.
 3. Confirm the active branch is not `main` before writing any code.
 4. Review open PRs for this repo before starting new work.
 5. Subscribe to active PRs via `subscribe_pr_activity`.
 
 ## Skill Bootstrap
 
-At session start, bootstrap personal skills **and agents** from this repo using
-the `gh` CLI. Agents are organized into purpose-based subfolders (e.g. `qa/`, `data/`), so
-this walks the tree recursively and preserves the subdirectory layout:
-```bash
-for dir in skills agents; do
-  gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
-    --jq ".tree[] | select(.type==\"blob\" and (.path|startswith(\".claude/$dir/\"))) | .path" \
-  | while read -r p; do
-    [ -f "$p" ] && continue            # skip files that already exist
-    mkdir -p "$(dirname "$p")"
-    gh api "repos/akyachtsman/claude.directives/contents/$p" --jq '.content' | base64 -d > "$p"
-  done
-done
-```
-If `gh` is unavailable (common in remote/web sessions), use the tarball fallback —
-the bootstrap must not silently no-op just because `gh` is missing:
-```bash
-tmp=$(mktemp -d)
-curl -sL https://codeload.github.com/akyachtsman/claude.directives/tar.gz/main \
-  | tar -xz -C "$tmp" --strip-components=1
-for dir in skills agents; do
-  [ -d "$tmp/.claude/$dir" ] || continue
-  ( cd "$tmp" && find ".claude/$dir" -type f ) | while read -r p; do
-    [ -f "$p" ] && continue            # skip files that already exist
-    mkdir -p "$(dirname "$p")"
-    cp "$tmp/$p" "$p"
-  done
-done
-rm -rf "$tmp"
-```
-Run this silently. Skip files that already exist. **Because it skips existing files, the bootstrap never updates a skill or agent already present — to pull upstream changes into files you already have, run the `refresh.repo` skill (it re-reads the rules, overwrites skills/agents in place, flags upstream-removed orphans AND broken references to renamed/deleted upstream paths, and reports the upstream delta since the project's last sync with per-file dispositions).** Once populated, skills are invoked by typing the skill name (e.g. `my.list`, `env.chk`, `doc.comp`); agents load automatically from `.claude/agents/` (Claude Code scans it recursively — agent identity comes from the `name:` frontmatter, not the path, and `name:` values must stay unique across the whole tree). Do NOT maintain a per-skill or per-agent URL list — the directories are the source of truth. Adding a skill or agent means dropping one file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket here and nothing else changes.
+The toolkit — commands, auto-skills, agents, and guard hooks — ships as the
+**`directives-toolkit` plugin** from this repo's own marketplace. There is no
+file bootstrap anymore; nothing is fetched into `.claude/`.
+
+- **Claude Code on the web:** the project environment's setup script installs
+  it before session start (see `NEW-REPO-USER-INSTRUCTIONS.md` step 7) —
+  required, because web containers are ephemeral and `enabledPlugins` alone
+  enables but never installs.
+- **CLI / desktop:** one-time `/plugin marketplace add akyachtsman/claude.directives`
+  then `/plugin install directives-toolkit@claude-directives`.
+- Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
+  `enabledPlugins` (copy `templates/claude-settings.json`).
+
+At session start, **verify the plugin attached**: the `directives-toolkit:*`
+commands/skills resolve and the QA agents are available. If they don't, the
+environment's setup script didn't run — fix that rather than hand-fetching
+files. Updates track this repo's `main` automatically (SHA-versioned; web
+sessions reinstall fresh every container). Commands are invoked as
+`/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
 
 See docs/automations.md for monitor setup and the automation-specific
 PR-lifecycle/escalation additions.

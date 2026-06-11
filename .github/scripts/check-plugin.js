@@ -1,5 +1,5 @@
-// Validates the marketplace + plugin structure, and (during the Phase-1
-// dual-run) that every .claude/ skill has its plugin counterpart.
+// Validates the marketplace + plugin structure (the plugin is the canonical
+// toolkit source — Phase 2 retired the .claude/ copies).
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 
 let failed = false;
@@ -59,23 +59,6 @@ else ok('hooks.json structure');
 if (!(statSync(`${ROOT}/scripts/push-gate.sh`).mode & 0o111)) fail('push-gate.sh not executable');
 else ok('push-gate.sh executable');
 
-// ── Phase-1 dual-run parity: every .claude skill maps to a plugin artifact ──
-const MAP = {
-  'env.chk': 'commands/env-chk.md', 'refresh.repo': 'commands/refresh-repo.md',
-  'new.repo': 'commands/new-repo.md', 'handoff.session': 'commands/handoff-session.md',
-  'audit.repo': 'commands/audit-repo.md', 'commit.chk': 'commands/commit-chk.md',
-  'live.chk': 'commands/live-chk.md', 'do.repo': 'commands/do-repo.md',
-  '3.opt': 'commands/opt-3.md', 'no.fluff': 'commands/no-fluff.md',
-  'browser.only': 'commands/browser-only.md', 'my.list': 'commands/my-list.md',
-  'update.pages': 'skills/update-pages/SKILL.md', 'doc.comp': 'skills/doc-comp/SKILL.md',
-  'scope.chk': 'skills/scope-chk/SKILL.md',
-};
-for (const [old, art] of Object.entries(MAP)) {
-  if (existsSync(`.claude/skills/${old}.md`) && !existsSync(`${ROOT}/${art}`)) fail(`parity: ${old} has no plugin artifact ${art}`);
-}
-const agentSrc = readdirSync('.claude/agents', { recursive: true }).filter(f => String(f).endsWith('.md'));
-if (agentSrc.length !== agents.length) fail(`parity: ${agentSrc.length} .claude agents vs ${agents.length} plugin agents`);
-else ok('dual-run parity (15 skills mapped, agent counts match)');
 
 if (failed) process.exit(1);
 console.log('PLUGIN CHECKS PASS');

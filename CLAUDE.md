@@ -21,14 +21,12 @@ covers only how to operate *on this repo*.
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
-| `plugins/directives-toolkit/` | The installable toolkit plugin: 12 commands, 3 auto-skills, 8 agents, guard hooks. **Phase-1 dual-run:** content mirrors `.claude/` (parity enforced by `check-plugin.js`); `.claude/skills` + `agents` retire in Phase 2 once the plugin path is proven downstream. **Web sessions never auto-install plugins** — each project's claude.ai environment setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` step 7) |
-| `.claude/skills/` | Personal skill files, invoked by typing the skill name |
-| `.claude/settings.json` | Claude Code hooks for this repo (incl. the `update.pages` reminder on Pages-file edits) |
-| `.claude/agents/` | Agent definitions in purpose-based subfolders (`qa/` and `data/` today); loaded recursively into sessions on this repo |
+| `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): 11 commands, 3 auto-skills, 8 agents, guard hooks incl. the push-gate. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` step 7) |
+| `.claude/settings.json` | Plugin enablement only (`extraKnownMarketplaces` + `enabledPlugins`); hooks ship inside the plugin |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
 | `templates/scripts/` | Optional scheduled-task scripts (`notify-email.js`) projects copy into `.github/scripts/` |
-| `templates/claude-settings.json` | Project `.claude/settings.json` template (hooks) that `new.repo` installs into new projects |
+| `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `docs/` | Reference docs (automations, CI triage, testing, code review, …); see `docs/README.md` for the role-grouped index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
@@ -55,21 +53,22 @@ relocate the export into this file.
 
 ## Session Start
 1. Read all Imported Directive URLs above fully
-2. Bootstrap skills and agents per the Skill Bootstrap block in global.md
+2. Verify the directives-toolkit plugin attached (commands/agents resolve) per global.md → Skill Bootstrap
 3. Confirm active branch: `git branch --show-current`
-4. Run `env.chk` and report status — this includes the `scope.chk` repo-scope
+4. Run `/env-chk` and report status — this includes the `scope-chk` repo-scope
    verification (global.md's Session Start step 2), so it need not be run separately here
 
 ## Mid-session change semantics
 What a live session sees when these files change mid-session — don't assume
 everything hot-reloads:
-- `.claude/skills/` — **live at next invocation** (skill files are read when typed).
 - `CLAUDE.md` and `directives/` — **stale until re-read**: the copy injected at
-  session start does not update. The PostToolUse hook reminds on CLAUDE.md
-  edits; `refresh.repo` Phase 0 re-reads CLAUDE.md + directives explicitly.
-- `.claude/settings.json` hooks and `.claude/agents/` — **loaded at session
-  start only**; changes take effect in the NEXT session (the hook says so when
-  these files are edited).
+  session start does not update. The plugin's PostToolUse hook reminds on
+  CLAUDE.md edits; `/refresh-repo` Phase 0 re-reads CLAUDE.md + directives.
+- `plugins/directives-toolkit/` — editing files here changes what the NEXT
+  install delivers; the running session keeps its installed copy (web sessions
+  reinstall fresh every container, so changes propagate at next session start).
+- `.claude/settings.json` — **loaded at session start only**; changes take
+  effect in the NEXT session.
 
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.
@@ -83,22 +82,24 @@ A directive repo must pass its own CI before it can be trusted downstream.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
   deploy is live and on a problem opens/updates a deduplicated
   `pages-deploy-failure` issue (success → job summary only). The zero-model
-  counterpart to the `update.pages` skill.
+  counterpart to the `update-pages` skill.
 
 See `docs/repo-monitors.md` for this repo's monitor detail, and `docs/automations.md` for escalation rules and the exported automation standard.
 See `docs/ci-triage.md` for triage on `ci-failure` issues and `codex-flagged` PRs.
 
-## Skills
-Personal skills live in `.claude/skills/` and are the live source of truth —
-type `my.list` for the current menu. Notable operational skills:
-- `do.repo` — run a command (`inspect` / `compare <target>` / `audit`) against
-  any public GitHub repo via `gh api`, read-only, without cloning.
-- `update.pages` — standard procedure for any change that updates the Pages site:
-  run gates, push, watch the deploy to a terminal state, and report live / stuck
-  / failed proactively (encodes the stuck-pipeline toggle and cache gotchas).
-- `scope.chk` — report the session's true repository scope (which repos the GitHub
-  MCP can act on, whether others can be added) so cross-repo access is never
-  overclaimed; run at startup or whenever a session drifts.
+## Toolkit (commands, skills, agents, hooks)
+Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit/`
+— the live source of truth; edit there). Commands invoke as `/env-chk`,
+`/refresh-repo`, `/audit-repo`, …; auto-skills (`update-pages`, `scope-chk`,
+`doc-comp`) fire on description match; agents are namespaced
+`directives-toolkit:*`. Notable:
+- `/do-repo` — run a command (`inspect` / `compare <target>` / `audit`) against
+  any public GitHub repo, read-only, without cloning.
+- `update-pages` (auto-skill) — Pages deploy procedure: gates, push, watch to a
+  terminal state, report live/stuck/failed proactively (encodes the
+  stuck-pipeline toggle and cache gotchas).
+- `scope-chk` (auto-skill) — fires before any cross-repo offer; reports the
+  session's true repository scope so access is never overclaimed.
 
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, verify locally — this list mirrors what `qa.yml`
@@ -120,11 +121,12 @@ Stop and ask the user before:
 - Modifying any workflow file's trigger conditions.
 - Pushing after 3 consecutive CI failures on the same branch.
 
-## Skill Bootstrap
+## Toolkit changes
 
-Skills and agents bootstrap from this repo's `.claude/` at session start — the
-canonical fetch block lives in `directives/global.md` (don't duplicate it here).
-To add a skill or agent, drop a
-`.md` file into `.claude/skills/` or the right `.claude/agents/<domain>/` bucket
-here (`qa/` and `data/` today; `scrape/`, … as new types appear). `name:` values must
-stay unique across the whole agent tree — the subfolder does not disambiguate.
+To add a command, skill, or agent: drop the file into the right
+`plugins/directives-toolkit/` subdir (commands are flat md files; each skill is
+a SKILL.md in its own directory; agents are flat md files with unique `name:`
+frontmatter), run the plugin check from the Local gate below, and ship through
+the normal PR flow. Downstream picks it up at next session start (web reinstalls
+fresh per container). The install/distribution model lives in
+`directives/global.md` → Skill Bootstrap.

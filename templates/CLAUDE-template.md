@@ -1,6 +1,6 @@
 # CLAUDE.md — [Project Name]
 
-<!-- Canonical project CLAUDE.md scaffold. `new.repo` copies this file to the
+<!-- Canonical project CLAUDE.md scaffold. `/new-repo` copies this file to the
      new repo root as CLAUDE.md, fills in repo name + live URL from context,
      and leaves the [bracketed] sections for the human to complete post-merge. -->
 
@@ -76,6 +76,6 @@ Agents write evidence to `.agent-reports/`:
 
 ## Session Start
 1. Read all Imported Directive URLs above fully
-2. Bootstrap skills and agents per the Skill Bootstrap block in global.md
+2. Verify the directives-toolkit plugin attached (commands/agents resolve) per global.md → Skill Bootstrap
 3. Confirm active branch: `git branch --show-current`
-4. Run `env.chk` and report status
+4. Run `/env-chk` and report status

@@ -73,10 +73,13 @@ tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
 grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
   --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
   | sed -E 's#.*claude\.directives/(main/)?##' | sort -u \
+  | grep -E '^(directives|docs|templates|\.claude|\.github)/' \
   | while read -r p; do
     echo "$tree" | grep -qx "$p" || echo "BROKEN: $p"
   done
 ```
+(The top-dir filter drops non-path artifacts like the codeload `tar.gz/...`
+URL form — only real repo paths are validated.)
 
 For each BROKEN path, search the tree for its basename (rename candidate) and
 propose the fix; deletions get "content was folded — check upstream docs/README.md".

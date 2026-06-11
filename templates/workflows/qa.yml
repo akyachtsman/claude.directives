@@ -9,9 +9,14 @@
 name: QA — Static + UI Tests
 
 on:
-  push:
-    branches: [main, 'feature/**', 'fix/**', 'claude/**']
   pull_request:
+    branches: [main]
+  # push covers only main (the post-merge run). Feature-branch commits are
+  # covered by the pull_request trigger — listing them here too made every
+  # PR commit run the whole workflow twice. Accepted trade-off: commits
+  # pushed before a PR exists get no run; the draft-PR-immediately flow
+  # makes that window moments.
+  push:
     branches: [main]
 
 # Least privilege: these jobs only read the repo and run tests.

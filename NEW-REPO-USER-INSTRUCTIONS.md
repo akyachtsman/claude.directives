@@ -14,6 +14,14 @@
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
+7. **Claude Code on the web — environment setup script** (the project's
+   environment configuration on claude.ai): add this line so the
+   directives-toolkit plugin installs *before* session start. Web containers
+   are ephemeral and never auto-install from `enabledPlugins`, so without it
+   the plugin's commands/agents/hooks silently never load:
+   ```
+   claude plugin marketplace add akyachtsman/claude.directives && claude plugin install directives-toolkit@claude-directives
+   ```
 
 ### Step 2 — Bootstrap the project
 Open a Claude Code session scoped to the new repo and type:

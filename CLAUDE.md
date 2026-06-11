@@ -21,7 +21,7 @@ covers only how to operate *on this repo*.
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
-| `plugins/directives-toolkit/` | The installable toolkit plugin: 12 commands, 3 auto-skills, 8 agents, guard hooks. **Phase-1 dual-run:** content mirrors `.claude/` (parity enforced by `check-plugin.js`); `.claude/skills` + `agents` retire in Phase 2 once the plugin path is proven downstream |
+| `plugins/directives-toolkit/` | The installable toolkit plugin: 12 commands, 3 auto-skills, 8 agents, guard hooks. **Phase-1 dual-run:** content mirrors `.claude/` (parity enforced by `check-plugin.js`); `.claude/skills` + `agents` retire in Phase 2 once the plugin path is proven downstream. **Web sessions never auto-install plugins** — each project's claude.ai environment setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` step 7) |
 | `.claude/skills/` | Personal skill files, invoked by typing the skill name |
 | `.claude/settings.json` | Claude Code hooks for this repo (incl. the `update.pages` reminder on Pages-file edits) |
 | `.claude/agents/` | Agent definitions in purpose-based subfolders (`qa/` and `data/` today); loaded recursively into sessions on this repo |

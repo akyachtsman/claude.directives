@@ -1,0 +1,11 @@
+{
+  "name": "directives-toolkit",
+  "displayName": "Directives Toolkit",
+  "description": "Operational commands, auto-skills, QA/data agents, and guard hooks from the claude.directives company standard. Version is intentionally omitted: updates track this repo's main via git SHA.",
+  "author": {
+    "name": "akyachtsman",
+    "email": "akyachtsman@gmail.com"
+  },
+  "repository": "https://github.com/akyachtsman/claude.directives",
+  "keywords": ["qa", "ci", "supabase", "github-pages", "directives"]
+}

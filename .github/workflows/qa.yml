@@ -31,6 +31,9 @@ jobs:
       - name: Check required sections present
         run: node .github/scripts/check-sections.js
 
+      - name: Check plugin + marketplace structure
+        run: node .github/scripts/check-plugin.js
+
       - name: Validate workflow YAML
         run: |
           python3 -c "

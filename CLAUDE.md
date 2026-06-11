@@ -20,6 +20,8 @@ covers only how to operate *on this repo*.
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
+| `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
+| `plugins/directives-toolkit/` | The installable toolkit plugin: 12 commands, 3 auto-skills, 8 agents, guard hooks. **Phase-1 dual-run:** content mirrors `.claude/` (parity enforced by `check-plugin.js`); `.claude/skills` + `agents` retire in Phase 2 once the plugin path is proven downstream |
 | `.claude/skills/` | Personal skill files, invoked by typing the skill name |
 | `.claude/settings.json` | Claude Code hooks for this repo (incl. the `update.pages` reminder on Pages-file edits) |
 | `.claude/agents/` | Agent definitions in purpose-based subfolders (`qa/` and `data/` today); loaded recursively into sessions on this repo |
@@ -104,6 +106,7 @@ runs, so keep the two in sync:
 ```
 node .github/scripts/check-paths.js
 node .github/scripts/check-sections.js
+node .github/scripts/check-plugin.js
 node .github/scripts/check-links.js --internal   # set GITHUB_REPOSITORY + GITHUB_TOKEN
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages monitor template pairs)

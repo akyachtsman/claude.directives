@@ -102,19 +102,26 @@ fi
 with curl, or download the old-sha tarball from codeload and `diff -r` against the main tarball.
 First run with no stamp: skip the delta and apply the per-file policy below directly.)
 
-Then disposition each changed file that exists locally — classify, don't blindly apply:
+Then disposition each changed file — classify, don't blindly apply:
 | Class | Disposition |
 |---|---|
 | **Equivalent-already** — upstream adopted what this project already does | Report-only; keep local |
 | **New-upstream** — a fix/feature the local copy lacks | Show the upstream patch; apply on approval |
 | **Local-custom** — deliberate project customization touched upstream | Preserve local; report the upstream intent |
 
-Per-file policies (unchanged): workflow templates are verbatim drop-ins (offer
-batch overwrite, EXCEPT preserve a renamed `qa.yml` name in `ci-monitor.yml`'s
-watch list); `ui-tests/` is per-project customized (per-file diffs, apply only
-approved hunks, never touch `package-lock.json`); `.claude/settings.json` is
-merge-only (report missing upstream hooks, merge approved ones, never replace
-wholesale).
+The compare output emits **upstream paths, which never exist verbatim in a
+project** — map each to its installed location before dispositioning:
+
+| Upstream path | Installed locally at | Refresh policy |
+|---|---|---|
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — offer batch overwrite; EXCEPT preserve a renamed `qa.yml` `name:` in `ci-monitor.yml`'s watch list |
+| `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json` |
+| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm |
+| `templates/claude-settings.json` | `.claude/settings.json` | Merge-only: report missing upstream hooks, merge approved ones; never replace wholesale |
+| `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
+| `directives/*`, `docs/*` | not installed — read live from upstream | Informational; no local file to update |
+
+Skip rows whose local path doesn't exist (the project never installed that piece).
 
 ## Phase 5 — Stamp and report
 

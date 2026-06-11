@@ -35,5 +35,5 @@ See `.github/workflows/ci-monitor.yml`, `.github/workflows/codex-monitor.yml`, a
 
 ---
 
-**Escalation & tool-use discipline:** see `docs/automations.md` → *Escalation Rules*
-and *Tool Use Discipline* — the same rules apply here.
+**Escalation:** see `directives/global.md` → *Escalation Rules* (canonical) and
+`docs/automations.md` → *Escalation Rules* (automation additions) — both apply here.

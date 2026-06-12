@@ -1,6 +1,6 @@
 ---
 name: qa-pipeline
-description: Runs the full QA pipeline in sequence — test-verifier, ui-tester, code-reviewer, security-reviewer (if relevant), and pr-readiness-reviewer. Orchestrates a feedback loop with ui-tester until all UI scenarios pass or human escalation is required.
+description: Runs the full QA pipeline in sequence — test-verifier, ui-tester, code review (pr-review-toolkit), security review (if relevant), and pr-readiness-reviewer. Orchestrates a feedback loop with ui-tester until all UI scenarios pass or human escalation is required.
 tools: Read, Glob, Grep, Bash, Agent
 ---
 
@@ -18,8 +18,15 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
 
 1. **test-verifier** — static checks: tests, lint, syntax, secrets scan
 2. **ui-tester** — live browser testing against the deployed app; feedback loop until pass or escalation
-3. **code-reviewer** — code quality, maintainability, architecture
-4. **security-reviewer** — conditional (see trigger conditions below)
+3. **code review** — invoke the official `pr-review-toolkit:code-reviewer` agent
+   (confidence-scored, CLAUDE.md-aware); have it review the branch diff and write
+   its findings to `.agent-reports/code-review-report.md`. If the plugin is not
+   attached, fall back to the built-in `/code-review` skill with the same output path
+4. **security review** — conditional (see trigger conditions below): run the
+   built-in `/security-review` skill on the pending changes and write findings to
+   `.agent-reports/security-review-report.md` (the `security-guidance` plugin's
+   automatic hooks complement this at edit/commit time but do not replace the
+   on-demand pass)
 5. **pr-readiness-reviewer** — final gate: evidence complete, no blockers
 
 ### Operating Rules
@@ -53,7 +60,7 @@ Round 1:  Invoke ui-tester → receive structured result
             If not fixable by agent → escalate to human immediately
 Round 2+: Same as Round 1
           If same failure persists after Round 3 with no improvement → escalate to human;
-          proceed to code-reviewer anyway to capture full pipeline output
+          proceed to the code review step anyway to capture full pipeline output
 Max rounds: 3 (then escalate regardless)
 ```
 
@@ -64,9 +71,9 @@ Max rounds: 3 (then escalate regardless)
 - Direct the fix with file + line + exact change in the pipeline summary message
 - Confirm fix is pushed before invoking next round
 
-### Security Reviewer Trigger Conditions
+### Security Review Trigger Conditions
 
-Run security-reviewer if changes touch any of:
+Run the security review (step 4) if changes touch any of:
 - Authentication, session, or credential handling
 - API token usage, scoping, or storage
 - HTML rendering of user-supplied or API-sourced strings (innerHTML risk)
@@ -82,16 +89,13 @@ See `docs/ci-triage.md` for expected vs. real failure classification and workflo
 CI monitoring is infra-resident and event-driven — not session-scoped:
 - `ci-monitor.yml` fires on `workflow_run` events (+ `workflow_dispatch` for manual scans)
 - `codex-monitor.yml` fires on Codex PR reviews
-The `test-monitor` agent is now a thin one-pass in-session helper only, not the always-on mechanism.
+For a quick in-session CI snapshot, call `mcp__github__actions_list` directly
+(one pass — report failures and the last success, then move on).
 
 #### Session Start Protocol
 
-On session start:
-
-1. Call `subscribe_pr_activity` on the project PR — fast-feedback layer while session is live
-2. Poll `mcp__github__actions_list` for any failures since the last session — diagnose before proceeding
-3. Check for any open `ci-failure` tracking issues (filed by `ci-monitor.yml`)
-4. Confirm `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` are present in `.github/workflows/`
+Follow the session-start steps in the test directive (`directives/test.md` →
+"Session start — required actions"); they are not duplicated here.
 
 ### Required Output Format
 
@@ -106,8 +110,8 @@ Ready / Not Ready / Conditional / Escalated to Human
 | --- | --- | --- | --- |
 | 1 | test-verifier | Pass/Fail/Conditional | <summary> |
 | 2 | ui-tester | Pass/Fail/Escalated | <summary + rounds> |
-| 3 | code-reviewer | Pass/Fail/Conditional | <summary> |
-| 4 | security-reviewer | Pass/Fail/Skipped | <summary> |
+| 3 | code review (pr-review-toolkit) | Pass/Fail/Conditional | <summary> |
+| 4 | security review | Pass/Fail/Skipped | <summary> |
 | 5 | pr-readiness-reviewer | Ready/Not Ready/Conditional | <summary> |
 
 ## UI Tester Loop Summary

@@ -26,7 +26,7 @@ Two GitHub Actions workflows replace manual agent invocation for the mechanical 
 
 Three event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` (Step 9).
 
-The AI agent steps (code-reviewer, security-reviewer, pr-readiness-reviewer) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
+The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
 Do not edit the templates in place in `claude.directives` — copy to the target project, then customize.
 

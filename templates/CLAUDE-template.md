@@ -37,8 +37,8 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 1. Use a `claude/<name>` feature branch
 2. Implement changes in [main source file]
 3. Run Required Commands above — all must pass
-4. Prefer `qa-pipeline`; run agents individually only if it fails:
-   `test-verifier` → `code-reviewer` → `security-reviewer` → `pr-readiness-reviewer`
+4. Prefer `qa-pipeline`; run steps individually only if it fails:
+   `test-verifier` → `pr-review-toolkit:code-reviewer` → `/security-review` (if security-relevant) → `pr-readiness-reviewer`
 5. Open PR to `main`
 
 ## UI Test Configuration

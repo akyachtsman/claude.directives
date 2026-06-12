@@ -1,6 +1,6 @@
 ---
 name: ui-tester
-description: Generic exploratory browser UI tester using Playwright. Discovers auth, maps interactive elements, exercises each one, captures API calls, and reports anomalies. Works on any web app without project-specific configuration — reads credentials from CLAUDE.md at runtime. Run after test-verifier and before code-reviewer.
+description: Generic exploratory browser UI tester using Playwright. Discovers auth, maps interactive elements, exercises each one, captures API calls, and reports anomalies. Works on any web app without project-specific configuration — reads credentials from CLAUDE.md at runtime. Run after test-verifier and before the code review step.
 tools: Read, Glob, Grep, Bash
 ---
 

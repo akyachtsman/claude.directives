@@ -28,7 +28,9 @@ verdict. Read-only — do NOT modify files. Execute in order:
    claude.directives `main` (one API call:
    `repos/akyachtsman/claude.directives/commits/main`). If they differ — or no
    stamp exists — report "upstream has moved since this project's last sync
-   (N commits behind) — run `/refresh-repo`" as a ⚠️ finding. Session Start
+   (N commits behind) — run `/refresh-repo`" as a ⚠️ finding. Exception: if
+   upstream.sha trails HEAD by exactly the commit(s) that recorded the
+   stamp/baselines themselves, report current, not behind. Session Start
    bootstrap skips existing files, so without this alarm a project can run
    indefinitely on stale skills/agents.
 7. Connectors & tools — Inventory the session's actual capabilities. Discover

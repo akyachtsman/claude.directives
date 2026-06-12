@@ -9,6 +9,11 @@ against the target repo. If `gh api` is unavailable, fall back to the public RES
 endpoints over `curl`/WebFetch (`https://api.github.com/repos/<repo>/...` and
 `https://raw.githubusercontent.com/<repo>/<ref>/<path>`).
 
+Repo-ops family note: current-repo lifecycle is `/new-repo`, `/refresh-repo`,
+`/audit-repo`; THIS command is the other-repo READ adapter. The verb list below
+is **closed** — unknown verb → refuse and list the supported verbs; never
+improvise one.
+
 Resolve the default branch first when a ref is needed:
 ```bash
 ref=$(gh api "repos/<repo>" --jq '.default_branch')
@@ -39,11 +44,12 @@ Use this to confirm whether content from an old repo has been migrated into a ne
 one.
 
 ### audit
-Check the repo for missing or expected content. By default, flag: no README,
-no LICENSE, empty directories, referenced-but-absent files (e.g. links/paths in
-markdown that don't resolve in the tree), and TODO/placeholder markers. If the
-caller names specific expectations (`audit <repo> expects:<a,b,c>`), verify each
-listed path/section exists and report which are missing.
+Run `/audit-repo`'s checklist (directive drift, errors, redundancies, logic
+correctness, structural soundness) against the FETCHED tree — read-only,
+findings-only, same severity grouping. That command's definition is canonical;
+do not maintain a separate audit spec here. If the caller names specific
+expectations (`audit <repo> expects:<a,b,c>`), additionally verify each listed
+path/section exists and report which are missing.
 
 ## Output
 Always end with a compact verdict: for `inspect`, the file count and tree; for

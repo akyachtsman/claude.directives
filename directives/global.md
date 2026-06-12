@@ -61,12 +61,18 @@ index.html       ← complete single-page app
 - GitHub Pages for project web apps only
 
 ## Repository Scope
-- The GitHub MCP is **hard-scoped to the repo(s) this session was opened on** —
-  no reads, writes, branches, or PRs against any other repo.
-- **Never offer cross-repo capability you have not verified**: confirm the
-  `add_repo` / `list_repos` tools (claude-code-remote server) exist via ToolSearch
-  before offering to add or act on another repo. If absent, the work must happen
-  in a session scoped to that repo — say so plainly.
+Two different scopes — never conflate them:
+- **ACT scope (hard-limited):** the GitHub MCP can write — branch, push, PR,
+  comment, merge — only against the repo(s) this session was opened on. Before
+  offering to ACT on another repo, confirm the `add_repo` / `list_repos` tools
+  (claude-code-remote server) exist via ToolSearch; if absent, that work needs
+  a session scoped to the target repo — say so plainly.
+- **READ scope (unrestricted for public repos):** any public repo is always
+  readable — `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`,
+  `https://api.github.com/repos/<owner>/<repo>/...`, or the codeload tarball —
+  no MCP, no `gh`, no clone needed. `/do-repo` packages this (inspect /
+  compare / audit). **NEVER claim a public repo "can't be seen"** — that
+  confuses ACT scope with READ scope; verify by fetching, then answer from data.
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk`
   runs the same verification at session start.
 

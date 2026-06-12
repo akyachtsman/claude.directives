@@ -22,8 +22,15 @@ Execute in order:
    - If they are **absent** → cross-repo is impossible here; another repo can only
      be worked on from a session scoped to it. Do **not** offer to "add" it.
 
-3. **Report** a compact verdict:
-   - **In scope (can act on):** `<owner/repo …>`
+3. **READ scope is a different thing — and it is never restricted for public
+   repos.** Raw URLs, the public GitHub API, and codeload tarballs work from
+   any session (`/do-repo` packages this). The MCP limit constrains ACTING
+   (branch/push/PR/merge), not reading. Never report a public repo as
+   inaccessible — fetch it and answer from data.
+
+4. **Report** a compact verdict:
+   - **In scope (can ACT on):** `<owner/repo …>`
+   - **Readable regardless:** any public repo, via raw/API/tarball (`/do-repo`)
    - **Add-repo capability:** available → `<addable repos>` | **NOT available**
    - **Rule:** do not offer to add, reach, or act on any repo not listed above
      unless `add_repo` was confirmed available.

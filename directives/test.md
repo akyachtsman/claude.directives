@@ -21,22 +21,31 @@ Bootstrap; web environments install it in the setup script) and are namespaced
 `directives-toolkit:*`. Nothing is fetched into `.claude/`; the full body loads
 when an agent is invoked. Inventory (source:
 `claude.directives/plugins/directives-toolkit/agents/`):
-- `test-monitor` — thin in-session CI status helper (one-pass check, not the always-on monitor)
-- `test-verifier` — independent QA verification agent
-- `code-reviewer` — code quality review agent
-- `security-reviewer` — security vulnerability review agent
+- `test-verifier` — independent QA verification agent (runs the suite, merge verdict)
 - `pr-readiness-reviewer` — final merge gate agent
 - `qa-pipeline` — full pipeline orchestrator
 - `ui-tester` — Playwright browser testing agent
 - `supabase` — data/backend specialist (per `data.md`)
+
+Code review and security review are **not** toolkit agents anymore — they come
+from Anthropic-official sources (enabled in each project's `.claude/settings.json`
+and installed by the environment setup script):
+- Code review → `pr-review-toolkit:code-reviewer` (official plugin; confidence-scored,
+  CLAUDE.md-aware); deep test-coverage critique → `pr-review-toolkit:pr-test-analyzer`
+- Security review → the built-in `/security-review` skill on demand, plus the
+  official `security-guidance` plugin's automatic hooks (edit/turn/commit-time)
+- Quick CI status checks are done inline via `mcp__github__actions_list` (the
+  retired `test-monitor` agent's one-pass job; the always-on monitor remains
+  `ci-monitor.yml`)
 
 ### templates/ — fill-in artifacts
 - `templates/CLAUDE-template.md` — project CLAUDE.md scaffold (used by `/new-repo`)
 - `templates/implementation-summary-template.md` — required before invoking reviewers
 - `templates/pr-checklist.md` — PR readiness checklist
 - `templates/project-test-plan-template.md` — test plan structure
-  (the test-verifier and code-reviewer report formats live inline in their agent
-  definitions inside the plugin)
+  (the test-verifier report format lives inline in its agent definition inside
+  the plugin; code/security review findings are written to `.agent-reports/` by
+  the official reviewers per qa-pipeline's adapter instructions)
 
 Workflow and Playwright-kit installation — which template goes where, and the
 monitors — is `docs/cicd-setup.md`'s job; don't re-derive it from the tree.

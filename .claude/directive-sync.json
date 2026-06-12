@@ -2,7 +2,7 @@
   "recorded": "2026-06-12",
   "source": "env.chk baseline",
   "upstream": {
-    "sha": "c240ad389750e3c250be830d6e14010ebc18fc03"
+    "sha": "8b0aa09a7c72f54228b2b86f36813414c31cecde"
   },
   "directives": {
     "directives/global.md": {
@@ -15,7 +15,7 @@
     },
     "directives/test.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md",
-      "sha256": "a0e4ced72cc13efb837d91f46f06805d944f46db0d38525bc97d1de5df2119bf"
+      "sha256": "546a5a3891b536239d525da2fafe5ff87ffc090b2bffec028a2ddfe4d4607db0"
     },
     "directives/data.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md",

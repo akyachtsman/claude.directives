@@ -20,8 +20,11 @@
    are ephemeral and never auto-install from `enabledPlugins`, so without it
    the plugin's commands/agents/hooks silently never load:
    ```
-   claude plugin marketplace add akyachtsman/claude.directives && claude plugin install directives-toolkit@claude-directives
+   claude plugin marketplace add akyachtsman/claude.directives && claude plugin install directives-toolkit@claude-directives && claude plugin install pr-review-toolkit@claude-plugins-official && claude plugin install security-guidance@claude-plugins-official
    ```
+   (`pr-review-toolkit` supplies the official code-review agents the QA pipeline
+   routes to; `security-guidance` adds Anthropic's automatic security hooks —
+   it needs Python 3.8+ in the environment, which standard web containers have.)
 
 ### Step 2 — Bootstrap the project
 Open a Claude Code session scoped to the new repo and type:

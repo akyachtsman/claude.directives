@@ -16,14 +16,14 @@
 
 ## Review
 
-- [ ] The `code-reviewer` report is attached or available at `.agent-reports/code-review-report.md`.
+- [ ] The code review report (official `pr-review-toolkit:code-reviewer`) is attached or available at `.agent-reports/code-review-report.md`.
 - [ ] Critical review issues are fixed.
 - [ ] Remaining follow-ups are documented and acceptable.
 
 ## Security
 
 - [ ] I considered whether a security review is required.
-- [ ] The `security-reviewer` was run for auth, input handling, data access, secrets, dependency, infrastructure, file handling, or sensitive-data changes.
+- [ ] The security review (`/security-review`, written to `.agent-reports/security-review-report.md`) was run for auth, input handling, data access, secrets, dependency, infrastructure, file handling, or sensitive-data changes.
 - [ ] No secrets or sensitive data were committed.
 
 ## CI and Readiness

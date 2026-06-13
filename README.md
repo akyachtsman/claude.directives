@@ -15,7 +15,7 @@ lives in `NEW-REPO-USER-INSTRUCTIONS.md`. Supporting directories:
 - `plugins/directives-toolkit/` — the installable toolkit (commands, auto-skills,
   QA/data agents, guard hooks); this repo doubles as its plugin marketplace
 - `docs/` — reference material, including the rendered design system reference at
-  `docs/design-system.html`
+  `docs/design-system.html` and the [AI-first working principles](docs/ai-first-principles.md)
 - `templates/` — installable workflows and the Playwright test kit
 
 **Live demos:** https://akyachtsman.github.io/claude.directives/ — rendered UI

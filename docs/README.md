@@ -14,6 +14,11 @@ Referenced by the exported directives and the qa agents.
 | `ci-triage.md` | CI triage — expected vs real failures, two-tier CI, when to trigger `qa-live.yml` |
 | `code-review-standard.md` | Blocking vs non-blocking review criteria and output format |
 
+## Working guidance
+| File | What it covers |
+|------|----------------|
+| `ai-first-principles.md` | Nine working principles for collaborating with an AI agent (adapted from TechWolf's MIT-licensed AI-First Toolkit) — orientation, not enforced policy |
+
 ## Setup guides
 | File | What it covers |
 |------|----------------|

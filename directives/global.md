@@ -100,6 +100,10 @@ plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
 - Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
 - Fix all CI failures before marking ready for review
 - Mark PR ready only when all checks pass
+- A `codex-flagged` label is a **merge blocker**: triage Codex's review before merging
+  — apply the fix, or remove the label with a one-line dismissal rationale in the PR.
+  Never merge while the PR is still `codex-flagged` (check the PR's labels on GitHub
+  first; the `codex-monitor` workflow adds the label, it does not clear it for you)
 - Before merging, confirm the PR's file list is **only** what you changed. A surprise
   file count signals a stale or tangled branch — verify against GitHub's own PR diff,
   not a possibly-stale local clone (re-fetch/prune, or re-cut from `main`, if they disagree)

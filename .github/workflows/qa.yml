@@ -34,6 +34,9 @@ jobs:
       - name: Check plugin + marketplace structure
         run: node .github/scripts/check-plugin.js
 
+      - name: Check secret-scan pattern in sync
+        run: node .github/scripts/check-secret-scan.js
+
       - name: Validate workflow YAML
         run: |
           python3 -c "

@@ -66,7 +66,7 @@ invoking agents (the ui-tester stops and asks if this table is missing).
 Agents write evidence to `.agent-reports/`:
 - `implementation-summary.md`, `test-report.md`, `ui-test-report.md`
 - `playwright-results.json`, `screenshots/` (on failure)
-- `code-review-report.md`, `security-review-report.md`, `pr-readiness-report.md`
+- `code-review-report.md`, `test-coverage-report.md`, `security-review-report.md`, `pr-readiness-report.md`
 
 ## Safety Rules for Agents
 - Reviewer agents must not edit code unless explicitly instructed.

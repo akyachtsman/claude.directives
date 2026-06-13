@@ -18,10 +18,15 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
 
 1. **test-verifier** — static checks: tests, lint, syntax, secrets scan
 2. **ui-tester** — live browser testing against the deployed app; feedback loop until pass or escalation
-3. **code review** — invoke the official `pr-review-toolkit:code-reviewer` agent
-   (confidence-scored, CLAUDE.md-aware); have it review the branch diff and write
-   its findings to `.agent-reports/code-review-report.md`. If the plugin is not
-   attached, fall back to the built-in `/code-review` skill with the same output path
+3. **code review + coverage** — invoke two official `pr-review-toolkit` agents on
+   the branch diff:
+   - `pr-review-toolkit:code-reviewer` (confidence-scored, CLAUDE.md-aware) → write
+     findings to `.agent-reports/code-review-report.md`. If the plugin is not
+     attached, fall back to the built-in `/code-review` skill with the same output path.
+   - `pr-review-toolkit:pr-test-analyzer` — the deep test-coverage critique that
+     `test-verifier` delegates to the orchestrator (see test-verifier.md) → write
+     findings to `.agent-reports/test-coverage-report.md`. Skip only if the plugin is
+     unattached (the built-in `/code-review` has no coverage-analysis equivalent)
 4. **security review** — conditional (see trigger conditions below): run the
    built-in `/security-review` skill on the pending changes and write findings to
    `.agent-reports/security-review-report.md` (the `security-guidance` plugin's
@@ -110,7 +115,7 @@ Ready / Not Ready / Conditional / Escalated to Human
 | --- | --- | --- | --- |
 | 1 | test-verifier | Pass/Fail/Conditional | <summary> |
 | 2 | ui-tester | Pass/Fail/Escalated | <summary + rounds> |
-| 3 | code review (pr-review-toolkit) | Pass/Fail/Conditional | <summary> |
+| 3 | code review + coverage (pr-review-toolkit) | Pass/Fail/Conditional | <code-reviewer + pr-test-analyzer findings> |
 | 4 | security review | Pass/Fail/Skipped | <summary> |
 | 5 | pr-readiness-reviewer | Ready/Not Ready/Conditional | <summary> |
 

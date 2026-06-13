@@ -91,7 +91,9 @@ jobs:
         working-directory: ${{ env.UI_TESTS_DIR }}
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # Both browsers: playwright.config.js defines a webkit project (iPhone 12)
+        # alongside chromium (Pixel 5). Installing chromium alone fails that project.
+        run: npx playwright install --with-deps chromium webkit
         working-directory: ${{ env.UI_TESTS_DIR }}
 
       - name: Run Playwright tests

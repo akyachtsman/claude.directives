@@ -57,6 +57,11 @@ relocate the export into this file.
 3. Confirm active branch: `git branch --show-current`
 4. Run `/env-chk` and report status — this includes the `scope-chk` repo-scope
    verification (global.md's Session Start step 2), so it need not be run separately here
+5. **Periodically** run `/audit-repo` — a structural/efficiency sweep for
+   directive↔code drift, redundancy, and simplification opportunities. Not every
+   session: run it when starting on a fresh `main`, or when the repo has changed
+   materially since the last audit. Never let it delay the user's actual request —
+   skip or defer if a task is already queued.
 
 ## Mid-session change semantics
 What a live session sees when these files change mid-session — don't assume

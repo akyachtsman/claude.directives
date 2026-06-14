@@ -8,40 +8,39 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    /* ── Variables (verbatim from directives/design.md) ── */
+    /* ── Structural tokens — fixed across every theme ── */
     :root {
-      --color-bg:             #F5F5F3;
-      --color-surface:        #FFFFFF;
-      --color-border:         #E2E0DB;
-      --color-border-hover:   #C8C5BE;
-      --color-text-primary:   #1A1A1A;
-      --color-text-secondary: #6B6860;
-      --color-accent:         #3D6B4F;
-      --color-accent-hover:   #2F5540;
-      --color-accent-light:   #EAF2ED;
-      --color-danger:         #C0392B;
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
       --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
       --shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04);
-      --font-xs:   12px;
-      --font-sm:   13px;
-      --font-base: 15px;
-      --font-lg:   17px;
-      --font-xl:   20px;
-      --font-2xl:  24px;
-      --radius-sm: 6px;
-      --radius-md: 10px;
-      --radius-lg: 14px;
-      --radius-xl: 20px;
-      --space-1:  4px;
-      --space-2:  8px;
-      --space-3:  12px;
-      --space-4:  16px;
-      --space-5:  20px;
-      --space-6:  24px;
-      --space-8:  32px;
-      --space-10: 40px;
+      --font-xs:12px; --font-sm:13px; --font-base:15px; --font-lg:17px; --font-xl:20px; --font-2xl:24px;
+      --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-xl:20px;
+      --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
+
+      /* Color tokens — NEUTRAL "unselected" fallback. There is NO house default:
+         a project must pick one theme (set data-theme on <html>); see directives/design.md.
+         This greyscale state renders fine but looks deliberately undecided. */
+      --color-bg:#F5F5F3; --color-surface:#FFFFFF;
+      --color-border:#E2E0DB; --color-border-hover:#C8C5BE;
+      --color-text-primary:#1A1A1A; --color-text-secondary:#6B6860;
+      --color-accent:#6E6E6A; --color-accent-hover:#595955;
+      --color-accent-light:#EDEDEB; --color-accent-ring:rgba(110,110,106,0.12);
+      --color-danger:#C0392B;
     }
+
+    /* ── Color schemes — full palette per theme; STRUCTURE never changes ──
+       Neutrals shift only by a faint temperature; the accent does the talking.
+       (Illustrative values — final contrast tuning pending.) */
+    [data-theme="forest"]     { --color-bg:#F5F5F3; --color-surface:#FFFFFF; --color-border:#E2E0DB; --color-border-hover:#C8C5BE; --color-text-primary:#1A1A1A; --color-text-secondary:#6B6860; --color-accent:#3D6B4F; --color-accent-hover:#2F5540; --color-accent-light:#EAF2ED; --color-accent-ring:rgba(61,107,79,0.12); --color-danger:#C0392B; }
+    [data-theme="slate-blue"] { --color-bg:#F3F4F6; --color-surface:#FFFFFF; --color-border:#DEE1E6; --color-border-hover:#C4C9D1; --color-text-primary:#1A1B1D; --color-text-secondary:#676A70; --color-accent:#3E5C76; --color-accent-hover:#31495F; --color-accent-light:#E9EEF3; --color-accent-ring:rgba(62,92,118,0.12); --color-danger:#C0392B; }
+    [data-theme="teal"]       { --color-bg:#F2F5F4; --color-surface:#FFFFFF; --color-border:#DCE3E1; --color-border-hover:#C2CCC9; --color-text-primary:#1A1B1B; --color-text-secondary:#69706E; --color-accent:#2E6B66; --color-accent-hover:#245450; --color-accent-light:#E5F0EF; --color-accent-ring:rgba(46,107,102,0.12); --color-danger:#C0392B; }
+    [data-theme="indigo"]     { --color-bg:#F4F4F8; --color-surface:#FFFFFF; --color-border:#E0E0E8; --color-border-hover:#C7C7D3; --color-text-primary:#1A1A1D; --color-text-secondary:#696A72; --color-accent:#474B82; --color-accent-hover:#393C69; --color-accent-light:#ECEDF6; --color-accent-ring:rgba(71,75,130,0.12); --color-danger:#C0392B; }
+    [data-theme="plum"]       { --color-bg:#F6F3F6; --color-surface:#FFFFFF; --color-border:#E5DFE5; --color-border-hover:#CEC5CE; --color-text-primary:#1C1A1C; --color-text-secondary:#6E6870; --color-accent:#6A4A6E; --color-accent-hover:#553A58; --color-accent-light:#F1ECF2; --color-accent-ring:rgba(106,74,110,0.12); --color-danger:#C0392B; }
+    [data-theme="terracotta"] { --color-bg:#F7F4F2; --color-surface:#FFFFFF; --color-border:#E7DFDB; --color-border-hover:#D3C8C1; --color-text-primary:#1D1A18; --color-text-secondary:#71685F; --color-accent:#A85C4A; --color-accent-hover:#8C4B3C; --color-accent-light:#F6EBE7; --color-accent-ring:rgba(168,92,74,0.12); --color-danger:#C0392B; }
+    [data-theme="charcoal"]   { --color-bg:#F4F4F3; --color-surface:#FFFFFF; --color-border:#E1E0DE; --color-border-hover:#C7C6C3; --color-text-primary:#1A1A1A; --color-text-secondary:#696865; --color-accent:#3A3A3C; --color-accent-hover:#2B2B2D; --color-accent-light:#ECECED; --color-accent-ring:rgba(58,58,60,0.12); --color-danger:#C0392B; }
+    [data-theme="burgundy"]   { --color-bg:#F6F3F3; --color-surface:#FFFFFF; --color-border:#E5DEDF; --color-border-hover:#D0C5C7; --color-text-primary:#1C1A1B; --color-text-secondary:#6F6866; --color-accent:#7A3B45; --color-accent-hover:#632F38; --color-accent-light:#F2E9EB; --color-accent-ring:rgba(122,59,69,0.12); --color-danger:#C0392B; }
+    [data-theme="bronze"]     { --color-bg:#F6F4EE; --color-surface:#FFFFFF; --color-border:#E5E0D5; --color-border-hover:#D0C9BA; --color-text-primary:#1B1A17; --color-text-secondary:#6E695E; --color-accent:#836A38; --color-accent-hover:#6A562D; --color-accent-light:#F2EDE1; --color-accent-ring:rgba(131,106,56,0.12); --color-danger:#C0392B; }
+    [data-theme="deep-cyan"]  { --color-bg:#F2F5F6; --color-surface:#FFFFFF; --color-border:#DCE3E5; --color-border-hover:#C2CCCE; --color-text-primary:#191B1C; --color-text-secondary:#677072; --color-accent:#2C6377; --color-accent-hover:#224E5E; --color-accent-light:#E5EFF2; --color-accent-ring:rgba(44,99,119,0.12); --color-danger:#C0392B; }
 
     /* ── Reset + Base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -71,6 +70,34 @@
       color: var(--color-accent-hover);
       font-weight: 500;
     }
+
+    /* ── Theme switcher (preview control — not part of the design system) ── */
+    .theme-switcher {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 12px 16px; margin-bottom: 32px;
+      box-shadow: var(--shadow-sm);
+    }
+    .theme-switcher-label {
+      font-size: var(--font-sm); font-weight: 600;
+      color: var(--color-text-secondary);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .theme-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+    .theme-dot {
+      width: 28px; height: 28px; min-width: 28px;
+      border-radius: 999px; cursor: pointer; padding: 0;
+      border: 2px solid var(--color-border);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .theme-dot:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+    .theme-dot.active { box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text-primary); }
+    .theme-dot.unset { background: repeating-linear-gradient(45deg,#EDEDEB,#EDEDEB 4px,#D7D7D4 4px,#D7D7D4 8px); }
+    .theme-current { font-size: var(--font-sm); color: var(--color-text-secondary); margin-left: auto; }
+    .theme-current strong { color: var(--color-text-primary); font-weight: 600; }
 
     /* ── Page title ── */
     .page-title {
@@ -243,7 +270,7 @@
     }
     .input:focus, .input.focused {
       border-color: var(--color-accent);
-      box-shadow: 0 0 0 3px rgba(61,107,79,0.12);
+      box-shadow: 0 0 0 3px var(--color-accent-ring);
     }
     .input + .input {
       margin-top: 12px;
@@ -520,6 +547,12 @@
       Do not copy this file into new projects.
     </div>
 
+    <div class="theme-switcher">
+      <span class="theme-switcher-label">Color scheme</span>
+      <div class="theme-swatches" id="theme-swatches"></div>
+      <span class="theme-current">Active: <strong id="theme-current-name">—</strong></span>
+    </div>
+
     <h1 class="page-title">Design System Reference</h1>
     <p class="page-subtitle">Visual showcase of every token and component defined in directives/design.md.</p>
 
@@ -654,53 +687,53 @@
       <div class="section-label">Colour Palette</div>
       <div class="card">
         <div class="swatches">
-          <div class="swatch-item">
-            <div class="swatch" style="background:#F5F5F3;"></div>
+          <div class="swatch-item" data-cssvar="--color-bg">
+            <div class="swatch" style="background:var(--color-bg);"></div>
             <div class="swatch-hex">#F5F5F3</div>
             <div class="swatch-name">--color-bg</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#FFFFFF;"></div>
+          <div class="swatch-item" data-cssvar="--color-surface">
+            <div class="swatch" style="background:var(--color-surface);"></div>
             <div class="swatch-hex">#FFFFFF</div>
             <div class="swatch-name">--color-surface</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#E2E0DB;"></div>
+          <div class="swatch-item" data-cssvar="--color-border">
+            <div class="swatch" style="background:var(--color-border);"></div>
             <div class="swatch-hex">#E2E0DB</div>
             <div class="swatch-name">--color-border</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#C8C5BE;"></div>
+          <div class="swatch-item" data-cssvar="--color-border-hover">
+            <div class="swatch" style="background:var(--color-border-hover);"></div>
             <div class="swatch-hex">#C8C5BE</div>
             <div class="swatch-name">--color-border-hover</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#1A1A1A;"></div>
+          <div class="swatch-item" data-cssvar="--color-text-primary">
+            <div class="swatch" style="background:var(--color-text-primary);"></div>
             <div class="swatch-hex">#1A1A1A</div>
             <div class="swatch-name">--color-text-primary</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#6B6860;"></div>
+          <div class="swatch-item" data-cssvar="--color-text-secondary">
+            <div class="swatch" style="background:var(--color-text-secondary);"></div>
             <div class="swatch-hex">#6B6860</div>
             <div class="swatch-name">--color-text-secondary</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#3D6B4F;"></div>
+          <div class="swatch-item" data-cssvar="--color-accent">
+            <div class="swatch" style="background:var(--color-accent);"></div>
             <div class="swatch-hex">#3D6B4F</div>
             <div class="swatch-name">--color-accent</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#2F5540;"></div>
+          <div class="swatch-item" data-cssvar="--color-accent-hover">
+            <div class="swatch" style="background:var(--color-accent-hover);"></div>
             <div class="swatch-hex">#2F5540</div>
             <div class="swatch-name">--color-accent-hover</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#EAF2ED;"></div>
+          <div class="swatch-item" data-cssvar="--color-accent-light">
+            <div class="swatch" style="background:var(--color-accent-light);"></div>
             <div class="swatch-hex">#EAF2ED</div>
             <div class="swatch-name">--color-accent-light</div>
           </div>
-          <div class="swatch-item">
-            <div class="swatch" style="background:#C0392B;"></div>
+          <div class="swatch-item" data-cssvar="--color-danger">
+            <div class="swatch" style="background:var(--color-danger);"></div>
             <div class="swatch-hex">#C0392B</div>
             <div class="swatch-name">--color-danger</div>
           </div>
@@ -879,6 +912,59 @@
   </div>
 
   <script>
+    /* ── Theme switcher (preview / test run) ── */
+    (function () {
+      const THEMES = [
+        { id: '',           label: 'Unselected', accent: '' },
+        { id: 'forest',     label: 'Forest',     accent: '#3D6B4F' },
+        { id: 'slate-blue', label: 'Slate Blue', accent: '#3E5C76' },
+        { id: 'teal',       label: 'Teal',       accent: '#2E6B66' },
+        { id: 'indigo',     label: 'Indigo',     accent: '#474B82' },
+        { id: 'plum',       label: 'Plum',       accent: '#6A4A6E' },
+        { id: 'terracotta', label: 'Terracotta', accent: '#A85C4A' },
+        { id: 'charcoal',   label: 'Charcoal',   accent: '#3A3A3C' },
+        { id: 'burgundy',   label: 'Burgundy',   accent: '#7A3B45' },
+        { id: 'bronze',     label: 'Bronze',     accent: '#836A38' },
+        { id: 'deep-cyan',  label: 'Deep Cyan',  accent: '#2C6377' }
+      ];
+      const root = document.documentElement;
+      const wrap = document.getElementById('theme-swatches');
+      const nameEl = document.getElementById('theme-current-name');
+      const KEY = 'ds-theme';
+
+      function updatePalette() {
+        const cs = getComputedStyle(root);
+        document.querySelectorAll('.swatch-item[data-cssvar]').forEach(function (item) {
+          const v = cs.getPropertyValue(item.getAttribute('data-cssvar')).trim();
+          const hex = item.querySelector('.swatch-hex');
+          if (v && hex) hex.textContent = v.toUpperCase();
+        });
+      }
+      function apply(id) {
+        if (id) root.setAttribute('data-theme', id); else root.removeAttribute('data-theme');
+        try { localStorage.setItem(KEY, id); } catch (e) {}
+        const t = THEMES.find(function (x) { return x.id === id; }) || THEMES[0];
+        if (nameEl) nameEl.textContent = t.label;
+        wrap.querySelectorAll('.theme-dot').forEach(function (d) {
+          d.classList.toggle('active', d.getAttribute('data-id') === id);
+        });
+        updatePalette();
+      }
+      THEMES.forEach(function (t) {
+        const b = document.createElement('button');
+        b.className = 'theme-dot' + (t.id ? '' : ' unset');
+        b.setAttribute('data-id', t.id);
+        b.title = t.label;
+        b.setAttribute('aria-label', t.label);
+        if (t.accent) b.style.background = t.accent;
+        b.addEventListener('click', function () { apply(t.id); });
+        wrap.appendChild(b);
+      });
+      let initial = 'forest';
+      try { const s = localStorage.getItem(KEY); if (s !== null) initial = s; } catch (e) {}
+      apply(initial);
+    })();
+
     function toggleDone(row) {
       row.classList.toggle('done');
       row.classList.remove('hovered');

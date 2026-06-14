@@ -32,6 +32,32 @@ Document the project's validation commands in its `CLAUDE.md` (e.g. HTML and
 workflow-YAML validation, plus lint/tests where applicable) — agents run these as
 part of review.
 
+## Spec-Driven Development (`/sdd-loop`)
+
+For non-trivial features, `/sdd-loop` runs a phased spec → plan → tasks →
+implement loop (the `github/spec-kit` methodology, ported — not the CLI). It is
+**stepwise**: one phase per invocation, so you supply intent between phases.
+Phase 0 (constitution) is **inherited** from the imported directives — it is
+never regenerated. The full per-phase spec lives in the command body; the loop
+at a glance:
+
+```
+/new-repo            → scaffold + inherit directives (constitution is automatic)
+/sdd-loop specify    → WHAT & WHY only (you supply the feature idea)
+          clarify    → interrogate gaps before planning
+          plan       → HOW: stack + architecture (you supply stack decisions)
+          tasks      → ordered, dependency-aware list ([P] = parallel-safe)
+          analyze    → consistency check, delegated to the review agents
+                       (+ optional --cross-check: fresh reviewer subagent, off by default)
+          implement  → build task by task, delegated to qa-pipeline
+→ /commit-chk → PR → CI green → merge
+```
+
+Artifacts are committed under `specs/<feature>/` (`spec.md`, `plan.md`,
+`tasks.md`, `analysis.md`). The command **owns** specify→tasks and **delegates**
+analyze/implement to the `pr-review-toolkit` reviewers and `qa-pipeline` rather
+than reinventing them.
+
 ## Reports
 
 Agents write evidence to `.agent-reports/`:

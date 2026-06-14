@@ -18,6 +18,7 @@ every project unless explicitly overridden at repo level.
 - Plain HTML + JS is the default stack
 - All code must work on iPad Safari
 - Use `textContent` for all DOM text insertion — never `innerHTML` with data from any backend or user input
+- For non-trivial features, separate WHAT from HOW — specify and clarify intent before planning a stack, and refine in phases rather than one-shotting (run `/sdd-loop`; the imported directives are its constitution)
 
 ## Repo Structure Standard
 Every project repo should contain:

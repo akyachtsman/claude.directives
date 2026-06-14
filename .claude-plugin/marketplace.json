@@ -9,7 +9,7 @@
     {
       "name": "directives-toolkit",
       "source": "./plugins/directives-toolkit",
-      "description": "The full claude.directives toolkit: 12 operational commands (env-chk, refresh-repo, new-repo, handoff-session, ...), 3 auto-skills (update-pages, scope-chk, doc-comp), 8 QA/data agents, and guard hooks (Pages-edit nudge, stale-config reminder, main-push gate)."
+      "description": "The full claude.directives toolkit: 12 operational commands (env-chk, refresh-repo, new-repo, sdd-loop, ...), 3 auto-skills (update-pages, scope-chk, doc-comp), 5 QA/data agents, and guard hooks (Pages-edit nudge, stale-config reminder, main-push gate)."
     }
   ]
 }

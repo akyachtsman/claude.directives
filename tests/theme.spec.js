@@ -16,16 +16,16 @@ const PAGE = 'file://' + path.resolve(__dirname, '..', 'docs', 'design-system.ht
 const SCHEMES = {
   'forest': '#1F7A45',
   'slate-blue': '#1565C0',
-  'teal': '#0F8A6E',
+  'teal': '#0D745C',
   'indigo': '#4A3FB5',
   'plum': '#A52A78',
-  'terracotta': '#C0532A',
+  'terracotta': '#A94925',
   'charcoal': '#36383B',
   'burgundy': '#9B2D3F',
-  'bronze': '#A06A12',
+  'bronze': '#8A5A0F',
   'deep-cyan': '#0E6E93',
 };
-const FALLBACK = '#6E6E6A';
+const FALLBACK = '#656562';
 
 function accent(page) {
   return page.evaluate(() =>

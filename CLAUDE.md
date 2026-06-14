@@ -81,8 +81,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   against the local working tree), path-existence check, required-section check,
   workflow YAML validation, a secret-scan-pattern sync check (the canonical regex
   stays byte-identical across `global.md` and the qa workflow templates), a
-  design-theme parity check (the 10 schemes match between `design.md` and the
-  showcase), plus a warn-only external-link job.
+  design-theme parity check (the 10 schemes match between `design.md`, the
+  showcase, and the bootstrap template) plus a WCAG-AA color-contrast audit, a
+  non-blocking Playwright theme-contract job, plus a warn-only external-link job.
 - `ci-monitor.yml` — fires when `QA — Directive Validation` completes; on failure
   opens/updates a deduplicated `ci-failure` tracking issue.
 - `codex-monitor.yml` — fires on Codex PR reviews; adds a `codex-flagged` label
@@ -118,6 +119,7 @@ node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
 node .github/scripts/check-theme-parity.js
+node .github/scripts/check-contrast.js
 node .github/scripts/check-links.js --internal   # set GITHUB_REPOSITORY + GITHUB_TOKEN
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages monitor template pairs)

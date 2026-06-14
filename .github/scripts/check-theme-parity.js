@@ -62,5 +62,21 @@ for (const id of idsA) {
   }
 }
 
+// Stage-3 guard: the bootstrap template must offer exactly the schemes design.md defines.
+const tmpl = readFileSync('templates/CLAUDE-template.md', 'utf8');
+const choice = tmpl.match(/Design Theme:[^\n]*\[choose one:([^\]]+)\]/);
+if (!choice) {
+  console.error('templates/CLAUDE-template.md: missing `Design Theme: [choose one: ...]` field');
+  failed = true;
+} else {
+  const offered = choice[1].split('|').map(s => s.trim()).filter(Boolean).sort();
+  if (offered.join(',') !== idsA.join(',')) {
+    console.error(`Design Theme options mismatch:\n  template offers: ${offered.join(', ')}\n  design.md defines: ${idsA.join(', ')}`);
+    failed = true;
+  } else {
+    console.log(`OK: CLAUDE-template Design Theme offers all ${offered.length} schemes`);
+  }
+}
+
 if (failed) { console.error('check-theme-parity: FAIL'); process.exit(1); }
 console.log(`check-theme-parity: OK — 10 schemes identical across ${a} and ${b}`);

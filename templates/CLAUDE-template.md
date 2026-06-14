@@ -18,6 +18,12 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 - **Stack:** [fill in]
 - **Branch policy:** Develop on a `claude/<name>` feature branch; PRs target `main`
 
+## Design Theme
+One-time color-scheme choice from `directives/design.md` → "Color Schemes"
+(changeable later). Set this field, and set `data-theme` on the app's root
+`<html>` to match.
+- **Design Theme:** `[choose one: forest | slate-blue | teal | indigo | plum | terracotta | charcoal | burgundy | bronze | deep-cyan]`
+
 ## Application Architecture
 - [main source file/folder] — [brief description]
 

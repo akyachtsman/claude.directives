@@ -39,7 +39,10 @@ Execute in order:
    Write it as `CLAUDE.md`, drop the scaffold's HTML comment, fill in the repo
    name and live URL from context (`APP_URL` variable / repo name), and leave
    the [bracketed] sections as placeholders for the human to complete
-   post-merge.
+   post-merge — including **Design Theme**, the project's one-time color-scheme
+   choice from design.md's "Color Schemes" (flag it for the human; nothing
+   renders branded until it is set and `data-theme` is applied to the app's
+   root `<html>`).
 
 5. **Install CI/CD workflows.** Copy the 5 canonical workflow files from
    `claude.directives/templates/workflows/` into `.github/workflows/`:
@@ -104,5 +107,6 @@ Execute in order:
 
 10. **Report to the human.** Summarize: files/dirs created, the PR link, and
     exactly which placeholder sections in `CLAUDE.md` still need human input
-    (Project name, Stack, Application Architecture, security constraints, coding
-    standards) before the PR is merged.
+    (Project name, Stack, Application Architecture, **Design Theme** — the
+    one-time color-scheme pick, security constraints, coding standards) before
+    the PR is merged.

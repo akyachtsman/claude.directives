@@ -4,8 +4,10 @@ This is the exported design directive for all projects. Import it via:
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 
 The complete design directive for all projects. Import this one file and follow
-it exactly — there is nothing to choose. Every rule below applies; use the parts
-your screens need and ignore the rest.
+it exactly. Structure, type, spacing and components are fixed — nothing to choose
+there. The one choice each project makes is its **color scheme**: pick one of the
+ten in "Color Schemes" below (a one-time setup decision, changeable later). Use
+the parts your screens need and ignore the rest.
 
 **Visual reference:** every token and component below is rendered live at
 https://akyachtsman.github.io/claude.directives/docs/design-system.html
@@ -26,21 +28,55 @@ Neutral, calm, professional. iPad-first, mouse-friendly desktop.
 No loud colors. Generous whitespace. Every element feels solid and tappable.
 Data is the hero — UI chrome stays out of the way.
 
-## Color Palette
+## Color Schemes
+Structure is fixed; **color is the only thing a scheme changes.** Eleven color
+tokens are swappable; everything else (shadows, type, radius, spacing, component
+shapes) is identical across all schemes.
+
+**Choosing a scheme (downstream).** Set `data-theme` on the root element —
+`<html data-theme="slate-blue">` — and every component re-colors automatically
+(they all read the tokens). **There is no house default:** each project picks one
+scheme at adoption (a one-time decision recorded in its `CLAUDE.md` as
+`Design Theme: <id>`; `/new-repo` forces the pick) and may change it any time
+afterward in its own environment. Until one is set, the neutral "unselected"
+fallback below renders — greyscale accent, deliberately undecided.
+
+Swappable tokens (per scheme): `--color-bg`, `--color-surface`, `--color-border`,
+`--color-border-hover`, `--color-text-primary`, `--color-text-secondary`,
+`--color-accent`, `--color-accent-hover`, `--color-accent-light`,
+`--color-accent-ring`, `--color-danger`.
+
+Theme-independent (identical for every scheme):
 ```
---color-bg:             #F5F5F3
---color-surface:        #FFFFFF
---color-border:         #E2E0DB
---color-border-hover:   #C8C5BE
---color-text-primary:   #1A1A1A
---color-text-secondary: #6B6860
---color-accent:         #3D6B4F
---color-accent-hover:   #2F5540
---color-accent-light:   #EAF2ED
---color-danger:         #C0392B
 --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)
 --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05)
 --shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)
+```
+
+### Neutral fallback — `:root`, no scheme chosen
+```
+--color-bg:#F5F5F3; --color-surface:#FFFFFF; --color-border:#E2E0DB; --color-border-hover:#C8C5BE;
+--color-text-primary:#1A1A1A; --color-text-secondary:#6B6860;
+--color-accent:#6E6E6A; --color-accent-hover:#595955; --color-accent-light:#EDEDEB; --color-accent-ring:rgba(110,110,106,0.13);
+--color-danger:#C0392B;
+```
+
+### The ten schemes
+Authoritative values — copy the chosen block into `styles/variables.css`. `danger`
+is constant `#C0392B`; `--color-accent-ring` is the accent at ~13% alpha (focus
+ring). Neutrals shift only by a faint temperature; the accent carries the identity.
+All ten render live at the visual reference above.
+```
+/* Forest   */ [data-theme="forest"]     { --color-bg:#EEF4F0; --color-surface:#FFFFFF; --color-border:#DCE6E0; --color-border-hover:#C4D3CA; --color-text-primary:#19211C; --color-text-secondary:#5F6B63; --color-accent:#1F7A45; --color-accent-hover:#186337; --color-accent-light:#E6F2EB; --color-accent-ring:rgba(31,122,69,0.13); --color-danger:#C0392B; }
+/* Blue     */ [data-theme="slate-blue"] { --color-bg:#EDF1F8; --color-surface:#FFFFFF; --color-border:#DAE2EE; --color-border-hover:#BFCBDF; --color-text-primary:#181B22; --color-text-secondary:#5F6573; --color-accent:#1565C0; --color-accent-hover:#114F98; --color-accent-light:#E5EEF8; --color-accent-ring:rgba(21,101,192,0.13); --color-danger:#C0392B; }
+/* Teal     */ [data-theme="teal"]       { --color-bg:#EDF4F2; --color-surface:#FFFFFF; --color-border:#D8E5E1; --color-border-hover:#BFD2CC; --color-text-primary:#172320; --color-text-secondary:#5E6E69; --color-accent:#0F8A6E; --color-accent-hover:#0B6E58; --color-accent-light:#E2F1ED; --color-accent-ring:rgba(15,138,110,0.13); --color-danger:#C0392B; }
+/* Indigo   */ [data-theme="indigo"]     { --color-bg:#F0EFF9; --color-surface:#FFFFFF; --color-border:#E0DEF0; --color-border-hover:#C8C4E0; --color-text-primary:#1B1A26; --color-text-secondary:#64627A; --color-accent:#4A3FB5; --color-accent-hover:#3B3291; --color-accent-light:#ECEAF8; --color-accent-ring:rgba(74,63,181,0.13); --color-danger:#C0392B; }
+/* Magenta  */ [data-theme="plum"]       { --color-bg:#F8EEF4; --color-surface:#FFFFFF; --color-border:#EEDCE7; --color-border-hover:#DEC2D3; --color-text-primary:#241A20; --color-text-secondary:#6F6068; --color-accent:#A52A78; --color-accent-hover:#84215F; --color-accent-light:#F6E6F0; --color-accent-ring:rgba(165,42,120,0.13); --color-danger:#C0392B; }
+/* Rust     */ [data-theme="terracotta"] { --color-bg:#F8F1EC; --color-surface:#FFFFFF; --color-border:#ECDFD6; --color-border-hover:#DCC8BB; --color-text-primary:#241B16; --color-text-secondary:#6F635A; --color-accent:#C0532A; --color-accent-hover:#9C4221; --color-accent-light:#F8EAE2; --color-accent-ring:rgba(192,83,42,0.13); --color-danger:#C0392B; }
+/* Charcoal */ [data-theme="charcoal"]   { --color-bg:#F3F3F2; --color-surface:#FFFFFF; --color-border:#E0E0DE; --color-border-hover:#C7C7C4; --color-text-primary:#1A1A1A; --color-text-secondary:#67676A; --color-accent:#36383B; --color-accent-hover:#27282B; --color-accent-light:#ECEDED; --color-accent-ring:rgba(54,56,59,0.13); --color-danger:#C0392B; }
+/* Wine     */ [data-theme="burgundy"]   { --color-bg:#F8EFF0; --color-surface:#FFFFFF; --color-border:#EEDDDF; --color-border-hover:#DEC4C8; --color-text-primary:#241A1C; --color-text-secondary:#6F6063; --color-accent:#9B2D3F; --color-accent-hover:#7C2433; --color-accent-light:#F6E5E8; --color-accent-ring:rgba(155,45,63,0.13); --color-danger:#C0392B; }
+/* Amber    */ [data-theme="bronze"]     { --color-bg:#F7F2E9; --color-surface:#FFFFFF; --color-border:#ECE3D2; --color-border-hover:#DCCFB6; --color-text-primary:#221E14; --color-text-secondary:#6B6453; --color-accent:#A06A12; --color-accent-hover:#80540D; --color-accent-light:#F5ECDA; --color-accent-ring:rgba(160,106,18,0.13); --color-danger:#C0392B; }
+/* Cyan     */ [data-theme="deep-cyan"]  { --color-bg:#ECF3F6; --color-surface:#FFFFFF; --color-border:#D8E5EB; --color-border-hover:#BED3DC; --color-text-primary:#162126; --color-text-secondary:#5E6A6F; --color-accent:#0E6E93; --color-accent-hover:#0B5775; --color-accent-light:#E2EFF4; --color-accent-ring:rgba(14,110,147,0.13); --color-danger:#C0392B; }
 ```
 
 ## Typography
@@ -150,7 +186,7 @@ transition:    border-color 0.15s ease
 ### Input :focus
 border-color: var(--color-accent)
 outline:      none
-box-shadow:   0 0 0 3px rgba(61,107,79,0.12)
+box-shadow:   0 0 0 3px var(--color-accent-ring)
 
 ## Section Headers
 font-size:      var(--font-sm)
@@ -219,7 +255,7 @@ Write for someone who is busy and competent — not a beginner, not a lawyer.
 
 ## File Structure
 styles/
-  variables.css   ← all CSS vars from this file
+  variables.css   ← all CSS vars + the chosen [data-theme] scheme block (set data-theme on <html>)
   base.css        ← reset + typography
   components.css  ← buttons, cards, inputs, checkboxes
   forms.css       ← form layouts

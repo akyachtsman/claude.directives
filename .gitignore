@@ -1,0 +1,7 @@
+# Node dependencies
+node_modules/
+
+# Playwright (optional theme contract test) generated output
+tests/test-results/
+tests/playwright-report/
+tests/package-lock.json

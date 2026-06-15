@@ -42,7 +42,7 @@ One-time color-scheme choice from `directives/design.md` → "Color Schemes"
 ## Agent Workflow
 1. Use a `claude/<name>` feature branch
 2. For a non-trivial feature, run `/sdd-loop` (`specify` → `clarify` → `plan` → `tasks`) before coding — separate WHAT from HOW; trivial changes skip to step 3
-3. Implement changes in [main source file] — or `/sdd-loop implement` to work the task list
+3. Implement changes in [main source file] — or `/sdd-loop analyze` then `/sdd-loop implement` to check consistency and work the task list
 4. Run Required Commands above — all must pass
 5. Prefer `qa-pipeline`; run steps individually only if it fails:
    `test-verifier` → `pr-review-toolkit:code-reviewer` → `/security-review` (if security-relevant) → `pr-readiness-reviewer`

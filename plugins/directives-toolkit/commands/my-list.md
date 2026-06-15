@@ -9,7 +9,9 @@ menu stays accurate as the toolkit changes:
    `skills/<name>/SKILL.md` `description` frontmatter. In this repo the source
    is `plugins/directives-toolkit/`; downstream it lives wherever the plugin is
    installed — Glob for the `directives-toolkit` `commands/` and `skills/` dirs
-   rather than assuming a path.
+   rather than assuming a path. If the plugin dir isn't reachable (installed
+   outside the project working tree), fall back to enumerating the
+   `directives-toolkit` commands and skills available in this session.
 2. Print two alphabetically-sorted tables, using each item's own `description`
    for the right column (do not paraphrase from memory):
 

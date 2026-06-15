@@ -22,7 +22,7 @@ Referenced by the exported directives and the qa agents.
 ## Setup guides
 | File | What it covers |
 |------|----------------|
-| `usage-guide.md` | How agents/skills bootstrap into a project and where reports go |
+| `usage-guide.md` | How agents/skills bootstrap into a project, the `/sdd-loop` quickstart, and where reports go |
 | `cron-email-notifications.md` | Standing up the scheduled-job + email-notification kit |
 
 ## This repo only (not inherited downstream)

@@ -41,11 +41,12 @@ One-time color-scheme choice from `directives/design.md` → "Color Schemes"
 
 ## Agent Workflow
 1. Use a `claude/<name>` feature branch
-2. Implement changes in [main source file]
-3. Run Required Commands above — all must pass
-4. Prefer `qa-pipeline`; run steps individually only if it fails:
+2. For a non-trivial feature, run `/sdd-loop` (`specify` → `clarify` → `plan` → `tasks`) before coding — separate WHAT from HOW; trivial changes skip to step 3
+3. Implement changes in [main source file] — or `/sdd-loop analyze` then `/sdd-loop implement` to check consistency and work the task list
+4. Run Required Commands above — all must pass
+5. Prefer `qa-pipeline`; run steps individually only if it fails:
    `test-verifier` → `pr-review-toolkit:code-reviewer` → `/security-review` (if security-relevant) → `pr-readiness-reviewer`
-5. Open PR to `main`
+6. Open PR to `main`
 
 ## UI Test Configuration
 Read by `ui-tester` and the Playwright kit at runtime — fill in before invoking agents:

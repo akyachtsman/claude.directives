@@ -48,19 +48,19 @@ once locally — it persists.
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
 
-### Step 2 — Bootstrap the project
-Open a Claude Code session scoped to the new repo — **with the `directives`
-environment from Step 0 selected** — and type:
+### Step 2 — Build the app
+Open a Claude Code session scoped to the new repo and type:
 
 ```
-/new-repo
+/kickoff
 ```
 
-That's it. Claude handles everything else autonomously.
+That's it. `/kickoff` scaffolds the repo (running `/new-repo` for you), asks you
+for the product brief, offers an optional competitive-discovery pass, then drives
+the `/sdd-loop` build — answering its prompts is all you do.
 
-For a full spec-driven build of a new app, run **`/kickoff`** instead — it
-scaffolds (via `/new-repo` if needed), asks you for the product brief, offers an
-optional competitive-discovery pass, then drives the `/sdd-loop` phases.
+*Just want a bare scaffold, no build yet? Run `/new-repo` instead — it sets up
+`CLAUDE.md`, CI, and the test kit, and stops there.*
 
 ---
 

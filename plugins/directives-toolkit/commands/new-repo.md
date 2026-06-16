@@ -74,6 +74,10 @@ Execute in order:
      and must never be committed (see the data directive)
    - `.env` and `.env.*` — local key/secret files must never be committed
 
+   Add **only** these entries. In particular, do **not** gitignore
+   `package-lock.json` — the Playwright lockfile **must be committed** (Step 7),
+   and don't copy this or any other repo's `.gitignore` wholesale.
+
    Also copy `claude.directives/templates/claude-settings.json` to
    `.claude/settings.json` (merge into any existing one): it registers the
    claude-directives marketplace and enables the directives-toolkit plugin
@@ -85,8 +89,11 @@ Execute in order:
    - `tests/app.spec.js`
    - `package.json`
 
-   Do NOT copy `package-lock.json` — run `npm install` inside
-   `.github/scripts/ui-tests/` to generate a fresh one. Confirm
+   Do NOT copy the template's `package-lock.json` — instead run `npm install`
+   inside `.github/scripts/ui-tests/` to generate a fresh one **and commit it**.
+   `qa.yml`'s `cache: npm` step hard-fails at `setup-node` without a committed
+   `package-lock.json` (before Playwright even runs), so commit the lockfile and
+   never add it to `.gitignore`. Confirm
    `playwright.config.js` resolves the live URL from the `APP_URL` variable, and
    update any project-specific selector constants in `app.spec.js` to match the
    actual UI (the kit is generic/exploratory by default and reads the credential

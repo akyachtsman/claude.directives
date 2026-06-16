@@ -147,7 +147,21 @@ async function detectAuthGate(page) {
   const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).count();
   const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').count();
   if (hasNumericButtons >= 9 && hasDotIndicator > 0) return true;
-  return await page.locator('input[type=password]').first().isVisible().catch(() => false);
+  if (await page.locator('input[type=password]').first().isVisible().catch(() => false)) return true;
+  // Text/access-code gate (detectAndAuth's text-input path): a SINGLE visible text input
+  // on a sparse, login-like page — gated on auth-ish context so an arbitrary search/filter
+  // box on a content-rich page is NOT treated as auth.
+  return await page.evaluate(() => {
+    const inputs = [...document.querySelectorAll('input[type=text], input:not([type])')]
+      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+    if (inputs.length !== 1) return false;
+    const el = inputs[0];
+    const ctx = [el.placeholder, el.getAttribute('aria-label'), el.name, el.id,
+                 document.body.innerText?.slice(0, 300)].join(' ').toLowerCase();
+    const looksAuth = /\b(pin|passcode|access\s*code|access|log\s*in|login|sign\s*in|unlock|enter\s*code|password)\b/.test(ctx);
+    const controls = document.querySelectorAll('button, [role=button], a[href], select, textarea').length;
+    return looksAuth && controls <= 4;
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,14 +242,17 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 
   const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
   // A wrong credential often renders an inline error, which itself changes the DOM —
-  // so domChanged alone is not proof of success. Treat a non-empty on-screen error as
-  // a failure even when the DOM changed. Guard the lookup with count()+a short timeout:
-  // on a successful login the error element is usually absent, and an un-timed
-  // textContent() would wait out the whole test timeout before resolving.
-  const errLoc = page.locator('[id*="err"], [class*="err"], [class*="error"]').first();
-  const onscreenError = (await errLoc.count()) > 0
-    ? ((await errLoc.textContent({ timeout: 1000 }).catch(() => '')) ?? '').trim()
-    : '';
+  // so domChanged alone is not proof of success. Treat a non-empty on-screen error as a
+  // failure even when the DOM changed. Read the first VISIBLE, non-empty error element:
+  // apps often keep hidden/empty `.error` placeholders, so `.first().textContent()` could
+  // read the wrong node. Synchronous evaluate — no locator waiting, so it can't burn the
+  // test timeout either.
+  const onscreenError = await page.evaluate(() => {
+    const els = [...document.querySelectorAll('[id*="err"], [class*="err"], [class*="error"]')]
+      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+    for (const el of els) { const t = (el.textContent || '').trim(); if (t) return t; }
+    return '';
+  });
 
   if (mechanism !== 'none' && (!domChanged || onscreenError.length > 0)) {
     const apiCalls = await getApiCalls();

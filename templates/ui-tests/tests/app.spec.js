@@ -45,6 +45,9 @@ async function captureApiCalls(page) {
   await page.addInitScript(() => {
     const orig = window.fetch;
     window.__apiCalls = [];
+    // Fresh id per document: addInitScript re-runs on every full navigation, so a
+    // changed id means window.__apiCalls was reset (used to detect navigation in S3).
+    window.__pageLoadId = Math.random();
     window.fetch = async (...args) => {
       const res = await orig(...args);
       // Record the call (with its status) IMMEDIATELY so non-JSON 4xx/5xx responses
@@ -135,6 +138,18 @@ async function detectAndAuth(page, credential) {
   return 'none'; // no auth gate detected
 }
 
+// Detection-only: is there a real auth gate (PIN keypad or password field)? Does NOT
+// interact, and deliberately ignores plain text inputs (a search/filter box is not an
+// auth gate). Used to decide whether to skip/auth without firing spurious login attempts.
+async function detectAuthGate(page) {
+  await page.locator('[class*="keypad"], [class*="pin"], input[type="password"]')
+    .first().waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).count();
+  const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').count();
+  if (hasNumericButtons >= 9 && hasDotIndicator > 0) return true;
+  return await page.locator('input[type=password]').first().isVisible().catch(() => false);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // INTERACTIVE ELEMENT DISCOVERY
 // ─────────────────────────────────────────────────────────────────────────────
@@ -214,9 +229,13 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
   // A wrong credential often renders an inline error, which itself changes the DOM —
   // so domChanged alone is not proof of success. Treat a non-empty on-screen error as
-  // a failure even when the DOM changed.
-  const onscreenError = ((await page.locator('[id*="err"], [class*="err"], [class*="error"]')
-    .first().textContent().catch(() => '')) ?? '').trim();
+  // a failure even when the DOM changed. Guard the lookup with count()+a short timeout:
+  // on a successful login the error element is usually absent, and an un-timed
+  // textContent() would wait out the whole test timeout before resolving.
+  const errLoc = page.locator('[id*="err"], [class*="err"], [class*="error"]').first();
+  const onscreenError = (await errLoc.count()) > 0
+    ? ((await errLoc.textContent({ timeout: 1000 }).catch(() => '')) ?? '').trim()
+    : '';
 
   if (mechanism !== 'none' && (!domChanged || onscreenError.length > 0)) {
     const apiCalls = await getApiCalls();
@@ -260,9 +279,8 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // navigation waits) and cannot fit the 30s global timeout on element-rich
   // apps or mobile-emulated projects.
   test.setTimeout(240_000);
-  // Run the sweep whether or not a credential exists: public-first apps (knowledge
-  // hub, questionnaire) must be exercised even with no auth. Only the auth step below
-  // is gated on having a credential.
+  // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
+  // only auth-gated apps with no credential are skipped (decided after page load below).
   const consoleErrors = [];
   const apiAnomalies  = [];
   page.on('pageerror', e => consoleErrors.push(e.message));
@@ -271,8 +289,16 @@ test('S3: interactive elements discovered and exercised without errors', async (
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
   await page.waitForLoadState('networkidle').catch(() => {});
-  if (AUTH_CREDENTIAL) await detectAndAuth(page, AUTH_CREDENTIAL);
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // Authenticate if we have a credential; if there's a real auth gate but no credential,
+  // skip — sweeping the login screen would fire spurious PIN/password attempts and 401/403s
+  // don't block, so the job could "pass" without reaching app content. A public app with
+  // no gate falls through and is swept normally.
+  if (AUTH_CREDENTIAL) {
+    await detectAndAuth(page, AUTH_CREDENTIAL);
+    await page.waitForLoadState('networkidle').catch(() => {});
+  } else if (await detectAuthGate(page)) {
+    test.skip(true, 'Auth gate present but no credential — skipping sweep (would only exercise the login screen)');
+  }
 
   const elements = await discoverElements(page);
   test.info().attach('element-map', {
@@ -284,9 +310,11 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
   for (const el of elements) {
     const errorsBefore = consoleErrors.length;
-    // Like errorsBefore: only calls made by THIS interaction count as findings.
-    // (A navigation resets window.__apiCalls; slice() then yields [] — safe.)
+    // Only calls made by THIS interaction count as findings. callsBefore is the baseline
+    // length; loadIdBefore detects whether the interaction navigated (which resets the
+    // array) so we don't mis-slice the new page's calls — see recentBadCalls below.
     const callsBefore  = ((await getApiCalls()) ?? []).length;
+    const loadIdBefore = await page.evaluate(() => window.__pageLoadId).catch(() => null);
     const snapBefore   = await domSnapshot(page);
 
     try {
@@ -314,10 +342,14 @@ test('S3: interactive elements discovered and exercised without errors', async (
       const domTransition  = JSON.stringify(snapBefore) !== JSON.stringify(snapAfter);
       const newErrors      = consoleErrors.slice(errorsBefore);
       const apiCalls       = (await getApiCalls()) ?? [];
-      // A navigation resets window.__apiCalls, so the array can be SHORTER than the
-      // pre-interaction baseline. When that happens the new page's calls start at 0, so
-      // treat them all as recent — otherwise slice(callsBefore) drops new-page failures.
-      const recentBadCalls = (apiCalls.length < callsBefore ? apiCalls : apiCalls.slice(callsBefore))
+      // If the interaction navigated, window.__apiCalls was reset to the new page's calls
+      // (which are unrelated to callsBefore and may be the same length or longer). Detect
+      // that via the page-load id and treat ALL current calls as recent; otherwise slice
+      // off the pre-interaction baseline. (Length alone is unreliable — a reset page with
+      // one failing call can match callsBefore and hide the failure.)
+      const loadIdAfter    = await page.evaluate(() => window.__pageLoadId).catch(() => null);
+      const navigated      = loadIdAfter !== loadIdBefore;
+      const recentBadCalls = (navigated ? apiCalls : apiCalls.slice(callsBefore))
         .filter(c => c.status >= 400);
 
       if (newErrors.length > 0 || recentBadCalls.length > 0) {
@@ -364,9 +396,11 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
   await page.waitForLoadState('networkidle').catch(() => {});
-  // Authenticate when possible so overflow is measured against the real app, not just
-  // the login screen. Public-first apps with no gate are measured as-is.
-  if (AUTH_CREDENTIAL) {
+  // Authenticate only when a real auth gate (PIN/password) is detected, so overflow is
+  // measured against the real app rather than the login screen. Gate on detectAuthGate()
+  // — NOT just "a credential exists" — so a public-first app with a stray text input
+  // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
+  if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle').catch(() => {});
   }

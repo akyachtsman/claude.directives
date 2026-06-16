@@ -10,43 +10,48 @@ project-specific brief. Run it in a project session once the toolkit is installe
 
 Execute in order:
 
-1. **Bootstrap if needed.** If `CLAUDE.md` is absent, run **`/new-repo`** first and
-   let it finish (it scaffolds `CLAUDE.md` + inherited directives, CI, the
-   Playwright kit, and settings). If `CLAUDE.md` already exists, skip — the repo is
-   bootstrapped; continue.
-
-2. **Gather the PRODUCT BRIEF (WHAT & WHY).** Ask the user for these — a short
-   answer each; this is the only project-specific input the build needs:
+1. **Gather the PRODUCT BRIEF (WHAT & WHY) — FIRST, before any scaffolding.** Ask
+   the user up front so they give input immediately rather than watching an
+   autonomous setup run and wondering when they're needed. Ask for these — a short
+   answer each:
    - **Vision** — what the app is and the outcome it drives
    - **Primary users** — who uses it; any secondary roles
    - **Top-level sections** — the main areas/screens
    - **Core capabilities** — the key things it does
    - **Explicit non-goals (MVP)** — what's out of scope for v1
 
-   Don't invent these. If the user is unsure on one, record it as an open item for
-   `clarify` rather than guessing.
+   In the same message, ask the **competitive-discovery** yes/no (step 4, off by
+   default). Don't invent answers — if the user is unsure on one, log it as an open
+   item for `clarify` rather than guessing. **Wait for the user's reply before
+   proceeding.**
 
-3. **Optional — competitive discovery fan-out.** Ask whether to ground the spec in
-   market leaders (**off by default**). If the user opts in:
-   - Spawn parallel worker agents **in one batch so they run concurrently** (Agent
-     tool `general-purpose` with web access, or the `deep-research` skill), **one
-     per target site** (~6–10 of the most popular sites in this app's category).
-     Each analyzes its site against a rubric: information architecture, core user
-     flows, content depth, onboarding/CTAs/conversion, category-specific tooling,
-     trust patterns, UX strengths & weaknesses.
-   - As orchestrator, synthesize a comparison matrix and **recommend a starting
-     version** (single best-fit or a hybrid), written cited to
-     `specs/<feature>/research.md`.
-   - **Guardrails:** needs an environment network policy that allows those sites;
-     fetch **public pages only**; respect ToS/robots; **synthesize patterns —
-     don't clone** copy, branding, or designs.
+2. **State the plan, then go hands-off.** Tell the user what happens next so the
+   autonomous stretch isn't a surprise: "I'll now scaffold the repo, [run
+   discovery,] and start the spec — I'll pause for you again at `clarify`, plan
+   approval, and each merge."
 
-4. **Drive the loop.** Hand the brief (and `research.md` if produced) to
+3. **Bootstrap if needed.** If `CLAUDE.md` is absent, run **`/new-repo`** and let it
+   finish (it scaffolds `CLAUDE.md` + inherited directives, CI, the Playwright kit,
+   and settings). If `CLAUDE.md` already exists, skip — the repo is bootstrapped.
+
+4. **Optional — competitive discovery fan-out** (only if the user opted in at
+   step 1). Spawn parallel worker agents **in one batch so they run concurrently**
+   (Agent tool `general-purpose` with web access, or the `deep-research` skill),
+   **one per target site** (~6–10 of the most popular sites in this app's
+   category). Each analyzes its site against a rubric: information architecture,
+   core user flows, content depth, onboarding/CTAs/conversion, category-specific
+   tooling, trust patterns, UX strengths & weaknesses. As orchestrator, synthesize
+   a comparison matrix and **recommend a starting version** (single best-fit or a
+   hybrid), written cited to `specs/<feature>/research.md`. **Guardrails:** needs an
+   environment network policy that allows those sites; fetch **public pages only**;
+   respect ToS/robots; **synthesize patterns — don't clone** copy, branding, designs.
+
+5. **Drive the loop.** Hand the brief (and `research.md` if produced) to
    **`/sdd-loop specify`**, then proceed phase by phase
    (`specify → clarify → plan → tasks → analyze → implement`). `/sdd-loop` owns the
    phase mechanics and delegates `analyze`/`implement` to the `pr-review-toolkit`
    reviewers and `qa-pipeline`; the directives are the constitution. Honor the
    Pre-Push gate (`/commit-chk`) and PR lifecycle.
 
-Keep it **stepwise — never one-shot.** The human supplies the brief here, answers
-`clarify`, provides backend secrets, and approves the plan and each merge.
+Keep it **stepwise — never one-shot.** The human supplies the brief up front,
+answers `clarify`, provides backend secrets, and approves the plan and each merge.

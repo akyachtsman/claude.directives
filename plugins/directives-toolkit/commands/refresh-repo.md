@@ -15,8 +15,9 @@ and CI validates references.
 The session's working rules were loaded at session start and do NOT update
 themselves. Re-fetch and re-read the four imported directive URLs from
 CLAUDE.md, and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
-load at session start only — mid-session upstream merges reach the toolkit at
-the NEXT session (web containers reinstall fresh each start).
+load at session start only — mid-session upstream merges reach the toolkit when
+the environment's cached setup script rebuilds (web: on an env-config change or
+~weekly cache expiry), not necessarily the next session.
 
 ## Phase 1 — Broken upstream references
 

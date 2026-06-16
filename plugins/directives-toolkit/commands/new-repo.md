@@ -28,7 +28,7 @@ Execute in order:
    command, all skills, the QA/data agents, and the guard hooks). If its
    commands don't resolve, the environment's setup script didn't run the
    install — stop and have the human fix the environment per
-   `NEW-REPO-USER-INSTRUCTIONS.md` step 7 before continuing.
+   `NEW-REPO-USER-INSTRUCTIONS.md` Step 0 before continuing.
 
 3. **Create the feature branch.** Use the session's existing branch if it is a
    `claude/<name>` branch; otherwise create `claude/<name>`. Never work on `main`.

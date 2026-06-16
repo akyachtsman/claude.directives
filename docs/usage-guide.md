@@ -7,7 +7,7 @@ skills are **not** a committed runtime dependency — they bootstrap fresh from
 ## Installation
 
 - **New project:** run `/new-repo` (see `NEW-REPO-USER-INSTRUCTIONS.md` — its
-  step 7 puts the plugin install in the environment setup script). It scaffolds
+  Step 0 puts the plugin install in the reusable environment's setup script). It scaffolds
   `CLAUDE.md`, the CI workflows, the Playwright kit, and the plugin-enable
   settings.
 - **Existing project:** the `directives-toolkit` plugin delivers all commands,

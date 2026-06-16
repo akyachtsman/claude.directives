@@ -133,10 +133,14 @@ jobs:
         working-directory: ${{ env.UI_TESTS_DIR }}
 
       # ── Start local server ─────────────────────────────────────────────────
+      # http-server is a pinned devDependency installed in UI_TESTS_DIR (above). Invoke
+      # its binary by path while staying at the repo root, so '.' still serves the app
+      # root AND nothing is fetched at runtime (works under locked egress). `npx
+      # --no-install` from the root would fail — the bin lives under UI_TESTS_DIR, not root.
       # Adjust '.' to your build output directory if needed (e.g. dist, public).
       - name: Start local server
         run: |
-          npx http-server . -p 8080 --silent &
+          "./$UI_TESTS_DIR/node_modules/.bin/http-server" . -p 8080 --silent &
           sleep 2
 
       # UI Tests against the local server are non-blocking: the backend API is

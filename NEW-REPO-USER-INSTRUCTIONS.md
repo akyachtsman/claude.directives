@@ -3,32 +3,27 @@
 ## HUMAN STEPS
 
 ### Step 0 — One-time: reusable cloud environment (set up once, reuse for every repo)
-`/new-repo` and the QA agents ship *inside* the `directives-toolkit` plugin, so the
-plugin must be installed **before** a session can run them. On Claude Code for the
-web that install runs from the **environment setup script** — and because a setup
-script is attached to the cloud *environment* (not the repo) and its result is
-cached, you do this **once** and reuse the same environment for every new repo.
+`/new-repo` and the QA agents live *inside* the toolkit plugin, so the environment
+must install it before a session starts. Do this **once** on a cloud environment
+you reuse for every repo (setup scripts attach to the environment, not the repo).
 
-On claude.ai, **Add environment** (name it e.g. `directives`) and set:
-- **Setup script** — installs the toolkit + official review/security plugins before
-  each session launches (cached after the first run, so it isn't re-run every
-  session):
-  ```
-  claude plugin marketplace add akyachtsman/claude.directives && claude plugin marketplace add anthropics/claude-plugins-official && claude plugin install directives-toolkit@claude-directives && claude plugin install pr-review-toolkit@claude-plugins-official && claude plugin install security-guidance@claude-plugins-official
-  ```
-  (`pr-review-toolkit` supplies the official code-review agents the QA pipeline
-  routes to; `security-guidance` adds Anthropic's security hooks — needs Python
-  3.8+, which standard web containers have. **Both** `marketplace add` lines are
-  required: `anthropics/claude-plugins-official` isn't registered at boot, so
-  installing from it without adding it first fails with *"Plugin not found in
-  marketplace"* and only `directives-toolkit` lands.)
-- **Network access** — *Trusted* covers the toolkit install; pick a broader policy
-  if your sessions need outbound web access (e.g. competitive-research scraping).
+On claude.ai → **Add environment**, paste this **one line** into its **Setup script**:
+```
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/scripts/install-toolkit.sh | bash
+```
+Set **Network access** to allow GitHub (plus any sites your sessions must reach,
+e.g. research scraping). That's it — the script installs `directives-toolkit` and
+the official `pr-review-toolkit` + `security-guidance` plugins. Thereafter just
+**select this environment** when you open a session for any repo.
 
-Thereafter just **select this environment** when you open a session for any repo —
-no re-paste. (CLI / desktop instead: one-time `/plugin marketplace add akyachtsman/claude.directives`
-+ `/plugin install directives-toolkit@claude-directives` and the two
-`@claude-plugins-official` plugins, which persist locally.)
+<details><summary>What it runs / fallback if the fetch is blocked</summary>
+
+The one-liner runs <a href="scripts/install-toolkit.sh"><code>scripts/install-toolkit.sh</code></a>
+(the single source of truth for the install set). If your network policy blocks
+the fetch, open that file and paste the `claude plugin …` commands it lists
+directly into the Setup script instead. CLI / desktop: run the same script (or its
+commands) once locally — it persists.
+</details>
 
 ### Step 1 — Create and configure the GitHub repo (per repo)
 1. Create a new **public** repo under `akyachtsman`

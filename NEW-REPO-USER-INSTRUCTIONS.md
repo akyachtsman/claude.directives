@@ -53,6 +53,10 @@ environment from Step 0 selected** — and type:
 
 That's it. Claude handles everything else autonomously.
 
+For a full spec-driven build of a new app, instead paste a filled-in copy of
+`templates/project-kickoff.md` as your first message — it includes the `/new-repo`
+step and then drives the `/sdd-loop` phases from your PRODUCT BRIEF.
+
 ---
 
 ### Optional — scheduled email notifications

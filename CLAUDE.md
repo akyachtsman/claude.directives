@@ -27,6 +27,7 @@ covers only how to operate *on this repo*.
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
 | `templates/scripts/` | Optional scheduled-task scripts (`notify-email.js`) projects copy into `.github/scripts/` |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
+| `templates/project-kickoff.md` | Reusable, product-agnostic kickoff brief — fill its PRODUCT BRIEF block and paste as a new repo's first session message to drive an `/sdd-loop` build |
 | `docs/` | Reference docs (automations, CI triage, testing, code review, …); see `docs/README.md` for the role-grouped index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |

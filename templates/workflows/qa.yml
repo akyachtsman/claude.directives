@@ -133,10 +133,12 @@ jobs:
         working-directory: ${{ env.UI_TESTS_DIR }}
 
       # ── Start local server ─────────────────────────────────────────────────
+      # http-server is a pinned devDependency (installed above), so `--no-install`
+      # uses the local binary and never fetches at runtime — works under locked egress.
       # Adjust '.' to your build output directory if needed (e.g. dist, public).
       - name: Start local server
         run: |
-          npx http-server . -p 8080 --silent &
+          npx --no-install http-server . -p 8080 --silent &
           sleep 2
 
       # UI Tests against the local server are non-blocking: the backend API is

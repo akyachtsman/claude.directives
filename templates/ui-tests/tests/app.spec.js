@@ -47,23 +47,28 @@ async function captureApiCalls(page) {
     window.__apiCalls = [];
     window.fetch = async (...args) => {
       const res = await orig(...args);
-      const clone = res.clone();
-      clone.json().then(body => {
+      // Record the call (with its status) IMMEDIATELY so non-JSON 4xx/5xx responses
+      // (e.g. an HTML 500 page) are captured — clone.json() rejects on those, and the
+      // old code only pushed inside .then(), silently dropping them as "no call".
+      const entry = {
+        url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
+        status: res.status,
+        recordCount: null,
+        firstFieldKey: null,
+        error: null,
+      };
+      window.__apiCalls.push(entry);
+      res.clone().json().then(body => {
         // Backend-agnostic: most REST backends return an array of row objects; some
         // backends wrap rows as { records: [{ fields: {...} }] }.
         const rows = Array.isArray(body) ? body : (body?.records ?? null);
         const firstRow = rows?.[0];
-        const firstFieldKey = firstRow
+        entry.recordCount  = Array.isArray(rows) ? rows.length : null;
+        entry.firstFieldKey = firstRow
           ? Object.keys(firstRow.fields ?? firstRow)[0] ?? null
           : null;
-        window.__apiCalls.push({
-          url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
-          status: res.status,
-          recordCount: Array.isArray(rows) ? rows.length : null,
-          firstFieldKey,
-          error: body?.error ?? body?.message ?? null,
-        });
-      }).catch(() => {});
+        entry.error = body?.error ?? body?.message ?? null;
+      }).catch(() => {}); // non-JSON body: status already recorded above
       return res;
     };
   });
@@ -207,10 +212,15 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   const afterSnap  = await domSnapshot(page);
 
   const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
+  // A wrong credential often renders an inline error, which itself changes the DOM —
+  // so domChanged alone is not proof of success. Treat a non-empty on-screen error as
+  // a failure even when the DOM changed.
+  const onscreenError = ((await page.locator('[id*="err"], [class*="err"], [class*="error"]')
+    .first().textContent().catch(() => '')) ?? '').trim();
 
-  if (!domChanged && mechanism !== 'none') {
+  if (mechanism !== 'none' && (!domChanged || onscreenError.length > 0)) {
     const apiCalls = await getApiCalls();
-    const errText  = await page.locator('[id*="err"], [class*="err"], [class*="error"]').first().textContent().catch(() => '');
+    const errText  = onscreenError;
     const firstKey = apiCalls[0]?.firstFieldKey ?? null;
     const diag = {
       mechanism,
@@ -250,7 +260,9 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // navigation waits) and cannot fit the 30s global timeout on element-rich
   // apps or mobile-emulated projects.
   test.setTimeout(240_000);
-  if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential — skipping interaction sweep (auth required to reach app content)');
+  // Run the sweep whether or not a credential exists: public-first apps (knowledge
+  // hub, questionnaire) must be exercised even with no auth. Only the auth step below
+  // is gated on having a credential.
   const consoleErrors = [];
   const apiAnomalies  = [];
   page.on('pageerror', e => consoleErrors.push(e.message));
@@ -259,7 +271,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
   await page.waitForLoadState('networkidle').catch(() => {});
-  await detectAndAuth(page, AUTH_CREDENTIAL ?? '');
+  if (AUTH_CREDENTIAL) await detectAndAuth(page, AUTH_CREDENTIAL);
   await page.waitForLoadState('networkidle').catch(() => {});
 
   const elements = await discoverElements(page);
@@ -302,7 +314,11 @@ test('S3: interactive elements discovered and exercised without errors', async (
       const domTransition  = JSON.stringify(snapBefore) !== JSON.stringify(snapAfter);
       const newErrors      = consoleErrors.slice(errorsBefore);
       const apiCalls       = (await getApiCalls()) ?? [];
-      const recentBadCalls = apiCalls.slice(callsBefore).filter(c => c.status >= 400);
+      // A navigation resets window.__apiCalls, so the array can be SHORTER than the
+      // pre-interaction baseline. When that happens the new page's calls start at 0, so
+      // treat them all as recent — otherwise slice(callsBefore) drops new-page failures.
+      const recentBadCalls = (apiCalls.length < callsBefore ? apiCalls : apiCalls.slice(callsBefore))
+        .filter(c => c.status >= 400);
 
       if (newErrors.length > 0 || recentBadCalls.length > 0) {
         findings.push({
@@ -314,7 +330,21 @@ test('S3: interactive elements discovered and exercised without errors', async (
         });
       }
     } catch (e) {
-      // Element became stale or detached — expected in SPAs, not a failure
+      // Stale / detached / not-found / timeout are expected during an exploratory
+      // sweep of an SPA. Anything else is an unexpected interaction error worth
+      // surfacing — recorded as a non-blocking finding (no consoleErrors/apiErrors, so
+      // it doesn't fail this advisory job) rather than silently swallowed.
+      const msg = String(e?.message ?? e);
+      if (!/detached|not attached|stale|no longer|not visible|element is not|Timeout.*exceeded/i.test(msg)) {
+        findings.push({
+          element: el.label || el.id || `${el.tag}[${el.index}]`,
+          action: el.tag === 'input' ? 'fill' : 'click',
+          consoleErrors: [],
+          apiErrors: [],
+          interactionError: msg,
+          domTransition: false,
+        });
+      }
     }
   }
 
@@ -334,6 +364,12 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
   await page.waitForLoadState('networkidle').catch(() => {});
+  // Authenticate when possible so overflow is measured against the real app, not just
+  // the login screen. Public-first apps with no gate are measured as-is.
+  if (AUTH_CREDENTIAL) {
+    await detectAndAuth(page, AUTH_CREDENTIAL);
+    await page.waitForLoadState('networkidle').catch(() => {});
+  }
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   const viewWidth = await page.evaluate(() => window.innerWidth);
   expect(bodyWidth).toBeLessThanOrEqual(viewWidth + 1);

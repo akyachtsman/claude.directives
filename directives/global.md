@@ -143,7 +143,7 @@ The toolkit — commands, auto-skills, agents, and guard hooks — ships as the
 file bootstrap anymore; nothing is fetched into `.claude/`.
 
 - **Claude Code on the web:** the project environment's setup script installs
-  it before session start (see `NEW-REPO-USER-INSTRUCTIONS.md` step 7) —
+  it before session start (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) —
   required, because web containers are ephemeral and `enabledPlugins` alone
   enables but never installs.
 - **CLI / desktop:** one-time `/plugin marketplace add akyachtsman/claude.directives`
@@ -154,8 +154,9 @@ file bootstrap anymore; nothing is fetched into `.claude/`.
 At session start, **verify the plugin attached**: the `directives-toolkit:*`
 commands/skills resolve and the QA agents are available. If they don't, the
 environment's setup script didn't run — fix that rather than hand-fetching
-files. Updates track this repo's `main` automatically (SHA-versioned; web
-sessions reinstall fresh every container). Commands are invoked as
+files. Updates track this repo's `main` (SHA-versioned); on web they arrive when
+the environment's cached setup script rebuilds — on a setup-script/network change
+or roughly weekly cache expiry, not necessarily every session. Commands are invoked as
 `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
 
 See docs/automations.md for monitor setup and the automation-specific

@@ -21,7 +21,7 @@ covers only how to operate *on this repo*.
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
-| `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): 13 commands, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` step 7) |
+| `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): 13 commands, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 | `.claude/settings.json` | Plugin enablement only (`extraKnownMarketplaces` + `enabledPlugins`); hooks ship inside the plugin |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
@@ -70,8 +70,9 @@ everything hot-reloads:
   session start does not update. The plugin's PostToolUse hook reminds on
   CLAUDE.md edits; `/refresh-repo` Phase 0 re-reads CLAUDE.md + directives.
 - `plugins/directives-toolkit/` — editing files here changes what the NEXT
-  install delivers; the running session keeps its installed copy (web sessions
-  reinstall fresh every container, so changes propagate at next session start).
+  install delivers; the running session keeps its installed copy. On web the
+  install is cached per environment, so changes propagate when that cache rebuilds
+  (a setup-script/network change or ~weekly expiry), not guaranteed next session.
 - `.claude/settings.json` — **loaded at session start only**; changes take
   effect in the NEXT session.
 
@@ -139,6 +140,7 @@ To add a command, skill, or agent: drop the file into the right
 `plugins/directives-toolkit/` subdir (commands are flat md files; each skill is
 a SKILL.md in its own directory; agents are flat md files with unique `name:`
 frontmatter), run the plugin check from the Local gate below, and ship through
-the normal PR flow. Downstream picks it up at next session start (web reinstalls
-fresh per container). The install/distribution model lives in
+the normal PR flow. Downstream picks it up when its environment's cached setup
+script rebuilds (web: on an env-config change or ~weekly expiry). The
+install/distribution model lives in
 `directives/global.md` → Skill Bootstrap.

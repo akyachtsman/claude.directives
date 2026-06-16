@@ -1,8 +1,36 @@
 # New Project Quickstart
 
-## HUMAN STEPS — Do these once per new repo
+## HUMAN STEPS
 
-### Step 1 — Create and configure the GitHub repo
+### Step 0 — One-time: reusable cloud environment (set up once, reuse for every repo)
+`/new-repo` and the QA agents ship *inside* the `directives-toolkit` plugin, so the
+plugin must be installed **before** a session can run them. On Claude Code for the
+web that install runs from the **environment setup script** — and because a setup
+script is attached to the cloud *environment* (not the repo) and its result is
+cached, you do this **once** and reuse the same environment for every new repo.
+
+On claude.ai, **Add environment** (name it e.g. `directives`) and set:
+- **Setup script** — installs the toolkit + official review/security plugins before
+  each session launches (cached after the first run, so it isn't re-run every
+  session):
+  ```
+  claude plugin marketplace add akyachtsman/claude.directives && claude plugin marketplace add anthropics/claude-plugins-official && claude plugin install directives-toolkit@claude-directives && claude plugin install pr-review-toolkit@claude-plugins-official && claude plugin install security-guidance@claude-plugins-official
+  ```
+  (`pr-review-toolkit` supplies the official code-review agents the QA pipeline
+  routes to; `security-guidance` adds Anthropic's security hooks — needs Python
+  3.8+, which standard web containers have. **Both** `marketplace add` lines are
+  required: `anthropics/claude-plugins-official` isn't registered at boot, so
+  installing from it without adding it first fails with *"Plugin not found in
+  marketplace"* and only `directives-toolkit` lands.)
+- **Network access** — *Trusted* covers the toolkit install; pick a broader policy
+  if your sessions need outbound web access (e.g. competitive-research scraping).
+
+Thereafter just **select this environment** when you open a session for any repo —
+no re-paste. (CLI / desktop instead: one-time `/plugin marketplace add akyachtsman/claude.directives`
++ `/plugin install directives-toolkit@claude-directives` and the two
+`@claude-plugins-official` plugins, which persist locally.)
+
+### Step 1 — Create and configure the GitHub repo (per repo)
 1. Create a new **public** repo under `akyachtsman`
 2. Initialize with a README (required to enable GitHub Pages)
 3. Enable GitHub Pages: **Settings → Pages → Source: `main` / `root`**
@@ -14,24 +42,10 @@
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
-7. **Claude Code on the web — environment setup script** (the project's
-   environment configuration on claude.ai): add this line so the
-   directives-toolkit plugin installs *before* session start. Web containers
-   are ephemeral and never auto-install from `enabledPlugins`, so without it
-   the plugin's commands/agents/hooks silently never load:
-   ```
-   claude plugin marketplace add akyachtsman/claude.directives && claude plugin marketplace add anthropics/claude-plugins-official && claude plugin install directives-toolkit@claude-directives && claude plugin install pr-review-toolkit@claude-plugins-official && claude plugin install security-guidance@claude-plugins-official
-   ```
-   (`pr-review-toolkit` supplies the official code-review agents the QA pipeline
-   routes to; `security-guidance` adds Anthropic's automatic security hooks —
-   it needs Python 3.8+ in the environment, which standard web containers have.)
-   **Both** marketplace `add` lines are required: `anthropics/claude-plugins-official`
-   is not yet registered at boot, so installing `…@claude-plugins-official` without
-   adding it first fails with *"Plugin not found in marketplace"* — only
-   `directives-toolkit` lands and the official agents silently never load.
 
 ### Step 2 — Bootstrap the project
-Open a Claude Code session scoped to the new repo and type:
+Open a Claude Code session scoped to the new repo — **with the `directives`
+environment from Step 0 selected** — and type:
 
 ```
 /new-repo

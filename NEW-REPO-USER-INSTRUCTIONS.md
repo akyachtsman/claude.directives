@@ -37,7 +37,10 @@ once locally — it persists.
 
 ### Step 1 — Create and configure the GitHub repo (per repo)
 1. Create a new **public** repo under `akyachtsman`
-2. Initialize with a README (required to enable GitHub Pages)
+2. **Initialize with a README** — this creates the `main` branch (the base the
+   bootstrap PR targets) and is required to enable GitHub Pages. An empty repo
+   has no `main`, which stalls the bootstrap; tick **"Add a README file"** when
+   creating the repo.
 3. Enable GitHub Pages: **Settings → Pages → Source: `main` / `root`**
 4. Set repo Watch: **Watch → All Activity**
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):

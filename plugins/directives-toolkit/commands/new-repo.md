@@ -102,8 +102,16 @@ Execute in order:
    Fix any failure before pushing.
 
 9. **Commit, PR, subscribe.** Commit all scaffolding to the `claude/<name>`
-   branch, push, open a **draft** PR targeting `main`, and subscribe via
-   `subscribe_pr_activity`. Fix any CI failures before marking ready.
+   branch and push. **Ensure the base branch exists first:** if the repo was
+   created empty (no README, so `git ls-remote --heads origin main` is empty),
+   establish `main` before opening the PR — create it from an empty root commit
+   (`git commit --allow-empty`) and push it, then rebase the scaffolding branch
+   onto it so the PR shows a clean diff. (Prevention: have the human create the
+   repo with a README per `NEW-REPO-USER-INSTRUCTIONS.md` Step 1.) Then open a
+   **draft** PR targeting `main` and subscribe via `subscribe_pr_activity`. Fix
+   any CI failures before marking ready — note the `UI Tests` job is **skipped
+   while there's no `index.html` yet** (expected; the blocking gate is `Static
+   Checks`).
 
 10. **Report to the human.** Summarize: files/dirs created, the PR link, and
     exactly which placeholder sections in `CLAUDE.md` still need human input

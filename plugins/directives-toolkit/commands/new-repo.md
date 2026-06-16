@@ -109,4 +109,5 @@ Execute in order:
     exactly which placeholder sections in `CLAUDE.md` still need human input
     (Project name, Stack, Application Architecture, **Design Theme** — the
     one-time color-scheme pick, security constraints, coding standards) before
-    the PR is merged.
+    the PR is merged. To start a spec-driven build of the app from here, point the
+    human at **`/kickoff`** (it gathers the product brief and drives `/sdd-loop`).

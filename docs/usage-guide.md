@@ -58,10 +58,10 @@ Artifacts are committed under `specs/<feature>/` (`spec.md`, `plan.md`,
 analyze/implement to the `pr-review-toolkit` reviewers and `qa-pipeline` rather
 than reinventing them.
 
-To kick off a whole new app this way, copy **`templates/project-kickoff.md`**,
-fill its **PRODUCT BRIEF** block (the only per-project section), and paste it as
-the first message of the new repo's session — it walks `/new-repo` → constitution
-→ optional discovery fan-out → the `/sdd-loop` phases in one reusable brief.
+To kick off a whole new app this way, run **`/kickoff`**: it scaffolds (via
+`/new-repo` if needed), prompts you for the product brief (the only per-project
+input), offers an optional competitive-discovery pass, then drives the `/sdd-loop`
+phases — orchestrating the existing pieces rather than restating them.
 
 ## Reports
 

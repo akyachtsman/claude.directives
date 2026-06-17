@@ -21,8 +21,19 @@ into its **Setup script** field:
 ```
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/scripts/install-toolkit.sh | bash
 ```
-Set **Network access** to allow GitHub (plus any sites your sessions must reach,
-e.g. `/kickoff`'s optional research scraping). Reload — now the commands appear,
+Set **Network access** so sessions can reach what the toolkit needs. The default
+**Trusted** level allows GitHub + package registries (enough to install), but it
+**blocks two hosts every project here uses** — so use **Custom** (keep the default
+package‑registry list checked) and add:
+- `*.github.io` — so a session can fetch/verify your **live Pages site** (`/live-chk`,
+  `update-pages`); without it those checks 403 from inside the session.
+- `cdn.playwright.dev` — so **Playwright UI tests + screenshots run in‑session**;
+  without it the browser download 403s and you can only rely on `qa-live.yml`.
+- plus any sites a session must reach (e.g. `/kickoff`'s optional research scraping).
+
+Or set network to **Full** if you'd rather not maintain a list. *(Optional: add
+`npx playwright install chromium` to the setup script so the browser is preinstalled
+each container once `cdn.playwright.dev` is allowed.)* Reload — now the commands appear,
 and **every repo you open in this environment** has them from then on.
 
 <details><summary>What the one-liner does / fallback if the fetch is blocked</summary>

@@ -59,6 +59,11 @@ the plan must deliver that (real pages/sections, the design mode's hero/imagery
 patterns), not a stack of plain cards. "Smallest slice" is for risk, not the
 finish line.
 
+**Show what you're approving — never gate on an unseen artifact.** When you pause
+for the user at `clarify`, `plan`, or any approval point, **present the artifact in
+the chat** (a tight summary of the key decisions + trade-offs, plus the file path) —
+not just "approve `plan.md`?" The user can't sign off on a file they have to go find.
+
 ## Phase 4 — tasks  (`/sdd-loop tasks <feature>`)
 Write `specs/<slug>/tasks.md`: an ordered, dependency-aware checklist derived
 from the plan. Number tasks, note dependencies, and tag parallel-safe tasks
@@ -81,7 +86,15 @@ browser-only). No API key, no terminal. Append its notes to `analysis.md` under
 `## Cross-check`.
 
 ## Phase 6 — implement  (`/sdd-loop implement <feature>`)
-Execute `tasks.md` against `plan.md`, task by task — **delegate to the existing
+**Expressive builds — visual mockup first (a look gate).** Before building out a full
+expressive/elaborate app, implement just **1–2 key screens** (e.g. the landing + one
+representative content/detail page) to **real Expressive-Mode quality** — hero, display
+type, an inline-SVG illustration, a section band, motion — then **deploy to Pages (or
+attach a screenshot) and get the user's sign-off on the *look*** before building the
+rest. The look is cheapest to fix on one screen, not the whole app. (Utility-mode apps
+skip this.)
+
+Then execute `tasks.md` against `plan.md`, task by task — **delegate to the existing
 pipeline, don't duplicate it.** Implement each task, then run the
 `directives-toolkit:qa-pipeline` agent (test-verifier → ui-tester → code review
 → pr-readiness) to verify before moving on. Honor the Pre-Push gate

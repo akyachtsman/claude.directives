@@ -5,8 +5,10 @@ Start a spec-driven build of a **new app**, end to end. This command **orchestra
 the existing pieces — it does not re-implement them**: it delegates scaffolding to
 `/new-repo`, the build to `/sdd-loop`, and treats the imported directives as the
 constitution (never restate them). The only thing it gathers fresh is the
-project-specific brief. Run it in a project session once the toolkit is installed
-(per `NEW-REPO-USER-INSTRUCTIONS.md` Step 0).
+project-specific brief. **Run it by itself — just `/kickoff`, with no pre-written
+brief; it asks you everything interactively** (a single command kick-starts the
+whole build). Run it in a project session once the toolkit is installed (per
+`NEW-REPO-USER-INSTRUCTIONS.md` Step 0).
 
 Execute in order:
 
@@ -25,6 +27,14 @@ Execute in order:
      **Default when unspecified: production-grade, not a skeleton.** Carry this bar
      into `plan` and `implement` — do **not** quietly trim it to a minimal MVP.
    - **Explicit non-goals (MVP)** — what's out of scope for v1
+
+   Then **invite a detailed spec + reference material, and pause for it.** Ask the
+   user to paste any **fuller written spec** they have AND to **attach reference
+   images, sketches, brand assets, or example sites/apps** they want it to feel like
+   — **read any attached images.** This is their chance to shape the design with
+   their own input **before anything is designed**, and it anchors the build
+   **alongside** discovery (step 4), not instead of it. Optional but strongly
+   encouraged for expressive apps; don't skip the invitation.
 
    In the same message, ask the **competitive-discovery** yes/no (step 4, off by
    default). Don't invent answers — if the user is unsure on one, log it as an open
@@ -51,7 +61,9 @@ Execute in order:
    treatment & first impression, layout richness & hierarchy, imagery/iconography,
    and motion/interaction.** As orchestrator, synthesize a comparison matrix and
    recommend a starting version **plus an explicit richness/polish bar** the build
-   must hit (so research raises the *look*, not just the flow), written cited to
+   must hit (so research raises the *look*, not just the flow). **Fold in the user's
+   own detailed spec + reference images/attachments from step 1** — their material
+   leads, the scrape supports it — and write the synthesis cited to
    `specs/<feature>/research.md`. **Guardrails:** needs an environment network policy
    that allows those sites; fetch **public pages only**; respect ToS/robots;
    **synthesize patterns — don't clone** copy, branding, or designs.

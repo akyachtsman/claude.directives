@@ -24,9 +24,18 @@ Examine each frame and update with exact measured values. Otherwise treat the
 values below as authoritative — do not attempt ffmpeg in remote/web sessions.
 
 ## Philosophy
-Neutral, calm, professional. iPad-first, mouse-friendly desktop.
-No loud colors. Generous whitespace. Every element feels solid and tappable.
-Data is the hero — UI chrome stays out of the way.
+Two modes share one foundation — the tokens, accessibility, iPad, and contrast rules
+below apply to both:
+- **Default (utility / data apps):** neutral, calm, professional. No loud colors,
+  generous whitespace, every element solid and tappable. Data is the hero — chrome
+  stays out of the way. Use for dashboards, tools, internal apps.
+- **Expressive (consumer-facing / marketing / "elaborate" apps):** the same foundation,
+  **built up** — a display type scale, hero and feature sections, imagery and
+  iconography, richer (still tasteful) motion. Use when the brief asks for an
+  ambitious, polished, multi-section experience. **See "Expressive Mode" below — do
+  not ship the bare utility look for these.**
+
+iPad-first, mouse-friendly desktop, in both.
 
 ## Color Schemes
 Structure is fixed; **color is the only thing a scheme changes.** Eleven color
@@ -229,6 +238,41 @@ border-bottom:  1px solid var(--color-border)
 - Primary action: bottom-right desktop, full-width mobile/iPad
 - Destructive actions: red only, never styled as primary
 - Loading: opacity 0.6 + cursor not-allowed
+
+## Expressive Mode (consumer-facing / marketing / elaborate apps)
+The default system is a calm **floor, not a ceiling.** When a project's brief calls for
+an ambitious, polished, multi-section experience, build richly **on top of** the tokens
+and rules above — never ship a stack of plain cards + a form. Keep every accessibility,
+iPad, and contrast rule; add expressiveness through **scale, composition, and imagery.**
+All in plain HTML/CSS/JS (no frameworks): elaborate is about **craft, not tooling.**
+
+### Display type scale (heroes & section openers — beyond the 24px utility cap)
+```
+--font-3xl: 30px   --font-4xl: 40px   --font-5xl: 56px   --font-6xl: 72px
+```
+Display headings: weight 600, tight line-height (1.05–1.15). Body stays at `--font-base`.
+
+### Patterns to compose (from the tokens above)
+- **Hero / landing** — full-width opening: display headline + one-line promise + primary
+  CTA + a supporting visual (inline-SVG illustration, optimized photo, or styled graphic).
+- **Feature / section blocks** — alternating full-bleed sections with generous rhythm
+  (`--space-10`+), each a heading + supporting copy + a visual or icon row. Vary the
+  background (`--color-bg` / `--color-surface` / `--color-accent-light`) for depth.
+- **Iconography** — one consistent icon per concept/section (**inline SVG** — no icon
+  font, no CDN, per the no-runtime-deps rule).
+- **Imagery** — illustration or photography to carry meaning and warmth; optimize assets
+  and lazy-load below the fold.
+- **Multi-page feel** — distinct, fully-designed sections/routes, not one screen of cards.
+
+### Expressive motion (tasteful)
+On top of the 0.15s utility transitions, **scroll-reveal fades / slide-ups and gentle
+parallax are allowed** on marketing surfaces. Still never bounce/spin/flash or anything
+that fights readability. **Always honor `prefers-reduced-motion`.**
+
+### The bar
+An expressive-mode app should read like real product/marketing work — hero, visual
+hierarchy, iconography, imagery, considered empty/loading/success states — judged against
+the **reference targets named in the project brief**, not "does it function."
 
 ## Editorial Preferences
 

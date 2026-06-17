@@ -18,6 +18,12 @@ Execute in order:
    - **Primary users** — who uses it; any secondary roles
    - **Top-level sections** — the main areas/screens
    - **Core capabilities** — the key things it does
+   - **Ambition & references** — how elaborate should it be, and which 1–2 apps
+     should it match in polish/depth? This sets the bar everything downstream is held
+     to. Map it to a design mode (`design.md`): **utility** (calm/data — dashboards,
+     tools) or **expressive** (consumer/marketing — hero, imagery, multi-section).
+     **Default when unspecified: production-grade, not a skeleton.** Carry this bar
+     into `plan` and `implement` — do **not** quietly trim it to a minimal MVP.
    - **Explicit non-goals (MVP)** — what's out of scope for v1
 
    In the same message, ask the **competitive-discovery** yes/no (step 4, off by
@@ -38,13 +44,17 @@ Execute in order:
    step 1). Spawn parallel worker agents **in one batch so they run concurrently**
    (Agent tool `general-purpose` with web access, or the `deep-research` skill),
    **one per target site** (~6–10 of the most popular sites in this app's
-   category). Each analyzes its site against a rubric: information architecture,
-   core user flows, content depth, onboarding/CTAs/conversion, category-specific
-   tooling, trust patterns, UX strengths & weaknesses. As orchestrator, synthesize
-   a comparison matrix and **recommend a starting version** (single best-fit or a
-   hybrid), written cited to `specs/<feature>/research.md`. **Guardrails:** needs an
-   environment network policy that allows those sites; fetch **public pages only**;
-   respect ToS/robots; **synthesize patterns — don't clone** copy, branding, designs.
+   category). Each analyzes its site against a rubric covering **both structure and
+   craft**: information architecture; core user flows; content depth & how much they
+   actually offer; onboarding/CTAs/conversion; category-specific tooling; trust
+   patterns; **and the experiential layer — visual design language, the landing/hero
+   treatment & first impression, layout richness & hierarchy, imagery/iconography,
+   and motion/interaction.** As orchestrator, synthesize a comparison matrix and
+   recommend a starting version **plus an explicit richness/polish bar** the build
+   must hit (so research raises the *look*, not just the flow), written cited to
+   `specs/<feature>/research.md`. **Guardrails:** needs an environment network policy
+   that allows those sites; fetch **public pages only**; respect ToS/robots;
+   **synthesize patterns — don't clone** copy, branding, or designs.
 
 5. **Drive the loop.** Hand the brief (and `research.md` if produced) to
    **`/sdd-loop specify`**, then proceed phase by phase

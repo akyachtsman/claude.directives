@@ -51,6 +51,14 @@ the global directive's stack (plain HTML + JS, no frameworks/build) unless the
 user explicitly chose otherwise here. Reference back to the spec's requirements;
 do not introduce scope the spec didn't ask for.
 
+**Build to the brief's ambition bar — don't reflexively minimize.** Honor the
+brief's **Ambition & references** and design mode (`design.md`: utility vs
+expressive). Phasing/MVP‑slicing is a *deliberate choice the user makes*, not the
+default — when the brief asks for an elaborate, multi-section, polished experience,
+the plan must deliver that (real pages/sections, the design mode's hero/imagery
+patterns), not a stack of plain cards. "Smallest slice" is for risk, not the
+finish line.
+
 ## Phase 4 — tasks  (`/sdd-loop tasks <feature>`)
 Write `specs/<slug>/tasks.md`: an ordered, dependency-aware checklist derived
 from the plan. Number tasks, note dependencies, and tag parallel-safe tasks
@@ -79,6 +87,14 @@ pipeline, don't duplicate it.** Implement each task, then run the
 → pr-readiness) to verify before moving on. Honor the Pre-Push gate
 (`/commit-chk`) and PR lifecycle from the global directive. Check tasks off in
 `tasks.md` as they land.
+
+**Polish pass before "done" (expressive / elaborate builds).** "Passes tests" is
+not the finish line — the bar is the brief's ambition + reference targets. Before
+calling the feature done, meet `design.md`'s **Expressive Mode**: a real hero/landing,
+strong visual hierarchy (display type scale), iconography/imagery, considered
+empty/loading/success states, and tasteful motion (`prefers-reduced-motion` honored)
+— judged against the named references, not "does it function." Utility-mode apps skip
+this and stay calm by design.
 
 ## status  (`/sdd-loop` with no phase)
 List each `specs/*/` feature and which artifacts exist, to show where each

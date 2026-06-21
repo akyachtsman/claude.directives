@@ -149,6 +149,45 @@ Every command and skill carries:
 - **`frontend-design`** (generative design) — conflicts with `design.md`'s fixed
   system; rejected.
 
+## Composable scaffold (Phase 4 — design, not yet built)
+
+Today every new repo inherits the whole scaffold. Phase 4 splits it into **CORE
++ opt-in modules** so a project carries only what it uses. (The toolkit *plugin*
+still ships all commands/skills/agents as one unit — this composability is about
+the per-project **scaffold**: which workflow templates, `CLAUDE.md` sections,
+secrets/vars, and agents are active.)
+
+**Toggle mechanism.** The project `CLAUDE.md` carries a `Modules:` line, e.g.
+`Modules: data, ui-tests`. `/new-repo` asks which modules during bootstrap,
+writes the line, and copies only those templates/workflows; `/env-chk` and the
+QA agents read it to know what's active (e.g. skip live UI checks when `ui-tests`
+is off). One human-readable, version-controlled switch — no extra config files.
+
+**CORE (every project):**
+- `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs
+- the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
+- `qa.yml` + `ci-monitor.yml` + `pages-monitor.yml` + `codex-monitor.yml`
+- a `design.md` theme pick (one of the ten) + `index.html`
+
+**MODULES (opt-in):**
+
+| Module | Pulls in | Secrets / vars | Agent |
+|--------|----------|----------------|-------|
+| `data` | `data.md` + `.claude/mcp.json` (Supabase) | `DB_URL`, `DB_SERVICE_KEY` | `supabase` |
+| `ui-tests` | `templates/ui-tests/` → `.github/scripts/ui-tests/` + `qa-live.yml` | `TEST_AUTH_CREDENTIAL`, `APP_URL` | `ui-tester` |
+| `cron-email` | `cron-notify.yml` + `keepalive.yml` + `notify-email.js` | `SMTP_*`, `ALERT_TO`, `KEEPALIVE_PAT` | — |
+| `expressive-design` | `design.md` → Expressive Mode (else utility mode) | — | — |
+
+**Why this shape:** a new project gets a small, legible baseline and opts into
+complexity, instead of inheriting every workflow/secret whether it needs it or
+not. `install-toolkit.sh` stays the single source for the external plugin set;
+modules only gate the per-repo scaffold. Browser-only throughout — the only
+"CLI" remains the one-time env setup-script paste.
+
+**To decide before building:** the exact `/new-repo` prompt flow, whether
+`/env-chk` should warn on secrets configured for a disabled module, and how
+`NEW-REPO-USER-INSTRUCTIONS.md` Step 1 splits its secret list per module.
+
 ## Implementation status
 
 - **Phase 1 — structure (done):** `phase` + `benefits-from` frontmatter on all
@@ -164,5 +203,7 @@ Every command and skill carries:
   staleness gate; `sdd-loop` tasks gain 2–5 min sizing + no-placeholder
   self-review. (The Plan-phase "one adaptive plan-review" remains a deferred
   enhancement.)
-- **Phase 4 — composable scaffold:** split the child-repo baseline into CORE +
-  opt-in modules (`data`, `ui-tests`, `cron-email`, `expressive-design`).
+- **Phase 4 — composable scaffold (design drafted; implementation pending):**
+  CORE + opt-in modules with a `CLAUDE.md` `Modules:` toggle — see "Composable
+  scaffold" above. Reshapes `/new-repo` + `templates/`, so it ships only after
+  the open decisions there are settled.

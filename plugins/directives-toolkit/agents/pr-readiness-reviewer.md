@@ -38,6 +38,10 @@ You are the final gate before a pull request or merge. Confirm that the branch i
    - Lint command passes if available.
    - Build command passes if available.
    - Type checks, migrations, or smoke tests pass if required.
+   - **Evidence is current** — test/review reports and CI results cover the
+     latest commit (HEAD). If any report or CI run predates the current HEAD SHA
+     (commits landed after it was produced), mark **Not Ready / Conditional** and
+     require a fresh run; never pass readiness on stale evidence.
 
 4. **Reviewer issues**
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
@@ -81,6 +85,7 @@ Use commands from `CLAUDE.md` or CI first. Common checks include:
 | Test report | Present/Missing | <path> |
 | Reviewer issues | Clear/Unclear/Blocking | <report paths or notes> |
 | Codex review | Clear/Flagged/Unknown | <`codex-flagged` label state> |
+| Evidence currency | Current/Stale/Unknown | <HEAD SHA vs report/CI SHA> |
 | CI readiness | Ready/Not ready/Unknown | <notes> |
 
 ## Blocking Issues

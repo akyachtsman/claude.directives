@@ -69,7 +69,10 @@ not just "approve `plan.md`?" The user can't sign off on a file they have to go 
 ## Phase 4 — tasks  (`/sdd-loop tasks <feature>`)
 Write `specs/<slug>/tasks.md`: an ordered, dependency-aware checklist derived
 from the plan. Number tasks, note dependencies, and tag parallel-safe tasks
-`[P]`. Each task should be small enough to implement and verify on its own.
+`[P]`. Size each task to roughly **2–5 minutes** of work — ideally failing test
+→ implement → verify → commit. **Self-review before finishing: reject
+placeholders** ("TBD", "similar to Task N", vague "handle errors") — every task
+must name concrete files and changes.
 
 ## Phase 5 — analyze  (`/sdd-loop analyze <feature>`)
 Cross-artifact consistency check — **delegate, don't reinvent.** Spin up the

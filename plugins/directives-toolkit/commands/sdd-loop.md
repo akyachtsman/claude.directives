@@ -1,7 +1,7 @@
 ---
 description: "Spec-Driven Development loop — stepwise specify → clarify → plan → tasks → analyze → implement, with the inherited directives as the constitution. Ports the github/spec-kit methodology (not the CLI)."
 phase: plan
-benefits-from: [kickoff]
+benefits-from: [kickoff, diagnose]
 ---
 Run a Spec-Driven Development (SDD) loop: refine a feature through ordered
 phases, each emitting a Markdown artifact that feeds the next. Core principle

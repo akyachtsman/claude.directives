@@ -66,6 +66,15 @@ for the user at `clarify`, `plan`, or any approval point, **present the artifact
 the chat** (a tight summary of the key decisions + trade-offs, plus the file path) —
 not just "approve `plan.md`?" The user can't sign off on a file they have to go find.
 
+**Plan self-review (one adaptive pass) — before showing it to the user.** After
+drafting `plan.md`, launch a **fresh reviewer subagent** (Agent tool, clean
+context — the same browser-only path as the `analyze` cross-check: same model, no
+extra servers) to score the plan 0–10 on a few dimensions: completeness vs the
+spec, simplicity matched to the brief's ambition, **failure-mode coverage**, and
+constitution-fit. Revise `plan.md` in place for anything under ~8, and require it
+to spell out the **data flow and main failure modes** before it's ready. One
+consolidated pass — not separate CEO/design/eng personas.
+
 ## Phase 4 — tasks  (`/sdd-loop tasks <feature>`)
 Write `specs/<slug>/tasks.md`: an ordered, dependency-aware checklist derived
 from the plan. Number tasks, note dependencies, and tag parallel-safe tasks

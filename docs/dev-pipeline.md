@@ -23,7 +23,7 @@ importing only browser-only-safe *methods*:
 | # | Phase | Command / skill / agent | Status | Hand-off artifact |
 |---|-------|-------------------------|--------|-------------------|
 | 0 | **Think** | `/diagnose` | exists | `brief.md` |
-| 1–3 | **Plan** | `/sdd-loop` (`/kickoff`, `/opt-3`) | exists — harden | `spec.md → plan.md → tasks.md` |
+| 1–3 | **Plan** | `/sdd-loop` (`/kickoff`, `/opt-3`) | exists — gated | `spec.md → plan.md → tasks.md` |
 | 4 | **Plan-gate** | `/sdd-loop analyze` | exists | `analysis.md` |
 | 5 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
 | 6 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
@@ -62,14 +62,14 @@ one-question-per-message, *alternatives mandatory*, no "too simple" exemption �
 **stripped of the YC/startup framing**. Writes `brief.md`; gates entry to
 `specify`. Browser-only: pure Markdown + `AskUserQuestion`.
 
-### 1–3 · Plan — `/sdd-loop specify|clarify|plan|tasks` *(exists — harden)*
+### 1–3 · Plan — `/sdd-loop specify|clarify|plan|tasks` *(exists — gated)*
 Keep our WHAT/HOW split and the constitution (inherited directives) as binding
-constraints. **Methods to import:** collapse gstack's CEO/design/eng triple
-plan-review into **one adaptive review** (a fresh subagent rates a few
-dimensions 0–10, edits `plan.md` in place if < 8, forces a data-flow/failure-mode
-note); adopt superpowers `writing-plans` **2–5 min task granularity** (each task
-= failing test → implement → verify → commit) and its **no-placeholder
-self-review** (reject "TBD" / "similar to Task N").
+constraints. **Methods imported:** gstack's CEO/design/eng triple plan-review
+collapsed into **one adaptive review** (a fresh subagent scores `plan.md` 0–10,
+revises in place under ~8, forces a data-flow/failure-mode note); superpowers
+`writing-plans` **2–5 min task granularity** (each task = failing test →
+implement → verify → commit) and its **no-placeholder self-review** (reject
+"TBD" / "similar to Task N").
 
 ### 4 · Plan-gate — `/sdd-loop analyze` *(exists)*
 Cross-artifact consistency. **Method imported:** gstack's **verification gate** —
@@ -121,11 +121,14 @@ Every command and skill carries:
 - **per-skill `version` (semver)** — contradicts this repo's policy that updates
   track `main` via git SHA (`check-plugin.js` already forbids a `version` in
   `plugin.json`). Versioning stays at the repo level.
-- **`allowed-tools`** — deferred; needs a per-command tool audit, and a wrong
-  allowlist silently breaks a command. Add once audited.
-- **`triggers` + description-as-trigger rewrites** — deferred; rewriting live
-  skill descriptions changes *when they fire*, so it is a behaviour change, not
-  structural. Apply per-skill, reviewed.
+- **`allowed-tools`** — not adopted: these are broad workflow commands that need
+  general tool access (orchestrators like `kickoff`/`sdd-loop`/`new-repo` use most
+  tools), and a wrong allowlist silently breaks a command. Revisit only per-command
+  if a genuinely narrow command appears.
+- **`triggers` + description-as-trigger rewrites** — not adopted: the skill
+  `description` already is the auto-trigger, so a separate `triggers` field is
+  redundant, and rewriting live descriptions changes *when they fire* (a behaviour
+  change). Left as-is by design.
 
 ## Delegation map — what we do NOT build
 
@@ -194,8 +197,8 @@ scheduled-job crash. (`expressive-design` is not a module — it's a per-brief
   (anti-sycophancy); `test.md` gains the *circuit breakers* (attempt cap +
   runaway-diff stop); `pr-readiness-reviewer` gains the *evidence-currency*
   staleness gate; `sdd-loop` tasks gain 2–5 min sizing + no-placeholder
-  self-review. (The Plan-phase "one adaptive plan-review" remains a deferred
-  enhancement.)
+  self-review; `sdd-loop` plan gains the one adaptive plan-review pass (fresh
+  subagent scores `plan.md`, revises under ~8, forces data-flow/failure-mode).
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
   scaffolds the full set (8 workflows + Playwright kit + scheduled-job scripts).
   The email kit is standard + active with mandatory secrets and a config-guard

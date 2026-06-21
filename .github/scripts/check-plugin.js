@@ -29,21 +29,30 @@ const fm = path => {
   return Object.fromEntries([...m[1].matchAll(/^([A-Za-z-]+):\s*(.*)$/gm)].map(x => [x[1], x[2]]));
 };
 
-// ── Commands ─────────────────────────────────────────────────────────────────
-const cmds = readdirSync(`${ROOT}/commands`).filter(f => f.endsWith('.md'));
-for (const c of cmds) {
-  const f = fm(`${ROOT}/commands/${c}`);
-  if (!f?.description) fail(`command ${c}: missing description frontmatter`);
-}
-ok(`${cmds.length} commands with description frontmatter`);
+// ── Commands + skills: description, pipeline phase, chain integrity ───────────
+// Every command/skill declares a dev-pipeline `phase`; `benefits-from` (optional)
+// names the upstream command/skill whose artifact it consumes — the edge must
+// resolve to a real item so the chain can never reference a deleted/renamed node.
+const PHASES = new Set(['think', 'plan', 'build', 'review', 'test', 'ship', 'reflect', 'cross-cutting']);
+const parseList = v => (v ?? '').replace(/^\[|\]$/g, '').split(',').map(s => s.trim()).filter(Boolean);
 
-// ── Skills ───────────────────────────────────────────────────────────────────
+const cmds = readdirSync(`${ROOT}/commands`).filter(f => f.endsWith('.md'));
 const skills = readdirSync(`${ROOT}/skills`).filter(d => statSync(`${ROOT}/skills/${d}`).isDirectory());
-for (const s of skills) {
-  const f = fm(`${ROOT}/skills/${s}/SKILL.md`);
-  if (!f?.description) fail(`skill ${s}: missing description frontmatter`);
+const pipelineNames = new Set([...cmds.map(c => c.replace(/\.md$/, '')), ...skills]);
+
+const items = [
+  ...cmds.map(c => ({ kind: 'command', name: c.replace(/\.md$/, ''), f: fm(`${ROOT}/commands/${c}`) })),
+  ...skills.map(s => ({ kind: 'skill', name: s, f: fm(`${ROOT}/skills/${s}/SKILL.md`) })),
+];
+for (const { kind, name, f } of items) {
+  if (!f?.description) fail(`${kind} ${name}: missing description frontmatter`);
+  if (!f?.phase) fail(`${kind} ${name}: missing phase frontmatter`);
+  else if (!PHASES.has(f.phase)) fail(`${kind} ${name}: invalid phase "${f.phase}" (expected ${[...PHASES].join('|')})`);
+  for (const dep of parseList(f?.['benefits-from'])) {
+    if (!pipelineNames.has(dep)) fail(`${kind} ${name}: benefits-from target "${dep}" is not a known command/skill`);
+  }
 }
-ok(`${skills.length} skills with SKILL.md`);
+ok(`${cmds.length} commands + ${skills.length} skills: description + valid phase, chain resolves`);
 
 // ── Agents (flat, unique names) ──────────────────────────────────────────────
 const agents = readdirSync(`${ROOT}/agents`).filter(f => f.endsWith('.md'));

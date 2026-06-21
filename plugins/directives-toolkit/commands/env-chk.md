@@ -1,5 +1,6 @@
 ---
 description: "Full environment readiness check — session context, git health, CI status, validation gates, directive freshness, a connectors/tools inventory, and the scope-chk repo-scope verification"
+phase: cross-cutting
 ---
 Run a comprehensive environment readiness check and report a single pass/fail
 verdict. Read-only — do NOT modify files. Execute in order:

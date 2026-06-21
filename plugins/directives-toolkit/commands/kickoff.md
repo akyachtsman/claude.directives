@@ -1,5 +1,7 @@
 ---
 description: "Kick off a spec-driven build of a new app — scaffold (if needed), gather the product brief, optional competitive discovery, then drive the /sdd-loop"
+phase: plan
+benefits-from: [new-repo]
 ---
 Start a spec-driven build of a **new app**, end to end. This command **orchestrates
 the existing pieces — it does not re-implement them**: it delegates scaffolding to

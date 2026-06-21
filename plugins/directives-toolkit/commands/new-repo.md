@@ -1,5 +1,6 @@
 ---
 description: "First-time repo bootstrap — scaffold a brand-new project autonomously (fires only when CLAUDE.md does not exist yet)"
+phase: build
 ---
 Bootstrap a brand-new project repo from scratch. This runs **once**, on a repo
 that has no `CLAUDE.md` yet. The human has already done the GitHub config in

@@ -70,6 +70,18 @@ Execute these steps at the start of every session, before any task work:
 - `qa-live.yml` failures against the live app must be fixed before marking work done
 - Workflow YAML is validated on every CI run — keep it parseable
 
+## Circuit breakers (autonomous fix loops)
+When fixing failures without a human in the loop (the `qa-pipeline` ui-tester
+loop, CI triage), stop before thrashing:
+- **Cap attempts** — at most 3 fix attempts on the same failure, then escalate
+  (the `global.md` 3-failures gate; `qa-pipeline` already enforces this for the
+  ui-tester loop).
+- **Watch the diff** — if a "fix" balloons or starts touching files unrelated to
+  the failure, stop: that signals the diagnosis is wrong. Re-diagnose from the
+  evidence rather than piling on more changes.
+- **Re-verify each attempt fresh** (`global.md` → Evidence before assertions) —
+  never assume the previous fix held.
+
 ## Escalation
 Canonical stop-and-ask gates live in `global.md` → Escalation Rules; they apply
 here unchanged (file deletion, workflow triggers, 3+ CI failures, multi-file

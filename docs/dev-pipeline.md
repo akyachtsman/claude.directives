@@ -26,8 +26,8 @@ importing only browser-only-safe *methods*:
 | 1–3 | **Plan** | `/sdd-loop` (`/kickoff`, `/opt-3`) | exists — harden | `spec.md → plan.md → tasks.md` |
 | 4 | **Plan-gate** | `/sdd-loop analyze` | exists | `analysis.md` |
 | 5 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
-| 6 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — add gates | `qa.md` |
-| 7 | **Ship** | `push-gate` hook, `update-pages`, `/live-chk`, `ci/pages-monitor` | exists — add gate | `ship.md` |
+| 6 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
+| 7 | **Ship** | `push-gate` hook, `update-pages`, `/live-chk`, `ci/pages-monitor` | exists — gated | `ship.md` |
 | 8 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
@@ -85,7 +85,7 @@ import:** superpowers `receiving-code-review` **anti-sycophancy** rule (no
 "You're absolutely right!", restate the requirement, push back with technical
 reasoning) — added as a review-handling directive.
 
-### 6 · Test — `qa-pipeline` / `test-verifier` / `ui-tester` *(exists — add gates)*
+### 6 · Test — `qa-pipeline` / `test-verifier` / `ui-tester` *(exists — gated)*
 **Methods imported:** superpowers `verification-before-completion` as a hard
 gate (identify the proving command, run it *fresh*, read full output, *then*
 claim done); gstack **circuit-breakers** (stop after 3 failed fix attempts —
@@ -94,7 +94,7 @@ two-tier CI (`qa.yml` static = free, `qa-live.yml`/Playwright = gated) already
 mirrors gstack's tiered testing; the `claude -p` cost-capped eval harness is
 **rejected** (CLI/API-billed).
 
-### 7 · Ship — `push-gate` + `update-pages` + `/live-chk` *(exists — add gate)*
+### 7 · Ship — `push-gate` + `update-pages` + `/live-chk` *(exists — gated)*
 **Method imported:** gstack **Review Readiness staleness gate** —
 `pr-readiness-reviewer` blocks "ready" unless `review.md` is recent and clean.
 Our `push-gate` hook + PR lifecycle + `pages-monitor` already cover gstack's
@@ -157,7 +157,12 @@ Every command and skill carries:
 - **Phase 2 — the bookends (done):** `/diagnose` (Think → `brief.md`) and
   `/learn` (Reflect → `learnings.jsonl`); `sdd-loop` now declares
   `benefits-from: [kickoff, diagnose]`.
-- **Phase 3 — harden the middle:** fold in verification-before-completion,
-  circuit-breakers, anti-sycophancy, readiness-staleness, no-placeholder tasks.
+- **Phase 3 — harden the middle (done):** `global.md` gains *evidence before
+  assertions* (verification-before-completion) and *receiving review feedback*
+  (anti-sycophancy); `test.md` gains the *circuit breakers* (attempt cap +
+  runaway-diff stop); `pr-readiness-reviewer` gains the *evidence-currency*
+  staleness gate; `sdd-loop` tasks gain 2–5 min sizing + no-placeholder
+  self-review. (The Plan-phase "one adaptive plan-review" remains a deferred
+  enhancement.)
 - **Phase 4 — composable scaffold:** split the child-repo baseline into CORE +
   opt-in modules (`data`, `ui-tests`, `cron-email`, `expressive-design`).

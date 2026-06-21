@@ -19,6 +19,8 @@ every project unless explicitly overridden at repo level.
 - All code must work on iPad Safari
 - Use `textContent` for all DOM text insertion — never `innerHTML` with data from any backend or user input
 - For non-trivial features, separate WHAT from HOW — specify and clarify intent before planning a stack, and refine in phases rather than one-shotting (run `/sdd-loop`; the imported directives are its constitution)
+- **Evidence before assertions** — never report something done, passing, or fixed without running the proving check *fresh* and reading its actual output and exit status; assumptions and stale results do not count as verification
+- **Receiving review feedback** — treat review comments (human, Codex, code-reviewer) as suggestions to *evaluate*, not orders to obey. Restate the underlying requirement, verify the claim against the code, then either apply the fix or push back with technical reasoning. No performative agreement ("You're absolutely right!"), and no change you cannot justify
 
 ## Repo Structure Standard
 Every project repo should contain:

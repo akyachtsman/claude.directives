@@ -101,6 +101,12 @@ plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
 - Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
 - Fix all CI failures before marking ready for review
 - Mark PR ready only when all checks pass
+- **Auto-merge on approval:** once the user approves a change, that approval covers
+  merging it — don't ask a second time. Squash-merge automatically as soon as the
+  required CI checks are green, **provided** the PR has no `codex-flagged` label, no
+  unresolved review threads, and a diff limited to the intended files (the two rules
+  below). If any of those conditions fails, pause and surface it instead of merging.
+  Always report the merge result.
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review before merging
   — apply the fix, or remove the label with a one-line dismissal rationale in the PR.
   Never merge while the PR is still `codex-flagged` (check the PR's labels on GitHub

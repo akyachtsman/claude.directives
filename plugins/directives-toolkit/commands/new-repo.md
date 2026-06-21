@@ -45,28 +45,32 @@ Execute in order:
    renders branded until it is set and `data-theme` is applied to the app's
    root `<html>`).
 
-5. **Install CI/CD workflows.** Copy the 5 canonical workflow files from
-   `claude.directives/templates/workflows/` into `.github/workflows/`:
+5. **Install CI/CD workflows.** Every project gets the **full standard set** —
+   copy all eight workflow files from `claude.directives/templates/workflows/`
+   into `.github/workflows/`:
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages
    - `ci-monitor.yml` — event-driven CI failure tracker
    - `codex-monitor.yml` — Codex PR review monitor
    - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
      every `page_build`; portable as-is, no edits needed)
+   - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
+   - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
+   - `keepalive.yml` — weekly commit that keeps scheduled workflows from auto-disabling
 
-   All five are drop-in — copy them verbatim, no edits. `ci-monitor.yml` is
-   pre-wired to watch both QA workflows shipped alongside it (`qa.yml` and
-   `qa-live.yml`); only touch its `workflows:` list if you rename their
-   `name:` values.
+   All are drop-in — copy them verbatim, no edits. `ci-monitor.yml` is pre-wired
+   to watch both QA workflows shipped alongside it (`qa.yml` and `qa-live.yml`);
+   only touch its `workflows:` list if you rename their `name:` values.
 
-   Optional — **event-driven QA dispatch**: copy `qa-response.yml` too if
-   sessions/automations should be able to trigger QA via `repository_dispatch`.
-
-   Optional — **scheduled email notifications**: if the project needs a cron job
-   that emails alerts, also copy `cron-notify.yml` + `keepalive.yml` from
-   `templates/workflows/` and `templates/scripts/notify-email.js`, then follow
-   `docs/cron-email-notifications.md` (SMTP host/port/user + `ALERT_TO` variables;
-   `SMTP_PASS` + `KEEPALIVE_PAT` secrets).
+   **Scheduled-job scripts.** Copy `claude.directives/templates/scripts/`
+   (`notify-email.js`, `notify-task.js`, `package.json`) into `.github/scripts/`,
+   then run `npm install` there and **commit** the generated `package-lock.json`
+   (`cron-notify.yml`'s `cache:` step needs `.github/scripts/package-lock.json`,
+   same policy as the Playwright kit). `notify-task.js` ships as a starter that
+   emails via `notify-email.js`; it **guards on the SMTP config and emits a
+   notice if it is missing**, so the scheduled job never crashes cryptically. The
+   email secrets are **mandatory repo setup** (NEW-REPO-USER-INSTRUCTIONS Step 1);
+   the project replaces the task body with its real notification.
 
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains

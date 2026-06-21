@@ -4,9 +4,17 @@ A scheduled **GitHub Actions** job that runs a Node script and emails a
 notification. Transport-agnostic (any SMTP provider), DST-safe, and protected
 against GitHub's 60-day scheduler auto-disable.
 
+`/new-repo` scaffolds this kit into **every** project as standard, and the SMTP
+secrets are **mandatory repo setup** (NEW-REPO-USER-INSTRUCTIONS Step 1). The
+shipped entry point `notify-task.js` **guards on the config and emits a GitHub
+Actions notice (not a crash) if a required secret/variable is missing**, then
+skips — so an unconfigured repo is obvious in the Actions log. Replace the body
+of `notify-task.js` with your project's real notification.
+
 ## Files
-- `.github/workflows/<your-job>.yml`  — from `templates/workflows/cron-notify.yml`
-- `.github/scripts/notify-email.js`    — SMTP helper, `require` it from your task
+- `.github/workflows/cron-notify.yml`  — the scheduled job (runs `notify-task.js`)
+- `.github/scripts/notify-task.js`     — task entry point: config-guard + your notification logic
+- `.github/scripts/notify-email.js`    — SMTP helper, `require`d by `notify-task.js`
 - `.github/scripts/package.json`       — declares `nodemailer` (run `npm install` once to generate a lockfile)
 - `.github/workflows/keepalive.yml`    — keeps the schedule alive
 

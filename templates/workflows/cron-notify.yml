@@ -1,8 +1,10 @@
 name: Scheduled Notification
 
-# Generic scheduled job: runs a Node task that can email a notification.
-# Copy + rename per project, point the final step at your script, and add the
-# task's own env below. See docs/cron-email-notifications.md for setup.
+# Standard scheduled job (ships in every project): runs notify-task.js, which
+# emails a notification via notify-email.js. notify-task.js guards on the SMTP
+# config and emits a GitHub Actions notice if it's missing (mandatory repo
+# setup). Customize notify-task.js with your task; add its own env below.
+# See docs/cron-email-notifications.md for setup.
 
 on:
   schedule:
@@ -48,4 +50,4 @@ jobs:
           SMTP_USER:  ${{ vars.SMTP_USER }}
           SMTP_PASS:  ${{ secrets.SMTP_PASS }}
           FORCE:      ${{ github.event.inputs.force }}
-        run: node your-task.js
+        run: node notify-task.js

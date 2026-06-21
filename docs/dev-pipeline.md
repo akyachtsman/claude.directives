@@ -149,6 +149,38 @@ Every command and skill carries:
 - **`frontend-design`** (generative design) — conflicts with `design.md`'s fixed
   system; rejected.
 
+## Complete standard scaffold (Phase 4)
+
+**Decision: no opt-in modules — every new project gets the complete standard set
+automatically.** (The toolkit *plugin* already ships all commands/skills/agents
+as one unit; this is about the per-project **scaffold**: workflows, scripts,
+secrets, directives.) Consistency over minimalism — every repo is identical and
+complete, nothing to toggle or forget. Browser-only throughout: the only "CLI"
+remains the one-time env setup-script paste.
+
+What `/new-repo` scaffolds in **every** project:
+- `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs + a
+  `design.md` theme pick + `index.html`
+- the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
+- **all eight** workflows: `qa.yml`, `qa-live.yml`, `ci-monitor.yml`,
+  `codex-monitor.yml`, `pages-monitor.yml`, `qa-response.yml`, `cron-notify.yml`,
+  `keepalive.yml`
+- the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job scripts
+  (`.github/scripts/`: `notify-email.js`, `notify-task.js`, `package.json`)
+
+**Mandatory setup** (NEW-REPO-USER-INSTRUCTIONS Step 1): data secrets (`DB_URL`,
+`DB_SERVICE_KEY`), the test credential (`TEST_AUTH_CREDENTIAL`), and the email
+transport (`SMTP_PASS`, `KEEPALIVE_PAT` secrets; `SMTP_HOST`, `SMTP_USER`,
+`ALERT_TO` variables). The Supabase connection (`.claude/mcp.json`) stays
+per-repo + gitignored by the data directive's security rule — the one thing never
+committed.
+
+**Graceful when unconfigured:** `notify-task.js` checks its required SMTP config
+and, if any is missing, emits a GitHub Actions **notice** and exits 0 — a
+not-yet-configured repo surfaces a clear message instead of a cryptic
+scheduled-job crash. (`expressive-design` is not a module — it's a per-brief
+*mode* of `design.md`, which every project already inherits.)
+
 ## Implementation status
 
 - **Phase 1 — structure (done):** `phase` + `benefits-from` frontmatter on all
@@ -164,5 +196,7 @@ Every command and skill carries:
   staleness gate; `sdd-loop` tasks gain 2–5 min sizing + no-placeholder
   self-review. (The Plan-phase "one adaptive plan-review" remains a deferred
   enhancement.)
-- **Phase 4 — composable scaffold:** split the child-repo baseline into CORE +
-  opt-in modules (`data`, `ui-tests`, `cron-email`, `expressive-design`).
+- **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
+  scaffolds the full set (8 workflows + Playwright kit + scheduled-job scripts).
+  The email kit is standard + active with mandatory secrets and a config-guard
+  notice in `notify-task.js`. See "Complete standard scaffold" above.

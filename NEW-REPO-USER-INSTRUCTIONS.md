@@ -57,10 +57,13 @@ once locally — it persists.
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):
    - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests
    - `DB_SERVICE_KEY` — backend service-role key (required before the project's scheduled data workflow, if any, can run)
+   - `SMTP_PASS` — SMTP app password / API key for the standard email-notification job (`cron-notify.yml`)
+   - `KEEPALIVE_PAT` — fine-grained PAT (this repo, **Contents: read/write**) for `keepalive.yml`
    - Any project-specific secrets the app requires
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
+   - `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` — email transport for the standard notification job (`SMTP_PORT` / `ALERT_FROM` optional). Until these + `SMTP_PASS` are set, the job emits a notice and skips — see `docs/cron-email-notifications.md`
 
 ### Step 2 — Build the app
 Open a Claude Code session scoped to the new repo and type:
@@ -78,9 +81,10 @@ the `/sdd-loop` build — answering its prompts is all you do.
 
 ---
 
-### Optional — scheduled email notifications
-To add a cron job that emails alerts (e.g. a nightly report), copy
-`templates/workflows/cron-notify.yml` + `templates/workflows/keepalive.yml` and
-`templates/scripts/notify-email.js`, then follow `docs/cron-email-notifications.md`
-to set the `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`ALERT_TO` variables, the `SMTP_PASS`
-and `KEEPALIVE_PAT` secrets.
+### Scheduled email notifications (standard)
+`/new-repo` already scaffolds the email kit (`cron-notify.yml`, `keepalive.yml`,
+`notify-email.js`, `notify-task.js`) into every project. You just set the secrets
+and variables in Steps 5–6 above, then edit `.github/scripts/notify-task.js` to
+send your project's actual notification. Until the SMTP secrets are set, the job
+emits a notice and skips (no failure). Provider setup (Gmail app password, Resend,
+SendGrid) is in `docs/cron-email-notifications.md`.

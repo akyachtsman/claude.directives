@@ -22,13 +22,13 @@ importing only browser-only-safe *methods*:
 
 | # | Phase | Command / skill / agent | Status | Hand-off artifact |
 |---|-------|-------------------------|--------|-------------------|
-| 0 | **Think** | `/diagnose` | **planned** (gap) | `brief.md` |
+| 0 | **Think** | `/diagnose` | exists | `brief.md` |
 | 1–3 | **Plan** | `/sdd-loop` (`/kickoff`, `/opt-3`) | exists — harden | `spec.md → plan.md → tasks.md` |
 | 4 | **Plan-gate** | `/sdd-loop analyze` | exists | `analysis.md` |
 | 5 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
 | 6 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — add gates | `qa.md` |
 | 7 | **Ship** | `push-gate` hook, `update-pages`, `/live-chk`, `ci/pages-monitor` | exists — add gate | `ship.md` |
-| 8 | **Reflect** | `/learn` (upgrade of `/handoff-session`) | **planned** (gap) | `learnings.jsonl` |
+| 8 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
 ## The artifact chain
@@ -55,7 +55,7 @@ learnings.jsonl  ← 8 Reflect (repo-root, append-only, auto-consulted)
 
 ## Per-phase detail
 
-### 0 · Think — `/diagnose` *(planned)*
+### 0 · Think — `/diagnose`
 Force the problem to be understood before any code. **Method imported:** gstack
 `office-hours` six forcing questions + superpowers `brainstorming`
 one-question-per-message, *alternatives mandatory*, no "too simple" exemption —
@@ -100,7 +100,7 @@ mirrors gstack's tiered testing; the `claude -p` cost-capped eval harness is
 Our `push-gate` hook + PR lifecycle + `pages-monitor` already cover gstack's
 land-and-deploy + canary.
 
-### 8 · Reflect — `/learn` *(planned — upgrade of `/handoff-session`)*
+### 8 · Reflect — `/learn` *(alongside `/handoff-session`)*
 Compounding institutional memory. **Method imported:** gstack `learnings.jsonl`
 — append-only, **typed** (pattern / pitfall / preference / architecture / tool),
 **confidence 1–10**, file attribution, latest-key-wins; auto-consulted before
@@ -154,7 +154,9 @@ Every command and skill carries:
 - **Phase 1 — structure (done):** `phase` + `benefits-from` frontmatter on all
   commands/skills; `check-plugin.js` validates phase + chain resolution;
   `/my-list` ordered by phase; this spec.
-- **Phase 2 — the bookends:** add `/diagnose` (Think) and `/learn` (Reflect).
+- **Phase 2 — the bookends (done):** `/diagnose` (Think → `brief.md`) and
+  `/learn` (Reflect → `learnings.jsonl`); `sdd-loop` now declares
+  `benefits-from: [kickoff, diagnose]`.
 - **Phase 3 — harden the middle:** fold in verification-before-completion,
   circuit-breakers, anti-sycophancy, readiness-staleness, no-placeholder tasks.
 - **Phase 4 — composable scaffold:** split the child-repo baseline into CORE +

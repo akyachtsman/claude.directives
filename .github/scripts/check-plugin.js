@@ -34,21 +34,43 @@ const fm = path => {
 // names the upstream command/skill whose artifact it consumes — the edge must
 // resolve to a real item so the chain can never reference a deleted/renamed node.
 const PHASES = new Set(['think', 'plan', 'build', 'review', 'test', 'ship', 'reflect', 'cross-cutting']);
-const parseList = v => (v ?? '').replace(/^\[|\]$/g, '').split(',').map(s => s.trim()).filter(Boolean);
+
+// Parse a frontmatter list field robustly from the raw block — supports inline
+// `key: [a, b]`, a single scalar `key: a`, and YAML block lists
+// (`key:\n  - a\n  - b`). The flat fm() parser drops block-list items, which
+// would silently skip the chain check, so read the raw frontmatter here.
+const listField = (path, key) => {
+  const m = readFileSync(path, 'utf8').match(/^---\n([\s\S]*?)\n---\n/);
+  if (!m) return [];
+  const lines = m[1].split('\n');
+  const i = lines.findIndex(l => l.startsWith(`${key}:`));
+  if (i === -1) return [];
+  const inline = lines[i].slice(key.length + 1).trim();
+  if (inline.startsWith('[')) return inline.replace(/^\[|\]$/g, '').split(',').map(s => s.trim()).filter(Boolean);
+  if (inline) return [inline];
+  const out = [];
+  for (let j = i + 1; j < lines.length; j++) {
+    const li = lines[j].match(/^[ \t]+-[ \t]*(\S.*?)[ \t]*$/);
+    if (!li) break; // first non-list line (blank, or the next key) ends the list
+    out.push(li[1]);
+  }
+  return out;
+};
 
 const cmds = readdirSync(`${ROOT}/commands`).filter(f => f.endsWith('.md'));
 const skills = readdirSync(`${ROOT}/skills`).filter(d => statSync(`${ROOT}/skills/${d}`).isDirectory());
 const pipelineNames = new Set([...cmds.map(c => c.replace(/\.md$/, '')), ...skills]);
 
 const items = [
-  ...cmds.map(c => ({ kind: 'command', name: c.replace(/\.md$/, ''), f: fm(`${ROOT}/commands/${c}`) })),
-  ...skills.map(s => ({ kind: 'skill', name: s, f: fm(`${ROOT}/skills/${s}/SKILL.md`) })),
+  ...cmds.map(c => ({ kind: 'command', name: c.replace(/\.md$/, ''), path: `${ROOT}/commands/${c}` })),
+  ...skills.map(s => ({ kind: 'skill', name: s, path: `${ROOT}/skills/${s}/SKILL.md` })),
 ];
-for (const { kind, name, f } of items) {
+for (const { kind, name, path } of items) {
+  const f = fm(path);
   if (!f?.description) fail(`${kind} ${name}: missing description frontmatter`);
   if (!f?.phase) fail(`${kind} ${name}: missing phase frontmatter`);
   else if (!PHASES.has(f.phase)) fail(`${kind} ${name}: invalid phase "${f.phase}" (expected ${[...PHASES].join('|')})`);
-  for (const dep of parseList(f?.['benefits-from'])) {
+  for (const dep of listField(path, 'benefits-from')) {
     if (!pipelineNames.has(dep)) fail(`${kind} ${name}: benefits-from target "${dep}" is not a known command/skill`);
   }
 }

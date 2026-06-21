@@ -1,5 +1,6 @@
 ---
 description: "Audit current repo for drift between directive files and actual code, a full recursive code-correctness sweep, and structural soundness — always weighing whether re-organizing files would make the layout clearer and more error-proof"
+phase: review
 ---
 Precondition note: this audits code against the directives as currently
 imported. If you suspect the rulebook itself is stale, run /env-chk first —

@@ -1,5 +1,6 @@
 ---
 description: "Lock answers to Chromebook browser-only constraints"
+phase: cross-cutting
 ---
 For this session and any setup/install/workflow questions, assume:
 - I am on Chromebook

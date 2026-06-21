@@ -1,5 +1,6 @@
 ---
 description: "Manual backup trigger for the pre-push verification directive (run tests, lint, CI checks before committing)"
+phase: test
 ---
 This is the manual backup for the standing verify-locally-before-pushing
 directive in claude.directives. The directive should run this

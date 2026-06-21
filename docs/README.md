@@ -18,6 +18,7 @@ Referenced by the exported directives and the qa agents.
 | File | What it covers |
 |------|----------------|
 | `ai-first-principles.md` | Nine working principles for collaborating with an AI agent (adapted from TechWolf's MIT-licensed AI-First Toolkit) — orientation, not enforced policy |
+| `dev-pipeline.md` | The toolkit as one ordered procedure (Think→…→Reflect) — phase map, hand-off artifacts, frontmatter schema, delegation map; the working spec behind the `phase`/`benefits-from` frontmatter |
 
 ## Setup guides
 | File | What it covers |

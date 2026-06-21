@@ -1,5 +1,6 @@
 ---
 description: "Force structured three-option comparison format"
+phase: plan
 ---
 When I ask "should I do X" — give exactly three options:
 - Simplest

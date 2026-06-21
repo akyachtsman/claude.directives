@@ -1,5 +1,6 @@
 ---
 description: "Run a command against any public GitHub repo via gh api — inspect, compare, or audit without cloning"
+phase: cross-cutting
 ---
 Generic cross-repo operator. Invoked as `/do.repo <repo> <command>`, where
 `<repo>` is `owner/name` (or a bare name under `akyachtsman`) and `<command>` is

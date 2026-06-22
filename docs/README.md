@@ -35,6 +35,7 @@ Referenced by the exported directives and the qa agents.
 | File | What it is |
 |------|------------|
 | `design-system.html` | Rendered design-system showcase (the visual companion to `directives/design.md`) |
+| `repo-map.html` | Interactive map of the whole repo — zoom/pan/search, self-contained (no CDN) |
 | `index.html` | Redirect so `/docs/` resolves to the site root gallery |
 
 > Fill-in **templates** (project CLAUDE.md scaffold, PR checklist, test plan,

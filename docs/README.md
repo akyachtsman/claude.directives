@@ -19,13 +19,14 @@ Referenced by the exported directives and the qa agents.
 |------|----------------|
 | `ai-first-principles.md` | Nine working principles for collaborating with an AI agent (adapted from TechWolf's MIT-licensed AI-First Toolkit) — orientation, not enforced policy |
 | `dev-pipeline.md` | The toolkit as one ordered procedure (Think→…→Reflect) — phase map, hand-off artifacts, frontmatter schema, delegation map; the working spec behind the `phase`/`benefits-from` frontmatter |
-| `design-migration.md` | Proposed plan to replace the fixed company design system with per-project generative design (tokens + `/design-intake` + Stitch/frontend-design) — staged spec, for review |
+| `design-migration.md` | The per-project generative design migration (tokens + `/design-intake` + Stitch/frontend-design) — the record of the plan, now implemented |
 
 ## Setup guides
 | File | What it covers |
 |------|----------------|
 | `usage-guide.md` | How agents/skills bootstrap into a project, the `/sdd-loop` quickstart, and where reports go |
 | `cron-email-notifications.md` | Standing up the scheduled-job + email-notification kit |
+| `design-tooling.md` | Design generators (the `frontend-design` skill, wiring Google Stitch's remote MCP) and the `/design-intake` flow |
 
 ## This repo only (not inherited downstream)
 | File | What it covers |
@@ -35,7 +36,6 @@ Referenced by the exported directives and the qa agents.
 ## Site assets (GitHub Pages)
 | File | What it is |
 |------|------------|
-| `design-system.html` | Rendered design-system showcase (the visual companion to `directives/design.md`) |
 | `repo-map.html` | Interactive map of the whole repo — zoom/pan/search, self-contained (no CDN) |
 | `index.html` | Redirect so `/docs/` resolves to the site root gallery |
 

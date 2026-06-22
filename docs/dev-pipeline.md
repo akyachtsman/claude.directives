@@ -140,6 +140,7 @@ Every command and skill carries:
 | GitHub ops | GitHub MCP |
 | Backend / data | Supabase MCP + `supabase` agent (per `data.md`) |
 | Browser UI testing | Playwright (kit in `templates/ui-tests/`) / `ui-tester` |
+| Design generation | `frontend-design` skill (primary) + Google Stitch remote MCP — per-project look; see `design.md` / `docs/design-tooling.md` |
 
 ## Deliberate rejects (simplicity discipline)
 
@@ -149,8 +150,10 @@ Every command and skill carries:
 - **superpowers** — `using-git-worktrees`, local `finishing-a-development-branch`
   (use the GitHub UI/MCP instead), the bash `session-start` hook (use the
   plugin's own mechanism), multi-platform packaging.
-- **`frontend-design`** (generative design) — conflicts with `design.md`'s fixed
-  system; rejected.
+- **frameworked AI UI generators** (v0, Lovable, Bolt, 21st.dev, official Figma
+  codegen) — React/Tailwind output and (often) a local server; wrong target for a
+  plain-HTML, browser-only stack. (`frontend-design` + Stitch's *remote* MCP are
+  adopted instead — see the Delegation map and `docs/design-tooling.md`.)
 
 ## Complete standard scaffold (Phase 4)
 
@@ -162,14 +165,15 @@ complete, nothing to toggle or forget. Browser-only throughout: the only "CLI"
 remains the one-time env setup-script paste.
 
 What `/new-repo` scaffolds in **every** project:
-- `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs + a
-  `design.md` theme pick + `index.html`
+- `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs + `index.html`
+  + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
 - **all eight** workflows: `qa.yml`, `qa-live.yml`, `ci-monitor.yml`,
   `codex-monitor.yml`, `pages-monitor.yml`, `qa-response.yml`, `cron-notify.yml`,
   `keepalive.yml`
-- the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job scripts
-  (`.github/scripts/`: `notify-email.js`, `notify-task.js`, `package.json`)
+- the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job /
+  guardrail scripts (`.github/scripts/`: `notify-email.js`, `notify-task.js`,
+  `check-contrast.js`, `package.json`)
 
 **Mandatory setup** (NEW-REPO-USER-INSTRUCTIONS Step 1): data secrets (`DB_URL`,
 `DB_SERVICE_KEY`), the test credential (`TEST_AUTH_CREDENTIAL`), and the email
@@ -181,8 +185,8 @@ committed.
 **Graceful when unconfigured:** `notify-task.js` checks its required SMTP config
 and, if any is missing, emits a GitHub Actions **notice** and exits 0 — a
 not-yet-configured repo surfaces a clear message instead of a cryptic
-scheduled-job crash. (`expressive-design` is not a module — it's a per-brief
-*mode* of `design.md`, which every project already inherits.)
+scheduled-job crash. (Design is **per-project and generated** — see `design.md`
+and `docs/design-tooling.md`; there is no shared company theme to inherit.)
 
 ## Implementation status
 
@@ -203,3 +207,8 @@ scheduled-job crash. (`expressive-design` is not a module — it's a per-brief
   scaffolds the full set (8 workflows + Playwright kit + scheduled-job scripts).
   The email kit is standard + active with mandatory secrets and a config-guard
   notice in `notify-task.js`. See "Complete standard scaffold" above.
+- **Design — per-project generative (done):** the fixed company design system
+  (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;
+  `design.md` is now a thin method, `/design-intake` establishes each project's
+  own `styles/tokens.css` + `styles/components.css` via `frontend-design` + Stitch,
+  and the WCAG guardrail ships per-project. See `docs/design-migration.md`.

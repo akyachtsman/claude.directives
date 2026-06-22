@@ -15,7 +15,7 @@ covers only how to operate *on this repo*.
 | Path | Role |
 |------|------|
 | `directives/global.md` | Exported global directive (was global's DIRECTIVE.md) |
-| `directives/design.md` | Exported design system (was design's DIRECTIVE.md) |
+| `directives/design.md` | Exported design **method** — per-project generative (tokens + `/design-intake` + `frontend-design`/Stitch), not a shared theme |
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
@@ -82,10 +82,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
 - `qa.yml` — `QA — Directive Validation`: internal link check (hard fail, verified
   against the local working tree), path-existence check, required-section check,
   workflow YAML validation, a secret-scan-pattern sync check (the canonical regex
-  stays byte-identical across `global.md` and the qa workflow templates), a
-  design-theme parity check (the 10 schemes match between `design.md`, the
-  showcase, and the bootstrap template) plus a WCAG-AA color-contrast audit, a
-  non-blocking Playwright theme-contract job, plus a warn-only external-link job.
+  stays byte-identical across `global.md` and the qa workflow templates), and a
+  paired-file diff check, plus a warn-only external-link job. (The old design-theme
+  parity + contrast checks were retired with the fixed design system — design is
+  now per-project; the contrast guardrail ships in `templates/scripts/` for projects.)
 - `ci-monitor.yml` — fires when `QA — Directive Validation` completes; on failure
   opens/updates a deduplicated `ci-failure` tracking issue.
 - `codex-monitor.yml` — fires on Codex PR reviews; adds a `codex-flagged` label
@@ -120,8 +120,6 @@ node .github/scripts/check-paths.js
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
-node .github/scripts/check-theme-parity.js
-node .github/scripts/check-contrast.js
 node .github/scripts/check-links.js --internal   # set GITHUB_REPOSITORY + GITHUB_TOKEN
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages monitor template pairs)

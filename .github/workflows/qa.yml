@@ -37,12 +37,6 @@ jobs:
       - name: Check secret-scan pattern in sync
         run: node .github/scripts/check-secret-scan.js
 
-      - name: Check design theme parity (design.md ↔ showcase)
-        run: node .github/scripts/check-theme-parity.js
-
-      - name: Check color contrast (WCAG AA)
-        run: node .github/scripts/check-contrast.js
-
       - name: Validate workflow YAML
         run: |
           python3 -c "
@@ -74,22 +68,3 @@ jobs:
         run: node .github/scripts/check-links.js --external
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  theme-contract:
-    name: Theme contract (Playwright, non-blocking)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install deps + browser
-        working-directory: tests
-        run: |
-          npm install --no-audit --no-fund
-          npx playwright install --with-deps chromium
-      - name: Run theme contract test
-        working-directory: tests
-        run: npx playwright test

@@ -1,6 +1,6 @@
 [
   { "file": "directives/global.md", "sections": ["Escalation Rules", "PR Lifecycle", "Session Start", "Skill Bootstrap"] },
-  { "file": "directives/design.md", "sections": ["Color Schemes", "Typography", "iPad Rules"] },
+  { "file": "directives/design.md", "sections": ["Establishing your project's look", "iPad Rules", "Accessibility", "Editorial Preferences"] },
   { "file": "directives/test.md", "sections": ["Session start", "Playwright", "CI triage", "Escalation"] },
   { "file": "directives/data.md", "sections": ["Preferred Backend", "Row-Level Security (RLS)", "Keys", "Escalation"] },
   { "file": "NEW-REPO-USER-INSTRUCTIONS.md", "sections": ["HUMAN STEPS"] }

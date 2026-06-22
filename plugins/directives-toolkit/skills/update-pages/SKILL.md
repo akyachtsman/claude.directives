@@ -15,11 +15,11 @@ what `*.github.io` serves, run these steps and report when it's live.
 
 Run in order:
 
-1. **Pre-flight (local gate).** Before pushing, run the repo's validation:
-   - `node .github/scripts/check-paths.js`, `check-sections.js`,
-     `check-links.js --internal`
-   - `npx html-validate <changed .html>` for any HTML touched
-   Fix failures before pushing.
+1. **Pre-flight (local gate).** Before pushing, run the repo's configured
+   validation gates — whatever the project wires into CI (in this repo that's
+   `node .github/scripts/check-*.js` — `check-paths`, `check-sections`,
+   `check-links.js --internal`) — plus `npx html-validate <changed .html>` for
+   any HTML touched. Fix failures before pushing.
 
 2. **Commit, push, capture the SHA.** Commit to the working branch (or `main`
    per repo policy), push, and record `git rev-parse HEAD` — this is the SHA the

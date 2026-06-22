@@ -10,9 +10,8 @@
 
 Step-by-step guide for deploying the QA pipeline to a new project repo. Follow in order — each step must complete before the next.
 
-> This is the **single canonical install procedure** (it absorbed the former
-> `docs/cicd-directives.md`). Other docs link here rather than carrying their
-> own copy of these instructions.
+> This is the **single canonical install procedure**. Other docs link here
+> rather than carrying their own copy of these instructions.
 
 ## Overview
 

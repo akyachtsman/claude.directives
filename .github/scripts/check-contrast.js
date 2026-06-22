@@ -4,22 +4,7 @@
 // Normal text (incl. 15px/500 buttons, 13px labels) needs >= 4.5:1; large/icon
 // accent-on-surface uses the 3.0 large-text bar.
 import { readFileSync } from 'fs';
-
-function parseThemes(text) {
-  const themes = {};
-  const re = /\[data-theme="([^"]+)"\]\s*\{([^}]*)\}/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const t = {};
-    for (const d of m[2].split(';')) {
-      const i = d.indexOf(':'); if (i < 0) continue;
-      const k = d.slice(0, i).trim(); if (!k.startsWith('--')) continue;
-      t[k] = d.slice(i + 1).trim();
-    }
-    themes[m[1]] = t;
-  }
-  return themes;
-}
+import { parseThemes } from './parse-themes.js';
 
 const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
 function lum(hex) {

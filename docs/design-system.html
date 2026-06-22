@@ -1073,8 +1073,12 @@
         lvlEl.textContent = lv;
         critEl.textContent = cr;
         cEl.textContent = data.completed;
-        rEl.innerHTML = CHECK + Math.round(rate * 100) + '%';
-        mEl.innerHTML = ALERT + (data.total - data.completed);
+        rEl.replaceChildren();
+        rEl.insertAdjacentHTML('beforeend', CHECK); // CHECK is a trusted SVG constant
+        rEl.append(Math.round(rate * 100) + '%');    // dynamic value as a text node
+        mEl.replaceChildren();
+        mEl.insertAdjacentHTML('beforeend', ALERT);
+        mEl.append(String(data.total - data.completed));
         cellEl.textContent = data.completed + '/' + data.total;
       }
 

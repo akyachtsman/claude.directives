@@ -2,7 +2,7 @@
 description: "Run a command against any public GitHub repo via gh api — inspect, compare, or audit without cloning"
 phase: cross-cutting
 ---
-Generic cross-repo operator. Invoked as `/do.repo <repo> <command>`, where
+Generic cross-repo operator. Invoked as `/do-repo <repo> <command>`, where
 `<repo>` is `owner/name` (or a bare name under `akyachtsman`) and `<command>` is
 one of the verbs below. Uses `gh api` to read public repos directly — no clone,
 no working-tree changes. **Read-only**: never write to, branch, or open PRs

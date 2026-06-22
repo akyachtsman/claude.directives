@@ -4,6 +4,7 @@
 // carry the palettes (one is the source, one renders it), so this guards that
 // duplication the way the repo already guards file-pairs and the secret-scan.
 import { readFileSync } from 'fs';
+import { parseThemes } from './parse-themes.js';
 
 const FILES = ['directives/design.md', 'docs/design-system.html'];
 
@@ -12,24 +13,6 @@ const EXPECTED_TOKENS = [
   '--color-text-primary', '--color-text-secondary', '--color-accent',
   '--color-accent-hover', '--color-accent-light', '--color-accent-ring', '--color-danger',
 ];
-
-function parseThemes(text) {
-  const themes = {};
-  const re = /\[data-theme="([^"]+)"\]\s*\{([^}]*)\}/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const tokens = {};
-    for (const decl of m[2].split(';')) {
-      const i = decl.indexOf(':');
-      if (i === -1) continue;
-      const k = decl.slice(0, i).trim();
-      if (!k.startsWith('--')) continue;
-      tokens[k] = decl.slice(i + 1).trim().replace(/\s+/g, '');
-    }
-    themes[m[1]] = tokens;
-  }
-  return themes;
-}
 
 const parsed = {};
 for (const f of FILES) parsed[f] = parseThemes(readFileSync(f, 'utf8'));

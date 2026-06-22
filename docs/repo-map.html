@@ -22,7 +22,7 @@
 </style></head><body>
 <header>
   <h1>claude.directives — repo map</h1>
-  <span class="hint">scroll / pinch = zoom · drag canvas = pan · drag a box = move it · click a box = isolate · search a file →</span>
+  <span class="hint">scroll / pinch = zoom · drag canvas = pan · drag a box = move it (saved) · click a box = isolate · search a file →</span>
   <span class="btns"><button id="zin">+</button><button id="zout">−</button><button id="reset">reset</button></span>
   <input id="search" placeholder="find a file… (e.g. push-gate, qa.yml)">
 </header>
@@ -38,6 +38,9 @@ const nodes=[...document.querySelectorAll('.node')], edges=[...document.querySel
 const model={};
 nodes.forEach(n=>{const r=n.querySelector('rect');model[n.dataset.id]={el:n,bx:+r.getAttribute('x'),by:+r.getAttribute('y'),w:+r.getAttribute('width'),h:+r.getAttribute('height'),ox:0,oy:0}});
 function rectOf(id){const m=model[id];const x=m.bx+m.ox,y=m.by+m.oy;return{x,y,w:m.w,h:m.h,cx:x+m.w/2,cy:y+m.h/2}}
+const LSKEY='repomap-layout-v1';
+function saveLayout(){try{const o={};for(const id in model){const m=model[id];if(m.ox||m.oy)o[id]=[Math.round(m.ox),Math.round(m.oy)]}localStorage.setItem(LSKEY,JSON.stringify(o))}catch(_){}}
+function loadLayout(){try{const o=JSON.parse(localStorage.getItem(LSKEY)||'{}');for(const id in o){const m=model[id];if(!m)continue;m.ox=o[id][0];m.oy=o[id][1];m.el.setAttribute('transform',`translate(${m.ox},${m.oy})`)}}catch(_){}}
 function border(r,px,py){const dx=px-r.cx,dy=py-r.cy;if(!dx&&!dy)return{x:r.cx,y:r.cy};const sx=dx?(r.w/2)/Math.abs(dx):1e9,sy=dy?(r.h/2)/Math.abs(dy):1e9;const s=Math.min(sx,sy);return{x:r.cx+dx*s,y:r.cy+dy*s}}
 function renderEdges(){edges.forEach(ed=>{const a=rectOf(ed.dataset.a),b=rectOf(ed.dataset.b);const p1=border(a,b.cx,b.cy),p2=border(b,a.cx,a.cy);const path=ed.querySelector('path');if(path)path.setAttribute('d',`M${p1.x.toFixed(1)},${p1.y.toFixed(1)} L${p2.x.toFixed(1)},${p2.y.toFixed(1)}`);const lab=ed.querySelector('.elabel');if(lab){lab.setAttribute('x',((p1.x+p2.x)/2).toFixed(1));lab.setAttribute('y',((p1.y+p2.y)/2-5).toFixed(1))}})}
 // zoom (wheel)
@@ -59,7 +62,7 @@ let drag=null;
 nodes.forEach(n=>{const id=n.dataset.id;n.style.cursor='grab';
   n.addEventListener('pointerdown',e=>{e.stopPropagation();const m=model[id];drag={id,sx:e.clientX,sy:e.clientY,ox:m.ox,oy:m.oy,moved:false};try{n.setPointerCapture(e.pointerId)}catch(_){}n.style.cursor='grabbing'});
   n.addEventListener('pointermove',e=>{if(!drag||drag.id!==id)return;const m=model[id];m.ox=drag.ox+(e.clientX-drag.sx)/scale;m.oy=drag.oy+(e.clientY-drag.sy)/scale;if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>4)drag.moved=true;n.setAttribute('transform',`translate(${m.ox.toFixed(1)},${m.oy.toFixed(1)})`);renderEdges()});
-  n.addEventListener('pointerup',e=>{n.style.cursor='grab';if(drag&&drag.id===id){if(!drag.moved)toggleFocus(n);drag=null}});
+  n.addEventListener('pointerup',e=>{n.style.cursor='grab';if(drag&&drag.id===id){if(drag.moved)saveLayout();else toggleFocus(n);drag=null}});
   n.addEventListener('pointercancel',()=>{drag=null;n.style.cursor='grab'})});
 wrap.addEventListener('click',e=>{if(e.target===wrap||e.target===svg){nodes.forEach(x=>x.classList.remove('focused'));clearFocus()}});
 // search
@@ -67,6 +70,6 @@ document.getElementById('search').addEventListener('input',e=>{const q=e.target.
 // buttons
 document.getElementById('zin').onclick=()=>{const r=wrap.getBoundingClientRect();const ns=Math.min(9,scale*1.3);tx=r.width/2-(r.width/2-tx)*(ns/scale);ty=r.height/2-(r.height/2-ty)*(ns/scale);scale=ns;apply()};
 document.getElementById('zout').onclick=()=>{const r=wrap.getBoundingClientRect();const ns=Math.max(0.12,scale/1.3);tx=r.width/2-(r.width/2-tx)*(ns/scale);ty=r.height/2-(r.height/2-ty)*(ns/scale);scale=ns;apply()};
-document.getElementById('reset').onclick=()=>{document.getElementById('search').value='';nodes.forEach(n=>{n.classList.remove('dim','match','focused');const m=model[n.dataset.id];m.ox=0;m.oy=0;n.removeAttribute('transform')});clearFocus();renderEdges();fit()};
-renderEdges();fit();
+document.getElementById('reset').onclick=()=>{document.getElementById('search').value='';nodes.forEach(n=>{n.classList.remove('dim','match','focused');const m=model[n.dataset.id];m.ox=0;m.oy=0;n.removeAttribute('transform')});try{localStorage.removeItem(LSKEY)}catch(_){}clearFocus();renderEdges();fit()};
+loadLayout();renderEdges();fit();
 </script></body></html>

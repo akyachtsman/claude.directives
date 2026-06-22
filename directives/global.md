@@ -126,6 +126,11 @@ plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
 - Any background watcher MUST set a hard timeout sized to the operation and exit
   on every terminal state (success, failure, timeout). A waiter that outlives
   what it watches is a bug.
+- A background **agent** you spawn (`run_in_background`) is a task you still own:
+  collect (await) every one before the turn ends. Uncollected background tasks get
+  orphaned by context compaction — they run on with no handle left to stop them, a
+  token-burning zombie that never reaches a terminal state. Fan agents out only in
+  a window you will close; never fire-and-forget into a long session.
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic

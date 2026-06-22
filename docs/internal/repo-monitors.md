@@ -1,8 +1,10 @@
 # Repo Monitors — this repo's CI
 
-This repo's own infrastructure monitors. For the **exported** automation standard
-that downstream projects inherit (email, CI/Codex monitors, PR lifecycle,
-escalation, tool-use discipline, test-scenario bootstrap), see `automations.md`.
+This repo's own infrastructure monitors **and its self-test triage**. For the
+**exported** automation standard that downstream projects inherit (email,
+CI/Codex monitors, PR lifecycle, escalation, tool-use discipline, test-scenario
+bootstrap), see `docs/automations.md`; for the exported **project** CI triage,
+see `docs/ci-triage.md`.
 
 ### Infrastructure Monitors (always on, no session required)
 CI and Codex monitoring runs entirely in GitHub Actions — event-driven, no session
@@ -30,8 +32,24 @@ See `.github/workflows/ci-monitor.yml`, `.github/workflows/codex-monitor.yml`, a
 ### Activation Checklist for New Sessions
 - Confirm `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` exist; `codex-monitor` fires only on PR-review events and `pages-monitor` only on `page_build` events, so neither has a standing "green" status to check
 - Subscribe to PR activity on any open PRs
-- Read `docs/ci-triage.md` for triage rules
+- See *Self-test triage* below for `ci-failure` / `codex-flagged` handling
 - Check for open `ci-failure` issues before starting new work
+
+---
+
+## Self-test triage
+
+This repo's `ci-failure` issues come specifically from its **directive-validation**
+CI — the `check-*.js` link / section / path validators in `qa.yml` (a downstream
+project's instead come from its build / Playwright suite). The triage **steps** are
+identical either way, so they aren't duplicated here: follow
+`docs/ci-triage.md` → *`ci-failure` issue is open* / *`codex-flagged` label on a PR*.
+Repo-specific notes:
+
+- An `internal link` or `required section` failure is this repo's own defect — fix
+  it in the offending directive/doc and push.
+- An `external links` failure is usually a sibling-repo or rate-limit issue — verify
+  the URL before suppressing (`.github/scripts/check-links.js`, `.github/workflows/qa.yml`).
 
 ---
 

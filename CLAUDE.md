@@ -95,8 +95,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   `pages-deploy-failure` issue (success → job summary only). The zero-model
   counterpart to the `update-pages` skill.
 
-See `docs/repo-monitors.md` for this repo's monitor detail, and `docs/automations.md` for escalation rules and the exported automation standard.
-See `docs/ci-triage.md` for triage on `ci-failure` issues and `codex-flagged` PRs.
+See `docs/internal/repo-monitors.md` for this repo's monitor detail and self-test
+triage (the `ci-failure` / `codex-flagged` flow), and `docs/automations.md` for
+escalation rules and the exported automation standard.
+See `docs/ci-triage.md` for the exported **project** CI triage rules.
 
 ## Toolkit (commands, skills, agents, hooks)
 Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit/`

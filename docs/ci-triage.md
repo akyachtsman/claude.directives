@@ -1,46 +1,43 @@
 # CI Triage
 
-This repo carries two CI concerns, merged here from the former
-`claude.global.directives` and `claude.test.directives` triage docs:
-
-1. **Directive self-test triage** — failures in *this* repo's own validation CI
-   (link/section/path checks). See "Directive repo self-test" below.
-2. **Project Playwright triage** — failures in *downstream project* CI
-   (`qa.yml` / `qa-live.yml`). See "Project CI (Playwright)" below.
-
----
-
-## Directive repo self-test
-
-### Detection sources
-
-Failures surface through two GitHub-event-driven monitors — no session or email
-polling required:
+Triage for **project** CI in any repo using these agents. Three failure surfaces,
+all detected by event-driven infra workflows — no session, no polling:
 
 | Signal | Source | Surfaces as |
 |---|---|---|
-| Validation workflow failed | `workflow_run` event → `ci-monitor.yml` | `ci-failure` tracking issue |
-| Codex raised PR concerns | `pull_request_review` event → `codex-monitor.yml` | `codex-flagged` PR label |
+| A watched workflow failed | `workflow_run` → `ci-monitor.yml` | `ci-failure` tracking issue |
+| Codex raised PR concerns | `pull_request_review` → `codex-monitor.yml` | `codex-flagged` PR label |
+| Playwright failure | `qa.yml` / `qa-live.yml` | failing CI check on the PR |
 
-### Triage rules
+GitHub automatically emails issue comments and label events, so the inbox is
+notified without polling. For in-session fast feedback, poll via
+`mcp__github__actions_list`.
 
-#### `ci-failure` issue is open
+> This repo's own `ci-failure` issues come from its **directive-validation**
+> checks (link / section / path); a downstream project's come from its build /
+> Playwright suite. The triage steps below are the same either way — see
+> `docs/internal/repo-monitors.md` for this repo's specifics.
+
+## `ci-failure` issue is open
+
 1. Read the issue body — each line names the failed workflow, branch, SHA, and run URL
 2. Open the run URL and read the failing step's logs
 3. Diagnose root cause before touching any code
-4. If the failure is in an **internal link** or **required section** check → it's this
-   repo's defect; fix it and push
+4. If the failure is in an **internal link** or **required section** check → it's a
+   repo defect; fix it and push
 5. If the failure is in the **external links** job → it's a sibling repo or rate-limit
    issue; investigate the URL before suppressing (see `.github/scripts/check-links.js`
    and `.github/workflows/qa.yml` for the split-locality policy)
 6. If the failure recurs 3+ times on the same issue with different fixes → escalate
 
-#### `codex-flagged` label on a PR
+## `codex-flagged` label on a PR
+
 1. Open the PR and read Codex's inline comments
 2. Address each suggestion or explicitly note why it's declined
 3. Remove the label once resolved — do not merge while the label is present
 
-### What not to do
+## What not to do
+
 - Do not close a `ci-failure` issue without fixing the underlying failure
 - Do not remove `codex-flagged` without addressing the inline comments
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
@@ -48,19 +45,6 @@ polling required:
 ---
 
 ## Project CI (Playwright)
-
-### Detection source
-
-CI failures are detected by two event-driven infra workflows — no session, no polling:
-
-- **`ci-monitor.yml`** — triggers on `workflow_run` (fires GitHub-side the instant a watched
-  workflow finishes; `workflow_dispatch` for manual scans). Findings surface as a `ci-failure`
-  GitHub tracking issue.
-- **`codex-monitor.yml`** — triggers on `pull_request_review` by Codex bot. Findings surface
-  as a `codex-flagged` label on the PR.
-
-GitHub automatically emails both — issue comments and label events — so the inbox is
-notified without any polling. For in-session fast feedback, poll via `mcp__github__actions_list`.
 
 ### Two-tier CI architecture
 

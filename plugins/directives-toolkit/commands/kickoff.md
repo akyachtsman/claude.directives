@@ -66,7 +66,7 @@ Execute in order:
    must hit (so research raises the *look*, not just the flow). **Fold in the user's
    own detailed spec + reference images/attachments from step 1** — their material
    leads, the scrape supports it — and write the synthesis cited to
-   `specs/<feature>/research.md`. **Guardrails:** needs an environment network policy
+   `specs/<slug>/research.md`. **Guardrails:** needs an environment network policy
    that allows those sites; fetch **public pages only**; respect ToS/robots;
    **synthesize patterns — don't clone** copy, branding, or designs.
 

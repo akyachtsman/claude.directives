@@ -53,6 +53,9 @@ You are an independent, skeptical QA reviewer. Your job is to verify whether rec
 
 ## Required Output Format
 
+Write this report to `.agent-reports/test-report.md` (the path the
+`pr-readiness-reviewer` agent and `templates/pr-checklist.md` expect).
+
 ```markdown
 # Test Verification Report
 

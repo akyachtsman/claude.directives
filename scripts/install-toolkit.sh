@@ -12,13 +12,18 @@
 # Re-runnable: the marketplace 'add' steps tolerate an already-registered marketplace.
 set -u
 
-# 1) Register both marketplaces the plugins come from (idempotent).
+# 1) Register the marketplaces the plugins come from (idempotent).
 claude plugin marketplace add akyachtsman/claude.directives      || true
 claude plugin marketplace add anthropics/claude-plugins-official || true
+claude plugin marketplace add anthropics/claude-code             || true
 
-# 2) Install the toolkit + the official code-review and security plugins.
+# 2) Install the toolkit + the official review / security / design plugins.
 claude plugin install directives-toolkit@claude-directives
 claude plugin install pr-review-toolkit@claude-plugins-official
 claude plugin install security-guidance@claude-plugins-official
+# frontend-design: the design generator the new design.md relies on (per
+# design.md / docs/design-tooling.md). || true so a marketplace-name drift can't
+# break the whole setup run.
+claude plugin install frontend-design@claude-code-plugins || true
 
-echo "✓ directives toolkit + official review/security plugins installed"
+echo "✓ directives toolkit + official review / security / design plugins installed"

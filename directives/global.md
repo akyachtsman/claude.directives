@@ -13,7 +13,7 @@ every project unless explicitly overridden at repo level.
 
 ## Behavior Rules
 - Always read CLAUDE.md and any imported directive URLs before starting any task
-- Never deviate from the imported design directive without explicit approval
+- Follow the design directive's universal craft rules (iPad, accessibility, motion, copy); each project's *look* is its own — established via `/design-intake`, not a shared company theme
 - No frameworks, no npm, no build steps unless explicitly asked
 - Plain HTML + JS is the default stack
 - All code must work on iPad Safari

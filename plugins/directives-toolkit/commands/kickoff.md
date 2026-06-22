@@ -24,10 +24,9 @@ Execute in order:
    - **Core capabilities** — the key things it does
    - **Ambition & references** — how elaborate should it be, and which 1–2 apps
      should it match in polish/depth? This sets the bar everything downstream is held
-     to. Map it to a design mode (`design.md`): **utility** (calm/data — dashboards,
-     tools) or **expressive** (consumer/marketing — hero, imagery, multi-section).
-     **Default when unspecified: production-grade, not a skeleton.** Carry this bar
-     into `plan` and `implement` — do **not** quietly trim it to a minimal MVP.
+     to, and feeds **`/design-intake`** (the look). **Default when unspecified:
+     production-grade, not a skeleton.** Carry this bar into `plan` and `implement` —
+     do **not** quietly trim it to a minimal MVP.
    - **Explicit non-goals (MVP)** — what's out of scope for v1
 
    Then **invite a detailed spec + reference material, and pause for it.** Ask the
@@ -70,7 +69,13 @@ Execute in order:
    that allows those sites; fetch **public pages only**; respect ToS/robots;
    **synthesize patterns — don't clone** copy, branding, or designs.
 
-5. **Drive the loop.** Hand the brief (and `research.md` if produced) to
+5. **Establish the look.** Run **`/design-intake`** — import a reference (a
+   screenshot/mockup, Stitch HTML, or Figma; image is the simplest browser-only
+   path) and distill it into `styles/tokens.css` + `styles/components.css` + an
+   approved reference page (per `directives/design.md`). Get the user's sign-off on
+   the look here, before building out — it's cheapest to fix on one page.
+
+6. **Drive the loop.** Hand the brief (and `research.md` if produced) to
    **`/sdd-loop specify`**, then proceed phase by phase
    (`specify → clarify → plan → tasks → analyze → implement`). `/sdd-loop` owns the
    phase mechanics and delegates `analyze`/`implement` to the `pr-review-toolkit`

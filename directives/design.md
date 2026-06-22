@@ -1,306 +1,100 @@
-# UI Design System
+# Design Method
 
 This is the exported design directive for all projects. Import it via:
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 
-The complete design directive for all projects. Import this one file and follow
-it exactly. Structure, type, spacing and components are fixed — nothing to choose
-there. The one choice each project makes is its **color scheme**: pick one of the
-ten in "Color Schemes" below (a one-time setup decision, changeable later). Use
-the parts your screens need and ignore the rest.
+There is **no company-wide look.** Each project owns its own visual identity.
+The only consistency that matters is **page-to-page within a single project** —
+carried by that project's own design tokens and components, established once at
+kickoff and reused everywhere. Across projects, nothing has to match.
 
-**Visual reference:** every token and component below is rendered live at
-https://akyachtsman.github.io/claude.directives/docs/design-system.html
-(browse all demos at https://akyachtsman.github.io/claude.directives/docs/).
+## Establishing your project's look
+At project kickoff, run **`/design-intake`** (the `/kickoff` flow calls it for
+you). It takes a starting point and turns it into your project's reusable design
+contract:
 
-## Source of Truth
-All generated HTML/CSS must follow these rules exactly. The values below are
-authoritative. If a `screen_recording.webm` exists at the repo root AND `ffmpeg`
-is available in the environment, measured values may optionally be refined using:
+1. **Import a look** — fastest first:
+   - **An image** (default, browser-only): attach a screenshot/mockup from Google
+     Stitch, Figma, or anywhere — the `frontend-design` skill reads it.
+   - **Stitch HTML** — pull real markup via Stitch's remote MCP, or paste a download.
+   - **Figma** — read variables/styles via a Figma MCP (for plain HTML, use a
+     descriptive MCP and let Claude author the markup).
+2. **Distill** the import into the project's contract (below) + one approved
+   **reference page** (the look-gate).
+3. **Build** the remaining pages against that contract via `/sdd-loop` — so every
+   page matches page one.
+
+See `docs/design-tooling.md` for generator setup (the `frontend-design` skill and
+wiring Stitch's remote MCP for a browser-only session).
+
+## Tokens & components (the per-project consistency contract)
+Two files, committed in the project repo, are the single source of truth for its
+look:
+- **`styles/tokens.css`** — the brand primitives as CSS custom properties:
+  `--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`. Every rule
+  references `var(--…)`, never a hardcoded value. Change a token → the whole
+  project re-themes.
+- **`styles/components.css`** — the reusable elements (button, card, input,
+  checkbox, header) built once and used on every page, so structure stays
+  consistent page-to-page.
+
+Generators (`frontend-design`, Stitch) are always instructed to **use this
+project's `tokens.css`/`components.css`**, never invent a parallel system. Starter
+versions ship in `templates/styles/` for `/new-repo` to scaffold.
+
+## Stack
+Plain HTML + CSS + vanilla JS, no frameworks/build (per `global.md`). Tokens are
+plain CSS custom properties; components are plain CSS — both drop straight onto
+GitHub Pages. File layout:
 ```
-ffmpeg -i screen_recording.webm -vf fps=2 frames/frame%04d.png
+styles/
+  tokens.css       ← brand primitives (this project's look)
+  components.css    ← reusable components
+  base.css          ← reset + typography (optional)
+  layout.css        ← page structure (optional)
 ```
-Examine each frame and update with exact measured values. Otherwise treat the
-values below as authoritative — do not attempt ffmpeg in remote/web sessions.
-
-## Philosophy
-Two modes share one foundation — the tokens, accessibility, iPad, and contrast rules
-below apply to both:
-- **Default (utility / data apps):** neutral, calm, professional. No loud colors,
-  generous whitespace, every element solid and tappable. Data is the hero — chrome
-  stays out of the way. Use for dashboards, tools, internal apps.
-- **Expressive (consumer-facing / marketing / "elaborate" apps):** the same foundation,
-  **built up** — a display type scale, hero and feature sections, imagery and
-  iconography, richer (still tasteful) motion. Use when the brief asks for an
-  ambitious, polished, multi-section experience. **See "Expressive Mode" below — do
-  not ship the bare utility look for these.**
-
-iPad-first, mouse-friendly desktop, in both.
-
-## Color Schemes
-Structure is fixed; **color is the only thing a scheme changes.** Eleven color
-tokens are swappable; everything else (shadows, type, radius, spacing, component
-shapes) is identical across all schemes.
-
-**Choosing a scheme (downstream).** Set `data-theme` on the root element —
-`<html data-theme="slate-blue">` — and every component re-colors automatically
-(they all read the tokens). **There is no house default:** each project picks one
-scheme at adoption (a one-time decision recorded in its `CLAUDE.md` as
-`Design Theme: <id>`; `/new-repo` forces the pick) and may change it any time
-afterward in its own environment. Until one is set, the neutral "unselected"
-fallback below renders — greyscale accent, deliberately undecided.
-
-Swappable tokens (per scheme): `--color-bg`, `--color-surface`, `--color-border`,
-`--color-border-hover`, `--color-text-primary`, `--color-text-secondary`,
-`--color-accent`, `--color-accent-hover`, `--color-accent-light`,
-`--color-accent-ring`, `--color-danger`.
-
-Theme-independent (identical for every scheme):
-```
---shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)
---shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05)
---shadow-lg: 0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)
-```
-
-### Neutral fallback — `:root`, no scheme chosen
-```
---color-bg:#F5F5F3; --color-surface:#FFFFFF; --color-border:#E2E0DB; --color-border-hover:#C8C5BE;
---color-text-primary:#1A1A1A; --color-text-secondary:#6B6860;
---color-accent:#656562; --color-accent-hover:#51514E; --color-accent-light:#EDEDEB; --color-accent-ring:rgba(101,101,98,0.13);
---color-danger:#C0392B;
-```
-
-### The ten schemes
-Authoritative values — copy the chosen block into `styles/variables.css`. `danger`
-is constant `#C0392B`; `--color-accent-ring` is the accent at ~13% alpha (focus
-ring). Neutrals shift only by a faint temperature; the accent carries the identity.
-All ten render live at the visual reference above.
-```
-/* Forest   */ [data-theme="forest"]     { --color-bg:#EEF4F0; --color-surface:#FFFFFF; --color-border:#DCE6E0; --color-border-hover:#C4D3CA; --color-text-primary:#19211C; --color-text-secondary:#5F6B63; --color-accent:#1F7A45; --color-accent-hover:#186337; --color-accent-light:#E6F2EB; --color-accent-ring:rgba(31,122,69,0.13); --color-danger:#C0392B; }
-/* Blue     */ [data-theme="slate-blue"] { --color-bg:#EDF1F8; --color-surface:#FFFFFF; --color-border:#DAE2EE; --color-border-hover:#BFCBDF; --color-text-primary:#181B22; --color-text-secondary:#5F6573; --color-accent:#1565C0; --color-accent-hover:#114F98; --color-accent-light:#E5EEF8; --color-accent-ring:rgba(21,101,192,0.13); --color-danger:#C0392B; }
-/* Teal     */ [data-theme="teal"]       { --color-bg:#EDF4F2; --color-surface:#FFFFFF; --color-border:#D8E5E1; --color-border-hover:#BFD2CC; --color-text-primary:#172320; --color-text-secondary:#5E6E69; --color-accent:#0D745C; --color-accent-hover:#0A5C49; --color-accent-light:#E2F1ED; --color-accent-ring:rgba(13,116,92,0.13); --color-danger:#C0392B; }
-/* Indigo   */ [data-theme="indigo"]     { --color-bg:#F0EFF9; --color-surface:#FFFFFF; --color-border:#E0DEF0; --color-border-hover:#C8C4E0; --color-text-primary:#1B1A26; --color-text-secondary:#64627A; --color-accent:#4A3FB5; --color-accent-hover:#3B3291; --color-accent-light:#ECEAF8; --color-accent-ring:rgba(74,63,181,0.13); --color-danger:#C0392B; }
-/* Magenta  */ [data-theme="plum"]       { --color-bg:#F8EEF4; --color-surface:#FFFFFF; --color-border:#EEDCE7; --color-border-hover:#DEC2D3; --color-text-primary:#241A20; --color-text-secondary:#6F6068; --color-accent:#A52A78; --color-accent-hover:#84215F; --color-accent-light:#F6E6F0; --color-accent-ring:rgba(165,42,120,0.13); --color-danger:#C0392B; }
-/* Rust     */ [data-theme="terracotta"] { --color-bg:#F8F1EC; --color-surface:#FFFFFF; --color-border:#ECDFD6; --color-border-hover:#DCC8BB; --color-text-primary:#241B16; --color-text-secondary:#6F635A; --color-accent:#A94925; --color-accent-hover:#8E3D1F; --color-accent-light:#F8EAE2; --color-accent-ring:rgba(169,73,37,0.13); --color-danger:#C0392B; }
-/* Charcoal */ [data-theme="charcoal"]   { --color-bg:#F3F3F2; --color-surface:#FFFFFF; --color-border:#E0E0DE; --color-border-hover:#C7C7C4; --color-text-primary:#1A1A1A; --color-text-secondary:#67676A; --color-accent:#36383B; --color-accent-hover:#27282B; --color-accent-light:#ECEDED; --color-accent-ring:rgba(54,56,59,0.13); --color-danger:#C0392B; }
-/* Wine     */ [data-theme="burgundy"]   { --color-bg:#F8EFF0; --color-surface:#FFFFFF; --color-border:#EEDDDF; --color-border-hover:#DEC4C8; --color-text-primary:#241A1C; --color-text-secondary:#6F6063; --color-accent:#9B2D3F; --color-accent-hover:#7C2433; --color-accent-light:#F6E5E8; --color-accent-ring:rgba(155,45,63,0.13); --color-danger:#C0392B; }
-/* Amber    */ [data-theme="bronze"]     { --color-bg:#F7F2E9; --color-surface:#FFFFFF; --color-border:#ECE3D2; --color-border-hover:#DCCFB6; --color-text-primary:#221E14; --color-text-secondary:#6B6453; --color-accent:#8A5A0F; --color-accent-hover:#6F4A0C; --color-accent-light:#F5ECDA; --color-accent-ring:rgba(138,90,15,0.13); --color-danger:#C0392B; }
-/* Cyan     */ [data-theme="deep-cyan"]  { --color-bg:#ECF3F6; --color-surface:#FFFFFF; --color-border:#D8E5EB; --color-border-hover:#BED3DC; --color-text-primary:#162126; --color-text-secondary:#5E6A6F; --color-accent:#0E6E93; --color-accent-hover:#0B5775; --color-accent-light:#E2EFF4; --color-accent-ring:rgba(14,110,147,0.13); --color-danger:#C0392B; }
-```
-
-## Typography
-font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif
---font-xs:   12px
---font-sm:   13px
---font-base: 15px
---font-lg:   17px
---font-xl:   20px
---font-2xl:  24px
-weights: 400 regular, 500 medium, 600 bold only
-
-## Border Radius
---radius-sm: 6px    (inputs, tags)
---radius-md: 10px   (buttons, chips)
---radius-lg: 14px   (cards, grouped sections)
---radius-xl: 20px   (modals, page containers)
-
-## Buttons
-
-### Primary (submit, confirm)
-background:    var(--color-accent)
-color:         #ffffff
-border:        none
-border-radius: var(--radius-md)
-padding:       12px 24px
-font-size:     var(--font-base)
-font-weight:   500
-box-shadow:    var(--shadow-sm)
-transition:    all 0.15s ease
-
-### Primary :hover — RAISE effect
-background:    var(--color-accent-hover)
-box-shadow:    var(--shadow-md)
-transform:     translateY(-1px)
-
-### Primary :active
-transform:     translateY(0)
-box-shadow:    var(--shadow-sm)
-
-### Secondary (cancel, back)
-background:    var(--color-surface)
-color:         var(--color-text-primary)
-border:        1px solid var(--color-border)
-border-radius: var(--radius-md)
-padding:       11px 22px
-box-shadow:    var(--shadow-sm)
-transition:    all 0.15s ease
-
-### Secondary :hover — HIGHLIGHT effect
-background:    var(--color-accent-light)
-border-color:  var(--color-accent)
-color:         var(--color-accent)
-box-shadow:    var(--shadow-md)
-transform:     translateY(-1px)
-
-### iPad minimum tap target
-min-height: 44px
-min-width:  44px
-
-## Cards & Grouped Sections
-background:    var(--color-surface)
-border:        1px solid var(--color-border)
-border-radius: var(--radius-lg)
-padding:       20px 24px
-box-shadow:    var(--shadow-sm)
-margin-bottom: 16px
-
-### Card :hover (interactive cards only)
-box-shadow:   var(--shadow-md)
-border-color: var(--color-border-hover)
-transition:   all 0.15s ease
-
-## Checkboxes & Task Rows
-
-### Checkbox unchecked
-width:         24px
-height:        24px
-border:        2px solid var(--color-border)
-border-radius: 6px
-background:    var(--color-surface)
-transition:    all 0.15s ease
-
-### Checkbox :hover
-border-color: var(--color-accent)
-background:   var(--color-accent-light)
-
-### Checkbox checked
-background:   var(--color-accent)
-border-color: var(--color-accent)
-checkmark:    white SVG icon
-
-### Task row :hover
-background:    var(--color-accent-light)
-border-radius: var(--radius-sm)
-cursor:        pointer
-
-## Form Inputs
-background:    var(--color-surface)
-border:        1px solid var(--color-border)
-border-radius: var(--radius-sm)
-padding:       10px 14px
-font-size:     var(--font-base)
-min-height:    48px  (iPad — prevents iOS auto-zoom)
-transition:    border-color 0.15s ease
-
-### Input :focus
-border-color: var(--color-accent)
-outline:      none
-box-shadow:   0 0 0 3px var(--color-accent-ring)
-
-## Section Headers
-font-size:      var(--font-sm)
-font-weight:    600
-color:          var(--color-text-secondary)
-text-transform: uppercase
-letter-spacing: 0.06em
-margin-bottom:  12px
-padding-bottom: 8px
-border-bottom:  1px solid var(--color-border)
-
-## Spacing Scale
---space-1:  4px
---space-2:  8px
---space-3:  12px
---space-4:  16px
---space-5:  20px
---space-6:  24px
---space-8:  32px
---space-10: 40px
-
-## Animation Rules
-- All transitions: 0.15s ease
-- Hover raise: translateY(-1px) + shadow upgrade
-- Hover highlight: bg tint + border color shift
-- Never use: bounce, spin, flash, heavy keyframes
-- Pair :hover with :focus-visible for keyboard/iPad nav
 
 ## iPad Rules
-- Tap targets: min 44x44px always
-- Input fields: min 48px height (prevents iOS zoom on focus)
-- Checkboxes: min 24x24px
-- Font on inputs: never below 16px
-- Gap between tappable elements: min 8px
-- No hover-only states
+Every project's UI must work on iPad Safari, whatever its look:
+- Tap targets: min **44×44px** always
+- Input fields: min **48px** height; font on inputs **never below 16px** (prevents iOS zoom)
+- Checkboxes: min **24×24px**
+- Gap between tappable elements: min **8px**
+- **No hover-only states** — pair every `:hover` affordance with a tap/focus equivalent
 
-## Layout Rules
-- Group related fields inside a card always
-- Section labels sit above cards, never inside
-- Primary action: bottom-right desktop, full-width mobile/iPad
-- Destructive actions: red only, never styled as primary
-- Loading: opacity 0.6 + cursor not-allowed
+## Accessibility
+Non-negotiable, independent of the chosen look — enforced per-project by the
+contrast guardrail (`templates/scripts/check-contrast.js`, run in CI against
+`styles/tokens.css`):
+- **WCAG AA contrast:** normal text ≥ 4.5:1, large/icon ≥ 3.0:1
+- Visible keyboard focus: pair `:hover` with `:focus-visible`
+- Honor `prefers-reduced-motion`
+- Use `textContent` for DOM text from any backend/user input — never `innerHTML` (per `global.md`)
 
-## Expressive Mode (consumer-facing / marketing / elaborate apps)
-The default system is a calm **floor, not a ceiling.** When a project's brief calls for
-an ambitious, polished, multi-section experience, build richly **on top of** the tokens
-and rules above — never ship a stack of plain cards + a form. Keep every accessibility,
-iPad, and contrast rule; add expressiveness through **scale, composition, and imagery.**
-All in plain HTML/CSS/JS (no frameworks): elaborate is about **craft, not tooling.**
-
-### Display type scale (heroes & section openers — beyond the 24px utility cap)
-```
---font-3xl: 30px   --font-4xl: 40px   --font-5xl: 56px   --font-6xl: 72px
-```
-Display headings: weight 600, tight line-height (1.05–1.15). Body stays at `--font-base`.
-
-### Patterns to compose (from the tokens above)
-- **Hero / landing** — full-width opening: display headline + one-line promise + primary
-  CTA + a supporting visual (inline-SVG illustration, optimized photo, or styled graphic).
-- **Feature / section blocks** — alternating full-bleed sections with generous rhythm
-  (`--space-10`+), each a heading + supporting copy + a visual or icon row. Vary the
-  background (`--color-bg` / `--color-surface` / `--color-accent-light`) for depth.
-- **Iconography** — one consistent icon per concept/section (**inline SVG** — no icon
-  font, no CDN, per the no-runtime-deps rule).
-- **Imagery** — illustration or photography to carry meaning and warmth; optimize assets
-  and lazy-load below the fold.
-- **Multi-page feel** — distinct, fully-designed sections/routes, not one screen of cards.
-
-### Expressive motion (tasteful)
-On top of the 0.15s utility transitions, **scroll-reveal fades / slide-ups and gentle
-parallax are allowed** on marketing surfaces. Still never bounce/spin/flash or anything
-that fights readability. **Always honor `prefers-reduced-motion`.**
-
-### The bar
-An expressive-mode app should read like real product/marketing work — hero, visual
-hierarchy, iconography, imagery, considered empty/loading/success states — judged against
-the **reference targets named in the project brief**, not "does it function."
+## Motion
+- Keep transitions short and calm (≈0.15s ease is a good default)
+- **Never** bounce, spin, flash, or use heavy keyframes that fight readability
+- Always honor `prefers-reduced-motion`
 
 ## Editorial Preferences
+Look-independent copy and formatting rules — apply to every project.
 
 ### Tone & Voice
-Professional but approachable. No jargon. Short sentences.
-Prefer active voice. Avoid "please" and "simply".
-Write for someone who is busy and competent — not a beginner, not a lawyer.
+Professional but approachable. No jargon. Short sentences. Prefer active voice.
+Avoid "please" and "simply". Write for someone busy and competent.
 
 ### UI Copy Rules
-- Buttons: verb-first ("Save Changes", "Export Report", "Cancel" — not "Click to Save")
+- Buttons: verb-first ("Save Changes", "Export Report" — not "Click to Save")
 - Error messages: what happened + what to do ("No data found — try a wider date range")
-- Empty states: explain why, then suggest next action ("No tasks yet — add one above")
+- Empty states: explain why, then the next action ("No tasks yet — add one above")
 - Section headers: noun phrases, no verbs ("Team Activity", not "View Team Activity")
-- Tooltips: one sentence max, no period at end
-- Confirmation dialogs: state the consequence, not the action ("This will permanently delete 3 tasks.")
+- Tooltips: one sentence max, no period
+- Confirmation dialogs: state the consequence ("This will permanently delete 3 tasks.")
 
 ### Number & Data Formatting
-- Percentages: whole numbers only (53%, not 53.2%)
-- Large numbers: K/M suffix above 999 (1.2K not 1,200 · 2.4M not 2,400,000)
-- Dates: "Jun 4" format — not "06/04", not "June 4th", not "2026-06-04"
-- Date ranges: "May 4 – Jun 4" (en-dash, spaces either side)
-- Zero vs. no-data: "0" means measured zero · "—" means not measured / no data available
-- Rates: always pair with context ("8% — last 7 days with data", not just "8%")
-
-## File Structure
-styles/
-  variables.css   ← all CSS vars + the chosen [data-theme] scheme block (set data-theme on <html>)
-  base.css        ← reset + typography
-  components.css  ← buttons, cards, inputs, checkboxes
-  forms.css       ← form layouts
-  layout.css      ← page structure
+- Percentages: whole numbers (53%, not 53.2%)
+- Large numbers: K/M suffix above 999 (1.2K, 2.4M)
+- Dates: "Jun 4" — not "06/04", not "June 4th", not "2026-06-04"
+- Date ranges: "May 4 – Jun 4" (en-dash, spaces both sides)
+- Zero vs no-data: "0" = measured zero · "—" = not measured / no data
+- Rates: always pair with context ("8% — last 7 days with data")

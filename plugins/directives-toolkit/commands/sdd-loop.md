@@ -54,12 +54,12 @@ user explicitly chose otherwise here. Reference back to the spec's requirements;
 do not introduce scope the spec didn't ask for.
 
 **Build to the brief's ambition bar — don't reflexively minimize.** Honor the
-brief's **Ambition & references** and design mode (`design.md`: utility vs
-expressive). Phasing/MVP‑slicing is a *deliberate choice the user makes*, not the
-default — when the brief asks for an elaborate, multi-section, polished experience,
-the plan must deliver that (real pages/sections, the design mode's hero/imagery
-patterns), not a stack of plain cards. "Smallest slice" is for risk, not the
-finish line.
+brief's **Ambition & references** and the project's established look (its
+`styles/tokens.css` + `styles/components.css` from `/design-intake`).
+Phasing/MVP‑slicing is a *deliberate choice the user makes*, not the default —
+when the brief asks for an elaborate, multi-section, polished experience, the plan
+must deliver that (real pages/sections, hero/imagery patterns), not a stack of
+plain cards. "Smallest slice" is for risk, not the finish line.
 
 **Show what you're approving — never gate on an unseen artifact.** When you pause
 for the user at `clarify`, `plan`, or any approval point, **present the artifact in
@@ -100,13 +100,12 @@ browser-only). No API key, no terminal. Append its notes to `analysis.md` under
 `## Cross-check`.
 
 ## Phase 6 — implement  (`/sdd-loop implement <feature>`)
-**Expressive builds — visual mockup first (a look gate).** Before building out a full
-expressive/elaborate app, implement just **1–2 key screens** (e.g. the landing + one
-representative content/detail page) to **real Expressive-Mode quality** — hero, display
-type, an inline-SVG illustration, a section band, motion — then **deploy to Pages (or
-attach a screenshot) and get the user's sign-off on the *look*** before building the
-rest. The look is cheapest to fix on one screen, not the whole app. (Utility-mode apps
-skip this.)
+**Look gate — establish the look before building out.** The project's look comes
+from **`/design-intake`** (`styles/tokens.css` + `styles/components.css` + an
+approved reference page). If it hasn't run yet for an ambitious build, run it
+first. Build the remaining pages against that contract; for an elaborate brief,
+**deploy 1–2 key screens to Pages (or attach a screenshot) and get the user's
+sign-off on the *look*** before doing the rest — cheapest to fix on one screen.
 
 Then execute `tasks.md` against `plan.md`, task by task — **delegate to the existing
 pipeline, don't duplicate it.** Implement each task, then run the
@@ -115,13 +114,13 @@ pipeline, don't duplicate it.** Implement each task, then run the
 (`/commit-chk`) and PR lifecycle from the global directive. Check tasks off in
 `tasks.md` as they land.
 
-**Polish pass before "done" (expressive / elaborate builds).** "Passes tests" is
-not the finish line — the bar is the brief's ambition + reference targets. Before
-calling the feature done, meet `design.md`'s **Expressive Mode**: a real hero/landing,
-strong visual hierarchy (display type scale), iconography/imagery, considered
-empty/loading/success states, and tasteful motion (`prefers-reduced-motion` honored)
-— judged against the named references, not "does it function." Utility-mode apps skip
-this and stay calm by design.
+**Polish pass before "done" (elaborate builds).** "Passes tests" is not the finish
+line — the bar is the brief's ambition + reference targets. Before calling the
+feature done, hold it to the project's established look and `design.md`'s universal
+craft: consistent use of `styles/tokens.css`/`components.css`, strong visual
+hierarchy, considered empty/loading/success states, accessibility (WCAG AA,
+`:focus-visible`), and tasteful motion (`prefers-reduced-motion` honored) — judged
+against the named references, not "does it function."
 
 ## status  (`/sdd-loop` with no phase)
 List each `specs/*/` feature and which artifacts exist, to show where each

@@ -61,6 +61,12 @@ jobs:
             exit 1
           fi
 
+      # ── Contrast guardrail ───────────────────────────────────────────────────
+      # WCAG AA check against styles/tokens.css (this project's design tokens).
+      # Exits with a notice (no failure) until /design-intake creates tokens.css.
+      - name: Contrast guardrail (WCAG AA)
+        run: node .github/scripts/check-contrast.js
+
   ui-changes:
     name: Detect UI-relevant changes
     runs-on: ubuntu-latest

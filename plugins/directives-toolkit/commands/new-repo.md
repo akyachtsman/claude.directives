@@ -40,10 +40,8 @@ Execute in order:
    Write it as `CLAUDE.md`, drop the scaffold's HTML comment, fill in the repo
    name and live URL from context (`APP_URL` variable / repo name), and leave
    the [bracketed] sections as placeholders for the human to complete
-   post-merge — including **Design Theme**, the project's one-time color-scheme
-   choice from design.md's "Color Schemes" (flag it for the human; nothing
-   renders branded until it is set and `data-theme` is applied to the app's
-   root `<html>`).
+   post-merge. The project's **look is established later by `/design-intake`**
+   (per `directives/design.md`) — there is no shared company theme to pick.
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
    copy all eight workflow files from `claude.directives/templates/workflows/`
@@ -63,14 +61,21 @@ Execute in order:
    only touch its `workflows:` list if you rename their `name:` values.
 
    **Scheduled-job scripts.** Copy `claude.directives/templates/scripts/`
-   (`notify-email.js`, `notify-task.js`, `package.json`) into `.github/scripts/`,
-   then run `npm install` there and **commit** the generated `package-lock.json`
-   (`cron-notify.yml`'s `cache:` step needs `.github/scripts/package-lock.json`,
-   same policy as the Playwright kit). `notify-task.js` ships as a starter that
-   emails via `notify-email.js`; it **guards on the SMTP config and emits a
-   notice if it is missing**, so the scheduled job never crashes cryptically. The
-   email secrets are **mandatory repo setup** (NEW-REPO-USER-INSTRUCTIONS Step 1);
-   the project replaces the task body with its real notification.
+   (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `package.json`) into
+   `.github/scripts/`, then run `npm install` there and **commit** the generated
+   `package-lock.json` (`cron-notify.yml`'s `cache:` step needs
+   `.github/scripts/package-lock.json`, same policy as the Playwright kit).
+   `notify-task.js` ships as a starter that emails via `notify-email.js`; it
+   **guards on the SMTP config and emits a notice if it is missing**, so the
+   scheduled job never crashes cryptically. The email secrets are **mandatory repo
+   setup** (NEW-REPO-USER-INSTRUCTIONS Step 1); the project replaces the task body
+   with its real notification. `check-contrast.js` is the WCAG guardrail `qa.yml`
+   runs against `styles/tokens.css`.
+
+   **Design starter.** Copy `claude.directives/templates/styles/` (`tokens.css`,
+   `components.css`) into `styles/`. These are neutral starters that pass the
+   contrast guardrail as-is; `/design-intake` replaces them with the project's
+   actual look (per `directives/design.md`).
 
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains
@@ -127,7 +132,8 @@ Execute in order:
 
 10. **Report to the human.** Summarize: files/dirs created, the PR link, and
     exactly which placeholder sections in `CLAUDE.md` still need human input
-    (Project name, Stack, Application Architecture, **Design Theme** — the
-    one-time color-scheme pick, security constraints, coding standards) before
-    the PR is merged. To start a spec-driven build of the app from here, point the
-    human at **`/kickoff`** (it gathers the product brief and drives `/sdd-loop`).
+    (Project name, Stack, Application Architecture, security constraints, coding
+    standards) before the PR is merged. The project's **look** is set later via
+    `/design-intake` (or `/kickoff`, which calls it). To start a spec-driven build
+    from here, point the human at **`/kickoff`** (it gathers the brief, establishes
+    the look via `/design-intake`, and drives `/sdd-loop`).

@@ -9,7 +9,7 @@ on a `sleep` loop — surface the result on its own.
 
 **Apply this automatically whenever a change updates the Pages site** — any edit to
 a file GitHub Pages serves (root `index.html`, `docs/index.html`,
-`docs/design-system.html`, other served HTML/CSS/assets) or to the Pages
+`docs/repo-map.html`, other served HTML/CSS/assets) or to the Pages
 configuration. Don't wait to be asked: if the change you just made will change
 what `*.github.io` serves, run these steps and report when it's live.
 

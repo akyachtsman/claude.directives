@@ -29,6 +29,10 @@ The AI review steps (the official `pr-review-toolkit` code review, the `/securit
 
 Do not edit the templates in place in `claude.directives` — copy to the target project, then customize.
 
+> This procedure is the **static tier** (GitHub Pages). For a **production-tier**
+> project (React + Next.js + Supabase — `global.md` → *Hosting & Deployment*),
+> Vercel owns build + deploy; see **Production tier — Vercel** at the end.
+
 ## Prerequisites
 
 - Target repo exists on GitHub with source files committed to `main`
@@ -246,3 +250,28 @@ Required repository variables:
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret
 - [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions
 - [ ] At least one successful run of each workflow confirmed
+
+---
+
+## Production tier — Vercel
+
+For a project on the **production tier** (React + Next.js + Supabase — see
+`global.md` → *Hosting & Deployment*), **Vercel owns the build and deploy**; the
+Pages-specific steps above (Step 6–7 enable Pages, Step 9c `pages-monitor`) do not
+apply. Development stays browser-only — Vercel builds on push, nothing local.
+
+1. **Scaffold** from `templates/nextjs-app/` (or graduate an existing static app
+   into it). The design contract (`tokens.css` + `components.css`) carries over.
+2. **Import to Vercel:** *Add New → Project →* import the GitHub repo. Vercel
+   auto-detects Next.js and builds on every push — PRs get preview URLs, `main`
+   deploys to production.
+3. **Environment variables** (*Vercel → Settings → Environment Variables*) — add
+   the Supabase keys from `templates/nextjs-app/.env.example`:
+   `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (client-safe) and
+   `SUPABASE_SERVICE_ROLE_KEY` (mark **secret**; never `NEXT_PUBLIC_*`). RLS stays
+   on (`directives/data.md`).
+4. **CI is otherwise unchanged:** `qa.yml` static checks + `ci-monitor` /
+   `codex-monitor` still run on the repo. Point `qa-live.yml`'s `APP_URL` at the
+   Vercel production URL (or a stable preview) so the live Playwright suite runs
+   against the real deploy. `pages-monitor.yml` is replaced by Vercel's own deploy
+   status — drop it for this tier.

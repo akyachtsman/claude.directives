@@ -83,9 +83,14 @@ A directive repo must pass its own CI before it can be trusted downstream.
   against the local working tree), path-existence check, required-section check,
   workflow YAML validation, a secret-scan-pattern sync check (the canonical regex
   stays byte-identical across `global.md` and the qa workflow templates), and a
-  paired-file diff check, plus a warn-only external-link job. (The old design-theme
-  parity + contrast checks were retired with the fixed design system — design is
-  now per-project; the contrast guardrail ships in `templates/scripts/` for projects.)
+  paired-file diff check, plus a warn-only external-link job. It also runs a
+  **Playwright UI test** (`Repo Map UI`) — this repo dogfooding its own exported
+  UI-testing standard (`test.md` / `templates/ui-tests`) on `docs/repo-map.html`,
+  the only interactive Pages artifact: a headless Chromium asserts the map
+  renders and that clicking a box fades no box and dragging selects no text.
+  (The old design-theme parity + contrast checks were retired with the fixed
+  design system — design is now per-project; the contrast guardrail ships in
+  `templates/scripts/` for projects.)
 - `ci-monitor.yml` — fires when `QA — Directive Validation` completes; on failure
   opens/updates a deduplicated `ci-failure` tracking issue.
 - `codex-monitor.yml` — fires on Codex PR reviews; adds a `codex-flagged` label
@@ -125,9 +130,13 @@ node .github/scripts/check-secret-scan.js
 node .github/scripts/check-links.js --internal   # set GITHUB_REPOSITORY + GITHUB_TOKEN
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages monitor template pairs)
+npx html-validate docs/repo-map.html                        # when the map changed
+node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 ```
 Confirm `git status` shows no unintended changes. If any check fails, fix it
-before pushing rather than pushing and fixing on the PR.
+before pushing rather than pushing and fixing on the PR. The Playwright UI
+check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
+local skip is fine for non-map changes.
 
 ## Escalation rules
 Stop and ask the user before:

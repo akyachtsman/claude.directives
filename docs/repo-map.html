@@ -19,6 +19,7 @@
   .edge text{paint-order:stroke;stroke:#fff;stroke-width:3px}
   .hit{outline:none}
   .match rect:first-child{stroke-width:4 !important}
+  .node.focused rect:first-child{stroke-width:4}
 .legend{position:absolute;right:12px;bottom:12px;background:rgba(255,255,255,.94);border:1px solid #E2E0DB;border-radius:10px;padding:8px 11px;box-shadow:0 2px 8px rgba(0,0,0,.08);max-width:250px;font-size:12px;color:#1A1A1A}
   .legend summary{cursor:pointer;font-weight:600;letter-spacing:.02em}
   .legend summary::-webkit-details-marker{display:none}
@@ -62,7 +63,7 @@ function up(e){ptrs.delete(e.pointerId);if(ptrs.size<2)pdist=0;if(ptrs.size===0)
 wrap.addEventListener('pointerup',up);wrap.addEventListener('pointercancel',up);
 // focus / isolate
 function clearFocus(){nodes.forEach(n=>n.classList.remove('dim'));edges.forEach(ed=>ed.classList.remove('dim'))}
-function focus(id){const keep=new Set([id]);edges.forEach(ed=>{const a=ed.dataset.a,b=ed.dataset.b;if(a===id||b===id){keep.add(a);keep.add(b);ed.classList.remove('dim')}else ed.classList.add('dim')});nodes.forEach(n=>n.classList.toggle('dim',!keep.has(n.dataset.id)))}
+function focus(id){edges.forEach(ed=>{ed.classList.toggle('dim',!(ed.dataset.a===id||ed.dataset.b===id))})}
 function toggleFocus(n){if(n.classList.contains('focused')){n.classList.remove('focused');clearFocus()}else{nodes.forEach(x=>x.classList.remove('focused'));n.classList.add('focused');focus(n.dataset.id)}}
 // drag a box to move it; a click (no movement) still isolates its links
 let drag=null;

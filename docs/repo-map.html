@@ -10,12 +10,12 @@
   #search{margin-left:auto;padding:7px 11px;border:1px solid #E2E0DB;border-radius:8px;font-size:13px;min-width:200px}
   .btns button{padding:6px 11px;border:1px solid #E2E0DB;background:#fff;border-radius:8px;cursor:pointer;font-size:13px}
   .btns button:hover{background:#EDEDEB}
-  #wrap{position:absolute;top:54px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;touch-action:none}
+  #wrap{position:absolute;top:54px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
   #wrap.grabbing{cursor:grabbing}
   svg{width:100%;height:100%;display:block}
   .node{cursor:pointer} .node rect{transition:opacity .15s}
   .node:hover rect:first-child{stroke-width:3.5}
-  .dim{opacity:.13} .edge.dim{opacity:.07}
+  .dim{opacity:.5} .edge.dim{opacity:.2}
   .edge text{paint-order:stroke;stroke:#fff;stroke-width:3px}
   .hit{outline:none}
   .match rect:first-child{stroke-width:4 !important}

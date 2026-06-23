@@ -10,9 +10,14 @@ verdict. Read-only — do NOT modify files. Execute in order:
 2. Branch and git health — Report the current branch (compare against the
    branch policy in CLAUDE.md if defined) and flag any uncommitted changes or
    merge conflicts against the default branch.
-3. CI monitor status — Check for any open CI-failure or reviewer-flagged
-   tracking issues/PRs and list them. Also flag any open issues tagged @claude
-   with no linked PR yet.
+3. CI & deploy status — Check for any open CI-failure or reviewer-flagged
+   tracking issues/PRs and list them (a broken deploy surfaces here as a
+   `pages-deploy-failure` issue). Also flag any open issues tagged @claude
+   with no linked PR yet. For a deploy-backed project (e.g. Pages), confirm the
+   live site is serving the latest commit: match the deploy run's `head_sha` to
+   `git rev-parse HEAD`, and report the live URL + last deploy time. Verify by
+   `head_sha` + `conclusion` — a live-URL 200 only where the session's network
+   policy allows that host (per the `update-pages` caveat).
 4. Validation gates — Detect and run the repo's configured validation
    commands (from CLAUDE.md "Required Commands" or equivalent: tests, lint,
    syntax/schema checks) and report results.

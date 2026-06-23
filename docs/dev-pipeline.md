@@ -27,7 +27,7 @@ importing only browser-only-safe *methods*:
 | 4 | **Plan-gate** | `/sdd-loop analyze` | exists | `analysis.md` |
 | 5 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
 | 6 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
-| 7 | **Ship** | `push-gate` hook, `update-pages`, `/live-chk`, `ci/pages-monitor` | exists — gated | `ship.md` |
+| 7 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | `ship.md` |
 | 8 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
@@ -94,7 +94,7 @@ two-tier CI (`qa.yml` static = free, `qa-live.yml`/Playwright = gated) already
 mirrors gstack's tiered testing; the `claude -p` cost-capped eval harness is
 **rejected** (CLI/API-billed).
 
-### 7 · Ship — `push-gate` + `update-pages` + `/live-chk` *(exists — gated)*
+### 7 · Ship — `push-gate` + `update-pages` + `pages-monitor` *(exists — gated)*
 **Method imported:** gstack **Review Readiness staleness gate** —
 `pr-readiness-reviewer` blocks "ready" unless `review.md` is recent and clean.
 Our `push-gate` hook + PR lifecycle + `pages-monitor` already cover gstack's

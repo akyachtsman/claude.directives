@@ -23,7 +23,7 @@ importing only browser-only-safe *methods*:
 | # | Phase | Command / skill / agent | Status | Hand-off artifact |
 |---|-------|-------------------------|--------|-------------------|
 | 0 | **Think** | `/diagnose` | exists | `brief.md` |
-| 1–3 | **Plan** | `/sdd-loop` (`/kickoff`, `/opt-3`) | exists — gated | `spec.md → plan.md → tasks.md` |
+| 1–3 | **Plan** | `/sdd-loop` (`/kickoff`) | exists — gated | `spec.md → plan.md → tasks.md` |
 | 4 | **Plan-gate** | `/sdd-loop analyze` | exists | `analysis.md` |
 | 5 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
 | 6 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |

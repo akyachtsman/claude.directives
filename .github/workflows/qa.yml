@@ -68,3 +68,25 @@ jobs:
         run: node .github/scripts/check-links.js --external
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Dogfood the exported UI-testing standard (test.md / templates/ui-tests) on
+  # this repo's own interactive Pages artifact, docs/repo-map.html. Blocking:
+  # the map is a static, self-contained file with no backend, so the run is
+  # deterministic (unlike the downstream local-server UI tests).
+  ui-tests:
+    name: Repo Map UI (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright + Chromium
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Repo map UI checks
+        run: node .github/scripts/check-repo-map-ui.js

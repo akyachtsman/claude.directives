@@ -43,9 +43,13 @@ project's `tokens.css`/`components.css`**, never invent a parallel system. Start
 versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack
-Plain HTML + CSS + vanilla JS, no frameworks/build (per `global.md`). Tokens are
+Plain HTML + CSS + vanilla JS, no *local* build (per `global.md`). Tokens are
 plain CSS custom properties; components are plain CSS — both drop straight onto
-GitHub Pages. File layout:
+GitHub Pages, **and carry over unchanged if the project graduates to the
+production tier** (React / Next.js on Vercel): `tokens.css` is imported in the
+Next app's global stylesheet, `components.css` becomes the React components'
+styles. The design contract is framework-agnostic by design — never rebuild it
+per framework. File layout:
 ```
 styles/
   tokens.css       ← brand primitives (this project's look)

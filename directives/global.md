@@ -14,8 +14,13 @@ every project unless explicitly overridden at repo level.
 ## Behavior Rules
 - Always read CLAUDE.md and any imported directive URLs before starting any task
 - Follow the design directive's universal craft rules (iPad, accessibility, motion, copy); each project's *look* is its own — established via `/design-intake`, not a shared company theme
-- No frameworks, no npm, no build steps unless explicitly asked
-- Plain HTML + JS is the default stack
+- Default stack: plain HTML + CSS + vanilla JS with **no *local* build** —
+  development is browser-only (no terminal), so nothing may require a build on
+  your machine. This is a **dev-environment** rule, not a deployment ceiling.
+- Frameworks and build tooling are a deliberate, per-project **production-tier**
+  choice (React / Next.js on Vercel), where the build runs **remotely on `git
+  push`** — never locally; see *Hosting & Deployment*. Don't add a framework to a
+  static site that doesn't need one.
 - All code must work on iPad Safari
 - Use `textContent` for all DOM text insertion — never `innerHTML` with data from any backend or user input
 - For non-trivial features, separate WHAT from HOW — specify and clarify intent before planning a stack, and refine in phases rather than one-shotting (run `/sdd-loop`; the imported directives are its constitution)
@@ -37,6 +42,9 @@ index.html       ← complete single-page app
   scripts/
     ui-tests/
 ```
+> This is the **static-tier** layout. A production-tier (Next.js) project is
+> scaffolded from the Next starter template instead — `app/` router,
+> `package.json`, Next config — see *Hosting & Deployment*.
 
 ## Backend
 - All backend/data rules — the provider, connection config, keys, RLS, and MCP
@@ -61,7 +69,7 @@ index.html       ← complete single-page app
   after each squash-merge — recycling branches tangles lineage and can attach
   the wrong diff to a PR.
 - Subscribe to PR activity; fix CI before marking ready
-- GitHub Pages for project web apps only
+- Deploy per the project's chosen tier (see *Hosting & Deployment*) — GitHub Pages by default
 
 ## Repository Scope
 Two different scopes — never conflate them:
@@ -79,9 +87,23 @@ Two different scopes — never conflate them:
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk`
   runs the same verification at session start.
 
-## Hosting
-- GitHub Pages only
-- No Vercel, no Netlify, no external hosting
+## Hosting & Deployment
+The **dev environment is the same for both tiers** — browser-only, no *local*
+build. The **deployment target** is a per-project choice:
+
+- **Static tier (default):** GitHub Pages, branch-source. Plain HTML/CSS/JS — the
+  app may still be dynamic via client-side Supabase + RLS. No build; the push *is*
+  the deploy. Use for prototypes, previews, and apps that don't need a server.
+- **Production tier (explicit, per-project):** React + **Next.js on Vercel**, with
+  **Supabase** as the backend. Vercel runs `next build` on every `git push` — so
+  development stays browser-only (no local build) — and adds server-side
+  rendering / data, edge delivery, and image optimization for data-backed apps at
+  scale. The design contract carries over unchanged: `styles/tokens.css` +
+  `styles/components.css` drop straight into the Next app.
+
+Choose the tier deliberately — stay static until the project actually needs the
+production tier (auth, server-rendered or per-user data, real scale). No other
+hosts (Netlify, etc.) without explicit owner sign-off.
 
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo

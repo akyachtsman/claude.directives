@@ -44,7 +44,7 @@ Under `docs/internal/`.
 |------|------------|
 | `repo-map.html` | Interactive map of the whole repo — zoom/pan/search, self-contained (no CDN) |
 | `commands.html` | Commands reference — all 17 toolkit slash commands by pipeline phase, what each does and when to use it |
-| `react-demo.html` | Live browser-only React button (CDN React + Babel, no build) — demos the production-tier preview technique. Dev-grade; needs internet to load the CDN |
+| `react-demo.html` | Live browser-only React button (vendored React, no build, no CDN) — demos the production-tier preview technique; pairs with `vendor/` |
 | `index.html` | Redirect so `/docs/` resolves to the site root gallery |
 
 > Fill-in **templates** (project CLAUDE.md scaffold, PR checklist, test plan,

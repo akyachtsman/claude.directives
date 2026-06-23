@@ -61,6 +61,24 @@ never ship `USING (true)` write policies instead of this.
   brute-forceable through the login function, public objects reachable by
   exact URL). RLS cannot rate-limit — say so rather than pretend.
 
+## Server-side access (Next.js / production tier)
+When a project graduates to the production tier (Next.js on Vercel — see
+`global.md` → *Hosting & Deployment*), Supabase gains a **server side**; the rules
+above still hold, plus:
+- **Client components / the browser** — anon (publishable) key + RLS only, exactly
+  as the static-app pattern above. RLS stays the enforcement boundary.
+- **Server components, route handlers, server actions** — may use the
+  **service-role** key, but it must be a **server-only environment variable**
+  (e.g. a Vercel secret, *not* a `NEXT_PUBLIC_*` var), never imported into client
+  code or shipped in the bundle. RLS stays enabled even server-side; reach for the
+  service role only for genuinely privileged operations.
+- **The `login_with_pin` / `SECURITY DEFINER` pattern above is the no-server
+  baseline.** With a Next server you can additionally move privileged logic into
+  server actions/route handlers — but never relax RLS because "the server checks it."
+- Keep secrets out of the repo: server-only keys live in Vercel/CI env vars, the
+  anon key + `DB_URL` stay as the repo variable; the `.claude/mcp.json` rule is
+  unchanged.
+
 ## Escalation
 - Stop and ask before disabling RLS on any table.
 - Stop and ask before using the service-role key anywhere a browser can reach it.

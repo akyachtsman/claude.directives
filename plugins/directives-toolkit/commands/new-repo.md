@@ -42,6 +42,11 @@ Execute in order:
    the [bracketed] sections as placeholders for the human to complete
    post-merge. The project's **look is established later by `/design-intake`**
    (per `directives/design.md`) — there is no shared company theme to pick.
+   Record the **deployment tier** in CLAUDE.md's Stack section. The steps below
+   scaffold the **static tier** (single-page `index.html` on GitHub Pages — the
+   default). For the **production tier** (React + Next.js on Vercel + Supabase, per
+   `global.md` → *Hosting & Deployment*), lay down the `templates/nextjs-app/` Next
+   starter instead and deploy on Vercel (`docs/cicd-setup.md` → *Production tier — Vercel*).
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
    copy all eight workflow files from `claude.directives/templates/workflows/`

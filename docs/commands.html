@@ -23,6 +23,9 @@
   .cmd{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;
        box-shadow:0 1px 2px rgba(0,0,0,.04)}
   .name{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-weight:700;font-size:15px;color:var(--green)}
+  .run{color:var(--green);font-weight:700;font-family:initial;cursor:help}
+  .key{color:var(--muted);font-size:13px;margin:0 0 24px}
+  .key .run{font-size:14px}
   .what{margin-top:5px}
   .when{margin-top:5px;color:var(--muted);font-size:14.5px}
   .when b{color:var(--slate);font-weight:600;font-variant:all-small-caps;letter-spacing:.03em}
@@ -36,6 +39,7 @@
   <h1>directives-toolkit — commands</h1>
   <p class="sub">The 17 slash commands in the directives-toolkit plugin, grouped by development-pipeline phase (Think → Plan → Build → Review → Test → Ship → Reflect), plus cross-cutting helpers.</p>
   <p class="how">Type <code>/&lt;name&gt;</code> to run a command. For the always-current menu read live from the installed plugin, run <code>/my-list</code>. Auto-skills (update-pages, scope-chk, doc-comp) fire on their own and aren't listed here.</p>
+  <p class="key"><span class="run">↻</span> marks the 4 commands the pipeline also runs — <code>/kickoff</code> and/or <code>/sdd-loop</code> invoke them. The other 13 are user-invoked; none are code-only.</p>
 
   <section>
     <h2>Think</h2>
@@ -57,7 +61,7 @@
         <div class="when"><b>When</b> — starting a brand-new app from an idea.</div>
       </div>
       <div class="cmd">
-        <div class="name">/sdd-loop</div>
+        <div class="name">/sdd-loop <span class="run" title="Also run by the pipeline — /kickoff drives it; it also calls /design-intake and /commit-chk">↻</span></div>
         <div class="what">The Spec-Driven Development loop: specify → clarify → plan → tasks → analyze → implement, each step emitting a Markdown artifact that feeds the next, with the inherited directives as the constitution.</div>
         <div class="when"><b>When</b> — building any feature methodically once the brief exists.</div>
       </div>
@@ -73,12 +77,12 @@
     <h2>Build</h2>
     <div class="cmds">
       <div class="cmd">
-        <div class="name">/new-repo</div>
+        <div class="name">/new-repo <span class="run" title="Also run by the pipeline — /kickoff invokes it to scaffold">↻</span></div>
         <div class="what">Bootstraps a brand-new project repo from scratch — scaffold, <code>CLAUDE.md</code>, CI workflows, plugin enablement.</div>
         <div class="when"><b>When</b> — the first session in a repo that has no <code>CLAUDE.md</code> yet (fires automatically then).</div>
       </div>
       <div class="cmd">
-        <div class="name">/design-intake</div>
+        <div class="name">/design-intake <span class="run" title="Also run by the pipeline — /kickoff and /sdd-loop invoke it (the look-gate)">↻</span></div>
         <div class="what">Turns a starting look (image / Stitch HTML / Figma) into the project's reusable design contract — <code>styles/tokens.css</code> + <code>styles/components.css</code> + an approved reference page — then hands off to <code>/sdd-loop</code>.</div>
         <div class="when"><b>When</b> — at kickoff, or any time you want to establish or re-theme the visual identity.</div>
       </div>
@@ -100,7 +104,7 @@
     <h2>Test</h2>
     <div class="cmds">
       <div class="cmd">
-        <div class="name">/commit-chk</div>
+        <div class="name">/commit-chk <span class="run" title="Also run by the pipeline — /sdd-loop's pre-push gate; the push-gate hook mirrors it">↻</span></div>
         <div class="what">Manually runs the pre-push verification — tests, lint, the CI checks — before you commit.</div>
         <div class="when"><b>When</b> — as a backup to force the local gate before pushing.</div>
       </div>

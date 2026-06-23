@@ -79,6 +79,26 @@ the `/sdd-loop` build — answering its prompts is all you do.
 *Just want a bare scaffold, no build yet? Run `/new-repo` instead — it sets up
 `CLAUDE.md`, CI, and the test kit, and stops there.*
 
+#### When does the UI design happen?
+**Inside `/kickoff` — after the repo is scaffolded, not before.** You don't need
+to design anything (in Stitch or elsewhere) up front to create the repo. The flow:
+
+1. `/kickoff` asks for the brief first — including **"how elaborate, and which 1–2
+   apps should it match in polish?"** That's where you seed the look, in words.
+2. It scaffolds the repo (neutral starter `styles/tokens.css` + `components.css`).
+3. It runs **`/design-intake`**, which establishes the actual look: you **import a
+   reference**, it distills that into the project's `tokens.css` + `components.css`
+   + one **reference page**, and you **sign off on that page (the look-gate)**
+   before any other page is built.
+4. `/sdd-loop` then builds the rest against that contract, so every page matches.
+
+**Stitch is optional, and used *during* step 3 — not a prerequisite.** Bring the
+look however you like: the simplest browser-only path is to **attach an image**
+(a screenshot/mockup from Stitch, Figma, Dribbble, or a sketch); or wire Stitch's
+remote MCP for higher-fidelity HTML; or bring nothing and let `/design-intake`
+propose a direction from 2–3 taste questions. Re-run `/design-intake` anytime to
+re-theme. Details: `directives/design.md` and `docs/design-tooling.md`.
+
 ---
 
 ### Scheduled email notifications (standard)

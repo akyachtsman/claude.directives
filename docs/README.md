@@ -43,6 +43,7 @@ Under `docs/internal/`.
 | File | What it is |
 |------|------------|
 | `repo-map.html` | Interactive map of the whole repo — zoom/pan/search, self-contained (no CDN) |
+| `commands.html` | Commands reference — all 17 toolkit slash commands by pipeline phase, what each does and when to use it |
 | `index.html` | Redirect so `/docs/` resolves to the site root gallery |
 
 > Fill-in **templates** (project CLAUDE.md scaffold, PR checklist, test plan,

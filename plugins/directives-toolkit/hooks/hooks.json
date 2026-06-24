@@ -10,7 +10,7 @@
           },
           {
             "type": "command",
-            "command": "in=$(cat); msg=''; if echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*CLAUDE\\.md\"'; then msg='CLAUDE.md changed - the copy injected at session start is now stale; re-read the file before relying on project instructions.'; elif echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*\\.claude/(settings\\.json|agents/)'; then msg='Hook/agent configuration changed - it loads only at session start; takes effect next session, do not assume it is live.'; fi; if [ -n \"$msg\" ]; then echo \"$msg\" >&2; exit 2; fi; exit 0"
+            "command": "in=$(cat); msg=''; if echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*CLAUDE\\.md\"'; then msg='CLAUDE.md changed - the copy injected at session start is now stale; re-read the file before relying on project instructions.'; elif echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*(\\.claude/settings\\.json|plugins/directives-toolkit/agents/)'; then msg='Hook/agent configuration changed - it loads only at session start; takes effect next session, do not assume it is live.'; fi; if [ -n \"$msg\" ]; then echo \"$msg\" >&2; exit 2; fi; exit 0"
           }
         ]
       }

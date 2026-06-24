@@ -1,8 +1,10 @@
 # Design migration — from a fixed company system to per-project generative design
 
-> **Status: proposed spec, for review.** Nothing is deleted or rewritten until
-> this plan is approved. Execution is staged (Phase 1 additive → Phase 2 cutover)
-> so CI stays green throughout.
+> **Status: implemented — kept as the migration record.** The cutover is done
+> (`design.md` is now a thin per-project method, `/design-intake` ships, the fixed
+> 10-theme system + `design-system.html` are retired). This doc is retained as the
+> historical plan that staged it (Phase 1 additive → Phase 2 cutover, CI green
+> throughout); see `dev-pipeline.md` → "Design — per-project generative (done)".
 
 ## Why
 The current `directives/design.md` is a **fixed, company-wide** design system (10

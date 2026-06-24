@@ -43,7 +43,7 @@ Under `docs/internal/`.
 | File | What it is |
 |------|------------|
 | `repo-map.html` | Interactive map of the whole repo — zoom/pan/search, self-contained (no CDN) |
-| `commands.html` | Commands reference — all 17 toolkit slash commands by pipeline phase, what each does and when to use it |
+| `commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
 | `react-demo.html` | Live browser-only React button (vendored React, no build, no CDN) — demos the production-tier preview technique; pairs with `vendor/` |
 | `index.html` | Demo gallery served at `/docs/` — links to the repo map, React preview, and commands reference (same list as the site-root `../index.html`) |
 

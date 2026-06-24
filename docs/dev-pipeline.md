@@ -25,10 +25,11 @@ importing only browser-only-safe *methods*:
 | 0 | **Think** | `/diagnose` | exists | `brief.md` |
 | 1–3 | **Plan** | `/sdd-loop` (`/kickoff`) | exists — gated | `spec.md → plan.md → tasks.md` |
 | 4 | **Plan-gate** | `/sdd-loop analyze` | exists | `analysis.md` |
-| 5 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
-| 6 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
-| 7 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | `ship.md` |
-| 8 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
+| 5 | **Build** | `/design-intake` (look-gate) · `/sdd-loop` implement | exists — gated | `design.md` + built pages |
+| 6 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
+| 7 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
+| 8 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | `ship.md` |
+| 9 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
 ## The artifact chain
@@ -44,10 +45,11 @@ specs/<slug>/
   plan.md        ← 2 plan + one adaptive plan-review (HOW)
   tasks.md       ← 3 tasks (2–5 min each)
   analysis.md    ← 4 analyze (cross-artifact consistency gate)
-  review.md      ← 5 review findings (AUTO-FIX vs ASK)
-  qa.md          ← 6 test report (verification-before-completion)
-  ship.md        ← 7 ship record (PR URL + deploy SHA + live-check)
-learnings.jsonl  ← 8 Reflect (repo-root, append-only, auto-consulted)
+  design.md      ← 5 Build (/design-intake look-gate → tokens.css + components.css)
+  review.md      ← 6 review findings (AUTO-FIX vs ASK)
+  qa.md          ← 7 test report (verification-before-completion)
+  ship.md        ← 8 ship record (PR URL + deploy SHA + live-check)
+learnings.jsonl  ← 9 Reflect (repo-root, append-only, auto-consulted)
 ```
 
 `benefits-from` frontmatter declares each edge so the chain is machine-checkable
@@ -76,7 +78,18 @@ Cross-artifact consistency. **Method imported:** gstack's **verification gate** 
 every finding must quote the motivating code or be suppressed; split **AUTO-FIX
 vs ASK**.
 
-### 5 · Review — official plugins + monitors *(delegated — do not rebuild)*
+### 5 · Build — `/design-intake` + `/sdd-loop` implement *(exists — gated)*
+Where the chosen look becomes a reusable contract and the pages get built.
+`/design-intake` (per `design.md`) imports a look — image / Stitch / Figma, or a
+first direction generated from a few taste questions — distills it to
+`styles/tokens.css` + `styles/components.css` + an approved reference page (the
+**look-gate**: sign off before building out, since the look is cheapest to fix on
+one page), and writes `specs/<slug>/design.md`. `/sdd-loop` then implements the
+remaining tasks against that contract so every page matches. Browser-only: plain
+semantic HTML/CSS, no framework. Non-UI work skips the design-intake half and
+goes straight to implement.
+
+### 6 · Review — official plugins + monitors *(delegated — do not rebuild)*
 This is already gstack's multi-lens + Codex second opinion, inherited:
 `pr-review-toolkit` (code-reviewer, silent-failure-hunter, type-design-analyzer,
 pr-test-analyzer), the built-in `/code-review` and `/security-review`, and
@@ -85,7 +98,7 @@ import:** superpowers `receiving-code-review` **anti-sycophancy** rule (no
 "You're absolutely right!", restate the requirement, push back with technical
 reasoning) — added as a review-handling directive.
 
-### 6 · Test — `qa-pipeline` / `test-verifier` / `ui-tester` *(exists — gated)*
+### 7 · Test — `qa-pipeline` / `test-verifier` / `ui-tester` *(exists — gated)*
 **Methods imported:** superpowers `verification-before-completion` as a hard
 gate (identify the proving command, run it *fresh*, read full output, *then*
 claim done); gstack **circuit-breakers** (stop after 3 failed fix attempts —
@@ -94,13 +107,13 @@ two-tier CI (`qa.yml` static = free, `qa-live.yml`/Playwright = gated) already
 mirrors gstack's tiered testing; the `claude -p` cost-capped eval harness is
 **rejected** (CLI/API-billed).
 
-### 7 · Ship — `push-gate` + `update-pages` + `pages-monitor` *(exists — gated)*
+### 8 · Ship — `push-gate` + `update-pages` + `pages-monitor` *(exists — gated)*
 **Method imported:** gstack **Review Readiness staleness gate** —
 `pr-readiness-reviewer` blocks "ready" unless `review.md` is recent and clean.
 Our `push-gate` hook + PR lifecycle + `pages-monitor` already cover gstack's
 land-and-deploy + canary.
 
-### 8 · Reflect — `/learn` *(alongside `/handoff-session`)*
+### 9 · Reflect — `/learn` *(alongside `/handoff-session`)*
 Compounding institutional memory. **Method imported:** gstack `learnings.jsonl`
 — append-only, **typed** (pattern / pitfall / preference / architecture / tool),
 **confidence 1–10**, file attribution, latest-key-wins; auto-consulted before

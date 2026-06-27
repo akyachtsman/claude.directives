@@ -9,7 +9,12 @@ verdict. Read-only — do NOT modify files. Execute in order:
    project state.
 2. Branch and git health — Report the current branch (compare against the
    branch policy in CLAUDE.md if defined) and flag any uncommitted changes or
-   merge conflicts against the default branch.
+   merge conflicts against the default branch. Also sweep for **orphaned
+   background tasks**: on a resumed/long session a backgrounded `sleep` poll can
+   linger as a phantom "running" task after its process was reaped — flag any
+   `sleep`/poll process with no live backing (and remind that future waits use
+   `ScheduleWakeup`/event-wakeups, never a backgrounded `sleep`; see global.md →
+   Async Operations).
 3. CI & deploy status — Check for any open CI-failure or reviewer-flagged
    tracking issues/PRs and list them (a broken deploy surfaces here as a
    `pages-deploy-failure` issue). Also flag any open issues tagged @claude

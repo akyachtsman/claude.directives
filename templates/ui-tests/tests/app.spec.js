@@ -500,7 +500,10 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       } catch { continue; }
       const after = await viewSignature(page);
       const hasBack = await backControl(page).isVisible().catch(() => false);
-      if (after !== before && hasBack) { forward.push(after); advanced = true; break; }
+      // Any view change ends this level's search: a drill-in (has a back control →
+      // descend and keep going) or an unexpected move (no back control → stop, rather
+      // than keep clicking a now-stale element list from the page we just left).
+      if (after !== before) { if (hasBack) { forward.push(after); advanced = true; } break; }
     }
     if (!advanced) break;
   }

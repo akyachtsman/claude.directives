@@ -46,6 +46,7 @@ Under `docs/internal/`.
 | `commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
 | `react-demo.html` | Live browser-only React button (vendored React, no build, no CDN) — demos the production-tier preview technique; pairs with `vendor/` |
 | `index.html` | Demo gallery served at `/docs/` — links to the repo map, React preview, and commands reference (same list as the site-root `../index.html`) |
+| `vendor/` | Same-origin vendored React (`react.production.min.js`, `react-dom.production.min.js`) + its README — the no-CDN dependency that makes `react-demo.html` work |
 
 > Fill-in **templates** (project CLAUDE.md scaffold, PR checklist, test plan,
 > implementation summary) live in `../templates/`, not here.

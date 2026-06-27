@@ -42,6 +42,12 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      latest commit (HEAD). If any report or CI run predates the current HEAD SHA
      (commits landed after it was produced), mark **Not Ready / Conditional** and
      require a fresh run; never pass readiness on stale evidence.
+   - **UI changes require `ui-tester` evidence** — if the diff touches client-side
+     UI (HTML/JS/CSS, components, routing/navigation), a `ui-tester` run must cover
+     HEAD. A UI change with no `ui-tester` evidence is **Not Ready** — "the backend
+     is unreachable locally" is not an exception (auth flows are tested against the
+     deploy via `qa-live.yml`, not skipped). Any new navigation or back affordance
+     additionally requires a passing back-flow/no-loop scenario in that run.
 
 4. **Reviewer issues**
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
@@ -79,6 +85,7 @@ Use commands from `CLAUDE.md` or CI first. Common checks include:
 | Item | Status | Evidence |
 | --- | --- | --- |
 | Tests | Pass/Fail/Missing/Skipped | <command or report> |
+| UI tester (if UI changed) | Pass/Fail/Missing/N-A | <report path / qa-live run> |
 | Lint | Pass/Fail/Not applicable/Skipped | <command or report> |
 | Build | Pass/Fail/Not applicable/Skipped | <command or report> |
 | Implementation summary | Present/Missing | <path> |

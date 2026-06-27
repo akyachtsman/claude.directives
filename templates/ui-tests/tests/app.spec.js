@@ -427,8 +427,141 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SHARED — load the app and authenticate if a real auth gate is present
+// (mirrors the S3/S4 preamble: skips the test when gated with no credential, so
+// the navigation/control invariants below never just exercise the login screen)
+// ─────────────────────────────────────────────────────────────────────────────
+async function gotoAndAuth(page) {
+  await page.goto('./');
+  await page.waitForLoadState('networkidle').catch(() => {});
+  if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
+    await detectAndAuth(page, AUTH_CREDENTIAL);
+    await page.waitForLoadState('networkidle').catch(() => {});
+  } else if (await detectAuthGate(page)) {
+    test.skip(true, 'Auth gate present but no credential — skipping navigation/control invariants');
+  }
+}
+
+// A low-noise fingerprint of the current view — heading + control counts + a body
+// text prefix. Used to tell drill-down levels apart and to detect a back control
+// returning to a level it just left (a circular/ping-pong back loop). Deliberately
+// avoids volatile generated ids; if a correct app re-renders unstable text and this
+// false-fails, narrow it to a stable view title (e.g. the h1/h2 only).
+async function viewSignature(page) {
+  return page.evaluate(() => {
+    const h = (document.querySelector('h1, h2, [role=heading]')?.textContent || '').trim().slice(0, 80);
+    const buttons = document.querySelectorAll('button, [role=button]').length;
+    const inputs = document.querySelectorAll('input:not([type=hidden]), select, textarea').length;
+    const text = (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+    return `${h}#${buttons}#${inputs}#${text}`;
+  });
+}
+
+// A single visible in-app back control, or an empty locator. Matches an accessible
+// name / aria-label of "back" or a left-arrow glyph, or an explicit [data-back] hook.
+// Deliberately narrow so the browser's Back button is NOT mistaken for an in-app one.
+function backControl(page) {
+  return page.locator(
+    '[data-back], [aria-label*="back" i], button:has-text("Back"), a:has-text("Back"), ' +
+    'button:has-text("←"), a:has-text("←")'
+  ).first();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCENARIO — NAV: in-app back navigation strictly unwinds (no circular loop)
+// Drill to the deepest level reachable, then press the in-app back control once
+// per level: each back must retrace to the prior level and never return to the
+// level it just left (an A↔B ping-pong). Catches the class of bug where "back"
+// tracks the last page visited instead of an origin-aware nav stack. Skips when
+// the app has no multi-level drill-down or no in-app back control (invariant N/A).
+// ─────────────────────────────────────────────────────────────────────────────
+test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await gotoAndAuth(page);
+
+  const DEPTH_CAP = 5;
+  const forward = [await viewSignature(page)]; // forward[0] = starting level
+
+  // Drill down: at each level click the first "drill-in" candidate that BOTH changes
+  // the view AND reveals an in-app back control. Stop at the cap, on no change, or
+  // when no further drill-in exists.
+  for (let d = 0; d < DEPTH_CAP; d++) {
+    const before = forward[forward.length - 1];
+    let advanced = false;
+    for (const el of await discoverElements(page)) {
+      if (!['a', 'button'].includes(el.tag) && !el.selector.includes('role=button')) continue;
+      if (/back|←|‹|◀|return|home/i.test(el.label)) continue; // never drill via a back/home control
+      try {
+        const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);
+        if (!await loc.isVisible().catch(() => false)) continue;
+        await loc.click({ timeout: 3000 });
+        await page.waitForTimeout(800);
+        await page.waitForLoadState('networkidle').catch(() => {});
+      } catch { continue; }
+      const after = await viewSignature(page);
+      const hasBack = await backControl(page).isVisible().catch(() => false);
+      if (after !== before && hasBack) { forward.push(after); advanced = true; break; }
+    }
+    if (!advanced) break;
+  }
+
+  // Need at least two levels AND a back control on screen to assert anything.
+  if (forward.length < 2 || !(await backControl(page).isVisible().catch(() => false))) {
+    test.skip(true, 'No multi-level drill-down with an in-app back control found — back-flow invariant N/A');
+  }
+
+  // Unwind: one back press per descended level. Each result must equal the expected
+  // prior level and must NOT equal the level just left (the ping-pong signature).
+  const trail = [];
+  for (let i = forward.length - 1; i >= 1; i--) {
+    const left = forward[i];          // current level, before pressing back
+    const expected = forward[i - 1];  // the level back should return to
+    const back = backControl(page);
+    if (!await back.isVisible().catch(() => false)) break;
+    await back.click({ timeout: 3000 });
+    await page.waitForTimeout(800);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    const now = await viewSignature(page);
+    trail.push({ stepFromDeepest: forward.length - i, expected, left, got: now });
+    test.info().attach('back-flow-trail', { body: JSON.stringify(trail, null, 2), contentType: 'application/json' });
+    expect(now,
+      `Back from level ${i} returned to the level it just left — circular/ping-pong back navigation.`
+    ).not.toBe(left);
+    expect(now,
+      `Back from level ${i} did not return to the prior level (origin-aware back broken).`
+    ).toBe(expected);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCENARIO — CTRL: each primary action appears exactly once per view
+// A duplicated primary CTA (e.g. two "Add asset" buttons) is a finding. Scans
+// visible add/new/create controls, groups by accessible name, flags any with >1.
+// ─────────────────────────────────────────────────────────────────────────────
+test('CTRL: no duplicated primary action control', async ({ page }) => {
+  await gotoAndAuth(page);
+  const dupes = await page.evaluate(() => {
+    const norm = s => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const isPrimary = name => /^(add|new|create)\b/.test(name);
+    const counts = {};
+    for (const el of document.querySelectorAll('button, [role=button], a[href]')) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue; // visible only — a hidden mobile/desktop variant is fine
+      const name = norm(el.textContent || el.getAttribute('aria-label'));
+      if (!isPrimary(name)) continue;
+      counts[name] = (counts[name] || 0) + 1;
+    }
+    return Object.entries(counts).filter(([, n]) => n > 1).map(([name, n]) => ({ name, count: n }));
+  });
+  expect(dupes,
+    `Duplicated primary action control(s) on the current view:\n${JSON.stringify(dupes, null, 2)}`
+  ).toHaveLength(0);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO 5+ — Project-Specific Scenarios
 // Source: CLAUDE.md § Project-Specific Test Scenarios
-// Generic coverage is S1–S4 above; add project-specific scenarios starting at S5.
+// Generic coverage is S1–S4 plus the NAV/CTRL invariants above; add
+// project-specific scenarios starting at S5.
 // Add one scenario per row in that table before running the QA pipeline.
 // ─────────────────────────────────────────────────────────────────────────────

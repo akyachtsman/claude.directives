@@ -64,10 +64,46 @@ Execute these steps at the start of every session, before any task work:
 - Normalize `APP_URL` to end with `/` in `playwright.config.js`
 - `UI Tests (local server)` failures with `API status: no call` are expected and non-blocking in CI
 
+## Authenticated flows (auth-gated apps)
+Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach the
+backend**, so auth-gated views (login, portal, drill-downs) are untestable there
+and its `ui-tests` job is non-blocking by design. The **canonical mechanism for
+testing authenticated flows is `qa-live.yml`**: it runs Playwright against the
+deployed URL and logs in with a per-project seeded test account
+(`TEST_AUTH_CREDENTIAL` secret + `APP_URL` variable). Its live step is blocking —
+a failure there must be fixed before work is done.
+- **Why live, not local:** agent sandboxes and CI runners are commonly firewalled
+  from the live backend (e.g. a Supabase `403` at the proxy), so local Playwright
+  cannot render authenticated views. Seed a test account and test against the
+  deploy rather than relying on local runs.
+- Any app with an auth gate must wire `qa-live.yml` + the seeded credential. An
+  authenticated flow with no live coverage is a **coverage gap, not "untestable"** —
+  and a UI change shipped without a `ui-tester` run is a readiness blocker (see the
+  `pr-readiness-reviewer` gate).
+
+## Required UI scenario patterns
+`ui-tester` emits these generic scenarios by default (beyond S1–S4) for every app;
+runnable source is the `NAV:`/`CTRL:` tests in `templates/ui-tests/tests/app.spec.js`:
+- **Back-flow / no-loop** — for each drill-down hierarchy, go deepest, then press
+  the in-app back control once per level and assert the path **strictly unwinds**:
+  each back lands on the prior page and never revisits the page just left. Catches
+  circular/ping-pong back navigation.
+- **Single primary action** — assert each view exposes exactly one primary CTA of
+  a kind (one "Add X"). Catches duplicate/ghost controls.
+
+Any new client-side navigation or back affordance **requires a back-flow test**
+(companions the origin-aware-back coding standard: a back control returns to the
+page you came from, tracked via a nav stack — not the last page visited).
+
 ## CI triage
 - `qa.yml` runs on push to `main` and `claude/**` branches, and on PRs targeting `main`
-- Static Checks must pass before merge; UI Tests are `continue-on-error: true`
+- Static Checks must pass before merge; the local `UI Tests` job is
+  `continue-on-error: true` (backend unreachable on runners) — `qa-live.yml` is the
+  authoritative, blocking UI gate
 - `qa-live.yml` failures against the live app must be fixed before marking work done
+- **Quarantine, don't blanket-disable** — when a single UI spec is flaky, skip that
+  one spec with a tracking note; never wrap the whole UI job in `continue-on-error`
+  to get green, which silently drops all coverage
 - Workflow YAML is validated on every CI run — keep it parseable
 
 ## Circuit breakers (autonomous fix loops)

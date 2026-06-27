@@ -107,6 +107,31 @@ auth-diagnostics attachment:
 
 After exploration, set viewport to 390×844 and reload. Assert `document.body.scrollWidth <= window.innerWidth + 1`. Report overflow as a finding.
 
+### Default Navigation & Control Scenarios (always run)
+
+Beyond S1–S4, emit these two generic scenarios on **every** app — they catch
+classes of bug a single-click interaction sweep misses. Runnable source of truth:
+the `NAV:` and `CTRL:` tests in **`templates/ui-tests/tests/app.spec.js`** — do
+not duplicate their bodies here; tune them to the project's actual drill-down
+hierarchy and primary controls.
+
+- **Back-flow / no-loop.** Identify the in-app back control (accessible name /
+  `aria-label` matching `/back/i` or a left-arrow glyph, or a `[data-back]` hook —
+  not the browser Back button). Drill to the deepest reachable level, then press
+  back once per level and assert the path **strictly unwinds**: each back returns
+  to the prior level and never to the level just left. A repeated A↔B state is a
+  circular/ping-pong loop (the bug shape where back tracks the last page visited
+  instead of an origin-aware nav stack). Skip as N/A only when the app has no
+  multi-level drill-down or no in-app back control.
+- **Single primary action.** Group visible primary CTAs by accessible name
+  (buttons/links matching `/^(add|new|create)\b/i`); assert no name appears more
+  than once on a view. A duplicated primary action (two "Add asset" buttons) is a
+  finding.
+
+These run in the qa-live (authenticated) suite and are **blocking** there. Any new
+client-side navigation or back affordance requires a passing back-flow scenario
+before the change is Ready (companions the origin-aware-back coding standard).
+
 ### Project-Specific Scenarios
 
 S1–S4 cover generic app behavior. Before adding S5+ scenarios, read the

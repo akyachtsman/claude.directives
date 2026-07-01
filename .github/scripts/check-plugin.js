@@ -89,6 +89,8 @@ if (!hooks.hooks?.PostToolUse || !hooks.hooks?.PreToolUse) fail('hooks.json miss
 else ok('hooks.json structure');
 if (!(statSync(`${ROOT}/scripts/push-gate.sh`).mode & 0o111)) fail('push-gate.sh not executable');
 else ok('push-gate.sh executable');
+if (!(statSync(`${ROOT}/scripts/wait-gate.sh`).mode & 0o111)) fail('wait-gate.sh not executable');
+else ok('wait-gate.sh executable');
 
 
 if (failed) process.exit(1);

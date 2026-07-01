@@ -31,14 +31,17 @@ Run in order:
    the **`pages build and deployment`** workflow (Actions `event: dynamic`). A
    custom Actions deploy runs as its own named workflow. Know which the repo uses.
 
-4. **Watch to a terminal state — no blocking sleep.** Poll the deploy workflow
-   for a run whose `head_sha` == the pushed SHA, until `status == completed`:
+4. **Watch to a terminal state — never a blocking or backgrounded sleep.** Find
+   the deploy run whose `head_sha` == the pushed SHA and re-check until
+   `status == completed`:
    - Query via the GitHub Actions API — github MCP `actions_list`
      (`event: dynamic`), or `gh run list` where `gh` is available.
-   - Do it proactively: if `send_later` is available, schedule a check-in ~60s
-     out and re-poll when it fires, repeating until terminal. Otherwise run a
-     background poll (Bash `run_in_background` / Monitor) that **exits on the
-     terminal state**. Never sit in a foreground sleep.
+   - Re-check proactively: schedule the next check with `ScheduleWakeup`
+     (`send_later` only where it exists — usually it does not), and re-poll on
+     wake until terminal. Do **not** background a `sleep` poll and do not sit in a
+     foreground sleep — a backgrounded sleep orphans into a phantom "running" task
+     on session resume (see global.md → Async Operations; the `wait-gate` hook
+     blocks it).
 
 5. **Stuck detection.** If no run for the pushed SHA appears within ~2 minutes,
    the branch-source build is not auto-firing (common right after enabling Pages,

@@ -142,17 +142,32 @@ plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
-  waiting: if `send_later` exists, schedule a check-in; otherwise end the turn
-  with "I'll report back when it completes" and resume on the event.
-- The result must surface proactively — the user never re-prompts for an outcome.
-- Any background watcher MUST set a hard timeout sized to the operation and exit
-  on every terminal state (success, failure, timeout). A waiter that outlives
-  what it watches is a bug.
+  waiting. The result must surface **proactively** — the user never re-prompts
+  for an outcome.
+- **How to wait, in order of preference:**
+  1. **Let the event wake you.** CI failures, PR reviews, and merges arrive as
+     webhooks that resume the session; most outcomes need no active waiter — end
+     the turn with "I'll report back when it completes" and act on the event.
+  2. **Self-pace with `ScheduleWakeup`** (or `send_later` where it exists — it is
+     frequently **absent**, so never assume it; verify per `/env-chk`). Schedule a
+     check-in sized to the operation, re-check on wake, and re-arm until terminal.
+  3. **Condition-wait with `Monitor`** only when you must block on a specific
+     state — always with an exit condition and a hard timeout.
+- **Never background a bare `sleep` to wait.** A `run_in_background` `sleep`
+  (e.g. `sleep 120; echo done`) is the single worst pattern: when the container
+  suspends and resumes — any multi-day session — the process is reaped but the
+  harness keeps showing it as a **phantom "running" task** that never clears, and
+  it was watching nothing. Use options 1–3 instead. (The toolkit's `wait-gate`
+  hook blocks this; a foreground long sleep is already blocked by the harness.)
 - A background **agent** you spawn (`run_in_background`) is a task you still own:
   collect (await) every one before the turn ends. Uncollected background tasks get
   orphaned by context compaction — they run on with no handle left to stop them, a
   token-burning zombie that never reaches a terminal state. Fan agents out only in
   a window you will close; never fire-and-forget into a long session.
+- **Sweep before you idle.** Any background watcher MUST set a hard timeout sized
+  to the operation and exit on every terminal state. Before ending a turn that
+  started waiters, confirm none are orphaned (no live `sleep`/poll process backing
+  a still-"running" task) — a waiter that outlives what it watches is a bug.
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic

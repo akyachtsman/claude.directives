@@ -80,6 +80,55 @@ contrast guardrail (`templates/scripts/check-contrast.js`, run in CI against
 - **Never** bounce, spin, flash, or use heavy keyframes that fight readability
 - Always honor `prefers-reduced-motion`
 
+## Tables & sorting
+Any table/grid of rows sorts the **same way in every project** — same
+interaction, same rules — so a user never relearns it:
+- **The column header IS the sort control.** Clicking (or Enter/Space on) a header
+  sorts the rows by that column. No separate sort pills or menus.
+- **Toggle direction:** the first activation of a column sorts **ascending**;
+  re-activating the active column flips to **descending**. Exactly one column is
+  active at a time.
+- **Type-aware:** numeric columns compare as numbers, text as case-insensitive
+  `localeCompare`. Keep the sortable value in `data-sort` on each cell, separate
+  from the display text — so `$42,000` sorts by `42000` and `Jun 4` by an ISO date.
+- **No-data sinks last:** empty / `—` cells always sort to the bottom in *both*
+  directions (pairs with the `—` = no-data rule under Number & Data Formatting).
+- **State is visible + accessible:** set `aria-sort` on the active `<th>` and show
+  a direction arrow (`↑`/`↓`); headers are keyboard-operable, 44px tap targets,
+  `:focus-visible` outlined.
+
+Reference implementation — wire `makeSortable(table)` once per table; the markup
+carries the raw value in `data-sort` and the column type in `data-type`:
+```html
+<th data-type="number" tabindex="0" aria-sort="none">Value</th>   <!-- header = control -->
+<td data-sort="42000">$42,000</td>                                 <!-- data-sort = raw, text = display -->
+```
+```js
+function makeSortable(table){
+  const heads = [...table.tHead.rows[0].cells], body = table.tBodies[0];
+  const blank = v => v === '' || v === '—' || v == null;
+  const go = th => {
+    const i = th.cellIndex, num = th.dataset.type === 'number';
+    const dir = th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending';
+    const s = dir === 'ascending' ? 1 : -1;
+    heads.forEach(h => h.setAttribute('aria-sort', 'none'));
+    th.setAttribute('aria-sort', dir);
+    const val = tr => { const c = tr.cells[i]; return c.dataset.sort ?? c.textContent.trim(); };
+    [...body.rows].sort((a, b) => {
+      const x = val(a), y = val(b);
+      if (blank(x) && blank(y)) return 0;   // no-data always last,
+      if (blank(x)) return 1;               // regardless of direction
+      if (blank(y)) return -1;
+      return (num ? x - y : ('' + x).localeCompare(y, undefined, {sensitivity:'base', numeric:true})) * s;
+    }).forEach(tr => body.appendChild(tr));
+  };
+  heads.forEach(th => {
+    th.onclick = () => go(th);
+    th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(th); } };
+  });
+}
+```
+
 ## Editorial Preferences
 Look-independent copy and formatting rules — apply to every project.
 

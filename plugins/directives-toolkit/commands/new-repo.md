@@ -49,7 +49,7 @@ Execute in order:
    starter instead and deploy on Vercel (`docs/cicd-setup.md` → *Production tier — Vercel*).
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
-   copy all eight workflow files from `claude.directives/templates/workflows/`
+   copy all nine workflow files from `claude.directives/templates/workflows/`
    into `.github/workflows/`:
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages
@@ -57,6 +57,10 @@ Execute in order:
    - `codex-monitor.yml` — Codex PR review monitor
    - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
      every `page_build`; portable as-is, no edits needed)
+   - `pages-retry.yml` — auto-re-runs the managed Pages deploy on a transient
+     failure (bounded to `run_attempt < 4`); pairs with `pages-monitor.yml`.
+     Applies to **branch-source** Pages projects; it only arms once it's on the
+     default branch, so it covers the *next* deploy, not the one that adds it
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
    - `keepalive.yml` — weekly commit that keeps scheduled workflows from auto-disabling

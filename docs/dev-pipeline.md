@@ -181,9 +181,9 @@ What `/new-repo` scaffolds in **every** project:
 - `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs + `index.html`
   + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
-- **all eight** workflows: `qa.yml`, `qa-live.yml`, `ci-monitor.yml`,
-  `codex-monitor.yml`, `pages-monitor.yml`, `qa-response.yml`, `cron-notify.yml`,
-  `keepalive.yml`
+- **all nine** workflows: `qa.yml`, `qa-live.yml`, `ci-monitor.yml`,
+  `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, `qa-response.yml`,
+  `cron-notify.yml`, `keepalive.yml`
 - the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job /
   guardrail scripts (`.github/scripts/`: `notify-email.js`, `notify-task.js`,
   `check-contrast.js`, `package.json`)

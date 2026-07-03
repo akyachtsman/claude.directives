@@ -207,6 +207,25 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 deduplicated `pages-deploy-failure` issue. Behavior detail: `docs/automations.md`
 → Automation 4.
 
+### 9d — Pages Retry
+
+Drop-in, portable as-is:
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-retry.yml \
+  -o .github/workflows/pages-retry.yml
+```
+
+**What it does:** watches the managed `pages build and deployment` run and, on a
+failure, re-runs it automatically (transient *"Deployment failed, try again
+later."* publish blips clear on retry), bounded to `run_attempt < 4` so a truly
+broken deploy can't loop — at the ceiling `pages-monitor.yml` opens the tracking
+issue. **Two prerequisites:** (1) it targets the **branch-source** Pages workflow
+(`pages build and deployment`) — projects on the **GitHub Actions** Pages source
+should instead build retry into their own deploy workflow; (2) it only arms once
+it's on the default branch, so it covers the *next* deploy, not the one that adds
+it.
+
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.
 
@@ -245,6 +264,7 @@ Required repository variables:
 - [ ] `.github/workflows/ci-monitor.yml` present, `workflow_run.workflows` filled in, manual dispatch verified
 - [ ] `.github/workflows/codex-monitor.yml` present
 - [ ] `.github/workflows/pages-monitor.yml` present
+- [ ] `.github/workflows/pages-retry.yml` present (branch-source Pages projects)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret

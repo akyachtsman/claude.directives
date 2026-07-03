@@ -168,6 +168,12 @@ plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
   to the operation and exit on every terminal state. Before ending a turn that
   started waiters, confirm none are orphaned (no live `sleep`/poll process backing
   a still-"running" task) — a waiter that outlives what it watches is a bug.
+- **Deploys — "merged" is not "live."** A deploy-backed change (GitHub Pages, etc.)
+  is done only after the deployed asset is fetched **cache-busted** and confirms the
+  new content is served. On a failed deploy, re-run to a terminal state before
+  reporting done — never leave the site stale. A clean/empty-cache render (headless
+  browser, incognito) proves the *new* deploy but not a *returning* visitor's cached
+  state. See the `update-pages` skill.
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic

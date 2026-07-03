@@ -5,7 +5,9 @@ phase: ship
 ---
 Drive a GitHub Pages deploy from commit to "live" and report back **proactively**,
 so the user never babysits it. Follows the Async Operations directive: never block
-on a `sleep` loop — surface the result on its own.
+on a `sleep` loop — surface the result on its own. **"Merged" is not "live": a Pages
+change is done only once the deploy reaches a green terminal state and the live URL
+serves the new content.**
 
 **Apply this automatically whenever a change updates the Pages site** — any edit to
 a file GitHub Pages serves (root `index.html`, `docs/index.html`,
@@ -60,13 +62,24 @@ Run in order:
      the user to verify *now* via a cache-busted URL
      (`<pages-url>/index.html?v=<timestamp>`) or an incognito window.
    - **FAILURE:** `❌ Pages build failed for <short-sha> — <run-url>`, with the
-     failing step summarized.
+     failing step summarized. GitHub's *managed* deploy sometimes fails its publish
+     step with a transient **"Deployment failed, try again later."** — a GitHub-side
+     blip, not your change. **Re-run it** to a terminal state before reporting done:
+     automatically if the project ships an auto-retry deploy workflow
+     (`.github/workflows/pages-retry.yml` — watches the managed deploy via
+     `workflow_run` and re-runs on failure, bounded to `run_attempt < 4` so a truly
+     broken deploy can't loop), otherwise re-run manually via the Actions API. A
+     merged-but-failed deploy leaves the site **stale** — that is not "done."
 
 7. **Verification caveat.** A remote/sandbox session often **cannot fetch the
    `*.github.io` page** (network allowlist blocks it — `curl`/`WebFetch` return
    403 "Host not in allowlist"). So verify by the build's `head_sha` +
    `conclusion` via the Actions API, **not** by loading the page. Confirm the
    intended files are in the published commit's tree with `git show <sha>:<path>`.
+   A clean/empty-cache render (headless Playwright, incognito, or a `?v=` bust)
+   confirms the *new* deploy is served but does **not** reproduce a **returning
+   visitor's** cached state — so it can't catch a stale-cache regression on its own
+   (see the cache-busting gotcha below).
 
 ## Gotchas this skill exists to catch
 - **Live site shows `README.md`** → no `index.html` in the *published* snapshot
@@ -76,3 +89,10 @@ Run in order:
   with `?v=` or incognito (step 6); `/` catches up when the CDN TTL expires.
 - **A green build for the wrong SHA** → confirm `head_sha` matches the commit you
   just pushed, not an older enable-time build.
+- **Returning visitors get a broken layout after a deploy** → render-blocking
+  assets don't share **one** cache-busting scheme (e.g. a versioned `app.js?v=8`
+  loaded against a static `styles.css`). **All render-blocking CSS + JS must use the
+  same cache-busting scheme**, so a returning visitor never loads new HTML/JS
+  against stale CSS (or vice-versa). Clean-cache tests never catch this — only a
+  returning visitor holding the old asset does; bump every render-blocking asset
+  together.

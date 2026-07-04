@@ -94,7 +94,7 @@ Run the security review (step 4) if changes touch any of:
 
 ### Session Automations
 
-See `docs/ci-triage.md` for expected vs. real failure classification and workflow trigger rules.
+See `docs/standards/ci-triage.md` for expected vs. real failure classification and workflow trigger rules.
 
 CI monitoring is infra-resident and event-driven — not session-scoped:
 - `ci-monitor.yml` fires on `workflow_run` events (+ `workflow_dispatch` for manual scans)

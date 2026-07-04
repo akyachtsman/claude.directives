@@ -15,8 +15,8 @@ lives in `NEW-REPO-USER-INSTRUCTIONS.md`. Supporting directories:
 - `plugins/directives-toolkit/` — the installable toolkit (commands, auto-skills,
   QA/data agents, guard hooks); this repo doubles as its plugin marketplace
 - `docs/` — reference material, including the interactive repo map at
-  `docs/repo-map.html` and the [AI-first working principles](docs/ai-first-principles.md)
+  `docs/site/repo-map.html` and the [AI-first working principles](docs/guides/ai-first-principles.md)
 - `templates/` — installable workflows and the Playwright test kit
 
 **Live demos:** https://akyachtsman.github.io/claude.directives/ — rendered UI
-references, including the [interactive repo map](https://akyachtsman.github.io/claude.directives/docs/repo-map.html).
+references, including the [interactive repo map](https://akyachtsman.github.io/claude.directives/docs/site/repo-map.html).

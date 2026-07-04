@@ -3,7 +3,7 @@ description: "Use when starting a non-trivial feature or build, BEFORE /sdd-loop
 phase: think
 ---
 Run the **Think** phase: understand the problem before any spec, plan, or code.
-This is the entry point of the dev-pipeline (see `docs/dev-pipeline.md`); it
+This is the entry point of the dev-pipeline (see `docs/guides/dev-pipeline.md`); it
 writes the `brief.md` that `/sdd-loop specify` reads. Browser-only — pure
 questions + a Markdown file, no CLI.
 

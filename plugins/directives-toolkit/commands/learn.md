@@ -4,7 +4,7 @@ phase: reflect
 ---
 Run the **Reflect** phase: capture a durable lesson as compounding project
 memory. This is the queryable upgrade to `/handoff-session`'s one-shot snapshot
-(see `docs/dev-pipeline.md`). Browser-only — a repo file plus read/append, no
+(see `docs/guides/dev-pipeline.md`). Browser-only — a repo file plus read/append, no
 CLI or daemon.
 
 **Store:** `learnings.jsonl` at the repo root — **committed** (so it survives

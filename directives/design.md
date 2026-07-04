@@ -24,7 +24,7 @@ contract:
 3. **Build** the remaining pages against that contract via `/sdd-loop` — so every
    page matches page one.
 
-See `docs/design-tooling.md` for generator setup (the `frontend-design` skill and
+See `docs/guides/design-tooling.md` for generator setup (the `frontend-design` skill and
 wiring Stitch's remote MCP for a browser-only session).
 
 ## Tokens & components (the per-project consistency contract)

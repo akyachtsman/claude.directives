@@ -12,7 +12,7 @@ contract that keeps it consistent page-to-page. Browser-only throughout.
 - **Image (default, zero setup):** ask the user to attach a screenshot/mockup
   (from Google Stitch, Figma, Dribbble, a sketch — anywhere). The
   `frontend-design` skill reads the image directly. Best browser-only path.
-- **Stitch HTML:** if Stitch's remote MCP is wired (see `docs/design-tooling.md`),
+- **Stitch HTML:** if Stitch's remote MCP is wired (see `docs/guides/design-tooling.md`),
   generate a screen and pull its markup (`getHtml()`); or paste a Stitch download.
   Higher fidelity than an image.
 - **Figma:** if a Figma MCP is wired, read the file's variables + styles. For

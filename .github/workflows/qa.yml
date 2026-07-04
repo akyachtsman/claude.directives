@@ -37,6 +37,9 @@ jobs:
       - name: Check secret-scan pattern in sync
         run: node .github/scripts/check-secret-scan.js
 
+      - name: Check export boundary (EXPORTS.json)
+        run: node .github/scripts/check-exports.js
+
       - name: Validate workflow YAML
         run: |
           python3 -c "
@@ -62,7 +65,7 @@ jobs:
       - name: Check landing-page palette blocks in sync
         run: |
           extract() { sed -n '/:root {/,/^    }/p' "$1"; }
-          diff <(extract index.html) <(extract docs/index.html)
+          diff <(extract index.html) <(extract docs/site/index.html)
           echo "OK: landing-page palette blocks in sync"
 
   check-external-links:
@@ -78,7 +81,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Dogfood the exported UI-testing standard (test.md / templates/ui-tests) on
-  # this repo's own interactive Pages artifact, docs/repo-map.html. Blocking:
+  # this repo's own interactive Pages artifact, docs/site/repo-map.html. Blocking:
   # the map is a static, self-contained file with no backend, so the run is
   # deterministic (unlike the downstream local-server UI tests).
   ui-tests:
@@ -99,7 +102,7 @@ jobs:
       # Keep in sync with CLAUDE.md "Local gate": the map's HTML is validated
       # here on every run (locally it's only needed when the map changed).
       - name: Validate repo map HTML
-        run: npx --yes html-validate docs/repo-map.html
+        run: npx --yes html-validate docs/site/repo-map.html
 
       - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js

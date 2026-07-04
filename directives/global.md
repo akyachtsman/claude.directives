@@ -217,9 +217,9 @@ the environment's cached setup script rebuilds — on a setup-script/network cha
 or roughly weekly cache expiry, not necessarily every session. Commands are invoked as
 `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
 
-See docs/automations.md for monitor setup and the automation-specific
+See docs/standards/automations.md for monitor setup and the automation-specific
 PR-lifecycle/escalation additions.
-See docs/ci-triage.md for CI and Codex failure triage rules.
+See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.

@@ -30,8 +30,10 @@ Run in order:
    means the site will fall back to rendering `README.md`.
 
 3. **Identify the deploy workflow.** GitHub Pages "Deploy from a branch" runs as
-   the **`pages build and deployment`** workflow (Actions `event: dynamic`). A
-   custom Actions deploy runs as its own named workflow. Know which the repo uses.
+   the managed **`pages-build-deployment`** workflow (that file slug IS its
+   `name` — verified via the Actions API; the UI's prose title "pages build and
+   deployment" never matches in `workflow_run` filters). A custom Actions deploy
+   runs as its own named workflow. Know which the repo uses.
 
 4. **Watch to a terminal state — never a blocking or backgrounded sleep.** Find
    the deploy run whose `head_sha` == the pushed SHA and re-check until

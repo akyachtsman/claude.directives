@@ -36,6 +36,7 @@ for (const id of ['plugin', 'directives', 'docsint']) {
   const rect = await page.$(`#n_${id} rect`);
   if (!rect) { fail(`box #n_${id} not found`); continue; }
   const bb = await rect.boundingBox();
+  if (!bb) { fail(`box #n_${id} has no bounding box (hidden?)`); continue; }
   await page.mouse.click(bb.x + bb.width / 2, bb.y + 18);
   await page.waitForTimeout(200);
   const faint = (await effOpacity()).filter(x => x.op < 0.95);

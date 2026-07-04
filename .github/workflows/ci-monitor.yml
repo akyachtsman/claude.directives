@@ -60,7 +60,7 @@ jobs:
             runs=$(gh api "repos/$REPO/actions/runs?per_page=50&status=completed" \
               --jq "[.workflow_runs[]
                      | select(.conclusion==\"failure\" or .conclusion==\"timed_out\" or .conclusion==\"startup_failure\")
-                     | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\")
+                     | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\" and .name != \"Pages Monitor\")
                      | select(.updated_at >= \"$since\")
                      | {name, id, sha: .head_sha[0:7], branch: .head_branch, url: .html_url}]")
             count=$(echo "$runs" | jq 'length')

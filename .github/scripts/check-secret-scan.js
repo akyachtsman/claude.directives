@@ -12,9 +12,12 @@ const SOURCES = [
   'templates/workflows/qa-response.yml',
 ];
 
-// The alternation always spans from the first `pat...` token through `xoxb-`.
+// The alternation starts at the first `pat...` token and runs to the closing
+// quote delimiter (double quotes in the directive, single quotes in the yml) —
+// anchoring on the delimiter, not on a token like `xoxb-`, means a pattern
+// appended at the end or a reorder can never drift undetected.
 // `\\\.` matches a literal backslash-dot; the body holds no quotes or newlines.
-const PATTERN = /pat\[A-Za-z0-9\]\{14\}\\\.[^\n'"]*xoxb-/;
+const PATTERN = /pat\[A-Za-z0-9\]\{14\}\\\.[^\n'"`]*/;
 
 const found = {};
 let failed = false;

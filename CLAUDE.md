@@ -29,7 +29,10 @@ covers only how to operate *on this repo*.
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
 | `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`) projects copy into `.github/scripts/` |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
-| `docs/` | Reference docs (automations, CI triage, testing, code review, …); see `docs/README.md` for the role-grouped index |
+| `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
+| `templates/nextjs-app/` | Production-tier Next.js starter scaffold (App Router + Supabase wiring) |
+| `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
+| `docs/` | Reference docs (automations, CI triage, testing, code review, …) + Pages site assets incl. vendored React under `docs/vendor/`; see `docs/README.md` for the role-grouped index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
@@ -46,16 +49,19 @@ When you change an exported directive, edit the file under `directives/` — nev
 relocate the export into this file.
 
 ## Branch policy
-- Develop all changes on `claude/<name>` branches.
+`global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
+(`claude/<name>` branches, never commit to `main`, draft PR on first push,
+squash-merge only when CI is green **and** the global.md merge gates hold —
+approval covers the merge, no `codex-flagged` label, no unresolved review
+threads, diff limited to the intended files). Repo-specific deltas:
 - Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
   next from updated `main` rather than reusing/force-pushing one long-lived branch.
-- Never commit directly to `main`.
-- Open a draft PR immediately after first push; squash-merge when CI is green.
-- Before merging, confirm the PR's diff is only the files you intended — a surprise
-  file count means a stale/tangled branch; verify against GitHub, not the local clone.
+- Before merging, verify the PR's file list against GitHub's own diff, not the
+  local clone — a surprise file count means a stale/tangled branch.
 
 ## Session Start
-1. Read all Imported Directive URLs above fully
+1. Read the four exported directive files under `directives/` fully — from the
+   local working tree, not the raw `main` URLs (on a branch, `main` copies may be stale)
 2. Verify the directives-toolkit plugin attached (commands/agents resolve) per global.md → Skill Bootstrap
 3. Confirm active branch: `git branch --show-current`
 4. Run `/env-chk` and report status — this includes the `scope-chk` repo-scope
@@ -129,10 +135,11 @@ node .github/scripts/check-paths.js
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
-node .github/scripts/check-links.js --internal   # set GITHUB_REPOSITORY + GITHUB_TOKEN
+node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages monitor template pairs)
-npx html-validate docs/repo-map.html                        # when the map changed
+diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/index.html)   # landing-page palette sync
+npx html-validate docs/repo-map.html                        # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 ```
 Confirm `git status` shows no unintended changes. If any check fails, fix it
@@ -141,17 +148,17 @@ check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
 local skip is fine for non-map changes.
 
 ## Escalation rules
-Stop and ask the user before:
-- Deleting any file that exists on `main`.
-- Modifying any workflow file's trigger conditions.
-- Pushing after 3 consecutive CI failures on the same branch.
+`global.md` → *Escalation Rules* apply here unchanged (stop and ask before
+deleting any file on `main`, modifying any workflow's trigger conditions, or
+pushing after 3 consecutive CI failures on the same issue). No repo-specific
+additions.
 
 ## Toolkit changes
 
 To add a command, skill, or agent: drop the file into the right
 `plugins/directives-toolkit/` subdir (commands are flat md files; each skill is
 a SKILL.md in its own directory; agents are flat md files with unique `name:`
-frontmatter), run the plugin check from the Local gate below, and ship through
+frontmatter), run the plugin check from the Local gate above, and ship through
 the normal PR flow. Downstream picks it up when its environment's cached setup
 script rebuilds (web: on an env-config change or ~weekly expiry). The
 install/distribution model lives in

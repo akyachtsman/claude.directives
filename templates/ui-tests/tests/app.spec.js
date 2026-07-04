@@ -237,7 +237,12 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   await page.waitForLoadState('networkidle').catch(() => {});
 
   const beforeSnap = await domSnapshot(page);
-  const mechanism  = await detectAndAuth(page, AUTH_CREDENTIAL ?? '');
+  // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
+  // detectAndAuth's text-input fallback would type the credential into the first visible
+  // text input (e.g. a public app's search box) and then falsely report auth failure.
+  const mechanism  = (await detectAuthGate(page))
+    ? await detectAndAuth(page, AUTH_CREDENTIAL ?? '')
+    : 'none';
   const afterSnap  = await domSnapshot(page);
 
   const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
@@ -348,8 +353,15 @@ test('S3: interactive elements discovered and exercised without errors', async (
         await locator.click({ timeout: 3000 });
         await page.waitForTimeout(1500);
         await page.waitForLoadState('networkidle').catch(() => {});
-      } else if (['input', 'textarea'].includes(el.tag) && el.type !== 'submit') {
+      } else if (el.tag === 'textarea' ||
+                 (el.tag === 'input' &&
+                  [null, 'text', 'email', 'password', 'search', 'tel', 'url', 'number'].includes(el.type))) {
+        // fill() only works on text-like inputs — on checkbox/radio/file/range/color it
+        // throws "Cannot fill…", which the expected-error regex in the catch below does
+        // NOT match, producing spurious interactionError findings.
         await locator.fill(testValueFor(el), { timeout: 3000 });
+      } else if (el.tag === 'input' && ['checkbox', 'radio'].includes(el.type)) {
+        await locator.click({ timeout: 3000 });
       } else if (el.tag === 'select') {
         const options = await locator.locator('option').allTextContents();
         if (options.length > 1) await locator.selectOption({ index: 1 });
@@ -434,10 +446,13 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
 async function gotoAndAuth(page) {
   await page.goto('./');
   await page.waitForLoadState('networkidle').catch(() => {});
-  if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
+  // Detect once and branch — each detectAuthGate() call burns a 5s waitFor timeout when
+  // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
+  const gated = await detectAuthGate(page);
+  if (AUTH_CREDENTIAL && gated) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle').catch(() => {});
-  } else if (await detectAuthGate(page)) {
+  } else if (gated) {
     test.skip(true, 'Auth gate present but no credential — skipping navigation/control invariants');
   }
 }

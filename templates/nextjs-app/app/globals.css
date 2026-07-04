@@ -1,28 +1,30 @@
 /* The design contract carries over UNCHANGED from the static tier.
  * When this project graduated via /design-intake it produced styles/tokens.css
  * + styles/components.css — paste those here (or @import them) so the Next app
- * and the static prototype share one source of truth. The starter below mirrors
- * the default templates/styles starter; replace its values with your look. */
+ * and the static prototype share one source of truth. The starter below uses
+ * the SAME token names and values as the default templates/styles starter, so
+ * pasting your real tokens.css over the :root block leaves nothing undefined. */
 
 :root {
   --color-bg: #F5F7FA;
   --color-surface: #FFFFFF;
-  --color-border: #D6DCE5;
-  --color-text: #1A2230;
-  --color-muted: #5B6675;
+  --color-border: #DAE2EE;
+  --color-text-primary: #181B22;
+  --color-text-secondary: #5F6573;
   --color-accent: #1565C0;
-  --color-accent-ink: #FFFFFF;
-  --radius: 10px;
-  --space: 16px;
-  --font: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --color-accent-hover: #114F98;
+  --radius-md: 10px;
+  --space-4: 16px;
+  --font-sans: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-base: 15px;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
-  font-family: var(--font);
+  font-family: var(--font-sans);
   background: var(--color-bg);
-  color: var(--color-text);
+  color: var(--color-text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -32,7 +34,7 @@ body {
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   padding: 24px;
 }
 
@@ -43,14 +45,14 @@ body {
   justify-content: center;
   min-height: 44px;
   padding: 0 20px;
-  font: 600 16px var(--font);
-  color: var(--color-accent-ink);
+  font: 600 16px var(--font-sans);
+  color: #fff;
   background: var(--color-accent);
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: filter .15s ease;
 }
-.btn:hover { filter: brightness(1.06); }
+.btn:hover { background: var(--color-accent-hover); }
 .btn:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }

@@ -22,6 +22,8 @@ specs/<feature-slug>/
   plan.md       ← phase 3 (HOW: stack + architecture)
   tasks.md      ← phase 4 (ordered, dependency-aware; [P] = parallel-safe)
   analysis.md   ← phase 5 (consistency findings + optional cross-check)
+  research.md   ← written by /kickoff (competitive discovery), when run
+  design.md     ← written by /design-intake (visual identity record), when run
 ```
 Derive `<feature-slug>` (kebab-case) from the feature name if omitted. Each
 phase first **reads the prior artifact** and refuses if it's missing — order is

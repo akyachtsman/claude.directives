@@ -1,7 +1,7 @@
 ---
 name: qa-pipeline
 description: Runs the full QA pipeline in sequence — test-verifier, ui-tester, code review (pr-review-toolkit), security review (if relevant), and pr-readiness-reviewer. Orchestrates a feedback loop with ui-tester until all UI scenarios pass or human escalation is required.
-tools: Read, Glob, Grep, Bash, Agent
+tools: Read, Glob, Grep, Bash, Agent, Skill
 ---
 
 ## Session Initialization
@@ -58,9 +58,13 @@ Round 1:  Invoke ui-tester → receive structured result
             If S2 (login) fails:
               Read the auth-diagnostics attachment and structured error message first
               Use the diagnostic decision tree in ui-tester.md to identify exact root cause
-              Implement the targeted fix, wait for deployment (~60s), re-run ui-tester
+              Return the targeted fix to the calling session (file + line + exact change) —
+              this orchestrator never edits files itself. Once the caller reports the fix
+              pushed, confirm the deploy caught up (deploy run head_sha == the fix commit,
+              via the Actions API — never a timed wait), then re-run ui-tester
             If other scenarios fail:
-              Read the structured error message, implement the targeted fix, re-run ui-tester
+              Read the structured error message, return the targeted fix to the caller,
+              re-run ui-tester after the same head_sha deploy check
             Do not guess at fixes — always read diagnostic data first
             If not fixable by agent → escalate to human immediately
 Round 2+: Same as Round 1
@@ -74,7 +78,8 @@ Max rounds: 3 (then escalate regardless)
 - Compare with previous round to confirm improvement or regression
 - Identify the minimum targeted fix
 - Direct the fix with file + line + exact change in the pipeline summary message
-- Confirm fix is pushed before invoking next round
+  (the calling session applies it — see Operating Rules)
+- Confirm the fix is pushed AND deployed (head_sha check) before invoking next round
 
 ### Security Review Trigger Conditions
 

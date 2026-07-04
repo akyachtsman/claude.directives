@@ -2,8 +2,8 @@
 // toolkit source — Phase 2 retired the .claude/ copies).
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 
-let failed = false;
-const fail = m => { console.error(`FAIL: ${m}`); failed = true; };
+let failCount = 0;
+const fail = m => { console.error(`FAIL: ${m}`); failCount++; };
 const ok = m => console.log(`OK:   ${m}`);
 
 // ── Manifests ────────────────────────────────────────────────────────────────
@@ -50,8 +50,9 @@ const listField = (path, key) => {
   if (inline) return [inline];
   const out = [];
   for (let j = i + 1; j < lines.length; j++) {
+    if (!lines[j].trim()) continue; // blank lines inside a YAML block list are valid
     const li = lines[j].match(/^[ \t]+-[ \t]*(\S.*?)[ \t]*$/);
-    if (!li) break; // first non-list line (blank, or the next key) ends the list
+    if (!li) break; // first non-list content line (the next key) ends the list
     out.push(li[1]);
   }
   return out;
@@ -65,6 +66,7 @@ const items = [
   ...cmds.map(c => ({ kind: 'command', name: c.replace(/\.md$/, ''), path: `${ROOT}/commands/${c}` })),
   ...skills.map(s => ({ kind: 'skill', name: s, path: `${ROOT}/skills/${s}/SKILL.md` })),
 ];
+const failsBeforeItems = failCount;
 for (const { kind, name, path } of items) {
   const f = fm(path);
   if (!f?.description) fail(`${kind} ${name}: missing description frontmatter`);
@@ -74,14 +76,17 @@ for (const { kind, name, path } of items) {
     if (!pipelineNames.has(dep)) fail(`${kind} ${name}: benefits-from target "${dep}" is not a known command/skill`);
   }
 }
-ok(`${cmds.length} commands + ${skills.length} skills: description + valid phase, chain resolves`);
+// Summary lines only print when their section actually passed — an OK line
+// right after a FAIL in the same section reads as a pass in the log.
+if (failCount === failsBeforeItems) ok(`${cmds.length} commands + ${skills.length} skills: description + valid phase, chain resolves`);
 
 // ── Agents (flat, unique names) ──────────────────────────────────────────────
+const failsBeforeAgents = failCount;
 const agents = readdirSync(`${ROOT}/agents`).filter(f => f.endsWith('.md'));
 const names = agents.map(a => fm(`${ROOT}/agents/${a}`)?.name).filter(Boolean);
 if (names.length !== agents.length) fail('agent missing name frontmatter');
 if (new Set(names).size !== names.length) fail('duplicate agent names');
-ok(`${agents.length} agents, names unique`);
+if (failCount === failsBeforeAgents) ok(`${agents.length} agents, names unique`);
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 const hooks = JSON.parse(readFileSync(`${ROOT}/hooks/hooks.json`, 'utf8'));
@@ -93,5 +98,5 @@ if (!(statSync(`${ROOT}/scripts/wait-gate.sh`).mode & 0o111)) fail('wait-gate.sh
 else ok('wait-gate.sh executable');
 
 
-if (failed) process.exit(1);
+if (failCount) process.exit(1);
 console.log('PLUGIN CHECKS PASS');

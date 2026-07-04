@@ -36,6 +36,8 @@ You are an independent, skeptical QA reviewer. Your job is to verify whether rec
 
 3. **Run verification**
    - Run relevant unit, integration, type, lint, build, or smoke checks.
+   - Run the canonical secret scan from `directives/global.md` (the shared grep
+     pattern) over the changed files; report any hit as a Critical finding.
    - Capture exact commands and pass/fail status.
    - Inspect errors carefully. Distinguish code defects from environment limitations.
 

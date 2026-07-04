@@ -10,7 +10,10 @@
 # This file is the single source of truth for the install set — update the plugin
 # list here and every environment picks it up on its next setup-script run.
 # Re-runnable: the marketplace 'add' steps tolerate an already-registered marketplace.
-set -u
+# set -e so a failed plugin install aborts the run with a non-zero status —
+# otherwise the script prints the success line and `curl | bash` callers
+# can't tell the environment has no toolkit.
+set -eu
 
 # 1) Register the marketplaces the plugins come from (idempotent).
 claude plugin marketplace add akyachtsman/claude.directives      || true

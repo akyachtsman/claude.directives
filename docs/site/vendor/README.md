@@ -1,4 +1,4 @@
-# docs/vendor/ — vendored third-party libraries
+# docs/site/vendor/ — vendored third-party libraries
 
 Same-origin copies so the `react-demo.html` preview has **no runtime CDN
 dependency** (no external `<script src>`, so no Subresource-Integrity risk — the

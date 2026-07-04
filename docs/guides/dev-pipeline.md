@@ -153,7 +153,7 @@ Every command and skill carries:
 | GitHub ops | GitHub MCP |
 | Backend / data | Supabase MCP + `supabase` agent (per `data.md`) |
 | Browser UI testing | Playwright (kit in `templates/ui-tests/`) / `ui-tester` |
-| Design generation | `frontend-design` skill (primary) + Google Stitch remote MCP — per-project look; see `design.md` / `docs/design-tooling.md` |
+| Design generation | `frontend-design` skill (primary) + Google Stitch remote MCP — per-project look; see `design.md` / `docs/guides/design-tooling.md` |
 
 ## Deliberate rejects (simplicity discipline)
 
@@ -166,7 +166,7 @@ Every command and skill carries:
 - **frameworked AI UI generators** (v0, Lovable, Bolt, 21st.dev, official Figma
   codegen) — React/Tailwind output and (often) a local server; wrong target for a
   plain-HTML, browser-only stack. (`frontend-design` + Stitch's *remote* MCP are
-  adopted instead — see the Delegation map and `docs/design-tooling.md`.)
+  adopted instead — see the Delegation map and `docs/guides/design-tooling.md`.)
 
 ## Complete standard scaffold (Phase 4)
 
@@ -199,7 +199,7 @@ committed.
 and, if any is missing, emits a GitHub Actions **notice** and exits 0 — a
 not-yet-configured repo surfaces a clear message instead of a cryptic
 scheduled-job crash. (Design is **per-project and generated** — see `design.md`
-and `docs/design-tooling.md`; there is no shared company theme to inherit.)
+and `docs/guides/design-tooling.md`; there is no shared company theme to inherit.)
 
 ## Implementation status
 

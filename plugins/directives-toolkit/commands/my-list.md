@@ -4,7 +4,7 @@ phase: cross-cutting
 ---
 List every command and auto-skill the `directives-toolkit` plugin provides in
 this session, as a menu **ordered by development-pipeline phase** (see
-`docs/dev-pipeline.md`). **Read them live — never hardcode the list** so the
+`docs/guides/dev-pipeline.md`). **Read them live — never hardcode the list** so the
 menu stays accurate as the toolkit changes:
 
 1. Locate the plugin in this session and read each `commands/<name>.md` and
@@ -28,7 +28,7 @@ menu stays accurate as the toolkit changes:
    |-----------|--------------|
 
 End with: "Commands run when you type them; auto-skills fire on description
-match. Phases mirror `docs/dev-pipeline.md`."
+match. Phases mirror `docs/guides/dev-pipeline.md`."
 
 Scope: this lists the **directives-toolkit** (our custom toolkit) only. For the
 full set including built-ins and other plugins, use Claude Code's `/help`.

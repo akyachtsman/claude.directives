@@ -1,0 +1,36 @@
+{
+  "_comment": "The machine-readable export boundary: every path downstream projects consume, grouped by HOW it reaches them (which determines how changes propagate). Validated by .github/scripts/check-exports.js in qa.yml: every path must exist, and every raw-URL self-reference in the tree must point inside one of these paths. Anything not listed here is internal to this repo and safe to move.",
+  "categories": {
+    "inherited-rules": {
+      "mode": "fetched live by raw URL at session start — changes propagate immediately",
+      "paths": [
+        "directives/global.md",
+        "directives/design.md",
+        "directives/test.md",
+        "directives/data.md"
+      ]
+    },
+    "installed-tooling": {
+      "mode": "installed via the plugin marketplace / env setup script — propagates on env cache rebuild (~weekly), versioned by git SHA",
+      "paths": [
+        ".claude-plugin/marketplace.json",
+        "plugins/directives-toolkit/",
+        "scripts/install-toolkit.sh"
+      ]
+    },
+    "copied-scaffolding": {
+      "mode": "copied into projects at bootstrap — snapshots that drift by design; /refresh-repo detects drift",
+      "paths": [
+        "templates/"
+      ]
+    },
+    "referenced-docs": {
+      "mode": "read on demand via links — no copy, no install",
+      "paths": [
+        "docs/standards/",
+        "docs/guides/",
+        "NEW-REPO-USER-INSTRUCTIONS.md"
+      ]
+    }
+  }
+}

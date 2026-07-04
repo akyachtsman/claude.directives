@@ -3,8 +3,8 @@
 This repo's own infrastructure monitors **and its self-test triage**. For the
 **exported** automation standard that downstream projects inherit (email,
 CI/Codex monitors, PR lifecycle, escalation, tool-use discipline, test-scenario
-bootstrap), see `docs/automations.md`; for the exported **project** CI triage,
-see `docs/ci-triage.md`.
+bootstrap), see `docs/standards/automations.md`; for the exported **project** CI triage,
+see `docs/standards/ci-triage.md`.
 
 ### Infrastructure Monitors (always on, no session required)
 CI and Codex monitoring runs entirely in GitHub Actions — event-driven, no session
@@ -43,7 +43,7 @@ This repo's `ci-failure` issues come specifically from its **directive-validatio
 CI — the `check-*.js` link / section / path validators in `qa.yml` (a downstream
 project's instead come from its build / Playwright suite). The triage **steps** are
 identical either way, so they aren't duplicated here: follow
-`docs/ci-triage.md` → *`ci-failure` issue is open* / *`codex-flagged` label on a PR*.
+`docs/standards/ci-triage.md` → *`ci-failure` issue is open* / *`codex-flagged` label on a PR*.
 Repo-specific notes:
 
 - An `internal link` or `required section` failure is this repo's own defect — fix
@@ -54,4 +54,4 @@ Repo-specific notes:
 ---
 
 **Escalation:** see `directives/global.md` → *Escalation Rules* (canonical) and
-`docs/automations.md` → *Escalation Rules* (automation additions) — both apply here.
+`docs/standards/automations.md` → *Escalation Rules* (automation additions) — both apply here.

@@ -46,7 +46,7 @@ Execute in order:
    scaffold the **static tier** (single-page `index.html` on GitHub Pages — the
    default). For the **production tier** (React + Next.js on Vercel + Supabase, per
    `global.md` → *Hosting & Deployment*), lay down the `templates/nextjs-app/` Next
-   starter instead and deploy on Vercel (`docs/cicd-setup.md` → *Production tier — Vercel*).
+   starter instead and deploy on Vercel (`docs/standards/cicd-setup.md` → *Production tier — Vercel*).
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
    copy all nine workflow files from `claude.directives/templates/workflows/`

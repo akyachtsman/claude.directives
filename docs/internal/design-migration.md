@@ -83,7 +83,7 @@ The WCAG contrast check moves from "validate the 10 company schemes" to a
 ## File-by-file change list
 
 **DELETE**
-- `docs/design-system.html` — its Pages slot is taken by `docs/repo-map.html`
+- `docs/design-system.html` — its Pages slot is taken by `docs/site/repo-map.html`
 - `.github/scripts/check-theme-parity.js`, `.github/scripts/parse-themes.js`
 - `tests/theme.spec.js`, `tests/playwright.config.js`, `tests/package.json`
 
@@ -103,9 +103,9 @@ The WCAG contrast check moves from "validate the 10 company schemes" to a
 - `templates/CLAUDE-template.md` — remove `Design Theme: [choose one of 10]`; note the look is set at kickoff
 - `scripts/install-toolkit.sh` — add the `frontend-design` plugin
 - `plugins/directives-toolkit/commands/`: `kickoff.md` (call `/design-intake`), `new-repo.md` (scaffold `styles/`), `sdd-loop.md` (look-gate sources from the contract)
-- `docs/dev-pipeline.md` — reverse the earlier "frontend-design rejected" note (now adopted); add `frontend-design` + Stitch MCP to the delegation map; add the design-intake step
+- `docs/guides/dev-pipeline.md` — reverse the earlier "frontend-design rejected" note (now adopted); add `frontend-design` + Stitch MCP to the delegation map; add the design-intake step
 - `directives/global.md` — soften "never deviate from the design directive"
-- site/links: root `index.html`, `README.md`, `docs/README.md`, `docs/index.html`, `CLAUDE.md` — feature `repo-map.html`, drop design-system references
+- site/links: root `index.html`, `README.md`, `docs/README.md`, `docs/site/index.html`, `CLAUDE.md` — feature `repo-map.html`, drop design-system references
 
 ## Phasing (CI stays green)
 - **Phase 1 — additive** (no deletions): add `/design-intake`, the `styles/`

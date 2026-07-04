@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>claude.directives</title>
+  <title>claude.directives — demos</title>
+  <link rel="canonical" href="https://akyachtsman.github.io/claude.directives/docs/site/">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    /* ── Landing-page palette — structure per directives/design.md; accent is page-specific, not a theme-switched scheme ── */
+    /* ── Demo-gallery palette — structure per directives/design.md; accent is page-specific, not a theme-switched scheme ── */
     :root {
       --color-bg:             #F5F5F3;
       --color-surface:        #FFFFFF;
@@ -46,6 +47,8 @@
       margin-top: 6px;
       margin-bottom: 32px;
     }
+    .page-subtitle code { background:#ECEAE4; border-radius:4px; padding:1px 5px; }
+    .page-subtitle a { color: var(--color-accent); }
     .section-label {
       font-size: var(--font-xs);
       font-weight: 600;
@@ -86,33 +89,34 @@
 </head>
 <body>
   <div class="container">
-    <h1 class="page-title">claude.directives</h1>
-    <p class="page-subtitle">The company-wide agent standard — directives, templates, and live UI references.</p>
+    <h1 class="page-title">claude.directives — demos</h1>
+    <p class="page-subtitle">Live UI references served from <code>docs/site/</code>. The site root <a href="../../">/</a> shows the same gallery.</p>
 
     <div class="section-label">Demos</div>
     <div class="demo-list">
-      <!-- Add new demos as a new .demo-card below; link into docs/. -->
-      <a class="demo-card" href="docs/site/repo-map.html">
+      <!-- These pages are siblings in docs/, so links are bare filenames.
+           This page and the root index.html carry the same demo list. -->
+      <a class="demo-card" href="repo-map.html">
         <div class="demo-name">Interactive Repo Map</div>
         <div class="demo-desc">Zoomable, searchable map of the whole repo — directives, the toolkit plugin (commands, skills, agents, hooks), templates, CI, and how they all connect.</div>
         <div class="demo-file">docs/site/repo-map.html</div>
       </a>
-      <a class="demo-card" href="docs/site/commands.html">
-        <div class="demo-name">Commands Reference</div>
-        <div class="demo-desc">All 13 directives-toolkit slash commands, grouped by pipeline phase — what each does and when to use it.</div>
-        <div class="demo-file">docs/site/commands.html</div>
-      </a>
-      <a class="demo-card" href="docs/site/react-demo.html">
+      <a class="demo-card" href="react-demo.html">
         <div class="demo-name">Browser-only React preview</div>
         <div class="demo-desc">A live, stateful React button running browser-only — no build, no terminal. Vendored React (self-contained, no CDN). The production-tier preview technique; carries into the Next.js app verbatim.</div>
         <div class="demo-file">docs/site/react-demo.html</div>
+      </a>
+      <a class="demo-card" href="commands.html">
+        <div class="demo-name">Commands Reference</div>
+        <div class="demo-desc">All 13 directives-toolkit slash commands, grouped by pipeline phase — what each does and when to use it.</div>
+        <div class="demo-file">docs/site/commands.html</div>
       </a>
     </div>
 
     <footer>
       Directives:
       <a href="https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md">design.md</a> ·
-      browse all demos under <a href="docs/site/">docs/site/</a>
+      reference docs index: <a href="README.md">docs/README.md</a>
     </footer>
   </div>
 </body>

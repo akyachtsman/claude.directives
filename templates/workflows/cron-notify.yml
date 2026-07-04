@@ -4,7 +4,7 @@ name: Scheduled Notification
 # emails a notification via notify-email.js. notify-task.js guards on the SMTP
 # config and emits a GitHub Actions notice if it's missing (mandatory repo
 # setup). Customize notify-task.js with your task; add its own env below.
-# See docs/cron-email-notifications.md for setup.
+# See docs/guides/cron-email-notifications.md for setup.
 
 on:
   schedule:

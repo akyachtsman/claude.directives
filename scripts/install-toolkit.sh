@@ -25,7 +25,7 @@ claude plugin install directives-toolkit@claude-directives
 claude plugin install pr-review-toolkit@claude-plugins-official
 claude plugin install security-guidance@claude-plugins-official
 # frontend-design: the design generator the new design.md relies on (per
-# design.md / docs/design-tooling.md). || true so a marketplace-name drift can't
+# design.md / docs/guides/design-tooling.md). || true so a marketplace-name drift can't
 # break the whole setup run.
 claude plugin install frontend-design@claude-code-plugins || true
 

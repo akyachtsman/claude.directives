@@ -13,7 +13,7 @@ const missing = REQUIRED.filter((k) => !process.env[k]);
 if (missing.length) {
   console.log(
     `::warning title=Email alerts not configured::Set ${missing.join(', ')} in ` +
-      `Settings → Secrets and variables → Actions (see docs/cron-email-notifications.md). Skipping.`
+      `Settings → Secrets and variables → Actions (see docs/guides/cron-email-notifications.md). Skipping.`
   );
   process.exit(0);
 }

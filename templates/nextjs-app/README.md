@@ -54,7 +54,7 @@ privileged operations only.
    PRs get preview URLs; `main` deploys to production.
 
 > Point `qa-live.yml` (Playwright) at the Vercel preview/production URL via the
-> project's `APP_URL` variable — see `docs/cicd-setup.md`.
+> project's `APP_URL` variable — see `docs/standards/cicd-setup.md`.
 
 ## Preview a React component in the browser (no build, no terminal)
 

@@ -9,11 +9,11 @@ everything at session start — that burns context on material the task may
 never touch.
 
 ### docs/
-- `docs/automations.md` — CI monitor workflow, PR lifecycle additions, escalation additions
-- `docs/cicd-setup.md` — canonical CI/CD install procedure (workflow templates, monitors, secrets/variables)
-- `docs/code-review-standard.md` — Blocking vs. non-blocking review criteria
-- `docs/usage-guide.md` — Agent installation, review boundaries, and .agent-reports/ organization
-- `docs/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
+- `docs/standards/automations.md` — CI monitor workflow, PR lifecycle additions, escalation additions
+- `docs/standards/cicd-setup.md` — canonical CI/CD install procedure (workflow templates, monitors, secrets/variables)
+- `docs/standards/code-review-standard.md` — Blocking vs. non-blocking review criteria
+- `docs/guides/usage-guide.md` — Agent installation, review boundaries, and .agent-reports/ organization
+- `docs/standards/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
 
 ### QA/data agents — ship in the directives-toolkit plugin
 Agents arrive via the `directives-toolkit` plugin (see global.md → Skill
@@ -48,7 +48,7 @@ and installed by the environment setup script):
   the official reviewers per qa-pipeline's adapter instructions)
 
 Workflow and Playwright-kit installation — which template goes where, and the
-monitors — is `docs/cicd-setup.md`'s job; don't re-derive it from the tree.
+monitors — is `docs/standards/cicd-setup.md`'s job; don't re-derive it from the tree.
 
 ## Session start — required actions
 

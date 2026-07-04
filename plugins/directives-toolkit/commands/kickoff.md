@@ -58,7 +58,7 @@ Execute in order:
    and settings). If `CLAUDE.md` already exists, skip — the repo is bootstrapped.
    If the **production tier** was chosen at step 1, the app is scaffolded from the
    `templates/nextjs-app/` Next starter (Vercel + Supabase) instead of the static
-   `index.html` layout — deploy per `docs/cicd-setup.md` → *Production tier — Vercel*.
+   `index.html` layout — deploy per `docs/standards/cicd-setup.md` → *Production tier — Vercel*.
 
 4. **Optional — competitive discovery fan-out** (only if the user opted in at
    step 1). Spawn parallel worker agents **in one batch so they run concurrently**

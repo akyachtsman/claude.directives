@@ -180,7 +180,7 @@ or want to watch additional workflows (`grep '^name:' .github/workflows/*.yml`).
 After pushing, verify with a manual `workflow_dispatch` run before relying on it.
 
 **What it does:** files a deduplicated `ci-failure` issue when a watched
-workflow fails. Behavior detail: `docs/automations.md` → Automation 2.
+workflow fails. Behavior detail: `docs/standards/automations.md` → Automation 2.
 
 ### 9b — Codex Monitor
 
@@ -192,7 +192,7 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 ```
 
 **What it does:** adds a `codex-flagged` label when Codex raises concerns.
-Behavior detail: `docs/automations.md` → Automation 3.
+Behavior detail: `docs/standards/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor
 
@@ -204,7 +204,7 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 ```
 
 **What it does:** verifies every Pages build is live and tracks problems via a
-deduplicated `pages-deploy-failure` issue. Behavior detail: `docs/automations.md`
+deduplicated `pages-deploy-failure` issue. Behavior detail: `docs/standards/automations.md`
 → Automation 4.
 
 ### 9d — Pages Retry

@@ -63,7 +63,7 @@ once locally — it persists.
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
-   - `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` — email transport for the standard notification job (`SMTP_PORT` / `ALERT_FROM` optional). Until these + `SMTP_PASS` are set, the job emits a notice and skips — see `docs/cron-email-notifications.md`
+   - `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` — email transport for the standard notification job (`SMTP_PORT` / `ALERT_FROM` optional). Until these + `SMTP_PASS` are set, the job emits a notice and skips — see `docs/guides/cron-email-notifications.md`
 
 ### Step 2 — Build the app
 Open a Claude Code session scoped to the new repo and type:
@@ -97,7 +97,7 @@ look however you like: the simplest browser-only path is to **attach an image**
 (a screenshot/mockup from Stitch, Figma, Dribbble, or a sketch); or wire Stitch's
 remote MCP for higher-fidelity HTML; or bring nothing and let `/design-intake`
 propose a direction from 2–3 taste questions. Re-run `/design-intake` anytime to
-re-theme. Details: `directives/design.md` and `docs/design-tooling.md`.
+re-theme. Details: `directives/design.md` and `docs/guides/design-tooling.md`.
 
 ---
 
@@ -107,4 +107,4 @@ re-theme. Details: `directives/design.md` and `docs/design-tooling.md`.
 and variables in items 5–6 of Step 1 above, then edit `.github/scripts/notify-task.js` to
 send your project's actual notification. Until the SMTP secrets are set, the job
 emits a notice and skips (no failure). Provider setup (Gmail app password, Resend,
-SendGrid) is in `docs/cron-email-notifications.md`.
+SendGrid) is in `docs/guides/cron-email-notifications.md`.

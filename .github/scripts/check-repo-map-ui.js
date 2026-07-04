@@ -9,7 +9,7 @@ import { dirname, resolve } from 'path';
 
 const MAP = 'file://' + (process.env.REPO_MAP_FILE
   ? resolve(process.env.REPO_MAP_FILE)
-  : resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/repo-map.html'));
+  : resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/site/repo-map.html'));
 const fail = m => { console.error('FAIL: ' + m); process.exitCode = 1; };
 
 const browser = await chromium.launch();

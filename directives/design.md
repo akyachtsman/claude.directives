@@ -129,6 +129,67 @@ function makeSortable(table){
 }
 ```
 
+## List & summary surfaces
+For a short, triage-style list of items (tasks, alerts, posts, entries) a user
+scans at a glance, use **one** consistent card pattern across the project so the
+interaction is never relearned. Use it for **≤ ~10 rows** with a title + context
+per item; reach for **Tables & sorting** instead when the data is tabular or needs
+comparison/sorting.
+
+**Anatomy** — a titled card holds hairline-divided rows; each row is the control:
+- **Card** — `--surface`, `1px solid --border`, radius from `--radius-*`, `--shadow`;
+  a small header (weight 700, `--muted`), optional count.
+- **Row = a full-width `<button>`** (`font: inherit`, left-aligned), **44px** min tap
+  target, with a `1px --border` **top divider between rows** (first row none) — the
+  framed-card + hairline look is the defining trait.
+- **Leading indicator** in a **fixed-width column** so every title left-aligns: a
+  status **pill** or a line **icon** (`stroke: currentColor`, so it follows the
+  theme). **One indicator style per card** (all pills or all icons). **No emoji.**
+- **Title** — single line, weight 500, **ellipsis on overflow (never wraps)**.
+- **Subline** — `--muted`, the context ("Open · Maria · 8:20").
+
+**Rules**
+- **Status is conveyed by the pill's text, never colour alone** (WCAG + screen
+  readers): colour reinforces, the label carries the meaning. Map each status to a
+  semantic token consistently — the palette is **per-project**, not standardized here.
+- **Tokens, not literals** — every value reads `var(--…)`.
+- **States:** hover / `:focus-visible` → `--primary-bg`; a selected or deep-linked
+  row keeps `--primary-bg`; **empty** → one centred muted line (per Editorial →
+  Empty states).
+- **Deep-link + arrive-flash:** clicking a row opens its source and flashes the exact
+  target row — scroll into view, pulse `--primary-bg` + a `2px --primary` outline
+  (~2.4s), and move focus to it. **Honor `prefers-reduced-motion`** — highlight and
+  focus without the pulse.
+- A header action (e.g. "+ New") must `stopPropagation()` so it can't fire the row.
+
+Reference implementation — `makeSummaryList(card)` + `flashRow(row)`; the markup
+carries the item id in `data-id`:
+```html
+<button class="summary-row" data-id="…">
+  <span class="row-lead"><span class="pill pill--alert">Alert</span></span>
+  <span class="row-main">
+    <span class="row-title">One-line title, ellipsis on overflow</span>
+    <span class="row-sub">Context · author · time</span>
+  </span>
+</button>
+```
+```js
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function flashRow(row){                      // the "arrived from a deep-link" affordance
+  row.scrollIntoView({block:'center', behavior: reduce ? 'auto' : 'smooth'});
+  row.classList.remove('flash'); void row.offsetWidth;   // restart the animation
+  row.classList.add('flash'); row.focus({preventScroll:true});
+  setTimeout(() => row.classList.remove('flash'), reduce ? 1200 : 2400);
+}
+function makeSummaryList(card){
+  const rows = [...card.querySelectorAll('.summary-row')];
+  rows.forEach(row => row.addEventListener('click', () => {
+    rows.forEach(r => r.classList.toggle('selected', r === row));
+    // real app: open row.dataset.id's source screen, then flashRow(target).
+  }));
+}
+```
+
 ## Editorial Preferences
 Look-independent copy and formatting rules — apply to every project.
 

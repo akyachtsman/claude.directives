@@ -10,6 +10,7 @@
   "enabledPlugins": {
     "directives-toolkit@claude-directives": true,
     "pr-review-toolkit@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true
+    "security-guidance@claude-plugins-official": true,
+    "frontend-design@claude-code-plugins": true
   }
 }

@@ -20,7 +20,9 @@ verdict. Read-only — do NOT modify files. Execute in order:
    `pages-deploy-failure` issue). Also flag any open issues tagged @claude
    with no linked PR yet. For a deploy-backed project (e.g. Pages), confirm the
    live site is serving the latest commit: match the deploy run's `head_sha` to
-   `git rev-parse HEAD`, and report the live URL + last deploy time. Verify by
+   the head of the Pages source branch (`git rev-parse origin/main` — NOT the
+   session's `HEAD`, which false-flags "stale" on a feature branch), and report
+   the live URL + last deploy time. Verify by
    `head_sha` + `conclusion` — a live-URL 200 only where the session's network
    policy allows that host (per the `update-pages` caveat).
 4. Validation gates — Detect and run the repo's configured validation

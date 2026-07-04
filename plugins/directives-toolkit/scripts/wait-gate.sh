@@ -45,9 +45,13 @@ case "$trimmed" in
   sleep[[:space:]]*) ;;
   *) exit 0 ;;
 esac
+# A leading bg sleep with a non-literal duration (`sleep $DELAY`,
+# `sleep $((60*5))`) is still a pure waiter — fail CLOSED for those rather
+# than letting the unparseable duration slip past the threshold check.
 dur=$(printf '%s' "$trimmed" | grep -oE '^sleep[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1)
-[ -n "$dur" ] || exit 0
-[ "$dur" -ge 15 ] 2>/dev/null || exit 0
+if [ -n "$dur" ]; then
+  [ "$dur" -ge 15 ] 2>/dev/null || exit 0
+fi
 
 echo 'BLOCKED by directives wait-gate: do not background a `sleep` to wait. A backgrounded sleep orphans into a phantom "running" task when the session suspends/resumes, and it watches nothing. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) or just re-check on your next turn; (2) to self-pace a re-check, use ScheduleWakeup (sanctioned here — `send_later` is usually unavailable); (3) for a genuine condition-wait, use Monitor with an exit condition. See global.md -> Async Operations.' >&2
 exit 2

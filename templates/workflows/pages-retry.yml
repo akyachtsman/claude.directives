@@ -12,7 +12,11 @@ name: Pages Deploy Retry
 # Purely additive — no change to the Pages source or the existing deploy/monitor.
 on:
   workflow_run:
-    workflows: ["pages build and deployment"]
+    # The managed Pages workflow's actual `name` is its file slug
+    # "pages-build-deployment" (verified via the Actions API), not the prose
+    # title shown in the UI — the prose form never matches, so the retry
+    # would never fire.
+    workflows: [pages-build-deployment]
     types: [completed]
 permissions:
   actions: write

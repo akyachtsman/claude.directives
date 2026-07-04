@@ -10,6 +10,10 @@ on:
     - cron: '0 9 * * 1'   # weekly — well within 60 days
   workflow_dispatch:
 
+# Least privilege for GITHUB_TOKEN — the push itself uses the PAT from checkout.
+permissions:
+  contents: read
+
 jobs:
   keepalive:
     runs-on: ubuntu-latest

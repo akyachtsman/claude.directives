@@ -57,6 +57,14 @@ jobs:
           diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
           echo "OK: paired files in sync"
 
+      # The two Pages landing pages (site root + /docs/ gallery) deliberately
+      # duplicate one :root palette block; keep the copies from drifting.
+      - name: Check landing-page palette blocks in sync
+        run: |
+          extract() { sed -n '/:root {/,/^    }/p' "$1"; }
+          diff <(extract index.html) <(extract docs/index.html)
+          echo "OK: landing-page palette blocks in sync"
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest
@@ -87,6 +95,11 @@ jobs:
         run: |
           npm install playwright
           npx playwright install --with-deps chromium
+
+      # Keep in sync with CLAUDE.md "Local gate": the map's HTML is validated
+      # here on every run (locally it's only needed when the map changed).
+      - name: Validate repo map HTML
+        run: npx --yes html-validate docs/repo-map.html
 
       - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js

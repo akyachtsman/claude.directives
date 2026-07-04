@@ -96,7 +96,8 @@ Any new client-side navigation or back affordance **requires a back-flow test**
 page you came from, tracked via a nav stack — not the last page visited).
 
 ## CI triage
-- `qa.yml` runs on push to `main` and `claude/**` branches, and on PRs targeting `main`
+- `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are
+  covered by the PR trigger — listing `claude/**` under push would run everything twice)
 - Static Checks must pass before merge; the local `UI Tests` job is
   `continue-on-error: true` (backend unreachable on runners) — `qa-live.yml` is the
   authoritative, blocking UI gate

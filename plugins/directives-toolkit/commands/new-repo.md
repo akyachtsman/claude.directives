@@ -108,7 +108,7 @@ Execute in order:
    - `tests/app.spec.js`
    - `package.json`
 
-   Do NOT copy the template's `package-lock.json` — instead run `npm install`
+   The template kit ships no lockfile on purpose — run `npm install`
    inside `.github/scripts/ui-tests/` to generate a fresh one **and commit it**.
    `qa.yml`'s `cache: npm` step hard-fails at `setup-node` without a committed
    `package-lock.json` (before Playwright even runs), so commit the lockfile and

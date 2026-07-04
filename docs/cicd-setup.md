@@ -71,7 +71,7 @@ Alternatively, have the active Claude Code session fetch and write these files v
 
 ## Step 2 — Set UI_TESTS_DIR
 
-In all three workflow files, confirm `UI_TESTS_DIR` points to the correct path for the project's Playwright test directory (default: `.github/scripts/ui-tests`). Edit if different.
+In each copied workflow file (two core, or three if you added `qa-response.yml`), confirm `UI_TESTS_DIR` points to the correct path for the project's Playwright test directory (default: `.github/scripts/ui-tests`). Edit if different.
 
 ---
 
@@ -216,12 +216,14 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/workflows/pages-retry.yml
 ```
 
-**What it does:** watches the managed `pages build and deployment` run and, on a
+**What it does:** watches the managed `pages-build-deployment` run (that file
+slug is the workflow's actual `name` — the UI's prose title "pages build and
+deployment" never matches in `workflow_run` filters) and, on a
 failure, re-runs it automatically (transient *"Deployment failed, try again
 later."* publish blips clear on retry), bounded to `run_attempt < 4` so a truly
 broken deploy can't loop — at the ceiling `pages-monitor.yml` opens the tracking
 issue. **Two prerequisites:** (1) it targets the **branch-source** Pages workflow
-(`pages build and deployment`) — projects on the **GitHub Actions** Pages source
+(`pages-build-deployment`) — projects on the **GitHub Actions** Pages source
 should instead build retry into their own deploy workflow; (2) it only arms once
 it's on the default branch, so it covers the *next* deploy, not the one that adds
 it.

@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 // Recursively collect all .md files, skipping node_modules and .git.
 function findMarkdown(dir) {
@@ -51,8 +51,12 @@ const isInternal = url => url.includes(`raw.githubusercontent.com/${REPO}`);
 
 // Map an internal raw URL to the repo-relative path it names.
 // https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path...> → <path...>
+// The repo name is regex-escaped (it contains a dot) and the ref is constrained
+// to the forms we actually pin (main or a commit SHA) — a slash-carrying branch
+// ref would otherwise misparse and swallow part of the path.
+const REPO_RE = REPO.replace(/[.]/g, '\\.');
 const internalPath = url => {
-  const m = url.match(new RegExp(`raw\\.githubusercontent\\.com/${REPO}/[^/]+/(.+)$`));
+  const m = url.match(new RegExp(`raw\\.githubusercontent\\.com/${REPO_RE}/(?:main|[0-9a-f]{7,40})/(.+)$`));
   return m ? m[1] : null;
 };
 
@@ -62,13 +66,13 @@ const targets = [...urls].filter(url =>
   true
 );
 
-// Auth only for GitHub-hosted URLs; the token is expanded by the shell from the
-// environment, never interpolated into the command string (process-listing safe).
+// Auth only for GitHub-hosted URLs; the token reaches curl as a config file on
+// stdin (never in argv — process-listing safe; never via a shell — URLs are
+// harvested from repo markdown, so a shell string would let `${GITHUB_TOKEN}`
+// in a crafted link expand and exfiltrate the token).
 const hasToken = Boolean(process.env.GITHUB_TOKEN);
-const authHeaderFor = url =>
-  hasToken && /https:\/\/(raw\.githubusercontent\.com|api\.github\.com|github\.com)\//.test(url)
-    ? '-H "Authorization: Bearer $GITHUB_TOKEN"'
-    : '';
+const isGithubHost = url =>
+  /^https:\/\/(raw\.githubusercontent\.com|api\.github\.com|github\.com)\//.test(url);
 
 let failed = false;
 
@@ -84,18 +88,29 @@ for (const url of internalTargets) {
   }
 }
 
-// External links: verify over the network with retry.
+// External links: verify over the network with retry. Authed requests do not
+// follow redirects (`-L` forwards the Authorization header cross-host); without
+// `-L` a 3xx is a curl success, which is fine — the link resolved.
 const externalTargets = targets.filter(url => !isInternal(url));
 for (const url of externalTargets) {
+  const authed = hasToken && isGithubHost(url);
+  const args = [
+    '-sf', '--max-time', '10',
+    ...(authed ? ['--config', '-'] : ['-L']),
+    url, '-o', '/dev/null',
+  ];
   let ok = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      execSync(`curl -sfL --max-time 10 ${authHeaderFor(url)} "${url}" -o /dev/null`, { stdio: 'pipe' });
+      execFileSync('curl', args, {
+        stdio: 'pipe',
+        input: authed ? `header = "Authorization: Bearer ${process.env.GITHUB_TOKEN}"\n` : '',
+      });
       ok = true;
       break;
     } catch {
       if (attempt < 3) {
-        execSync(`sleep ${attempt * 2}`);
+        execFileSync('sleep', [String(attempt * 2)]);
       }
     }
   }

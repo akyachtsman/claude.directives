@@ -30,7 +30,7 @@ importing only browser-only-safe *methods*:
 | 7 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
 | 8 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | `ship.md` |
 | 9 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
-| — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
+| — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/refresh-repo` (re-sync); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
 ## The artifact chain
 
@@ -217,7 +217,7 @@ and `docs/design-tooling.md`; there is no shared company theme to inherit.)
   self-review; `sdd-loop` plan gains the one adaptive plan-review pass (fresh
   subagent scores `plan.md`, revises under ~8, forces data-flow/failure-mode).
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
-  scaffolds the full set (8 workflows + Playwright kit + scheduled-job scripts).
+  scaffolds the full set (all nine workflows + Playwright kit + scheduled-job scripts).
   The email kit is standard + active with mandatory secrets and a config-guard
   notice in `notify-task.js`. See "Complete standard scaffold" above.
 - **Design — per-project generative (done):** the fixed company design system

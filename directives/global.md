@@ -28,17 +28,17 @@ every project unless explicitly overridden at repo level.
 - **Receiving review feedback** — treat review comments (human, Codex, code-reviewer) as suggestions to *evaluate*, not orders to obey. Restate the underlying requirement, verify the claim against the code, then either apply the fix or push back with technical reasoning. No performative agreement ("You're absolutely right!"), and no change you cannot justify
 
 ## Repo Structure Standard
-Every project repo should contain:
+Every project repo should contain (matching what `/new-repo` actually scaffolds):
 ```
 CLAUDE.md        ← project context + imported directive URLs
-index.html       ← complete single-page app
+index.html       ← the app's entry page (additional pages are fine — every
+                   page matches the styles/ contract, per design.md)
+styles/          ← the committed design contract (tokens.css + components.css)
 .github/
-  workflows/
-    qa.yml
-    qa-live.yml
-    ci-monitor.yml
-    codex-monitor.yml
-    pages-monitor.yml
+  workflows/     ← the full template set from templates/workflows/ (9 files):
+    qa.yml, qa-live.yml, qa-response.yml,
+    ci-monitor.yml, codex-monitor.yml, pages-monitor.yml,
+    pages-retry.yml, cron-notify.yml, keepalive.yml
   scripts/
     ui-tests/
 ```
@@ -202,8 +202,10 @@ file bootstrap anymore; nothing is fetched into `.claude/`.
   it before session start (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) —
   required, because web containers are ephemeral and `enabledPlugins` alone
   enables but never installs.
-- **CLI / desktop:** one-time `/plugin marketplace add akyachtsman/claude.directives`
-  then `/plugin install directives-toolkit@claude-directives`.
+- **CLI / desktop:** run `scripts/install-toolkit.sh` (the same single source
+  of truth the web setup script curls) — the toolkit alone is NOT enough:
+  `.claude/settings.json` also enables the official review/security/design
+  plugins the script installs alongside it.
 - Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
   `enabledPlugins` (copy `templates/claude-settings.json`).
 

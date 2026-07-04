@@ -104,7 +104,7 @@ re-theme. Details: `directives/design.md` and `docs/design-tooling.md`.
 ### Scheduled email notifications (standard)
 `/new-repo` already scaffolds the email kit (`cron-notify.yml`, `keepalive.yml`,
 `notify-email.js`, `notify-task.js`) into every project. You just set the secrets
-and variables in Steps 5–6 above, then edit `.github/scripts/notify-task.js` to
+and variables in items 5–6 of Step 1 above, then edit `.github/scripts/notify-task.js` to
 send your project's actual notification. Until the SMTP secrets are set, the job
 emits a notice and skips (no failure). Provider setup (Gmail app password, Resend,
 SendGrid) is in `docs/cron-email-notifications.md`.

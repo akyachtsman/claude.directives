@@ -85,7 +85,8 @@ or live URL not serving — with no session required.
   (`https://<owner>.github.io/<repo>/`) returns 200, with cache-busted retries.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
   issue. A healthy deploy closes it and reports green in the job summary only.
-- The live URL is derived generically — the file is portable to any project as-is.
+- The live URL comes from the Pages API (user-site repos and custom domains work),
+  with a generic derivation as fallback — the file is portable to any project as-is.
 - Uses `GITHUB_TOKEN` only.
 
 **Template:** `templates/workflows/pages-monitor.yml` — drop-in, no customization needed.
@@ -95,6 +96,26 @@ or live URL not serving — with no session required.
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
   -o .github/workflows/pages-monitor.yml
 ```
+
+---
+
+## Automation 4b — Pages Deploy Retry (infra-resident, event-driven)
+
+**Goal:** Auto-heal the transient *"Deployment failed, try again later."* Pages
+publish blip without a session — the failure class that otherwise leaves the site
+on the previous version until someone re-runs the deploy by hand.
+
+**How it works:**
+- Trigger: `workflow_run` on the managed `pages-build-deployment` workflow
+  (branch-source Pages), on completion.
+- On a failed deploy with `run_attempt < 4`: re-runs the whole deploy run. At the
+  ceiling it stops and lets `pages-monitor.yml` (Automation 4) open the tracking issue.
+- Projects deploying Pages via their own GitHub **Actions** source should build the
+  retry into that workflow instead — this template only covers the branch source.
+- Uses `GITHUB_TOKEN` only (`actions: write`).
+
+**Template:** `templates/workflows/pages-retry.yml` — drop-in, no customization
+needed. Full detail: `docs/cicd-setup.md` Step 9d.
 
 ---
 
@@ -114,6 +135,7 @@ When a Claude Code session is live, it subscribes to PR activity for fast feedba
 - [ ] Confirm `ci-monitor.yml` is present and its `workflow_run.workflows` list is correct
 - [ ] Confirm `codex-monitor.yml` is present
 - [ ] Confirm `pages-monitor.yml` is present (any project with a GitHub Pages site)
+- [ ] Confirm `pages-retry.yml` is present (branch-source Pages projects)
 - [ ] Check for any open `ci-failure` tracking issues before starting work
 - [ ] Subscribe to PR activity: `subscribe_pr_activity` on any open PRs
 - [ ] Read `CLAUDE.md` for full project context

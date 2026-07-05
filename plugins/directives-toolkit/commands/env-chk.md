@@ -40,9 +40,16 @@ verdict. Read-only — do NOT modify files. Execute in order:
    `.upstream.sha` in .claude/directive-sync.json against the live HEAD of
    claude.directives `main` (one API call:
    `repos/akyachtsman/claude.directives/commits/main`). If they differ — or no
-   stamp exists — report "upstream has moved since this project's last sync
-   (N commits behind) — run `/refresh-repo`" as a ⚠️ finding. Exception: if
-   upstream.sha trails HEAD by exactly the commit(s) that recorded the
+   stamp exists — report a ⚠️ finding. Make it category-aware: classify the
+   delta's changed paths (one compare call) and state the action per
+   EXPORTS.json delivery mode:
+   - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
+   - `templates/` → installed copies may be stale → run `/refresh-repo`
+   - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it —
+     force the env cache rebuild (see NEW-REPO-USER-INSTRUCTIONS.md → "Force a
+     toolkit update") or wait for the ~weekly expiry
+   - `docs/` only → informational
+   Exception: if upstream.sha trails HEAD by exactly the commit(s) that recorded the
    stamp/baselines themselves, report current, not behind. Session Start
    bootstrap skips existing files, so without this alarm a project can run
    indefinitely on stale skills/agents.

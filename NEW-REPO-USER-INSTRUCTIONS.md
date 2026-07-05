@@ -36,6 +36,13 @@ Or set network to **Full** if you'd rather not maintain a list. *(Optional: add
 each container once `cdn.playwright.dev` is allowed.)* Reload — now the commands appear,
 and **every repo you open in this environment** has them from then on.
 
+**Force a toolkit update (skip the ~weekly wait).** The setup-script install is
+cached per environment, so a toolkit change merged upstream normally reaches your
+sessions only when that cache rebuilds (~weekly). To get it **now**: open the
+environment's settings, make any edit to the Setup script (even re-saving a
+whitespace change), save — that invalidates the cache — then start a **new**
+session. `/env-chk` tells you when this is needed ("plugins/ changed upstream").
+
 <details><summary>What the one-liner does / fallback if the fetch is blocked</summary>
 
 It runs <a href="scripts/install-toolkit.sh"><code>scripts/install-toolkit.sh</code></a>

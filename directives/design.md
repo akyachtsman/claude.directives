@@ -190,6 +190,34 @@ function makeSummaryList(card){
 }
 ```
 
+## Diagrams & connectors
+For any node-and-edge surface (relationship maps, flow/architecture diagrams,
+org charts — SVG or canvas). The invariant: **every connector stays individually
+traceable to exactly one source→target pair**, at any zoom.
+
+**Rules**
+- **No collinear overlap between different relationships.** Two edges from
+  *different* sources must never lie on the same line — they read as one.
+  Same-orientation runs sharing a corridor each get their **own lane** (a fixed
+  per-edge offset within the corridor).
+- **A bus is one relationship.** A single source fanning to several targets may
+  share a trunk — that trunk *is* the relationship, drawn once. Never let two
+  different relationships merge into something that reads as a bus.
+- **Route around boxes, never behind them.** An edge passing under a node is
+  untraceable; add a bend instead.
+- **Crossings break with a gap, never an arc.** Where perpendicular edges cross,
+  interrupt the lower edge with a small gap. Arcs/hop-loops read as nodes at
+  small sizes.
+- If edges carry labels, each label sits on its own edge's lane — never in a
+  shared corridor where it could attach to a neighbour.
+
+**Verify geometrically, not visually, before shipping.** A glance misses
+collinear overlaps. From the edge geometry itself (path data / computed
+polylines), assert: no two segments from different edges overlap collinearly,
+and no segment intersects a node's rect. Then confirm against the **served**
+build, not the local file — hash-nav and CDN caching can serve a stale build
+that hides the change (cache-bust with `?v=` or incognito).
+
 ## Editorial Preferences
 Look-independent copy and formatting rules — apply to every project.
 

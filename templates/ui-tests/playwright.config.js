@@ -11,6 +11,9 @@ export default defineConfig({
   reporter: [['list'], ['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]],
   use: {
     // REPLACE_WITH_YOUR_APP_URL — e.g. https://yourname.github.io/your-repo/
+    // Extra HTML entry points (admin/vendor consoles): set APP_PAGES to a
+    // comma-separated list of paths relative to APP_URL — the ENTRY scenario
+    // load-gates each one (test.md → UI coverage gates).
     baseURL: (process.env.APP_URL || 'REPLACE_WITH_YOUR_APP_URL').replace(/\/?$/, '/'),
     headless: true,
     screenshot: 'only-on-failure',

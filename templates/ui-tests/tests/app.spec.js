@@ -577,6 +577,124 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SCENARIO — ENTRY: every deployed HTML entry point renders without JS errors
+// A page with zero tests is a release blocker (test.md → UI coverage gates).
+// Declare entry points beyond the baseURL in APP_PAGES (env var / repository
+// variable): comma-separated paths relative to APP_URL, e.g.
+// APP_PAGES="admin.html,vendor/console.html". Each gets the S1 load gate here;
+// pages with richer flows deserve their own suite (Scenario 5+ below).
+// ─────────────────────────────────────────────────────────────────────────────
+test('ENTRY: every deployed entry point renders without JS errors', async ({ page }) => {
+  const pages = (process.env.APP_PAGES || '').split(',').map(s => s.trim()).filter(Boolean);
+  test.skip(pages.length === 0, 'No extra entry points declared (APP_PAGES) — the baseURL is covered by S1');
+  for (const path of pages) {
+    const errors = [];
+    const onPageError = e => errors.push(e.message);
+    const onConsole = m => { if (m.type() === 'error') errors.push(m.text()); };
+    page.on('pageerror', onPageError);
+    page.on('console', onConsole);
+    await page.goto('./' + path.replace(/^\//, ''));
+    await page.waitForLoadState('networkidle').catch(() => {});
+    const bodyText = await page.evaluate(() => document.body.innerText?.trim());
+    expect(bodyText?.length, `${path}: page body is empty`).toBeGreaterThan(0);
+    expect(errors, `${path}: JS errors on load: ${errors.join('; ')}`).toHaveLength(0);
+    page.off('pageerror', onPageError);
+    page.off('console', onConsole);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCENARIO — DISMISS: overlays close via their control, Escape, and backdrop
+// "It has a close button" is not coverage; "clicking it closes" is (test.md →
+// UI coverage gates). For each trigger that opens a modal/drawer/popover, the
+// container must actually hide after (a) its close/X/Cancel control and
+// (b) Escape — re-opened between checks — and (c) a backdrop click, asserted
+// only when a backdrop element exists (some designs omit it deliberately).
+// ─────────────────────────────────────────────────────────────────────────────
+test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page }) => {
+  test.setTimeout(180_000);
+  await gotoAndAuth(page);
+
+  const OVERLAY = 'dialog[open], [role="dialog"], [aria-modal="true"], .modal, .drawer, .popover, .overlay';
+  const CLOSE = '[aria-label*="close" i], .close, .modal-close, button:has-text("Close"), button:has-text("Cancel"), button:has-text("×"), button:has-text("✕")';
+  const TRIGGERS = 'button, [role=button], [aria-haspopup="dialog"]';
+  const overlayVisible = async () => {
+    for (const el of await page.locator(OVERLAY).all()) {
+      if (await el.isVisible().catch(() => false)) return el;
+    }
+    return null;
+  };
+
+  const findings = [];
+  const triggerCount = Math.min(await page.locator(TRIGGERS).count(), 30);
+
+  for (let i = 0; i < triggerCount; i++) {
+    // Re-resolve per round — the DOM may have re-rendered since discovery.
+    const trigger = page.locator(TRIGGERS).nth(i);
+    if (!await trigger.isVisible().catch(() => false)) continue;
+    const name = ((await trigger.textContent().catch(() => '')) || '').trim().slice(0, 40) || `trigger[${i}]`;
+
+    const urlBefore = page.url();
+    await trigger.click({ timeout: 2000 }).catch(() => {});
+    await page.waitForTimeout(600);
+    if (page.url() !== urlBefore && !(await overlayVisible())) {
+      await gotoAndAuth(page);           // trigger navigated — not an overlay
+      continue;
+    }
+    if (!(await overlayVisible())) continue;  // opens no overlay — S3's territory
+
+    // The trigger owns an overlay: each dismisser must actually hide it.
+    const reopen = async () => {
+      if (await overlayVisible()) return true;
+      await trigger.click({ timeout: 2000 }).catch(() => {});
+      await page.waitForTimeout(600);
+      return Boolean(await overlayVisible());
+    };
+
+    // (a) the overlay's own close/X/Cancel control
+    const ov = await overlayVisible();
+    const close = ov.locator(CLOSE).first();
+    if (!(await close.isVisible().catch(() => false))) {
+      findings.push({ trigger: name, dismisser: 'close control', problem: 'no visible close/X/Cancel control in overlay' });
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.waitForTimeout(300);
+    } else {
+      await close.click({ timeout: 2000 }).catch(() => {});
+      await page.waitForTimeout(600);
+      if (await overlayVisible()) findings.push({ trigger: name, dismisser: 'close control', problem: 'overlay still visible after clicking it' });
+    }
+
+    // (b) Escape
+    if (await reopen()) {
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(600);
+      if (await overlayVisible()) findings.push({ trigger: name, dismisser: 'Escape', problem: 'overlay still visible' });
+    } else {
+      findings.push({ trigger: name, dismisser: 'Escape', problem: 'could not re-open overlay to test' });
+    }
+
+    // (c) backdrop — only asserted when a backdrop element exists
+    const backdrop = page.locator('.backdrop, .modal-backdrop, .overlay-backdrop, [data-backdrop]').first();
+    if (await reopen()) {
+      if (await backdrop.isVisible().catch(() => false)) {
+        await backdrop.click({ position: { x: 4, y: 4 }, timeout: 2000 }).catch(() => {});
+        await page.waitForTimeout(600);
+        if (await overlayVisible()) findings.push({ trigger: name, dismisser: 'backdrop', problem: 'overlay still visible' });
+      }
+    }
+
+    await page.keyboard.press('Escape').catch(() => {});   // leave closed for the next round
+    await page.waitForTimeout(200);
+  }
+
+  test.info().attach('dismisser-findings', {
+    body: JSON.stringify(findings, null, 2),
+    contentType: 'application/json',
+  });
+  expect(findings, `Overlay dismisser failures:\n${JSON.stringify(findings, null, 2)}`).toHaveLength(0);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO 5+ — Project-Specific Scenarios
 // Source: CLAUDE.md § Project-Specific Test Scenarios
 // Generic coverage is S1–S4 plus the NAV/CTRL invariants above; add

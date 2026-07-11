@@ -58,6 +58,16 @@ styles/
   layout.css        ← page structure (optional)
 ```
 
+## Script loading
+**Inline scripts run after their DOM.** An inline `<script>` that binds event
+listeners must not execute before the elements it targets are parsed: place it
+at the very end of `<body>`, or wrap the bindings in a function run on
+`DOMContentLoaded` (with a `document.readyState` fast-path). Binding a listener
+to a not-yet-parsed element throws — and silently kills the rest of the script,
+so **every handler after the throw never attaches** while the page still "looks"
+rendered. Never bind to an element defined later in the document than the
+script. (test.md's console-error gate exists to catch exactly this.)
+
 ## iPad Rules
 Every project's UI must work on iPad Safari, whatever its look:
 - Tap targets: min **44×44px** always

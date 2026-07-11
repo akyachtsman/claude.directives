@@ -95,6 +95,28 @@ Any new client-side navigation or back affordance **requires a back-flow test**
 (companions the origin-aware-back coding standard: a back control returns to the
 page you came from, tracked via a nav stack — not the last page visited).
 
+## UI coverage gates (blocking)
+Four gates every project's UI suite must satisfy — the kit enforces each
+(scenario in parentheses); project-specific suites must keep them:
+- **Console-error gate.** Every UI test run attaches `page.on('pageerror')` and
+  `page.on('console')` (type `error`) and **fails if either fires** during load
+  or interaction (S1, S3, ENTRY). An uncaught error on load is a broken page even
+  if the screen "looks" rendered — one throw silently kills every handler bound
+  after it (see design.md → Script loading). No allow-lists without a written
+  reason in the test file.
+- **Dismissers are proven, not assumed.** For every modal, drawer, popover, or
+  overlay: open it, then dismiss via its close/X/Cancel control AND Escape AND
+  the backdrop (where one exists), asserting the container is actually hidden
+  after each (DISMISS). "It has a close button" is not coverage; "clicking it
+  closes" is.
+- **Coverage = controls clicked, not screens visited.** Every interactive
+  control is exercised at least once (S3). A screen-level smoke test does not
+  count as coverage for that screen's controls.
+- **Every deployed HTML entry point is tested.** If a project ships more than
+  one page (an app plus an admin/vendor console, say), declare the extra pages
+  in `APP_PAGES` so each gets the load gate (ENTRY), and give rich pages their
+  own suite. A page with zero tests is a release blocker, not an acceptable gap.
+
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are
   covered by the PR trigger — listing `claude/**` under push would run everything twice)

@@ -79,6 +79,38 @@ above still hold, plus:
   anon key + `DB_URL` stay as the repo variable; the `.claude/mcp.json` rule is
   unchanged.
 
+## Reversible-by-Design Backend Changes
+Every Supabase change must be undoable by a later session with no memory
+of this one. Rules:
+1. **Everything through versioned migrations** — schema, RPCs, RLS
+   policies, grants. Never mutate the backend ad-hoc; the migration
+   history (repo + `list_migrations`) IS the undo documentation.
+2. **Pair backend and repo in one PR.** A PR that changes an edge
+   function or migration carries the versioned source in the same diff,
+   so `git revert` restores the exact prior source to redeploy from.
+3. **State the inverse at change time.** Each migration's header comment
+   names its compensating action ("revert: DROP FUNCTION x; restore y
+   from migration desk_004"). Writing the undo while the context is
+   fresh is cheap; reconstructing it later is not.
+4. **Additive over destructive.** Prefer deprecating (rename, null,
+   ignore) over DROP/DELETE. Anything that destroys data is the
+   auto-merge hard exception: explicit owner approval, and note that
+   undo = backups/PITR only, not a migration.
+
+**Revert procedure** (when the owner says "undo PR #N"):
+1. `git revert` the squash commit (or GitHub's Revert button) → PR → green → merge.
+2. Write + apply the compensating migration from the inverse noted in
+   step 3 above (or reconstruct prior definitions from migration history).
+3. Redeploy any affected edge function from the reverted repo source.
+4. Verify: `get_advisors` clean, spot-check the restored RPC/table via
+   `execute_sql`, and confirm the live site against the reverted Pages
+   deploy.
+
+(Merge timing for backend changes is governed by `global.md` →
+*Conditional Auto-Merge on Green* — these are two halves of one policy:
+global.md decides when a merge waits for the owner; this section
+guarantees whatever merged can be walked back.)
+
 ## Escalation
 - Stop and ask before disabling RLS on any table.
 - Stop and ask before using the service-role key anywhere a browser can reach it.

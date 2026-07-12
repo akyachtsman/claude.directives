@@ -227,3 +227,43 @@ They now live alongside this file in the consolidated `claude.directives` repo:
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
+
+## Network Access Playbook (cloud sessions)
+All projects share one environment ("fleet"); its egress allowlist applies to
+sandbox traffic. When a resource seems unreachable, walk this ladder in order
+— each rung has different rules — before reporting "no access":
+1. **Connector/MCP tools first** — GitHub MCP for anything GitHub (files,
+   PRs, CI logs, commits), Supabase MCP for the database. Authenticated;
+   always preferred for in-scope resources.
+2. **GitHub as a side-door** — `raw.githubusercontent.com` is allowlisted
+   (directives load through it); public repos are readable via the GitHub
+   MCP. Never pre-check a private repo with curl: unauthenticated requests
+   return 404 even when access exists.
+3. **WebSearch** — runs server-side and bypasses the container's network
+   policy entirely. Use for documentation, examples, and corroborating
+   design/technical facts.
+4. **WebFetch** — also server-side with its own egress rules. A 403 here may
+   be the target site's bot protection, not the environment policy.
+5. **curl/CLI in the sandbox** — goes through the agent proxy; the
+   environment allowlist applies. A 403 on CONNECT is a policy denial:
+   report it, never route around it. The owner can add the host in the
+   environment's network settings — the change takes effect in RUNNING
+   sessions immediately (verified 2026-07-12; no new session needed).
+   Diagnose with: curl -sS "$HTTPS_PROXY/__agentproxy/status".
+6. **Sandbox browser (Playwright)** — launch with
+   executablePath '/opt/pw-browsers/chromium'. Known gateway quirk: some
+   hosts reset BROWSER-originated connections even when allowlisted
+   (github.io, finviz.com) — ERR_CONNECTION_RESET while curl succeeds means
+   use curl for content, and for UI verification serve the project locally
+   (python3 -m http.server + the project's demo mode) and screenshot that.
+7. **The owner** — for pixel-level truth on browser-blocked third-party
+   sites, ask for high-res screenshots and treat them as data: extract
+   exact colors, typography, spacing, and interaction behavior from the
+   image before implementing.
+
+## Cross-Repo Boundary
+A Claude Code session is connected to exactly one repository. Do NOT offer
+to add or modify other repositories from within a session (no add_repo
+offers, no cross-repo PRs). When work belongs in another repo — including
+this directives repo — compose a complete, paste-ready hand-off message for
+the owner to deliver to a session scoped to that repo, and stop there.

@@ -100,11 +100,15 @@ Execute in order:
    Also copy `claude.directives/templates/claude-settings.json` to
    `.claude/settings.json` (merge into any existing one): it registers the
    claude-directives marketplace, enables the directives-toolkit plugin
-   for every session on this repo, and pre-approves the Claude Code Remote
-   scheduling tools (`send_later`, `*_trigger`) — they only schedule messages
-   back into the session's own future (PR-babysitting check-ins), and
-   per-call permission prompts defeat unattended monitoring. Hooks ship
-   inside the plugin.
+   for every session on this repo, and pre-approves the low-risk Claude Code
+   Remote scheduling tools (`send_later`, `list_triggers`, `delete_trigger`) —
+   they only schedule messages back into the session's own future
+   (PR-babysitting check-ins), and per-call permission prompts defeat
+   unattended monitoring. `create_trigger` / `update_trigger` / `fire_trigger`
+   stay prompt-gated deliberately — they can target other sessions or spawn
+   new ones, making them a persistence channel under prompt injection
+   (flagged by automated security review on claude.trading PR #30). Hooks
+   ship inside the plugin.
 
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:

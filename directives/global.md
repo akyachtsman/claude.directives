@@ -157,7 +157,11 @@ plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
      and per-call prompts defeat unattended monitoring. `create_trigger` /
      `update_trigger` / `fire_trigger` stay prompt-gated deliberately: they can
      target other sessions or spawn new ones, a persistence channel under
-     prompt injection. **Projects bootstrapped before this template inherit nothing
+     prompt injection. **Deployment tools** (`mcp__Supabase__deploy_edge_function`
+     and anything else that pushes code/config to a live backend) likewise stay
+     prompt-gated by owner decision (2026-07-12) — never offer to add them to
+     `permissions.allow`; reduce prompt fatigue by **batching deploys**, not by
+     removing the gate. **Projects bootstrapped before this template inherit nothing
      automatically**: when a session hits repeated scheduling-tool permission
      prompts in an older repo, offer to add the same `permissions.allow` block
      to that repo's `.claude/settings.json` via a normal PR.

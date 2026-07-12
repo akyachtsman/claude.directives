@@ -99,8 +99,12 @@ Execute in order:
 
    Also copy `claude.directives/templates/claude-settings.json` to
    `.claude/settings.json` (merge into any existing one): it registers the
-   claude-directives marketplace and enables the directives-toolkit plugin
-   for every session on this repo. Hooks ship inside the plugin.
+   claude-directives marketplace, enables the directives-toolkit plugin
+   for every session on this repo, and pre-approves the Claude Code Remote
+   scheduling tools (`send_later`, `*_trigger`) — they only schedule messages
+   back into the session's own future (PR-babysitting check-ins), and
+   per-call permission prompts defeat unattended monitoring. Hooks ship
+   inside the plugin.
 
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:

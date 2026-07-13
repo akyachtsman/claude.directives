@@ -26,6 +26,7 @@ every project unless explicitly overridden at repo level.
 - For non-trivial features, separate WHAT from HOW — specify and clarify intent before planning a stack, and refine in phases rather than one-shotting (run `/sdd-loop`; the imported directives are its constitution)
 - **Evidence before assertions** — never report something done, passing, or fixed without running the proving check *fresh* and reading its actual output and exit status; assumptions and stale results do not count as verification
 - **Receiving review feedback** — treat review comments (human, Codex, code-reviewer) as suggestions to *evaluate*, not orders to obey. Restate the underlying requirement, verify the claim against the code, then either apply the fix or push back with technical reasoning. No performative agreement ("You're absolutely right!"), and no change you cannot justify
+- **Explanations are tabular-first** (owner preference, 2026-07-13) — when explaining how anything works (data flows, architecture, processes, options), lead with a simple table: one row per component, plain-language columns (what / where it comes from / when it updates / how it reaches the user), then at most two takeaway sentences. No jargon inside cells; mechanism detail only when asked
 
 ## Repo Structure Standard
 Every project repo should contain (matching what `/new-repo` actually scaffolds):

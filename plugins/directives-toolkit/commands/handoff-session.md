@@ -19,11 +19,19 @@ A handoff over a messy tree is worthless:
   self-delete and this step is a no-op.
 
 ## 2. Write the handoff
-Lead with this pointer, verbatim:
+**Always deliver it as one self-contained, fenced block the user can paste
+verbatim into the new session** — never prose scattered around the reply. The
+block leads with **Unresolved** (pending issues, open concerns, decisions still
+in the air — the things only this session's memory holds); if there is truly
+nothing pending, it contains a 2–3 line summary of where the repo stands
+instead. An empty or missing hand-over block is never an acceptable output of
+this command.
+
+Inside the block, lead with this pointer, verbatim:
 > CLAUDE.md is the source of truth — read it first. This file holds only what
 > the repo doesn't capture.
 
-Include only:
+Then include only:
 - **Loose ends with no tracker** — pending manual/UI steps, credential or
   secret expiry dates, half-done work no PR or issue records.
 - **Out-of-band context that lives in no file** — cross-repo coordination,

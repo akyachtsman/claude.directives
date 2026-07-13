@@ -187,7 +187,10 @@ force it with a close→reopen of the PR before concluding anything.
      The low-risk Claude Code Remote scheduling tools (`send_later`,
      `list_triggers`, `delete_trigger`) are pre-approved in the project settings
      template — they only schedule messages back into the session's own future,
-     and per-call prompts defeat unattended monitoring. `create_trigger` /
+     and per-call prompts defeat unattended monitoring. The connector registers
+     under two server-name spellings depending on surface, so the template
+     allowlists each tool as both `mcp__Claude_Code_Remote__*` and
+     `mcp__claude-code-remote__*` — permission rules match names exactly. `create_trigger` /
      `update_trigger` / `fire_trigger` stay prompt-gated deliberately: they can
      target other sessions or spawn new ones, a persistence channel under
      prompt injection. **Deployment tools** (`mcp__Supabase__deploy_edge_function`

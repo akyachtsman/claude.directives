@@ -104,11 +104,15 @@ Execute in order:
    Remote scheduling tools (`send_later`, `list_triggers`, `delete_trigger`) —
    they only schedule messages back into the session's own future
    (PR-babysitting check-ins), and per-call permission prompts defeat
-   unattended monitoring. `create_trigger` / `update_trigger` / `fire_trigger`
-   stay prompt-gated deliberately — they can target other sessions or spawn
-   new ones, making them a persistence channel under prompt injection
-   (flagged by automated security review on claude.trading PR #30). Hooks
-   ship inside the plugin.
+   unattended monitoring. The connector registers under two server-name
+   spellings depending on surface (`mcp__Claude_Code_Remote__*` vs
+   `mcp__claude-code-remote__*`) and permission rules match exactly, so the
+   template lists each tool in BOTH spellings — keep both. Do NOT "complete
+   the set": `create_trigger` / `update_trigger` / `fire_trigger` stay
+   prompt-gated deliberately in either spelling — they can target other
+   sessions or spawn new ones, making them a persistence channel under
+   prompt injection (flagged by automated security review on claude.trading
+   PR #30). Hooks ship inside the plugin.
 
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:

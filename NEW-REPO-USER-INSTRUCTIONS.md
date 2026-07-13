@@ -36,6 +36,13 @@ Or set network to **Full** if you'd rather not maintain a list. *(Optional: add
 each container once `cdn.playwright.dev` is allowed.)* Reload — now the commands appear,
 and **every repo you open in this environment** has them from then on.
 
+**Scheduling-tools pre-approval is template-only.** Projects bootstrapped
+before the current `templates/claude-settings.json` inherit nothing
+automatically — each existing repo needs the same `permissions.allow` block
+(both connector spellings, low-risk three tools only) PR'd into its
+`.claude/settings.json` manually. One small PR per repo; a session scoped to
+that repo can do it on request.
+
 **Force a toolkit update (skip the ~weekly wait).** The setup-script install is
 cached per environment, so a toolkit change merged upstream normally reaches your
 sessions only when that cache rebuilds (~weekly). To get it **now**: open the

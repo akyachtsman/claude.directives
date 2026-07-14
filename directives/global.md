@@ -199,9 +199,13 @@ force it with a close→reopen of the PR before concluding anything.
      prompt-gated by owner decision (2026-07-12) — never offer to add them to
      `permissions.allow`; reduce prompt fatigue by **batching deploys**, not by
      removing the gate. **Projects bootstrapped before this template inherit nothing
-     automatically**: when a session hits repeated scheduling-tool permission
-     prompts in an older repo, offer to add the same `permissions.allow` block
-     to that repo's `.claude/settings.json` via a normal PR.
+     automatically**: the FIRST time a session hits a scheduling-tool permission
+     prompt in an older repo, it PRs the current template's `permissions.allow`
+     block (both spellings, low-risk three only) into that repo's own
+     `.claude/settings.json` right away — no need to ask; it's the session's own
+     repo, and `.claude/` config is in the auto-merge-on-green class. Note in
+     the PR that the pre-approval activates from the NEXT session (settings load
+     at session start).
   3. **Condition-wait with `Monitor`** only when you must block on a specific
      state — always with an exit condition and a hard timeout.
 - **Never background a bare `sleep` to wait.** A `run_in_background` `sleep`

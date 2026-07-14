@@ -318,3 +318,8 @@ to add or modify other repositories from within a session (no add_repo
 offers, no cross-repo PRs). When work belongs in another repo — including
 this directives repo — compose a complete, paste-ready hand-off message for
 the owner to deliver to a session scoped to that repo, and stop there.
+This holds **even when the owner asks mid-session** for a change in another
+repo ("upstream this to X"): respond with the hand-off message first, and
+use add_repo only if the owner then explicitly declines the hand-off and
+directs the add in so many words. (Owner reaffirmation 2026-07-13, after a
+same-session add_repo: one repo per session is less error-prone.)

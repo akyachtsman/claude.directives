@@ -14,9 +14,18 @@ if (!existsSync(FILE)) {
 
 const css = readFileSync(FILE, 'utf8');
 const t = {};
-// Valid hex lengths only (3/4/6/8) — a 5- or 7-digit token would otherwise be
-// admitted here and silently misparsed by lum() below.
-for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*(#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4}))\s*;/g)) t[m[1]] = m[2];
+// Capture every color token, then validate its hex length (3/4/6/8). A 5- or
+// 7-digit value is malformed: fail loudly rather than silently skip it — a
+// tighter regex that just doesn't match would drop the token from the checks
+// below and pass green, hiding the bad declaration instead of catching it.
+for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*(#[0-9a-fA-F]+)\s*;/g)) {
+  const [, name, hex] = m;
+  if (![3, 4, 6, 8].includes(hex.length - 1)) {
+    console.error(`check-contrast: ${name} has an invalid hex value "${hex}" (expected 3, 4, 6, or 8 digits)`);
+    process.exit(1);
+  }
+  t[name] = hex;
+}
 
 const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
 function lum(hex) {

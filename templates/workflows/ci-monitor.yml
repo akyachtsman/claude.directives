@@ -93,17 +93,12 @@ jobs:
               gh issue reopen "$num" --repo "$REPO"
             fi
             echo "Commenting on tracking issue #$num"
-            gh issue comment "$num" --repo "$REPO" --body "CI failures detected at $stamp:
-          $body"
+            gh issue comment "$num" --repo "$REPO" --body "$(printf 'CI failures detected at %s:\n%s' "$stamp" "$body")"
           else
             echo "Opening new tracking issue"
             gh issue create \
               --repo "$REPO" \
               --title "CI failures detected" \
               --label "$ISSUE_LABEL" \
-              --body "CI Monitor detected failing workflow run(s) at $stamp:
-          $body
-          ---
-          This issue is auto-managed by \`.github/workflows/ci-monitor.yml\`.
-          Close it once the failures are resolved; new failures will reopen tracking."
+              --body "$(printf 'CI Monitor detected failing workflow run(s) at %s:\n%s\n\n---\nThis issue is auto-managed by \`.github/workflows/ci-monitor.yml\`.\nClose it once the failures are resolved; new failures will reopen tracking.' "$stamp" "$body")"
           fi

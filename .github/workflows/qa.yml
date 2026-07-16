@@ -45,7 +45,8 @@ jobs:
           python3 -c "
           import yaml, sys, glob
           files = glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml') \
-                + glob.glob('templates/workflows/*.yml') + glob.glob('templates/workflows/*.yaml')
+                + glob.glob('templates/workflows/*.yml') + glob.glob('templates/workflows/*.yaml') \
+                + glob.glob('templates/actions/*/action.yml')
           for f in files:
               yaml.safe_load(open(f))
               print(f'OK: {f}')

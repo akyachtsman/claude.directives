@@ -1,19 +1,22 @@
 # qa.yml — Static checks + Playwright against a local server.
-# Copy to .github/workflows/qa.yml in your project.
+# Copy to .github/workflows/qa.yml in your project, along with the composite
+# actions from templates/actions/ into .github/actions/ (secret-scan, ui-suite).
 #
 # Jobs:
-#   static-checks — secret scan; the blocking gate, runs on every trigger.
+#   static-checks — secret scan (composite) + contrast guardrail; the blocking
+#                   gate, runs on every trigger.
 #   ui-changes    — diffs the PR against its base and decides whether the
 #                   browser job is needed. Non-PR events (push to main)
 #                   always run UI tests.
-#   ui-tests      — Playwright against a local server; runs only when an
-#                   index.html exists and UI-relevant paths changed (so the
-#                   scaffold/bootstrap PR stays clean). Non-blocking here (the
-#                   backend is unreachable on CI runners); qa-live.yml is
-#                   the authoritative UI gate.
+#   ui-tests      — Playwright against a local server via the ui-suite
+#                   composite. BLOCKING by default for the static/no-backend
+#                   tier (the suite runs fully against the bundled http-server);
+#                   set advisory-run: 'true' only as an explicit, temporary
+#                   opt-out — and flip it back once the blocking issue is fixed.
 #
 # Required setup:
-#   - Add TEST_AUTH_CREDENTIAL as a repository secret (value from CLAUDE.md)
+#   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project has
+#     no auth; the empty secret makes auth tests self-skip
 #   - Set UI_TESTS_DIR below to the path of your Playwright test directory
 #   - Adjust the UI_PATHS regex in the ui-changes job to your project layout
 
@@ -48,18 +51,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── Secret scan ────────────────────────────────────────────────────────
-      # Flags common API token patterns before any tests run.
-      - name: Secret scan
-        run: |
-          # Canonical secret-scan pattern — keep identical to global.md and qa-response.yml.
-          if grep -rE \
-            'pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-' \
-            --include="*.js" --include="*.html" --include="*.css" --include="*.json" \
-            --exclude-dir=node_modules --exclude-dir=.git .; then
-            echo "ERROR: potential API token found in source files"
-            exit 1
-          fi
+      # ── Secret scan (composite — single source of truth for the pattern) ────
+      - uses: ./.github/actions/secret-scan
 
       # ── Contrast guardrail ───────────────────────────────────────────────────
       # WCAG AA check against styles/tokens.css (this project's design tokens).
@@ -85,8 +78,11 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          # Per-project: paths whose changes warrant a browser run.
-          UI_PATHS: '^(index\.html$|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
+          # Per-project: paths whose changes warrant a browser run. Includes
+          # js/ and styles/ (a source-only change must not skip the browser
+          # job) and .github/actions/ (changes to the composites are exercised
+          # pre-merge).
+          UI_PATHS: '^(index\.html$|js/|styles/|\.github/actions/|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
         run: |
           # No app yet (no index.html in the repo) → nothing to browser-test.
           # Keeps the scaffold/bootstrap PR clean: skip until the app exists.
@@ -120,52 +116,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # `cache: npm` requires a committed package-lock.json at the path below.
-      # Generate it once (`npm install` in UI_TESTS_DIR) and COMMIT it, or this
-      # step fails with "Dependencies lock file is not found".
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      # advisory-run is TEMPORARY: it is set 'true' here only while a repo has
+      # a known open UI failure (e.g. a mobile overflow mid-fix) — flip it back
+      # to 'false' as soon as that lands. Blocking is the default posture for
+      # the static/no-backend tier, where the suite runs fully against the
+      # bundled local server; auth/backend-gated scenarios self-skip on an
+      # empty TEST_AUTH_CREDENTIAL, and qa-live.yml stays the live gate.
+      - uses: ./.github/actions/ui-suite
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: ${{ env.UI_TESTS_DIR }}/package-lock.json
-
-      - name: Install test dependencies
-        run: npm install
-        working-directory: ${{ env.UI_TESTS_DIR }}
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium webkit
-        working-directory: ${{ env.UI_TESTS_DIR }}
-
-      # ── Start local server ─────────────────────────────────────────────────
-      # http-server is a pinned devDependency installed in UI_TESTS_DIR (above). Invoke
-      # its binary by path while staying at the repo root, so '.' still serves the app
-      # root AND nothing is fetched at runtime (works under locked egress). `npx
-      # --no-install` from the root would fail — the bin lives under UI_TESTS_DIR, not root.
-      # Adjust '.' to your build output directory if needed (e.g. dist, public).
-      - name: Start local server
-        run: |
-          "./$UI_TESTS_DIR/node_modules/.bin/http-server" . -p 8080 --silent &
-          sleep 2
-
-      # UI Tests against the local server are non-blocking: the backend API is
-      # unreachable on CI runners, so API-dependent scenarios fail with
-      # "API status: no call" by design. The authoritative UI gate is qa-live.yml.
-      - name: Run Playwright tests
-        continue-on-error: true
-        env:
-          APP_URL: http://localhost:8080
-          TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
-        run: npx playwright test --reporter=list
-        working-directory: ${{ env.UI_TESTS_DIR }}
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-results-local
-          path: |
-            .agent-reports/screenshots/
-            .agent-reports/playwright-results.json
-          retention-days: 7
+          tests-dir: ${{ env.UI_TESTS_DIR }}
+          app-url: http://localhost:8080
+          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          artifact-name: playwright-results-local
+          start-local-server: 'true'
+          advisory-run: 'true'

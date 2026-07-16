@@ -8,8 +8,7 @@ import { readFileSync } from 'fs';
 
 const SOURCES = [
   'directives/global.md',
-  'templates/workflows/qa.yml',
-  'templates/workflows/qa-response.yml',
+  'templates/actions/secret-scan/action.yml',
 ];
 
 // The alternation starts at the first `pat...` token and runs to the closing

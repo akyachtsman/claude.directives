@@ -44,10 +44,10 @@ Do not edit the templates in place in `claude.directives` — copy to the target
 
 ## Step 1 — Copy workflow templates
 
-Copy the two core QA workflow templates from `claude.directives` into the target repo's `.github/workflows/`:
+Copy the two core QA workflow templates from `claude.directives` into the target repo's `.github/workflows/`, **plus the two composite actions they reference** into `.github/actions/` (without them every qa run fails at step resolution):
 
 ```bash
-mkdir -p .github/workflows
+mkdir -p .github/workflows .github/actions/secret-scan .github/actions/ui-suite
 
 # Fetch from the public template repo
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa.yml \
@@ -55,6 +55,12 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-live.yml \
   -o .github/workflows/qa-live.yml
+
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/secret-scan/action.yml \
+  -o .github/actions/secret-scan/action.yml
+
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/action.yml \
+  -o .github/actions/ui-suite/action.yml
 ```
 
 Optional — event-driven QA dispatch hook (add if sessions/automations should be

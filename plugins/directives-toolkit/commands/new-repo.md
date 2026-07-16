@@ -70,6 +70,12 @@ Execute in order:
    to watch both QA workflows shipped alongside it (`qa.yml` and `qa-live.yml`);
    only touch its `workflows:` list if you rename their `name:` values.
 
+   **Composite actions (required by the qa workflows).** Copy
+   `claude.directives/templates/actions/` (`secret-scan/action.yml`,
+   `ui-suite/action.yml`) into `.github/actions/` — the qa workflows reference
+   them as `./.github/actions/*`; without them every qa run fails at step
+   resolution.
+
    **Scheduled-job scripts.** Copy `claude.directives/templates/scripts/`
    (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `package.json`) into
    `.github/scripts/`, then run `npm install` there and **commit** the generated

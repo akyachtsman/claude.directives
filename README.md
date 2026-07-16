@@ -5,6 +5,7 @@ Consolidated home for the company-wide Claude Code agent directives.
 The exported, downstream-imported directives live in `directives/`:
 
 - `directives/global.md` — global agent behavior standard
+- `directives/git.md` — git/GitHub directive (PR lifecycle, conditional auto-merge, repo-settings preflight)
 - `directives/design.md` — design method (per-project generative: tokens + `/design-intake`)
 - `directives/test.md` — test / QA directive
 - `directives/data.md` — data / backend directive (backend provider, keys, RLS, MCP config)

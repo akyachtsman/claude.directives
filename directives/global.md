@@ -122,57 +122,15 @@ Report the result before pushing; fix failures locally rather than on the PR.
 plugin's push-gate hook enforces the no-direct-push-to-main rule mechanically).
 
 ## PR Lifecycle
-- Open a draft PR as soon as a branch has a first commit
-- Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
-- Fix all CI failures before marking ready for review
-- Mark PR ready only when all checks pass
-- **Auto-merge on approval:** once the user approves a change, that approval covers
-  merging it — don't ask a second time. Squash-merge automatically as soon as the
-  required CI checks are green, **provided** the PR has no `codex-flagged` label, no
-  unresolved review threads, and a diff limited to the intended files (the two rules
-  below). If any of those conditions fails, pause and surface it instead of merging.
-  Always report the merge result. For merging on green **without** a per-change
-  approval, classify the diff per *Conditional Auto-Merge on Green* below.
-- A `codex-flagged` label is a **merge blocker**: triage Codex's review before merging
-  — apply the fix, or remove the label with a one-line dismissal rationale in the PR.
-  Never merge while the PR is still `codex-flagged` (check the PR's labels on GitHub
-  first; the `codex-monitor` workflow adds the label, it does not clear it for you)
-- Before merging, confirm the PR's file list is **only** what you changed. A surprise
-  file count signals a stale or tangled branch — verify against GitHub's own PR diff,
-  not a possibly-stale local clone (re-fetch/prune, or re-cut from `main`, if they disagree)
-- Never force-push to `main`
+Moved to `directives/git.md` → *PR Lifecycle* — the dedicated git/GitHub
+directive, imported alongside this file. Draft-first, subscribe on open,
+green-before-ready, auto-merge-on-approval, `codex-flagged` blocker, diff
+check, never force-push `main` — all live there now.
 
-## Conditional Auto-Merge on Green (owner ruling, 2026-07-12)
-All projects deploy GitHub Pages from `main`; work is invisible until
-merged, so waiting has a real cost. When a PR's CI gates are fully green,
-classify the diff and act:
-
-**Auto-merge immediately, without asking** — squash, then follow the
-update-pages flow (watch the Pages build for the merged sha to a terminal
-state and confirm the live site serves it):
-- Frontend code, styles, static assets, data-pipeline scripts
-- Docs, specs, tests, CLAUDE.md, .claude/ config
-- Anything fully undone by a plain `git revert`
-
-**Hold for explicit owner approval, even on green CI** — the PR waits,
-with a clear note of what it touches and why it's held:
-1. Secrets, tokens, PINs, or personal data anywhere in the diff — on a
-   public repo a merge is irreversible in the only way that matters;
-   this class is never merged, it's fixed first.
-2. Environment variables / repo or workflow configuration that runs with
-   elevated secrets.
-3. ANY Supabase backend change — migrations, RPCs, RLS, grants, edge
-   functions — regardless of how safe it looks. Backend changes follow
-   directives/data.md → Reversible-by-Design; the owner approves the
-   merge per instance.
-
-The safety net for the auto-merge class is reversibility, not
-hesitation: a regression found after merge is handled revert-first
-(git revert / GitHub's Revert button), investigate second; a small
-roll-forward fix is fine when clearly faster.
-
-If CI never registers on a PR (the pull_request event-delivery flake),
-force it with a close→reopen of the PR before concluding anything.
+## Conditional Auto-Merge on Green
+Moved to `directives/git.md` → *Conditional Auto-Merge on Green* (owner
+ruling, 2026-07-12): the diff classification for merging on green without a
+per-change approval, and the revert-first safety net.
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
@@ -279,6 +237,7 @@ See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.
 They now live alongside this file in the consolidated `claude.directives` repo:
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md

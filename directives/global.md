@@ -21,7 +21,7 @@ every project unless explicitly overridden at repo level.
   choice (React / Next.js on Vercel), where the build runs **remotely on `git
   push`** — never locally; see *Hosting & Deployment*. Don't add a framework to a
   static site that doesn't need one.
-- All code must work on iPad Safari
+- All code must work responsively across the project's target platforms — laptop, tablet (iPad), and phone (iPhone/Android)
 - Use `textContent` for all DOM text insertion — never `innerHTML` with data from any backend or user input
 - For non-trivial features, separate WHAT from HOW — specify and clarify intent before planning a stack, and refine in phases rather than one-shotting (run `/sdd-loop`; the imported directives are its constitution)
 - **Evidence before assertions** — never report something done, passing, or fixed without running the proving check *fresh* and reading its actual output and exit status; assumptions and stale results do not count as verification

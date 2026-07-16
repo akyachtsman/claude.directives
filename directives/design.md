@@ -68,13 +68,20 @@ so **every handler after the throw never attaches** while the page still "looks"
 rendered. Never bind to an element defined later in the document than the
 script. (test.md's console-error gate exists to catch exactly this.)
 
-## iPad Rules
-Every project's UI must work on iPad Safari, whatever its look:
-- Tap targets: min **44×44px** always
-- Input fields: min **48px** height; font on inputs **never below 16px** (prevents iOS zoom)
-- Checkboxes: min **24×24px**
-- Gap between tappable elements: min **8px**
-- **No hover-only states** — pair every `:hover` affordance with a tap/focus equivalent
+## Cross-platform & responsive
+Every project's UI must work across the platforms it ships to — laptop/desktop,
+tablet (iPad), and phone (iPhone/Android). Design responsive-first, never for a
+single device:
+- **Fluid layout:** adapt from phone to desktop widths — no fixed desktop-only
+  canvas. Content reflows; nothing is clipped or scrolls horizontally at phone
+  width. Use responsive units and breakpoints, not hardcoded pixel layouts.
+- **Touch *and* pointer:** every action works by tap, click, and keyboard.
+  **No hover-only states** — pair every `:hover` with a tap/focus equivalent
+  (touch devices have no hover).
+- Targets: tap/click min **44×44px**; checkboxes min **24×24px**; min **8px**
+  gap between adjacent targets.
+- Inputs: min **48px** height; font on inputs **never below 16px** (prevents
+  iOS zoom on focus).
 
 ## Accessibility
 Non-negotiable, independent of the chosen look — enforced per-project by the

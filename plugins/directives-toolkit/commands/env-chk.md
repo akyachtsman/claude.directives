@@ -17,7 +17,11 @@ verdict. Read-only — do NOT modify files. Execute in order:
    Async Operations).
 3. CI & deploy status — Check for any open CI-failure or reviewer-flagged
    tracking issues/PRs and list them (a broken deploy surfaces here as a
-   `pages-deploy-failure` issue). Also flag any open issues tagged @claude
+   `pages-deploy-failure` issue). Run the `directives/git.md` repo-settings
+   preflight: if "Allow auto-merge" or "Automatically delete head branches"
+   is off (`allow_auto_merge` / `delete_branch_on_merge` via the repo API, or
+   the documented MCP-rejection signal), warn once with the exact settings
+   path — don't block, don't re-nag this session. Also flag any open issues tagged @claude
    with no linked PR yet. For a deploy-backed project (e.g. Pages), confirm the
    live site is serving the latest commit: match the deploy run's `head_sha` to
    the head of the Pages source branch (`git rev-parse origin/main` — NOT the

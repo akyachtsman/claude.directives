@@ -18,9 +18,10 @@ Never overwrite an existing workflow, agent, or test file.
 
 Execute in order:
 
-1. **Fetch and internalize all four directives.** Read each fully before
+1. **Fetch and internalize all five directives.** Read each fully before
    proceeding:
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md`
+   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md`
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md`
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md`
    - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md`

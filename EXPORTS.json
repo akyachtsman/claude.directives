@@ -5,6 +5,7 @@
       "mode": "fetched live by raw URL at session start — changes propagate immediately",
       "paths": [
         "directives/global.md",
+        "directives/git.md",
         "directives/design.md",
         "directives/test.md",
         "directives/data.md"

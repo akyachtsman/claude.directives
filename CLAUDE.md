@@ -16,6 +16,7 @@ covers only how to operate *on this repo*.
 |------|------|
 | `directives/global.md` | Exported global directive (was global's DIRECTIVE.md) |
 | `directives/design.md` | Exported design **method** — per-project generative (tokens + `/design-intake` + `frontend-design`/Stitch), not a shared theme |
+| `directives/git.md` | Exported git/GitHub directive — PR lifecycle, conditional auto-merge, repo-settings preflight |
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
@@ -42,6 +43,7 @@ covers only how to operate *on this repo*.
 Projects import each directive by raw URL — the consolidated paths are:
 ```
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
@@ -61,7 +63,7 @@ threads, diff limited to the intended files). Repo-specific deltas:
   local clone — a surprise file count means a stale/tangled branch.
 
 ## Session Start
-1. Read the four exported directive files under `directives/` fully — from the
+1. Read all five exported directive files under `directives/` fully — from the
    local working tree, not the raw `main` URLs (on a branch, `main` copies may be stale)
 2. Verify the directives-toolkit plugin attached (commands/agents resolve) per global.md → Skill Bootstrap
 3. Confirm active branch: `git branch --show-current`

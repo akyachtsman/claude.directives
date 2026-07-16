@@ -14,8 +14,8 @@ and CI validates references.
 ## Phase 0 — Re-read the rules (context refresh)
 
 The session's working rules were loaded at session start and do NOT update
-themselves. Re-fetch and re-read the four imported directive URLs from
-CLAUDE.md, and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
+themselves. Re-fetch and re-read every imported directive URL from
+CLAUDE.md (five as of `git.md`), and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
 load at session start only — mid-session upstream merges reach the toolkit when
 the environment's cached setup script rebuilds (web: on an env-config change or
 ~weekly cache expiry), not necessarily the next session.

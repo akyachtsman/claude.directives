@@ -14,7 +14,9 @@ if (!existsSync(FILE)) {
 
 const css = readFileSync(FILE, 'utf8');
 const t = {};
-for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/g)) t[m[1]] = m[2];
+// Valid hex lengths only (3/4/6/8) — a 5- or 7-digit token would otherwise be
+// admitted here and silently misparsed by lum() below.
+for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*(#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4}))\s*;/g)) t[m[1]] = m[2];
 
 const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
 function lum(hex) {

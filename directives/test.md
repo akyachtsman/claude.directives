@@ -120,9 +120,12 @@ Four gates every project's UI suite must satisfy — the kit enforces each
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are
   covered by the PR trigger — listing `claude/**` under push would run everything twice)
-- Static Checks must pass before merge; the local `UI Tests` job is
-  `continue-on-error: true` (backend unreachable on runners) — `qa-live.yml` is the
-  authoritative, blocking UI gate
+- Static Checks must pass before merge. The local `UI Tests` job is **blocking
+  by default** for the static/no-backend tier (the suite runs fully against the
+  bundled local server); a repo may set the ui-suite composite's
+  `advisory-run: 'true'` as an explicit, temporary opt-out while a known UI
+  failure is mid-fix — flip it back once fixed. `qa-live.yml` remains the
+  authoritative live gate for auth/backend-dependent flows
 - `qa-live.yml` failures against the live app must be fixed before marking work done
 - **Quarantine, don't blanket-disable** — when a single UI spec is flaky, skip that
   one spec with a tracking note; never wrap the whole UI job in `continue-on-error`

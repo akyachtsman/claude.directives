@@ -1,0 +1,95 @@
+# Copy to .github/actions/ui-suite/action.yml in your project (the qa
+# workflows reference it as `uses: ./.github/actions/ui-suite`).
+#
+# Caveats baked into this design:
+# - Composite steps cannot carry per-step `timeout-minutes` — bound the run
+#   with the CALLING job's `timeout-minutes` (all three qa workflows set 20).
+# - `advisory-run` flips ONLY the Playwright run step to continue-on-error;
+#   setup/install/server/upload always stay blocking, so a broken install can
+#   never pass green.
+name: 'UI test suite'
+description: >
+  Install deps + Playwright, optionally start a bundled local server, run the
+  suite, upload results. Single source of truth for the run block shared by
+  qa.yml, qa-live.yml and qa-response.yml.
+inputs:
+  tests-dir:
+    description: 'Directory containing playwright.config.js and package.json'
+    required: true
+  app-url:
+    description: 'URL the suite targets (local server or live deploy)'
+    required: true
+  test-auth-credential:
+    description: 'Seeded test credential; empty makes auth tests self-skip'
+    required: false
+    default: ''
+  artifact-name:
+    description: 'Name for the uploaded results artifact'
+    required: true
+  start-local-server:
+    description: "Set 'true' to serve server-root on :8080 via the bundled http-server"
+    required: false
+    default: 'false'
+  server-root:
+    description: 'Directory the local server serves'
+    required: false
+    default: '.'
+  advisory-run:
+    description: "Set 'true' to make ONLY the run step advisory; setup/install/server/upload stay blocking."
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        # Requires a committed package-lock.json at this path — generate it
+        # once (`npm install` in tests-dir) and COMMIT it.
+        cache-dependency-path: ${{ inputs.tests-dir }}/package-lock.json
+
+    - name: Install test dependencies
+      shell: bash
+      run: npm install
+      working-directory: ${{ inputs.tests-dir }}
+
+    - name: Install Playwright browsers
+      # Both browsers: playwright.config.js defines a webkit project (iPhone 12)
+      # alongside chromium (Pixel 5). Installing chromium alone fails that project.
+      shell: bash
+      run: npx playwright install --with-deps chromium webkit
+      working-directory: ${{ inputs.tests-dir }}
+
+    # http-server is a pinned devDependency installed in tests-dir. Invoke its
+    # binary by path while staying at the repo root, so server-root still serves
+    # the app root AND nothing is fetched at runtime (works under locked egress).
+    - name: Start local server
+      if: ${{ inputs.start-local-server == 'true' }}
+      shell: bash
+      env:
+        TESTS_DIR: ${{ inputs.tests-dir }}
+        SERVER_ROOT: ${{ inputs.server-root }}
+      run: |
+        "./$TESTS_DIR/node_modules/.bin/http-server" "$SERVER_ROOT" -p 8080 --silent &
+        sleep 2
+
+    - name: Run Playwright tests
+      shell: bash
+      continue-on-error: ${{ inputs.advisory-run == 'true' }}
+      env:
+        APP_URL: ${{ inputs.app-url }}
+        TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
+      run: npx playwright test --reporter=list
+      working-directory: ${{ inputs.tests-dir }}
+
+    - name: Upload test results
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          .agent-reports/screenshots/
+          .agent-reports/playwright-results.json
+        retention-days: 7

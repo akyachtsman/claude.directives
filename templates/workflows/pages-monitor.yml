@@ -79,10 +79,7 @@ jobs:
               gh issue create --repo "$REPO" \
                 --title "Pages deploy failing" \
                 --label "$ISSUE_LABEL" \
-                --body "$body
-
-          ---
-          Auto-managed by \`.github/workflows/pages-monitor.yml\`. It closes automatically on the next healthy deploy."
+                --body "$(printf '%s\n\n---\nAuto-managed by \`.github/workflows/pages-monitor.yml\`. It closes automatically on the next healthy deploy.' "$body")"
             fi
             {
               echo "## ❌ Pages deploy problem"

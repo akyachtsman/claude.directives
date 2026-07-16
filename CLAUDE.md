@@ -28,6 +28,7 @@ covers only how to operate *on this repo*.
 | `.claude/settings.json` | Plugin enablement only (`extraKnownMarketplaces` + `enabledPlugins`); hooks ship inside the plugin |
 | `.claude/directive-sync.json` | Upstream-sync baseline (`.upstream.sha` + snapshots) that `/env-chk` and `/refresh-repo` read to detect directive drift |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
+| `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
 | `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`) projects copy into `.github/scripts/` |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
@@ -140,7 +141,7 @@ node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths + raw self-references
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
-python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml')]"
+python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages monitor template pairs)
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/repo-map.html                        # when the map changed (CI runs it every time)

@@ -61,6 +61,25 @@ roll-forward fix is fine when clearly faster.
 If CI never registers on a PR (the pull_request event-delivery flake),
 force it with a close→reopen of the PR before concluding anything.
 
+**Owner express merge (owner ruling, 2026-07-16).** When the owner explicitly
+says "merge" / "merge asap" for a specific PR, do not hold it for in-flight CI
+that one time — mark it ready and squash-merge immediately. Guards:
+- Applies **only to the auto-merge class** above (frontend, styles, assets,
+  docs, tests, config — anything fully undone by a plain `git revert`). The
+  hold-for-approval classes (secrets, elevated-secret env/workflow config, ANY
+  Supabase backend change) are **never** express-merged, even on an explicit
+  "merge" — surface the hold instead.
+- Local verification before pushing is still expected: the express order trades
+  the **CI wait**, not the verification.
+- CI still runs after the merge. The session watches it and treats any late
+  failure as the **immediate top follow-up** — revert-first (or a clearly-faster
+  roll-forward) — reporting the outcome either way.
+
+Origin: owner ruling 2026-07-16 in claude.trading ("Next time when I say merge,
+you can cut the testing for that one time short so I can make quicker progress
+with the dashboard"); first exercised on claude.trading#98 — merged mid-run,
+deploy green, CI confirmed after the fact.
+
 ## Repo-settings preflight (warn once per session)
 Two GitHub repo settings make the merge rules above work end-to-end. Agents
 cannot change repo settings themselves (the GitHub MCP has no settings

@@ -149,7 +149,15 @@ per-change approval, and the revert-first safety net.
      and per-call prompts defeat unattended monitoring. The connector registers
      under two server-name spellings depending on surface, so the template
      allowlists each tool as both `mcp__Claude_Code_Remote__*` and
-     `mcp__claude-code-remote__*` — permission rules match names exactly. `create_trigger` /
+     `mcp__claude-code-remote__*` — permission rules match names exactly.
+     **Web caveat (verified 2026-07-16):** claude.ai cloud sessions do NOT
+     apply project-level permission rules — the allow block works on
+     CLI/desktop only, and no personal-account setting suppresses these
+     prompts on web. Never tell the owner the settings block fixes web
+     popups. On web, minimize the prompts instead: rely on PR webhooks as
+     the primary wake signal and arm at most ONE `send_later` per watched
+     operation (a single long check-in, re-armed only on fire) — not one
+     per polling cycle. `create_trigger` /
      `update_trigger` / `fire_trigger` stay prompt-gated deliberately: they can
      target other sessions or spawn new ones, a persistence channel under
      prompt injection. **Deployment tools** (`mcp__Supabase__deploy_edge_function`

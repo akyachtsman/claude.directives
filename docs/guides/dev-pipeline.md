@@ -181,7 +181,7 @@ What `/new-repo` scaffolds in **every** project:
 - `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs + `index.html`
   + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
-- **all nine** workflows: `qa.yml`, `qa-live.yml`, `ci-monitor.yml`,
+- **all ten** workflows: `qa.yml`, `qa-live.yml`, `ci-notify.yml`, `ci-monitor.yml`,
   `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, `qa-response.yml`,
   `cron-notify.yml`, `keepalive.yml`
 - the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job /
@@ -217,7 +217,7 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   self-review; `sdd-loop` plan gains the one adaptive plan-review pass (fresh
   subagent scores `plan.md`, revises under ~8, forces data-flow/failure-mode).
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
-  scaffolds the full set (all nine workflows + Playwright kit + scheduled-job scripts).
+  scaffolds the full set (all ten workflows + Playwright kit + scheduled-job scripts).
   The email kit is standard + active with mandatory secrets and a config-guard
   notice in `notify-task.js`. See "Complete standard scaffold" above.
 - **Design — per-project generative (done):** the fixed company design system

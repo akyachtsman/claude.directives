@@ -50,11 +50,14 @@ Execute in order:
    starter instead and deploy on Vercel (`docs/standards/cicd-setup.md` → *Production tier — Vercel*).
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
-   copy all nine workflow files from `claude.directives/templates/workflows/`
+   copy all ten workflow files from `claude.directives/templates/workflows/`
    into `.github/workflows/`:
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages
    - `ci-monitor.yml` — event-driven CI failure tracker
+   - `ci-notify.yml` — comments CI success on the open PR so a watching web
+     session wakes on green via the comment webhook (no scheduling-tool
+     polling, no permission prompts)
    - `codex-monitor.yml` — Codex PR review monitor
    - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
      every `page_build`; portable as-is, no edits needed)

@@ -36,7 +36,7 @@ covers only how to operate *on this repo*.
 | `templates/nextjs-app/` | Production-tier Next.js starter scaffold (App Router + Supabase wiring) |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets incl. vendored React), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths; see `docs/README.md` for the index |
-| `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |
+| `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 
@@ -105,6 +105,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   `templates/scripts/` for projects.)
 - `ci-monitor.yml` — fires when `QA — Directive Validation` completes; on failure
   opens/updates a deduplicated `ci-failure` tracking issue.
+- `ci-notify.yml` — fires when `QA — Directive Validation` completes **green**;
+  comments on the open PR for that head SHA so a watching web session wakes on
+  success without scheduling-tool polling (the template's counterpart, adapted
+  to this repo's workflow name).
 - `codex-monitor.yml` — fires on Codex PR reviews; adds a `codex-flagged` label
   when Codex raised concerns.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the

@@ -1,0 +1,42 @@
+# ci-notify.yml — CI-success wake signal for web sessions (this repo's copy).
+# Diverges from templates/workflows/ci-notify.yml only in the watched name:
+# this repo's QA workflow is "QA — Directive Validation".
+#
+# When the watched workflow completes green, comments on the open PR for that
+# head SHA; the comment webhook wakes the subscribed session — no scheduling-
+# tool polling, no permission prompts. Failures deliberately not commented
+# (delivered natively; ci-monitor tracks them). Uses only GITHUB_TOKEN.
+on:
+  workflow_run:
+    workflows:
+      - 'QA — Directive Validation'
+    types: [completed]
+
+name: CI Notify
+
+permissions:
+  pull-requests: write
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Comment CI success on the open PR for this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WR_NAME: ${{ github.event.workflow_run.name }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+          WR_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          num=$(gh pr list --repo "$REPO" --state open --json number,headRefOid \
+            --jq ".[] | select(.headRefOid == \"$WR_SHA\") | .number" | head -1)
+          if [ -z "$num" ]; then
+            echo "No open PR with head $WR_SHA — nothing to notify."
+            exit 0
+          fi
+          gh pr comment "$num" --repo "$REPO" \
+            --body "$(printf '✅ %s green @ %s — [run](%s)\n\n_Automated wake signal for the watching session (ci-notify.yml); no action needed._' "$WR_NAME" "${WR_SHA:0:7}" "$WR_URL")"

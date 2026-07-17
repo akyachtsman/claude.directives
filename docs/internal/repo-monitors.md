@@ -13,6 +13,12 @@ or commit-hook involved. These must exist and be green before making any changes
 **ci-monitor.yml** — fires when `QA — Directive Validation` completes. On failure,
 opens or updates a deduplicated `ci-failure` tracking issue. Uses only GITHUB_TOKEN.
 
+**ci-notify.yml** — fires when `QA — Directive Validation` completes **green**.
+Comments on the open PR for that head SHA so a watching web session wakes on
+success via the comment webhook (no scheduling-tool polling, no permission
+prompts). No open PR → exits quietly. The template counterpart, adapted to this
+repo's workflow name.
+
 **codex-monitor.yml** — fires on every Codex PR review. Adds a `codex-flagged` label
 when Codex raised concerns (changes_requested or COMMENTED with inline comments).
 Approving/empty reviews are ignored.
@@ -26,8 +32,8 @@ zero-model counterpart to the `update-pages` skill: the deploy already happens o
 (branch-source Pages), and this adds the verify + notify layer with no session required.
 The live URL is derived generically, so the file is portable to any project as-is.
 
-See `.github/workflows/ci-monitor.yml`, `.github/workflows/codex-monitor.yml`, and
-`.github/workflows/pages-monitor.yml`.
+See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
+`.github/workflows/codex-monitor.yml`, and `.github/workflows/pages-monitor.yml`.
 
 ### Activation Checklist for New Sessions
 - Confirm `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` exist; `codex-monitor` fires only on PR-review events and `pages-monitor` only on `page_build` events, so neither has a standing "green" status to check

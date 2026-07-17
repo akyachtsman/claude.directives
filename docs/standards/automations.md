@@ -119,13 +119,33 @@ needed. Full detail: `docs/standards/cicd-setup.md` Step 9d.
 
 ---
 
+## Automation 4c — CI-Success Wake Signal (infra-resident, event-driven)
+
+**Goal:** Let a watching web session wake on CI **success** without polling —
+GitHub delivers failures natively but never green, and on web every
+scheduling-tool poll costs a permission prompt.
+
+**How it works:**
+- Trigger: `workflow_run` (completed) on the QA workflows shipped in the set.
+- On `conclusion == success`: finds the open PR whose head SHA matches the run
+  and posts a one-line "✅ green" comment — the comment webhook wakes the
+  subscribed session. No open PR → exits quietly.
+- Failures are deliberately NOT commented (delivered natively; `ci-monitor.yml`
+  tracks them repo-side).
+- Uses `GITHUB_TOKEN` only (`pull-requests: write`).
+
+**Template:** `templates/workflows/ci-notify.yml` — drop-in, no customization needed.
+
+---
+
 ## Automation 5 — In-Session Reactive Subscription
 
 When a Claude Code session is live, it subscribes to PR activity for fast feedback:
 - Call `subscribe_pr_activity` on every open PR at session start
 - A subscription is active until the PR is merged or closed
-- Webhooks don't deliver CI success, new pushes, or merge-conflict transitions —
-  so re-check PR state periodically and re-arm the subscription silently if nothing changed
+- Webhooks don't deliver new pushes or merge-conflict transitions — and deliver
+  CI success only via `ci-notify.yml`'s PR comment (Automation 4c) — so re-check
+  PR state on wake and re-arm silently if nothing changed
 - This is the fast-feedback layer; `ci-monitor.yml` is the always-on backbone
 
 ---
@@ -136,6 +156,7 @@ When a Claude Code session is live, it subscribes to PR activity for fast feedba
 - [ ] Confirm `codex-monitor.yml` is present
 - [ ] Confirm `pages-monitor.yml` is present (any project with a GitHub Pages site)
 - [ ] Confirm `pages-retry.yml` is present (branch-source Pages projects)
+- [ ] Confirm `ci-notify.yml` is present (wakes web sessions on CI green)
 - [ ] Check for any open `ci-failure` tracking issues before starting work
 - [ ] Subscribe to PR activity: `subscribe_pr_activity` on any open PRs
 - [ ] Read `CLAUDE.md` for full project context

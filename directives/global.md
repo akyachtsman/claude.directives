@@ -36,9 +36,9 @@ index.html       ← the app's entry page (additional pages are fine — every
                    page matches the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
-  workflows/     ← the full template set from templates/workflows/ (9 files):
+  workflows/     ← the full template set from templates/workflows/ (10 files):
     qa.yml, qa-live.yml, qa-response.yml,
-    ci-monitor.yml, codex-monitor.yml, pages-monitor.yml,
+    ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml,
     pages-retry.yml, cron-notify.yml, keepalive.yml
   scripts/
     ui-tests/
@@ -138,8 +138,10 @@ per-change approval, and the revert-first safety net.
   for an outcome.
 - **How to wait, in order of preference:**
   1. **Let the event wake you.** CI failures, PR reviews, and merges arrive as
-     webhooks that resume the session; most outcomes need no active waiter — end
-     the turn with "I'll report back when it completes" and act on the event.
+     webhooks that resume the session — and with `ci-notify.yml` installed
+     (standard scaffold), CI SUCCESS arrives too, as a PR comment. A PR-attached
+     wait therefore needs NO scheduler at all: end the turn with "I'll report
+     back when it completes" and act on the event.
   2. **Self-pace with `ScheduleWakeup`** (or `send_later` where it exists — it is
      frequently **absent**, so never assume it; verify per `/env-chk`). Schedule a
      check-in sized to the operation, re-check on wake, and re-arm until terminal.
@@ -154,9 +156,11 @@ per-change approval, and the revert-first safety net.
      apply project-level permission rules — the allow block works on
      CLI/desktop only, and no personal-account setting suppresses these
      prompts on web. Never tell the owner the settings block fixes web
-     popups. On web, minimize the prompts instead: rely on PR webhooks as
-     the primary wake signal and arm at most ONE `send_later` per watched
-     operation (a single long check-in, re-armed only on fire) — not one
+     popups. On web, minimize the prompts instead: with `ci-notify.yml`
+     installed, a PR-attached wait uses webhook wake ONLY (no scheduling
+     calls at all); the scheduling tools are the fallback for waits with no
+     PR attached — and even then arm at most ONE `send_later` per watched
+     operation (a single long check-in, re-armed only on fire), never one
      per polling cycle. `create_trigger` /
      `update_trigger` / `fire_trigger` stay prompt-gated deliberately: they can
      target other sessions or spawn new ones, a persistence channel under

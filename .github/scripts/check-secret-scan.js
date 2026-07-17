@@ -13,8 +13,10 @@ const SOURCES = [
 
 // The alternation starts at the first `pat...` token and runs to the closing
 // quote delimiter (double quotes in the directive, single quotes in the yml) —
-// anchoring on the delimiter, not on a token like `xoxb-`, means a pattern
-// appended at the end or a reorder can never drift undetected.
+// anchoring on the delimiter rather than on the final alternation token means
+// a pattern appended at the end or a reorder can never drift undetected.
+// (This comment deliberately names no token literally: the repo now runs the
+// actual scan on itself, and a literal prefix here would trip it.)
 // `\\\.` matches a literal backslash-dot; the body holds no quotes or newlines.
 const PATTERN = /pat\[A-Za-z0-9\]\{14\}\\\.[^\n'"`]*/;
 

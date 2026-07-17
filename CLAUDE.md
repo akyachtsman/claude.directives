@@ -36,7 +36,7 @@ covers only how to operate *on this repo*.
 | `templates/nextjs-app/` | Production-tier Next.js starter scaffold (App Router + Supabase wiring) |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets incl. vendored React), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths; see `docs/README.md` for the index |
-| `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`) |
+| `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 
@@ -51,6 +51,18 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 ```
 When you change an exported directive, edit the file under `directives/` — never
 relocate the export into this file.
+
+## Self-application
+This repo eats its own cooking: **whenever a directive or template change ships,
+check whether it applies to THIS repo too**, in the same PR. Two patterns:
+- **Byte-identical copy**, enforced by qa.yml's paired-file check
+  (`codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`,
+  `.claude/settings.json`) — the template IS the live copy.
+- **Adapted with documented divergence** where roles differ (`ci-monitor.yml` /
+  `ci-notify.yml` watch this repo's workflow name; `qa.yml` here is directive
+  validation, not app CI — so the app-shaped pieces like the ui-tests kit and
+  `styles/` contract don't apply).
+`/audit-repo` treats a shipped-downstream-but-applicable-here miss as drift.
 
 ## Branch policy
 `global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
@@ -146,7 +158,7 @@ node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths + raw self-references
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
-diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages monitor template pairs)
+diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages-monitor/pages-retry template pairs)
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/repo-map.html                        # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`

@@ -20,6 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Self-application: run the same secret scan every downstream project runs
+      # (global.md → Security), dogfooding the composite straight from its
+      # template path — a composite action works from any repo path.
+      - name: Secret scan
+        uses: ./templates/actions/secret-scan
+
       - name: Check internal URLs resolve (hard fail)
         run: node .github/scripts/check-links.js --internal
         env:
@@ -59,6 +65,7 @@ jobs:
           diff .claude/settings.json templates/claude-settings.json
           diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
           diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
+          diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
           echo "OK: paired files in sync"
 
       # The two Pages landing pages (site root + /docs/ gallery) deliberately

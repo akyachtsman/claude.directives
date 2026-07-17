@@ -27,17 +27,42 @@ nothing pending, it contains a 2–3 line summary of where the repo stands
 instead. An empty or missing hand-over block is never an acceptable output of
 this command.
 
-Inside the block, lead with this pointer, verbatim:
-> CLAUDE.md is the source of truth — read it first. This file holds only what
-> the repo doesn't capture.
+**The block uses this exact visual format** — same header, same dividers, same
+framing, in every repo (drop a section entirely rather than leaving it empty;
+UNRESOLVED — or the nothing-pending summary in its place — always comes first):
 
-Then include only:
-- **Loose ends with no tracker** — pending manual/UI steps, credential or
-  secret expiry dates, half-done work no PR or issue records.
-- **Out-of-band context that lives in no file** — cross-repo coordination,
-  vendored/generated files (don't hand-edit), scope limits; anything you were
-  *told* rather than read.
-- **Gotchas** a fresh session would otherwise re-learn the hard way.
+```text
+════════════════════ SESSION HANDOFF — <repo-name> ════════════════════
+CLAUDE.md is the source of truth — read it first. This file holds only
+what the repo doesn't capture.
+
+── UNRESOLVED ─────────────────────────────────────────────────────────
+1. SHORT CAPS TITLE (tracker ref + state, e.g. "PR #62, draft, CI
+   pending") — one-line stance: what's contested/undecided and by whom.
+   • Current observable state (what the live site / branch shows today).
+   • The load-bearing facts or numbers the next session must not
+     re-derive (measurements, thresholds, root cause).
+2. NEXT ITEM …
+
+── CONTEXT (in no file) ───────────────────────────────────────────────
+• Out-of-band facts: cross-repo coordination, vendored/generated files
+  (don't hand-edit), scope limits — anything you were TOLD, not read.
+
+── GOTCHAS ────────────────────────────────────────────────────────────
+• Things a fresh session would re-learn the hard way.
+
+── BRANCHES TO DELETE ─────────────────────────────────────────────────
+none — remote is clean            (or the per-branch checklist from §3)
+═══════════════════════════════════════════════════════════════════════
+```
+
+Framing rules for UNRESOLVED items — the part that makes a handoff usable:
+- **Title states the dispute/decision, not the task** ("USER DISPUTES the
+  centering fix", not "fix centering").
+- **Separate what IS from what SHOULD BE**: one bullet for today's observable
+  state, one for the constraint/physics that explains it.
+- **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
+  session would otherwise burn a round-trip re-deriving.
 
 Self-check every line: if it's already in CLAUDE.md, the README, or a workflow
 file, drop it — or move it THERE and drop it.

@@ -29,15 +29,28 @@ against the upstream tree:
 ```bash
 tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
   --jq '.tree[] | select(.type=="blob") | .path')
-grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
-  --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
-  | sed -E 's#.*claude\.directives/(main/)?##' | sort -u \
-  | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' \
-  | while read -r p; do
-    echo "$tree" | grep -qx "$p" || echo "BROKEN: $p"
-  done
+# GUARD: an empty tree makes EVERY path look BROKEN. Never run the loop on a
+# failed fetch — skip validation and say so instead of reporting false breaks.
+if [ -z "$tree" ]; then
+  echo "tree fetch failed — SKIPPING reference validation (no false BROKENs)"
+else
+  grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
+    --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
+    | sed -E 's#.*claude\.directives/(main/)?##' | sort -u \
+    | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' \
+    | while read -r p; do
+      echo "$tree" | grep -qx "$p" || echo "BROKEN: $p"
+    done
+fi
 ```
-(No `gh`: fetch the tree via `https://api.github.com/repos/akyachtsman/claude.directives/git/trees/main?recursive=1` with curl.)
+**Remote-session transport (verified 2026-07-18, apfp.claude):** `gh` is usually
+absent and sandbox curl to `api.github.com` is proxy-blocked or rate-limited
+(unauthenticated per-IP limits on a shared fleet IP — expect 403s after a call
+or two). Use **WebFetch** for the api.github.com calls (server-side, own egress),
+and spend the budget on the ONE `git/trees` call — it carries everything Phase 1
+needs. Individual raw-URL spot-checks (`raw.githubusercontent.com`, CDN-served,
+not rate-limited the same way) are the fallback for a handful of paths. A failed
+fetch is "cannot verify", never "BROKEN".
 
 For each BROKEN path, search the tree for its basename (rename candidate) and
 propose the fix; deletions get "content was folded — check upstream docs/README.md".
@@ -88,6 +101,12 @@ jq --arg sha "$head" --arg d "$(date -u +%F)" \
   > /tmp/ds.json && mv /tmp/ds.json .claude/directive-sync.json
 ```
 (Create the file with `{}` first if the project has none.)
+
+**Stamp only a VERIFIED head SHA.** If the commits/compare/refs endpoints are
+unreachable this run (proxy rate limits), skip Phases 2–3 gracefully: report
+"upstream delta unavailable this run — stamp unchanged, re-run /refresh-repo
+later", keep the old stamp, and never fabricate a SHA or an unverified delta
+(global.md → Evidence before assertions).
 
 Report: rules re-read (Phase 0), broken references and fixes, the upstream
 delta with per-file dispositions, the new stamp — and remind that any toolkit

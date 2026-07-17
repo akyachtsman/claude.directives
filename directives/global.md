@@ -132,6 +132,25 @@ Moved to `directives/git.md` → *Conditional Auto-Merge on Green* (owner
 ruling, 2026-07-12): the diff classification for merging on green without a
 per-change approval, and the revert-first safety net.
 
+## Progress Visibility (owner ruling, 2026-07-17)
+Silent processing is indistinguishable from a hang. For any operation expected
+to take more than ~1 minute (subagent fan-outs, CI/deploy watches, large
+sweeps, multi-file audits):
+- **Announce before starting**: one line saying what is about to run and a
+  rough time estimate ("fanning out 5 audit agents — expect ~4–6 min").
+- **Never go silent for more than ~1–2 minutes of active work.** Emit a
+  one-line status between steps: what just finished, what's next, revised
+  estimate if it moved. Structure long work to CREATE those update points —
+  prefer background agents (narrate on each completion notification) and
+  stepwise tool calls over one monolithic blocking wait, precisely because a
+  session cannot emit text mid-wait inside a single blocking call.
+- **Parked is not silent.** When waiting on an external event (CI webhook,
+  ci-notify wake, deploy), say so explicitly before ending the turn — "parked;
+  the green comment on PR #N will wake me (~3 min)" — so quiet is legible as
+  waiting, not hung.
+- **Estimate misses get an update, not silence.** If the estimate blows past,
+  say what's still running and the new expectation.
+
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts

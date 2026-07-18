@@ -180,7 +180,12 @@ sweeps, multi-file audits):
      calls at all); the scheduling tools are the fallback for waits with no
      PR attached — and even then arm at most ONE `send_later` per watched
      operation (a single long check-in, re-armed only on fire), never one
-     per polling cycle. `create_trigger` /
+     per polling cycle. **No scheduled "backstop" checks either** (owner
+     ruling, 2026-07-18): failure wakes natively, success wakes via
+     ci-notify, and the owner's next message is the backstop for the rare
+     case both break — a parked session costs nothing, a backstop costs a
+     prompt every time. Sole exception: the one PR that changes the wake
+     mechanism itself may arm a single verification check. `create_trigger` /
      `update_trigger` / `fire_trigger` stay prompt-gated deliberately: they can
      target other sessions or spawn new ones, a persistence channel under
      prompt injection. **Deployment tools** (`mcp__Supabase__deploy_edge_function`

@@ -24,6 +24,15 @@ for (const [cat, { paths }] of Object.entries(manifest.categories)) {
   }
 }
 
+// 1b) Every domain path exists — the logical (paradigm) view can't rot.
+for (const [dom, paths] of Object.entries(manifest.domains ?? {})) {
+  if (dom.startsWith('_')) continue;
+  for (const p of paths) {
+    if (existsSync(p)) console.log(`OK:   [domain:${dom}] ${p}`);
+    else fail(`[domain:${dom}] path missing from tree: ${p}`);
+  }
+}
+
 // 2) Every raw-URL self-reference resolves inside a manifest path.
 function findTextFiles(dir) {
   const out = [];

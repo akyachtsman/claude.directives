@@ -1,5 +1,9 @@
 # New Project Quickstart
 
+> This doc gets a project **started**. Once it's running, the ongoing runbook —
+> how upstream changes propagate, when to re-save environments, `/refresh-repo`,
+> the downstream-finding loop — is `MAINTAIN-REPO-USER-INSTRUCTIONS.md`.
+
 ## HUMAN STEPS
 
 ### Step 0 — One-time: turn the toolkit on (you may already be done)

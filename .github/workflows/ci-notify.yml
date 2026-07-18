@@ -6,6 +6,11 @@
 # head SHA; the comment webhook wakes the subscribed session — no scheduling-
 # tool polling, no permission prompts. Failures deliberately not commented
 # (delivered natively; ci-monitor tracks them). Uses only GITHUB_TOKEN.
+#
+# BOOTSTRAP GAP: workflow_run triggers are read from this file ON THE DEFAULT
+# BRANCH — this workflow can never wake the PR that installs it. For that one
+# PR only, arm the single verification check global.md's no-backstop ruling
+# allows; confirm the first post-install PR gets its green comment.
 on:
   workflow_run:
     workflows:

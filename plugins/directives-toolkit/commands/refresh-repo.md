@@ -83,7 +83,7 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — offer batch overwrite; EXCEPT preserve a renamed `qa.yml` `name:` in `ci-monitor.yml`'s watch list |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — offer batch overwrite; EXCEPT preserve locally-adapted `workflow_run` watch lists in `ci-monitor.yml` AND `ci-notify.yml` (repos whose QA workflows carry non-template `name:` values adapt those lists; overwriting them re-breaks the trigger — verified on apfp.claude 2026-07-18) |
 | `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json` |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm |

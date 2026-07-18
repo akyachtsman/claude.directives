@@ -12,6 +12,15 @@
 #
 # Drop-in: watched names match the QA workflows shipped in this template set;
 # entries for workflows you didn't copy are inert. Uses only GITHUB_TOKEN.
+#
+# BOOTSTRAP GAP — read before trusting this on its install PR: workflow_run
+# triggers are read from this file ON THE DEFAULT BRANCH, so this workflow can
+# NEVER wake the PR that installs it (verified on claude.prop, 2026-07-18: two
+# post-merge runs, zero PR wakes — the mechanism was fine, the install PR just
+# predated it on main). For that one PR only, arm the single verification
+# check global.md's no-backstop ruling allows (its sole exception), confirm
+# the FIRST post-install PR gets its green comment, then never schedule
+# checks again. Do not conclude "dud" from the install PR's silence.
 on:
   workflow_run:
     workflows:

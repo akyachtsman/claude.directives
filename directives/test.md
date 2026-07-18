@@ -117,6 +117,12 @@ Four gates every project's UI suite must satisfy — the kit enforces each
   in `APP_PAGES` so each gets the load gate (ENTRY), and give rich pages their
   own suite. A page with zero tests is a release blocker, not an acceptable gap.
 
+These gates are **completion gates, not sequencing gates**: everything must
+pass before the work is called done, but a task never waits for the previous
+task's suite to finish before starting (`global.md` → Pipelined Execution).
+Verification runs concurrently with the next task; results route back — and
+batching independent tasks into one suite run is the norm, not a shortcut.
+
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are
   covered by the PR trigger — listing `claude/**` under push would run everything twice)

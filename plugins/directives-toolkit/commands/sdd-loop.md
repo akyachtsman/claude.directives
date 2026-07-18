@@ -79,8 +79,10 @@ consolidated pass — not separate CEO/design/eng personas.
 
 ## Phase 4 — tasks  (`/sdd-loop tasks <feature>`)
 Write `specs/<slug>/tasks.md`: an ordered, dependency-aware checklist derived
-from the plan. Number tasks, note dependencies, and tag parallel-safe tasks
-`[P]`. Size each task to roughly **2–5 minutes** of work — ideally failing test
+from the plan. Number tasks and give **every task an explicit `depends:` line**
+(task IDs it must wait for, or `none`) — required for every task list, one item
+or more (`global.md` → Pipelined Execution); tag parallel-safe tasks `[P]`.
+Size each task to roughly **2–5 minutes** of work — ideally failing test
 → implement → verify → commit. **Self-review before finishing: reject
 placeholders** ("TBD", "similar to Task N", vague "handle errors") — every task
 must name concrete files and changes.
@@ -109,10 +111,16 @@ first. Build the remaining pages against that contract; for an elaborate brief,
 **deploy 1–2 key screens to Pages (or attach a screenshot) and get the user's
 sign-off on the *look*** before doing the rest — cheapest to fix on one screen.
 
-Then execute `tasks.md` against `plan.md`, task by task — **delegate to the existing
-pipeline, don't duplicate it.** Implement each task, then run the
-`directives-toolkit:qa-pipeline` agent (test-verifier → ui-tester → code review
-→ pr-readiness) to verify before moving on. Honor the Pre-Push gate
+Then execute `tasks.md` against `plan.md` **pipelined, not step-serialized**
+(`global.md` → Pipelined Execution): implement a task, launch its verification
+in the background, and immediately start the next task whose `depends:` are
+all satisfied — never idle-wait for a suite to finish before beginning
+independent work. **Batch verification**: group completed independent tasks
+and run the `directives-toolkit:qa-pipeline` agent (test-verifier → ui-tester
+→ code review → pr-readiness) once over the batch rather than once per task.
+A failure routes back as the priority — its downstream tasks pause, the rest
+keep going. Loop until every task is done AND every verification round is
+green; the completion bar is unchanged. Honor the Pre-Push gate
 (`/commit-chk`) and PR lifecycle from the global directive. Check tasks off in
 `tasks.md` as they land.
 

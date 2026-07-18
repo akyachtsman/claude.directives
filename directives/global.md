@@ -151,6 +151,31 @@ sweeps, multi-file audits):
 - **Estimate misses get an update, not silence.** If the estimate blows past,
   say what's still running and the new expectation.
 
+## Pipelined Execution (owner ruling, 2026-07-18)
+Serializing a task list behind each step's verification wastes the session —
+20 tasks × one UI-suite wait each is the failure mode this section exists to
+kill. Applies to **every task list, one item or more**:
+- **Dependencies are declared at plan time.** Every task carries an explicit
+  `depends:` (task IDs it must wait for, or `none`). Parallelism is decided
+  when the list is written, not improvised mid-run.
+- **Never idle-wait on verification.** The moment a task's UI suite / CI run
+  is launched, start the next task with no unmet dependencies. Verification
+  results arrive asynchronously (ci-notify, webhooks, background agents) and
+  route back when they land.
+- **Block only on a true dependency or a shared-file conflict.** "Finishing
+  one first feels tidy" is not a dependency.
+- **Batch verification.** Group independent small tasks and run ONE suite
+  over the batch rather than one run per task — most task lists collapse to
+  a handful of verification rounds.
+- **Failure routing.** A failed verification becomes the priority; tasks
+  downstream of the failure pause; independent tasks keep going. Circuit
+  breakers (`test.md` → 3 attempts) unchanged.
+- **Loop until drained.** Keep picking up the next ready task until nothing
+  is ready and everything outstanding is only waiting on verification or the
+  owner. The completion bar is unchanged: ALL verification green before the
+  work is called done (`test.md` gates) — pipelining reorders the waiting,
+  never skips it.
+
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts

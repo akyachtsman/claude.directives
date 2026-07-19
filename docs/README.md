@@ -40,6 +40,7 @@ Referenced by the exported directives and the qa agents.
 | File | What it is |
 |------|------------|
 | `site/repo-map.html` | Interactive map of the whole repo — zoom/pan/search, self-contained (no CDN) |
+| `site/logical-map.html` | The logical view — domains, compartments, swap classes, vendor sockets (the `EXPORTS.json` view); same engine as the repo map, cross-linked with it |
 | `site/commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
 | `site/react-demo.html` | Live browser-only React button (vendored React, no build, no CDN) — demos the production-tier preview technique; pairs with `site/vendor/` |
 | `site/index.html` | Demo gallery — links to the repo map, React preview, and commands reference (same list as the site-root `../index.html`) |

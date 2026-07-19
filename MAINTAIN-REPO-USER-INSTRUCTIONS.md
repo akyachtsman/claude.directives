@@ -86,23 +86,37 @@ session confirms the toolkit version attached.
 ## Domain Boundaries — the logical view
 
 The folder layout is **physical** (organized by delivery mode, because that is
-what the raw-URL / plugin / template machinery enforces). The **logical** view —
-which files constitute each swappable paradigm — is the `domains` section of
-`EXPORTS.json` (`global`, `git`, `design`, `test`, `data`, `meta`), validated
-by CI so it can't rot. Rules:
+what the raw-URL / plugin / template machinery enforces). The **logical** view
+lives in `EXPORTS.json` and is drawn interactively at
+`docs/site/logical-map.html` (the physical map's sibling — each links to the
+other). Three layers, all CI-validated so they can't rot:
 
-- **To swap a paradigm** (e.g. replace the testing approach): replace the
-  files tagged with that domain, across all delivery modes at once — the
-  directive, its workflows, its kit, its agents. The tags ARE the shopping list.
+- **`domains`** — domain → compartment → paths. The **compartment** is the
+  swappable unit (e.g. `test.ui-kit`, `git.monitors`): replace its file set
+  honoring its interface and nothing outside it moves. The compartment's
+  paths ARE the shopping list for a swap, across all delivery modes at once.
+- **`swap`** — the classes. **Permanent** paths (the four directive contracts;
+  the whole `meta` domain) evolve via PR, never wholesale replacement.
+  **Orchestrators** (`sdd-loop` for development, `qa-pipeline` for testing)
+  are permanent AND define the interfaces components must fit — **a new
+  component does not exist until its orchestrator sequences it**. Everything
+  else is swappable.
+- **`externals`** — vendor-owned capabilities we hold only **sockets** for
+  (pr-review-toolkit, security-guidance, Playwright, Codex, Stitch,
+  Supabase MCP, …). Each entry records the vendor, the compartment it serves,
+  and the exact socket files that name/enable it. To swap a vendor: rewire
+  the sockets, never fork the vendor's code.
+
+Standing rules:
 - **Interfaces between domains**: a directive may *reference* another domain's
   sections (test.md points at global.md's escalation rules) but never
   *redefines* them. One owner per rule; pointers elsewhere.
 - **`meta` is not swappable** — it's the machinery that delivers the other
-  five (installer, marketplace, refresh/env-chk/handoff, hooks). Changing it
-  changes how everything propagates, so treat it with workflow-file caution.
+  five. Changing it changes how everything propagates; treat it with
+  workflow-file caution.
 - Precedent that this works: the design paradigm was already swapped once
   (fixed shared theme → per-project generative method) by replacing the
-  `design`-tagged set, with no other domain touched.
+  `design` set, with no other domain touched — its 3-point interface held.
 
 ## Known Gotchas
 

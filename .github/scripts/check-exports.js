@@ -24,12 +24,37 @@ for (const [cat, { paths }] of Object.entries(manifest.categories)) {
   }
 }
 
-// 1b) Every domain path exists — the logical (paradigm) view can't rot.
-for (const [dom, paths] of Object.entries(manifest.domains ?? {})) {
+// 1b) Every domain.compartment path exists — the logical (paradigm) view can't rot.
+const compartments = new Set();
+for (const [dom, comps] of Object.entries(manifest.domains ?? {})) {
   if (dom.startsWith('_')) continue;
-  for (const p of paths) {
-    if (existsSync(p)) console.log(`OK:   [domain:${dom}] ${p}`);
-    else fail(`[domain:${dom}] path missing from tree: ${p}`);
+  compartments.add(dom);
+  for (const [comp, paths] of Object.entries(comps)) {
+    if (comp.startsWith('_')) continue;
+    compartments.add(`${dom}.${comp}`);
+    for (const p of paths) {
+      if (existsSync(p)) console.log(`OK:   [${dom}.${comp}] ${p}`);
+      else fail(`[${dom}.${comp}] path missing from tree: ${p}`);
+    }
+  }
+}
+
+// 1c) Swap-class paths exist.
+for (const cls of ['permanent', 'orchestrators']) {
+  for (const p of manifest.swap?.[cls] ?? []) {
+    if (existsSync(p)) console.log(`OK:   [swap:${cls}] ${p}`);
+    else fail(`[swap:${cls}] path missing from tree: ${p}`);
+  }
+}
+
+// 1d) Externals: every socket file exists; `serves` names a real domain.compartment.
+for (const [name, ext] of Object.entries(manifest.externals ?? {})) {
+  if (name.startsWith('_')) continue;
+  if (!compartments.has(ext.serves)) fail(`[external:${name}] serves unknown compartment: ${ext.serves}`);
+  else console.log(`OK:   [external:${name}] serves ${ext.serves} (${ext.vendor})`);
+  for (const p of ext.sockets ?? []) {
+    if (existsSync(p)) console.log(`OK:   [external:${name}] socket ${p}`);
+    else fail(`[external:${name}] socket missing from tree: ${p}`);
   }
 }
 

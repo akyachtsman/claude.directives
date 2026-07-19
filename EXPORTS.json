@@ -36,84 +36,227 @@
     }
   },
   "domains": {
-    "_comment": "The LOGICAL view, orthogonal to categories (which encode propagation): which files constitute each swappable paradigm. To swap a paradigm, replace its tagged set across all delivery modes at once — see MAINTAIN-REPO-USER-INSTRUCTIONS.md → Domain Boundaries. 'meta' is the delivery machinery itself and is not swappable. Validated by check-exports.js: every path must exist.",
-    "global": [
+    "_comment": "The LOGICAL view, orthogonal to categories (which encode propagation): domain → compartment → paths. A compartment is the swappable unit — replace its file set honoring its interface and nothing outside it moves. Rendered visually at docs/site/logical-map.html; boundaries and swap procedure in MAINTAIN-REPO-USER-INSTRUCTIONS.md → Domain Boundaries. Validated by check-exports.js: every path must exist.",
+    "global": {
+      "core": [
+        "directives/global.md"
+      ],
+      "method": [
+        "plugins/directives-toolkit/commands/sdd-loop.md",
+        "plugins/directives-toolkit/commands/diagnose.md",
+        "plugins/directives-toolkit/commands/kickoff.md",
+        "plugins/directives-toolkit/commands/learn.md",
+        "docs/guides/ai-first-principles.md",
+        "docs/guides/dev-pipeline.md",
+        "docs/guides/usage-guide.md"
+      ],
+      "security": [
+        "templates/actions/secret-scan/"
+      ],
+      "deploy": [
+        "plugins/directives-toolkit/skills/update-pages/",
+        "templates/workflows/pages-monitor.yml",
+        "templates/workflows/pages-retry.yml"
+      ],
+      "starter": [
+        "templates/CLAUDE-template.md",
+        "templates/nextjs-app/"
+      ]
+    },
+    "git": {
+      "lifecycle": [
+        "directives/git.md",
+        "templates/pr-checklist.md",
+        "plugins/directives-toolkit/commands/commit-chk.md"
+      ],
+      "monitors": [
+        "templates/workflows/ci-monitor.yml",
+        "templates/workflows/ci-notify.yml",
+        "templates/workflows/codex-monitor.yml"
+      ],
+      "automation": [
+        "templates/workflows/keepalive.yml",
+        "templates/workflows/cron-notify.yml",
+        "templates/scripts/notify-email.js",
+        "templates/scripts/notify-task.js",
+        "templates/scripts/package.json",
+        "docs/guides/cron-email-notifications.md"
+      ],
+      "setup": [
+        "docs/standards/automations.md",
+        "docs/standards/cicd-setup.md"
+      ]
+    },
+    "design": {
+      "method": [
+        "directives/design.md",
+        "plugins/directives-toolkit/commands/design-intake.md",
+        "docs/guides/design-tooling.md"
+      ],
+      "contract": [
+        "templates/styles/"
+      ],
+      "guards": [
+        "templates/scripts/check-contrast.js"
+      ]
+    },
+    "test": {
+      "core": [
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md"
+      ],
+      "static-ci": [
+        "templates/workflows/qa.yml",
+        "templates/workflows/qa-response.yml"
+      ],
+      "ui-kit": [
+        "templates/actions/ui-suite/",
+        "templates/ui-tests/",
+        "plugins/directives-toolkit/agents/ui-tester.md"
+      ],
+      "live": [
+        "templates/workflows/qa-live.yml"
+      ],
+      "review": [
+        "docs/standards/code-review-standard.md",
+        "templates/implementation-summary-template.md"
+      ],
+      "verify": [
+        "plugins/directives-toolkit/agents/test-verifier.md",
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
+        "templates/project-test-plan-template.md"
+      ],
+      "triage": [
+        "docs/standards/ci-triage.md"
+      ]
+    },
+    "data": {
+      "core": [
+        "directives/data.md",
+        "plugins/directives-toolkit/agents/supabase.md"
+      ]
+    },
+    "meta": {
+      "delivery": [
+        ".claude-plugin/marketplace.json",
+        "plugins/directives-toolkit/.claude-plugin/plugin.json",
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json"
+      ],
+      "session": [
+        "plugins/directives-toolkit/commands/env-chk.md",
+        "plugins/directives-toolkit/commands/refresh-repo.md",
+        "plugins/directives-toolkit/commands/new-repo.md",
+        "plugins/directives-toolkit/commands/audit-repo.md",
+        "plugins/directives-toolkit/commands/handoff-session.md",
+        "plugins/directives-toolkit/commands/do-repo.md",
+        "plugins/directives-toolkit/commands/my-list.md",
+        "plugins/directives-toolkit/skills/scope-chk/",
+        "plugins/directives-toolkit/skills/doc-comp/"
+      ],
+      "guards": [
+        "plugins/directives-toolkit/hooks/",
+        "plugins/directives-toolkit/scripts/"
+      ],
+      "runbooks": [
+        "NEW-REPO-USER-INSTRUCTIONS.md",
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+      ]
+    }
+  },
+  "swap": {
+    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced (the meta domain is permanent in its entirety). ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit — a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
+    "permanent": [
       "directives/global.md",
-      "templates/CLAUDE-template.md",
-      "templates/nextjs-app/",
-      "templates/actions/secret-scan/",
-      "templates/workflows/pages-monitor.yml",
-      "templates/workflows/pages-retry.yml",
-      "plugins/directives-toolkit/skills/update-pages/",
-      "plugins/directives-toolkit/commands/diagnose.md",
-      "plugins/directives-toolkit/commands/kickoff.md",
-      "plugins/directives-toolkit/commands/sdd-loop.md",
-      "plugins/directives-toolkit/commands/learn.md",
-      "docs/guides/ai-first-principles.md",
-      "docs/guides/dev-pipeline.md",
-      "docs/guides/usage-guide.md"
-    ],
-    "git": [
       "directives/git.md",
-      "templates/pr-checklist.md",
-      "templates/workflows/ci-monitor.yml",
-      "templates/workflows/ci-notify.yml",
-      "templates/workflows/codex-monitor.yml",
-      "templates/workflows/keepalive.yml",
-      "templates/workflows/cron-notify.yml",
-      "templates/scripts/notify-email.js",
-      "templates/scripts/notify-task.js",
-      "templates/scripts/package.json",
-      "plugins/directives-toolkit/commands/commit-chk.md",
-      "docs/standards/automations.md",
-      "docs/standards/cicd-setup.md",
-      "docs/guides/cron-email-notifications.md"
-    ],
-    "design": [
-      "directives/design.md",
-      "templates/styles/",
-      "templates/scripts/check-contrast.js",
-      "plugins/directives-toolkit/commands/design-intake.md",
-      "docs/guides/design-tooling.md"
-    ],
-    "test": [
       "directives/test.md",
-      "templates/workflows/qa.yml",
-      "templates/workflows/qa-live.yml",
-      "templates/workflows/qa-response.yml",
-      "templates/actions/ui-suite/",
-      "templates/ui-tests/",
-      "templates/project-test-plan-template.md",
-      "templates/implementation-summary-template.md",
-      "plugins/directives-toolkit/agents/test-verifier.md",
-      "plugins/directives-toolkit/agents/ui-tester.md",
-      "plugins/directives-toolkit/agents/qa-pipeline.md",
-      "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-      "docs/standards/ci-triage.md",
-      "docs/standards/code-review-standard.md"
+      "directives/data.md"
     ],
-    "data": [
-      "directives/data.md",
-      "plugins/directives-toolkit/agents/supabase.md"
-    ],
-    "meta": [
-      ".claude-plugin/marketplace.json",
-      "scripts/install-toolkit.sh",
-      "templates/claude-settings.json",
-      "plugins/directives-toolkit/.claude-plugin/plugin.json",
-      "plugins/directives-toolkit/commands/new-repo.md",
-      "plugins/directives-toolkit/commands/refresh-repo.md",
-      "plugins/directives-toolkit/commands/env-chk.md",
-      "plugins/directives-toolkit/commands/audit-repo.md",
-      "plugins/directives-toolkit/commands/handoff-session.md",
-      "plugins/directives-toolkit/commands/do-repo.md",
-      "plugins/directives-toolkit/commands/my-list.md",
-      "plugins/directives-toolkit/skills/scope-chk/",
-      "plugins/directives-toolkit/skills/doc-comp/",
-      "plugins/directives-toolkit/hooks/",
-      "plugins/directives-toolkit/scripts/",
-      "NEW-REPO-USER-INSTRUCTIONS.md",
-      "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+    "orchestrators": [
+      "plugins/directives-toolkit/commands/sdd-loop.md",
+      "plugins/directives-toolkit/agents/qa-pipeline.md"
     ]
+  },
+  "externals": {
+    "_comment": "Vendor-owned capabilities this system depends on but does not contain — we hold only the sockets. To swap a vendor: rewire the listed socket files, never fork the vendor's code. serves = domain.compartment from the domains view. sockets = the files here that name/enable/configure it (must exist; validated).",
+    "pr-review-toolkit": {
+      "vendor": "Anthropic",
+      "serves": "test.review",
+      "sockets": [
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json",
+        "directives/test.md"
+      ]
+    },
+    "code-review-builtin": {
+      "vendor": "Anthropic",
+      "serves": "test.review",
+      "sockets": [
+        "directives/test.md"
+      ]
+    },
+    "security-guidance": {
+      "vendor": "Anthropic",
+      "serves": "global.security",
+      "sockets": [
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json",
+        "directives/test.md"
+      ]
+    },
+    "security-review-builtin": {
+      "vendor": "Anthropic",
+      "serves": "global.security",
+      "sockets": [
+        "directives/test.md"
+      ]
+    },
+    "codex-reviews": {
+      "vendor": "GitHub",
+      "serves": "git.monitors",
+      "sockets": [
+        "templates/workflows/codex-monitor.yml",
+        "directives/git.md"
+      ]
+    },
+    "github-mcp": {
+      "vendor": "GitHub",
+      "serves": "git.lifecycle",
+      "sockets": [
+        "directives/git.md"
+      ]
+    },
+    "playwright": {
+      "vendor": "Microsoft",
+      "serves": "test.ui-kit",
+      "sockets": [
+        "templates/ui-tests/package.json",
+        "templates/actions/ui-suite/action.yml"
+      ]
+    },
+    "frontend-design": {
+      "vendor": "Anthropic",
+      "serves": "design.method",
+      "sockets": [
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json",
+        "docs/guides/design-tooling.md"
+      ]
+    },
+    "stitch": {
+      "vendor": "Google",
+      "serves": "design.method",
+      "sockets": [
+        "docs/guides/design-tooling.md"
+      ]
+    },
+    "supabase-mcp": {
+      "vendor": "Supabase",
+      "serves": "data.core",
+      "sockets": [
+        "directives/data.md",
+        "plugins/directives-toolkit/agents/supabase.md"
+      ]
+    }
   }
 }

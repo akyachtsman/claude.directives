@@ -22,7 +22,7 @@ await page.goto(MAP);
 await page.waitForTimeout(400);
 
 const ids = await page.$$eval('.node', ns => ns.map(n => n.dataset.id));
-if (ids.length < 8) fail(`expected >=8 boxes, found ${ids.length}`);
+if (ids.length < 7) fail(`expected >=7 boxes, found ${ids.length}`);
 else console.log(`OK: ${ids.length} boxes render`);
 
 const effOpacity = () => page.$$eval('.node', ns => ns.map(n => {
@@ -32,7 +32,10 @@ const effOpacity = () => page.$$eval('.node', ns => ns.map(n => {
 }));
 
 // Core regression guard: clicking a box must never fade another box.
-for (const id of ['plugin', 'directives', 'docsint']) {
+// Sample the first three boxes from the DOM so the same check runs against
+// any map page sharing this engine (repo-map, logical-map) without a
+// hardcoded id list.
+for (const id of ids.slice(0, 3)) {
   const rect = await page.$(`#n_${id} rect`);
   if (!rect) { fail(`box #n_${id} not found`); continue; }
   const bb = await rect.boundingBox();

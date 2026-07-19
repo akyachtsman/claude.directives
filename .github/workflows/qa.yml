@@ -89,8 +89,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Dogfood the exported UI-testing standard (test.md / templates/ui-tests) on
-  # this repo's own interactive Pages artifact, docs/site/repo-map.html. Blocking:
-  # the map is a static, self-contained file with no backend, so the run is
+  # this repo's interactive Pages artifacts: docs/site/repo-map.html (physical
+  # view) and docs/site/logical-map.html (logical view — same engine). Blocking:
+  # the maps are static, self-contained files with no backend, so the run is
   # deterministic (unlike the downstream local-server UI tests).
   ui-tests:
     name: Repo Map UI (Playwright)
@@ -107,10 +108,15 @@ jobs:
           npm install playwright
           npx playwright install --with-deps chromium
 
-      # Keep in sync with CLAUDE.md "Local gate": the map's HTML is validated
-      # here on every run (locally it's only needed when the map changed).
-      - name: Validate repo map HTML
-        run: npx --yes html-validate docs/site/repo-map.html
+      # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
+      # here on every run (locally it's only needed when a map changed).
+      - name: Validate map HTML (both views)
+        run: npx --yes html-validate docs/site/repo-map.html docs/site/logical-map.html
 
-      - name: Repo map UI checks
+      - name: Repo map UI checks (physical view)
         run: node .github/scripts/check-repo-map-ui.js
+
+      - name: Logical map UI checks (same engine, logical view)
+        run: node .github/scripts/check-repo-map-ui.js
+        env:
+          REPO_MAP_FILE: docs/site/logical-map.html

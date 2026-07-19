@@ -110,9 +110,11 @@ A directive repo must pass its own CI before it can be trusted downstream.
   stays byte-identical across `global.md` and the qa workflow templates), and a
   paired-file diff check, plus a warn-only external-link job. It also runs a
   **Playwright UI test** (`Repo Map UI`) — this repo dogfooding its own exported
-  UI-testing standard (`test.md` / `templates/ui-tests`) on `docs/site/repo-map.html`,
-  the only interactive Pages artifact: a headless Chromium asserts the map
-  renders and that clicking a box fades no box and dragging selects no text.
+  UI-testing standard (`test.md` / `templates/ui-tests`) on its two interactive
+  Pages artifacts, `docs/site/repo-map.html` (physical view) and
+  `docs/site/logical-map.html` (logical view, same engine): a headless Chromium
+  asserts each map renders and that clicking a box fades no box and dragging
+  selects no text.
   (The old design-theme parity + contrast checks were retired with the fixed
   design system — design is now per-project; the contrast guardrail ships in
   `templates/scripts/` for projects.)
@@ -161,8 +163,9 @@ node .github/scripts/check-links.js --internal   # offline: verifies against the
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages-monitor/pages-retry template pairs)
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
-npx html-validate docs/site/repo-map.html                        # when the map changed (CI runs it every time)
-node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
+npx html-validate docs/site/repo-map.html docs/site/logical-map.html   # when a map changed (CI runs it every time)
+node .github/scripts/check-repo-map-ui.js                    # when a map changed; needs `npm i playwright && npx playwright install chromium`
+REPO_MAP_FILE=docs/site/logical-map.html node .github/scripts/check-repo-map-ui.js   # the logical view, same check
 ```
 Confirm `git status` shows no unintended changes. If any check fails, fix it
 before pushing rather than pushing and fixing on the PR. The Playwright UI

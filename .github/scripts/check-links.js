@@ -40,8 +40,9 @@ for (const file of findMarkdown('.')) {
   for (let url of content.match(URL_RE) ?? []) {
     url = url.replace(/[.,;:]+$/, ''); // strip trailing prose punctuation
     // Skip template placeholder URLs (e.g. .../<repo>/<ref>/<path>) — they are
-    // documentation examples, not real links to resolve. [bracketed] likewise.
-    if (url.includes('<') || url.includes('[')) continue;
+    // documentation examples, not real links to resolve. [bracketed] likewise,
+    // and unexpanded shell variables ($var) inside documented code blocks.
+    if (url.includes('<') || url.includes('[') || url.includes('$')) continue;
     if (SKIP_HOSTS.some(h => url.startsWith(`https://${h}/`))) continue;
     urls.add(url);
   }

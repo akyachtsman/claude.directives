@@ -122,3 +122,18 @@ Hard-won; each cost a real debugging session:
   what a live session sees when files change under it. Don't expect hot reload.
 - **api.github.com rate limits in remote sessions** — shared-fleet IP; use
   WebFetch or raw URLs, and a failed fetch is "cannot verify", never "broken".
+- **Plugin supply chain has no review point in our repos** — external plugin
+  updates (even Anthropic-official) reach sessions automatically on each env
+  cache rebuild (~weekly), unreviewed by us. The defenses are layered
+  elsewhere: push-gate blocks direct-to-main, workflow files are excluded
+  from auto-merge, workflow-trigger edits are stop-and-ask, and every
+  workflow PR gets a line-by-line diff read (`git.md`, 2026-07-19). Keep the
+  install list minimal — ours plus the named Anthropic-official set in
+  `scripts/install-toolkit.sh`.
+- **`/refresh-repo` is a sync negotiator, not a restore-from-backup** — its
+  Phase 2 diffs the *upstream delta*, so a locally corrupted copy of an
+  unchanged template is invisible to it; and when it does see local changes
+  it preserves them pending approval by design. Local corruption is caught by
+  Phase 1.5's delta-independent integrity check (drift vs the current
+  templates) and fixed by restore-from-template or `git revert` — not by
+  waiting for a refresh to notice.

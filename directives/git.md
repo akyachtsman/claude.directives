@@ -27,6 +27,14 @@ Workflow*.
 - Before merging, confirm the PR's file list is **only** what you changed. A surprise
   file count signals a stale or tangled branch — verify against GitHub's own PR diff,
   not a possibly-stale local clone (re-fetch/prune, or re-cut from `main`, if they disagree)
+- **Any PR touching `.github/workflows/**` gets a line-by-line read of that diff
+  before approval or merge** (owner ruling, 2026-07-19) — regardless of source or
+  green CI. Workflow files are the repo's execution surface: they run with
+  secrets and outlive the session that wrote them. They're already excluded
+  from auto-merge; this rule adds that the approval itself must be
+  eyes-on-the-diff, never approval-by-momentum. A workflow file appearing in a
+  PR that wasn't supposed to touch workflows is a stop-and-diagnose, not a
+  merge-and-see.
 - Never force-push to `main`
 
 ## Conditional Auto-Merge on Green (owner ruling, 2026-07-12)

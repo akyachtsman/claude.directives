@@ -55,6 +55,42 @@ fetch is "cannot verify", never "BROKEN".
 For each BROKEN path, search the tree for its basename (rename candidate) and
 propose the fix; deletions get "content was folded — check upstream docs/README.md".
 
+## Phase 1.5 — Installed-copy integrity (delta-independent drift check)
+
+Phase 2 only examines files UPSTREAM changed since the stamp — a locally
+corrupted copy of an *unchanged* template is invisible to it forever
+(identified gap, 2026-07-19: an accidental session edit to a project's qa.yml
+would never be flagged). This pass compares every installed verbatim drop-in
+against the CURRENT upstream template, regardless of delta:
+
+```bash
+repo="akyachtsman/claude.directives"
+raw="https://raw.githubusercontent.com/$repo/main"
+for f in .github/workflows/*.yml .github/actions/*/action.yml; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    .github/workflows/*) t="templates/workflows/$(basename "$f")";;
+    *)                   t="templates/actions/$(basename "$(dirname "$f")")/action.yml";;
+  esac
+  tmpl=$(curl -fsSL "$raw/$t") \
+    || { echo "NO-TEMPLATE: $f (project-specific — skip)"; continue; }
+  diff -q <(printf '%s\n' "$tmpl") "$f" >/dev/null 2>&1 || echo "DRIFT: $f"
+done
+```
+(raw.githubusercontent.com is CDN-served and works from remote sessions; a
+failed fetch is "cannot verify", never DRIFT.)
+
+Disposition each DRIFT — three classes, in checking order:
+1. **Expected adaptation** — `ci-monitor.yml` / `ci-notify.yml` where the diff
+   is ONLY the `workflow_run` watch list: keep, no report needed.
+2. **Documented customization** — the project's CLAUDE.md records the local
+   change: keep, mention in the report.
+3. **Unexplained drift** — everything else. Show the full diff and ask; the
+   default is **restore from the template**. An unexplained workflow drift
+   means an accidental session edit or tampering (git.md requires eyes-on-the-
+   diff for every workflow PR precisely so this class stays empty) — it is a
+   red flag to resolve, never a customization to silently preserve.
+
 ## Phase 2 — Upstream delta since last sync (installed templates)
 
 The actionable signal for the project's installed template copies is what

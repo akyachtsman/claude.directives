@@ -36,6 +36,16 @@ notified without polling. For in-session fast feedback, poll via
 2. Address each suggestion or explicitly note why it's declined
 3. Remove the label once resolved — do not merge while the label is present
 
+## CI never registered on a PR
+
+No run at all is a different failure from a red run — usually nothing in the
+repo is broken. Follow the escalation ladder in `directives/git.md` → *PR
+Lifecycle* (close→reopen → empty commit → fresh branch/PR → scope diagnosis).
+The distinguishing test: if push-to-main runs fire while `pull_request` runs
+don't, it's a GitHub event-delivery outage, not your workflow file — run the
+gate manually via `qa.yml`'s `workflow_dispatch` on the PR's branch, and do
+not edit workflows chasing a bug that isn't there.
+
 ## What not to do
 
 - Do not close a `ci-failure` issue without fixing the underlying failure

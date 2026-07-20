@@ -8,6 +8,12 @@ on:
   # run the whole workflow twice.
   push:
     branches: [main]
+  # Manual escape hatch (owner-approved 2026-07-19): pull_request event
+  # delivery has died repo-wide before — this lets a session or the Actions
+  # tab run the gate by hand on any ref. A dispatch run on the PR's head SHA
+  # satisfies the merge gate; the policy requires the gate passing, not a
+  # particular triggering event.
+  workflow_dispatch:
 
 # Least privilege: validation only reads the repo.
 permissions:

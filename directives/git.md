@@ -66,8 +66,20 @@ hesitation: a regression found after merge is handled revert-first
 (git revert / GitHub's Revert button), investigate second; a small
 roll-forward fix is fine when clearly faster.
 
-If CI never registers on a PR (the pull_request event-delivery flake),
-force it with a close→reopen of the PR before concluding anything.
+If CI never registers on a PR (no run at all — different from a red run),
+walk this ladder in order; each rung is a fresh event source (observed
+2026-07-19: the first rung is not always enough):
+1. Close→reopen the PR — re-fires the `pull_request` event.
+2. Push an empty commit — fires a `synchronize` event.
+3. Re-cut the branch under a new name and open a new PR — fresh event stream.
+4. Still nothing? **Diagnose scope before more retries**: if push-to-main runs
+   fire while `pull_request` runs don't, it's a GitHub event-delivery outage,
+   not your workflow file — stop burning retries. Run the gate manually
+   (`qa.yml` has `workflow_dispatch` for exactly this) on the PR's branch, or
+   arm a timed watch for recovery. Either way, surface status and options to
+   the owner within ~30 minutes — never wait silently.
+A manual-dispatch run on the PR's head SHA satisfies the merge gate: the
+policy requires the gate to pass on that SHA, not a particular trigger.
 
 ## Repo-settings preflight (warn once per session)
 Two GitHub repo settings make the merge rules above work end-to-end. Agents

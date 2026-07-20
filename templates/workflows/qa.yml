@@ -32,6 +32,11 @@ on:
   # makes that window moments.
   push:
     branches: [main]
+  # Manual escape hatch: pull_request event delivery can die provider-side
+  # (observed 2026-07-19) — this lets a session or the Actions tab run the
+  # gate by hand on any ref. A dispatch run on the PR's head SHA satisfies
+  # the merge gate. See docs/standards/ci-triage.md → "CI never registered".
+  workflow_dispatch:
 
 # Least privilege: these jobs only read the repo and run tests.
 permissions:

@@ -21,6 +21,7 @@ covers only how to operate *on this repo*.
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `EXPORTS.json` | Machine-readable export boundary — every downstream-consumed path by delivery mode (inherited rules / installed tooling / copied scaffolding / referenced docs); enforced by `check-exports.js` in `qa.yml` |
+| `learnings.jsonl` | Compounding project memory — `/learn` appends typed, confidence-scored entries (one JSON object per line, latest-key-wins); consulted at session start and by `/diagnose` |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
 | `index.html` | The repo's GitHub Pages landing page (links to the repo map, commands reference, React demo) |

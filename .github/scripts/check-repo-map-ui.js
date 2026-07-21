@@ -1,5 +1,6 @@
-// Playwright UI smoke test for the repo map (this repo's only interactive
-// Pages artifact). Applies the exported UI-testing standard (test.md /
+// Playwright UI smoke test for the repo map (docs/site/logical-map.html —
+// this repo's only interactive Pages artifact; the physical view was retired
+// 2026-07-21). Applies the exported UI-testing standard (test.md /
 // templates/ui-tests) to claude.directives itself: a real browser asserts the
 // map renders and that its interactions don't regress. Run in CI by qa.yml,
 // which installs Chromium first. ESM (matches the other check-*.js).
@@ -9,7 +10,7 @@ import { dirname, resolve } from 'path';
 
 const MAP = 'file://' + (process.env.REPO_MAP_FILE
   ? resolve(process.env.REPO_MAP_FILE)
-  : resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/site/repo-map.html'));
+  : resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/site/logical-map.html'));
 const fail = m => { console.error('FAIL: ' + m); process.exitCode = 1; };
 
 const browser = await chromium.launch();

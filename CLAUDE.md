@@ -21,9 +21,10 @@ covers only how to operate *on this repo*.
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
 | `EXPORTS.json` | Machine-readable export boundary — every downstream-consumed path by delivery mode (inherited rules / installed tooling / copied scaffolding / referenced docs); enforced by `check-exports.js` in `qa.yml` |
+| `learnings.jsonl` | Compounding project memory — `/learn` appends typed, confidence-scored entries (one JSON object per line, latest-key-wins); consulted at session start and by `/diagnose` |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
-| `index.html` | The repo's GitHub Pages landing page (links to the repo map, commands reference, React demo) |
+| `index.html` | The repo's GitHub Pages landing page (links to the logical map, commands reference, React demo) |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 | `.claude/settings.json` | Plugin enablement only (`extraKnownMarketplaces` + `enabledPlugins`); hooks ship inside the plugin |
@@ -110,10 +111,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   stays byte-identical across `global.md` and the qa workflow templates), and a
   paired-file diff check, plus a warn-only external-link job. It also runs a
   **Playwright UI test** (`Repo Map UI`) — this repo dogfooding its own exported
-  UI-testing standard (`test.md` / `templates/ui-tests`) on its two interactive
-  Pages artifacts, `docs/site/repo-map.html` (physical view) and
-  `docs/site/logical-map.html` (logical view, same engine): a headless Chromium
-  asserts each map renders and that clicking a box fades no box and dragging
+  UI-testing standard (`test.md` / `templates/ui-tests`) on its interactive
+  Pages artifact, `docs/site/logical-map.html` (the repo map, logical view —
+  the physical-folders view was retired 2026-07-21): a headless Chromium
+  asserts the map renders and that clicking a box fades no box and dragging
   selects no text.
   (The old design-theme parity + contrast checks were retired with the fixed
   design system — design is now per-project; the contrast guardrail ships in
@@ -163,9 +164,8 @@ node .github/scripts/check-links.js --internal   # offline: verifies against the
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages-monitor/pages-retry template pairs)
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
-npx html-validate docs/site/repo-map.html docs/site/logical-map.html   # when a map changed (CI runs it every time)
-node .github/scripts/check-repo-map-ui.js                    # when a map changed; needs `npm i playwright && npx playwright install chromium`
-REPO_MAP_FILE=docs/site/logical-map.html node .github/scripts/check-repo-map-ui.js   # the logical view, same check
+npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
+node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 ```
 Confirm `git status` shows no unintended changes. If any check fails, fix it
 before pushing rather than pushing and fixing on the PR. The Playwright UI

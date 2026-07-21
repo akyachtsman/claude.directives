@@ -136,6 +136,17 @@ Hard-won; each cost a real debugging session:
   what a live session sees when files change under it. Don't expect hot reload.
 - **api.github.com rate limits in remote sessions** — shared-fleet IP; use
   WebFetch or raw URLs, and a failed fetch is "cannot verify", never "broken".
+- **The GitHub App token's hourly quota is shared and exhaustible** — distinct
+  from the bullet above: every session and monitor draws authenticated REST
+  calls from ONE identity (the error names it: `API rate limit already
+  exceeded for user ID 108373010`), so an API-heavy day throttles *write*
+  calls at the worst moment — un-draft/merge got struck four times on
+  2026-07-21 alone. Failed calls are retryable, not fatal: the window rolls
+  hourly, so arm ONE `send_later` check-in and park. The owner's browser
+  session has its own separate quota — a UI "Ready for review → Squash and
+  merge" is the instant fallback. Economize the budget: small `per_page`,
+  jq-summarize oversized saved payloads instead of re-fetching, WebFetch
+  (server-side, own egress) for reads when the MCP is throttled.
 - **Plugin supply chain has no review point in our repos** — external plugin
   updates (even Anthropic-official) reach sessions automatically on each env
   cache rebuild (~weekly), unreviewed by us. The defenses are layered

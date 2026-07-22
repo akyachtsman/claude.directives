@@ -11,6 +11,9 @@ Workflow*.
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
 - Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
+- A PR-wait is never idle time: the moment the PR's CI is in flight, start the
+  next ready task (`global.md` → *Pipelined Execution* — the turn-end test
+  applies)
 - Fix all CI failures before marking ready for review
 - Mark PR ready only when all checks pass
 - **Auto-merge on approval:** once the user approves a change, that approval covers

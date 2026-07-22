@@ -146,7 +146,9 @@ Hard-won; each cost a real debugging session:
   session has its own separate quota — a UI "Ready for review → Squash and
   merge" is the instant fallback. Economize the budget: small `per_page`,
   jq-summarize oversized saved payloads instead of re-fetching, WebFetch
-  (server-side, own egress) for reads when the MCP is throttled.
+  (server-side, own egress) for reads when the MCP is throttled. The full
+  fleet-wide rulebook is exported to every repo as `directives/git.md` →
+  *GitHub API Quota Economy* (inherited live at session start).
 - **Plugin supply chain has no review point in our repos** — external plugin
   updates (even Anthropic-official) reach sessions automatically on each env
   cache rebuild (~weekly), unreviewed by us. The defenses are layered

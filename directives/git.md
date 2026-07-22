@@ -106,3 +106,38 @@ natural moments to check are `/env-chk` or the session's first PR.
    stale branches as a workaround — in remote sessions branch-delete pushes
    are rejected (403; push scope covers the designated branch only). The fix
    is the setting; the warning is the deliverable.
+
+## GitHub API Quota Economy (owner ruling, 2026-07-21)
+Every Claude session, in EVERY repo, acts on GitHub as one user identity and
+draws from that identity's single primary REST quota (5,000 calls/hour).
+Git transport (push/fetch/clone) is not metered; API/MCP reads and writes
+are. Quota hygiene is therefore fleet-wide: one repo session's polling can
+starve another repo's merge in the same hour (observed 2026-07-21 — three
+repos' sessions emptied the pot five times in one day).
+
+**Diagnose from the error text** (rate-limit headers are usually invisible
+in MCP results):
+- `API rate limit already exceeded for user ID …` → **primary** quota;
+  resets on the rolling hour. Retry after rollover, not in minutes.
+- A message naming a **secondary rate limit** explicitly → burst throttle;
+  back off a few minutes and slow the write cadence.
+- Either way a throttled call is **retryable, not fatal** — never diagnose
+  it as a broken repo, account, or permission problem.
+
+**Rules:**
+- **Never poll** for CI, deploy, or PR status — webhook wakes + `ci-notify`
+  (global.md → Async Operations). A watching session is woken by success;
+  it does not ask for it.
+- **Reads:** request small pages (`per_page` 5–10, minimal output); reuse
+  already-fetched payloads (jq the saved file) instead of re-fetching; when
+  throttled, route reads through WebFetch (server-side — does not draw on
+  the shared quota).
+- **Writes:** batch related changes into fewer PR cycles — one PR carrying
+  three changes beats three PRs. On a throttled write, arm ONE scheduled
+  check-in sized to the rolling hour; never retry-loop or burst.
+- **Stagger heavy sessions across repos.** Many PR cycles, audits, or
+  migration sweeps in two repos within the same hour share one pot —
+  sequence them.
+- **The owner's browser is the unmetered fallback**: for a green,
+  gate-clean PR, "Ready for review → Squash and merge" in the UI costs no
+  API budget and is always the fastest path out of a throttle.

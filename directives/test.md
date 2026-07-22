@@ -81,6 +81,22 @@ a failure there must be fixed before work is done.
   and a UI change shipped without a `ui-tester` run is a readiness blocker (see the
   `pr-readiness-reviewer` gate).
 
+## Rendered-verification gate (visual changes)
+
+A change that alters rendered UI is not "done" until Playwright has actually
+rendered the changed surface and asserted the *visible outcome* — never a
+proxy (`node --check`, html-validate, boot-smoke, a DB/SQL check, or reading
+the diff). Add or extend a scenario that asserts the **specific** change (the
+new value, the now-visible control), not merely that the screen loads.
+- **Unauthenticated surfaces** (public pages, pre-auth/login states, static
+  components): run the check **locally before pushing**.
+- **Auth-gated surfaces** (portals, drill-downs, anything behind login): local
+  runs can't reach the backend (see *Authenticated flows*), so the check is
+  **`qa-live`** — do **not** report the change verified until qa-live's live
+  step has **passed for it**. "Static checks are green" / "it will run in CI"
+  is not verification. If the gate hasn't passed yet, report status as
+  *pending visual verification*, not done.
+
 ## Required UI scenario patterns
 `ui-tester` emits these generic scenarios by default (beyond S1–S4) for every app;
 runnable source is the `NAV:`/`CTRL:` tests in `templates/ui-tests/tests/app.spec.js`:

@@ -175,6 +175,22 @@ kill. Applies to **every task list, one item or more**:
   owner. The completion bar is unchanged: ALL verification green before the
   work is called done (`test.md` gates) — pipelining reorders the waiting,
   never skips it.
+- **A launched verification IS the start signal for the next task** (owner
+  reinforcement, 2026-07-22 — sessions were reminded too often). The moment a
+  push, PR, CI run, or deploy is in flight, pick up the next ready task in
+  the SAME turn. The turn-end test: a turn that launched verification may
+  not end as "waiting on CI" while the ready-queue is non-empty — either
+  name the next task you just started, or state "queue empty — parked on
+  CI" so the idle wait is visibly justified (see Progress Visibility).
+  "Waiting" with ready work on the list is a directive violation, not a
+  style choice.
+- **Fan independent tasks out to subagents.** Where the Agent tool is
+  available, independent items run as parallel background subagents — small,
+  tightly scoped, one task each — instead of serially in the main loop. The
+  main session stays the orchestrator: it assigns, integrates results, and
+  runs the batched verification. Every spawned agent is collected before the
+  turn ends (→ Async Operations); shared-file conflicts stay a valid reason
+  to serialize, "it's tidier one at a time" does not.
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block

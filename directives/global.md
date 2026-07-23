@@ -271,6 +271,26 @@ kill. Applies to **every task list, one item or more**:
 - Stop and ask before deleting any file that exists on `main`
 - Stop and ask before modifying any workflow file's trigger conditions
 
+## Standing Authorization (owner ruling, 2026-07-22)
+The symmetric rule to Escalation Rules: that list defines when to STOP —
+this one defines the default everywhere else, which is KEEP GOING.
+- An owner-approved plan, task list, or "continue" instruction is a
+  **standing authorization**: it covers every task in the declared list,
+  not just the next one. Work task-to-task without re-asking; checkpoint
+  reports replace permission requests.
+- **Re-asking at a task boundary that trips no stop gate is a directive
+  violation**, symmetric to idle-waiting during verification (→ Pipelined
+  Execution's turn-end test). "Want me to continue?" with authorized work
+  remaining is the same failure as "waiting on CI" with ready work queued.
+- The stop gates are unchanged and are NEVER overridden by a standing
+  authorization: Escalation Rules above, the hold-for-approval diff classes
+  (`git.md` → Conditional Auto-Merge on Green — secrets, elevated config,
+  any Supabase backend change), and genuine scope changes. Work that is NOT
+  in the declared plan still needs the owner — momentum is never a license
+  to invent scope.
+- When the declared list drains: report done and stop. A standing
+  authorization expires with its list.
+
 ## Session Start
 At the start of every session:
 1. Read this file fully and fetch all imported directive URLs.

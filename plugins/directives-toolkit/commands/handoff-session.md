@@ -64,8 +64,18 @@ Framing rules for UNRESOLVED items — the part that makes a handoff usable:
 - **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
   session would otherwise burn a round-trip re-deriving.
 
-Self-check every line: if it's already in CLAUDE.md, the README, or a workflow
-file, drop it — or move it THERE and drop it.
+Self-check every line: if it's already in CLAUDE.md, the README, a workflow
+file, **or an imported directive** (`global.md`, `git.md`, `test.md`,
+`design.md`, `data.md`), drop it — or move it THERE and drop it. Never
+paraphrase a directive rule into the handoff: the receiving session's own
+Session Start already re-fetches the live directive text, and a paraphrase
+can drift stale or lossy in the meantime — the receiving session then
+treats the paraphrase as authoritative and skips the real fetch (observed
+2026-07-22: a session worked off a stale handoff paraphrase of `git.md`'s
+merge-authorization rule instead of reading the live file, and mis-applied
+it until it read the source directly). If a directive's *application* to
+this repo needs a decision record, that belongs in CLAUDE.md, not a
+handoff.
 
 ## 3. End with the branch checklist (hard exit gate)
 Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` and close the

@@ -7,8 +7,11 @@
 > owner; sessions cite it, you execute it.
 
 The fleet today: `claude.trading`, `claude.prop`, `apfp.claude`,
-`claude.insurance` — each with its own web environment — plus this repo's own
-environment. Update this list when a repo is added or retired.
+`claude.insurance`, plus this repo. Update this list when a repo is added or
+retired. **All of them share ONE web environment**, named `fleet` (verified
+2026-07-23 via `list_environments`) — so its egress allowlist and its cached
+toolkit install are fleet-wide, and refreshing it is a single action, not one
+per repo.
 
 ## Propagation Matrix
 
@@ -72,16 +75,18 @@ never by cross-repo edits** (`global.md` → Cross-Repo Boundary):
 ## Environment Maintenance
 
 The installed-tooling cache is **per environment** and rebuilds on any
-environment-config change or ~weekly expiry. To force an update now:
+environment-config change or ~weekly expiry. Since the whole fleet shares the
+single `fleet` environment, this is **one action that updates every repo**:
 
-1. Open the project's environment (Claude Code on the web → the environment
-   its sessions run in — NOT a global account setting).
+1. Open the `fleet` environment (Claude Code on the web → the environment your
+   sessions run in — NOT a global account setting).
 2. Choose **Edit environment** and **re-save the setup script unchanged**.
-3. The next NEW session in that environment installs the toolkit fresh from
-   `main`. Running sessions keep their old copy.
+3. The next NEW session in that environment — in ANY repo — installs the
+   toolkit fresh from `main`. Running sessions keep their old copy.
 
-Do this once per environment in the fleet list above. `/env-chk` in the new
-session confirms the toolkit version attached.
+`/env-chk` in the new session confirms the toolkit version attached. (If the
+fleet ever splits across multiple environments, repeat per environment and
+update the fleet list above.)
 
 ## Domain Boundaries — the logical view
 

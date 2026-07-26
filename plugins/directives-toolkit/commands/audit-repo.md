@@ -13,8 +13,22 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
 - Directive drift — code/config that violates a directive rule.
 - Errors — syntax errors, broken references, dead imports, invalid config,
   malformed data, things that won't run.
-- Redundancies and duplications — duplicated code, repeated literals/constants,
-  copy-pasted blocks, overlapping functions, dead/unused code.
+- Redundancies and duplications — **a first-class finding class, not a
+  footnote** (`global.md` → *Reuse Before Rewrite*). Hunt for: duplicated code,
+  repeated literals/constants, copy-pasted blocks, overlapping functions, dead/
+  unused code, and above all **near-duplicate implementations of the same
+  feature for different entities** (the same view/handler/renderer rewritten
+  per portal, per role, per form type — the classic fleet failure). Compare by
+  BEHAVIOR, not by text: two functions that do the same job with different
+  identifiers are duplicates even with zero matching lines.
+  For each cluster found, propose the concrete consolidation: **one
+  implementation, parameterized** — name the surviving unit, the parameter or
+  flag that absorbs each small difference (label, table, permission, extra
+  column), and every call site to repoint. Only genuinely different *behavior*
+  justifies keeping separate code, and that justification must be stated.
+  Report the **net line delta** of each proposed merge; **minimizing total
+  codebase size is an explicit goal of this audit**, and a consolidation that
+  doesn't shrink the codebase needs a reason.
 - Logic correctness — verify the logic of every statement and code path is
   actually correct: off-by-one errors, wrong conditionals, unreachable branches,
   incorrect assumptions, mismatched types, edge cases that break.

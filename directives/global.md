@@ -28,6 +28,36 @@ every project unless explicitly overridden at repo level.
 - **Receiving review feedback** — treat review comments (human, Codex, code-reviewer) as suggestions to *evaluate*, not orders to obey. Restate the underlying requirement, verify the claim against the code, then either apply the fix or push back with technical reasoning. No performative agreement ("You're absolutely right!"), and no change you cannot justify
 - **Explanations are tabular-first** (owner preference, 2026-07-13) — when explaining how anything works (data flows, architecture, processes, options), lead with a simple table: one row per component, plain-language columns (what / where it comes from / when it updates / how it reaches the user), then at most two takeaway sentences. No jargon inside cells; mechanism detail only when asked
 
+## Reuse Before Rewrite (owner ruling, 2026-07-23)
+When a requested feature resembles one this project already has, **the
+existing implementation is the source — find it, read it, and reuse it.**
+Authoring fresh code for an already-solved problem is the single most
+common failure mode in this fleet, and it is not acceptable. It ships
+divergent behavior for identical features, duplicates every bug, and
+doubles the maintenance surface.
+
+- **Search before you write — every time, no exceptions.** Before authoring
+  any component, handler, view, renderer, or query, search the repo for the
+  nearest existing equivalent (by feature name, by UI role, by table, by
+  the words in the request). "Add X to portal B, like the one in portal A"
+  is a **reuse task, not an authoring task** — treat it as one.
+- **Preferred order, strictly:** (1) call/extend the existing shared
+  implementation; (2) generalize it — lift it into one parameterized unit
+  serving both callers, with a flag/param for the small differences;
+  (3) copy the working implementation verbatim and adapt the minimum.
+  **Re-deriving it from scratch is never an option** — a from-scratch
+  rewrite of an existing behavior requires the owner's explicit say-so.
+- **"Similar but not identical" is a parameter, not a new file.** Small
+  differences (labels, table names, permissions, one extra column) are
+  arguments to shared code. Divergence is justified only by genuinely
+  different *behavior*, and the justification is stated in the PR.
+- **Say what you reused.** Every PR touching a feature that resembles an
+  existing one names the implementation it reused or generalized — or, if
+  it wrote new code, why no existing code fit. Silence reads as a rewrite.
+- **The bar is total codebase size.** A change that adds a near-copy of
+  existing code is a regression even when it works. Prefer the diff that
+  leaves the codebase smaller or flat.
+
 ## Repo Structure Standard
 Every project repo should contain (matching what `/new-repo` actually scaffolds):
 ```

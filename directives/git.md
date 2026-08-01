@@ -118,6 +118,19 @@ are. Quota hygiene is therefore fleet-wide: one repo session's polling can
 starve another repo's merge in the same hour (observed 2026-07-21 — three
 repos' sessions emptied the pot five times in one day).
 
+**REST and GraphQL have SEPARATE pools.** A strike on one says nothing about
+the other, and the GitHub MCP silently mixes both: merging a PR is REST, but
+marking one ready-for-review is GraphQL-only (`markPullRequestReadyForReview`
+— GitHub exposes no REST equivalent). So a GraphQL-exhausted session can still
+merge a PR that is already non-draft, while a draft one is stuck behind the one
+call it cannot make. Two consequences:
+- **Un-draft as soon as CI goes green**, not at merge time. Draft-on-first-push
+  still stands (global.md → *PR Lifecycle*); this only moves *when* you leave
+  draft, so the GraphQL call happens while budget is likely available.
+- Tell REST from GraphQL by the failing verb: a 4xx from the merge/comment/label
+  endpoints is REST; a failure to un-draft, resolve a review thread, or read
+  review threads is GraphQL.
+
 **Diagnose from the error text** (rate-limit headers are usually invisible
 in MCP results):
 - `API rate limit already exceeded for user ID …` → **primary** quota;
@@ -143,4 +156,6 @@ in MCP results):
   sequence them.
 - **The owner's browser is the unmetered fallback**: for a green,
   gate-clean PR, "Ready for review → Squash and merge" in the UI costs no
-  API budget and is always the fastest path out of a throttle.
+  API budget and is always the fastest path out of a throttle. When only
+  GraphQL is exhausted, the owner clicking *Ready for review* alone is enough
+  — the session can then merge over REST without waiting for the hour.

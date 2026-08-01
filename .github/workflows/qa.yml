@@ -52,6 +52,12 @@ jobs:
       - name: Check export boundary (EXPORTS.json)
         run: node .github/scripts/check-exports.js
 
+      # The logical map is generated from EXPORTS.json, so a committed page that
+      # no longer matches the manifest is drift — fail here rather than let the
+      # map quietly describe a repo that has moved on.
+      - name: Check the logical map is regenerated
+        run: node .github/scripts/build-logical-map.js --check
+
       - name: Validate workflow YAML
         run: |
           python3 -c "

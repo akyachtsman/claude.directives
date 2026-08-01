@@ -304,6 +304,10 @@
   let panning = null;
   wrap.addEventListener('pointerdown', ev => {
     if (ev.target.closest('.fr')) return;             // frames handle their own drags
+    // The legend is a child of #wrap. Without this, pressing it started a pan
+    // and captured the pointer, so the click never reached <summary> and the
+    // panel simply would not open.
+    if (ev.target.closest('.legend')) return;
     panning = { x: ev.clientX - px, y: ev.clientY - py };
     wrap.classList.add('grabbing');
     wrap.setPointerCapture(ev.pointerId);
@@ -327,11 +331,19 @@
       f.classList.add('dragging');
       f.setPointerCapture(ev.pointerId);
     };
-    f.querySelector('.ft').addEventListener('pointerdown', ev => start(ev, 'move'));
-    f.querySelector('.rs').addEventListener('pointerdown', ev => start(ev, 'resize'));
+    // Grab ANYWHERE on the frame to move it. This started as a title-bar-only
+    // handle, which is a ~15px strip — about 10px on screen at the default
+    // zoom, and far too small to hit.
+    let travelled = false;
+    f.addEventListener('pointerdown', ev => {
+      if (ev.button !== 0) return;
+      travelled = false;
+      start(ev, ev.target.closest('.rs') ? 'resize' : 'move');
+    });
     f.addEventListener('pointermove', ev => {
       if (!drag || drag.id !== id) return;
       const dx = (ev.clientX - drag.sx) / scale, dy = (ev.clientY - drag.sy) / scale;
+      if (Math.abs(dx) > 3 / scale || Math.abs(dy) > 3 / scale) travelled = true;
       const g = geom[id];
       if (drag.mode === 'move') {
         g.x = Math.round(Math.max(0, drag.x + dx));
@@ -349,9 +361,10 @@
     f.addEventListener('pointerup', done);
     f.addEventListener('pointercancel', done);
 
-    // click a frame to isolate it and whatever it connects to
+    // A press that went nowhere is a click: isolate this frame and whatever it
+    // connects to. A press that moved was a drag, and must not also isolate.
     f.addEventListener('click', ev => {
-      if (ev.target.closest('.rs') || ev.target.closest('.ft')) return;
+      if (ev.target.closest('.rs') || travelled) return;
       isolate(f.classList.contains('focused') ? null : id);
     });
   }

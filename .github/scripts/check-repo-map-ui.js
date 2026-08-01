@@ -76,13 +76,15 @@ if (resized.w <= before.w || resized.h <= before.h) {
   fail('resizing a frame also moved it');
 } else ok('dragging the corner resizes a frame');
 
-await drag('.fr[data-id="orchestrator"] .ft', 120, 60);
+// Drag by the BODY, not the title. The title bar alone is a ~15px strip — about
+// 10px on screen at the default zoom — and was far too small to grab.
+await drag('.fr[data-id="orchestrator"] .fd', 120, 60);
 const moved = await geomOf('orchestrator');
 if (moved.x <= resized.x || moved.y <= resized.y) {
-  fail(`dragging a frame title did not move it (${JSON.stringify(resized)} -> ${JSON.stringify(moved)})`);
+  fail(`dragging a frame body did not move it (${JSON.stringify(resized)} -> ${JSON.stringify(moved)})`);
 } else if (moved.w !== resized.w || moved.h !== resized.h) {
   fail('moving a frame also resized it');
-} else ok('dragging a frame title moves it');
+} else ok('dragging a frame body moves it');
 
 // The layout the reader arranges is theirs, so it has to survive a reload.
 await page.reload();
@@ -146,6 +148,23 @@ await page.click('#t_edge');
 await page.waitForTimeout(200);
 if (await page.$$eval('.edge', e => e.length) === 0) fail('"hide arrows" is not reversible');
 
+/* ------------------------------------------------------------------ legend */
+// The legend is a child of #wrap. When #wrap's pan handler captured the pointer
+// on press, the click never reached <summary> and the panel would not open.
+const legendOpen = () => page.$eval('.legend', d => d.open);
+if (await legendOpen()) fail('legend starts open and covers the canvas');
+await page.click('.legend summary');
+await page.waitForTimeout(200);
+if (!(await legendOpen())) fail('clicking the legend does not open it (pan handler eating the click?)');
+else ok('the legend opens on click');
+const legendBody = await page.$$eval('.legend li', ns => ns.length);
+if (legendBody < 15) fail(`legend opened but lists only ${legendBody} entries`);
+else ok(`the legend lists ${legendBody} entries`);
+await page.click('.legend summary');
+await page.waitForTimeout(150);
+if (await legendOpen()) fail('the legend does not close again');
+else ok('the legend closes again');
+
 /* ------------------------------------------------------------ search/isolate */
 await page.fill('#search', 'qa-pipeline');
 await page.waitForTimeout(200);
@@ -157,6 +176,7 @@ else ok(`search highlights ${hits} file(s) and dims ${misses}`);
 await page.fill('#search', '');
 await page.waitForTimeout(150);
 
+// A press that does not travel is a click (isolate); one that travels is a drag.
 await page.click('.fr[data-id="artifact"] .fd');
 await page.waitForTimeout(250);
 const faded = await page.$$eval('.fr.faded', fs => fs.map(f => f.dataset.id));
@@ -165,6 +185,14 @@ else if (faded.includes('behavioral')) fail('isolate dimmed a frame connected to
 else ok(`clicking a frame isolates it (${faded.length} unrelated frames dimmed)`);
 await page.click('.fr[data-id="artifact"] .fd');
 await page.waitForTimeout(200);
+
+// Dragging a frame must NOT also isolate it — the click fires after pointerup.
+const preDrag = await geomOf('reference');
+await drag('.fr[data-id="reference"] .fd', 60, 40);
+if ((await geomOf('reference')).x <= preDrag.x) fail('dragging a frame body did not move it');
+else if ((await page.$$eval('.fr.faded', fs => fs.length)) > 0) {
+  fail('dragging a frame also isolated it');
+} else ok('dragging a frame body moves it without isolating');
 
 /* ------------------------------------------------------------------ canvas */
 // Dragging empty canvas must pan, not select the page text.

@@ -154,6 +154,13 @@ Hard-won; each cost a real debugging session:
   (server-side, own egress) for reads when the MCP is throttled. The full
   fleet-wide rulebook is exported to every repo as `directives/git.md` →
   *GitHub API Quota Economy* (inherited live at session start).
+- **REST and GraphQL quotas are separate, and un-drafting needs GraphQL** —
+  observed 2026-08-01: `merge_pull_request` returned a clean `405 still a
+  draft` (REST alive) while `update_pull_request draft:false` returned
+  `rate limit already exceeded` (GraphQL out). GitHub has no REST endpoint for
+  marking a PR ready. So when a session says it is quota-blocked on a green PR,
+  your single click on **Ready for review** may be all it needs — it can merge
+  over REST straight after, no need to wait out the hour.
 - **Plugin supply chain has no review point in our repos** — external plugin
   updates (even Anthropic-official) reach sessions automatically on each env
   cache rebuild (~weekly), unreviewed by us. The defenses are layered

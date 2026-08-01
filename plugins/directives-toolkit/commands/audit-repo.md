@@ -1,5 +1,5 @@
 ---
-description: "Audit current repo for drift between directive files and actual code, a full recursive code-correctness sweep, and structural soundness — always weighing whether re-organizing files would make the layout clearer and more error-proof"
+description: "Audit the repo for directive drift, code correctness, duplication, and structural soundness. Reports findings; changes nothing without approval."
 phase: review
 ---
 Precondition note: this audits code against the directives as currently

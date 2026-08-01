@@ -1,6 +1,6 @@
 ---
 name: scope-chk
-description: "Use BEFORE discussing, offering, or promising work on any repository other than the one this session is scoped to. Verifies the session's TRUE repo scope (GitHub MCP scope, add_repo/list_repos availability) so cross-repo access is never overclaimed."
+description: "Use BEFORE offering or promising work on any repository other than this session's — verifies true repo scope so cross-repo access is never overclaimed."
 phase: cross-cutting
 ---
 Establish and report the **real** repository scope of this session, so you never

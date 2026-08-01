@@ -1,5 +1,5 @@
 ---
-description: "First-time repo bootstrap — scaffold a brand-new project autonomously (fires only when CLAUDE.md does not exist yet)"
+description: "Bootstrap a brand-new project — fires only when CLAUDE.md does not exist yet."
 phase: build
 ---
 Bootstrap a brand-new project repo from scratch. This runs **once**, on a repo

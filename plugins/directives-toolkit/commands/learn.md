@@ -1,5 +1,5 @@
 ---
-description: "Use when a session surfaces a durable lesson — a pattern, pitfall, preference, architecture decision, or tool fact worth keeping. Appends a typed, confidence-scored entry to learnings.jsonl so future sessions consult it before recommending."
+description: "Use when a session surfaces a durable lesson — pattern, pitfall, preference, architecture decision, or tool fact. Appends a confidence-scored entry to learnings.jsonl."
 phase: reflect
 ---
 Run the **Reflect** phase: capture a durable lesson as compounding project

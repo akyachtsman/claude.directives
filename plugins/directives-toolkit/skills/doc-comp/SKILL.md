@@ -1,6 +1,6 @@
 ---
 name: doc-comp
-description: "Use whenever asked to compare two documents: produce a self-contained side-by-side HTML diff (strikethrough deletions, red-underline additions, margin notes only for substantive changes)."
+description: "Use whenever asked to compare two documents — produces a side-by-side HTML diff with margin notes on substantive changes."
 phase: cross-cutting
 ---
 When asked to compare two documents, produce a self-contained downloadable HTML

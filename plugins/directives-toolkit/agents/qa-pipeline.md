@@ -1,14 +1,11 @@
 ---
 name: qa-pipeline
-description: Runs the full QA pipeline in sequence — test-verifier, ui-tester, code review (pr-review-toolkit), security review (if relevant), and pr-readiness-reviewer. Orchestrates a feedback loop with ui-tester until all UI scenarios pass or human escalation is required.
+description: Runs the QA pipeline in sequence — test-verifier, ui-tester, code review, security review, readiness gate — looping with ui-tester until it passes or escalates.
 tools: Read, Glob, Grep, Bash, Agent, Skill
 ---
 
-## Session Initialization
-
-Read `CLAUDE.md` before starting. All project-specific values — app URL, branch name,
-backend project/connection IDs, table and column names, test credentials, script paths, workflow names —
-come from `CLAUDE.md`. Do not hardcode these values here.
+Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, credentials,
+paths, workflow names — comes from there; hardcode none of them here.
 
 ## QA Pipeline Orchestrator
 

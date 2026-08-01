@@ -23,8 +23,8 @@ importing only browser-only-safe *methods*:
 | # | Phase | Command / skill / agent | Status | Hand-off artifact |
 |---|-------|-------------------------|--------|-------------------|
 | 0 | **Think** | `/diagnose` | exists | `brief.md` |
-| 1–3 | **Plan** | `/sdd-loop` (`/kickoff`) | exists — gated | `spec.md → plan.md → tasks.md` |
-| 4 | **Plan-gate** | `/sdd-loop analyze` | exists | `analysis.md` |
+| 1–2 | **Plan** | `/sdd-loop specify` → `/sdd-loop plan` (`/kickoff`) | exists — gated | `spec.md → plan.md` |
+| — | **Plan-gate** | folded into `/sdd-loop plan` (consistency check + self-review) | exists | `plan.md` → `## Consistency` |
 | 5 | **Build** | `/design-intake` (look-gate) · `/sdd-loop` implement | exists — gated | `design.md` + built pages |
 | 6 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
 | 7 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
@@ -43,8 +43,8 @@ specs/<slug>/
   brief.md       ← 0 Think    (/diagnose)
   spec.md        ← 1 specify+clarify (WHAT/WHY)
   plan.md        ← 2 plan + one adaptive plan-review (HOW)
-  tasks.md       ← 3 tasks (2–5 min each)
-  analysis.md    ← 4 analyze (cross-artifact consistency gate)
+                 (plan.md also carries `## Tasks`, 2–5 min each, and the
+                  `## Consistency` gate — formerly tasks.md and analysis.md)
   design.md      ← 5 Build (/design-intake look-gate → tokens.css + components.css)
   review.md      ← 6 review findings (AUTO-FIX vs ASK)
   qa.md          ← 7 test report (verification-before-completion)
@@ -64,7 +64,7 @@ one-question-per-message, *alternatives mandatory*, no "too simple" exemption �
 **stripped of the YC/startup framing**. Writes `brief.md`; gates entry to
 `specify`. Browser-only: pure Markdown + `AskUserQuestion`.
 
-### 1–3 · Plan — `/sdd-loop specify|clarify|plan|tasks` *(exists — gated)*
+### 1–2 · Plan — `/sdd-loop specify|plan` *(exists — gated)*
 Keep our WHAT/HOW split and the constitution (inherited directives) as binding
 constraints. **Methods imported:** gstack's CEO/design/eng triple plan-review
 collapsed into **one adaptive review** (a fresh subagent scores `plan.md` 0–10,
@@ -73,7 +73,7 @@ revises in place under ~8, forces a data-flow/failure-mode note); superpowers
 implement → verify → commit) and its **no-placeholder self-review** (reject
 "TBD" / "similar to Task N").
 
-### 4 · Plan-gate — `/sdd-loop analyze` *(exists)*
+### Plan-gate — folded into `/sdd-loop plan` *(exists)*
 Cross-artifact consistency. **Method imported:** gstack's **verification gate** —
 every finding must quote the motivating code or be suppressed; split **AUTO-FIX
 vs ASK**.

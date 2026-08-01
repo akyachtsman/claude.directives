@@ -1,5 +1,5 @@
 ---
-description: "Show all directives-toolkit commands and auto-skills as a clean menu — reads the live plugin so it never goes stale"
+description: "List the toolkit's commands and auto-skills — read live from the plugin."
 phase: cross-cutting
 ---
 List every command and auto-skill the `directives-toolkit` plugin provides in

@@ -1,14 +1,11 @@
 ---
 name: test-verifier
-description: Independent QA verifier for code changes. Use after implementation to run tests, inspect failures, identify missing edge cases, and decide whether a branch is safe to merge. This agent must not edit code unless explicitly instructed.
+description: Independent QA verifier — runs the suite, inspects failures, and rules on merge safety. Does not edit code unless told to.
 tools: Read, Glob, Grep, Bash
 ---
 
-## Session Initialization
-
-Read `CLAUDE.md` before starting. All project-specific values — app URL, branch name,
-backend project/connection IDs, table and column names, test credentials, script paths, workflow names —
-come from `CLAUDE.md`. Do not hardcode these values here.
+Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, credentials,
+paths, workflow names — comes from there; hardcode none of them here.
 
 # Test Verifier Subagent
 

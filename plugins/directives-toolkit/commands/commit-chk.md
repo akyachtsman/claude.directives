@@ -1,5 +1,5 @@
 ---
-description: "Manual backup trigger for the pre-push verification directive (run tests, lint, CI checks before committing)"
+description: "Run the pre-push verification manually — tests, lint, CI status."
 phase: test
 ---
 This is the manual backup for the standing verify-locally-before-pushing

@@ -1,5 +1,5 @@
 ---
-description: "Kick off a spec-driven build of a new app — scaffold (if needed), gather the product brief, optional competitive discovery, then drive the /sdd-loop"
+description: "Start a spec-driven build of a new app — scaffold, product brief, optional discovery, then /sdd-loop."
 phase: plan
 benefits-from: [new-repo]
 ---

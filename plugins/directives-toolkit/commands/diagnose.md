@@ -1,5 +1,5 @@
 ---
-description: "Use when starting a non-trivial feature or build, BEFORE /sdd-loop specify — force the problem to be understood first: one diagnostic question at a time, 2–3 approaches with tradeoffs, then write specs/<slug>/brief.md. No 'too simple' exemption."
+description: "Understand the problem before building: one question at a time, 2-3 approaches with tradeoffs, then specs/<slug>/brief.md. Run before /sdd-loop; no 'too simple' exemption."
 phase: think
 ---
 Run the **Think** phase: understand the problem before any spec, plan, or code.

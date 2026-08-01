@@ -47,6 +47,34 @@ for (const cls of ['permanent', 'orchestrators']) {
   }
 }
 
+// 1c-ii) Durability classes must PARTITION the domain set exactly — every exported
+// path classified once, no strays, no duplicates. Without this the logical map's
+// rows would be an unverifiable opinion frozen into HTML.
+const domainPaths = new Set();
+for (const [dom, comps] of Object.entries(manifest.domains ?? {})) {
+  if (dom.startsWith('_')) continue;
+  for (const [comp, paths] of Object.entries(comps)) {
+    if (comp.startsWith('_')) continue;
+    for (const p of paths) domainPaths.add(p);
+  }
+}
+const classified = new Map();
+for (const [cls, { paths = [] }] of Object.entries(manifest.classes ?? {})
+  .filter(([k]) => !k.startsWith('_'))) {
+  for (const p of paths) {
+    if (classified.has(p)) fail(`[class] path in two classes (${classified.get(p)}, ${cls}): ${p}`);
+    else classified.set(p, cls);
+    if (!domainPaths.has(p)) fail(`[class:${cls}] path is not in any domain.compartment: ${p}`);
+  }
+}
+for (const p of domainPaths) {
+  if (!classified.has(p)) fail(`[class] exported path has no durability class: ${p}`);
+}
+if (classified.size && ![...classified.keys()].some(p => !domainPaths.has(p))) {
+  console.log(`OK:   [classes] ${classified.size} paths partitioned across `
+    + `${Object.keys(manifest.classes).filter(k => !k.startsWith('_')).length} classes`);
+}
+
 // 1d) Externals: every socket file exists; `serves` names a real domain.compartment.
 for (const [name, ext] of Object.entries(manifest.externals ?? {})) {
   if (name.startsWith('_')) continue;

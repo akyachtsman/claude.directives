@@ -20,11 +20,12 @@ covers only how to operate *on this repo*.
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
-| `EXPORTS.json` | Machine-readable export boundary — every downstream-consumed path by delivery mode (inherited rules / installed tooling / copied scaffolding / referenced docs); enforced by `check-exports.js` in `qa.yml` |
+| `EXPORTS.json` | Machine-readable export boundary — every downstream-consumed path by delivery mode (inherited rules / installed tooling / copied scaffolding / referenced docs), by `domains`/compartment, by `swap` class, and by **durability `classes`** (standard · orchestrator · behavioral · mechanical · artifact · reference — the classes must partition the exported set exactly); enforced by `check-exports.js` in `qa.yml` |
 | `learnings.jsonl` | Compounding project memory — `/learn` appends typed, confidence-scored entries (one JSON object per line, latest-key-wins); consulted at session start and by `/diagnose` |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
 | `index.html` | The repo's GitHub Pages landing page (links to the logical map, commands reference, React demo) |
+| `docs/site/logical-map.html` | The repo map — **generated** from `EXPORTS.json` by `.github/scripts/build-logical-map.js`; never hand-edit it. Its behaviour (pan/zoom/search/isolate, layer toggles, drag-to-move and drag-to-resize with per-browser persistence) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 | `.claude/settings.json` | Plugin enablement only (`extraKnownMarketplaces` + `enabledPlugins`); hooks ship inside the plugin |
@@ -113,9 +114,13 @@ A directive repo must pass its own CI before it can be trusted downstream.
   **Playwright UI test** (`Repo Map UI`) — this repo dogfooding its own exported
   UI-testing standard (`test.md` / `templates/ui-tests`) on its interactive
   Pages artifact, `docs/site/logical-map.html` (the repo map, logical view —
-  the physical-folders view was retired 2026-07-21): a headless Chromium
-  asserts the map renders and that clicking a box fades no box and dragging
-  selects no text.
+  the physical-folders view was retired 2026-07-21): a headless Chromium asserts
+  the map renders, that no frame clips its contents, that dragging a title moves
+  a frame and dragging its corner resizes one, that the layout survives a reload,
+  that every layer toggle works and reverses, that search and isolate behave, and
+  that dragging the canvas selects no text.
+  `qa.yml` also runs `build-logical-map.js --check`, so a committed map that no
+  longer matches `EXPORTS.json` fails the build.
   (The old design-theme parity + contrast checks were retired with the fixed
   design system — design is now per-project; the contrast guardrail ships in
   `templates/scripts/` for projects.)
@@ -159,13 +164,15 @@ node .github/scripts/check-paths.js
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
-node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths + raw self-references
+node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths, class partition, raw self-references
+node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages-monitor/pages-retry template pairs)
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
+#   after editing EXPORTS.json or the map, regenerate first: node .github/scripts/build-logical-map.js
 ```
 Confirm `git status` shows no unintended changes. If any check fails, fix it
 before pushing rather than pushing and fixing on the PR. The Playwright UI

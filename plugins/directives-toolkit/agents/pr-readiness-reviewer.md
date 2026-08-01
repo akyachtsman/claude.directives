@@ -1,14 +1,11 @@
 ---
 name: pr-readiness-reviewer
-description: Final PR readiness gate. Use after implementation, verification, review, and fixes to confirm tests, lint/build, required reports, unresolved issues, and CI readiness before opening or merging a PR.
+description: Final PR gate — confirms tests, lint/build, required reports, and CI readiness before opening or merging.
 tools: Read, Glob, Grep, Bash
 ---
 
-## Session Initialization
-
-Read `CLAUDE.md` before starting. All project-specific values — app URL, branch name,
-backend project/connection IDs, table and column names, test credentials, script paths, workflow names —
-come from `CLAUDE.md`. Do not hardcode these values here.
+Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, credentials,
+paths, workflow names — comes from there; hardcode none of them here.
 
 # PR Readiness Reviewer Subagent
 

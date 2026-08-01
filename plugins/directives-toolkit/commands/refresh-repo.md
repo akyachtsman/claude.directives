@@ -1,5 +1,5 @@
 ---
-description: "Re-sync this project with claude.directives mid-session — re-read the rules, flag broken upstream references, and report the upstream delta since the last sync (toolkit content itself updates via the plugin at session start)"
+description: "Re-sync this project with claude.directives mid-session — re-read the rules and report the upstream delta since the last sync."
 phase: cross-cutting
 ---
 Re-sync the project against `akyachtsman/claude.directives` **mid-session**.

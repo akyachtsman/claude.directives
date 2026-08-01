@@ -1,5 +1,5 @@
 ---
-description: "Establish (or re-establish) a project's visual identity: import a look (image / Stitch HTML / Figma), distill it into styles/tokens.css + styles/components.css + an approved reference page, then hand off to /sdd-loop to build the rest. Browser-only."
+description: "Establish a project's visual identity — import a look, distil it to tokens.css + components.css + an approved reference page, then hand off to /sdd-loop."
 phase: build
 benefits-from: [kickoff]
 ---

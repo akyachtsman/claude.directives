@@ -1,6 +1,6 @@
 ---
 name: update-pages
-description: "Standard procedure for ANY change that updates a GitHub Pages site. Use AUTOMATICALLY whenever an edit touches a Pages-served file (root index.html, docs/*.html, served CSS/assets) or Pages config: run gates, push, watch the deploy to a terminal state, and report live/stuck/failed proactively."
+description: "Use automatically whenever an edit touches a Pages-served file or Pages config — run gates, push, watch the deploy to a terminal state, report live/stuck/failed."
 phase: ship
 ---
 Drive a GitHub Pages deploy from commit to "live" and report back **proactively**,

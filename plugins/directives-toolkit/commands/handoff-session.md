@@ -1,5 +1,5 @@
 ---
-description: "Write a delta-only handoff for a fresh session — only what no other repo file already captures"
+description: "Write a delta-only handoff for a fresh session."
 phase: reflect
 ---
 Produce a session handoff as a **paste-ready chat message** — never write a

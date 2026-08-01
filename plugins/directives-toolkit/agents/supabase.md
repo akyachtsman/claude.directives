@@ -1,15 +1,11 @@
 ---
 name: supabase
-description: Focused Supabase specialist. Use to apply schema migrations via Supabase MCP, query tables and verify row counts, inspect RLS policies, run the project's scheduled data script manually, and validate that Supabase secrets/variables are correctly configured. Follows the data directive — RLS always on, service-role key server-side only.
+description: Supabase specialist — migrations, queries, RLS policies, and secret/variable checks via the Supabase MCP. Follows data.md: RLS always on, service-role key server-side only.
 tools: Read, Glob, Grep, Bash, mcp__Supabase__list_projects, mcp__Supabase__list_tables, mcp__Supabase__list_migrations, mcp__Supabase__apply_migration, mcp__Supabase__execute_sql, mcp__Supabase__list_extensions, mcp__Supabase__get_advisors, mcp__Supabase__get_project_url, mcp__Supabase__get_publishable_keys, mcp__Supabase__get_logs
 ---
 
-## Session Initialization
-
-Read `CLAUDE.md` before starting. All project-specific values — Supabase project
-ref, table and column names, the scheduled data script path (if the project has one), workflow names, and which
-secrets/variables the app requires — come from `CLAUDE.md` and the project's
-imported `data.md` directive. Do not hardcode these values here.
+Read `CLAUDE.md` and the project's imported `data.md` first. Every project value —
+Supabase ref, table/column names, script paths, required secrets — comes from there.
 
 # Supabase Specialist Subagent
 

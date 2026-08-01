@@ -1,5 +1,5 @@
 ---
-description: "Full environment readiness check — session context, git health, CI status, validation gates, directive freshness, a connectors/tools inventory, and the scope-chk repo-scope verification"
+description: "Session readiness — git health, CI status, validation gates, directive freshness, tool inventory, and repo-scope verification."
 phase: cross-cutting
 ---
 Run a comprehensive environment readiness check and report a single pass/fail

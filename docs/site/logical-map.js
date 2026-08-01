@@ -291,14 +291,32 @@
     paint();
   }
 
+  // Scroll PANS; pinch or ctrl/cmd+scroll zooms.
+  //
+  // This used to treat every wheel event as zoom, which broke trackpads badly:
+  // a two-finger swipe sends deltaX with deltaY of 0, and `deltaY < 0` is false
+  // for 0 — so every sideways swipe silently zoomed OUT instead of panning, and
+  // the map felt walled in on all four sides. Panning by drag needs empty canvas
+  // to grab, and once you zoom in there is barely any, so scroll is the only
+  // gesture that always works. A trackpad pinch arrives as a wheel event with
+  // ctrlKey set, which is what makes both gestures coexist.
   wrap.addEventListener('wheel', ev => {
     ev.preventDefault();
-    const r = wrap.getBoundingClientRect();
-    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
-    const next = clamp(scale * (ev.deltaY < 0 ? 1.12 : 1 / 1.12), 0.15, 3);
-    px = mx - (mx - px) * (next / scale);
-    py = my - (my - py) * (next / scale);
-    scale = next; paint();
+    if (ev.ctrlKey || ev.metaKey) {
+      const r = wrap.getBoundingClientRect();
+      const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+      const next = clamp(scale * (ev.deltaY < 0 ? 1.12 : 1 / 1.12), 0.15, 3);
+      px = mx - (mx - px) * (next / scale);
+      py = my - (my - py) * (next / scale);
+      scale = next; paint();
+      return;
+    }
+    // Shift+wheel is the long-standing "scroll sideways" convention for mice,
+    // which have no deltaX of their own.
+    const sideways = ev.shiftKey && ev.deltaX === 0;
+    px -= sideways ? ev.deltaY : ev.deltaX;
+    py -= sideways ? 0 : ev.deltaY;
+    paint();
   }, { passive: false });
 
   let panning = null;

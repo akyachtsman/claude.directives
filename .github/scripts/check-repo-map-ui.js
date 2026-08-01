@@ -194,6 +194,44 @@ else if ((await page.$$eval('.fr.faded', fs => fs.length)) > 0) {
   fail('dragging a frame also isolated it');
 } else ok('dragging a frame body moves it without isolating');
 
+/* -------------------------------------------------------------- pan / zoom */
+// Scroll must PAN, on both axes. Treating every wheel event as zoom walled the
+// map in: a trackpad swipe sends deltaX with deltaY 0, and `deltaY < 0` is false
+// for 0, so sideways swipes silently zoomed out instead of moving.
+const view = () => page.evaluate(() => {
+  const t = getComputedStyle(document.getElementById('viewport')).transform;
+  const m = new DOMMatrixReadOnly(t);
+  return { x: m.e, y: m.f, scale: m.a };
+});
+await page.mouse.move(600, 500);
+const v0 = await view();
+for (let i = 0; i < 4; i++) await page.mouse.wheel(-150, 0);
+await page.waitForTimeout(150);
+const vx = await view();
+if (Math.abs(vx.x - v0.x) < 100) fail('horizontal scroll does not pan');
+else if (Math.abs(vx.scale - v0.scale) > 0.001) fail('horizontal scroll changed the zoom');
+else ok('horizontal scroll pans without zooming');
+
+for (let i = 0; i < 4; i++) await page.mouse.wheel(0, -150);
+await page.waitForTimeout(150);
+const vy = await view();
+if (Math.abs(vy.y - vx.y) < 100) fail('vertical scroll does not pan');
+else if (Math.abs(vy.scale - vx.scale) > 0.001) fail('vertical scroll changed the zoom');
+else ok('vertical scroll pans without zooming');
+
+await page.keyboard.down('Control');
+await page.mouse.wheel(0, -240);
+await page.keyboard.up('Control');
+await page.waitForTimeout(150);
+if ((await view()).scale <= vy.scale) fail('ctrl+scroll does not zoom in');
+else ok('ctrl/pinch+scroll zooms');
+
+await page.click('#zin'); await page.waitForTimeout(120);
+const zoomed = await view();
+await page.click('#zout'); await page.waitForTimeout(120);
+if ((await view()).scale >= zoomed.scale) fail('the zoom buttons do not work');
+else ok('the +/- buttons zoom');
+
 /* ------------------------------------------------------------------ canvas */
 // Dragging empty canvas must pan, not select the page text.
 await page.mouse.move(120, 880);

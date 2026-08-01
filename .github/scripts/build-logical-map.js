@@ -351,8 +351,8 @@ ${['global', 'git', 'design', 'test', 'data', 'meta', 'self', 'external']
 </style></head><body>
 <header>
   <h1>claude.directives — logical map <span>(classes · compartments · delivery · sockets)</span></h1>
-  <span class="hint">drag a title = move · drag the corner = resize · drag canvas = pan ·
-    scroll = zoom · click a box = isolate</span>
+  <span class="hint">scroll = pan · pinch or ⌘/ctrl+scroll = zoom · drag a box = move it ·
+    drag its corner = resize · click a box = isolate</span>
   <span class="btns">
     <button type="button" id="zin" title="Zoom in">+</button>
     <button type="button" id="zout" title="Zoom out">−</button>

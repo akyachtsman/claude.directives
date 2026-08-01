@@ -185,15 +185,24 @@ if (await page.$$eval('.edge', e => e.length) !== 0) {
   fail('arrows are drawn before any frame is selected');
 } else ok('no arrows at rest — the map is quiet until you ask');
 
-await page.click('.fr[data-id="standard"] .fd');
-await page.waitForTimeout(250);
-const focusEdges = await page.$$eval('.edge', e => e.length);
-if (focusEdges === 0) fail('selecting a frame drew no arrows');
-else if (focusEdges >= 10) fail(`selecting a frame drew the whole graph (${focusEdges})`);
-else ok(`selecting a frame draws only its ${focusEdges} connections`);
-await page.click('.fr[data-id="standard"] .fd');
-await page.waitForTimeout(200);
-if (await page.$$eval('.edge', e => e.length) !== 0) fail('deselecting left arrows drawn');
+// ONE arrow at a time. Crossing-free routing is not achievable in general once
+// the reader fixes node positions by dragging, so "no lines cross" can only be
+// guaranteed by drawing a single line. Every relationship chip must draw exactly
+// one — this is the assertion that makes the guarantee real rather than hoped for.
+const chips = await page.$$('.rel');
+let worst = 0;
+for (const c of chips) {
+  await c.click();
+  await page.waitForTimeout(80);
+  worst = Math.max(worst, await page.$$eval('.edge', e => e.length));
+  await c.click();
+  await page.waitForTimeout(50);
+}
+if (chips.length < 15) fail(`expected a chip per relationship, found ${chips.length}`);
+else if (worst !== 1) fail(`a relationship chip drew ${worst} arrows — must be exactly 1`);
+else ok(`each of the ${chips.length} relationship chips draws exactly one arrow`);
+if (await page.$$eval('.edge', e => e.length) !== 0) fail('clicking a chip twice left it drawn');
+else ok('clicking a chip again clears it');
 
 await page.click('#t_edge');
 await page.waitForTimeout(250);

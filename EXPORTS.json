@@ -165,7 +165,7 @@
     }
   },
   "swap": {
-    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced (this covers the exported standards under docs/standards/ as well as directives/, since both carry blocking criteria) (the meta domain is permanent in its entirety). ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit — a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
+    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced — this covers directives/ and the exported standards under docs/standards/, since both carry blocking criteria; the meta domain is permanent in its entirety. ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit — a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
     "permanent": [
       "directives/global.md",
       "directives/git.md",

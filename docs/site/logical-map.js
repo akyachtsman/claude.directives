@@ -291,26 +291,62 @@
     paint();
   }
 
+  // Scroll PANS; pinch or ctrl/cmd+scroll zooms.
+  //
+  // This used to treat every wheel event as zoom, which broke trackpads badly:
+  // a two-finger swipe sends deltaX with deltaY of 0, and `deltaY < 0` is false
+  // for 0 — so every sideways swipe silently zoomed OUT instead of panning, and
+  // the map felt walled in on all four sides. Panning by drag needs empty canvas
+  // to grab, and once you zoom in there is barely any, so scroll is the only
+  // gesture that always works. A trackpad pinch arrives as a wheel event with
+  // ctrlKey set, which is what makes both gestures coexist.
   wrap.addEventListener('wheel', ev => {
     ev.preventDefault();
-    const r = wrap.getBoundingClientRect();
-    const mx = ev.clientX - r.left, my = ev.clientY - r.top;
-    const next = clamp(scale * (ev.deltaY < 0 ? 1.12 : 1 / 1.12), 0.15, 3);
-    px = mx - (mx - px) * (next / scale);
-    py = my - (my - py) * (next / scale);
-    scale = next; paint();
+    if (ev.ctrlKey || ev.metaKey) {
+      const r = wrap.getBoundingClientRect();
+      const mx = ev.clientX - r.left, my = ev.clientY - r.top;
+      const next = clamp(scale * (ev.deltaY < 0 ? 1.12 : 1 / 1.12), 0.15, 3);
+      px = mx - (mx - px) * (next / scale);
+      py = my - (my - py) * (next / scale);
+      scale = next; paint();
+      return;
+    }
+    // Shift+wheel is the long-standing "scroll sideways" convention for mice,
+    // which have no deltaX of their own.
+    const sideways = ev.shiftKey && ev.deltaX === 0;
+    px -= sideways ? ev.deltaY : ev.deltaX;
+    py -= sideways ? 0 : ev.deltaY;
+    paint();
   }, { passive: false });
 
+  // Hold space to pan from anywhere, including over a frame. Zoomed in, frames
+  // cover almost the whole canvas, so "grab the background" can leave nowhere
+  // to grab.
+  let spaceHeld = false;
+  addEventListener('keydown', ev => {
+    if (ev.code === 'Space' && !ev.target.matches('input, textarea, summary')) {
+      spaceHeld = true; wrap.classList.add('pannable'); ev.preventDefault();
+    }
+  });
+  addEventListener('keyup', ev => {
+    if (ev.code === 'Space') { spaceHeld = false; wrap.classList.remove('pannable'); }
+  });
+
   let panning = null;
+  const startPan = ev => {
+    panning = { x: ev.clientX - px, y: ev.clientY - py };
+    wrap.classList.add('grabbing');
+    wrap.setPointerCapture(ev.pointerId);
+  };
   wrap.addEventListener('pointerdown', ev => {
+    // Middle-drag and space-drag pan regardless of what is underneath.
+    if (ev.button === 1 || spaceHeld) { ev.preventDefault(); startPan(ev); return; }
     if (ev.target.closest('.fr')) return;             // frames handle their own drags
     // The legend is a child of #wrap. Without this, pressing it started a pan
     // and captured the pointer, so the click never reached <summary> and the
     // panel simply would not open.
     if (ev.target.closest('.legend')) return;
-    panning = { x: ev.clientX - px, y: ev.clientY - py };
-    wrap.classList.add('grabbing');
-    wrap.setPointerCapture(ev.pointerId);
+    startPan(ev);
   });
   wrap.addEventListener('pointermove', ev => {
     if (!panning) return;
@@ -319,6 +355,82 @@
   const endPan = () => { panning = null; wrap.classList.remove('grabbing'); };
   wrap.addEventListener('pointerup', endPan);
   wrap.addEventListener('pointercancel', endPan);
+
+  // Two-finger pinch. A trackpad pinch arrives as a ctrlKey wheel event and is
+  // handled above, but on a touch screen it is genuinely two pointers, and
+  // without this there was no way to zoom on a tablet at all. Capture phase, so
+  // a second finger landing on a frame still counts.
+  const touches = new Map();
+  let pinch = null;
+  const spread = () => {
+    const [a, b] = [...touches.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y),
+             mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  };
+  wrap.addEventListener('pointerdown', ev => {
+    if (ev.pointerType !== 'touch') return;
+    touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (touches.size === 2) {
+      drag = null; endPan();                 // a second finger cancels any drag
+      frames.forEach(f => f.classList.remove('dragging'));
+      const s0 = spread();
+      pinch = { d: s0.d, scale, px, py };
+    }
+  }, true);
+  wrap.addEventListener('pointermove', ev => {
+    if (ev.pointerType !== 'touch' || !touches.has(ev.pointerId)) return;
+    touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (touches.size !== 2 || !pinch) return;
+    ev.preventDefault();
+    const now = spread();
+    const r = wrap.getBoundingClientRect();
+    const next = clamp(pinch.scale * (now.d / (pinch.d || 1)), 0.15, 3);
+    const mx = now.mx - r.left, my = now.my - r.top;
+    px = mx - (mx - pinch.px) * (next / pinch.scale);
+    py = my - (my - pinch.py) * (next / pinch.scale);
+    scale = next; paint();
+  }, true);
+  for (const t of ['pointerup', 'pointercancel']) {
+    wrap.addEventListener(t, ev => {
+      touches.delete(ev.pointerId);
+      if (touches.size < 2) pinch = null;
+    }, true);
+  }
+
+  // Keyboard access. Nothing here was reachable without a pointer.
+  const zoomBy = k => {
+    const r = wrap.getBoundingClientRect();
+    const mx = r.width / 2, my = r.height / 2;
+    const next = clamp(scale * k, 0.15, 3);
+    px = mx - (mx - px) * (next / scale);
+    py = my - (my - py) * (next / scale);
+    scale = next; paint();
+  };
+  addEventListener('keydown', ev => {
+    if (ev.target.matches('input, textarea')) return;
+    const step = ev.shiftKey ? 240 : 70;
+    switch (ev.key) {
+      case 'ArrowLeft':  px += step; break;
+      case 'ArrowRight': px -= step; break;
+      case 'ArrowUp':    py += step; break;
+      case 'ArrowDown':  py -= step; break;
+      case '+': case '=': zoomBy(1.2); return void ev.preventDefault();
+      case '-': case '_': zoomBy(1 / 1.2); return void ev.preventDefault();
+      case '0': fit(); return void ev.preventDefault();
+      case 'Escape':
+        isolate(null); search.value = '';
+        document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
+        return void ev.preventDefault();
+      case 'Enter':
+        if (ev.target.classList?.contains('fr')) {
+          isolate(ev.target.classList.contains('focused') ? null : ev.target.dataset.id);
+          ev.preventDefault();
+        }
+        return;
+      default: return;
+    }
+    ev.preventDefault(); paint();
+  });
 
   /* ---------------- move + resize ---------------- */
   const MIN_W = 190, MIN_H = 92;
@@ -433,12 +545,12 @@
     applyAll(); autofit(); drawEdges(); fit();
   });
 
-  document.getElementById('zin').addEventListener('click', () => {
-    scale = clamp(scale * 1.2, 0.15, 3); paint();
-  });
-  document.getElementById('zout').addEventListener('click', () => {
-    scale = clamp(scale / 1.2, 0.15, 3); paint();
-  });
+  // Recentre WITHOUT touching the arranged layout. Previously `reset` was the
+  // only way back from an off-screen pan, and it also discarded every frame the
+  // reader had moved — so getting un-lost cost you your arrangement.
+  document.getElementById('t_fit').addEventListener('click', fit);
+  document.getElementById('zin').addEventListener('click', () => zoomBy(1.2));
+  document.getElementById('zout').addEventListener('click', () => zoomBy(1 / 1.2));
 
   /* ---------------- go ---------------- */
   const restored = load();

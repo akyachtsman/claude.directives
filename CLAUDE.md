@@ -115,10 +115,14 @@ A directive repo must pass its own CI before it can be trusted downstream.
   UI-testing standard (`test.md` / `templates/ui-tests`) on its interactive
   Pages artifact, `docs/site/logical-map.html` (the repo map, logical view —
   the physical-folders view was retired 2026-07-21): a headless Chromium asserts
-  the map renders, that no frame clips its contents, that dragging a title moves
-  a frame and dragging its corner resizes one, that the layout survives a reload,
-  that every layer toggle works and reverses, that search and isolate behave, and
-  that dragging the canvas selects no text.
+  the map renders, that no frame clips its contents, that dragging a frame moves
+  it and dragging its corner resizes it, that the layout survives a reload, that
+  every layer toggle works and reverses, that the legend opens, that search and
+  isolate behave, and that dragging the canvas selects no text. It also covers the
+  **input surface** a mouse-only test never reaches — scroll pans on both axes
+  without zooming, ctrl/pinch zooms, two-finger pinch zooms on touch, middle-drag
+  pans over a frame, frames are keyboard-reachable and arrow keys pan, and `fit`
+  recentres without discarding the reader's arranged layout.
   `qa.yml` also runs `build-logical-map.js --check`, so a committed map that no
   longer matches `EXPORTS.json` fails the build.
   (The old design-theme parity + contrast checks were retired with the fixed

@@ -199,7 +199,8 @@ const frameHtml = FRAMES.map(f => {
   const b = bodies[f.id];
   if (!b) { fail(`no content for frame: ${f.id}`); return ''; }
   return `<div class="fr c-${f.id}" data-id="${f.id}" data-x="${f.x}" data-y="${f.y}" `
-    + `data-w="${f.w}" data-h="${f.h}">`
+    + `data-w="${f.w}" data-h="${f.h}" tabindex="0" `
+    + `aria-label="${esc(b.title)} — ${b.count} files. Enter to isolate.">`
     + `<div class="ft"><span class="ttl">${esc(b.title)}</span>`
     + `<span class="cnt">${b.count}</span></div>`
     + `<p class="fd">${esc(b.blurb)}</p>`
@@ -264,6 +265,8 @@ const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
     background-image:radial-gradient(var(--border) 1px,transparent 1px);
     background-size:22px 22px}
   #wrap.grabbing{cursor:grabbing}
+  #wrap.pannable,#wrap.pannable .fr{cursor:grab}
+  #wrap.pannable.grabbing,#wrap.pannable.grabbing .fr{cursor:grabbing}
   #viewport{position:absolute;top:0;left:0;transform-origin:0 0;width:0;height:0}
   #edges{position:absolute;top:0;left:0;width:4000px;height:2400px;overflow:visible;
     pointer-events:none;z-index:40}
@@ -284,6 +287,7 @@ const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
   .fr:hover{box-shadow:var(--shadow-md)}
   .fr.dragging{box-shadow:var(--shadow-lg);z-index:30}
   .fr.focused{border-color:var(--acc);box-shadow:var(--shadow-lg)}
+  .fr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .fr.faded{opacity:.24}
   .fr.gone{display:none}
 ${FRAMES.map(f => `  .c-${f.id}{--acc:var(--c-${f.id})}`).join('\n')}
@@ -351,8 +355,9 @@ ${['global', 'git', 'design', 'test', 'data', 'meta', 'self', 'external']
 </style></head><body>
 <header>
   <h1>claude.directives — logical map <span>(classes · compartments · delivery · sockets)</span></h1>
-  <span class="hint">drag a title = move · drag the corner = resize · drag canvas = pan ·
-    scroll = zoom · click a box = isolate</span>
+  <span class="hint">scroll = pan · pinch or ⌘/ctrl+scroll = zoom · space- or middle-drag = pan
+    anywhere · drag a box = move it · drag its corner = resize · click = isolate ·
+    arrows / +− / 0 / esc</span>
   <span class="btns">
     <button type="button" id="zin" title="Zoom in">+</button>
     <button type="button" id="zout" title="Zoom out">−</button>
@@ -360,7 +365,8 @@ ${['global', 'git', 'design', 'test', 'data', 'meta', 'self', 'external']
     <button type="button" id="t_cmp" aria-pressed="false" title="Hide each file's domain.compartment">hide compartments</button>
     <button type="button" id="t_del" aria-pressed="false" title="Hide each file's delivery mode">hide delivery</button>
     <button type="button" id="t_edge" aria-pressed="false" title="Hide the relationship arrows">hide arrows</button>
-    <button type="button" id="t_reset" title="Restore the default layout, zoom and layers">reset</button>
+    <button type="button" id="t_fit" title="Recentre the view — keeps the frames where you put them">fit</button>
+    <button type="button" id="t_reset" title="Discard your layout and restore the defaults">reset layout</button>
   </span>
   <input id="search" type="search" aria-label="Find a file" placeholder="find a file… (e.g. qa-pipeline, ui-kit)">
 </header>

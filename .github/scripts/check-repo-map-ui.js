@@ -60,6 +60,39 @@ const sel = await page.evaluate(() => String(window.getSelection()));
 if (sel !== '') fail(`dragging selected text: ${JSON.stringify(sel)}`);
 else console.log('OK: dragging selects no text');
 
+// "exports only" toggle: header controls must stay clickable (a wrapped header
+// once let the canvas overlay them), and the toggle must hide ONLY the
+// this-repo-only frame and its edges, reversibly.
+const toggle = await page.$('#selftoggle');
+if (!toggle) fail('#selftoggle button missing');
+else {
+  const state = () => page.evaluate(() => {
+    const self = document.getElementById('n_self');
+    const selfEdges = [...document.querySelectorAll('.edge')]
+      .filter(e => e.dataset.a === 'self' || e.dataset.b === 'self');
+    return {
+      self: self ? getComputedStyle(self).display : 'missing',
+      edgesHidden: selfEdges.every(e => getComputedStyle(e).display === 'none'),
+      othersVisible: [...document.querySelectorAll('.node')]
+        .filter(n => n.id !== 'n_self')
+        .every(n => getComputedStyle(n).display !== 'none'),
+    };
+  });
+  await page.click('#selftoggle');            // throws if the header is overlaid
+  await page.waitForTimeout(150);
+  const on = await state();
+  if (on.self !== 'none') fail(`toggle did not hide the self frame (display=${on.self})`);
+  else if (!on.edgesHidden) fail('toggle left a self edge dangling');
+  else if (!on.othersVisible) fail('toggle hid an exported frame');
+  else console.log('OK: "exports only" hides the self frame and its edges');
+
+  await page.click('#selftoggle');
+  await page.waitForTimeout(150);
+  const off = await state();
+  if (off.self === 'none') fail('toggle is not reversible');
+  else console.log('OK: toggle restores the self frame');
+}
+
 if (errors.length) fail('console/page errors: ' + errors.join(' | '));
 else console.log('OK: no console or page errors');
 

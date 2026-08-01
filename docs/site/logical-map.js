@@ -115,12 +115,17 @@
   // Dijkstra with a turn penalty finds the shortest tidy path through them.
   const uniq = xs => [...new Set(xs.map(v => Math.round(v)))].sort((a, b) => a - b);
 
-  function laneGrid(boxes, extra) {
+  // `ring` gives each arrow in a fan its OWN set of lanes, offset outward from
+  // every frame. Nested rings, walked in the same angular order as their
+  // targets, cannot cross — which is what turns "usually untangled" into a
+  // guarantee. Without it two arrows share a corridor and weave.
+  function laneGrid(boxes, extra, ring = 0) {
     const xs = [], ys = [];
+    const m = 12 + ring * 15;
     let lo = { x: Infinity, y: Infinity }, hi = { x: -Infinity, y: -Infinity };
     for (const g of boxes) {
-      xs.push(g.x - PAD - 12, g.x + g.w + PAD + 12);
-      ys.push(g.y - PAD - 12, g.y + g.h + PAD + 12);
+      xs.push(g.x - PAD - m, g.x + g.w + PAD + m);
+      ys.push(g.y - PAD - m, g.y + g.h + PAD + m);
       lo = { x: Math.min(lo.x, g.x), y: Math.min(lo.y, g.y) };
       hi = { x: Math.max(hi.x, g.x + g.w), y: Math.max(hi.y, g.y + g.h) };
     }
@@ -133,8 +138,8 @@
     // always exists. Without it, a layout with no interior corridor left the
     // solver with no path at all and the fallback drew straight through a frame.
     if (isFinite(lo.x)) {
-      xs.push(lo.x - 60, hi.x + 60);
-      ys.push(lo.y - 60, hi.y + 60);
+      xs.push(lo.x - 60 - ring * 15, hi.x + 60 + ring * 15);
+      ys.push(lo.y - 60 - ring * 15, hi.y + 60 + ring * 15);
     }
     return { xs: uniq(xs), ys: uniq(ys) };
   }
@@ -144,8 +149,13 @@
 
   // Shortest orthogonal path start→end that never enters a box. Turns cost
   // extra so the result reads as two or three clean runs, not a staircase.
-  function solve(start, end, boxes) {
-    const { xs, ys } = laneGrid(boxes, [start, end]);
+  const segCross = (p, q, r, t) => {
+    const ccw = (A, B, C) => (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+    return ccw(p, r, t) !== ccw(q, r, t) && ccw(p, q, r) !== ccw(p, q, t);
+  };
+
+  function solve(start, end, boxes, avoid = [], ring = 0) {
+    const { xs, ys } = laneGrid(boxes, [start, end], ring);
     const xi = new Map(xs.map((v, i) => [v, i]));
     const yi = new Map(ys.map((v, i) => [v, i]));
     const sx = xi.get(Math.round(start.x)), sy = yi.get(Math.round(start.y));
@@ -154,7 +164,14 @@
 
     const node = (a, b) => ({ x: xs[a], y: ys[b] });
     const blocked = (a, b) => inside(node(a, b), boxes);
-    const passable = (a1, b1, a2, b2) => !hits(node(a1, b1), node(a2, b2), boxes);
+    // An arrow may not cross one already drawn. This is what stops the fan of
+    // edges leaving a selected frame from tangling into each other.
+    const passable = (a1, b1, a2, b2) => {
+      const p = node(a1, b1), q = node(a2, b2);
+      if (hits(p, q, boxes)) return false;
+      for (const [r, t] of avoid) if (segCross(p, q, r, t)) return false;
+      return true;
+    };
 
     const key = (a, b, d) => `${a},${b},${d}`;
     const dist = new Map(), prev = new Map();
@@ -241,19 +258,46 @@
     return out;
   }
 
-  function elbow(a, b, ida, idb, labelLen = 0) {
+  // Where an arrow leaves `g` heading for `other`: the point on g's border that
+  // the straight line between centres would exit through. Using the true exit
+  // point means a fan of arrows leaves in the same angular order as its targets,
+  // which is the property that keeps them from crossing near the source.
+  function exitPoint(g, other) {
+    const c = { x: g.x + g.w / 2, y: g.y + g.h / 2 };
+    const o = { x: other.x + other.w / 2, y: other.y + other.h / 2 };
+    const dx = o.x - c.x, dy = o.y - c.y;
+    if (!dx && !dy) return { x: c.x, y: g.y };
+    const t = Math.min(dx ? (g.w / 2) / Math.abs(dx) : Infinity,
+                       dy ? (g.h / 2) / Math.abs(dy) : Infinity);
+    // snap onto the border so the anchor is a real lane coordinate
+    const p = { x: c.x + dx * t, y: c.y + dy * t };
+    const onV = Math.abs(Math.abs(p.x - c.x) - g.w / 2) < 0.5;
+    return onV ? { x: p.x, y: Math.round(p.y) } : { x: Math.round(p.x), y: p.y };
+  }
+
+  function elbow(a, b, ida, idb, labelLen = 0, avoid = [], ring = 0) {
     const boxes = rects([ida, idb]);
     const all = rects([]);
     let pts = null;
-    for (const s of anchors(a, b)) {
-      for (const e of anchors(b, a)) {
-        const cand = solve(s, e, boxes);
+    const starts = [exitPoint(a, b), ...anchors(a, b)];
+    const ends = [exitPoint(b, a), ...anchors(b, a)];
+    for (const s of starts) {
+      for (const e of ends) {
+        const cand = solve(s, e, boxes, avoid, ring);
         if (cand && (!pts || cand.length < pts.length)) pts = cand;
       }
       if (pts && pts.length <= 3) break;      // already as clean as it gets
     }
-    if (!pts) {                               // nothing clear — say so straight
-      const s = anchors(a, b)[0], e = anchors(b, a)[0];
+    // Nothing clear while avoiding the arrows already drawn — try again ignoring
+    // them rather than not drawing at all.
+    if (!pts && avoid.length) {
+      for (const s of starts) for (const e of ends) {
+        const cand = solve(s, e, boxes, [], ring);
+        if (cand && (!pts || cand.length < pts.length)) pts = cand;
+      }
+    }
+    if (!pts) {
+      const s = starts[0], e = ends[0];
       pts = [s, { x: s.x, y: (s.y + e.y) / 2 }, { x: e.x, y: (s.y + e.y) / 2 }, e];
     }
     return { pts, label: placeLabel(pts, all, (labelLen * 5.4 + 12) / 2) };
@@ -288,20 +332,48 @@
   // relationships in words (the .rel chips), so nothing is hidden; the lines
   // exist to answer "show me THIS box's connections", and at most four are ever
   // on screen at once. `showAll` restores the full graph for anyone who wants it.
+  // ONE arrow at a time.
+  //
+  // Crossing-free routing is not achievable in general once the reader fixes the
+  // node positions by dragging — so promising "no lines cross" while drawing six
+  // at once is a promise that cannot be kept, and three rounds of router work
+  // proved it. Drawing exactly one arrow makes it true by construction. The
+  // relationship chips on each frame are the control: click one, see precisely
+  // that connection. `showAll` remains as an explicit escape hatch, and is the
+  // only mode where lines may overlap.
   let showAll = false;
   let selected = null;
+  let solo = null;                          // {a, b} of the single arrow shown
   function visibleEdges() {
     if (showAll) return D.edges;
-    if (!selected) return [];
-    return D.edges.filter(e => e.a === selected || e.b === selected);
+    if (!solo) return [];
+    return D.edges.filter(e => e.a === solo.a && e.b === solo.b);
   }
   function drawEdges() {
     svg.replaceChildren(svg.querySelector('defs'));
-    for (const e of visibleEdges()) {
+    const drawn = [];                       // segments of arrows already placed
+    // Angular order around the selected frame. Drawing a fan in the order its
+    // targets sit around the source is what makes a crossing-free result
+    // reachable at all; routing them in arbitrary order does not.
+    const pivot = selected ? geom[selected] : null;
+    const ordered = [...visibleEdges()].sort((p, q) => {
+      if (!pivot) return 0;
+      const ang = e => {
+        const o = geom[e.a === selected ? e.b : e.a];
+        if (!o) return 0;
+        return Math.atan2((o.y + o.h / 2) - (pivot.y + pivot.h / 2),
+                          (o.x + o.w / 2) - (pivot.x + pivot.w / 2));
+      };
+      return ang(p) - ang(q);
+    });
+    let ringOf = 0;
+    for (const e of ordered) {
       const A = byId[e.a], B = byId[e.b];
       if (!A || !B) continue;
       if (A.classList.contains('gone') || B.classList.contains('gone')) continue;
-      const { pts, label } = elbow(geom[e.a], geom[e.b], e.a, e.b, (e.label || '').length);
+      const { pts, label } = elbow(geom[e.a], geom[e.b], e.a, e.b,
+        (e.label || '').length, drawn, drawn.length ? ringOf++ : ringOf++);
+      for (let i = 0; i < pts.length - 1; i++) drawn.push([pts[i], pts[i + 1]]);
       const d = roundPath(pts);
       const dim = A.classList.contains('faded') || B.classList.contains('faded');
       const g = el('g', { class: 'edge' + (dim ? ' faded' : ''), 'data-kind': e.kind });
@@ -479,7 +551,9 @@
       case '-': case '_': zoomBy(1 / 1.2); return void ev.preventDefault();
       case '0': fit(); return void ev.preventDefault();
       case 'Escape':
-        showAll = false; isolate(null); search.value = '';
+        showAll = false; solo = null;
+    document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
+    isolate(null); search.value = '';
         document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
         return void ev.preventDefault();
       case 'Enter':
@@ -549,6 +623,7 @@
   /* ---------------- isolate + search ---------------- */
   function isolate(id) {
     selected = id;
+    if (!id) { solo = null; document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on')); }
     frames.forEach(f => f.classList.remove('focused', 'faded'));
     if (!id) { drawEdges(); return; }
     const keep = new Set([id]);
@@ -561,6 +636,28 @@
       else if (!keep.has(f.dataset.id)) f.classList.add('faded');
     });
     drawEdges();
+  }
+
+  // A relationship chip draws its own arrow, and only its own.
+  for (const chip of document.querySelectorAll('.rel')) {
+    chip.addEventListener('pointerdown', ev => ev.stopPropagation());
+    chip.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const want = { a: chip.dataset.a, b: chip.dataset.b };
+      const same = solo && solo.a === want.a && solo.b === want.b;
+      document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
+      solo = same ? null : want;
+      if (!same) chip.classList.add('on');
+      showAll = false;
+      frames.forEach(f => f.classList.remove('focused', 'faded'));
+      if (solo) {
+        frames.forEach(f => {
+          if (f.dataset.id === solo.a || f.dataset.id === solo.b) f.classList.add('focused');
+          else f.classList.add('faded');
+        });
+      }
+      drawEdges();
+    });
   }
 
   const search = document.getElementById('search');
@@ -606,7 +703,9 @@
     resets.forEach(r => r());
     Object.assign(geom, structuredClone(declared));
     try { localStorage.removeItem(STORE); } catch { /* private mode */ }
-    showAll = false; isolate(null); search.value = '';
+    showAll = false; solo = null;
+    document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
+    isolate(null); search.value = '';
     document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
     applyAll(); autofit(); drawEdges(); fit();
   });

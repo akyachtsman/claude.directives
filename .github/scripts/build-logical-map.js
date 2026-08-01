@@ -201,14 +201,16 @@ const shortTitle = id => (bodies[id]?.title ?? id).replace(/ —.*$/, '').toLowe
 // draggable boxes is unreadable however well each line is routed; text sits
 // with the box, moves with it, and can never tangle.
 function relations(id) {
-  const out = EDGES.filter(e => e.a === id)
-    .map(e => `<span class="rel k-${e.kind}"><b>${esc(KINDS[e.kind].label)}</b> `
-      + `→ ${esc(EDGES.filter(x => x.a === id && x.kind === e.kind).length > 1 ? '' : '')}`
-      + `${esc(shortTitle(e.b))}</span>`);
-  const inc = EDGES.filter(e => e.b === id)
-    .map(e => `<span class="rel inc k-${e.kind}">${esc(shortTitle(e.a))} → `
-      + `<b>${esc(KINDS[e.kind].label)}</b></span>`);
-  const all = [...inc, ...out];
+  const chip = (e, incoming) => {
+    const text = incoming
+      ? `${esc(shortTitle(e.a))} → <b>${esc(KINDS[e.kind].label)}</b>`
+      : `<b>${esc(KINDS[e.kind].label)}</b> → ${esc(shortTitle(e.b))}`;
+    return `<button type="button" class="rel k-${e.kind}${incoming ? ' inc' : ''}" `
+      + `data-a="${e.a}" data-b="${e.b}" title="${esc(KINDS[e.kind].hint)} — click to draw it">`
+      + `${text}</button>`;
+  };
+  const all = [...EDGES.filter(e => e.b === id).map(e => chip(e, true)),
+               ...EDGES.filter(e => e.a === id).map(e => chip(e, false))];
   return all.length ? `<div class="rels">${all.join('')}</div>` : '';
 }
 
@@ -320,7 +322,11 @@ ${FRAMES.map(f => `  .c-${f.id}{--acc:var(--c-${f.id})}`).join('\n')}
   .rels{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px}
   .rel{display:inline-flex;align-items:center;gap:4px;font:10px/1 Inter,system-ui,sans-serif;
     color:var(--ink-2);background:var(--bg);border:1px solid var(--border);
-    border-left:3px solid var(--rk,var(--border-2));border-radius:5px;padding:4px 7px}
+    border-left:3px solid var(--rk,var(--border-2));border-radius:5px;padding:4px 7px;
+    cursor:pointer;transition:background .12s,box-shadow .12s}
+  .rel:hover{background:var(--surface);box-shadow:var(--shadow-sm)}
+  .rel.on{background:var(--rk);border-color:var(--rk);color:#fff}
+  .rel.on b{color:#fff}
   .rel b{color:var(--rk);font-weight:700}
   .rel.inc{opacity:.75}
   .k-con{--rk:var(--k-con)} .k-seq{--rk:var(--k-seq)} .k-enf{--rk:var(--k-enf)}
@@ -383,16 +389,16 @@ ${['global', 'git', 'design', 'test', 'data', 'meta', 'self', 'external']
 </style></head><body>
 <header>
   <h1>claude.directives — logical map <span>(classes · compartments · delivery · sockets)</span></h1>
-  <span class="hint">click a box = show its connections · scroll = pan · pinch or
-    ⌘/ctrl+scroll = zoom · space- or middle-drag = pan anywhere · drag = move ·
-    drag the corner = resize · arrows / +− / 0 / esc</span>
+  <span class="hint">click a relationship chip = draw that one arrow · click a box =
+    focus it · scroll = pan · pinch or ⌘/ctrl+scroll = zoom · space- or middle-drag =
+    pan anywhere · drag = move · drag the corner = resize · esc = clear</span>
   <span class="btns">
     <button type="button" id="zin" title="Zoom in">+</button>
     <button type="button" id="zout" title="Zoom out">−</button>
     <button type="button" id="t_self" aria-pressed="false" title="Hide the files that only run or maintain this repo">exports only</button>
     <button type="button" id="t_cmp" aria-pressed="false" title="Hide each file's domain.compartment">hide compartments</button>
     <button type="button" id="t_del" aria-pressed="false" title="Hide each file's delivery mode">hide delivery</button>
-    <button type="button" id="t_edge" aria-pressed="false" title="Draw every arrow at once instead of only the selected frame's">all arrows</button>
+    <button type="button" id="t_edge" aria-pressed="false" title="Draw every arrow at once — they will overlap; the per-relationship chips draw one at a time">all arrows</button>
     <button type="button" id="t_fit" title="Recentre the view — keeps the frames where you put them">fit</button>
     <button type="button" id="t_reset" title="Discard your layout and restore the defaults">reset layout</button>
   </span>

@@ -104,6 +104,27 @@ if (Math.abs(afterReset.x - restored.x) < 1 && Math.abs(afterReset.w - restored.
   fail('reset did not restore the default layout');
 } else ok('reset restores the default layout');
 
+// A frame must be draggable past the canvas origin. Clamping x/y at 0 made
+// frames stop dead when dragged left or up, with empty canvas still beside them.
+// Runs AFTER the persistence checks — it ends in a reset, which clears the
+// stored layout those checks depend on.
+await drag('.fr[data-id="standard"] .fd', -400, -300);
+const pushed = await geomOf('standard');
+if (pushed.x >= 0 && pushed.y >= 0) {
+  fail(`a frame cannot be dragged past the origin (landed at ${pushed.x},${pushed.y})`);
+} else ok('a frame drags past the canvas origin into negative space');
+await page.click('#t_fit');
+await page.waitForTimeout(250);
+const backInView = await page.evaluate(() => {
+  const f = document.querySelector('.fr[data-id="standard"]').getBoundingClientRect();
+  const w = document.getElementById('wrap').getBoundingClientRect();
+  return f.right > w.left && f.left < w.right && f.bottom > w.top && f.top < w.bottom;
+});
+if (!backInView) fail('"fit" does not bring a negatively-positioned frame back into view');
+else ok('"fit" frames negative coordinates correctly');
+await page.click('#t_reset');
+await page.waitForTimeout(250);
+
 const selfState = () => page.evaluate(() => ({
   hidden: getComputedStyle(document.querySelector('.fr[data-id="self"]')).display === 'none',
   othersVisible: [...document.querySelectorAll('.fr')]
@@ -232,6 +253,57 @@ await page.click('#zout'); await page.waitForTimeout(120);
 if ((await view()).scale >= zoomed.scale) fail('the zoom buttons do not work');
 else ok('the +/- buttons zoom');
 
+/* --------------------------------------------------- edges must not cross */
+// The invariant a reader actually sees: an arrow may touch the two frames it
+// connects and NOTHING else. This is asserted on the default layout AND after
+// frames have been dragged into arbitrary positions, because the first router
+// only ever avoided the shipped layout — the moment a reader moved a box, edges
+// went straight through it. Every earlier version of this suite tested
+// interactions and never once looked at where the lines actually went.
+const crossings = () => page.evaluate(() => {
+  const fr = [...document.querySelectorAll('.fr')]
+    .filter(f => getComputedStyle(f).display !== 'none')
+    .map(f => ({ id: f.dataset.id, x: parseFloat(f.style.left), y: parseFloat(f.style.top),
+                 w: parseFloat(f.style.width), h: parseFloat(f.style.height) }));
+  const out = [];
+  for (const g of document.querySelectorAll('.edge')) {
+    const path = g.querySelector('.line'), L = path.getTotalLength();
+    // an edge legitimately touches the frames it starts and ends on
+    const ends = new Set();
+    for (const t of [0, L]) {
+      const p = path.getPointAtLength(t);
+      for (const f of fr) {
+        if (p.x >= f.x - 2 && p.x <= f.x + f.w + 2 && p.y >= f.y - 2 && p.y <= f.y + f.h + 2) ends.add(f.id);
+      }
+    }
+    const through = new Set();
+    for (let i = 0; i <= 300; i++) {
+      const p = path.getPointAtLength(L * i / 300);
+      for (const f of fr) {
+        if (ends.has(f.id)) continue;
+        if (p.x > f.x + 2 && p.x < f.x + f.w - 2 && p.y > f.y + 2 && p.y < f.y + f.h - 2) through.add(f.id);
+      }
+    }
+    if (through.size) out.push(`${g.dataset.kind} → ${[...through].join(', ')}`);
+  }
+  return out;
+});
+
+const clean = await crossings();
+if (clean.length) fail(`edges cross frames in the default layout: ${clean.join(' | ')}`);
+else ok('no edge crosses a frame it does not connect (default layout)');
+
+for (const [id, dx, dy] of [['behavioral', 260, 180], ['mechanical', -150, 120],
+                            ['artifact', -320, 240], ['reference', -260, -180]]) {
+  await drag(`.fr[data-id="${id}"] .fd`, dx, dy);
+}
+await page.waitForTimeout(250);
+const shuffled = await crossings();
+if (shuffled.length) fail(`edges cross frames after the layout is rearranged: ${shuffled.join(' | ')}`);
+else ok('no edge crosses a frame after the layout is rearranged');
+await page.click('#t_reset');
+await page.waitForTimeout(250);
+
 /* ------------------------------------------- input surface: touch, keys, pan */
 // These cover the ways INTO the map that a mouse-driven test never exercises.
 // Each was found by auditing the input surface deliberately rather than by
@@ -255,6 +327,10 @@ else ok('two-finger pinch zooms on touch');
 
 // Space- and middle-drag must pan even when a frame is under the cursor, because
 // once you zoom in the frames cover nearly all of the canvas.
+// Re-centre first: the pinch above zooms in and can leave this frame off-screen,
+// which would make a working middle-drag look broken.
+await page.click('#t_fit');
+await page.waitForTimeout(250);
 const overFrame = await (await page.$('.fr[data-id="standard"] .fd')).boundingBox();
 const vMid = await view();
 await page.mouse.move(overFrame.x + 40, overFrame.y + 4);

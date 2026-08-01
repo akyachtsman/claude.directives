@@ -106,114 +106,145 @@
     return true;
   };
 
-  // Candidate lanes come from the frames themselves, not a fixed grid: the only
-  // x worth trying is one that clears somebody's edge. A 24px grid misses the
-  // 36px gutter between behavioral and artifact — the one lane that lets
-  // standard reach reference at all.
-  function lanes(axis) {
-    const out = new Set();
-    for (const f of frames) {
-      if (f.classList.contains('gone')) continue;
-      const g = geom[f.dataset.id];
-      const lo = axis === 'x' ? g.x : g.y;
-      const hi = axis === 'x' ? g.x + g.w : g.y + g.h;
-      out.add(lo - PAD - 10); out.add(hi + PAD + 10);
+  // Orthogonal routing over a lane grid.
+  //
+  // This used to try L-shapes and give up — an L cannot go AROUND an obstacle,
+  // so once a reader dragged frames into arbitrary positions, edges fell back to
+  // running straight through boxes. Lanes are derived from the frames' own edges
+  // (the only x or y worth travelling along is one that clears somebody), and a
+  // Dijkstra with a turn penalty finds the shortest tidy path through them.
+  const uniq = xs => [...new Set(xs.map(v => Math.round(v)))].sort((a, b) => a - b);
+
+  function laneGrid(boxes, extra) {
+    const xs = [], ys = [];
+    for (const g of boxes) {
+      xs.push(g.x - PAD - 12, g.x + g.w + PAD + 12);
+      ys.push(g.y - PAD - 12, g.y + g.h + PAD + 12);
     }
-    return [...out];
+    for (const p of extra) { xs.push(p.x); ys.push(p.y); }
+    return { xs: uniq(xs), ys: uniq(ys) };
   }
 
-  // Try every (anchor, anchor, turn) combination, least deviation from the
-  // natural straight-through route first, and stop at the first clear one.
-  function route(build, boxes, natural) {
-    const xs = [natural.u, ...lanes(natural.axis)];
-    const js = [natural.j, ...lanes(natural.axis === 'x' ? 'y' : 'x')];
-    const plan = [];
-    for (const u of xs) for (const v of xs) for (const j of js) {
-      plan.push({ u, v, j, cost: Math.abs(u - natural.u) + Math.abs(v - natural.v)
-        + Math.abs(j - natural.j) * 1.4 });
+  const inside = (p, boxes) => boxes.some(g =>
+    p.x > g.x - PAD && p.x < g.x + g.w + PAD && p.y > g.y - PAD && p.y < g.y + g.h + PAD);
+
+  // Shortest orthogonal path start→end that never enters a box. Turns cost
+  // extra so the result reads as two or three clean runs, not a staircase.
+  function solve(start, end, boxes) {
+    const { xs, ys } = laneGrid(boxes, [start, end]);
+    const xi = new Map(xs.map((v, i) => [v, i]));
+    const yi = new Map(ys.map((v, i) => [v, i]));
+    const sx = xi.get(Math.round(start.x)), sy = yi.get(Math.round(start.y));
+    const ex = xi.get(Math.round(end.x)), ey = yi.get(Math.round(end.y));
+    if (sx === undefined || sy === undefined || ex === undefined || ey === undefined) return null;
+
+    const node = (a, b) => ({ x: xs[a], y: ys[b] });
+    const blocked = (a, b) => inside(node(a, b), boxes);
+    const passable = (a1, b1, a2, b2) => !hits(node(a1, b1), node(a2, b2), boxes);
+
+    const key = (a, b, d) => `${a},${b},${d}`;
+    const dist = new Map(), prev = new Map();
+    const pq = [{ a: sx, b: sy, d: -1, c: 0 }];
+    dist.set(key(sx, sy, -1), 0);
+    const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let best = null;
+
+    while (pq.length) {
+      pq.sort((p, q) => p.c - q.c);
+      const cur = pq.shift();
+      if (cur.c > (dist.get(key(cur.a, cur.b, cur.d)) ?? Infinity)) continue;
+      if (cur.a === ex && cur.b === ey) { best = cur; break; }
+      for (let d = 0; d < 4; d++) {
+        const [dx, dy] = DIRS[d];
+        const na = cur.a + dx, nb = cur.b + dy;
+        if (na < 0 || nb < 0 || na >= xs.length || nb >= ys.length) continue;
+        if (blocked(na, nb) && !(na === ex && nb === ey)) continue;
+        if (!passable(cur.a, cur.b, na, nb)) continue;
+        const step = Math.abs(xs[na] - xs[cur.a]) + Math.abs(ys[nb] - ys[cur.b]);
+        const turn = cur.d === -1 || cur.d === d ? 0 : 120;   // prefer few corners
+        const nc = cur.c + step + turn;
+        const k = key(na, nb, d);
+        if (nc < (dist.get(k) ?? Infinity)) {
+          dist.set(k, nc);
+          prev.set(k, { a: cur.a, b: cur.b, d: cur.d });
+          pq.push({ a: na, b: nb, d, c: nc });
+        }
+      }
     }
-    plan.sort((a, b) => a.cost - b.cost);
-    for (const { u, v, j } of plan) {
-      const pts = build(u, v, j);
-      if (clear(pts, boxes)) return pts;
+    if (!best) return null;
+
+    const pts = [];
+    let cur = { a: best.a, b: best.b, d: best.d };
+    while (cur) {
+      pts.unshift(node(cur.a, cur.b));
+      cur = prev.get(key(cur.a, cur.b, cur.d));
     }
-    return null;                       // caller decides what to do instead
+    // drop mid-points on a straight run
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
+      const straight = (a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y);
+      if (!straight) out.push(b);
+    }
+    out.push(pts[pts.length - 1]);
+    return out;
   }
 
-  // An anchor must still land on the frame it leaves from.
-  const clampTo = (x, g) => Math.min(g.x + g.w - 18, Math.max(g.x + 18, x));
-
-  // Put the label on the first stretch of the long segment that is not behind
-  // a frame — a label sitting on a box reads as if it belongs to the box.
-  function placeLabel(pts, all) {
-    const a = pts[1], b = pts[2];
-    const steps = 12;
-    const cands = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      cands.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  // Put the label on the longest run that is not behind a frame — a label
+  // sitting on a box reads as if it belongs to the box. The whole PILL has to
+  // clear, not just its centre point, or a long label overhangs the frame it
+  // was carefully routed around.
+  function placeLabel(pts, all, halfW) {
+    const clearOf = c => !all.some(g =>
+      c.x + halfW > g.x - 2 && c.x - halfW < g.x + g.w + 2 &&
+      c.y + 10 > g.y - 2 && c.y - 10 < g.y + g.h + 2);
+    let best = null, bestLen = -1;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+      if (len <= bestLen) continue;
+      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+        const c = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        if (clearOf(c)) { best = c; bestLen = len; break; }
+      }
     }
-    cands.sort((p, q) => Math.abs(0.5 - cands.indexOf(p) / steps)
-      - Math.abs(0.5 - cands.indexOf(q) / steps));
-    for (const c of cands) if (!hits(c, c, all)) return c;
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    return best ?? pts[Math.floor(pts.length / 2)];
   }
 
-  function elbow(a, b, ida, idb) {
+  // Anchor on the border of `g` facing `other`, offset along that border so
+  // parallel edges between the same pair do not overlap.
+  function anchors(g, other) {
+    const gc = { x: g.x + g.w / 2, y: g.y + g.h / 2 };
+    const oc = { x: other.x + other.w / 2, y: other.y + other.h / 2 };
+    const out = [];
+    if (oc.y > g.y + g.h) out.push({ x: gc.x, y: g.y + g.h });
+    if (oc.y < g.y) out.push({ x: gc.x, y: g.y });
+    if (oc.x > g.x + g.w) out.push({ x: g.x + g.w, y: gc.y });
+    if (oc.x < g.x) out.push({ x: g.x, y: gc.y });
+    if (!out.length) {              // overlapping — leave by the nearest side
+      out.push({ x: gc.x, y: g.y + g.h }, { x: g.x + g.w, y: gc.y });
+    }
+    return out;
+  }
+
+  function elbow(a, b, ida, idb, labelLen = 0) {
     const boxes = rects([ida, idb]);
     const all = rects([]);
-    const ac = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
-    const bc = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
-    const dx = bc.x - ac.x, dy = bc.y - ac.y;
-    let pts;
-
-    // Pick the axis by which pair of borders actually face each other. Two
-    // frames whose x-ranges overlap must be joined top-to-bottom however far
-    // apart their centres are — a sideways route would start inside one of them.
-    const xOverlap = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 40;
-    const yOverlap = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 40;
-    const vertical = xOverlap || (!yOverlap && Math.abs(dy) >= Math.abs(dx));
-
-    // The turn has to happen in the gap BETWEEN the two frames. Left free it
-    // slides back inside whichever frame it started from — legal by the
-    // obstacle test (endpoints are exempt) but nonsense to look at.
-    const between = (mid, lo, hi) => Math.min(Math.max(mid, Math.min(lo, hi) + PAD),
-      Math.max(lo, hi) - PAD);
-
-    const horizontalPlan = () => {
-      const sx = dx > 0 ? a.x + a.w : a.x;
-      const tx = dx > 0 ? b.x : b.x + b.w;
-      const build = (u, v, j) => {
-        const p1 = { x: sx, y: clampTo2(u, a) };
-        const p2 = { x: tx, y: clampTo2(v, b) };
-        const mid = between(j, sx, tx);
-        return [p1, { x: mid, y: p1.y }, { x: mid, y: p2.y }, p2];
-      };
-      return { build, natural: { axis: 'y', u: ac.y, v: bc.y, j: (sx + tx) / 2 } };
-    };
-    const verticalPlan = () => {
-      const sy = dy > 0 ? a.y + a.h : a.y;
-      const ty = dy > 0 ? b.y : b.y + b.h;
-      const build = (u, v, j) => {
-        const p1 = { x: clampTo(u, a), y: sy };
-        const p2 = { x: clampTo(v, b), y: ty };
-        const mid = between(j, sy, ty);
-        return [p1, { x: p1.x, y: mid }, { x: p2.x, y: mid }, p2];
-      };
-      return { build, natural: { axis: 'x', u: ac.x, v: bc.x, j: (sy + ty) / 2 } };
-    };
-
-    // Preferred axis first, then the other — a frame stack can leave the
-    // natural approach with no lane at all (standard reaches reference only
-    // from the side, because artifact sits directly on top of it).
-    const first = vertical ? verticalPlan() : horizontalPlan();
-    const second = vertical ? horizontalPlan() : verticalPlan();
-    pts = route(first.build, boxes, first.natural)
-      ?? route(second.build, boxes, second.natural)
-      ?? first.build(first.natural.u, first.natural.v, first.natural.j);
-    return { pts, label: placeLabel(pts, all) };
+    let pts = null;
+    for (const s of anchors(a, b)) {
+      for (const e of anchors(b, a)) {
+        const cand = solve(s, e, boxes);
+        if (cand && (!pts || cand.length < pts.length)) pts = cand;
+      }
+      if (pts && pts.length <= 3) break;      // already as clean as it gets
+    }
+    if (!pts) {                               // nothing clear — say so straight
+      const s = anchors(a, b)[0], e = anchors(b, a)[0];
+      pts = [s, { x: s.x, y: (s.y + e.y) / 2 }, { x: e.x, y: (s.y + e.y) / 2 }, e];
+    }
+    return { pts, label: placeLabel(pts, all, (labelLen * 5.4 + 12) / 2) };
   }
-  const clampTo2 = (y, g) => Math.min(g.y + g.h - 16, Math.max(g.y + 16, y));
+
   // Round the two interior corners so the route reads as a path, not a staircase.
   function roundPath(pts) {
     let d = `M${pts[0].x},${pts[0].y}`;
@@ -245,7 +276,7 @@
       const A = byId[e.a], B = byId[e.b];
       if (!A || !B) continue;
       if (A.classList.contains('gone') || B.classList.contains('gone')) continue;
-      const { pts, label } = elbow(geom[e.a], geom[e.b], e.a, e.b);
+      const { pts, label } = elbow(geom[e.a], geom[e.b], e.a, e.b, (e.label || '').length);
       const d = roundPath(pts);
       const dim = A.classList.contains('faded') || B.classList.contains('faded');
       const g = el('g', { class: 'edge' + (dim ? ' faded' : ''), 'data-kind': e.kind });
@@ -277,17 +308,22 @@
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const paint = () => { vp.style.transform = `translate(${px}px,${py}px) scale(${scale})`; };
 
+  // Frames may sit anywhere, including at negative coordinates, so fit measures
+  // the real bounding box rather than assuming it starts at the origin.
   function fit() {
-    let maxX = 0, maxY = 0;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const id in geom) {
       if (byId[id].classList.contains('gone')) continue;
-      maxX = Math.max(maxX, geom[id].x + geom[id].w);
-      maxY = Math.max(maxY, geom[id].y + geom[id].h);
+      const g = geom[id];
+      minX = Math.min(minX, g.x); minY = Math.min(minY, g.y);
+      maxX = Math.max(maxX, g.x + g.w); maxY = Math.max(maxY, g.y + g.h);
     }
+    if (!isFinite(minX)) return;
+    const w = maxX - minX, h = maxY - minY;
     const r = wrap.getBoundingClientRect();
-    scale = clamp(Math.min((r.width - 48) / (maxX + 40), (r.height - 48) / (maxY + 40)), 0.15, 1.6);
-    px = (r.width - (maxX + 40) * scale) / 2;
-    py = 20;
+    scale = clamp(Math.min((r.width - 48) / (w + 40), (r.height - 48) / (h + 40)), 0.15, 1.6);
+    px = (r.width - w * scale) / 2 - minX * scale;
+    py = 20 - minY * scale;
     paint();
   }
 
@@ -458,8 +494,12 @@
       if (Math.abs(dx) > 3 / scale || Math.abs(dy) > 3 / scale) travelled = true;
       const g = geom[id];
       if (drag.mode === 'move') {
-        g.x = Math.round(Math.max(0, drag.x + dx));
-        g.y = Math.round(Math.max(0, drag.y + dy));
+        // No clamp to the canvas origin. Pinning at 0 meant a frame simply
+        // stopped when dragged left or up, with empty canvas still visible
+        // beside it — the origin is an arbitrary point in an infinite plane,
+        // not an edge. fit() handles negative coordinates.
+        g.x = Math.round(drag.x + dx);
+        g.y = Math.round(drag.y + dy);
       } else {
         g.w = Math.round(Math.max(MIN_W, drag.w + dx));
         g.h = Math.round(Math.max(MIN_H, drag.h + dy));

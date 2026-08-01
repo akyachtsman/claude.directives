@@ -117,11 +117,25 @@
 
   function laneGrid(boxes, extra) {
     const xs = [], ys = [];
+    let lo = { x: Infinity, y: Infinity }, hi = { x: -Infinity, y: -Infinity };
     for (const g of boxes) {
       xs.push(g.x - PAD - 12, g.x + g.w + PAD + 12);
       ys.push(g.y - PAD - 12, g.y + g.h + PAD + 12);
+      lo = { x: Math.min(lo.x, g.x), y: Math.min(lo.y, g.y) };
+      hi = { x: Math.max(hi.x, g.x + g.w), y: Math.max(hi.y, g.y + g.h) };
     }
-    for (const p of extra) { xs.push(p.x); ys.push(p.y); }
+    for (const p of extra) {
+      xs.push(p.x); ys.push(p.y);
+      lo = { x: Math.min(lo.x, p.x), y: Math.min(lo.y, p.y) };
+      hi = { x: Math.max(hi.x, p.x), y: Math.max(hi.y, p.y) };
+    }
+    // A perimeter outside everything, so a route around the whole arrangement
+    // always exists. Without it, a layout with no interior corridor left the
+    // solver with no path at all and the fallback drew straight through a frame.
+    if (isFinite(lo.x)) {
+      xs.push(lo.x - 60, hi.x + 60);
+      ys.push(lo.y - 60, hi.y + 60);
+    }
     return { xs: uniq(xs), ys: uniq(ys) };
   }
 
@@ -268,11 +282,22 @@
     return e;
   };
 
-  let edgesHidden = false;
+  // Arrows are drawn ON DEMAND, not all at once. Ten free-floating lines across
+  // eight draggable boxes is unreadable however well each one is routed — you
+  // cannot tell which arrow leaves which box. Every frame states its
+  // relationships in words (the .rel chips), so nothing is hidden; the lines
+  // exist to answer "show me THIS box's connections", and at most four are ever
+  // on screen at once. `showAll` restores the full graph for anyone who wants it.
+  let showAll = false;
+  let selected = null;
+  function visibleEdges() {
+    if (showAll) return D.edges;
+    if (!selected) return [];
+    return D.edges.filter(e => e.a === selected || e.b === selected);
+  }
   function drawEdges() {
     svg.replaceChildren(svg.querySelector('defs'));
-    if (edgesHidden) return;
-    for (const e of D.edges) {
+    for (const e of visibleEdges()) {
       const A = byId[e.a], B = byId[e.b];
       if (!A || !B) continue;
       if (A.classList.contains('gone') || B.classList.contains('gone')) continue;
@@ -454,7 +479,7 @@
       case '-': case '_': zoomBy(1 / 1.2); return void ev.preventDefault();
       case '0': fit(); return void ev.preventDefault();
       case 'Escape':
-        isolate(null); search.value = '';
+        showAll = false; isolate(null); search.value = '';
         document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
         return void ev.preventDefault();
       case 'Enter':
@@ -523,6 +548,7 @@
 
   /* ---------------- isolate + search ---------------- */
   function isolate(id) {
+    selected = id;
     frames.forEach(f => f.classList.remove('focused', 'faded'));
     if (!id) { drawEdges(); return; }
     const keep = new Set([id]);
@@ -572,15 +598,15 @@
       ['hide compartments', 'show compartments']),
     toggle(document.getElementById('t_del'), on => vp.classList.toggle('no-del', on),
       ['hide delivery', 'show delivery']),
-    toggle(document.getElementById('t_edge'), on => { edgesHidden = on; drawEdges(); },
-      ['hide arrows', 'show arrows']),
+    toggle(document.getElementById('t_edge'), on => { showAll = on; drawEdges(); },
+      ['all arrows', 'selected only']),
   ];
 
   document.getElementById('t_reset').addEventListener('click', () => {
     resets.forEach(r => r());
     Object.assign(geom, structuredClone(declared));
     try { localStorage.removeItem(STORE); } catch { /* private mode */ }
-    isolate(null); search.value = '';
+    showAll = false; isolate(null); search.value = '';
     document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
     applyAll(); autofit(); drawEdges(); fit();
   });

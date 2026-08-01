@@ -122,7 +122,12 @@ A directive repo must pass its own CI before it can be trusted downstream.
   **input surface** a mouse-only test never reaches — scroll pans on both axes
   without zooming, ctrl/pinch zooms, two-finger pinch zooms on touch, middle-drag
   pans over a frame, frames are keyboard-reachable and arrow keys pan, and `fit`
-  recentres without discarding the reader's arranged layout.
+  recentres without discarding the reader's arranged layout. It also asserts the
+  **visual** invariant the interaction checks kept missing: every frame states its
+  relationships in words, nothing is drawn at rest, selecting a frame draws only
+  its own connections, and **no arrow crosses a frame it does not connect** —
+  verified on the shipped layout AND after frames are dragged around, which is
+  the case the earlier router had never been exercised against.
   `qa.yml` also runs `build-logical-map.js --check`, so a committed map that no
   longer matches `EXPORTS.json` fails the build.
   (The old design-theme parity + contrast checks were retired with the fixed

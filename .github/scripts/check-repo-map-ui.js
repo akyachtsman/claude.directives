@@ -35,7 +35,8 @@ const counts = await page.evaluate(() => ({
 if (counts.frames < 8) fail(`expected >=8 frames, found ${counts.frames}`);
 else ok(`${counts.frames} frames, ${counts.chips} file chips, ${counts.edges} edges render`);
 if (counts.chips < 90) fail(`expected >=90 file chips, found ${counts.chips}`);
-if (counts.edges < 1) fail('no edges drawn');
+// counts.edges is expected to be 0 here — arrows are drawn on demand, and the
+// dedicated section below asserts that. See "arrows on demand".
 
 // No frame may clip its own contents. The generator cannot measure text, so the
 // page auto-fits on load — when that broke, files silently vanished off the
@@ -132,6 +133,10 @@ const selfState = () => page.evaluate(() => ({
     .every(f => getComputedStyle(f).display !== 'none'),
   edges: document.querySelectorAll('.edge').length,
 }));
+// Draw the whole graph first: edge counts are 0 at rest now, so comparing them
+// would compare nothing.
+await page.click('#t_edge');
+await page.waitForTimeout(250);
 const allShown = await selfState();
 await page.click('#t_self');
 await page.waitForTimeout(250);
@@ -144,6 +149,8 @@ await page.click('#t_self');
 await page.waitForTimeout(200);
 if ((await selfState()).hidden) fail('"exports only" is not reversible');
 else ok('"exports only" is reversible');
+await page.click('#t_edge');
+await page.waitForTimeout(200);
 
 for (const [id, sel, what] of [
   ['#t_cmp', '.f .cmp', 'compartment labels'],
@@ -161,13 +168,37 @@ for (const [id, sel, what] of [
   }
 }
 
-await page.click('#t_edge');
+/* ------------------------------------------------------- arrows on demand */
+// Ten arrows across eight draggable boxes cannot be read no matter how well
+// each is routed, so nothing is drawn until a frame is selected. The
+// relationships are still stated in words on every frame, so no information is
+// hidden by this — check that first, because the text is what makes the quiet
+// default acceptable.
+const rels = await page.$$eval('.rel', ns => ns.length);
+const framesWithRels = await page.$$eval('.fr', fs =>
+  fs.filter(f => f.querySelector('.rel')).length);
+if (rels < 15) fail(`expected every relationship stated in words, found ${rels} chips`);
+else if (framesWithRels < 8) fail(`${8 - framesWithRels} frame(s) state no relationships`);
+else ok(`all 8 frames state their relationships in words (${rels} chips)`);
+
+if (await page.$$eval('.edge', e => e.length) !== 0) {
+  fail('arrows are drawn before any frame is selected');
+} else ok('no arrows at rest — the map is quiet until you ask');
+
+await page.click('.fr[data-id="standard"] .fd');
+await page.waitForTimeout(250);
+const focusEdges = await page.$$eval('.edge', e => e.length);
+if (focusEdges === 0) fail('selecting a frame drew no arrows');
+else if (focusEdges >= 10) fail(`selecting a frame drew the whole graph (${focusEdges})`);
+else ok(`selecting a frame draws only its ${focusEdges} connections`);
+await page.click('.fr[data-id="standard"] .fd');
 await page.waitForTimeout(200);
-if (await page.$$eval('.edge', e => e.length) > 0) fail('"hide arrows" left arrows drawn');
-else ok('"hide arrows" hides the arrows');
+if (await page.$$eval('.edge', e => e.length) !== 0) fail('deselecting left arrows drawn');
+
 await page.click('#t_edge');
-await page.waitForTimeout(200);
-if (await page.$$eval('.edge', e => e.length) === 0) fail('"hide arrows" is not reversible');
+await page.waitForTimeout(250);
+if (await page.$$eval('.edge', e => e.length) < 10) fail('"all arrows" did not draw the full graph');
+else ok('"all arrows" draws the full graph on request');
 
 /* ------------------------------------------------------------------ legend */
 // The legend is a child of #wrap. When #wrap's pan handler captured the pointer
@@ -276,11 +307,17 @@ const crossings = () => page.evaluate(() => {
         if (p.x >= f.x - 2 && p.x <= f.x + f.w + 2 && p.y >= f.y - 2 && p.y <= f.y + f.h + 2) ends.add(f.id);
       }
     }
+    // A frame overlapping one of this edge's endpoints cannot be avoided — the
+    // route has to start inside it. Readers can stack frames, so exclude those.
+    const overlapsEnd = f => [...ends].some(id => {
+      const e = fr.find(x => x.id === id);
+      return e && f.x < e.x + e.w && f.x + f.w > e.x && f.y < e.y + e.h && f.y + f.h > e.y;
+    });
     const through = new Set();
     for (let i = 0; i <= 300; i++) {
       const p = path.getPointAtLength(L * i / 300);
       for (const f of fr) {
-        if (ends.has(f.id)) continue;
+        if (ends.has(f.id) || overlapsEnd(f)) continue;
         if (p.x > f.x + 2 && p.x < f.x + f.w - 2 && p.y > f.y + 2 && p.y < f.y + f.h - 2) through.add(f.id);
       }
     }
@@ -289,6 +326,11 @@ const crossings = () => page.evaluate(() => {
   return out;
 });
 
+await page.click('#t_edge');            // ensure the full graph is drawn
+await page.waitForTimeout(250);
+if (await page.$$eval('.edge', e => e.length) < 10) {
+  await page.click('#t_edge'); await page.waitForTimeout(250);
+}
 const clean = await crossings();
 if (clean.length) fail(`edges cross frames in the default layout: ${clean.join(' | ')}`);
 else ok('no edge crosses a frame it does not connect (default layout)');
@@ -303,6 +345,7 @@ if (shuffled.length) fail(`edges cross frames after the layout is rearranged: ${
 else ok('no edge crosses a frame after the layout is rearranged');
 await page.click('#t_reset');
 await page.waitForTimeout(250);
+if (await page.$$eval('.edge', e => e.length) !== 0) fail('reset left arrows drawn');
 
 /* ------------------------------------------- input surface: touch, keys, pan */
 // These cover the ways INTO the map that a mouse-driven test never exercises.

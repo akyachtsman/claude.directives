@@ -195,15 +195,33 @@ bodies.self = {
       labeller(selfPaths.flatMap(([, ps]) => ps))),
 };
 
+const shortTitle = id => (bodies[id]?.title ?? id).replace(/ —.*$/, '').toLowerCase();
+
+// A frame states its own relationships in words. Ten arrows across eight
+// draggable boxes is unreadable however well each line is routed; text sits
+// with the box, moves with it, and can never tangle.
+function relations(id) {
+  const out = EDGES.filter(e => e.a === id)
+    .map(e => `<span class="rel k-${e.kind}"><b>${esc(KINDS[e.kind].label)}</b> `
+      + `→ ${esc(EDGES.filter(x => x.a === id && x.kind === e.kind).length > 1 ? '' : '')}`
+      + `${esc(shortTitle(e.b))}</span>`);
+  const inc = EDGES.filter(e => e.b === id)
+    .map(e => `<span class="rel inc k-${e.kind}">${esc(shortTitle(e.a))} → `
+      + `<b>${esc(KINDS[e.kind].label)}</b></span>`);
+  const all = [...inc, ...out];
+  return all.length ? `<div class="rels">${all.join('')}</div>` : '';
+}
+
 const frameHtml = FRAMES.map(f => {
   const b = bodies[f.id];
   if (!b) { fail(`no content for frame: ${f.id}`); return ''; }
   return `<div class="fr c-${f.id}" data-id="${f.id}" data-x="${f.x}" data-y="${f.y}" `
     + `data-w="${f.w}" data-h="${f.h}" tabindex="0" `
-    + `aria-label="${esc(b.title)} — ${b.count} files. Enter to isolate.">`
+    + `aria-label="${esc(b.title)} — ${b.count} files. Enter to show its connections.">`
     + `<div class="ft"><span class="ttl">${esc(b.title)}</span>`
     + `<span class="cnt">${b.count}</span></div>`
     + `<p class="fd">${esc(b.blurb)}</p>`
+    + relations(f.id)
     + `<div class="files">${b.chips}</div>`
     + `<span class="rs" aria-hidden="true"></span></div>`;
 }).join('\n');
@@ -299,6 +317,16 @@ ${FRAMES.map(f => `  .c-${f.id}{--acc:var(--c-${f.id})}`).join('\n')}
     border:1px solid var(--border);border-radius:20px;padding:3px 7px}
   .fd{font:400 11px/1.4 inherit;color:var(--ink-2);margin:0 0 8px;max-width:92ch}
 
+  .rels{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px}
+  .rel{display:inline-flex;align-items:center;gap:4px;font:10px/1 Inter,system-ui,sans-serif;
+    color:var(--ink-2);background:var(--bg);border:1px solid var(--border);
+    border-left:3px solid var(--rk,var(--border-2));border-radius:5px;padding:4px 7px}
+  .rel b{color:var(--rk);font-weight:700}
+  .rel.inc{opacity:.75}
+  .k-con{--rk:var(--k-con)} .k-seq{--rk:var(--k-seq)} .k-enf{--rk:var(--k-enf)}
+  .k-pro{--rk:var(--k-pro)} .k-exp{--rk:var(--k-exp)} .k-del{--rk:var(--k-del)}
+  .k-val{--rk:var(--k-val)}
+
   .files{display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start}
   .f{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
     background:var(--surface);border:1px solid var(--border);border-radius:7px;
@@ -355,16 +383,16 @@ ${['global', 'git', 'design', 'test', 'data', 'meta', 'self', 'external']
 </style></head><body>
 <header>
   <h1>claude.directives — logical map <span>(classes · compartments · delivery · sockets)</span></h1>
-  <span class="hint">scroll = pan · pinch or ⌘/ctrl+scroll = zoom · space- or middle-drag = pan
-    anywhere · drag a box = move it · drag its corner = resize · click = isolate ·
-    arrows / +− / 0 / esc</span>
+  <span class="hint">click a box = show its connections · scroll = pan · pinch or
+    ⌘/ctrl+scroll = zoom · space- or middle-drag = pan anywhere · drag = move ·
+    drag the corner = resize · arrows / +− / 0 / esc</span>
   <span class="btns">
     <button type="button" id="zin" title="Zoom in">+</button>
     <button type="button" id="zout" title="Zoom out">−</button>
     <button type="button" id="t_self" aria-pressed="false" title="Hide the files that only run or maintain this repo">exports only</button>
     <button type="button" id="t_cmp" aria-pressed="false" title="Hide each file's domain.compartment">hide compartments</button>
     <button type="button" id="t_del" aria-pressed="false" title="Hide each file's delivery mode">hide delivery</button>
-    <button type="button" id="t_edge" aria-pressed="false" title="Hide the relationship arrows">hide arrows</button>
+    <button type="button" id="t_edge" aria-pressed="false" title="Draw every arrow at once instead of only the selected frame's">all arrows</button>
     <button type="button" id="t_fit" title="Recentre the view — keeps the frames where you put them">fit</button>
     <button type="button" id="t_reset" title="Discard your layout and restore the defaults">reset layout</button>
   </span>

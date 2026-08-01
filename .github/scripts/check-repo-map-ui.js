@@ -18,7 +18,7 @@ const fail = m => { console.error('FAIL: ' + m); process.exitCode = 1; };
 const ok = m => console.log('OK: ' + m);
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+const page = await browser.newPage({ viewport: { width: 1500, height: 950 }, hasTouch: true });
 const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -231,6 +231,60 @@ const zoomed = await view();
 await page.click('#zout'); await page.waitForTimeout(120);
 if ((await view()).scale >= zoomed.scale) fail('the zoom buttons do not work');
 else ok('the +/- buttons zoom');
+
+/* ------------------------------------------- input surface: touch, keys, pan */
+// These cover the ways INTO the map that a mouse-driven test never exercises.
+// Each was found by auditing the input surface deliberately rather than by
+// waiting for the next bug report.
+
+// Pinch, via real multi-touch. A trackpad pinch is a ctrlKey wheel event, but on
+// a touch screen it is two pointers — without handling them there was no way to
+// zoom on a tablet at all.
+const cdp = await page.context().newCDPSession(page);
+const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent',
+  { type, touchPoints: pts.map((q, i) => ({ x: q.x, y: q.y, id: i })) });
+const beforePinch = await view();
+await touch('touchStart', [{ x: 600, y: 500 }, { x: 800, y: 500 }]);
+for (let i = 1; i <= 8; i++) {
+  await touch('touchMove', [{ x: 600 - i * 18, y: 500 }, { x: 800 + i * 18, y: 500 }]);
+}
+await touch('touchEnd', []);
+await page.waitForTimeout(150);
+if ((await view()).scale <= beforePinch.scale) fail('two-finger pinch does not zoom');
+else ok('two-finger pinch zooms on touch');
+
+// Space- and middle-drag must pan even when a frame is under the cursor, because
+// once you zoom in the frames cover nearly all of the canvas.
+const overFrame = await (await page.$('.fr[data-id="standard"] .fd')).boundingBox();
+const vMid = await view();
+await page.mouse.move(overFrame.x + 40, overFrame.y + 4);
+await page.mouse.down({ button: 'middle' });
+await page.mouse.move(overFrame.x + 220, overFrame.y + 60, { steps: 6 });
+await page.mouse.up({ button: 'middle' });
+await page.waitForTimeout(150);
+if (Math.abs((await view()).x - vMid.x) < 50) fail('middle-drag does not pan over a frame');
+else ok('middle-drag pans over a frame');
+
+// Keyboard: none of this was reachable without a pointer.
+if (!(await page.$('.fr[tabindex]'))) fail('frames are not reachable by keyboard');
+else ok('frames are reachable by keyboard');
+const vKey = await view();
+await page.keyboard.press('ArrowLeft');
+await page.keyboard.press('ArrowLeft');
+await page.waitForTimeout(120);
+if ((await view()).x <= vKey.x) fail('arrow keys do not pan');
+else ok('arrow keys pan');
+
+// "fit" recentres WITHOUT discarding the arranged layout. reset was previously
+// the only way back from an off-screen pan, and it also wiped every moved frame.
+await drag('.fr[data-id="behavioral"] .fd', 100, 50);
+const arranged = await geomOf('behavioral');
+await page.click('#t_fit');
+await page.waitForTimeout(200);
+const keptLayout = await geomOf('behavioral');
+if (Math.abs(keptLayout.x - arranged.x) > 1 || Math.abs(keptLayout.y - arranged.y) > 1) {
+  fail('"fit" moved the frames — it must only recentre the view');
+} else ok('"fit" recentres without disturbing the arranged layout');
 
 /* ------------------------------------------------------------------ canvas */
 // Dragging empty canvas must pan, not select the page text.

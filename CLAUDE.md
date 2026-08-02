@@ -130,7 +130,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   the case the earlier router had never been exercised against. The router itself
   is **ported from `claude.insurance`** — its `relmap.js` and `relmap-view.js`
   under js/keep: channel routing that reserves the row gaps and margins rather
-  than searching for free space, with hop-breaks where lines cross.
+  than searching for free space, with hop-breaks where lines cross. The map opens
+  **collapsed** — each frame leads with its meaning and a delivery-mix bar, and its
+  files appear on request (search opens the frame holding a hit), because 109
+  filenames shown at once is a reference table rather than a map.
   `qa.yml` also runs `build-logical-map.js --check`, so a committed map that no
   longer matches `EXPORTS.json` fails the build.
   (The old design-theme parity + contrast checks were retired with the fixed

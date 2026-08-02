@@ -168,6 +168,38 @@ for (const [id, sel, what] of [
   }
 }
 
+/* --------------------------------------------------- progressive disclosure */
+// 109 filenames at 10px is a reference table, not a map. A frame leads with what
+// the class IS and how it is delivered; the files are one click away.
+const visibleFiles = () => page.$$eval('.f', fs => fs.filter(f => f.offsetParent !== null).length);
+if (await visibleFiles() !== 0) fail('filenames are shown before any frame is opened');
+else ok('no filenames at rest — each frame leads with its meaning');
+const bars = await page.$$eval('.bar', b => b.length);
+if (bars < 6) fail(`expected a delivery-mix bar per class, found ${bars}`);
+else ok(`${bars} delivery-mix bars — a class's shape is readable without counting chips`);
+
+await page.click('.fr[data-id="mechanical"] .more');
+await page.waitForTimeout(300);
+const opened = await visibleFiles();
+if (opened < 20) fail(`opening a frame revealed ${opened} files`);
+else ok(`opening a frame reveals its ${opened} files`);
+await page.click('.fr[data-id="mechanical"] .more');
+await page.waitForTimeout(300);
+if (await visibleFiles() !== 0) fail('closing a frame left its files shown');
+else ok('closing a frame hides them again');
+
+// A match inside a collapsed frame would be invisible, so search must open it.
+await page.fill('#search', 'qa-pipeline');
+await page.waitForTimeout(400);
+const shown = await visibleFiles();
+const hitsNow = await page.$$eval('.f.hit', f => f.length);
+if (hitsNow < 1) fail('search matched nothing');
+else if (shown === 0) fail('search matched but left every frame collapsed — the hit is invisible');
+else if (shown > 30) fail(`search opened too much (${shown} files shown for ${hitsNow} hit)`);
+else ok(`search opens only the frame holding the hit (${shown} files shown)`);
+await page.fill('#search', '');
+await page.waitForTimeout(300);
+
 /* ------------------------------------------------------- arrows on demand */
 // Ten arrows across eight draggable boxes cannot be read no matter how well
 // each is routed, so nothing is drawn until a frame is selected. The

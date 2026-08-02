@@ -204,6 +204,59 @@ else ok(`each of the ${chips.length} relationship chips draws exactly one arrow`
 if (await page.$$eval('.edge', e => e.length) !== 0) fail('clicking a chip twice left it drawn');
 else ok('clicking a chip again clears it');
 
+// Selecting a frame shows its whole fan again — the one-arrow restriction was a
+// workaround for a router that could not keep several lines legible.
+await page.click('.fr[data-id="standard"] .fd');
+await page.waitForTimeout(250);
+const fan = await page.$$eval('.edge', e => e.length);
+if (fan < 2) fail(`selecting a frame drew ${fan} arrows — expected its whole fan`);
+else ok(`selecting a frame draws its ${fan} connections`);
+await page.click('.fr[data-id="standard"] .fd');
+await page.waitForTimeout(150);
+
+// THE invariant the channel routing guarantees: a run lives in a row gap or a
+// margin, never behind a frame. Checked with every arrow drawn, and again after
+// the layout is rearranged.
+const throughFrames = () => page.evaluate(() => {
+  const fr = [...document.querySelectorAll('.fr')]
+    .filter(f => getComputedStyle(f).display !== 'none')
+    .map(f => ({ id: f.dataset.id, x: parseFloat(f.style.left), y: parseFloat(f.style.top),
+                 w: parseFloat(f.style.width), h: parseFloat(f.style.height) }));
+  const out = [];
+  for (const g of document.querySelectorAll('.edge')) {
+    const ends = new Set([g.dataset.a, g.dataset.b]);
+    const path = g.querySelector('.line'), L = path.getTotalLength();
+    const bad = new Set();
+    for (let i = 0; i <= 300; i++) {
+      const q = path.getPointAtLength(L * i / 300);
+      for (const f of fr) {
+        if (ends.has(f.id)) continue;
+        if (q.x > f.x + 3 && q.x < f.x + f.w - 3 && q.y > f.y + 3 && q.y < f.y + f.h - 3) bad.add(f.id);
+      }
+    }
+    if (bad.size) out.push(`${g.dataset.a}->${g.dataset.b} thru ${[...bad].join(',')}`);
+  }
+  return out;
+});
+await page.click('#t_edge');
+await page.waitForTimeout(300);
+const drawnAll = await page.$$eval('.edge', e => e.length);
+if (drawnAll < 10) fail(`"all arrows" drew ${drawnAll}`);
+const behind = await throughFrames();
+if (behind.length) fail(`a run passes behind a frame: ${behind.join(' | ')}`);
+else ok(`all ${drawnAll} arrows route in gaps and margins — none behind a frame`);
+
+// Where lines genuinely cross, the crossed one breaks so it reads as a crossing
+// rather than a join (the circuit-diagram convention, ported from relHopPath).
+const breaks = await page.$$eval('.edge .line', ps =>
+  ps.reduce((n, p) => n + ((p.getAttribute('d') || '').split(' M ').length - 1), 0));
+if (breaks < 1) fail('no hop-breaks drawn where lines cross');
+else ok(`${breaks} hop-breaks drawn where lines cross`);
+// Leave "all arrows" off again — the assertions below toggle it themselves and
+// would otherwise be measuring from the opposite state.
+await page.click('#t_edge');
+await page.waitForTimeout(200);
+
 await page.click('#t_edge');
 await page.waitForTimeout(250);
 if (await page.$$eval('.edge', e => e.length) < 10) fail('"all arrows" did not draw the full graph');
@@ -335,8 +388,6 @@ const crossings = () => page.evaluate(() => {
   return out;
 });
 
-await page.click('#t_edge');            // ensure the full graph is drawn
-await page.waitForTimeout(250);
 if (await page.$$eval('.edge', e => e.length) < 10) {
   await page.click('#t_edge'); await page.waitForTimeout(250);
 }

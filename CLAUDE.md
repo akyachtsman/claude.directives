@@ -127,7 +127,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   relationships in words, nothing is drawn at rest, selecting a frame draws only
   its own connections, and **no arrow crosses a frame it does not connect** —
   verified on the shipped layout AND after frames are dragged around, which is
-  the case the earlier router had never been exercised against.
+  the case the earlier router had never been exercised against. The router itself
+  is **ported from `claude.insurance`** — its `relmap.js` and `relmap-view.js`
+  under js/keep: channel routing that reserves the row gaps and margins rather
+  than searching for free space, with hop-breaks where lines cross.
   `qa.yml` also runs `build-logical-map.js --check`, so a committed map that no
   longer matches `EXPORTS.json` fails the build.
   (The old design-theme parity + contrast checks were retired with the fixed

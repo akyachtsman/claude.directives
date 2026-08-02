@@ -82,149 +82,142 @@
     }
   }
 
-  /* ---------------- edges ---------------- */
-  // Orthogonal elbow between two rectangles: leave the source on the border
-  // facing the target, turn once in the gutter, arrive on the facing border.
-  // Straight diagonals across a dense map are unreadable; elbows follow the
-  // gutters the layout already leaves between rows.
-  const R = 9;
-  const PAD = 6;    // keep routes this far off a frame's edge
-
-  const rects = skip => frames
-    .filter(f => !skip.includes(f.dataset.id) && !f.classList.contains('gone'))
-    .map(f => geom[f.dataset.id]);
-
-  const hits = (p, q, boxes) => boxes.some(g =>
-    Math.max(p.x, q.x) >= g.x - PAD && Math.min(p.x, q.x) <= g.x + g.w + PAD &&
-    Math.max(p.y, q.y) >= g.y - PAD && Math.min(p.y, q.y) <= g.y + g.h + PAD);
-
-  // A route is only readable if none of its segments disappears behind an
-  // opaque frame. Testing each segment (not the whole L's bounding box) keeps
-  // edges in the nearest free gutter instead of banishing them to the margin.
-  const clear = (pts, boxes) => {
-    for (let i = 0; i < pts.length - 1; i++) if (hits(pts[i], pts[i + 1], boxes)) return false;
-    return true;
-  };
-
-  // Orthogonal routing over a lane grid.
+  /* ---------------- edges: channel routing ---------------- */
+  // Ported from claude.insurance — js/keep/logic/relmap.js (orchestrate) and
+  // js/keep/views/relmap-view.js (relOrtho, relHopPath). That code already solved
+  // this properly and was unit-tested; four attempts at hand-rolling an obstacle
+  // -avoiding router here produced worse results. Reuse Before Rewrite
+  // (global.md) — applied late.
   //
-  // This used to try L-shapes and give up — an L cannot go AROUND an obstacle,
-  // so once a reader dragged frames into arbitrary positions, edges fell back to
-  // running straight through boxes. Lanes are derived from the frames' own edges
-  // (the only x or y worth travelling along is one that clears somebody), and a
-  // Dijkstra with a turn penalty finds the shortest tidy path through them.
-  const uniq = xs => [...new Set(xs.map(v => Math.round(v)))].sort((a, b) => a - b);
+  // The idea that makes it work: do not SEARCH for space, RESERVE it. Frames sit
+  // in rows, so the gap between two rows is a channel no frame occupies. Every
+  // run is axis-aligned and lives either in a row gap (crossing runs) or on a
+  // frame's own column (approach runs), which means a line can never pass behind
+  // a frame — structurally, not by obstacle testing.
+  const LANE = 14;                // spacing between two sources' parallel runs
+  const HOP = 6;                  // half-width of the break where lines cross
 
-  // `ring` gives each arrow in a fan its OWN set of lanes, offset outward from
-  // every frame. Nested rings, walked in the same angular order as their
-  // targets, cannot cross — which is what turns "usually untangled" into a
-  // guarantee. Without it two arrows share a corridor and weave.
-  function laneGrid(boxes, extra, ring = 0) {
-    const xs = [], ys = [];
-    const m = 12 + ring * 15;
-    let lo = { x: Infinity, y: Infinity }, hi = { x: -Infinity, y: -Infinity };
-    for (const g of boxes) {
-      xs.push(g.x - PAD - m, g.x + g.w + PAD + m);
-      ys.push(g.y - PAD - m, g.y + g.h + PAD + m);
-      lo = { x: Math.min(lo.x, g.x), y: Math.min(lo.y, g.y) };
-      hi = { x: Math.max(hi.x, g.x + g.w), y: Math.max(hi.y, g.y + g.h) };
+  // Rows, derived from the frames' current vertical order. Frames within ~40px of
+  // each other are one row, which is what the default layout builds and what a
+  // reader's rearrangement usually preserves.
+  function rowsOf(ids) {
+    const sorted = [...ids].sort((a, b) => geom[a].y - geom[b].y);
+    const rows = [];
+    for (const id of sorted) {
+      const last = rows[rows.length - 1];
+      if (last && Math.abs(geom[last[0]].y - geom[id].y) < 40) last.push(id);
+      else rows.push([id]);
     }
-    for (const p of extra) {
-      xs.push(p.x); ys.push(p.y);
-      lo = { x: Math.min(lo.x, p.x), y: Math.min(lo.y, p.y) };
-      hi = { x: Math.max(hi.x, p.x), y: Math.max(hi.y, p.y) };
-    }
-    // A perimeter outside everything, so a route around the whole arrangement
-    // always exists. Without it, a layout with no interior corridor left the
-    // solver with no path at all and the fallback drew straight through a frame.
-    if (isFinite(lo.x)) {
-      xs.push(lo.x - 60 - ring * 15, hi.x + 60 + ring * 15);
-      ys.push(lo.y - 60 - ring * 15, hi.y + 60 + ring * 15);
-    }
-    return { xs: uniq(xs), ys: uniq(ys) };
+    return rows;
+  }
+  function rowIndex() {
+    const live = frames.filter(f => !f.classList.contains('gone')).map(f => f.dataset.id);
+    const rows = rowsOf(live);
+    const idx = {}, bounds = [];
+    rows.forEach((row, i) => {
+      row.forEach(id => { idx[id] = i; });
+      bounds.push({
+        top: Math.min(...row.map(id => geom[id].y)),
+        bottom: Math.max(...row.map(id => geom[id].y + geom[id].h)),
+      });
+    });
+    return { idx, bounds };
   }
 
-  const inside = (p, boxes) => boxes.some(g =>
-    p.x > g.x - PAD && p.x < g.x + g.w + PAD && p.y > g.y - PAD && p.y < g.y + g.h + PAD);
-
-  // Shortest orthogonal path start→end that never enters a box. Turns cost
-  // extra so the result reads as two or three clean runs, not a staircase.
-  const segCross = (p, q, r, t) => {
-    const ccw = (A, B, C) => (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
-    return ccw(p, r, t) !== ccw(q, r, t) && ccw(p, q, r) !== ccw(p, q, t);
+  // The channel between row i and row i+1: the middle of the empty band between
+  // them. `lane` fans several edges apart so parallel runs never lie on top of
+  // one another (relmap-view's channelOf).
+  const channel = (bounds, i, lane) => {
+    const a = bounds[i], b = bounds[i + 1];
+    if (!a || !b) return (a || b).bottom + 30 + lane * LANE;
+    // The lane offset must never push the run out of the gap it belongs to —
+    // that is precisely how a "channel" route ends up inside the next row.
+    const lo = a.bottom + 8, hi = b.top - 8;
+    const mid = (a.bottom + b.top) / 2;
+    if (hi <= lo) return mid;
+    const spread = Math.min(LANE, (hi - lo) / 4);
+    return Math.min(hi, Math.max(lo, mid + lane * spread));
   };
 
-  function solve(start, end, boxes, avoid = [], ring = 0) {
-    const { xs, ys } = laneGrid(boxes, [start, end], ring);
-    const xi = new Map(xs.map((v, i) => [v, i]));
-    const yi = new Map(ys.map((v, i) => [v, i]));
-    const sx = xi.get(Math.round(start.x)), sy = yi.get(Math.round(start.y));
-    const ex = xi.get(Math.round(end.x)), ey = yi.get(Math.round(end.y));
-    if (sx === undefined || sy === undefined || ex === undefined || ey === undefined) return null;
+  // Orthogonal route from `a` down/up to `b`, bending through every intervening
+  // row gap — the dummy-waypoint idea from orchestrate(), reduced to what an
+  // 8-frame map needs: the bend column is the target's, so a long edge runs down
+  // its own column clear of whatever it passes.
+  function routeEdge(a, b, ida, idb, lane) {
+    const { idx, bounds } = rowIndex();
+    const ra = idx[ida], rb = idx[idb];
+    const ax = clampTo(geom[ida].x + geom[ida].w / 2 + lane * LANE, geom[ida]);
+    const bx = clampTo(geom[idb].x + geom[idb].w / 2 - lane * LANE, geom[idb]);
+    if (ra == null || rb == null) return null;
 
-    const node = (a, b) => ({ x: xs[a], y: ys[b] });
-    const blocked = (a, b) => inside(node(a, b), boxes);
-    // An arrow may not cross one already drawn. This is what stops the fan of
-    // edges leaving a selected frame from tangling into each other.
-    const passable = (a1, b1, a2, b2) => {
-      const p = node(a1, b1), q = node(a2, b2);
-      if (hits(p, q, boxes)) return false;
-      for (const [r, t] of avoid) if (segCross(p, q, r, t)) return false;
-      return true;
-    };
-
-    const key = (a, b, d) => `${a},${b},${d}`;
-    const dist = new Map(), prev = new Map();
-    const pq = [{ a: sx, b: sy, d: -1, c: 0 }];
-    dist.set(key(sx, sy, -1), 0);
-    const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    let best = null;
-
-    while (pq.length) {
-      pq.sort((p, q) => p.c - q.c);
-      const cur = pq.shift();
-      if (cur.c > (dist.get(key(cur.a, cur.b, cur.d)) ?? Infinity)) continue;
-      if (cur.a === ex && cur.b === ey) { best = cur; break; }
-      for (let d = 0; d < 4; d++) {
-        const [dx, dy] = DIRS[d];
-        const na = cur.a + dx, nb = cur.b + dy;
-        if (na < 0 || nb < 0 || na >= xs.length || nb >= ys.length) continue;
-        if (blocked(na, nb) && !(na === ex && nb === ey)) continue;
-        if (!passable(cur.a, cur.b, na, nb)) continue;
-        const step = Math.abs(xs[na] - xs[cur.a]) + Math.abs(ys[nb] - ys[cur.b]);
-        const turn = cur.d === -1 || cur.d === d ? 0 : 120;   // prefer few corners
-        const nc = cur.c + step + turn;
-        const k = key(na, nb, d);
-        if (nc < (dist.get(k) ?? Infinity)) {
-          dist.set(k, nc);
-          prev.set(k, { a: cur.a, b: cur.b, d: cur.d });
-          pq.push({ a: na, b: nb, d, c: nc });
-        }
-      }
+    const down = rb > ra;
+    const sameRow = ra === rb;
+    if (sameRow) {
+      // Dip into the gap just below the row and back, staying out of every card
+      // in it (relOrtho's same-band case).
+      const ch = bounds[ra].bottom + 26 + lane * LANE;
+      return [{ x: ax, y: a.y + a.h }, { x: ax, y: ch }, { x: bx, y: ch }, { x: bx, y: b.y + b.h }];
     }
-    if (!best) return null;
+    // Adjacent rows: straight into the gap between them and across. The gap is
+    // empty by definition, so nothing is crossed.
+    if (Math.abs(rb - ra) === 1) {
+      const ch = channel(bounds, Math.min(ra, rb), lane);
+      return [{ x: ax, y: down ? a.y + a.h : a.y }, { x: ax, y: ch },
+              { x: bx, y: ch }, { x: bx, y: down ? b.y : b.y + b.h }];
+    }
 
-    const pts = [];
-    let cur = { a: best.a, b: best.b, d: best.d };
-    while (cur) {
-      pts.unshift(node(cur.a, cur.b));
-      cur = prev.get(key(cur.a, cur.b, cur.d));
+    // Spanning more than one row: the long vertical leg must not run down a
+    // column occupied by the rows in between. claude.insurance reserves those
+    // columns by laying its routing dummies out as real nodes with their own
+    // cross-axis width; our frames are wide and leave no such gap, so the
+    // reserved channel here is the MARGIN beside the whole arrangement. Pick the
+    // nearer side and fan by lane.
+    const spanned = frames
+      .filter(f => !f.classList.contains('gone'))
+      .map(f => f.dataset.id)
+      .filter(id => {
+        const r = idx[id];
+        return r != null && r > Math.min(ra, rb) && r < Math.max(ra, rb);
+      })
+      .map(id => geom[id]);
+    const box = spanned.length
+      ? { x0: Math.min(...spanned.map(g => g.x)), x1: Math.max(...spanned.map(g => g.x + g.w)) }
+      : { x0: Math.min(a.x, b.x), x1: Math.max(a.x + a.w, b.x + b.w) };
+    const mid = (ax + bx) / 2;
+    const goLeft = Math.abs(mid - box.x0) <= Math.abs(box.x1 - mid);
+    const col = goLeft ? box.x0 - 34 - lane * LANE : box.x1 + 34 + lane * LANE;
+    const chA = channel(bounds, down ? ra : ra - 1, lane);
+    const chB = channel(bounds, down ? rb - 1 : rb, lane);
+    return [
+      { x: ax, y: down ? a.y + a.h : a.y },
+      { x: ax, y: chA }, { x: col, y: chA },
+      { x: col, y: chB }, { x: bx, y: chB },
+      { x: bx, y: down ? b.y : b.y + b.h },
+    ];
+  }
+  const clampTo = (x, g) => Math.min(g.x + g.w - 20, Math.max(g.x + 20, x));
+
+  // Where two lines genuinely must cross, break the crossed one so it reads as a
+  // crossing and not a join — the circuit-diagram convention, from relHopPath.
+  function hopPath(pts, crossers) {
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const horizontalRun = Math.abs(a.y - b.y) < 0.5 && Math.abs(a.x - b.x) > 1;
+      if (!horizontalRun) { d += ` L ${b.x} ${b.y}`; continue; }
+      const dir = Math.sign(b.x - a.x) || 1;
+      const cuts = crossers
+        .filter(v => v.c > Math.min(a.x, b.x) + 2 && v.c < Math.max(a.x, b.x) - 2
+                  && a.y > v.s0 + 1 && a.y < v.s1 - 1)
+        .map(v => v.c)
+        .sort((x, y) => dir * (x - y));
+      for (const c of cuts) d += ` L ${c - dir * HOP} ${a.y} M ${c + dir * HOP} ${a.y}`;
+      d += ` L ${b.x} ${b.y}`;
     }
-    // drop mid-points on a straight run
-    const out = [pts[0]];
-    for (let i = 1; i < pts.length - 1; i++) {
-      const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
-      const straight = (a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y);
-      if (!straight) out.push(b);
-    }
-    out.push(pts[pts.length - 1]);
-    return out;
+    return d;
   }
 
-  // Put the label on the longest run that is not behind a frame — a label
-  // sitting on a box reads as if it belongs to the box. The whole PILL has to
-  // clear, not just its centre point, or a long label overhangs the frame it
-  // was carefully routed around.
+  // Label goes on the longest run that is clear of every frame.
   function placeLabel(pts, all, halfW) {
     const clearOf = c => !all.some(g =>
       c.x + halfW > g.x - 2 && c.x - halfW < g.x + g.w + 2 &&
@@ -234,7 +227,7 @@
       const a = pts[i], b = pts[i + 1];
       const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
       if (len <= bestLen) continue;
-      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7]) {
         const c = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
         if (clearOf(c)) { best = c; bestLen = len; break; }
       }
@@ -242,68 +235,8 @@
     return best ?? pts[Math.floor(pts.length / 2)];
   }
 
-  // Anchor on the border of `g` facing `other`, offset along that border so
-  // parallel edges between the same pair do not overlap.
-  function anchors(g, other) {
-    const gc = { x: g.x + g.w / 2, y: g.y + g.h / 2 };
-    const oc = { x: other.x + other.w / 2, y: other.y + other.h / 2 };
-    const out = [];
-    if (oc.y > g.y + g.h) out.push({ x: gc.x, y: g.y + g.h });
-    if (oc.y < g.y) out.push({ x: gc.x, y: g.y });
-    if (oc.x > g.x + g.w) out.push({ x: g.x + g.w, y: gc.y });
-    if (oc.x < g.x) out.push({ x: g.x, y: gc.y });
-    if (!out.length) {              // overlapping — leave by the nearest side
-      out.push({ x: gc.x, y: g.y + g.h }, { x: g.x + g.w, y: gc.y });
-    }
-    return out;
-  }
-
-  // Where an arrow leaves `g` heading for `other`: the point on g's border that
-  // the straight line between centres would exit through. Using the true exit
-  // point means a fan of arrows leaves in the same angular order as its targets,
-  // which is the property that keeps them from crossing near the source.
-  function exitPoint(g, other) {
-    const c = { x: g.x + g.w / 2, y: g.y + g.h / 2 };
-    const o = { x: other.x + other.w / 2, y: other.y + other.h / 2 };
-    const dx = o.x - c.x, dy = o.y - c.y;
-    if (!dx && !dy) return { x: c.x, y: g.y };
-    const t = Math.min(dx ? (g.w / 2) / Math.abs(dx) : Infinity,
-                       dy ? (g.h / 2) / Math.abs(dy) : Infinity);
-    // snap onto the border so the anchor is a real lane coordinate
-    const p = { x: c.x + dx * t, y: c.y + dy * t };
-    const onV = Math.abs(Math.abs(p.x - c.x) - g.w / 2) < 0.5;
-    return onV ? { x: p.x, y: Math.round(p.y) } : { x: Math.round(p.x), y: p.y };
-  }
-
-  function elbow(a, b, ida, idb, labelLen = 0, avoid = [], ring = 0) {
-    const boxes = rects([ida, idb]);
-    const all = rects([]);
-    let pts = null;
-    const starts = [exitPoint(a, b), ...anchors(a, b)];
-    const ends = [exitPoint(b, a), ...anchors(b, a)];
-    for (const s of starts) {
-      for (const e of ends) {
-        const cand = solve(s, e, boxes, avoid, ring);
-        if (cand && (!pts || cand.length < pts.length)) pts = cand;
-      }
-      if (pts && pts.length <= 3) break;      // already as clean as it gets
-    }
-    // Nothing clear while avoiding the arrows already drawn — try again ignoring
-    // them rather than not drawing at all.
-    if (!pts && avoid.length) {
-      for (const s of starts) for (const e of ends) {
-        const cand = solve(s, e, boxes, [], ring);
-        if (cand && (!pts || cand.length < pts.length)) pts = cand;
-      }
-    }
-    if (!pts) {
-      const s = starts[0], e = ends[0];
-      pts = [s, { x: s.x, y: (s.y + e.y) / 2 }, { x: e.x, y: (s.y + e.y) / 2 }, e];
-    }
-    return { pts, label: placeLabel(pts, all, (labelLen * 5.4 + 12) / 2) };
-  }
-
-  // Round the two interior corners so the route reads as a path, not a staircase.
+  const R = 9;
+  // Round the interior corners so the route reads as a path, not a staircase.
   function roundPath(pts) {
     let d = `M${pts[0].x},${pts[0].y}`;
     for (let i = 1; i < pts.length - 1; i++) {
@@ -346,58 +279,70 @@
   let solo = null;                          // {a, b} of the single arrow shown
   function visibleEdges() {
     if (showAll) return D.edges;
-    if (!solo) return [];
-    return D.edges.filter(e => e.a === solo.a && e.b === solo.b);
+    if (solo) return D.edges.filter(e => e.a === solo.a && e.b === solo.b);
+    // Selecting a frame shows its connections again. The one-arrow restriction
+    // existed because the old router could not keep several lines legible; with
+    // channel routing each run sits in a reserved gap, so a fan reads cleanly.
+    if (selected) return D.edges.filter(e => e.a === selected || e.b === selected);
+    return [];
   }
   function drawEdges() {
     svg.replaceChildren(svg.querySelector('defs'));
-    const drawn = [];                       // segments of arrows already placed
-    // Angular order around the selected frame. Drawing a fan in the order its
-    // targets sit around the source is what makes a crossing-free result
-    // reachable at all; routing them in arbitrary order does not.
-    const pivot = selected ? geom[selected] : null;
-    const ordered = [...visibleEdges()].sort((p, q) => {
-      if (!pivot) return 0;
-      const ang = e => {
-        const o = geom[e.a === selected ? e.b : e.a];
-        if (!o) return 0;
-        return Math.atan2((o.y + o.h / 2) - (pivot.y + pivot.h / 2),
-                          (o.x + o.w / 2) - (pivot.x + pivot.w / 2));
-      };
-      return ang(p) - ang(q);
+    const list = visibleEdges();
+    if (!list.length) return;
+    const all = frames.filter(f => !f.classList.contains('gone')).map(f => geom[f.dataset.id]);
+
+    // Pass 1 — route every edge into a channel. Each SOURCE gets its own lane so
+    // two edges leaving the same frame never lie on top of each other.
+    const lanes = {};
+    const routed = [];
+    for (const e of list) {
+      if (!geom[e.a] || !geom[e.b]) continue;
+      if (byId[e.a].classList.contains('gone') || byId[e.b].classList.contains('gone')) continue;
+      const lane = (lanes[e.a] = (lanes[e.a] ?? -1) + 1);
+      const pts = routeEdge(geom[e.a], geom[e.b], e.a, e.b, lane);
+      if (pts) routed.push({ e, pts });
+    }
+
+    // Pass 2 — collect every vertical run, so a horizontal run crossing one can
+    // break over it instead of appearing to join it.
+    const crossers = [];
+    routed.forEach(({ pts }, i) => {
+      for (let k = 0; k < pts.length - 1; k++) {
+        const p = pts[k], q = pts[k + 1];
+        if (Math.abs(p.x - q.x) < 0.5 && Math.abs(p.y - q.y) > 1) {
+          crossers.push({ i, c: p.x, s0: Math.min(p.y, q.y), s1: Math.max(p.y, q.y) });
+        }
+      }
     });
-    let ringOf = 0;
-    for (const e of ordered) {
-      const A = byId[e.a], B = byId[e.b];
-      if (!A || !B) continue;
-      if (A.classList.contains('gone') || B.classList.contains('gone')) continue;
-      const { pts, label } = elbow(geom[e.a], geom[e.b], e.a, e.b,
-        (e.label || '').length, drawn, drawn.length ? ringOf++ : ringOf++);
-      for (let i = 0; i < pts.length - 1; i++) drawn.push([pts[i], pts[i + 1]]);
-      const d = roundPath(pts);
-      const dim = A.classList.contains('faded') || B.classList.contains('faded');
-      const g = el('g', { class: 'edge' + (dim ? ' faded' : ''), 'data-kind': e.kind });
-      // halo first so the line stays legible where it crosses a frame
-      g.appendChild(el('path', { d, class: 'halo' }));
+
+    // Pass 3 — draw.
+    routed.forEach(({ e, pts }, i) => {
+      const K = e.kind;
+      const dim = byId[e.a].classList.contains('faded') || byId[e.b].classList.contains('faded');
+      const g = el('g', { class: 'edge' + (dim ? ' faded' : ''), 'data-kind': K,
+                          'data-a': e.a, 'data-b': e.b });
+      const d = hopPath(pts, crossers.filter(v => v.i !== i));
+      g.appendChild(el('path', { d: roundPath(pts), class: 'halo' }));
       g.appendChild(el('path', {
-        d, class: 'line', stroke: `var(--k-${e.kind})`,
-        'marker-end': `url(#arrow-${e.kind})`,
+        d, class: 'line', stroke: `var(--k-${K})`, 'marker-end': `url(#arrow-${K})`,
       }));
       if (e.label) {
+        const label = placeLabel(pts, all, (e.label.length * 5.4 + 12) / 2);
         const w = e.label.length * 5.4 + 12;
         g.appendChild(el('rect', {
           x: label.x - w / 2, y: label.y - 9, width: w, height: 18, rx: 9,
-          class: 'elabel-bg', stroke: `var(--k-${e.kind})`,
+          class: 'elabel-bg', stroke: `var(--k-${K})`,
         }));
         const t = el('text', {
           x: label.x, y: label.y + 4, 'text-anchor': 'middle',
-          class: 'elabel', fill: `var(--k-${e.kind})`,
+          class: 'elabel', fill: `var(--k-${K})`,
         });
         t.textContent = e.label;
         g.appendChild(t);
       }
       svg.appendChild(g);
-    }
+    });
   }
 
   /* ---------------- pan + zoom ---------------- */

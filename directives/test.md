@@ -97,6 +97,35 @@ new value, the now-visible control), not merely that the screen loads.
   is not verification. If the gate hasn't passed yet, report status as
   *pending visual verification*, not done.
 
+## Assert the outcome, not the mechanism (owner ruling, 2026-08-01)
+The gate above says *render it*. This one says *what to assert once you have*.
+A test written from the implementation confirms the implementation. Four
+interaction bugs shipped green through a 27-assertion suite in one session
+because every assertion checked a mechanism the author had just built, and none
+checked what a person looking at the page would see.
+
+**Name the observable outcome first, then write the assertion against it.**
+"The legend opens", "no arrow crosses a box it doesn't connect", "no filename is
+shown until asked for" — not "the click handler fires", "the router returns a
+path", "the toggle sets a class".
+
+Three failure shapes, each caught in the wild rather than by the suite:
+- **Driving the app the way you built it.** `page.click('.rs')` by selector hits
+  an 18px handle a real hand cannot find; `mouse.down()` + `move()` never sends
+  a wheel or touch event at all. Exercise the **whole input surface** — pointer,
+  wheel/trackpad (`deltaX` with `deltaY` of 0 is a real gesture), touch
+  (multi-pointer), keyboard — not just the one path you coded against.
+- **Testing only the shipped state.** A layout check that runs on the default
+  arrangement proves nothing about the arrangement a reader makes. Perturb it —
+  drag, resize, collapse, filter — then re-assert.
+- **Asserting a proxy.** "The handler ran" / "the class is set" / "CI is green"
+  are not the outcome. If the assertion would still pass with the visible result
+  wrong, it is testing the wrong thing.
+
+When a human reports a defect the suite passed through, the fix is **two**
+commits' worth of work: the defect, and the assertion that would have caught it.
+Shipping only the first guarantees the next one in that class also ships.
+
 ## Required UI scenario patterns
 `ui-tester` emits these generic scenarios by default (beyond S1–S4) for every app;
 runnable source is the `NAV:`/`CTRL:` tests in `templates/ui-tests/tests/app.spec.js`:

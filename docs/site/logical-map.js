@@ -85,120 +85,219 @@
     }
   }
 
-  /* ---------------- edges: channel routing ---------------- */
-  // Ported from claude.insurance — js/keep/logic/relmap.js (orchestrate) and
-  // js/keep/views/relmap-view.js (relOrtho, relHopPath). That code already solved
-  // this properly and was unit-tested; four attempts at hand-rolling an obstacle
-  // -avoiding router here produced worse results. Reuse Before Rewrite
-  // (global.md) — applied late.
+  /* ---------------- edges: reserved-channel routing ---------------- */
+  // The technique is claude.insurance's — js/keep/logic/relmap.js (orchestrate)
+  // and js/keep/views/relmap-view.js (relOrtho, relHopPath): do not SEARCH for
+  // space to route through, RESERVE it, and keep every run axis-aligned so it
+  // either lies in reserved space or is a short approach to a frame's own edge.
   //
-  // The idea that makes it work: do not SEARCH for space, RESERVE it. Frames sit
-  // in rows, so the gap between two rows is a channel no frame occupies. Every
-  // run is axis-aligned and lives either in a row gap (crossing runs) or on a
-  // frame's own column (approach runs), which means a line can never pass behind
-  // a frame — structurally, not by obstacle testing.
-  const LANE = 14;                // spacing between two sources' parallel runs
+  // Their layout COMPUTES node positions, so the reserved space falls out of the
+  // layer/column grid for free. Ours lets the reader drag frames anywhere, so
+  // the channels are MEASURED instead of assumed:
+  //   • merge every frame's y-interval — the complement is the set of horizontal
+  //     BANDS that provably cross no frame at any x;
+  //   • merge the x-intervals of just the frames spanning a given y-range — the
+  //     complement is the set of vertical CORRIDORS through it.
+  // Every route is then `frame edge → band → corridor → band → frame edge`, so
+  // no segment can pass behind a frame — structurally, not by obstacle testing.
+  //
+  // Routes are still verified against every frame afterwards and a blocked
+  // candidate falls through to the next corridor, because a reader is free to
+  // stack two frames on top of each other and leave no free space at all.
+  //
+  // The default layout in build-logical-map.js is built to give this router real
+  // corridors: frames are laid out on a grid whose gutters line up across rows,
+  // so a long edge has an empty column to run down instead of the outer margin.
+  const PAD = 10;                 // clearance kept around every frame
+  const LANE = 26;                // spacing between parallel runs sharing a channel
+  const SEP = 26;                 // clearance needed before two runs may share a lane
   const HOP = 6;                  // half-width of the break where lines cross
 
-  // Rows, derived from the frames' current vertical order. Frames within ~40px of
-  // each other are one row, which is what the default layout builds and what a
-  // reader's rearrangement usually preserves.
-  function rowsOf(ids) {
-    const sorted = [...ids].sort((a, b) => geom[a].y - geom[b].y);
-    const rows = [];
-    for (const id of sorted) {
-      const last = rows[rows.length - 1];
-      if (last && Math.abs(geom[last[0]].y - geom[id].y) < 40) last.push(id);
-      else rows.push([id]);
+  const liveIds = () => frames.filter(f => !f.classList.contains('gone'))
+    .map(f => f.dataset.id);
+
+  // Complement of a set of intervals — the free space — plus a margin lane at
+  // each end, so an edge always has somewhere to go around the outside.
+  function gapsOf(intervals, margin) {
+    const merged = [];
+    for (const [s, e] of intervals.slice().sort((p, q) => p[0] - q[0])) {
+      const last = merged[merged.length - 1];
+      if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+      else merged.push([s, e]);
     }
-    return rows;
-  }
-  function rowIndex() {
-    const live = frames.filter(f => !f.classList.contains('gone')).map(f => f.dataset.id);
-    const rows = rowsOf(live);
-    const idx = {}, bounds = [];
-    rows.forEach((row, i) => {
-      row.forEach(id => { idx[id] = i; });
-      bounds.push({
-        top: Math.min(...row.map(id => geom[id].y)),
-        bottom: Math.max(...row.map(id => geom[id].y + geom[id].h)),
-      });
-    });
-    return { idx, bounds };
+    if (!merged.length) return [];
+    const out = [[merged[0][0] - margin, merged[0][0]]];
+    for (let i = 0; i < merged.length - 1; i++) out.push([merged[i][1], merged[i + 1][0]]);
+    out.push([merged[merged.length - 1][1], merged[merged.length - 1][1] + margin]);
+    return out.filter(z => z[1] - z[0] > 6);
   }
 
-  // The channel between row i and row i+1: the middle of the empty band between
-  // them. `lane` fans several edges apart so parallel runs never lie on top of
-  // one another (relmap-view's channelOf).
-  const channel = (bounds, i, lane) => {
-    const a = bounds[i], b = bounds[i + 1];
-    if (!a || !b) return (a || b).bottom + 30 + lane * LANE;
-    // The lane offset must never push the run out of the gap it belongs to —
-    // that is precisely how a "channel" route ends up inside the next row.
-    const lo = a.bottom + 8, hi = b.top - 8;
-    const mid = (a.bottom + b.top) / 2;
-    if (hi <= lo) return mid;
-    const spread = Math.min(LANE, (hi - lo) / 4);
-    return Math.min(hi, Math.max(lo, mid + lane * spread));
+  const bandsOf = ids =>
+    gapsOf(ids.map(id => [geom[id].y - PAD, geom[id].y + geom[id].h + PAD]), 140);
+
+  const corridorsOf = (ids, y0, y1) => {
+    const hit = ids.filter(id => geom[id].y + geom[id].h + PAD > y0 && geom[id].y - PAD < y1);
+    return hit.length
+      ? gapsOf(hit.map(id => [geom[id].x - PAD, geom[id].x + geom[id].w + PAD]), 170)
+      : null;
   };
 
-  // Orthogonal route from `a` down/up to `b`, bending through every intervening
-  // row gap — the dummy-waypoint idea from orchestrate(), reduced to what an
-  // 8-frame map needs: the bend column is the target's, so a long edge runs down
-  // its own column clear of whatever it passes.
-  function routeEdge(a, b, ida, idb, lane) {
-    const { idx, bounds } = rowIndex();
-    const ra = idx[ida], rb = idx[idb];
-    const ax = clampTo(geom[ida].x + geom[ida].w / 2 + lane * LANE, geom[ida]);
-    const bx = clampTo(geom[idb].x + geom[idb].w / 2 - lane * LANE, geom[idb]);
-    if (ra == null || rb == null) return null;
+  // A lane inside a channel: `n` lanes share it, this is the i-th, and none of
+  // them may leave it (relmap-view's channelOf).
+  const laneIn = (z, fan) => {
+    const mid = (z[0] + z[1]) / 2;
+    if (!fan || fan.n < 2) return mid;
+    const step = Math.min(LANE, (z[1] - z[0] - 16) / fan.n);
+    return Math.min(z[1] - 6, Math.max(z[0] + 6, mid + (fan.i - (fan.n - 1) / 2) * step));
+  };
 
-    const down = rb > ra;
-    const sameRow = ra === rb;
-    if (sameRow) {
-      // Dip into the gap just below the row and back, staying out of every card
-      // in it (relOrtho's same-band case).
-      const ch = bounds[ra].bottom + 26 + lane * LANE;
-      return [{ x: ax, y: a.y + a.h }, { x: ax, y: ch }, { x: bx, y: ch }, { x: bx, y: b.y + b.h }];
+  // Greedy interval colouring: two runs may share a lane when their extents do
+  // not overlap, so a band only ever holds as many lanes as it genuinely needs.
+  // Six runs stacked 15px apart read as one thick smear even when not one of
+  // them touches a frame — which is exactly what the map looked like before.
+  function lanesOf(items) {
+    const ends = [];                                   // ends[k] = lane k's last extent
+    const of = new Map();
+    for (const it of items.slice().sort((p, q) => p.s[0] - q.s[0])) {
+      let k = ends.findIndex(e => e <= it.s[0] - SEP);
+      if (k < 0) { k = ends.length; ends.push(-Infinity); }
+      ends[k] = Math.max(ends[k], it.s[1]);
+      of.set(it.i, k);
     }
-    // Adjacent rows: straight into the gap between them and across. The gap is
-    // empty by definition, so nothing is crossed.
-    if (Math.abs(rb - ra) === 1) {
-      const ch = channel(bounds, Math.min(ra, rb), lane);
-      return [{ x: ax, y: down ? a.y + a.h : a.y }, { x: ax, y: ch },
-              { x: bx, y: ch }, { x: bx, y: down ? b.y : b.y + b.h }];
-    }
-
-    // Spanning more than one row: the long vertical leg must not run down a
-    // column occupied by the rows in between. claude.insurance reserves those
-    // columns by laying its routing dummies out as real nodes with their own
-    // cross-axis width; our frames are wide and leave no such gap, so the
-    // reserved channel here is the MARGIN beside the whole arrangement. Pick the
-    // nearer side and fan by lane.
-    const spanned = frames
-      .filter(f => !f.classList.contains('gone'))
-      .map(f => f.dataset.id)
-      .filter(id => {
-        const r = idx[id];
-        return r != null && r > Math.min(ra, rb) && r < Math.max(ra, rb);
-      })
-      .map(id => geom[id]);
-    const box = spanned.length
-      ? { x0: Math.min(...spanned.map(g => g.x)), x1: Math.max(...spanned.map(g => g.x + g.w)) }
-      : { x0: Math.min(a.x, b.x), x1: Math.max(a.x + a.w, b.x + b.w) };
-    const mid = (ax + bx) / 2;
-    const goLeft = Math.abs(mid - box.x0) <= Math.abs(box.x1 - mid);
-    const col = goLeft ? box.x0 - 34 - lane * LANE : box.x1 + 34 + lane * LANE;
-    const chA = channel(bounds, down ? ra : ra - 1, lane);
-    const chB = channel(bounds, down ? rb - 1 : rb, lane);
-    return [
-      { x: ax, y: down ? a.y + a.h : a.y },
-      { x: ax, y: chA }, { x: col, y: chA },
-      { x: col, y: chB }, { x: bx, y: chB },
-      { x: bx, y: down ? b.y : b.y + b.h },
-    ];
+    return { of, n: Math.max(1, ends.length) };
   }
-  const clampTo = (x, g) => Math.min(g.x + g.w - 20, Math.max(g.x + 20, x));
+  // Where a run attaches to a frame's edge: runs leaving the same side are
+  // spread across its width rather than stacked on its centre.
+  const port = (g, fan) => {
+    const t = fan && fan.n > 1 ? (fan.i + 1) / (fan.n + 1) : 0.5;
+    return Math.min(g.x + g.w - 18, Math.max(g.x + 18, g.x + g.w * t));
+  };
+
+  // Exact, because every segment is axis-aligned: it is a rectangle overlap.
+  // The half-pixel inset is what stops a run that starts ON a frame's edge from
+  // counting as passing through it.
+  const hitsAny = (p, q, ids) => ids.some(id => {
+    const g = geom[id];
+    return Math.max(p.x, q.x) > g.x + 0.5 && Math.min(p.x, q.x) < g.x + g.w - 0.5
+        && Math.max(p.y, q.y) > g.y + 0.5 && Math.min(p.y, q.y) < g.y + g.h - 0.5;
+  });
+  const blocked = (pts, ids) => {
+    let n = 0;
+    for (let i = 0; i < pts.length - 1; i++) if (hitsAny(pts[i], pts[i + 1], ids)) n++;
+    return n;
+  };
+  // Drop repeated points AND interior points that bend nothing — a "corner"
+  // between two collinear runs still gets drawn as a rounded corner, which on a
+  // snapped route reads as a kink in a straight line.
+  function simplify(pts) {
+    const out = [];
+    for (const p of pts) {
+      const q = out[out.length - 1];
+      if (q && Math.abs(p.x - q.x) < 0.5 && Math.abs(p.y - q.y) < 0.5) continue;
+      out.push(p);
+    }
+    for (let i = out.length - 2; i > 0; i--) {
+      const [u, p, v] = [out[i - 1], out[i], out[i + 1]];
+      if ((Math.abs(u.x - p.x) < 0.5 && Math.abs(p.x - v.x) < 0.5)
+       || (Math.abs(u.y - p.y) < 0.5 && Math.abs(p.y - v.y) < 0.5)) out.splice(i, 1);
+    }
+    return out;
+  }
+
+  // `fan` is null on the probe pass (which only discovers WHICH channels the
+  // edge wants) and carries a {i,n} per channel on the draw pass.
+  function planEdge(ida, idb, fan) {
+    const ids = liveIds();
+    const a = geom[ida], b = geom[idb];
+    if (!a || !b) return null;
+    const bs = bandsOf(ids);
+    if (!bs.length) return null;
+
+    // Frames sitting level with each other get a short link between their
+    // FACING edges. Sending a sibling relationship up into the band above and
+    // back down again is both longer and harder to follow, and it spends a lane
+    // in the busiest channel on the map for no reason.
+    const over = [Math.max(a.y, b.y), Math.min(a.y + a.h, b.y + b.h)];
+    const toRight = b.x >= a.x + a.w + 30, toLeft = a.x >= b.x + b.w + 30;
+    if (over[1] - over[0] > 70 && (toRight || toLeft)) {
+      const y = laneIn(over, fan?.yA);
+      const pts = [{ x: toRight ? a.x + a.w : a.x, y }, { x: toRight ? b.x : b.x + b.w, y }];
+      if (!blocked(pts, ids)) {
+        return { pts, n: 0, keyA: `s${over.join(':')}`, keyB: `s${over.join(':')}`, keyC: null,
+                 exitSide: toRight ? 'R' : 'L', enterSide: toRight ? 'L' : 'R',
+                 spanA: [Math.min(pts[0].x, pts[1].x), Math.max(pts[0].x, pts[1].x)],
+                 spanB: null, spanC: null,
+                 headA: b.y + b.h / 2, headB: a.y + a.h / 2 };
+      }
+    }
+
+    const down = (b.y + b.h / 2) >= (a.y + a.h / 2);
+    const after = y => bs.find(z => z[0] >= y - 1) ?? bs[bs.length - 1];
+    const before = y => [...bs].reverse().find(z => z[1] <= y + 1) ?? bs[0];
+    const zA = down ? after(a.y + a.h) : before(a.y);
+    let zB = down ? before(b.y) : after(b.y + b.h);
+    // Neighbouring frames share one band — and so do two the reader has dragged
+    // level with each other, which is why this is a comparison and not a row index.
+    if (down ? zB[1] < zA[0] : zB[0] > zA[1]) zB = zA;
+    const same = zA === zB;
+
+    // Which side a run leaves and arrives on follows from the BAND it uses, not
+    // from which frame sits lower. When two frames in the same row have unequal
+    // heights the two disagree, and taking the row's answer sent the line in
+    // through the target's far side — i.e. straight down through the target.
+    const exitY = zA[0] >= a.y + a.h - 1 ? a.y + a.h : a.y;
+    const enterY = zB[0] >= b.y + b.h - 1 ? b.y + b.h : b.y;
+
+    const yA = laneIn(zA, fan?.yA);
+    const yB = same ? yA : laneIn(zB, fan?.yB);
+    const axs = [port(a, fan?.ax), a.x + 20, a.x + a.w - 20];
+    const bxs = [port(b, fan?.bx), b.x + 20, b.x + b.w - 20];
+    const mid = (axs[0] + bxs[0]) / 2;
+
+    let cands = [null];
+    if (!same) {
+      const cs = corridorsOf(ids, Math.min(yA, yB), Math.max(yA, yB));
+      if (cs && cs.length) {
+        cands = cs.slice().sort((p, q) =>
+          Math.abs((p[0] + p[1]) / 2 - mid) - Math.abs((q[0] + q[1]) / 2 - mid));
+      }
+    }
+
+    // A port that lands within a few px of the column it is about to join makes
+    // a visible 2px zigzag rather than a straight run. Snap it, but only onto a
+    // column that is still on the frame's own edge.
+    const snap = (v, to, g) => (Math.abs(v - to) < 12
+      && to > g.x + 12 && to < g.x + g.w - 12) ? to : v;
+
+    let best = null;
+    for (const c of cands) {
+      const cx = c ? laneIn(c, fan?.cx) : mid;
+      for (const ax0 of axs) for (const bx0 of bxs) {
+        const ax = same ? ax0 : snap(ax0, cx, a);
+        const bx = same ? snap(bx0, ax0, b) : snap(bx0, cx, b);
+        const pts = simplify(same
+          ? [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: bx, y: yA }, { x: bx, y: enterY }]
+          : [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: cx, y: yA },
+             { x: cx, y: yB }, { x: bx, y: yB }, { x: bx, y: enterY }]);
+        const n = blocked(pts, ids);
+        if (!best || n < best.n) {
+          const far = same ? bx : cx;
+          best = { pts, n, keyA: zA.join(':'), keyB: zB.join(':'),
+                   keyC: c ? c.join(':') : null,
+                   exitSide: exitY <= a.y + 1 ? 'T' : 'B',
+                   enterSide: enterY <= b.y + 1 ? 'T' : 'B',
+                   // extents the lane assignment needs: how far each run reaches
+                   spanA: [Math.min(ax, far), Math.max(ax, far)],
+                   spanB: same ? null : [Math.min(cx, bx), Math.max(cx, bx)],
+                   spanC: same ? null : [Math.min(yA, yB), Math.max(yA, yB)],
+                   headA: same ? (b.x + b.w / 2) : cx,
+                   headB: same ? (a.x + a.w / 2) : cx };
+        }
+        if (!n) return best;
+      }
+    }
+    return best;
+  }
 
   // Where two lines genuinely must cross, break the crossed one so it reads as a
   // crossing and not a join — the circuit-diagram convention, from relHopPath.
@@ -220,22 +319,51 @@
     return d;
   }
 
-  // Label goes on the longest run that is clear of every frame.
-  function placeLabel(pts, all, halfW) {
-    const clearOf = c => !all.some(g =>
-      c.x + halfW > g.x - 2 && c.x - halfW < g.x + g.w + 2 &&
-      c.y + 10 > g.y - 2 && c.y - 10 < g.y + g.h + 2);
-    let best = null, bestLen = -1;
+  // A label is part of its line, so it has to clear everything the line clears:
+  // the frames, the labels already placed, and the OTHER lines. It prefers the
+  // longest horizontal run, which by construction lies in a band.
+  //
+  // A run shorter than its own label cannot carry it — the side-to-side links
+  // are 90px wide and "sequences" is 60px, so sitting it on the line put it over
+  // both frames and the arrowhead. Those get the label set BESIDE the run.
+  function placeLabel(pts, all, halfW, taken = [], wires = []) {
+    const box = c => ({ x0: c.x - halfW - 3, x1: c.x + halfW + 3, y0: c.y - 11, y1: c.y + 11 });
+    const clearFrames = c => { const b = box(c);
+      return !all.some(g => b.x1 > g.x - 2 && b.x0 < g.x + g.w + 2
+                         && b.y1 > g.y - 2 && b.y0 < g.y + g.h + 2); };
+    const clearLabels = c => !taken.some(t =>
+      Math.abs(t.y - c.y) < 20 && Math.abs(t.x - c.x) < t.w / 2 + halfW + 8);
+    const clearWires = c => { const b = box(c);
+      return !wires.some(s => Math.max(s.a.x, s.b.x) > b.x0 && Math.min(s.a.x, s.b.x) < b.x1
+                           && Math.max(s.a.y, s.b.y) > b.y0 && Math.min(s.a.y, s.b.y) < b.y1); };
+
+    const segs = [];
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1];
-      const len = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
-      if (len <= bestLen) continue;
-      for (const t of [0.5, 0.4, 0.6, 0.3, 0.7]) {
-        const c = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-        if (clearOf(c)) { best = c; bestLen = len; break; }
+      segs.push({ a, b, flat: Math.abs(a.y - b.y) < 0.5 ? 1 : 0,
+                  len: Math.abs(b.x - a.x) + Math.abs(b.y - a.y) });
+    }
+    segs.sort((p, q) => (q.flat - p.flat) || (q.len - p.len));
+
+    const cands = [];
+    for (const s of segs) {
+      const tight = s.len < halfW * 2 + 34;
+      for (const t of [0.5, 0.35, 0.65, 0.22, 0.78, 0.14, 0.86]) {
+        const c = { x: s.a.x + (s.b.x - s.a.x) * t, y: s.a.y + (s.b.y - s.a.y) * t };
+        if (!tight) cands.push(c);
+        else if (s.flat) cands.push({ x: c.x, y: c.y - 17 }, { x: c.x, y: c.y + 17 });
+        else cands.push({ x: c.x - halfW - 10, y: c.y }, { x: c.x + halfW + 10, y: c.y });
       }
     }
-    return best ?? pts[Math.floor(pts.length / 2)];
+    // Relax one requirement at a time; a frame is the one thing a label may
+    // never sit on, because it hides the content the map exists to show.
+    for (const test of [c => clearFrames(c) && clearLabels(c) && clearWires(c),
+                        c => clearFrames(c) && clearLabels(c),
+                        clearFrames]) {
+      const hit = cands.find(test);
+      if (hit) return hit;
+    }
+    return pts[Math.floor(pts.length / 2)];
   }
 
   const R = 9;
@@ -262,21 +390,11 @@
     return e;
   };
 
-  // Arrows are drawn ON DEMAND, not all at once. Ten free-floating lines across
-  // eight draggable boxes is unreadable however well each one is routed — you
-  // cannot tell which arrow leaves which box. Every frame states its
+  // Arrows are drawn ON DEMAND, not all at once. Every frame states its
   // relationships in words (the .rel chips), so nothing is hidden; the lines
-  // exist to answer "show me THIS box's connections", and at most four are ever
-  // on screen at once. `showAll` restores the full graph for anyone who wants it.
-  // ONE arrow at a time.
-  //
-  // Crossing-free routing is not achievable in general once the reader fixes the
-  // node positions by dragging — so promising "no lines cross" while drawing six
-  // at once is a promise that cannot be kept, and three rounds of router work
-  // proved it. Drawing exactly one arrow makes it true by construction. The
-  // relationship chips on each frame are the control: click one, see precisely
-  // that connection. `showAll` remains as an explicit escape hatch, and is the
-  // only mode where lines may overlap.
+  // answer "show me THIS box's connections". `showAll` draws the whole graph
+  // for anyone who wants it — with reserved-channel routing that stays legible,
+  // which is what it did not do when each line hunted for its own space.
   let showAll = false;
   let selected = null;
   let solo = null;                          // {a, b} of the single arrow shown
@@ -291,23 +409,76 @@
   }
   function drawEdges() {
     svg.replaceChildren(svg.querySelector('defs'));
-    const list = visibleEdges();
+    const list = visibleEdges().filter(e =>
+      geom[e.a] && geom[e.b]
+      && !byId[e.a].classList.contains('gone') && !byId[e.b].classList.contains('gone'));
     if (!list.length) return;
     const all = frames.filter(f => !f.classList.contains('gone')).map(f => geom[f.dataset.id]);
 
-    // Pass 1 — route every edge into a channel. Each SOURCE gets its own lane so
-    // two edges leaving the same frame never lie on top of each other.
-    const lanes = {};
-    const routed = [];
-    for (const e of list) {
-      if (!geom[e.a] || !geom[e.b]) continue;
-      if (byId[e.a].classList.contains('gone') || byId[e.b].classList.contains('gone')) continue;
-      const lane = (lanes[e.a] = (lanes[e.a] ?? -1) + 1);
-      const pts = routeEdge(geom[e.a], geom[e.b], e.a, e.b, lane);
-      if (pts) routed.push({ e, pts });
+    // Pass 1 — probe: which band, corridor and frame edge does each edge want?
+    const probe = list.map(e => planEdge(e.a, e.b, null));
+    // Pass 2 — ports. Runs touching one side of a frame are ordered by WHERE
+    // each is heading and then spread across that side in the same order, so
+    // they come out already sorted and their horizontal runs never cross each
+    // other. This is Sugiyama's crossing-minimisation step, applied at the only
+    // place a hand-placed layout still leaves a free choice: in declaration
+    // order the same four arrows leaving `standards` crossed twice on the way.
+    //
+    // One group per SIDE, not per direction: `standards → mechanical` and
+    // `mechanical → standards` both touch mechanical's top edge, and grouping
+    // them separately gave each the middle of that edge — two lines running
+    // 96px of the way down the same column, in opposite directions.
+    const bySide = new Map();
+    probe.forEach((p, i) => {
+      if (!p) return;
+      const push = (k, m) => { const g = bySide.get(k) ?? []; g.push(m); bySide.set(k, g); };
+      push(`${list[i].a}${p.exitSide}`, { i, end: 'a', head: p.headA });
+      push(`${list[i].b}${p.enterSide}`, { i, end: 'b', head: p.headB });
+    });
+    const ports = new Map();
+    for (const [k, items] of bySide) {
+      items.slice().sort((x, y) => x.head - y.head)
+        .forEach((m, n) => ports.set(`${k}|${m.end}${m.i}`, { i: n, n: items.length }));
     }
+    const fanPort = (p, e, i) => ({
+      ax: ports.get(`${e.a}${p.exitSide}|a${i}`),
+      bx: ports.get(`${e.b}${p.enterSide}|b${i}`),
+    });
 
-    // Pass 2 — collect every vertical run, so a horizontal run crossing one can
+    // Pass 3 — lanes. Re-probe with the ports fixed to learn each run's true
+    // extent, then colour: runs whose extents do not overlap share one lane.
+    const spans = list.map((e, i) =>
+      probe[i] ? planEdge(e.a, e.b, fanPort(probe[i], e, i)) : null);
+    const lanes = new Map();
+    const chan = new Map();
+    const add = (k, i, s) => { const g = chan.get(k) ?? []; g.push({ i, s }); chan.set(k, g); };
+    spans.forEach((p, i) => {
+      if (!p) return;
+      add(`y${p.keyA}`, i, p.spanA);
+      if (p.keyB !== p.keyA && p.spanB) add(`y${p.keyB}`, i, p.spanB);
+      if (p.keyC && p.spanC) add(`c${p.keyC}`, i, p.spanC);
+    });
+    for (const [k, items] of chan) lanes.set(k, lanesOf(items));
+    const fanLane = (k, i) => {
+      const l = lanes.get(k);
+      return l && l.of.has(i) ? { i: l.of.get(i), n: l.n } : null;
+    };
+
+    // Pass 4 — route for real.
+    const routed = [];
+    list.forEach((e, i) => {
+      const p = spans[i] ?? probe[i];
+      if (!p) return;
+      const r = planEdge(e.a, e.b, {
+        ...fanPort(p, e, i),
+        yA: fanLane(`y${p.keyA}`, i),
+        yB: fanLane(`y${p.keyB}`, i),
+        cx: p.keyC ? fanLane(`c${p.keyC}`, i) : null,
+      });
+      if (r) routed.push({ e, pts: r.pts });
+    });
+
+    // Pass 5 — collect every vertical run, so a horizontal run crossing one can
     // break over it instead of appearing to join it.
     const crossers = [];
     routed.forEach(({ pts }, i) => {
@@ -319,7 +490,29 @@
       }
     });
 
-    // Pass 3 — draw.
+    // Pass 6 — labels, placed before anything is drawn so each one can be moved
+    // clear of the ones already down. Two labels stacked on each other is the
+    // same defect as two lines stacked on each other.
+    const segsOf = pts => pts.slice(0, -1).map((a, k) => ({ a, b: pts[k + 1] }));
+    const wires = routed.map(({ pts }) => segsOf(pts));
+    const placed = [];
+    const labels = routed.map(({ e, pts }, i) => {
+      if (!e.label) return null;
+      const w = e.label.length * 5.4 + 12;
+      const c = placeLabel(pts, all, w / 2, placed, wires.filter((_, k) => k !== i).flat());
+      placed.push({ x: c.x, y: c.y, w });
+      return { c, w };
+    });
+
+    // Pass 7 — draw the lines, then ALL the labels on top of them.
+    //
+    // Labels last, in their own layer, because the side-to-side links are 90px
+    // wide and their labels are 60px — there is nowhere in that gutter a label
+    // can go that is not also crossed by the corridor running through it. A
+    // label has an opaque background, so sitting over a line is fine and is the
+    // usual convention; being drawn UNDER the next edge's line is not, and that
+    // is what made "fills in" read as "fil in".
+    const layer = el('g', { class: 'elabels' });
     routed.forEach(({ e, pts }, i) => {
       const K = e.kind;
       const dim = byId[e.a].classList.contains('faded') || byId[e.b].classList.contains('faded');
@@ -330,22 +523,24 @@
       g.appendChild(el('path', {
         d, class: 'line', stroke: `var(--k-${K})`, 'marker-end': `url(#arrow-${K})`,
       }));
-      if (e.label) {
-        const label = placeLabel(pts, all, (e.label.length * 5.4 + 12) / 2);
-        const w = e.label.length * 5.4 + 12;
-        g.appendChild(el('rect', {
-          x: label.x - w / 2, y: label.y - 9, width: w, height: 18, rx: 9,
-          class: 'elabel-bg', stroke: `var(--k-${K})`,
-        }));
-        const t = el('text', {
-          x: label.x, y: label.y + 4, 'text-anchor': 'middle',
-          class: 'elabel', fill: `var(--k-${K})`,
-        });
-        t.textContent = e.label;
-        g.appendChild(t);
-      }
       svg.appendChild(g);
+      if (!labels[i]) return;
+      const { c, w } = labels[i];
+      const lg = el('g', { class: 'elab' + (dim ? ' faded' : ''), 'data-kind': K,
+                           'data-a': e.a, 'data-b': e.b });
+      lg.appendChild(el('rect', {
+        x: c.x - w / 2, y: c.y - 9, width: w, height: 18, rx: 9,
+        class: 'elabel-bg', stroke: `var(--k-${K})`,
+      }));
+      const t = el('text', {
+        x: c.x, y: c.y + 4, 'text-anchor': 'middle',
+        class: 'elabel', fill: `var(--k-${K})`,
+      });
+      t.textContent = e.label;
+      lg.appendChild(t);
+      layer.appendChild(lg);
     });
+    svg.appendChild(layer);
   }
 
   /* ---------------- pan + zoom ---------------- */

@@ -25,17 +25,31 @@ const fail = m => { console.error(`FAIL: ${m}`); failed = true; };
 /* ------------------------------------------------------------------ config */
 // Default geometry in canvas space. Readers drag and resize from here; their
 // layout is stored per-browser, so these are only the starting positions.
+//
+// This is a GRID, not a pile of boxes, and the gutters are the point. The
+// router in logical-map.js routes only through measured free space, so the
+// layout's job is to leave it some: rows sit 150px apart (the horizontal bands
+// the arrows run along) and the column gutters at 380–470 and 1150–1240 line up
+// across every row they pass through (the vertical corridors). That 1150–1240
+// gutter is clear through rows 1, 2 and 3, which is what lets `self → standard`
+// cross the whole diagram without touching a frame. Widen a frame into a gutter
+// and its edges start going round the outside instead.
+//
+//        40        380 470              1150 1240        1600
+//   40   ├──────────────── standard ─────────────────────────┤
+//  340   ├ orchestr ┤    ├─ behavioral ──┤    ├─ artifact ───┤
+//  690   ├───────── mechanical ──────────┤    ├─ reference ──┤
+// 1060   ├───────── external ────────────┤
+// 1360   ├──────────────── self ─────────────────────────────┤
 const FRAMES = [
-  { id: 'standard',     x: 40,   y: 40,  w: 1560, h: 138 },
-  { id: 'orchestrator', x: 40,   y: 226, w: 320,  h: 168 },
-  { id: 'behavioral',   x: 396,  y: 226, w: 812,  h: 168 },
-  { id: 'artifact',     x: 1244, y: 226, w: 356,  h: 168 },
-  { id: 'mechanical',   x: 40,   y: 442, w: 1168, h: 212 },
-  { id: 'reference',    x: 1244, y: 442, w: 356,  h: 212 },
-  // Deliberately NOT full width: the column to its right is the only lane that
-  // lets an edge cross from the bottom row to the top one.
-  { id: 'external',     x: 40,   y: 702, w: 1168, h: 126 },
-  { id: 'self',         x: 40,   y: 876, w: 1560, h: 178 },
+  { id: 'standard',     x: 40,   y: 40,   w: 1560, h: 150 },
+  { id: 'orchestrator', x: 40,   y: 340,  w: 340,  h: 200 },
+  { id: 'behavioral',   x: 470,  y: 340,  w: 680,  h: 200 },
+  { id: 'artifact',     x: 1240, y: 340,  w: 360,  h: 200 },
+  { id: 'mechanical',   x: 40,   y: 690,  w: 1110, h: 220 },
+  { id: 'reference',    x: 1240, y: 690,  w: 360,  h: 220 },
+  { id: 'external',     x: 40,   y: 1060, w: 1110, h: 150 },
+  { id: 'self',         x: 40,   y: 1360, w: 1560, h: 190 },
 ];
 
 // Relationship types. Colour carries the KIND, so a reader can follow one kind
@@ -313,7 +327,7 @@ const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
   .edge .line{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
   .edge[data-kind=exp] .line,.edge[data-kind=del] .line,.edge[data-kind=val] .line{
     stroke-dasharray:7 5}
-  .edge.faded{opacity:.15}
+  .edge.faded,.elab.faded{opacity:.15}
   .elabel-bg{fill:var(--surface);stroke-width:1}
   .elabel{font:italic 600 10.5px/1 Inter,system-ui,sans-serif}
 

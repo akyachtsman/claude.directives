@@ -127,10 +127,22 @@ A directive repo must pass its own CI before it can be trusted downstream.
   relationships in words, nothing is drawn at rest, selecting a frame draws only
   its own connections, and **no arrow crosses a frame it does not connect** —
   verified on the shipped layout AND after frames are dragged around, which is
-  the case the earlier router had never been exercised against. The router itself
-  is **ported from `claude.insurance`** — its `relmap.js` and `relmap-view.js`
-  under js/keep: channel routing that reserves the row gaps and margins rather
-  than searching for free space, with hop-breaks where lines cross. The map opens
+  the case the earlier router had never been exercised against. It also asserts
+  the invariants a human had to report because nothing measured them: **no two
+  arrows run alongside each other** (measured as the length of one line lying
+  within 11px of another — a crossing costs a few px, a bundle costs its whole
+  span), no two edge labels overlap, labels draw above every line, and frames
+  sitting level with each other are linked straight across rather than detouring
+  through the band above. The router is **ported from `claude.insurance`** — its
+  `relmap.js` and `relmap-view.js` under js/keep: reserve space rather than
+  search for it, with hop-breaks where lines cross. Their layout computes node
+  positions; ours lets the reader drag, so the channels are MEASURED from the
+  frames' own extents — the complement of the y-intervals gives the horizontal
+  bands, the complement of the x-intervals over a y-range gives the vertical
+  corridors — and ports are ordered by where each run is heading, which is
+  Sugiyama's crossing-minimisation step applied where a hand-placed layout still
+  leaves a choice. `build-logical-map.js`'s default geometry is a GRID whose
+  gutters line up across rows precisely so those corridors exist. The map opens
   **collapsed** — each frame leads with its meaning and a delivery-mix bar, and its
   files appear on request (search opens the frame holding a hit), because 109
   filenames shown at once is a reference table rather than a map.
@@ -187,6 +199,7 @@ diff .claude/settings.json templates/claude-settings.json   # paired files (also
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
+#   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json or the map, regenerate first: node .github/scripts/build-logical-map.js
 ```
 Confirm `git status` shows no unintended changes. If any check fails, fix it

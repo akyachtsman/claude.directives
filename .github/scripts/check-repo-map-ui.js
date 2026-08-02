@@ -17,7 +17,11 @@ const MAP = 'file://' + (process.env.REPO_MAP_FILE
 const fail = m => { console.error('FAIL: ' + m); process.exitCode = 1; };
 const ok = m => console.log('OK: ' + m);
 
-const browser = await chromium.launch();
+// CI runs `npx playwright install chromium` first. Sandboxed dev environments
+// often ship a pinned Chromium instead, which the bundled version will not find
+// — CHROMIUM_PATH points the run at it so the gate is runnable before pushing.
+const browser = await chromium.launch(
+  process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1500, height: 950 }, hasTouch: true });
 const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -277,6 +281,89 @@ if (drawnAll < 10) fail(`"all arrows" drew ${drawnAll}`);
 const behind = await throughFrames();
 if (behind.length) fail(`a run passes behind a frame: ${behind.join(' | ')}`);
 else ok(`all ${drawnAll} arrows route in gaps and margins — none behind a frame`);
+
+// "Arrows are not very distinct and apart" — the defect a human reported while
+// every assertion above was green. Nothing here measured whether two lines run
+// ALONGSIDE each other, only whether they hit a frame, so six near-parallel runs
+// bundled 11px apart in one band passed as clean routing.
+//
+// A genuine crossing is two lines sharing a point or two; a bundle is two lines
+// sharing hundreds. So measure the LENGTH of each edge that runs within `NEAR`
+// of another edge: a crossing contributes a few px, a parallel run contributes
+// its whole span.
+const shadowed = (near = 11, budget = 46) => page.evaluate(([near, budget]) => {
+  const sample = p => {
+    const L = p.getTotalLength(), step = 4, out = [];
+    for (let d = 0; d <= L; d += step) { const q = p.getPointAtLength(d); out.push([q.x, q.y]); }
+    return { pts: out, step };
+  };
+  const es = [...document.querySelectorAll('.edge')]
+    .map(g => ({ id: `${g.dataset.a}->${g.dataset.b}`, ...sample(g.querySelector('.line')) }));
+  const out = [];
+  for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
+    let n = 0;
+    for (const [x1, y1] of es[i].pts) {
+      for (const [x2, y2] of es[j].pts) {
+        if (Math.abs(x1 - x2) < near && Math.abs(y1 - y2) < near
+            && Math.hypot(x1 - x2, y1 - y2) < near) { n++; break; }
+      }
+    }
+    const len = n * es[i].step;
+    if (len > budget) out.push(`${es[i].id} runs ${Math.round(len)}px alongside ${es[j].id}`);
+  }
+  return out;
+}, [near, budget]);
+
+const bundled = await shadowed();
+if (bundled.length) fail(`lines are not distinct and apart: ${bundled.join(' | ')}`);
+else ok('no two arrows run alongside each other — every near-approach is a crossing');
+
+// Labels are part of the line. Two stacked on the same spot is the same defect
+// as two lines stacked on the same spot, and looked exactly like it on screen.
+const labelClashes = await page.evaluate(() => {
+  const r = [...document.querySelectorAll('.elabel-bg')].map(e => ({
+    x: +e.getAttribute('x'), y: +e.getAttribute('y'),
+    w: +e.getAttribute('width'), h: +e.getAttribute('height'),
+    t: e.parentNode.querySelector('.elabel')?.textContent,
+  }));
+  const out = [];
+  for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) {
+    if (r[i].x < r[j].x + r[j].w && r[i].x + r[i].w > r[j].x
+        && r[i].y < r[j].y + r[j].h && r[i].y + r[i].h > r[j].y) {
+      out.push(`"${r[i].t}" over "${r[j].t}"`);
+    }
+  }
+  return out;
+});
+if (labelClashes.length) fail(`edge labels overlap: ${labelClashes.join(', ')}`);
+else ok('no two edge labels overlap');
+
+// A label CAN sit over another line — a 90px gutter has nowhere else to put a
+// 60px label — and that is fine because the label is opaque. What is not fine
+// is a later edge drawing over an earlier edge's label, which is what turned
+// "fills in" into "fil in". Labels live in their own layer, drawn last.
+const zorder = await page.evaluate(() => {
+  const kids = [...document.getElementById('edges').children];
+  const lastLine = kids.map(k => k.classList.contains('edge')).lastIndexOf(true);
+  const firstLabel = kids.findIndex(k => k.classList.contains('elabels'));
+  return { lastLine, firstLabel, labels: document.querySelectorAll('.elab').length };
+});
+if (zorder.labels < 8 || zorder.firstLabel < 0 || zorder.firstLabel < zorder.lastLine) {
+  fail(`edge labels are not drawn above every line (${JSON.stringify(zorder)})`);
+} else ok(`all ${zorder.labels} edge labels draw above every line`);
+
+// Frames that sit level with each other are linked side-to-side. Routing a
+// sibling relationship up into the band above and back down again is longer,
+// harder to follow, and burns a lane in the busiest channel on the map.
+// Counted on the halo, which is the unbroken route — the visible line carries
+// hop-breaks, so its command count says nothing about how many corners it turns.
+const siblings = await page.$$eval('.edge', gs => gs
+  .filter(g => ['orchestrator->behavioral', 'behavioral->artifact']
+    .includes(`${g.dataset.a}->${g.dataset.b}`))
+  .map(g => (g.querySelector('.halo').getAttribute('d').match(/Q/g) || []).length));
+if (siblings.length !== 2 || siblings.some(n => n > 0)) {
+  fail(`a side-by-side link detours instead of going straight across (${siblings})`);
+} else ok(`${siblings.length} side-by-side links go straight across`);
 
 // Where lines genuinely cross, the crossed one breaks so it reads as a crossing
 // rather than a join (the circuit-diagram convention, ported from relHopPath).

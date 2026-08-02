@@ -172,6 +172,11 @@
     const t = fan && fan.n > 1 ? (fan.i + 1) / (fan.n + 1) : 0.5;
     return Math.min(g.x + g.w - 18, Math.max(g.x + 18, g.x + g.w * t));
   };
+  // The same, down a frame's left or right edge.
+  const portY = (g, fan) => {
+    const t = fan && fan.n > 1 ? (fan.i + 1) / (fan.n + 1) : 0.5;
+    return Math.min(g.y + g.h - 16, Math.max(g.y + 16, g.y + g.h * t));
+  };
 
   // Exact, because every segment is axis-aligned: it is a rectangle overlap.
   // The half-pixel inset is what stops a run that starts ON a frame's edge from
@@ -213,55 +218,67 @@
     const bs = bandsOf(ids);
     if (!bs.length) return null;
 
-    // Frames sitting level with each other get a short link between their
-    // FACING edges. Sending a sibling relationship up into the band above and
-    // back down again is both longer and harder to follow, and it spends a lane
-    // in the busiest channel on the map for no reason.
+    // Frames standing beside each other are linked through their FACING edges —
+    // the whole band machinery below is for frames stacked ABOVE one another,
+    // and applying it sideways sends the line up into whichever band happens to
+    // be nearest. When the two are only slightly offset that band belongs to a
+    // third frame, which is how a sibling link ended up running the whole way
+    // round `standards` to reach the box immediately to its right.
+    //
+    // Dead level → one straight run. Offset → step through the free column in
+    // the gap between them, which is the same reserved-channel idea rotated 90°.
     const over = [Math.max(a.y, b.y), Math.min(a.y + a.h, b.y + b.h)];
     const toRight = b.x >= a.x + a.w + 30, toLeft = a.x >= b.x + b.w + 30;
-    if (over[1] - over[0] > 70 && (toRight || toLeft)) {
-      const y = laneIn(over, fan?.yA);
-      const pts = [{ x: toRight ? a.x + a.w : a.x, y }, { x: toRight ? b.x : b.x + b.w, y }];
-      if (!blocked(pts, ids)) {
-        return { pts, n: 0, keyA: `s${over.join(':')}`, keyB: `s${over.join(':')}`, keyC: null,
+    if (toRight || toLeft) {
+      const level = over[1] - over[0] > 50;
+      const yA = level ? laneIn(over, fan?.yA) : portY(a, fan?.ax);
+      const yB = level ? yA : portY(b, fan?.bx);
+      const exitX = toRight ? a.x + a.w : a.x;
+      const enterX = toRight ? b.x : b.x + b.w;
+      const lo = Math.min(exitX, enterX), hi = Math.max(exitX, enterX);
+      // Only a column that lies in the gap BETWEEN them is a shortcut; anything
+      // else is the long way round, which the band router below already covers.
+      const cols = (corridorsOf(ids, Math.min(yA, yB), Math.max(yA, yB)) ?? [])
+        .filter(z => z[1] > lo && z[0] < hi)
+        .sort((p, q) => (q[1] - q[0]) - (p[1] - p[0]));
+      for (const c of (level ? [null, ...cols] : cols)) {
+        const cx = c ? Math.min(hi - 6, Math.max(lo + 6, laneIn(c, fan?.cx))) : null;
+        const pts = simplify(cx == null
+          ? [{ x: exitX, y: yA }, { x: enterX, y: yB }]
+          : [{ x: exitX, y: yA }, { x: cx, y: yA }, { x: cx, y: yB }, { x: enterX, y: yB }]);
+        if (blocked(pts, ids)) continue;
+        return { pts, n: 0, keyA: `s${over.join(':')}`, keyB: `s${over.join(':')}`,
+                 keyC: c ? c.join(':') : null,
                  exitSide: toRight ? 'R' : 'L', enterSide: toRight ? 'L' : 'R',
-                 spanA: [Math.min(pts[0].x, pts[1].x), Math.max(pts[0].x, pts[1].x)],
-                 spanB: null, spanC: null,
+                 spanA: [lo, hi], spanB: null,
+                 spanC: c ? [Math.min(yA, yB), Math.max(yA, yB)] : null,
                  headA: b.y + b.h / 2, headB: a.y + a.h / 2 };
       }
     }
 
-    const down = (b.y + b.h / 2) >= (a.y + a.h / 2);
-    const after = y => bs.find(z => z[0] >= y - 1) ?? bs[bs.length - 1];
-    const before = y => [...bs].reverse().find(z => z[1] <= y + 1) ?? bs[0];
-    const zA = down ? after(a.y + a.h) : before(a.y);
-    let zB = down ? before(b.y) : after(b.y + b.h);
-    // Neighbouring frames share one band — and so do two the reader has dragged
-    // level with each other, which is why this is a comparison and not a row index.
-    if (down ? zB[1] < zA[0] : zB[0] > zA[1]) zB = zA;
-    const same = zA === zB;
-
-    // Which side a run leaves and arrives on follows from the BAND it uses, not
-    // from which frame sits lower. When two frames in the same row have unequal
-    // heights the two disagree, and taking the row's answer sent the line in
-    // through the target's far side — i.e. straight down through the target.
-    const exitY = zA[0] >= a.y + a.h - 1 ? a.y + a.h : a.y;
-    const enterY = zB[0] >= b.y + b.h - 1 ? b.y + b.h : b.y;
-
-    const yA = laneIn(zA, fan?.yA);
-    const yB = same ? yA : laneIn(zB, fan?.yB);
-    const axs = [port(a, fan?.ax), a.x + 20, a.x + a.w - 20];
-    const bxs = [port(b, fan?.bx), b.x + 20, b.x + b.w - 20];
-    const mid = (axs[0] + bxs[0]) / 2;
-
-    let cands = [null];
-    if (!same) {
-      const cs = corridorsOf(ids, Math.min(yA, yB), Math.max(yA, yB));
-      if (cs && cs.length) {
-        cands = cs.slice().sort((p, q) =>
-          Math.abs((p[0] + p[1]) / 2 - mid) - Math.abs((q[0] + q[1]) / 2 - mid));
-      }
+    // Which band each end uses is a SEARCH, not a deduction. Taking the band
+    // adjacent to each frame is right for a tidy grid, but two frames the reader
+    // has left overlapping vertically share one merged block and have no band
+    // between them at all — the single candidate then routed all the way round
+    // below everything and came back up through whatever stood in the way.
+    //
+    // Rank every pair of bands by the vertical distance the route would travel,
+    // which automatically prefers a band lying BETWEEN the two frames over one
+    // beyond either of them, then take the first pair that routes clean.
+    //
+    // Which side a run leaves and arrives on follows from the band it uses, not
+    // from which frame sits lower. When two frames in a row have unequal heights
+    // the two disagree, and taking the row's answer sent the line in through the
+    // target's far side — i.e. straight down through the target.
+    const exitOn = z => (z[0] >= a.y + a.h - 1 ? a.y + a.h : a.y);
+    const enterOn = z => (z[0] >= b.y + b.h - 1 ? b.y + b.h : b.y);
+    const midOf = z => (z[0] + z[1]) / 2;
+    const pairs = [];
+    for (const zA of bs) for (const zB of bs) {
+      pairs.push({ zA, zB, cost: Math.abs(exitOn(zA) - midOf(zA))
+        + Math.abs(midOf(zA) - midOf(zB)) + Math.abs(midOf(zB) - enterOn(zB)) });
     }
+    pairs.sort((p, q) => p.cost - q.cost);
 
     // A port that lands within a few px of the column it is about to join makes
     // a visible 2px zigzag rather than a straight run. Snap it, but only onto a
@@ -270,30 +287,49 @@
       && to > g.x + 12 && to < g.x + g.w - 12) ? to : v;
 
     let best = null;
-    for (const c of cands) {
-      const cx = c ? laneIn(c, fan?.cx) : mid;
-      for (const ax0 of axs) for (const bx0 of bxs) {
-        const ax = same ? ax0 : snap(ax0, cx, a);
-        const bx = same ? snap(bx0, ax0, b) : snap(bx0, cx, b);
-        const pts = simplify(same
-          ? [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: bx, y: yA }, { x: bx, y: enterY }]
-          : [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: cx, y: yA },
-             { x: cx, y: yB }, { x: bx, y: yB }, { x: bx, y: enterY }]);
-        const n = blocked(pts, ids);
-        if (!best || n < best.n) {
-          const far = same ? bx : cx;
-          best = { pts, n, keyA: zA.join(':'), keyB: zB.join(':'),
-                   keyC: c ? c.join(':') : null,
-                   exitSide: exitY <= a.y + 1 ? 'T' : 'B',
-                   enterSide: enterY <= b.y + 1 ? 'T' : 'B',
-                   // extents the lane assignment needs: how far each run reaches
-                   spanA: [Math.min(ax, far), Math.max(ax, far)],
-                   spanB: same ? null : [Math.min(cx, bx), Math.max(cx, bx)],
-                   spanC: same ? null : [Math.min(yA, yB), Math.max(yA, yB)],
-                   headA: same ? (b.x + b.w / 2) : cx,
-                   headB: same ? (a.x + a.w / 2) : cx };
+    for (const { zA, zB } of pairs.slice(0, 12)) {
+      const same = zA === zB;
+      const exitY = exitOn(zA), enterY = enterOn(zB);
+      const yA = laneIn(zA, fan?.yA);
+      const yB = same ? yA : laneIn(zB, fan?.yB);
+      const axs = [port(a, fan?.ax), a.x + 20, a.x + a.w - 20];
+      const bxs = [port(b, fan?.bx), b.x + 20, b.x + b.w - 20];
+      const mid = (axs[0] + bxs[0]) / 2;
+
+      let cands = [null];
+      if (!same) {
+        const cs = corridorsOf(ids, Math.min(yA, yB), Math.max(yA, yB));
+        if (cs && cs.length) {
+          cands = cs.slice().sort((p, q) =>
+            Math.abs(midOf(p) - mid) - Math.abs(midOf(q) - mid));
         }
-        if (!n) return best;
+      }
+
+      for (const c of cands) {
+        const cx = c ? laneIn(c, fan?.cx) : mid;
+        for (const ax0 of axs) for (const bx0 of bxs) {
+          const ax = same ? ax0 : snap(ax0, cx, a);
+          const bx = same ? snap(bx0, ax0, b) : snap(bx0, cx, b);
+          const pts = simplify(same
+            ? [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: bx, y: yA }, { x: bx, y: enterY }]
+            : [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: cx, y: yA },
+               { x: cx, y: yB }, { x: bx, y: yB }, { x: bx, y: enterY }]);
+          const n = blocked(pts, ids);
+          if (!best || n < best.n) {
+            const far = same ? bx : cx;
+            best = { pts, n, keyA: zA.join(':'), keyB: zB.join(':'),
+                     keyC: c ? c.join(':') : null,
+                     exitSide: exitY <= a.y + 1 ? 'T' : 'B',
+                     enterSide: enterY <= b.y + 1 ? 'T' : 'B',
+                     // extents the lane assignment needs: how far each run reaches
+                     spanA: [Math.min(ax, far), Math.max(ax, far)],
+                     spanB: same ? null : [Math.min(cx, bx), Math.max(cx, bx)],
+                     spanC: same ? null : [Math.min(yA, yB), Math.max(yA, yB)],
+                     headA: same ? (b.x + b.w / 2) : cx,
+                     headB: same ? (a.x + a.w / 2) : cx };
+          }
+          if (!n) return best;
+        }
       }
     }
     return best;

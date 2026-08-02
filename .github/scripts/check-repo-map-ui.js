@@ -595,6 +595,70 @@ const sel = await page.evaluate(() => String(window.getSelection()));
 if (sel !== '') fail(`dragging selected text: ${JSON.stringify(sel)}`);
 else ok('dragging the canvas selects no text');
 
+/* ------------------------------------------- a reader's own arrangement */
+// Reported by a human looking at the live page: the link between two boxes
+// standing side by side ran the whole way round a third box to reach its
+// neighbour. Two frames offset vertically fell under the side-link threshold,
+// so the edge went to the band router — and the nearest band was the one ABOVE
+// the frame in between. The scripted drags above never produced that shape.
+//
+// This runs last: it replaces the saved layout and reloads, which would strand
+// every assertion before it.
+await page.evaluate(() => localStorage.setItem('logical-map.layout.v2', JSON.stringify({
+  standards:    { x: 90,   y: 60,   w: 400,  h: 260 },   // between the two below
+  behavioral:   { x: 620,  y: 100,  w: 480,  h: 420 },
+  orchestrator: { x: 10,   y: 490,  w: 340,  h: 200 },   // only ~30px of overlap
+  artifact:     { x: 1240, y: 100,  w: 360,  h: 200 },
+  mechanical:   { x: 90,   y: 780,  w: 900,  h: 220 },
+  reference:    { x: 1240, y: 400,  w: 360,  h: 220 },
+  external:     { x: 90,   y: 1100, w: 900,  h: 150 },
+  self:         { x: 90,   y: 1400, w: 1200, h: 190 },
+})));
+await page.goto(MAP);
+await page.waitForTimeout(400);
+await page.click('#t_edge');
+await page.waitForTimeout(400);
+
+const reader = await page.evaluate(() => {
+  const fr = Object.fromEntries([...document.querySelectorAll('.fr')].map(f => [f.dataset.id, {
+    x: parseFloat(f.style.left), y: parseFloat(f.style.top),
+    w: parseFloat(f.style.width), h: parseFloat(f.style.height) }]));
+  const through = [];
+  let detour = null;
+  for (const g of document.querySelectorAll('.edge')) {
+    const p = g.querySelector('.line'), L = p.getTotalLength();
+    const hit = new Set();
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i <= 300; i++) {
+      const q = p.getPointAtLength(L * i / 300);
+      x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x);
+      y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+      for (const [id, f] of Object.entries(fr)) {
+        if (id === g.dataset.a || id === g.dataset.b) continue;
+        if (q.x > f.x + 2 && q.x < f.x + f.w - 2 && q.y > f.y + 2 && q.y < f.y + f.h - 2) hit.add(id);
+      }
+    }
+    if (hit.size) through.push(`${g.dataset.a}->${g.dataset.b} thru ${[...hit].join(',')}`);
+    if (g.dataset.a === 'orchestrator' && g.dataset.b === 'behavioral') {
+      const A = fr.orchestrator, B = fr.behavioral;
+      detour = { x0, x1, y0, y1,
+                 bx0: Math.min(A.x, B.x) - 4, bx1: Math.max(A.x + A.w, B.x + B.w) + 4,
+                 by0: Math.min(A.y, B.y) - 4, by1: Math.max(A.y + A.h, B.y + B.h) + 4 };
+    }
+  }
+  return { through, detour };
+});
+if (reader.through.length) {
+  fail(`in a reader's own arrangement, edges cross frames: ${reader.through.join(' | ')}`);
+} else ok("no edge crosses a frame in a reader's own arrangement");
+
+const d = reader.detour;
+if (!d) fail('the side-by-side edge was not drawn in the reader arrangement');
+else if (d.x0 < d.bx0 || d.x1 > d.bx1 || d.y0 < d.by0 || d.y1 > d.by1) {
+  fail('a link between neighbouring frames leaves their own bounding box — '
+     + `it is going round something (${JSON.stringify(d)})`);
+} else ok('offset neighbours are linked through the gap between them, not around');
+
 if (errors.length) fail('console/page errors: ' + errors.join(' | '));
 else ok('no console or page errors');
 

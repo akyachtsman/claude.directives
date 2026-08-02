@@ -604,8 +604,25 @@ else ok('dragging the canvas selects no text');
 //
 // This runs last: it replaces the saved layout and reloads, which would strand
 // every assertion before it.
-await page.evaluate(() => localStorage.setItem('logical-map.layout.v2', JSON.stringify({
-  standards:    { x: 90,   y: 60,   w: 400,  h: 260 },   // between the two below
+// The frame ids are singular — `standard`, not `standards`. A key that matches
+// no frame is silently dropped on load, so a typo here does not fail: it just
+// quietly leaves that frame at its default position and tests something else.
+const arrange = async layout => {
+  await page.evaluate(l => localStorage.setItem('logical-map.layout.v2', JSON.stringify(l)), layout);
+  await page.goto(MAP);
+  await page.waitForTimeout(400);
+  const placed = await page.$$eval('.fr', fs => Object.fromEntries(
+    fs.map(f => [f.dataset.id, parseFloat(f.style.top)])));
+  for (const [id, g] of Object.entries(layout)) {
+    if (placed[id] === undefined) fail(`test layout names a frame that does not exist: ${id}`);
+    else if (Math.abs(placed[id] - g.y) > 1) fail(`test layout for ${id} was not applied`);
+  }
+  await page.click('#t_edge');
+  await page.waitForTimeout(400);
+};
+
+await arrange({
+  standard:     { x: 90,   y: 60,   w: 400,  h: 260 },   // between the two below
   behavioral:   { x: 620,  y: 100,  w: 480,  h: 420 },
   orchestrator: { x: 10,   y: 490,  w: 340,  h: 200 },   // only ~30px of overlap
   artifact:     { x: 1240, y: 100,  w: 360,  h: 200 },
@@ -613,11 +630,7 @@ await page.evaluate(() => localStorage.setItem('logical-map.layout.v2', JSON.str
   reference:    { x: 1240, y: 400,  w: 360,  h: 220 },
   external:     { x: 90,   y: 1100, w: 900,  h: 150 },
   self:         { x: 90,   y: 1400, w: 1200, h: 190 },
-})));
-await page.goto(MAP);
-await page.waitForTimeout(400);
-await page.click('#t_edge');
-await page.waitForTimeout(400);
+});
 
 const reader = await page.evaluate(() => {
   const fr = Object.fromEntries([...document.querySelectorAll('.fr')].map(f => [f.dataset.id, {
@@ -658,6 +671,53 @@ else if (d.x0 < d.bx0 || d.x1 > d.bx1 || d.y0 < d.by0 || d.y1 > d.by1) {
   fail('a link between neighbouring frames leaves their own bounding box — '
      + `it is going round something (${JSON.stringify(d)})`);
 } else ok('offset neighbours are linked through the gap between them, not around');
+
+const readerBundled = await shadowed();
+if (readerBundled.length) {
+  fail(`lines merge in a reader's arrangement: ${readerBundled.join(' | ')}`);
+} else ok("no two arrows run alongside each other in a reader's arrangement");
+
+/* --------------------------------------- two links on one frame edge */
+// Also reported from the live page: two arrows drawn one on top of the other,
+// reading as a single line with an arrowhead at each end. A side-to-side link
+// took the middle of its own pair's vertical overlap, which knows nothing about
+// the other runs touching that same frame edge. Here `standard` has three:
+// out to `behavioral`, out to `mechanical`, and back in from `mechanical`.
+await arrange({
+  standard:     { x: 40,   y: 300,  w: 420,  h: 300 },
+  behavioral:   { x: 700,  y: 200,  w: 480,  h: 420 },
+  mechanical:   { x: 700,  y: 700,  w: 480,  h: 260 },
+  orchestrator: { x: 40,   y: 700,  w: 340,  h: 200 },
+  artifact:     { x: 1300, y: 200,  w: 300,  h: 200 },
+  reference:    { x: 1300, y: 500,  w: 300,  h: 220 },
+  external:     { x: 700,  y: 1050, w: 480,  h: 150 },
+  self:         { x: 40,   y: 1300, w: 1200, h: 190 },
+});
+
+const stacked = await shadowed();
+if (stacked.length) fail(`arrows on one frame edge merge: ${stacked.join(' | ')}`);
+else ok('several links on one frame edge each get their own height');
+
+const ports = await page.evaluate(() => {
+  const at = [];
+  for (const g of document.querySelectorAll('.edge')) {
+    const p = g.querySelector('.line'), L = p.getTotalLength();
+    for (const [id, t] of [[g.dataset.a, 0], [g.dataset.b, L]]) {
+      if (id !== 'standard') continue;
+      const q = p.getPointAtLength(t);
+      at.push({ e: `${g.dataset.a}->${g.dataset.b}`, x: Math.round(q.x), y: Math.round(q.y) });
+    }
+  }
+  const clash = [];
+  for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) {
+    if (Math.hypot(at[i].x - at[j].x, at[i].y - at[j].y) < 12) {
+      clash.push(`${at[i].e} and ${at[j].e} at ${at[i].x},${at[i].y}`);
+    }
+  }
+  return { n: at.length, clash };
+});
+if (ports.clash.length) fail(`two arrows share one attachment point: ${ports.clash.join(', ')}`);
+else ok(`${ports.n} arrows attach to "standard" at ${ports.n} distinct points`);
 
 if (errors.length) fail('console/page errors: ' + errors.join(' | '));
 else ok('no console or page errors');

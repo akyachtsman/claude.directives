@@ -133,7 +133,13 @@ A directive repo must pass its own CI before it can be trusted downstream.
   within 11px of another — a crossing costs a few px, a bundle costs its whole
   span), no two edge labels overlap, labels draw above every line, and frames
   sitting level with each other are linked straight across rather than detouring
-  through the band above. The router is **ported from `claude.insurance`** — its
+  through the band above. Two arrangements a READER made — not the suite's own
+  scripted drags — are pinned as cases, because both defects a human reported
+  lived only in layouts the script never produced: neighbours offset just enough
+  to miss the side-link threshold, and one frame edge carrying three runs.
+  `arrange()` fails loudly if a test layout names a frame that does not exist,
+  since a mistyped id is silently ignored on load and quietly tests nothing.
+  The router is **ported from `claude.insurance`** — its
   `relmap.js` and `relmap-view.js` under js/keep: reserve space rather than
   search for it, with hop-breaks where lines cross. Their layout computes node
   positions; ours lets the reader drag, so the channels are MEASURED from the

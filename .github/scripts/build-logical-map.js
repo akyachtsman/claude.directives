@@ -175,6 +175,7 @@ for (const [cls, def] of Object.entries(manifest.classes)) {
   bodies[cls] = {
     title: def.label, blurb: def.blurb,
     count: def.paths.length,
+    mix: mixBar(def.paths),
     chips: (n => def.paths.map(p => chip(p, { name: n(p) })).join(''))(labeller(def.paths)),
   };
 }
@@ -183,6 +184,7 @@ bodies.external = {
   title: 'Vendor sockets',
   blurb: 'Capabilities we depend on but do not own — we hold only the wiring. Swap a vendor by rewiring its sockets, never by forking it.',
   count: vendors.length,
+  mix: '',
   chips: vendors.map(([n, e]) => vendorChip(n, e)).join(''),
 };
 const selfPaths = Object.entries(SELF);
@@ -190,12 +192,26 @@ bodies.self = {
   title: 'This repo only — never exported',
   blurb: 'The body that builds and proves everything above. Hidden by “exports only”.',
   count: selfPaths.reduce((n, [, ps]) => n + ps.length, 0),
+  mix: '',
   chips: (n => selfPaths.map(([comp, ps]) =>
     ps.map(p => chip(p, { internal: true, comp, name: n(p) })).join('')).join(''))(
       labeller(selfPaths.flatMap(([, ps]) => ps))),
 };
 
 const shortTitle = id => (bodies[id]?.title ?? id).replace(/ —.*$/, '').toLowerCase();
+
+// A class's delivery mix as one bar. "18 copied · 5 installed" is legible at a
+// glance; counting 23 monospace chips is not.
+function mixBar(paths, internal = false) {
+  const mix = {};
+  for (const p of paths) { const k = internal ? 'int' : delivery(p); mix[k] = (mix[k] ?? 0) + 1; }
+  const order = Object.entries(mix).sort((x, y) => y[1] - x[1]);
+  const bar = order.map(([k, n]) =>
+    `<i class="p-${k}" style="flex:${n}" title="${n} ${esc(DELIVERY[k].split(' —')[0])}"></i>`).join('');
+  const words = order.map(([k, n]) =>
+    `<b class="w-${k}">${n}</b> ${esc(DELIVERY[k].split(' —')[0])}`).join(' · ');
+  return `<div class="bar">${bar}</div><div class="mix">${words}</div>`;
+}
 
 // A frame states its own relationships in words. Ten arrows across eight
 // draggable boxes is unreadable however well each line is routed; text sits
@@ -223,7 +239,9 @@ const frameHtml = FRAMES.map(f => {
     + `<div class="ft"><span class="ttl">${esc(b.title)}</span>`
     + `<span class="cnt">${b.count}</span></div>`
     + `<p class="fd">${esc(b.blurb)}</p>`
+    + b.mix
     + relations(f.id)
+    + `<button type="button" class="more">show ${b.count} files</button>`
     + `<div class="files">${b.chips}</div>`
     + `<span class="rs" aria-hidden="true"></span></div>`;
 }).join('\n');
@@ -333,7 +351,22 @@ ${FRAMES.map(f => `  .c-${f.id}{--acc:var(--c-${f.id})}`).join('\n')}
   .k-pro{--rk:var(--k-pro)} .k-exp{--rk:var(--k-exp)} .k-del{--rk:var(--k-del)}
   .k-val{--rk:var(--k-val)}
 
-  .files{display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start}
+  .bar{display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;margin:0 0 5px}
+  .bar i{display:block}
+  .mix{font-size:10px;color:var(--ink-2);margin:0 0 9px}
+  .mix b{font-weight:700}
+  .w-inh{color:var(--d-global)} .w-ins{color:var(--d-design)} .w-cop{color:var(--d-data)}
+  .w-ref{color:var(--d-meta)}   .w-int{color:var(--d-self)}
+
+  .more{display:block;width:100%;margin:2px 0 0;font:600 11px/1 Inter,system-ui,sans-serif;
+    color:var(--accent);background:var(--bg);border:1px solid var(--border);
+    border-radius:7px;padding:7px 10px;cursor:pointer}
+  .more:hover{background:var(--surface);border-color:var(--border-2)}
+  .fr .files{display:none}
+  .fr.open .files{display:flex}
+  .fr.open .more{margin-bottom:9px}
+
+  .files{flex-wrap:wrap;gap:5px;align-content:flex-start}
   .f{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
     background:var(--surface);border:1px solid var(--border);border-radius:7px;
     border-left:3px solid var(--d,var(--border-2));padding:3px 7px;
@@ -389,7 +422,7 @@ ${['global', 'git', 'design', 'test', 'data', 'meta', 'self', 'external']
 </style></head><body>
 <header>
   <h1>claude.directives — logical map <span>(classes · compartments · delivery · sockets)</span></h1>
-  <span class="hint">click a relationship chip = draw that one arrow · click a box =
+  <span class="hint">show files = open a box · click a relationship chip = draw that one arrow · click a box =
     focus it · scroll = pan · pinch or ⌘/ctrl+scroll = zoom · space- or middle-drag =
     pan anywhere · drag = move · drag the corner = resize · esc = clear</span>
   <span class="btns">

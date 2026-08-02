@@ -53,12 +53,15 @@
   // The generator cannot measure text, and hard-coded heights would silently
   // clip files the day EXPORTS.json grows — so the browser settles it instead.
   // Only runs when the reader has no saved layout of their own.
-  function autofit() {
+  // `from` picks which geometry defines the rows: the generator's on first load,
+  // the reader's current one after a frame is expanded or collapsed.
+  function autofit(from = declared) {
     const rows = new Map();
     for (const f of frames) {
-      const y = declared[f.dataset.id].y;
-      if (!rows.has(y)) rows.set(y, []);
-      rows.get(y).push(f.dataset.id);
+      const y = from[f.dataset.id].y;
+      const key = [...rows.keys()].find(k => Math.abs(k - y) < 40);
+      if (key == null) rows.set(y, [f.dataset.id]);
+      else rows.get(key).push(f.dataset.id);
     }
     let shift = 0;
     for (const y of [...rows.keys()].sort((a, b) => a - b)) {
@@ -69,16 +72,16 @@
         byId[id].style.height = 'auto';
         // offsetHeight, not scrollHeight: these are border-box frames, and
         // scrollHeight omits the borders — which is exactly a 4px clip.
-        need = Math.max(need, byId[id].offsetHeight, declared[id].h);
+        need = Math.max(need, byId[id].offsetHeight, from === declared ? declared[id].h : 0);
       }
       // Each frame keeps its OWN height — equalising a row leaves dead space
       // under whichever frame has the least content. Only the row's tallest
       // frame decides how far the rows below it move.
       for (const id of row) {
-        geom[id].h = Math.max(byId[id].offsetHeight, declared[id].h);
+        geom[id].h = Math.max(byId[id].offsetHeight, from === declared ? declared[id].h : 0);
         apply(id);
       }
-      shift += need - Math.max(...row.map(id => declared[id].h));
+      shift += need - Math.max(...row.map(id => from[id].h));
     }
   }
 
@@ -497,6 +500,7 @@
       case '0': fit(); return void ev.preventDefault();
       case 'Escape':
         showAll = false; solo = null;
+    frames.forEach(f => setOpen(f, false));
     document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
     isolate(null); search.value = '';
         document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
@@ -605,6 +609,30 @@
     });
   }
 
+  // Files are hidden until asked for. 109 filenames at 10px is a reference table,
+  // not a map; the frame leads with what the class IS and how it is delivered.
+  function setOpen(f, open) {
+    f.classList.toggle('open', open);
+    const btn = f.querySelector('.more');
+    const n = f.querySelectorAll('.f').length;
+    if (btn) btn.textContent = open ? 'hide files' : `show ${n} files`;
+  }
+  function reflow() {
+    const snapshot = structuredClone(geom);
+    autofit(snapshot);
+    save(); drawEdges();
+  }
+  for (const f of frames) {
+    const btn = f.querySelector('.more');
+    if (!btn) continue;
+    btn.addEventListener('pointerdown', ev => ev.stopPropagation());
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      setOpen(f, !f.classList.contains('open'));
+      reflow();
+    });
+  }
+
   const search = document.getElementById('search');
   search.addEventListener('input', () => {
     const q = search.value.trim().toLowerCase();
@@ -612,6 +640,9 @@
       chip.classList.toggle('hit', !!q && chip.dataset.search.includes(q));
       chip.classList.toggle('miss', !!q && !chip.dataset.search.includes(q));
     }
+    // A match inside a collapsed frame is invisible — open the frames that have one.
+    for (const f of frames) setOpen(f, !!q && !!f.querySelector('.f.hit'));
+    reflow();
   });
 
   /* ---------------- layer toggles ---------------- */
@@ -649,6 +680,7 @@
     Object.assign(geom, structuredClone(declared));
     try { localStorage.removeItem(STORE); } catch { /* private mode */ }
     showAll = false; solo = null;
+    frames.forEach(f => setOpen(f, false));
     document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
     isolate(null); search.value = '';
     document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));

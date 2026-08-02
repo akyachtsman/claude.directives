@@ -132,8 +132,15 @@
     return out.filter(z => z[1] - z[0] > 6);
   }
 
-  const bandsOf = ids =>
-    gapsOf(ids.map(id => [geom[id].y - PAD, geom[id].y + geom[id].h + PAD]), 140);
+  // Bands are computed over the x-window the route will actually occupy, not the
+  // whole canvas. A frame parked far off to one side still spans its y-interval,
+  // and merging it in globally could close the only gap between two frames that
+  // are nowhere near it — leaving the route no choice but a long trip around the
+  // outside. Nothing is weakened by this: bands only PROPOSE routes, and every
+  // route is still tested against every frame on the canvas.
+  const bandsIn = (ids, x0, x1) => gapsOf(
+    ids.filter(id => geom[id].x + geom[id].w + PAD > x0 && geom[id].x - PAD < x1)
+       .map(id => [geom[id].y - PAD, geom[id].y + geom[id].h + PAD]), 140);
 
   const corridorsOf = (ids, y0, y1) => {
     const hit = ids.filter(id => geom[id].y + geom[id].h + PAD > y0 && geom[id].y - PAD < y1);
@@ -209,13 +216,50 @@
     return out;
   }
 
+  // Where a run may attach when its assigned port is unusable. The preferred
+  // port comes first; the rest are a spread across the edge, because two edges
+  // whose ports are both blocked used to fall back on the SAME alternative and
+  // were then drawn one on top of the other for their whole length.
+  const ALT = [0.5, 0.28, 0.72, 0.15, 0.85, 0.39, 0.61, 0.22, 0.78, 0.08, 0.92];
+  const altX = g => ALT.map(t => g.x + 18 + (g.w - 36) * t);
+  const altY = g => ALT.map(t => g.y + 16 + (g.h - 32) * t);
+  const ALONG = 15;   // two parallel runs closer than this read as one line
+
+  // How much of this route would be drawn on top of the routes already laid:
+  // shared attachment points, plus the length of every run lying alongside one
+  // of theirs. Lane assignment separates runs that share a CHANNEL, but two
+  // edges can reach the same place through different channels and still come
+  // out collinear — which is drawn as one line with an arrowhead at each end.
+  // Measuring the drawn result catches that however it arose.
+  function overlap(pts, ida, idb, taken) {
+    if (!taken) return 0;
+    let n = 0;
+    for (const [id, p] of [[ida, pts[0]], [idb, pts[pts.length - 1]]]) {
+      if ((taken.ports.get(id) ?? []).some(q =>
+        Math.abs(p.x - q.x) < 14 && Math.abs(p.y - q.y) < 14)) n += 30;
+    }
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p = pts[i], q = pts[i + 1];
+      const flat = Math.abs(p.y - q.y) < 0.5;
+      for (const [u, v] of taken.wires) {
+        if ((Math.abs(u.y - v.y) < 0.5) !== flat) continue;         // not parallel
+        const k = flat ? 'y' : 'x', j = flat ? 'x' : 'y';
+        if (Math.abs(p[k] - u[k]) >= ALONG) continue;
+        n += Math.max(0, Math.min(Math.max(p[j], q[j]), Math.max(u[j], v[j]))
+                       - Math.max(Math.min(p[j], q[j]), Math.min(u[j], v[j])));
+      }
+    }
+    return n;
+  }
+
   // `fan` is null on the probe pass (which only discovers WHICH channels the
-  // edge wants) and carries a {i,n} per channel on the draw pass.
-  function planEdge(ida, idb, fan) {
+  // edge wants) and carries a {i,n} per channel on the draw pass. `taken` holds
+  // the attachment points of the edges already routed this pass.
+  function planEdge(ida, idb, fan, taken) {
     const ids = liveIds();
     const a = geom[ida], b = geom[idb];
     if (!a || !b) return null;
-    const bs = bandsOf(ids);
+    const bs = bandsIn(ids, Math.min(a.x, b.x) - 40, Math.max(a.x + a.w, b.x + b.w) + 40);
     if (!bs.length) return null;
 
     // Frames standing beside each other are linked through their FACING edges —
@@ -227,33 +271,62 @@
     //
     // Dead level → one straight run. Offset → step through the free column in
     // the gap between them, which is the same reserved-channel idea rotated 90°.
+    // Every candidate route is offered here and scored the same way: frame
+    // crossings plus shared attachment points. The first that scores zero wins;
+    // if a reader's arrangement admits nothing clean, the least-bad one is drawn.
+    // Crossing a frame is far worse than being drawn over another line — it
+    // hides content the map exists to show, where an overlap is only ugly — so
+    // it is weighted heavily. Scored equally, the router happily drove a line
+    // through three frames to keep one lane to itself.
+    let best = null;
+    const offer = o => {
+      const cost = o.n * 4000 + overlap(o.pts, ida, idb, taken);
+      if (!best || cost < best.cost) best = { ...o, cost };
+      return cost === 0;
+    };
+
     const over = [Math.max(a.y, b.y), Math.min(a.y + a.h, b.y + b.h)];
     const toRight = b.x >= a.x + a.w + 30, toLeft = a.x >= b.x + b.w + 30;
     if (toRight || toLeft) {
-      const level = over[1] - over[0] > 50;
-      const yA = level ? laneIn(over, fan?.yA) : portY(a, fan?.ax);
-      const yB = level ? yA : portY(b, fan?.bx);
+      // Height on each facing edge comes from that edge's PORT group, which
+      // holds every run touching it in either direction. Taking the middle of
+      // this pair's own vertical overlap instead ignored the other runs on the
+      // same edge, so two side links were drawn one on top of the other — one
+      // apparent line with an arrowhead at each end. The two collapse to a
+      // single straight run only when nothing else touches either edge.
+      const alone = (!fan?.ax || fan.ax.n < 2) && (!fan?.bx || fan.bx.n < 2);
       const exitX = toRight ? a.x + a.w : a.x;
       const enterX = toRight ? b.x : b.x + b.w;
       const lo = Math.min(exitX, enterX), hi = Math.max(exitX, enterX);
-      // Only a column that lies in the gap BETWEEN them is a shortcut; anything
-      // else is the long way round, which the band router below already covers.
-      const cols = (corridorsOf(ids, Math.min(yA, yB), Math.max(yA, yB)) ?? [])
-        .filter(z => z[1] > lo && z[0] < hi)
-        .sort((p, q) => (q[1] - q[0]) - (p[1] - p[0]));
-      for (const c of (level ? [null, ...cols] : cols)) {
-        const cx = c ? Math.min(hi - 6, Math.max(lo + 6, laneIn(c, fan?.cx))) : null;
-        const pts = simplify(cx == null
-          ? [{ x: exitX, y: yA }, { x: enterX, y: yB }]
-          : [{ x: exitX, y: yA }, { x: cx, y: yA }, { x: cx, y: yB }, { x: enterX, y: yB }]);
-        if (blocked(pts, ids)) continue;
-        return { pts, n: 0, keyA: `s${over.join(':')}`, keyB: `s${over.join(':')}`,
-                 keyC: c ? c.join(':') : null,
-                 exitSide: toRight ? 'R' : 'L', enterSide: toRight ? 'L' : 'R',
-                 spanA: [lo, hi], spanB: null,
-                 spanC: c ? [Math.min(yA, yB), Math.max(yA, yB)] : null,
-                 headA: b.y + b.h / 2, headB: a.y + a.h / 2 };
+      const ays = [portY(a, fan?.ax), ...altY(a)];
+      const bys = [portY(b, fan?.bx), ...altY(b)];
+      for (const yA0 of ays) for (const yB0 of bys) {
+        const level = alone && over[1] - over[0] > 50 && Math.abs(yA0 - yB0) < 60;
+        const yA = level
+          ? Math.min(over[1] - 10, Math.max(over[0] + 10, (yA0 + yB0) / 2)) : yA0;
+        const yB = level ? yA : yB0;
+        // Only a column in the gap BETWEEN them is a shortcut; anything else is
+        // the long way round, which the band router below already covers.
+        const cols = (corridorsOf(ids, Math.min(yA, yB), Math.max(yA, yB)) ?? [])
+          .filter(z => z[1] > lo && z[0] < hi)
+          .sort((p, q) => (q[1] - q[0]) - (p[1] - p[0]));
+        for (const c of (level ? [null, ...cols] : cols)) {
+          const cx = c ? Math.min(hi - 6, Math.max(lo + 6, laneIn(c, fan?.cx))) : null;
+          const pts = simplify(cx == null
+            ? [{ x: exitX, y: yA }, { x: enterX, y: yB }]
+            : [{ x: exitX, y: yA }, { x: cx, y: yA }, { x: cx, y: yB }, { x: enterX, y: yB }]);
+          const done = offer({ pts, n: blocked(pts, ids),
+            keyA: `s${over.join(':')}`, keyB: `s${over.join(':')}`,
+            keyC: c ? c.join(':') : null,
+            exitSide: toRight ? 'R' : 'L', enterSide: toRight ? 'L' : 'R',
+            spanA: [lo, hi], spanB: null,
+            spanC: c ? [Math.min(yA, yB), Math.max(yA, yB)] : null,
+            headA: b.y + b.h / 2, headB: a.y + a.h / 2 });
+          if (done) return best;
+        }
       }
+      // Nothing clean between the facing edges — fall through to the band
+      // router, but keep the best side route as the candidate to beat.
     }
 
     // Which band each end uses is a SEARCH, not a deduction. Taking the band
@@ -273,12 +346,19 @@
     const exitOn = z => (z[0] >= a.y + a.h - 1 ? a.y + a.h : a.y);
     const enterOn = z => (z[0] >= b.y + b.h - 1 ? b.y + b.h : b.y);
     const midOf = z => (z[0] + z[1]) / 2;
+    // `nudge` offers the run one lane either side of where the colouring put it.
+    // Lanes are assigned per channel, but a side link's approach to a frame edge
+    // lands in a band too without being part of that band's pool — the two then
+    // came out 8px apart, which is drawn as one line. Rather than merge the
+    // pools, let the search move off the assigned lane when it must.
     const pairs = [];
     for (const zA of bs) for (const zB of bs) {
-      pairs.push({ zA, zB, cost: Math.abs(exitOn(zA) - midOf(zA))
-        + Math.abs(midOf(zA) - midOf(zB)) + Math.abs(midOf(zB) - enterOn(zB)) });
+      const base = Math.abs(exitOn(zA) - midOf(zA))
+        + Math.abs(midOf(zA) - midOf(zB)) + Math.abs(midOf(zB) - enterOn(zB));
+      for (const nudge of [0, 1, -1]) pairs.push({ zA, zB, nudge, cost: base + Math.abs(nudge) });
     }
     pairs.sort((p, q) => p.cost - q.cost);
+    const inBand = (z, y) => Math.min(z[1] - 6, Math.max(z[0] + 6, y));
 
     // A port that lands within a few px of the column it is about to join makes
     // a visible 2px zigzag rather than a straight run. Snap it, but only onto a
@@ -286,14 +366,13 @@
     const snap = (v, to, g) => (Math.abs(v - to) < 12
       && to > g.x + 12 && to < g.x + g.w - 12) ? to : v;
 
-    let best = null;
-    for (const { zA, zB } of pairs.slice(0, 12)) {
+    for (const { zA, zB, nudge } of pairs.slice(0, 24)) {
       const same = zA === zB;
       const exitY = exitOn(zA), enterY = enterOn(zB);
-      const yA = laneIn(zA, fan?.yA);
-      const yB = same ? yA : laneIn(zB, fan?.yB);
-      const axs = [port(a, fan?.ax), a.x + 20, a.x + a.w - 20];
-      const bxs = [port(b, fan?.bx), b.x + 20, b.x + b.w - 20];
+      const yA = inBand(zA, laneIn(zA, fan?.yA) + nudge * LANE);
+      const yB = same ? yA : inBand(zB, laneIn(zB, fan?.yB) + nudge * LANE);
+      const axs = [port(a, fan?.ax), ...altX(a)];
+      const bxs = [port(b, fan?.bx), ...altX(b)];
       const mid = (axs[0] + bxs[0]) / 2;
 
       let cands = [null];
@@ -314,21 +393,18 @@
             ? [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: bx, y: yA }, { x: bx, y: enterY }]
             : [{ x: ax, y: exitY }, { x: ax, y: yA }, { x: cx, y: yA },
                { x: cx, y: yB }, { x: bx, y: yB }, { x: bx, y: enterY }]);
-          const n = blocked(pts, ids);
-          if (!best || n < best.n) {
-            const far = same ? bx : cx;
-            best = { pts, n, keyA: zA.join(':'), keyB: zB.join(':'),
-                     keyC: c ? c.join(':') : null,
-                     exitSide: exitY <= a.y + 1 ? 'T' : 'B',
-                     enterSide: enterY <= b.y + 1 ? 'T' : 'B',
-                     // extents the lane assignment needs: how far each run reaches
-                     spanA: [Math.min(ax, far), Math.max(ax, far)],
-                     spanB: same ? null : [Math.min(cx, bx), Math.max(cx, bx)],
-                     spanC: same ? null : [Math.min(yA, yB), Math.max(yA, yB)],
-                     headA: same ? (b.x + b.w / 2) : cx,
-                     headB: same ? (a.x + a.w / 2) : cx };
-          }
-          if (!n) return best;
+          const far = same ? bx : cx;
+          const done = offer({ pts, n: blocked(pts, ids),
+            keyA: zA.join(':'), keyB: zB.join(':'), keyC: c ? c.join(':') : null,
+            exitSide: exitY <= a.y + 1 ? 'T' : 'B',
+            enterSide: enterY <= b.y + 1 ? 'T' : 'B',
+            // extents the lane assignment needs: how far each run reaches
+            spanA: [Math.min(ax, far), Math.max(ax, far)],
+            spanB: same ? null : [Math.min(cx, bx), Math.max(cx, bx)],
+            spanC: same ? null : [Math.min(yA, yB), Math.max(yA, yB)],
+            headA: same ? (b.x + b.w / 2) : cx,
+            headB: same ? (a.x + a.w / 2) : cx });
+          if (done) return best;
         }
       }
     }
@@ -481,38 +557,56 @@
       bx: ports.get(`${e.b}${p.enterSide}|b${i}`),
     });
 
-    // Pass 3 — lanes. Re-probe with the ports fixed to learn each run's true
-    // extent, then colour: runs whose extents do not overlap share one lane.
-    const spans = list.map((e, i) =>
-      probe[i] ? planEdge(e.a, e.b, fanPort(probe[i], e, i)) : null);
-    const lanes = new Map();
-    const chan = new Map();
-    const add = (k, i, s) => { const g = chan.get(k) ?? []; g.push({ i, s }); chan.set(k, g); };
-    spans.forEach((p, i) => {
-      if (!p) return;
-      add(`y${p.keyA}`, i, p.spanA);
-      if (p.keyB !== p.keyA && p.spanB) add(`y${p.keyB}`, i, p.spanB);
-      if (p.keyC && p.spanC) add(`c${p.keyC}`, i, p.spanC);
-    });
-    for (const [k, items] of chan) lanes.set(k, lanesOf(items));
-    const fanLane = (k, i) => {
-      const l = lanes.get(k);
-      return l && l.of.has(i) ? { i: l.of.get(i), n: l.n } : null;
+    // Pass 3 — lanes. Colour each channel from the routes as they currently
+    // stand, then re-route with those lanes applied.
+    //
+    // Run twice. Applying a lane moves a run, which can make the route the lane
+    // was computed for no longer the cheapest clean one — the edge then takes a
+    // different shape, whose channels were never coloured, and falls back to the
+    // middle of them. Two edges doing that in the same channel are drawn exactly
+    // on top of each other: one apparent line with an arrowhead at each end.
+    // The second round colours the shapes that actually came out of the first.
+    const laneRound = prev => {
+      const chan = new Map();
+      const add = (k, i, s) => { const g = chan.get(k) ?? []; g.push({ i, s }); chan.set(k, g); };
+      prev.forEach((p, i) => {
+        if (!p) return;
+        add(`y${p.keyA}`, i, p.spanA);
+        if (p.keyB !== p.keyA && p.spanB) add(`y${p.keyB}`, i, p.spanB);
+        if (p.keyC && p.spanC) add(`c${p.keyC}`, i, p.spanC);
+      });
+      const lanes = new Map();
+      for (const [k, items] of chan) lanes.set(k, lanesOf(items));
+      const fanLane = (k, i) => {
+        const l = lanes.get(k);
+        return l && l.of.has(i) ? { i: l.of.get(i), n: l.n } : null;
+      };
+      // Routes are laid one at a time and each records where it went, so the
+      // next one can be told that space is spoken for.
+      const taken = { ports: new Map(), wires: [] };
+      return list.map((e, i) => {
+        const p = prev[i];
+        if (!p) return null;
+        const r = planEdge(e.a, e.b, {
+          ...fanPort(p, e, i),
+          yA: fanLane(`y${p.keyA}`, i),
+          yB: fanLane(`y${p.keyB}`, i),
+          cx: p.keyC ? fanLane(`c${p.keyC}`, i) : null,
+        }, taken) ?? p;
+        for (const [id, q] of [[e.a, r.pts[0]], [e.b, r.pts[r.pts.length - 1]]]) {
+          taken.ports.set(id, [...(taken.ports.get(id) ?? []), q]);
+        }
+        for (let k = 0; k < r.pts.length - 1; k++) taken.wires.push([r.pts[k], r.pts[k + 1]]);
+        return r;
+      });
     };
 
     // Pass 4 — route for real.
+    const ported = list.map((e, i) =>
+      probe[i] ? (planEdge(e.a, e.b, fanPort(probe[i], e, i)) ?? probe[i]) : null);
+    const final = laneRound(laneRound(ported));
     const routed = [];
-    list.forEach((e, i) => {
-      const p = spans[i] ?? probe[i];
-      if (!p) return;
-      const r = planEdge(e.a, e.b, {
-        ...fanPort(p, e, i),
-        yA: fanLane(`y${p.keyA}`, i),
-        yB: fanLane(`y${p.keyB}`, i),
-        cx: p.keyC ? fanLane(`c${p.keyC}`, i) : null,
-      });
-      if (r) routed.push({ e, pts: r.pts });
-    });
+    list.forEach((e, i) => { if (final[i]) routed.push({ e, pts: final[i].pts }); });
 
     // Pass 5 — collect every vertical run, so a horizontal run crossing one can
     // break over it instead of appearing to join it.

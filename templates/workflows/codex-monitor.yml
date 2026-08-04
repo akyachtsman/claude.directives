@@ -42,10 +42,12 @@ jobs:
           if [ "$state_lc" = "changes_requested" ]; then
             flag=1                       # actionable on its own; count irrelevant
           elif [ "$state_lc" = "commented" ]; then
-            # No fallback here on purpose: a transient API failure must fail the
-            # step rather than read as "0 inline comments" and skip the flag.
-            # Nothing re-runs this workflow automatically, so a red run here has
-            # to be re-run by hand before the PR's flag state means anything.
+            # No fallback here on purpose. A `|| echo 0` would let a transient
+            # API failure read as "0 inline comments": the step SUCCEEDS, the run
+            # stays green, and the flag is skipped with nothing anywhere saying
+            # so. Failing is the lesser evil — but nothing re-runs this workflow
+            # automatically, so a red run has to be re-run by hand before the
+            # PR's flag state means anything either way.
             inline=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews/$REVIEW_ID/comments" \
               --jq 'length')
             echo "Inline comments on this review: $inline"

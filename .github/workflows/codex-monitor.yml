@@ -30,15 +30,30 @@ jobs:
         run: |
           set -euo pipefail
           echo "Codex review $REVIEW_ID on PR #$PR_NUMBER — state=$REVIEW_STATE"
-          # No fallback here on purpose: a transient API failure must fail the
-          # step (and get retried) rather than read as "0 inline comments" and
-          # silently skip the flag.
-          inline=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews/$REVIEW_ID/comments" \
-            --jq 'length')
-          echo "Inline comments on this review: $inline"
           state_lc=$(echo "$REVIEW_STATE" | tr '[:upper:]' '[:lower:]')
-          if [ "$state_lc" = "changes_requested" ] || \
-             { [ "$state_lc" = "commented" ] && [ "$inline" -gt 0 ]; }; then
+          # State FIRST, and the comments API only in the branch that needs it.
+          # Fetching the count up front meant a transient API failure aborted the
+          # step under `set -e` before changes_requested was ever examined — a
+          # state that needs no count at all. The failed run is visible enough
+          # (it goes red), but what CONSUMES this step is a merge gate testing
+          # for the ABSENCE of the label, and absence-because-the-labeller-died
+          # reads exactly like absence-because-Codex-was-happy.
+          flag=0
+          if [ "$state_lc" = "changes_requested" ]; then
+            flag=1                       # actionable on its own; count irrelevant
+          elif [ "$state_lc" = "commented" ]; then
+            # No fallback here on purpose. A `|| echo 0` would let a transient
+            # API failure read as "0 inline comments": the step SUCCEEDS, the run
+            # stays green, and the flag is skipped with nothing anywhere saying
+            # so. Failing is the lesser evil — but nothing re-runs this workflow
+            # automatically, so a red run has to be re-run by hand before the
+            # PR's flag state means anything either way.
+            inline=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews/$REVIEW_ID/comments" \
+              --jq 'length')
+            echo "Inline comments on this review: $inline"
+            if [ "$inline" -gt 0 ]; then flag=1; fi
+          fi
+          if [ "$flag" = 1 ]; then
             echo "Codex raised concerns — flagging PR #$PR_NUMBER"
             gh label create "$FLAG_LABEL" --repo "$REPO" --color D93F0B \
               --description "Codex reviewer raised concerns — review before merge" 2>/dev/null || true

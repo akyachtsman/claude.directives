@@ -26,7 +26,36 @@ every project unless explicitly overridden at repo level.
 - For non-trivial features, separate WHAT from HOW — specify and clarify intent before planning a stack, and refine in phases rather than one-shotting (run `/sdd-loop`; the imported directives are its constitution)
 - **Evidence before assertions** — never report something done, passing, or fixed without running the proving check *fresh* and reading its actual output and exit status; assumptions and stale results do not count as verification
 - **Receiving review feedback** — treat review comments (human, Codex, code-reviewer) as suggestions to *evaluate*, not orders to obey. Restate the underlying requirement, verify the claim against the code, then either apply the fix or push back with technical reasoning. No performative agreement ("You're absolutely right!"), and no change you cannot justify
-- **Explanations are tabular-first** (owner preference, 2026-07-13) — when explaining how anything works (data flows, architecture, processes, options), lead with a simple table: one row per component, plain-language columns (what / where it comes from / when it updates / how it reaches the user), then at most two takeaway sentences. No jargon inside cells; mechanism detail only when asked
+
+## Plain Language First (owner ruling, 2026-08-04)
+Supersedes *Explanations are tabular-first* (owner preference, 2026-07-13).
+Tables are still fine wherever they genuinely help, but they were never the
+point and are no longer required — plainer prose is what was actually wanted.
+
+The owner reviews outcomes, not implementations. Mechanism detail is welcome;
+it just does not go first, and it never arrives unglossed.
+
+- **Open with what changes for the owner.** One or two sentences, no
+  identifiers, before any mechanism — what you can do now that you could not
+  before, or what stopped being broken. The test: if the opening cannot be
+  understood without opening the diff, rewrite it.
+- **Proposing work.** Lead with what it will let you do, roughly what it costs,
+  and the one thing most likely to go wrong. The technical plan goes underneath.
+  `/diagnose` and `/sdd-loop` still own the detail — this is the paragraph above
+  them.
+- **Reporting finished work.** Same shape: what is now true that was not, then
+  the evidence for it. A list of changed files is not a summary.
+- **Gloss every name on first use.** An identifier, algorithm or filename gets a
+  plain-language apposition the first time it appears ("the router — the code
+  deciding where each arrow goes"), or is replaced by the description outright.
+  Never assume the reader knows what a symbol refers to.
+- **Owner-facing vs. the record.** Chat replies, PR titles and PR bodies are
+  read by the owner and lead in plain language. Commit messages, code comments
+  and test names are the engineering *record*: they stay precise and technical,
+  and are never simplified to satisfy this rule.
+- **Detail on request, not by default.** Keep the mechanism, move it down. When
+  it is asked for, give all of it — simpler does not mean vaguer, and "it's
+  handled" is not an answer.
 
 ## Reuse Before Rewrite (owner ruling, 2026-07-23)
 When a requested feature resembles one this project already has, **the

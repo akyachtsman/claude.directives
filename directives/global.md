@@ -57,6 +57,36 @@ it just does not go first, and it never arrives unglossed.
   it is asked for, give all of it — simpler does not mean vaguer, and "it's
   handled" is not an answer.
 
+## Handoffs Carry Only What Dies With the Session (owner ruling, 2026-08-05)
+Applies to `/handoff-session` and to any summary written for a successor
+session. The test, applied to every line *before* writing it — not as a pass
+afterwards:
+
+> **Would this be lost forever the moment this session ends?**
+
+Not "is it useful", which lets everything through. What changed and why, the
+current state of anything, open PRs / issues / branches, the merged history, and
+every directive rule all FAIL it: the next session reads those from the repo,
+from GitHub, or from its own Session Start fetch. Restating a merged PR's
+reasoning is the single most common way a handoff bloats — a merged PR is not
+session memory.
+
+Three routing rules place everything else:
+- **Durable → a file, never a handoff.** An abandoned approach or a decision
+  that should outlive the next session goes to `learnings.jsonl` (`/learn`) or
+  to CLAUDE.md. A handoff dies when the next session ends, so parking a durable
+  decision there loses it one session later rather than never. Not worth a file
+  means not worth the handoff either.
+- **Human-actionable → the reply, never the block.** The block addresses the
+  next session. If that session cannot act on a line — a branch only the owner
+  can delete, a sibling repo it has no access to — raise it in the chat reply at
+  the time it is found.
+- **Declined twice → decided, not open.** Raised twice with no answer means no.
+  Never carry your own proposals forward as unresolved questions.
+
+**"Nothing to hand off — the repo holds everything" is a complete and correct
+handoff.** Never pad to fill a format.
+
 ## Reuse Before Rewrite (owner ruling, 2026-07-23)
 When a requested feature resembles one this project already has, **the
 existing implementation is the source — find it, read it, and reuse it.**

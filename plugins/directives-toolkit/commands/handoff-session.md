@@ -7,6 +7,10 @@ handoff file (anything durable belongs in CLAUDE.md, not a sidecar that goes
 stale the moment the repo changes).
 
 ## 0. The only test for including anything
+The rule itself is `global.md` → *Handoffs Carry Only What Dies With the
+Session*, which applies whether or not this command is installed. What follows
+is how to apply it.
+
 > **Would this be lost forever the moment this session ends?**
 
 Not "is it useful", not "is it relevant", not "would it save time" — those let
@@ -32,6 +36,18 @@ Passes the test — said aloud, never written down:
 - a commitment made to **another session or repo** that nothing here records
 - a constraint you were **told**, not read (access limits, vendor quirks, "don't
   touch X")
+
+Two traps that pass the literal test but are still wrong:
+
+- **A dead end worth remembering is worth a FILE.** If an abandoned approach
+  should outlive the next session, `/learn` it into `learnings.jsonl` or record
+  the decision in CLAUDE.md — a handoff dies when the next session ends, so
+  parking a durable decision there loses it one session later. If it is not
+  worth a file, it is not worth the block either.
+- **A concern the owner has declined to act on is not unresolved — it is
+  decided.** Raised twice with no answer means no. Do not carry your own
+  proposals forward as if they were open questions; a later session can raise
+  them fresh from the repo if they still matter.
 
 If nothing passes, say exactly that in one line and stop. "Nothing to hand off —
 the repo holds everything" is a **correct and complete** output of this command.
@@ -63,18 +79,23 @@ its own status better than a paraphrase of it can. Nothing pending means a
 one-line block saying so.
 
 **The block uses this exact visual format** — same header, same dividers, same
-framing, in every repo (drop a section entirely rather than leaving it empty;
-UNRESOLVED — or the nothing-pending summary in its place — always comes first):
+framing, in every repo. When the block carries sections at all, UNRESOLVED comes
+first, and an empty section is dropped rather than left blank — but a session
+with nothing to hand off emits the one-line block from §0 with no sections
+whatsoever, which is not an exception to be worked around but the expected
+result. Nothing in the block restates a standing
+instruction — the receiving session already reads CLAUDE.md and the directives
+at Session Start, so a header saying so is a paraphrased directive rule and
+belongs nowhere near a handoff:
 
 ```text
 ════════════════════ SESSION HANDOFF — <repo-name> ════════════════════
-CLAUDE.md is the source of truth — read it first. This file holds only
-what the repo doesn't capture.
 
 ── UNRESOLVED ─────────────────────────────────────────────────────────
 1. SHORT CAPS TITLE (tracker ref + state, e.g. "PR #62, draft, CI
    pending") — one-line stance: what's contested/undecided and by whom.
-   • Current observable state (what the live site / branch shows today).
+   • The state that is actually IN DISPUTE — not a status report; the
+     next session can look. Only what it would misread without you.
    • The load-bearing facts or numbers the next session must not
      re-derive (measurements, thresholds, root cause).
 2. NEXT ITEM …
@@ -83,21 +104,16 @@ what the repo doesn't capture.
 • Only what you were TOLD and never wrote down: cross-repo commitments,
   scope limits, access constraints. If it can be read anywhere, cut it.
 
-── DEAD ENDS ──────────────────────────────────────────────────────────
-• Approaches tried and abandoned that left NO trace in the repo — the
-  next session would otherwise retry them. If the attempt is visible in
-  the history, it is not a dead end worth carrying; cut it.
-
-── BRANCHES TO DELETE ─────────────────────────────────────────────────
-none — remote is clean            (or the per-branch checklist from §3)
 ═══════════════════════════════════════════════════════════════════════
 ```
 
 Framing rules for UNRESOLVED items — the part that makes a handoff usable:
 - **Title states the dispute/decision, not the task** ("USER DISPUTES the
   centering fix", not "fix centering").
-- **Separate what IS from what SHOULD BE**: one bullet for today's observable
-  state, one for the constraint/physics that explains it.
+- **Separate what IS from what SHOULD BE**: one bullet for the state *in
+  dispute* — the reading the next session would get wrong on its own — one for
+  the constraint that explains it. Neither is a status report: if the next
+  session can simply look and see it, cut the bullet.
 - **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
   session would otherwise burn a round-trip re-deriving.
 
@@ -106,8 +122,8 @@ workflow file, **a PR body, a commit message, an issue thread, the diff**, or an
 imported directive (`global.md`, `git.md`, `test.md`, `design.md`, `data.md`),
 drop it — or move it THERE and drop it. A merged PR is not session memory: the
 next session can read it, so restating its reasoning is the single most common
-way this command bloats. Never
-paraphrase a directive rule into the handoff: the receiving session's own
+way this command bloats. Never paraphrase a directive rule into the handoff —
+not in an item, and not in a header: the receiving session's own
 Session Start already re-fetches the live directive text, and a paraphrase
 can drift stale or lossy in the meantime — the receiving session then
 treats the paraphrase as authoritative and skips the real fetch (observed
@@ -117,11 +133,20 @@ it until it read the source directly). If a directive's *application* to
 this repo needs a decision record, that belongs in CLAUDE.md, not a
 handoff.
 
-## 3. End with the branch checklist (hard exit gate)
-Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` and close the
-message with a `Branches to delete` checklist: every stray branch the session
-could not delete itself, each with the reliable removal path — *its merged PR →
+## 3. Leave the remote clean (hard exit gate)
+Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` as the last act
+before handing off. Every stray branch is **this** session's work to finish, not
+a line item for the next one — the block never carries a "branches to delete"
+list, because a branch that still exists means §1 was not completed.
+
+If one genuinely cannot be removed (some proxied git remotes refuse branch
+deletion outright), that is a request for the **human, now** — put it in the
+chat reply, outside the block, with the reliable removal path: *its merged PR →
 "Delete branch"*, or the repo's **`/branches/all`** page (the plain Branches
-overview often omits merged branches; don't send the human there). With
-auto-delete enabled this should read: "Branches to delete: none — remote is
-clean."
+overview often omits merged branches; don't send them there). Never defer it
+into the handoff: the next session cannot action it either, so it would just be
+copied forward until someone happens to read it.
+
+The same rule generalises — **anything only the human can do goes in the reply,
+not the block.** The block addresses the next session; if the next session cannot
+act on a line, it does not belong in it.

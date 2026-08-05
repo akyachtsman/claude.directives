@@ -20,7 +20,12 @@ claude plugin marketplace add akyachtsman/claude.directives      || true
 claude plugin marketplace add anthropics/claude-plugins-official || true
 claude plugin marketplace add anthropics/claude-code             || true
 
-# 2) Install the toolkit + the official review / security / design plugins.
+# 2) Refresh every registered marketplace. `add` is a no-op once a marketplace is
+# registered, so without this a cached environment keeps resolving against the clone
+# it first fetched and step 4 finds nothing newer (verified 2026-08-05).
+claude plugin marketplace update || true
+
+# 3) Install the toolkit + the official review / security / design plugins.
 claude plugin install directives-toolkit@claude-directives
 claude plugin install pr-review-toolkit@claude-plugins-official
 claude plugin install security-guidance@claude-plugins-official
@@ -29,4 +34,14 @@ claude plugin install security-guidance@claude-plugins-official
 # break the whole setup run.
 claude plugin install frontend-design@claude-code-plugins || true
 
-echo "✓ directives toolkit + official review / security / design plugins installed"
+# 4) Move each plugin to its marketplace's current head. `install` is a NO-OP when
+# the plugin is already present — it prints "already installed" and leaves the old
+# sha pinned — so install alone can never deliver an update to an environment whose
+# cache carries a previous install (verified 2026-08-05). `update` is what moves the
+# pointer. || true so an already-current plugin can't fail the setup run.
+claude plugin update directives-toolkit@claude-directives      || true
+claude plugin update pr-review-toolkit@claude-plugins-official || true
+claude plugin update security-guidance@claude-plugins-official || true
+claude plugin update frontend-design@claude-code-plugins       || true
+
+echo "✓ directives toolkit + official review / security / design plugins installed and up to date"

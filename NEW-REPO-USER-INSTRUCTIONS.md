@@ -54,6 +54,13 @@ environment's settings, make any edit to the Setup script (even re-saving a
 whitespace change), save — that invalidates the cache — then start a **new**
 session. `/env-chk` tells you when this is needed ("plugins/ changed upstream").
 
+Environments whose setup script predates 2026-08-05 need that cache-invalidation
+step every time. Newer ones do not: the script now refreshes the marketplaces and
+runs `claude plugin update` after each install, so a plain re-run moves the
+plugins to current. `claude plugin install` alone never could — it reports
+"already installed" and leaves the old sha pinned. To adopt the fix on an older
+environment, re-save its Setup script once; from then on it self-updates.
+
 <details><summary>What the one-liner does / fallback if the fetch is blocked</summary>
 
 It runs <a href="scripts/install-toolkit.sh"><code>scripts/install-toolkit.sh</code></a>

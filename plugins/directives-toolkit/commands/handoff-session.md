@@ -63,18 +63,20 @@ its own status better than a paraphrase of it can. Nothing pending means a
 one-line block saying so.
 
 **The block uses this exact visual format** — same header, same dividers, same
-framing, in every repo (drop a section entirely rather than leaving it empty;
-UNRESOLVED — or the nothing-pending summary in its place — always comes first):
+framing, in every repo. Drop a section entirely rather than leaving it empty;
+UNRESOLVED always comes first. Nothing in the block restates a standing
+instruction — the receiving session already reads CLAUDE.md and the directives
+at Session Start, so a header saying so is a paraphrased directive rule and
+belongs nowhere near a handoff:
 
 ```text
 ════════════════════ SESSION HANDOFF — <repo-name> ════════════════════
-CLAUDE.md is the source of truth — read it first. This file holds only
-what the repo doesn't capture.
 
 ── UNRESOLVED ─────────────────────────────────────────────────────────
 1. SHORT CAPS TITLE (tracker ref + state, e.g. "PR #62, draft, CI
    pending") — one-line stance: what's contested/undecided and by whom.
-   • Current observable state (what the live site / branch shows today).
+   • The state that is actually IN DISPUTE — not a status report; the
+     next session can look. Only what it would misread without you.
    • The load-bearing facts or numbers the next session must not
      re-derive (measurements, thresholds, root cause).
 2. NEXT ITEM …
@@ -106,8 +108,8 @@ workflow file, **a PR body, a commit message, an issue thread, the diff**, or an
 imported directive (`global.md`, `git.md`, `test.md`, `design.md`, `data.md`),
 drop it — or move it THERE and drop it. A merged PR is not session memory: the
 next session can read it, so restating its reasoning is the single most common
-way this command bloats. Never
-paraphrase a directive rule into the handoff: the receiving session's own
+way this command bloats. Never paraphrase a directive rule into the handoff —
+not in an item, and not in a header: the receiving session's own
 Session Start already re-fetches the live directive text, and a paraphrase
 can drift stale or lossy in the meantime — the receiving session then
 treats the paraphrase as authoritative and skips the real fetch (observed

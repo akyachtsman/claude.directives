@@ -7,6 +7,10 @@ handoff file (anything durable belongs in CLAUDE.md, not a sidecar that goes
 stale the moment the repo changes).
 
 ## 0. The only test for including anything
+The rule itself is `global.md` → *Handoffs Carry Only What Dies With the
+Session*, which applies whether or not this command is installed. What follows
+is how to apply it.
+
 > **Would this be lost forever the moment this session ends?**
 
 Not "is it useful", not "is it relevant", not "would it save time" — those let
@@ -75,8 +79,11 @@ its own status better than a paraphrase of it can. Nothing pending means a
 one-line block saying so.
 
 **The block uses this exact visual format** — same header, same dividers, same
-framing, in every repo. Drop a section entirely rather than leaving it empty;
-UNRESOLVED always comes first. Nothing in the block restates a standing
+framing, in every repo. When the block carries sections at all, UNRESOLVED comes
+first, and an empty section is dropped rather than left blank — but a session
+with nothing to hand off emits the one-line block from §0 with no sections
+whatsoever, which is not an exception to be worked around but the expected
+result. Nothing in the block restates a standing
 instruction — the receiving session already reads CLAUDE.md and the directives
 at Session Start, so a header saying so is a paraphrased directive rule and
 belongs nowhere near a handoff:
@@ -103,8 +110,10 @@ belongs nowhere near a handoff:
 Framing rules for UNRESOLVED items — the part that makes a handoff usable:
 - **Title states the dispute/decision, not the task** ("USER DISPUTES the
   centering fix", not "fix centering").
-- **Separate what IS from what SHOULD BE**: one bullet for today's observable
-  state, one for the constraint/physics that explains it.
+- **Separate what IS from what SHOULD BE**: one bullet for the state *in
+  dispute* — the reading the next session would get wrong on its own — one for
+  the constraint that explains it. Neither is a status report: if the next
+  session can simply look and see it, cut the bullet.
 - **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
   session would otherwise burn a round-trip re-deriving.
 

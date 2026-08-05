@@ -33,6 +33,18 @@ Passes the test — said aloud, never written down:
 - a constraint you were **told**, not read (access limits, vendor quirks, "don't
   touch X")
 
+Two traps that pass the literal test but are still wrong:
+
+- **A dead end worth remembering is worth a FILE.** If an abandoned approach
+  should outlive the next session, `/learn` it into `learnings.jsonl` or record
+  the decision in CLAUDE.md — a handoff dies when the next session ends, so
+  parking a durable decision there loses it one session later. If it is not
+  worth a file, it is not worth the block either.
+- **A concern the owner has declined to act on is not unresolved — it is
+  decided.** Raised twice with no answer means no. Do not carry your own
+  proposals forward as if they were open questions; a later session can raise
+  them fresh from the repo if they still matter.
+
 If nothing passes, say exactly that in one line and stop. "Nothing to hand off —
 the repo holds everything" is a **correct and complete** output of this command.
 Never pad to fill the format.
@@ -85,13 +97,6 @@ belongs nowhere near a handoff:
 • Only what you were TOLD and never wrote down: cross-repo commitments,
   scope limits, access constraints. If it can be read anywhere, cut it.
 
-── DEAD ENDS ──────────────────────────────────────────────────────────
-• Approaches tried and abandoned that left NO trace in the repo — the
-  next session would otherwise retry them. If the attempt is visible in
-  the history, it is not a dead end worth carrying; cut it.
-
-── BRANCHES TO DELETE ─────────────────────────────────────────────────
-none — remote is clean            (or the per-branch checklist from §3)
 ═══════════════════════════════════════════════════════════════════════
 ```
 
@@ -119,11 +124,20 @@ it until it read the source directly). If a directive's *application* to
 this repo needs a decision record, that belongs in CLAUDE.md, not a
 handoff.
 
-## 3. End with the branch checklist (hard exit gate)
-Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` and close the
-message with a `Branches to delete` checklist: every stray branch the session
-could not delete itself, each with the reliable removal path — *its merged PR →
+## 3. Leave the remote clean (hard exit gate)
+Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` as the last act
+before handing off. Every stray branch is **this** session's work to finish, not
+a line item for the next one — the block never carries a "branches to delete"
+list, because a branch that still exists means §1 was not completed.
+
+If one genuinely cannot be removed (some proxied git remotes refuse branch
+deletion outright), that is a request for the **human, now** — put it in the
+chat reply, outside the block, with the reliable removal path: *its merged PR →
 "Delete branch"*, or the repo's **`/branches/all`** page (the plain Branches
-overview often omits merged branches; don't send the human there). With
-auto-delete enabled this should read: "Branches to delete: none — remote is
-clean."
+overview often omits merged branches; don't send them there). Never defer it
+into the handoff: the next session cannot action it either, so it would just be
+copied forward until someone happens to read it.
+
+The same rule generalises — **anything only the human can do goes in the reply,
+not the block.** The block addresses the next session; if the next session cannot
+act on a line, it does not belong in it.

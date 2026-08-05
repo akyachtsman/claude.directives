@@ -1,5 +1,5 @@
 ---
-description: "Session readiness — git health, CI status, validation gates, directive freshness, tool inventory, and repo-scope verification."
+description: "Session readiness — git health, CI status, validation gates, directive freshness, skill shadowing, tool inventory, and repo-scope verification."
 phase: cross-cutting
 ---
 Run a comprehensive environment readiness check and report a single pass/fail
@@ -57,7 +57,17 @@ verdict. Read-only — do NOT modify files. Execute in order:
    stamp/baselines themselves, report current, not behind. Session Start
    bootstrap skips existing files, so without this alarm a project can run
    indefinitely on stale skills/agents.
-7. Connectors & tools — Inventory the session's actual capabilities. Discover
+7. Skill shadowing — Personal skills (`~/.claude/skills/`, synced from the
+   user's Claude account) sit outside every repo, so `/audit-repo` and every
+   other repo-scoped check are blind to them while they shadow toolkit commands
+   by name. List that directory and compare against the installed toolkit's
+   commands and skills. For each collision report both line counts and, where
+   the personal copy contradicts a current directive rule, name the rule — a
+   handoff skill saying "summarize everything" contradicts `global.md` →
+   *Handoffs Carry Only What Dies With the Session*. Removing them is the
+   owner's action in their Claude account; no repo PR can, so report and stop.
+   No personal skills directory, or no collisions, is a pass.
+8. Connectors & tools — Inventory the session's actual capabilities. Discover
    values LIVE from this session (do not hardcode). For the repo-scope limit,
    **run the `scope-chk` verification** — confirm via ToolSearch whether the
    `add_repo` / `list_repos` tools (claude-code-remote) actually exist, and report
@@ -82,7 +92,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
    - <key access limit, e.g. GitHub single-repo scope>
    - <key access limit, e.g. no send_later / no gh / no browser>
 
-Output a compact checklist with a checkmark or X per item for steps 1–6. End
+Output a compact checklist with a checkmark or X per item for steps 1–7. End
 with a one-line "ready / not ready" verdict and any actions needed before
-starting work, then append the step-7 connectors/tools inventory below the
+starting work, then append the step-8 connectors/tools inventory below the
 verdict (reference info, not pass/fail).

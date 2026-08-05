@@ -55,6 +55,11 @@ genuinely help, but are not required.
 - **Owner-facing vs. the record.** Chat replies and PR titles/bodies lead in
   plain language. Commit messages, code comments and test names are the
   engineering *record* — precise, technical, never simplified for this rule.
+- **A rule states the rule; its reasoning goes in the commit.** When adding to a
+  directive or CLAUDE.md, write what to do and stop. The incident that prompted
+  it, the diagnosis, and the alternatives weighed belong in the commit message
+  and PR body. Every session pays a rule's length forever and reads it only to
+  learn what to do.
 - **Detail on request, not by default.** Keep the mechanism, move it down. When
   asked, give all of it — simpler never means vaguer, and "it's handled" is not
   an answer.

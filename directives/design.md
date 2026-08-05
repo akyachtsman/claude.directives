@@ -24,8 +24,7 @@ contract:
 3. **Build** the remaining pages against that contract via `/sdd-loop` — so every
    page matches page one.
 
-See `docs/guides/design-tooling.md` for generator setup (the `frontend-design` skill and
-wiring Stitch's remote MCP for a browser-only session).
+See `docs/guides/design-tooling.md` for generator setup.
 
 ## Tokens & components (the per-project consistency contract)
 Two files, committed in the project repo, are the single source of truth for its
@@ -35,12 +34,11 @@ look:
   references `var(--…)`, never a hardcoded value. Change a token → the whole
   project re-themes.
 - **`styles/components.css`** — the reusable elements (button, card, input,
-  checkbox, header) built once and used on every page, so structure stays
-  consistent page-to-page.
+  checkbox, header) built once and used on every page.
 
 Generators (`frontend-design`, Stitch) are always instructed to **use this
-project's `tokens.css`/`components.css`**, never invent a parallel system. Starter
-versions ship in `templates/styles/` for `/new-repo` to scaffold.
+project's `tokens.css`/`components.css`**, never invent a parallel system.
+Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack
 Plain HTML + CSS + vanilla JS, no *local* build (per `global.md`). Tokens are
@@ -60,28 +58,26 @@ styles/
 
 ## Script loading
 **Inline scripts run after their DOM.** An inline `<script>` that binds event
-listeners must not execute before the elements it targets are parsed: place it
-at the very end of `<body>`, or wrap the bindings in a function run on
+listeners must not execute before the elements it targets are parsed: place it at
+the very end of `<body>`, or wrap the bindings in a function run on
 `DOMContentLoaded` (with a `document.readyState` fast-path). Binding a listener
 to a not-yet-parsed element throws — and silently kills the rest of the script,
 so **every handler after the throw never attaches** while the page still "looks"
-rendered. Never bind to an element defined later in the document than the
-script. (test.md's console-error gate exists to catch exactly this.)
+rendered. Never bind to an element defined later in the document than the script.
+(`test.md`'s console-error gate exists to catch exactly this.)
 
 ## Cross-platform & responsive
 Every project's UI must work across the platforms it ships to — laptop/desktop,
-tablet (iPad), and phone (iPhone/Android). Design responsive-first, never for a
-single device:
+tablet (iPad), and phone (iPhone/Android). Design responsive-first:
 - **Fluid layout:** adapt from phone to desktop widths — no fixed desktop-only
   canvas. Content reflows; nothing is clipped or scrolls horizontally at phone
   width. Use responsive units and breakpoints, not hardcoded pixel layouts.
 - **Touch *and* pointer:** every action works by tap, click, and keyboard.
-  **No hover-only states** — pair every `:hover` with a tap/focus equivalent
-  (touch devices have no hover).
+  **No hover-only states** — pair every `:hover` with a tap/focus equivalent.
 - Targets: tap/click min **44×44px**; checkboxes min **24×24px**; min **8px**
   gap between adjacent targets.
-- Inputs: min **48px** height; font on inputs **never below 16px** (prevents
-  iOS zoom on focus).
+- Inputs: min **48px** height; font on inputs **never below 16px** (prevents iOS
+  zoom on focus).
 
 ## Accessibility
 Non-negotiable, independent of the chosen look — enforced per-project by the
@@ -100,8 +96,8 @@ contrast guardrail (`templates/scripts/check-contrast.js`, run in CI against
 ## Tables & sorting
 Any table/grid of rows sorts the **same way in every project** — same
 interaction, same rules — so a user never relearns it:
-- **The column header IS the sort control.** Clicking (or Enter/Space on) a header
-  sorts the rows by that column. No separate sort pills or menus.
+- **The column header IS the sort control.** Clicking (or Enter/Space on) a
+  header sorts the rows by that column. No separate sort pills or menus.
 - **Toggle direction:** the first activation of a column sorts **ascending**;
   re-activating the active column flips to **descending**. Exactly one column is
   active at a time.
@@ -148,10 +144,9 @@ function makeSortable(table){
 
 ## List & summary surfaces
 For a short, triage-style list of items (tasks, alerts, posts, entries) a user
-scans at a glance, use **one** consistent card pattern across the project so the
-interaction is never relearned. Use it for **≤ ~10 rows** with a title + context
-per item; reach for **Tables & sorting** instead when the data is tabular or needs
-comparison/sorting.
+scans at a glance, use **one** consistent card pattern across the project. Use it
+for **≤ ~10 rows** with a title + context per item; reach for **Tables & sorting**
+instead when the data is tabular or needs comparison/sorting.
 
 **Anatomy** — a titled card holds hairline-divided rows; each row is the control:
 - **Card** — `--surface`, `1px solid --border`, radius from `--radius-*`, `--shadow`;
@@ -168,7 +163,7 @@ comparison/sorting.
 **Rules**
 - **Status is conveyed by the pill's text, never colour alone** (WCAG + screen
   readers): colour reinforces, the label carries the meaning. Map each status to a
-  semantic token consistently — the palette is **per-project**, not standardized here.
+  semantic token consistently — the palette is **per-project**.
 - **Tokens, not literals** — every value reads `var(--…)`.
 - **States:** hover / `:focus-visible` → `--primary-bg`; a selected or deep-linked
   row keeps `--primary-bg`; **empty** → one centred muted line (per Editorial →
@@ -208,8 +203,8 @@ function makeSummaryList(card){
 ```
 
 ## Diagrams & connectors
-For any node-and-edge surface (relationship maps, flow/architecture diagrams,
-org charts — SVG or canvas). The invariant: **every connector stays individually
+For any node-and-edge surface (relationship maps, flow/architecture diagrams, org
+charts — SVG or canvas). The invariant: **every connector stays individually
 traceable to exactly one source→target pair**, at any zoom.
 
 **Rules**
@@ -230,10 +225,10 @@ traceable to exactly one source→target pair**, at any zoom.
 
 **Verify geometrically, not visually, before shipping.** A glance misses
 collinear overlaps. From the edge geometry itself (path data / computed
-polylines), assert: no two segments from different edges overlap collinearly,
-and no segment intersects a node's rect. Then confirm against the **served**
-build, not the local file — hash-nav and CDN caching can serve a stale build
-that hides the change (cache-bust with `?v=` or incognito).
+polylines), assert: no two segments from different edges overlap collinearly, and
+no segment intersects a node's rect. Then confirm against the **served** build,
+not the local file — hash-nav and CDN caching can serve a stale build that hides
+the change (cache-bust with `?v=` or incognito).
 
 ## Editorial Preferences
 Look-independent copy and formatting rules — apply to every project.

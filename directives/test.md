@@ -1,12 +1,13 @@
 # Claude Test & QA Directives
 
-This is the exportable directive for downstream projects. Import it into your project's `CLAUDE.md` or agent configuration.
+This is the exportable directive for downstream projects. Import it into your
+project's `CLAUDE.md` or agent configuration.
 
 ## Key docs — index (read on demand)
 
 Know this index; fetch a doc when working in its area. Do **not** bulk-read
-everything at session start — that burns context on material the task may
-never touch.
+everything at session start — that burns context on material the task may never
+touch.
 
 ### docs/
 - `docs/standards/automations.md` — CI monitor workflow, PR lifecycle additions, escalation additions
@@ -16,43 +17,41 @@ never touch.
 - `docs/standards/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
 
 ### QA/data agents — ship in the directives-toolkit plugin
-Agents arrive via the `directives-toolkit` plugin (see global.md → Skill
-Bootstrap; web environments install it in the setup script) and are namespaced
-`directives-toolkit:*`. Nothing is fetched into `.claude/`; the full body loads
-when an agent is invoked. Inventory (source:
-`claude.directives/plugins/directives-toolkit/agents/`):
+Agents arrive via the `directives-toolkit` plugin (see `global.md` → *Skill
+Bootstrap*) and are namespaced `directives-toolkit:*`. Nothing is fetched into
+`.claude/`; the full body loads when an agent is invoked. Source:
+`claude.directives/plugins/directives-toolkit/agents/`.
 - `test-verifier` — independent QA verification agent (runs the suite, merge verdict)
 - `pr-readiness-reviewer` — final merge gate agent
 - `qa-pipeline` — full pipeline orchestrator
 - `ui-tester` — Playwright browser testing agent
 - `supabase` — data/backend specialist (per `data.md`)
 
-Code review and security review are **not** toolkit agents anymore — they come
-from Anthropic-official sources (enabled in each project's `.claude/settings.json`
-and installed by the environment setup script):
-- Code review → `pr-review-toolkit:code-reviewer` (official plugin; confidence-scored,
-  CLAUDE.md-aware); deep test-coverage critique → `pr-review-toolkit:pr-test-analyzer`
+Code review and security review are **not** toolkit agents — they come from
+Anthropic-official sources, enabled in each project's `.claude/settings.json`
+and installed by the environment setup script:
+- Code review → `pr-review-toolkit:code-reviewer`; deep test-coverage critique →
+  `pr-review-toolkit:pr-test-analyzer`
 - Security review → the built-in `/security-review` skill on demand, plus the
   official `security-guidance` plugin's automatic hooks (edit/turn/commit-time)
-- Quick CI status checks are done inline via `mcp__github__actions_list` (the
-  retired `test-monitor` agent's one-pass job; the always-on monitor remains
-  `ci-monitor.yml`)
+- Quick CI status checks are done inline via `mcp__github__actions_list`; the
+  always-on monitor remains `ci-monitor.yml`
 
 ### templates/ — fill-in artifacts
 - `templates/CLAUDE-template.md` — project CLAUDE.md scaffold (used by `/new-repo`)
 - `templates/implementation-summary-template.md` — required before invoking reviewers
 - `templates/pr-checklist.md` — PR readiness checklist
 - `templates/project-test-plan-template.md` — test plan structure
-  (the test-verifier report format lives inline in its agent definition inside
-  the plugin; code/security review findings are written to `.agent-reports/` by
-  the official reviewers per qa-pipeline's adapter instructions)
 
-Workflow and Playwright-kit installation — which template goes where, and the
-monitors — is `docs/standards/cicd-setup.md`'s job; don't re-derive it from the tree.
+The test-verifier report format lives inline in its agent definition inside the
+plugin; code/security review findings are written to `.agent-reports/` by the
+official reviewers per qa-pipeline's adapter instructions. Workflow and
+Playwright-kit installation is `docs/standards/cicd-setup.md`'s job — don't
+re-derive it from the tree.
 
 ## Session start — required actions
 
-Execute these steps at the start of every session, before any task work:
+Execute these before any task work:
 1. Read `CLAUDE.md` for current project state (and any Project-Specific Test Scenarios)
 2. Subscribe to PR activity on all open PRs via `subscribe_pr_activity`
 3. Poll GitHub Actions API (`mcp__github__actions_list`) for any failures since the last session
@@ -65,54 +64,50 @@ Execute these steps at the start of every session, before any task work:
 - `UI Tests (local server)` failures with `API status: no call` are expected and non-blocking in CI
 
 ## Authenticated flows (auth-gated apps)
-Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach the
-backend**, so auth-gated views (login, portal, drill-downs) are untestable there
-and its `ui-tests` job is non-blocking by design. The **canonical mechanism for
-testing authenticated flows is `qa-live.yml`**: it runs Playwright against the
-deployed URL and logs in with a per-project seeded test account
+Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach
+the backend**, so auth-gated views (login, portal, drill-downs) are untestable
+there and its `ui-tests` job is non-blocking by design. The **canonical
+mechanism for testing authenticated flows is `qa-live.yml`**: it runs Playwright
+against the deployed URL and logs in with a per-project seeded test account
 (`TEST_AUTH_CREDENTIAL` secret + `APP_URL` variable). Its live step is blocking —
 a failure there must be fixed before work is done.
 - **Why live, not local:** agent sandboxes and CI runners are commonly firewalled
   from the live backend (e.g. a Supabase `403` at the proxy), so local Playwright
   cannot render authenticated views. Seed a test account and test against the
-  deploy rather than relying on local runs.
+  deploy.
 - Any app with an auth gate must wire `qa-live.yml` + the seeded credential. An
-  authenticated flow with no live coverage is a **coverage gap, not "untestable"** —
-  and a UI change shipped without a `ui-tester` run is a readiness blocker (see the
-  `pr-readiness-reviewer` gate).
+  authenticated flow with no live coverage is a **coverage gap, not
+  "untestable"** — and a UI change shipped without a `ui-tester` run is a
+  readiness blocker (see the `pr-readiness-reviewer` gate).
 
 ## Rendered-verification gate (visual changes)
 
 A change that alters rendered UI is not "done" until Playwright has actually
-rendered the changed surface and asserted the *visible outcome* — never a
-proxy (`node --check`, html-validate, boot-smoke, a DB/SQL check, or reading
-the diff). Add or extend a scenario that asserts the **specific** change (the
-new value, the now-visible control), not merely that the screen loads.
+rendered the changed surface and asserted the *visible outcome* — never a proxy
+(`node --check`, html-validate, boot-smoke, a DB/SQL check, or reading the
+diff). Add or extend a scenario that asserts the **specific** change (the new
+value, the now-visible control), not merely that the screen loads.
 - **Unauthenticated surfaces** (public pages, pre-auth/login states, static
   components): run the check **locally before pushing**.
 - **Auth-gated surfaces** (portals, drill-downs, anything behind login): local
-  runs can't reach the backend (see *Authenticated flows*), so the check is
-  **`qa-live`** — do **not** report the change verified until qa-live's live
-  step has **passed for it**. "Static checks are green" / "it will run in CI"
-  is not verification. If the gate hasn't passed yet, report status as
-  *pending visual verification*, not done.
+  runs can't reach the backend, so the check is **`qa-live`** — do **not** report
+  the change verified until qa-live's live step has **passed for it**. "Static
+  checks are green" / "it will run in CI" is not verification. If the gate hasn't
+  passed yet, report status as *pending visual verification*, not done.
 
 ## Assert the outcome, not the mechanism (owner ruling, 2026-08-01)
-The gate above says *render it*. This one says *what to assert once you have*.
-A test written from the implementation confirms the implementation. Four
-interaction bugs shipped green through a 27-assertion suite in one session
-because every assertion checked a mechanism the author had just built, and none
-checked what a person looking at the page would see.
+The gate above says *render it*. This one says *what to assert once you have*. A
+test written from the implementation confirms the implementation.
 
-**Name the observable outcome first, then write the assertion against it.**
-"The legend opens", "no arrow crosses a box it doesn't connect", "no filename is
-shown until asked for" — not "the click handler fires", "the router returns a
-path", "the toggle sets a class".
+**Name the observable outcome first, then write the assertion against it.** "The
+legend opens", "no arrow crosses a box it doesn't connect", "no filename is shown
+until asked for" — not "the click handler fires", "the router returns a path",
+"the toggle sets a class".
 
-Three failure shapes, each caught in the wild rather than by the suite:
+Three failure shapes:
 - **Driving the app the way you built it.** `page.click('.rs')` by selector hits
-  an 18px handle a real hand cannot find; `mouse.down()` + `move()` never sends
-  a wheel or touch event at all. Exercise the **whole input surface** — pointer,
+  an 18px handle a real hand cannot find; `mouse.down()` + `move()` never sends a
+  wheel or touch event at all. Exercise the **whole input surface** — pointer,
   wheel/trackpad (`deltaX` with `deltaY` of 0 is a real gesture), touch
   (multi-pointer), keyboard — not just the one path you coded against.
 - **Testing only the shipped state.** A layout check that runs on the default
@@ -127,12 +122,13 @@ commits' worth of work: the defect, and the assertion that would have caught it.
 Shipping only the first guarantees the next one in that class also ships.
 
 ## Required UI scenario patterns
-`ui-tester` emits these generic scenarios by default (beyond S1–S4) for every app;
-runnable source is the `NAV:`/`CTRL:` tests in `templates/ui-tests/tests/app.spec.js`:
+`ui-tester` emits these generic scenarios by default (beyond S1–S4) for every
+app; runnable source is the `NAV:`/`CTRL:` tests in
+`templates/ui-tests/tests/app.spec.js`:
 - **Back-flow / no-loop** — for each drill-down hierarchy, go deepest, then press
-  the in-app back control once per level and assert the path **strictly unwinds**:
-  each back lands on the prior page and never revisits the page just left. Catches
-  circular/ping-pong back navigation.
+  the in-app back control once per level and assert the path **strictly
+  unwinds**: each back lands on the prior page and never revisits the page just
+  left. Catches circular/ping-pong back navigation.
 - **Single primary action** — assert each view exposes exactly one primary CTA of
   a kind (one "Add X"). Catches duplicate/ghost controls.
 
@@ -147,40 +143,40 @@ Four gates every project's UI suite must satisfy — the kit enforces each
   `page.on('console')` (type `error`) and **fails if either fires** during load
   or interaction (S1, S3, ENTRY). An uncaught error on load is a broken page even
   if the screen "looks" rendered — one throw silently kills every handler bound
-  after it (see design.md → Script loading). No allow-lists without a written
+  after it (see `design.md` → *Script loading*). No allow-lists without a written
   reason in the test file.
 - **Dismissers are proven, not assumed.** For every modal, drawer, popover, or
   overlay: open it, then dismiss via its close/X/Cancel control AND Escape AND
   the backdrop (where one exists), asserting the container is actually hidden
-  after each (DISMISS). "It has a close button" is not coverage; "clicking it
-  closes" is.
-- **Coverage = controls clicked, not screens visited.** Every interactive
-  control is exercised at least once (S3). A screen-level smoke test does not
-  count as coverage for that screen's controls.
-- **Every deployed HTML entry point is tested.** If a project ships more than
-  one page (an app plus an admin/vendor console, say), declare the extra pages
-  in `APP_PAGES` so each gets the load gate (ENTRY), and give rich pages their
-  own suite. A page with zero tests is a release blocker, not an acceptable gap.
+  after each (DISMISS).
+- **Coverage = controls clicked, not screens visited.** Every interactive control
+  is exercised at least once (S3). A screen-level smoke test does not count as
+  coverage for that screen's controls.
+- **Every deployed HTML entry point is tested.** If a project ships more than one
+  page (an app plus an admin/vendor console, say), declare the extra pages in
+  `APP_PAGES` so each gets the load gate (ENTRY), and give rich pages their own
+  suite. A page with zero tests is a release blocker.
 
-These gates are **completion gates, not sequencing gates**: everything must
-pass before the work is called done, but a task never waits for the previous
-task's suite to finish before starting (`global.md` → Pipelined Execution).
-Verification runs concurrently with the next task; results route back — and
-batching independent tasks into one suite run is the norm, not a shortcut.
+These are **completion gates, not sequencing gates**: everything must pass before
+the work is called done, but a task never waits for the previous task's suite to
+finish before starting (`global.md` → *Pipelined Execution*). Verification runs
+concurrently with the next task; batching independent tasks into one suite run is
+the norm, not a shortcut.
 
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are
-  covered by the PR trigger — listing `claude/**` under push would run everything twice)
-- Static Checks must pass before merge. The local `UI Tests` job is **blocking
-  by default** for the static/no-backend tier (the suite runs fully against the
+  covered by the PR trigger — listing `claude/**` under push would run everything
+  twice)
+- Static Checks must pass before merge. The local `UI Tests` job is **blocking by
+  default** for the static/no-backend tier (the suite runs fully against the
   bundled local server); a repo may set the ui-suite composite's
   `advisory-run: 'true'` as an explicit, temporary opt-out while a known UI
   failure is mid-fix — flip it back once fixed. `qa-live.yml` remains the
   authoritative live gate for auth/backend-dependent flows
 - `qa-live.yml` failures against the live app must be fixed before marking work done
-- **Quarantine, don't blanket-disable** — when a single UI spec is flaky, skip that
-  one spec with a tracking note; never wrap the whole UI job in `continue-on-error`
-  to get green, which silently drops all coverage
+- **Quarantine, don't blanket-disable** — when a single UI spec is flaky, skip
+  that one spec with a tracking note; never wrap the whole UI job in
+  `continue-on-error` to get green, which silently drops all coverage
 - Workflow YAML is validated on every CI run — keep it parseable
 
 ## Circuit breakers (autonomous fix loops)
@@ -192,10 +188,10 @@ loop, CI triage), stop before thrashing:
 - **Watch the diff** — if a "fix" balloons or starts touching files unrelated to
   the failure, stop: that signals the diagnosis is wrong. Re-diagnose from the
   evidence rather than piling on more changes.
-- **Re-verify each attempt fresh** (`global.md` → Evidence before assertions) —
+- **Re-verify each attempt fresh** (`global.md` → *Evidence before assertions*) —
   never assume the previous fix held.
 
 ## Escalation
-Canonical stop-and-ask gates live in `global.md` → Escalation Rules; they apply
-here unchanged (file deletion, workflow triggers, 3+ CI failures, multi-file
-core logic).
+Canonical stop-and-ask gates live in `global.md` → *Escalation Rules*; they apply
+here unchanged (file deletion, workflow triggers, 3+ CI failures, multi-file core
+logic).

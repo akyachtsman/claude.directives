@@ -4,8 +4,42 @@ phase: reflect
 ---
 Produce a session handoff as a **paste-ready chat message** — never write a
 handoff file (anything durable belongs in CLAUDE.md, not a sidecar that goes
-stale the moment the repo changes). Capture ONLY the delta: facts no repo file
-records.
+stale the moment the repo changes).
+
+## 0. The only test for including anything
+> **Would this be lost forever the moment this session ends?**
+
+Not "is it useful", not "is it relevant", not "would it save time" — those let
+everything through. Only what lives *solely* in this session's memory qualifies.
+Apply it to every line before writing it, not as a pass afterwards.
+
+**Almost nothing survives this test. That is the intended outcome.** A handoff of
+two lines is a good handoff. A handoff of twenty is a session that failed to
+apply the test.
+
+Fails the test — the repo already holds it, and the next session reads the repo:
+- what changed, and why → the diff, the commit messages, the PR body
+- the current state of anything → the working tree, the live site, CI, `main`
+- open PRs / issues / labels / branches → GitHub, which the next session queries
+- any rule from CLAUDE.md or an imported directive → re-fetched at Session Start
+- what was tried and shipped → the merged history
+
+Passes the test — said aloud, never written down:
+- a question you asked the user that they have **not answered yet**
+- something the user said in chat that **contradicts or overrides** a file
+- an approach **already tried and abandoned**, where the repo shows no trace of
+  the attempt, so the next session would repeat it
+- a commitment made to **another session or repo** that nothing here records
+- a constraint you were **told**, not read (access limits, vendor quirks, "don't
+  touch X")
+
+If nothing passes, say exactly that in one line and stop. "Nothing to hand off —
+the repo holds everything" is a **correct and complete** output of this command.
+Never pad to fill the format.
+
+**Hard cap: 5 items, ~15 lines inside the block.** If more seem to qualify, the
+test is being applied too loosely — re-apply it and keep the ones that would
+actually cost the next session a wrong turn.
 
 ## 1. Settle the working state first
 A handoff over a messy tree is worthless:
@@ -19,13 +53,14 @@ A handoff over a messy tree is worthless:
   self-delete and this step is a no-op.
 
 ## 2. Write the handoff
-**Always deliver it as one self-contained, fenced block the user can paste
-verbatim into the new session** — never prose scattered around the reply. The
-block leads with **Unresolved** (pending issues, open concerns, decisions still
-in the air — the things only this session's memory holds); if there is truly
-nothing pending, it contains a 2–3 line summary of where the repo stands
-instead. An empty or missing hand-over block is never an acceptable output of
-this command.
+**Deliver it as one self-contained, fenced block the user can paste verbatim
+into the new session** — never prose scattered around the reply. It leads with
+**Unresolved**: decisions still in the air, questions the user has not answered,
+positions taken but not recorded.
+
+Do **not** substitute a status summary when nothing is pending — the repo states
+its own status better than a paraphrase of it can. Nothing pending means a
+one-line block saying so.
 
 **The block uses this exact visual format** — same header, same dividers, same
 framing, in every repo (drop a section entirely rather than leaving it empty;
@@ -45,11 +80,13 @@ what the repo doesn't capture.
 2. NEXT ITEM …
 
 ── CONTEXT (in no file) ───────────────────────────────────────────────
-• Out-of-band facts: cross-repo coordination, vendored/generated files
-  (don't hand-edit), scope limits — anything you were TOLD, not read.
+• Only what you were TOLD and never wrote down: cross-repo commitments,
+  scope limits, access constraints. If it can be read anywhere, cut it.
 
-── GOTCHAS ────────────────────────────────────────────────────────────
-• Things a fresh session would re-learn the hard way.
+── DEAD ENDS ──────────────────────────────────────────────────────────
+• Approaches tried and abandoned that left NO trace in the repo — the
+  next session would otherwise retry them. If the attempt is visible in
+  the history, it is not a dead end worth carrying; cut it.
 
 ── BRANCHES TO DELETE ─────────────────────────────────────────────────
 none — remote is clean            (or the per-branch checklist from §3)
@@ -64,9 +101,12 @@ Framing rules for UNRESOLVED items — the part that makes a handoff usable:
 - **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
   session would otherwise burn a round-trip re-deriving.
 
-Self-check every line: if it's already in CLAUDE.md, the README, a workflow
-file, **or an imported directive** (`global.md`, `git.md`, `test.md`,
-`design.md`, `data.md`), drop it — or move it THERE and drop it. Never
+Self-check every line against §0. If it's already in CLAUDE.md, the README, a
+workflow file, **a PR body, a commit message, an issue thread, the diff**, or an
+imported directive (`global.md`, `git.md`, `test.md`, `design.md`, `data.md`),
+drop it — or move it THERE and drop it. A merged PR is not session memory: the
+next session can read it, so restating its reasoning is the single most common
+way this command bloats. Never
 paraphrase a directive rule into the handoff: the receiving session's own
 Session Start already re-fetches the live directive text, and a paraphrase
 can drift stale or lossy in the meantime — the receiving session then

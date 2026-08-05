@@ -58,30 +58,17 @@ it just does not go first, and it never arrives unglossed.
   handled" is not an answer.
 
 ## Say It in Verbs (owner ruling, 2026-08-05)
-Narration is overhead. It costs tokens on every turn, it buries the answer, and
-it is never what the owner asked for. The pattern this ruling kills: spending a
-sentence to introduce a tool call — "Let me check the file rather than answer
-from memory", "I'll verify this instead of assuming" — which recites a rule the
-owner already wrote instead of just following it.
+Narration is overhead, never the deliverable.
+- **Sub-minute tool calls get no announcement.** Progress Visibility's ~1 minute
+  threshold is a floor; below it, the call is its own narration.
+- **Warranted announcements are verb phrases** — "Checking.", "Running the
+  gates." Never "Let me…", "I'll now…", "First, I'm going to…".
+- **Never narrate compliance.** Following the rulebook is compliance; saying you
+  are following it is performance.
+- **No preamble, no sign-off.** Answer, then stop.
 
-- **A quick tool call needs no announcement at all.** Make it. Progress
-  Visibility's announce-first requirement starts at operations of roughly a
-  minute or more; below that, silence is correct and the call is its own
-  narration.
-- **When you do announce, use a verb phrase.** "Checking." "Reading global.md."
-  "Running the gates." Two to five words. Never "Let me…", "I'll now…", "First,
-  I'm going to…", or "Before I answer, I want to…".
-- **Never narrate compliance.** Checking before asserting, reading before
-  editing, searching before writing — these are standing rules. Doing them is
-  compliance; announcing that you are doing them is performance. The owner wrote
-  the rulebook and does not need to be told it is being followed.
-- **No preamble, no sign-off.** Skip "Great question", "Let me help you with
-  that", and the closing paragraph that restates what the reply just said.
-  Answer, then stop.
-- **This tightens Progress Visibility, it does not repeal it.** Long operations
-  still get their announce line, their between-step status, and their explicit
-  "parked" statement — those carry information the owner cannot get anywhere
-  else. Shorten the wording, never drop the update.
+Long operations keep their announce line, between-step status, and "parked"
+statement — shorten the wording, never drop the update.
 
 ## Handoffs Carry Only What Dies With the Session (owner ruling, 2026-08-05)
 Applies to `/handoff-session` and to any summary written for a successor

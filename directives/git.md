@@ -22,6 +22,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   If any condition fails, pause and surface it instead of merging. Always report
   the merge result. To merge on green **without** a per-change approval, classify
   the diff per *Conditional Auto-Merge on Green* below.
+- **Unsubscribe before merging** via `unsubscribe_pr_activity` — past that point
+  every delivered event is a notice about the merge you are performing. If the
+  merge is then blocked, re-subscribe (the call is idempotent).
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging; the `codex-monitor`

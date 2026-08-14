@@ -17,15 +17,6 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__github__subscribe_pr_activity",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'BLOCKED by directives subscribe-gate: PR-activity subscription is disabled (git.md -> PR Lifecycle, owner ruling 2026-08-14). The subscribe confirmation is rendered into the transcript at call time and cannot be suppressed afterwards. Track the PR with ScheduleWakeup instead (~5 min), then read CI, labels and review threads directly before merging.' >&2; exit 2"
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {

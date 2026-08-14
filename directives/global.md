@@ -163,7 +163,7 @@ styles/          ← the committed design contract (tokens.css + components.css)
 - Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
   after each squash-merge — recycling branches tangles lineage and can attach
   the wrong diff to a PR
-- Track an open PR with `ScheduleWakeup`, never `subscribe_pr_activity`
+- Unsubscribe from a new PR at once and track it with `ScheduleWakeup`
   (`git.md` → *PR Lifecycle*); fix CI before marking ready
 - Deploy per the project's chosen tier (→ *Hosting & Deployment*) — GitHub Pages
   by default
@@ -379,8 +379,8 @@ At the start of every session:
    anything cross-repo.
 3. Confirm the active branch is not `main` before writing any code.
 4. Review open PRs for this repo before starting new work.
-5. Do not subscribe to PR activity — `git.md` → *PR Lifecycle*. Check open PRs
-   directly, and schedule a wake-up for any that are in flight.
+5. Check open PRs directly and schedule a wake-up for any in flight — do not
+   rely on PR-activity events (`git.md` → *PR Lifecycle*).
 
 ## Skill Bootstrap
 The toolkit — commands, auto-skills, agents, and guard hooks — ships as the

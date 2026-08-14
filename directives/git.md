@@ -9,11 +9,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
-- **Never call `subscribe_pr_activity`** (owner ruling, 2026-08-14). Its
-  confirmation is rendered into the transcript at call time and cannot be
-  suppressed afterwards. Track the PR with `ScheduleWakeup` instead: schedule a
-  check ~5 min out, then read CI, labels and review threads directly before
-  merging. A `PreToolUse` hook blocks the call as a backstop.
+- **Unsubscribe immediately after opening the PR** (owner ruling, 2026-08-14)
+  via `unsubscribe_pr_activity`. Creating a PR auto-subscribes the session
+  harness-side, with no tool call to prevent; unsubscribing at once stops every
+  event after the first. Track the PR with `ScheduleWakeup` instead — schedule a
+  check ~5 min out, then read CI, labels and review threads before merging.
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
   applies)
@@ -26,9 +26,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   If any condition fails, pause and surface it instead of merging. Always report
   the merge result. To merge on green **without** a per-change approval, classify
   the diff per *Conditional Auto-Merge on Green* below.
-- **Unsubscribe before merging** via `unsubscribe_pr_activity` — past that point
-  every delivered event is a notice about the merge you are performing. If the
-  merge is then blocked, re-subscribe (the call is idempotent).
+- Re-check the subscription before merging; if anything re-subscribed, drop it
+  again so the merge notice is not delivered back to you.
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging; the `codex-monitor`

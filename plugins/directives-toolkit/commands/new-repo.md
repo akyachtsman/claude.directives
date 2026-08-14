@@ -156,8 +156,8 @@ Execute in order:
    (`git commit --allow-empty`) and push it, then rebase the scaffolding branch
    onto it so the PR shows a clean diff. (Prevention: have the human create the
    repo with a README per `NEW-REPO-USER-INSTRUCTIONS.md` Step 1.) Then open a
-   **draft** PR targeting `main`; do not subscribe to its activity (`git.md` →
-   *PR Lifecycle*) — schedule a wake-up instead. Fix
+   **draft** PR targeting `main`, then unsubscribe from its activity at once
+   (`git.md` → *PR Lifecycle*) and schedule a wake-up instead. Fix
    any CI failures before marking ready — note the `UI Tests` job is **skipped
    while there's no `index.html` yet** (expected; the blocking gate is `Static
    Checks`).

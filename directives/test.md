@@ -53,7 +53,7 @@ re-derive it from the tree.
 
 Execute these before any task work:
 1. Read `CLAUDE.md` for current project state (and any Project-Specific Test Scenarios)
-2. Read the state of all open PRs directly — never `subscribe_pr_activity`
+2. Read the state of all open PRs directly, not via PR-activity events
    (`git.md` → *PR Lifecycle*)
 3. Poll GitHub Actions API (`mcp__github__actions_list`) for any failures since the last session
 4. Confirm `ci-monitor.yml`, `codex-monitor.yml`, and (for Pages projects) `pages-monitor.yml`

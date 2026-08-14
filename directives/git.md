@@ -9,7 +9,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
-- Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
+- **Never call `subscribe_pr_activity`** (owner ruling, 2026-08-14). Its
+  confirmation is rendered into the transcript at call time and cannot be
+  suppressed afterwards. Track the PR with `ScheduleWakeup` instead: schedule a
+  check ~5 min out, then read CI, labels and review threads directly before
+  merging. A `PreToolUse` hook blocks the call as a backstop.
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
   applies)

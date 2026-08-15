@@ -31,11 +31,16 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging; the `codex-monitor`
   workflow adds the label and never clears it for you.
-- **Label-absence is not proof.** `codex-monitor` applies `codex-flagged`
-  asynchronously, so a review landing seconds before the merge leaves the label
-  unset and a labels-only check passes a PR Codex has already flagged. Read the
-  reviews directly (`pull_request_read` → `get_reviews`) as well as the labels,
-  on the current head, immediately before merging.
+- **Neither a missing label nor an empty review list is proof.** `codex-monitor`
+  applies `codex-flagged` asynchronously, and Codex reviews on its own schedule
+  after a PR is opened or marked ready. Before merging, on the current head:
+  - **No Codex review yet is *pending*, not clean** — wait for it. Codex comments
+    when it has suggestions and reacts 👍 when it has none; one of those two is
+    the signal, never the absence of both.
+  - **A `COMMENTED` review needs its inline comments read.** `get_reviews` alone
+    cannot tell a clean COMMENTED review from an actionable one — read the review
+    comments and unresolved threads (`pull_request_read` → `get_review_comments`),
+    which is exactly what `codex-monitor` does before deciding to flag.
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or

@@ -1,7 +1,7 @@
 ---
 name: pr-readiness-reviewer
 description: Final PR gate — confirms tests, lint/build, required reports, and CI readiness before opening or merging.
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, mcp__github__pull_request_read
 ---
 
 Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, credentials,
@@ -50,12 +50,14 @@ You are the final gate before a pull request or merge. Confirm that the branch i
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
    - Codex is judged from the **review**, not the label. `codex-monitor` writes
      `codex-flagged` asynchronously, so an absent label proves nothing (`git.md` →
-     *PR Lifecycle*). Require a Codex response postdating the current head, and read its
-     review comments and unresolved threads — a `COMMENTED` review's substance is inline
-     and invisible in the review envelope. If Codex flagged it, the review is triaged
-     (fixed, or dismissed with a rationale in the PR) before Ready. If no response
-     postdates the head, or the reviews/comments cannot be read, mark the Codex item
-     **Pending** and do not report Ready.
+     *PR Lifecycle*). Use `mcp__github__pull_request_read`: `get_reviews` to find a review
+     whose reviewed-commit SHA matches HEAD — matched by SHA, never by timestamp, since a
+     review of an older commit can land after a newer push — then `get_review_comments`
+     for its inline comments and unresolved threads, because a `COMMENTED` review's
+     substance is invisible in the envelope. If Codex flagged it, the review is triaged
+     (fixed, or dismissed with a rationale in the PR) before Ready. If no review matches
+     HEAD, or the reviews/comments cannot be read, mark the Codex item **Pending** and do
+     not report Ready.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

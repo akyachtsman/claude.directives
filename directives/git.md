@@ -39,11 +39,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     the signal, never the absence of both. It reviews on open, on ready-for-review
     and on an `@codex review` comment — **not on a push** — so after pushing a fix,
     ask for a review rather than waiting for one that will never arrive.
-  - **The signal must postdate the latest push.** A review names the commit it
-    reviewed, but a 👍 reaction is PR-scoped and carries no SHA, so one earned
-    before your last commit still reads as approval. Require a Codex response
-    timestamped after the head moved (or after your review request); older is
-    stale, not clean.
+  - **Match the review to the head by SHA, not by clock.** A review names the
+    commit it reviewed — compare that against HEAD. A timestamp is not enough: a
+    review of commit A submitted after commit B was pushed postdates the push
+    while having reviewed neither. A 👍 carries no SHA at all, so accept one only
+    when the review request that triggered it postdates the latest push.
   - **A `COMMENTED` review needs its inline comments read.** `get_reviews` alone
     cannot tell a clean COMMENTED review from an actionable one: the review body is
     boilerplate and the substance is inline. Read the review comments and unresolved

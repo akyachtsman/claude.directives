@@ -48,10 +48,14 @@ You are the final gate before a pull request or merge. Confirm that the branch i
 
 4. **Reviewer issues**
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
-   - No unresolved `codex-flagged` label on the PR — if Codex flagged it, the review is
-     triaged (fixed, or dismissed with a rationale in the PR) before Ready. If this agent
-     cannot query PR labels, mark the Codex item **Unknown** and require the merger to
-     verify before merge.
+   - Codex is judged from the **review**, not the label. `codex-monitor` writes
+     `codex-flagged` asynchronously, so an absent label proves nothing (`git.md` →
+     *PR Lifecycle*). Require a Codex response postdating the current head, and read its
+     review comments and unresolved threads — a `COMMENTED` review's substance is inline
+     and invisible in the review envelope. If Codex flagged it, the review is triaged
+     (fixed, or dismissed with a rationale in the PR) before Ready. If no response
+     postdates the head, or the reviews/comments cannot be read, mark the Codex item
+     **Pending** and do not report Ready.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**
@@ -88,7 +92,7 @@ Use commands from `CLAUDE.md` or CI first. Common checks include:
 | Implementation summary | Present/Missing | <path> |
 | Test report | Present/Missing | <path> |
 | Reviewer issues | Clear/Unclear/Blocking | <report paths or notes> |
-| Codex review | Clear/Flagged/Unknown | <`codex-flagged` label state> |
+| Codex review | Clear/Flagged/Pending | <review state on current head; label is corroboration, not the source> |
 | Evidence currency | Current/Stale/Unknown | <HEAD SHA vs report/CI SHA> |
 | CI readiness | Ready/Not ready/Unknown | <notes> |
 

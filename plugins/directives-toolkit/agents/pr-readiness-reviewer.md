@@ -54,10 +54,13 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      whose reviewed-commit SHA matches HEAD — matched by SHA, never by timestamp, since a
      review of an older commit can land after a newer push — then `get_review_comments`
      for its inline comments and unresolved threads, because a `COMMENTED` review's
-     substance is invisible in the envelope. If Codex flagged it, the review is triaged
-     (fixed, or dismissed with a rationale in the PR) before Ready. If no review matches
-     HEAD, or the reviews/comments cannot be read, mark the Codex item **Pending** and do
-     not report Ready.
+     substance is invisible in the envelope. When Codex finds nothing it posts only a 👍
+     reaction and no review object exists at all — accept that as the clean signal, but
+     only when the review request that triggered it postdates the latest push. If Codex
+     flagged it, the review is triaged (fixed, or dismissed with a rationale in the PR)
+     before Ready. If neither a HEAD-matching review nor such a reaction is present, or the
+     reviews/comments cannot be read, mark the Codex item **Pending** and do not report
+     Ready.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

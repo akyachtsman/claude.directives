@@ -112,14 +112,35 @@ Three failure shapes:
   (multi-pointer), keyboard — not just the one path you coded against.
 - **Testing only the shipped state.** A layout check that runs on the default
   arrangement proves nothing about the arrangement a reader makes. Perturb it —
-  drag, resize, collapse, filter — then re-assert.
+  drag, resize, collapse, filter — then re-assert. Where a feature crosses a
+  browser-session boundary (auth, magic links, impersonation, tokens,
+  sessionStorage, multi-tab), enumerate the **transitions**, not the landing
+  state: *arrive → work → refresh → duplicate tab → exit → expiry*. Two
+  individually-correct rules can leave a live gap between them.
 - **Asserting a proxy.** "The handler ran" / "the class is set" / "CI is green"
   are not the outcome. If the assertion would still pass with the visible result
   wrong, it is testing the wrong thing.
 
+Two more shapes, from data and identity rather than interaction:
+- **Selecting the subject from live data.** "Pick the first X and assert its
+  rows" breaks the day someone creates an empty X — and if no X ever existed, the
+  test has been auto-skipping since birth: green while covering nothing. The
+  selection predicate must encode the property being asserted (pick an X *with
+  rows*), and the fixture must be **seeded, not skipped**. Where seeding is truly
+  impossible, a skipped test fails CI unless explicitly allowlisted; a
+  skip-if-absent test is a coverage hole, not coverage.
+- **One identity cannot see multi-identity bugs.** Anything tenant-, role- or
+  user-scoped needs a scenario where two identities touch the same feature —
+  a write landing under the wrong identity is indistinguishable from "not
+  saving". Asserting that the surface *names* its tenant is a partial mitigation,
+  not a substitute: it still passes while the write goes to the wrong place.
+
 When a human reports a defect the suite passed through, the fix is **two**
 commits' worth of work: the defect, and the assertion that would have caught it.
-Shipping only the first guarantees the next one in that class also ships.
+Shipping only the first guarantees the next one in that class also ships. Name
+which shape it was — wrong assertion, untested transition, or unmodelled data.
+A "more tests" response that names none of them is rigor applied to the part
+already covered.
 
 ## Required UI scenario patterns
 `ui-tester` emits these generic scenarios by default (beyond S1–S4) for every

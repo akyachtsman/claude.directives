@@ -103,7 +103,7 @@ Use commands from `CLAUDE.md` or CI first. Common checks include:
 | Implementation summary | Present/Missing | <path> |
 | Test report | Present/Missing | <path> |
 | Reviewer issues | Clear/Unclear/Blocking | <report paths or notes> |
-| Codex review | Clear/Flagged/Pending | <Clear only from a clean comment SHA-matching HEAD; Flagged from a HEAD-matching review; Pending for a bare 👍, missing PR number, or unreadable reviews> |
+| Codex review | Clear/Flagged/Pending | <state + the evidence, judged ONLY by the Reviewer-issues criterion above — never re-derived here> |
 | Evidence currency | Current/Stale/Unknown | <HEAD SHA vs report/CI SHA> |
 | CI readiness | Ready/Not ready/Unknown | <notes> |
 

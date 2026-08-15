@@ -48,19 +48,19 @@ You are the final gate before a pull request or merge. Confirm that the branch i
 
 4. **Reviewer issues**
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
-   - Codex is judged from the **review**, not the label. `codex-monitor` writes
-     `codex-flagged` asynchronously, so an absent label proves nothing (`git.md` →
-     *PR Lifecycle*). Use `mcp__github__pull_request_read`: `get_reviews` to find a review
-     whose reviewed-commit SHA matches HEAD — matched by SHA, never by timestamp, since a
-     review of an older commit can land after a newer push — then `get_review_comments`
-     for its inline comments and unresolved threads, because a `COMMENTED` review's
-     substance is invisible in the envelope. When Codex finds nothing it posts only a 👍
-     reaction and no review object exists at all — accept that as the clean signal, but
-     only when the review request that triggered it postdates the latest push. If Codex
-     flagged it, the review is triaged (fixed, or dismissed with a rationale in the PR)
-     before Ready. If neither a HEAD-matching review nor such a reaction is present, or the
-     reviews/comments cannot be read, mark the Codex item **Pending** and do not report
-     Ready.
+   - Codex is judged from the **review**, not the label — and **this agent never clears
+     that gate**. `codex-monitor` writes `codex-flagged` asynchronously, so an absent label
+     proves nothing (`git.md` → *PR Lifecycle*), and clearing it needs a signal this agent
+     cannot obtain: a clean Codex result is usually only a 👍 reaction, and no granted tool
+     enumerates who reacted, so a reaction cannot be attributed to Codex here. **Never
+     report Clear from label state.** What this agent can do: when the orchestrator supplies
+     the PR number, use `mcp__github__pull_request_read` — `get_reviews` for a review whose
+     reviewed-commit SHA matches HEAD (by SHA, never by timestamp, since a review of an
+     older commit can land after a newer push), then `get_review_comments` for its inline
+     substance, invisible in the envelope — and report **Flagged** if it raised anything
+     unresolved. Otherwise report **Pending**, stating that the merger must apply `git.md`'s
+     source-review gate before merging. Pending is the correct output of this item, not a
+     failure of it.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**
@@ -97,7 +97,7 @@ Use commands from `CLAUDE.md` or CI first. Common checks include:
 | Implementation summary | Present/Missing | <path> |
 | Test report | Present/Missing | <path> |
 | Reviewer issues | Clear/Unclear/Blocking | <report paths or notes> |
-| Codex review | Clear/Flagged/Pending | <review state on current head; label is corroboration, not the source> |
+| Codex review | Flagged/Pending | <Flagged only from a HEAD-matching review; Pending otherwise — this agent cannot establish Clear> |
 | Evidence currency | Current/Stale/Unknown | <HEAD SHA vs report/CI SHA> |
 | CI readiness | Ready/Not ready/Unknown | <notes> |
 

@@ -9,7 +9,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
-- Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
+- PR activity arrives on its own: opening a PR subscribes the session
+  harness-side, with no tool call involved. `subscribe_pr_activity` is for taking
+  over a PR you did not open, or re-subscribing after unsubscribing
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
   applies)
@@ -29,6 +31,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging; the `codex-monitor`
   workflow adds the label and never clears it for you.
+- **Label-absence is not proof.** `codex-monitor` applies `codex-flagged`
+  asynchronously, so a review landing seconds before the merge leaves the label
+  unset and a labels-only check passes a PR Codex has already flagged. Read the
+  reviews directly (`pull_request_read` → `get_reviews`) as well as the labels,
+  on the current head, immediately before merging.
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or

@@ -34,16 +34,21 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 - **Neither a missing label nor an empty review list is proof.** `codex-monitor`
   applies `codex-flagged` asynchronously, and Codex reviews on its own schedule
   after a PR is opened or marked ready. Before merging, on the current head:
-  - **No Codex review yet is *pending*, not clean** — wait for it. Codex comments
-    when it has suggestions and reacts 👍 when it has none; one of those two is
-    the signal, never the absence of both. It reviews on open, on ready-for-review
-    and on an `@codex review` comment — **not on a push** — so after pushing a fix,
-    ask for a review rather than waiting for one that will never arrive.
-  - **Match the review to the head by SHA, not by clock.** A review names the
-    commit it reviewed — compare that against HEAD. A timestamp is not enough: a
-    review of commit A submitted after commit B was pushed postdates the push
-    while having reviewed neither. A 👍 carries no SHA at all, so accept one only
-    when the review request that triggered it postdates the latest push.
+  - **No Codex response yet is *pending*, not clean** — wait for one. It answers in
+    one of three shapes: a review carrying inline comments when it has findings, a
+    plain comment naming the reviewed commit when it has none ("Didn't find any major
+    issues"), or a bare 👍 reaction. Any one of the three is the signal; the absence
+    of all three never is. Check the **author** as well as the content — clean wording
+    and a current SHA are forgeable by any commenter, and only the Codex bot's own
+    response clears this gate. It responds on open, on ready-for-review and on an
+    `@codex review` comment — **not on a push** — so after pushing a fix, ask for a
+    review rather than waiting for one that will never arrive.
+  - **Match the response to the head by SHA, not by clock.** A review names the
+    commit it reviewed, and so does the clean comment — compare either against HEAD.
+    A timestamp is not enough: a review of commit A submitted after commit B was
+    pushed postdates the push while having reviewed neither. Only the bare 👍 carries
+    no SHA, so accept a reaction alone only when the review request that triggered it
+    postdates the latest push.
   - **A `COMMENTED` review needs its inline comments read.** `get_reviews` alone
     cannot tell a clean COMMENTED review from an actionable one: the review body is
     boilerplate and the substance is inline. Read the review comments and unresolved

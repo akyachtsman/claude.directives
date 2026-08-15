@@ -56,11 +56,17 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      review of an older commit can land after a newer push — then `get_review_comments`
      for its inline substance, which the envelope hides; and `get_comments` for a clean
      comment naming the reviewed commit. A review with unresolved findings is **Flagged**;
-     a clean comment SHA-matching HEAD is **Clear**. A bare 👍 cannot be used — no granted
-     tool enumerates who reacted, so it cannot be attributed to Codex — and that case, a
-     missing PR number, or unreadable reviews/comments are all **Pending**, with the
-     merger applying `git.md`'s gate. Pending is a correct output of this item, not a
-     failure of it.
+     a clean comment is **Clear** only when it both SHA-matches HEAD **and** was authored
+     by the Codex bot identity — text and SHA alone are forgeable by any commenter. A bare
+     👍 cannot be used at all: no granted tool enumerates who reacted, so it cannot be
+     attributed. That case, a missing PR number, or unreadable reviews/comments are all
+     **Pending**, with the merger applying `git.md`'s gate. Pending is a correct output of
+     this item, not a failure of it.
+   - The label is **asymmetric**: its absence proves nothing, but a `codex-flagged` label
+     that is still present IS a blocker (`git.md` → *PR Lifecycle*) — `codex-monitor` never
+     clears it, so it survives every later head. A clean response on the current head does
+     not dismiss a label left from an earlier one. While it is present, report the PR
+     **Conditional** at best, and name removal-with-rationale as the required next step.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

@@ -35,6 +35,8 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
 
 - Do not modify code or files
 - Pass the branch name, changed files list, app URL, and existing `.agent-reports/` to each subagent
+- Also pass the PR number (owner/repo/number) when one exists — `pr-readiness-reviewer`
+  cannot resolve a branch to a PR itself and reports Codex as Pending without it
 - Continue pipeline even if non-blocking issues emerge — capture full picture
 - **Stop pipeline and report** if a blocking issue cannot be resolved after the ui-tester feedback loop
 - Store all reports in `.agent-reports/`

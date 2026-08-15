@@ -126,19 +126,28 @@ Two more shapes, from data and identity rather than interaction:
   rows" breaks the day someone creates an empty X — and if no X ever existed, the
   test has been auto-skipping since birth: green while covering nothing. The
   selection predicate must encode the property being asserted (pick an X *with
-  rows*), and the fixture must be **seeded, not skipped**. Where seeding is truly
-  impossible, a skipped test fails CI unless explicitly allowlisted; a
-  skip-if-absent test is a coverage hole, not coverage.
+  rows*), and the fixture must be **seeded, not skipped**. A skip-if-absent test
+  is a coverage hole, not coverage: a missing fixture fails review **whatever
+  reason the skip carries**, because a reason is not a fixture. Only an
+  explicitly approved N/A counts as an accepted skip. CI does not yet enforce
+  this — `ui-suite` runs plain `npx playwright test`, and the skips themselves
+  live in the spec template (`templates/ui-tests/tests/app.spec.js` skips the
+  auth scenarios when no credential is set, each with a reason attached) — so a
+  skipped-result gate is unbuilt work, not a rule projects are already failing.
 - **One identity cannot see multi-identity bugs.** Anything tenant-, role- or
   user-scoped needs a scenario where two identities touch the same feature —
   a write landing under the wrong identity is indistinguishable from "not
   saving". Asserting that the surface *names* its tenant is a partial mitigation,
-  not a substitute: it still passes while the write goes to the wrong place.
+  not a substitute: it still passes while the write goes to the wrong place. The
+  kit wires one identity only (`TEST_AUTH_CREDENTIAL`, singular, in `qa-live.yml`
+  → `ui-suite` → `app.spec.js`, documented once in `CLAUDE-template.md`), so a
+  project needing this scenario adds the second credential itself first.
 
 When a human reports a defect the suite passed through, the fix is **two**
 commits' worth of work: the defect, and the assertion that would have caught it.
 Shipping only the first guarantees the next one in that class also ships. Name
-which shape it was — wrong assertion, untested transition, or unmodelled data.
+which of the five shapes it was — untested input modality, untested state or
+transition, asserted proxy, unmodelled data, or single identity.
 A "more tests" response that names none of them is rigor applied to the part
 already covered.
 

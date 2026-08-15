@@ -9,7 +9,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
-- Subscribe to PR activity via `subscribe_pr_activity` immediately after opening
+- PR activity arrives on its own: opening a PR subscribes the session
+  harness-side, with no tool call involved. `subscribe_pr_activity` is for taking
+  over a PR you did not open, or re-subscribing after unsubscribing
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
   applies)
@@ -29,6 +31,28 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging; the `codex-monitor`
   workflow adds the label and never clears it for you.
+- **Neither a missing label nor an empty review list is proof.** `codex-monitor`
+  applies `codex-flagged` asynchronously, and Codex reviews on its own schedule
+  after a PR is opened or marked ready. Before merging, on the current head:
+  - **No Codex review yet is *pending*, not clean** — wait for it. Codex comments
+    when it has suggestions and reacts 👍 when it has none; one of those two is
+    the signal, never the absence of both. It reviews on open, on ready-for-review
+    and on an `@codex review` comment — **not on a push** — so after pushing a fix,
+    ask for a review rather than waiting for one that will never arrive.
+  - **Match the review to the head by SHA, not by clock.** A review names the
+    commit it reviewed — compare that against HEAD. A timestamp is not enough: a
+    review of commit A submitted after commit B was pushed postdates the push
+    while having reviewed neither. A 👍 carries no SHA at all, so accept one only
+    when the review request that triggered it postdates the latest push.
+  - **A `COMMENTED` review needs its inline comments read.** `get_reviews` alone
+    cannot tell a clean COMMENTED review from an actionable one: the review body is
+    boilerplate and the substance is inline. Read the review comments and unresolved
+    threads (`pull_request_read` → `get_review_comments`), which is exactly what
+    `codex-monitor` does before deciding to flag.
+  - **If the reviews cannot be read, the gate is not cleared.** Reading review
+    threads is GraphQL — the pool most likely to be exhausted at the moment it is
+    needed. Wait for the rollover or surface the block; never fall back to the
+    label, which is the failure this rule exists to prevent.
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or

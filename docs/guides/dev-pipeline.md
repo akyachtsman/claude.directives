@@ -49,7 +49,7 @@ specs/<slug>/
   review.md      ← 6 review findings (AUTO-FIX vs ASK)
   qa.md          ← 7 test report (verification-before-completion)
   ship.md        ← 8 ship record (PR URL + deploy SHA + live-check)
-learnings.jsonl  ← 9 Reflect (repo-root, append-only, auto-consulted)
+learnings.jsonl  ← 9 Reflect (repo-root, append-only + compaction, auto-consulted)
 ```
 
 `benefits-from` frontmatter declares each edge so the chain is machine-checkable
@@ -115,7 +115,7 @@ land-and-deploy + canary.
 
 ### 9 · Reflect — `/learn` *(alongside `/handoff-session`)*
 Compounding institutional memory. **Method imported:** gstack `learnings.jsonl`
-— append-only, **typed** (pattern / pitfall / preference / architecture / tool),
+— append-only, compacted on budget, **typed** (pattern / pitfall / preference / architecture / tool),
 **confidence 1–10**, file attribution, latest-key-wins; auto-consulted before
 recommendations. Today `/handoff-session` is a one-shot snapshot; `/learn` makes
 it compound. Browser-only: a repo file + a skill that greps it.

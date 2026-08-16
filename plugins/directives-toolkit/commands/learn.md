@@ -25,6 +25,26 @@ Fields: `ts` (ISO-8601) · `type` (`pattern` | `pitfall` | `preference` |
    updated entry anyway — consumers take **latest-key-wins**, so the newest line
    supersedes. Set `confidence` honestly (raise it when a lesson re-confirms).
 3. Create `learnings.jsonl` if absent; keep it valid JSONL (one object per line).
+4. **Cap `text` at ~60 words.** This file is read at session start, so every entry
+   is a permanent per-session cost, the same as a directive line — and unlike a
+   directive nothing else bounds it. State the lesson and the trigger that should
+   recall it; the incident, the diagnosis and the alternatives weighed belong in
+   the commit or PR that produced them (`global.md` → *Plain Language First*). If
+   an entry cannot be said in 60 words it is usually two entries, or it belongs in
+   CLAUDE.md as a rule rather than here as a memory.
+
+**Budget and compaction:** the per-entry cap slows growth but does not bound the
+file — distinct keys are unlimited and every update appends another line. Keep the
+file under **40 live entries / ~3,000 tokens**. On exceeding it, run a
+**compaction**: drop lines superseded by a later same-key entry (they are already
+inert under latest-key-wins), merge entries that state one lesson, and delete any
+whose rule now lives in CLAUDE.md or a directive.
+
+Compaction is the **one** exception to append-only, and it carries conditions: it
+is its own commit touching nothing else, every rewritten entry is re-stamped with
+the compaction date so no `ts` outlives the text it labels, and the superseded
+lines stay recoverable in git history — which is the archive, and is not read at
+session start. A rewrite that skips any of those is history loss, not compaction.
 
 **Consulting (the other half — done by other phases):** at session start and
 before recommending, grep `learnings.jsonl` for entries relevant to the files or

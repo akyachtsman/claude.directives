@@ -97,7 +97,8 @@ as "already installed" on every later refresh while `/env-chk` reports the
 project hook-enabled. A half-install is worse than no install here.
 
 ```bash
-raw="https://raw.githubusercontent.com/akyachtsman/claude.directives/main"
+repo="akyachtsman/claude.directives"
+raw="https://raw.githubusercontent.com/$repo/main"
 if [ -f .claude/settings.json ] && [ ! -f .claude/hooks/session-start.sh ]; then
   mkdir -p .claude/hooks
   # mktemp inside the DESTINATION dir: a bare `mktemp` lands in /tmp, and when

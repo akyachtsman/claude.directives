@@ -102,7 +102,8 @@ After the install block below, repair registration and the exec bit:
 # unrelated SessionStart hook AND reference this script under some other event, so
 # file-wide greps can both succeed while nothing invokes the updater at session start.
 if [ -f .claude/hooks/session-start.sh ] \
-   && ! jq -e '[.hooks.SessionStart[]?.hooks[]?.command] | any(contains("hooks/session-start.sh"))' \
+   && ! jq -e '[.hooks.SessionStart[]?.hooks[]?.command] 
+            | any((gsub("\"";"") | split(" ")[0] | endswith("hooks/session-start.sh")))' \
        .claude/settings.json >/dev/null 2>&1; then
   echo "MISSING-REGISTRATION: .claude/settings.json has no SessionStart row —"
   echo "  merge it from templates/claude-settings.json (do not overwrite the file;"

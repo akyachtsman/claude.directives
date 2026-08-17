@@ -61,7 +61,9 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      👍 cannot be used at all: no granted tool enumerates who reacted, so it cannot be
      attributed. That case, a missing PR number, or unreadable reviews/comments are all
      **Pending**, with the merger applying `git.md`'s gate. Pending is a correct output of
-     this item, not a failure of it.
+     this item, not a failure of it — but it **caps Final Status at Conditional**: never
+     report Ready while the Codex row is Pending, since Ready aggregates every row and
+     would otherwise carry an unverified one.
    - The label is **asymmetric**: its absence proves nothing, but a `codex-flagged` label
      that is still present IS a blocker (`git.md` → *PR Lifecycle*) — `codex-monitor` never
      clears it, so it survives every later head. A clean response on the current head does

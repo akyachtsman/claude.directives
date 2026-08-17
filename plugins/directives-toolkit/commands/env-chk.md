@@ -83,10 +83,15 @@ verdict. Read-only — do NOT modify files. Execute in order:
      ```bash
      [ "${CLAUDE_CODE_REMOTE:-}" = true ] \
        && [ -x .claude/hooks/session-start.sh ] \
-       && grep -q '"SessionStart"' .claude/settings.json \
-       && grep -q 'hooks/session-start\.sh' .claude/settings.json \
+       && jq -e '[.hooks.SessionStart[]?.hooks[]?.command] | any(contains("hooks/session-start.sh"))' \
+       .claude/settings.json >/dev/null 2>&1 \
        && echo "self-updating" || echo "needs remediation"
      ```
+     The registration test parses the SessionStart array rather than grepping the
+     file: two independent greps are satisfiable by unrelated entries — an
+     unrelated `SessionStart` command plus this script under `PreToolUse` — which
+     reports self-updating for a project whose updater never runs at session
+     start.
      On CLI/desktop the first condition is false by design — the hook exits early
      off the web (`global.md` → Skill Bootstrap keeps local installs manual). Do
      not report a local session as self-updating: tell it to run

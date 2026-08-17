@@ -98,11 +98,12 @@ After the install block below, repair registration and the exec bit:
   && echo "REPAIRED: exec bit on .claude/hooks/session-start.sh"
 
 # registration: merge the SessionStart row when the script exists but nothing runs it
-# Match the UPDATER COMMAND, not the SessionStart key: a project may already run
-# an unrelated SessionStart hook, which satisfies a bare key test while nothing
-# invokes this script.
+# Parse the SessionStart array; do not grep the file. A project may already run an
+# unrelated SessionStart hook AND reference this script under some other event, so
+# file-wide greps can both succeed while nothing invokes the updater at session start.
 if [ -f .claude/hooks/session-start.sh ] \
-   && ! grep -q 'hooks/session-start\.sh' .claude/settings.json 2>/dev/null; then
+   && ! jq -e '[.hooks.SessionStart[]?.hooks[]?.command] | any(contains("hooks/session-start.sh"))' \
+       .claude/settings.json >/dev/null 2>&1; then
   echo "MISSING-REGISTRATION: .claude/settings.json has no SessionStart row —"
   echo "  merge it from templates/claude-settings.json (do not overwrite the file;"
   echo "  the project may carry its own keys), then re-run /env-chk to confirm."

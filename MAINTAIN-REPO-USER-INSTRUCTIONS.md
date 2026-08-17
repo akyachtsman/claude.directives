@@ -28,7 +28,8 @@ travels determines what YOU must do when it changes:
 
 Corollaries worth memorizing:
 - A running session never updates itself — inherited rules refresh only via
-  `/refresh-repo`, installed tooling only via a NEW session after a cache rebuild.
+  `/refresh-repo`, installed tooling only via a NEW session (the `SessionStart`
+  hook fetches it; legacy projects wait for a cache rebuild).
 - One upstream PR often spans modes (a directive + a template + a plugin
   command). Walk the PR's file list against this table and do the union of
   the actions.
@@ -76,8 +77,10 @@ never by cross-repo edits** (`global.md` → Cross-Repo Boundary):
 
 ## Environment Maintenance
 
-The installed-tooling cache is **per environment** and rebuilds on any
-environment-config change or ~weekly expiry. Since the whole fleet shares the
+This section applies to **legacy projects only** — one carrying
+`.claude/hooks/session-start.sh` re-runs the installer every session and needs
+nothing here. The installed-tooling cache is **per environment** and rebuilds on
+any environment-config change or ~weekly expiry. Since the whole fleet shares the
 single `fleet` environment, this is **one action that updates every repo**:
 
 1. Open the `fleet` environment (Claude Code on the web → the environment your
@@ -164,8 +167,10 @@ Hard-won; each cost a real debugging session:
   your single click on **Ready for review** may be all it needs — it can merge
   over REST straight after, no need to wait out the hour.
 - **Plugin supply chain has no review point in our repos** — external plugin
-  updates (even Anthropic-official) reach sessions automatically on each env
-  cache rebuild (~weekly), unreviewed by us. The defenses are layered
+  updates (even Anthropic-official) reach sessions automatically — every session
+  now, via the `SessionStart` hook, rather than on the ~weekly cache rebuild —
+  unreviewed by us. The hook shortens that window, so it raises this risk rather
+  than lowering it. The defenses are layered
   elsewhere: push-gate blocks direct-to-main, workflow files are excluded
   from auto-merge, workflow-trigger edits are stop-and-ask, and every
   workflow PR gets a line-by-line diff read (`git.md`, 2026-07-19). Keep the

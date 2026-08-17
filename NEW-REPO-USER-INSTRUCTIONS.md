@@ -47,7 +47,9 @@ automatically — each existing repo needs the same `permissions.allow` block
 `.claude/settings.json` manually. One small PR per repo; a session scoped to
 that repo can do it on request.
 
-**Force a toolkit update (skip the ~weekly wait).** The setup-script install is
+**Force a toolkit update (skip the ~weekly wait).** Only needed for a project
+without `.claude/hooks/session-start.sh`; with the hook, the next session updates
+itself. The setup-script install is
 cached per environment, so a toolkit change merged upstream normally reaches your
 sessions only when that cache rebuilds (~weekly). To get it **now**: open the
 environment's settings, make any edit to the Setup script (even re-saving a

@@ -16,9 +16,10 @@ and CI validates references.
 The session's working rules were loaded at session start and do NOT update
 themselves. Re-fetch and re-read every imported directive URL from
 CLAUDE.md (five as of `git.md`), and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
-load at session start only — mid-session upstream merges reach the toolkit when
-the environment's cached setup script rebuilds (web: on an env-config change or
-~weekly cache expiry), not necessarily the next session.
+load at session start only — a mid-session upstream merge never reaches THIS
+session. With `.claude/hooks/session-start.sh` installed it reaches the next one;
+without it, only when the environment's cached setup script rebuilds (web: on an
+env-config change or ~weekly cache expiry).
 
 ## Phase 1 — Broken upstream references
 
@@ -82,8 +83,29 @@ done
 (raw.githubusercontent.com is CDN-served and works from remote sessions; a
 failed fetch is "cannot verify", never DRIFT.)
 
-`session-start.sh` is in this loop rather than only in Phase 2 because Phase 2
-sees only what changed UPSTREAM: a locally truncated hook whose template never
+**Absent-hook install (runs before the loop, delta-independent).** A legacy
+project has no `.claude/hooks/session-start.sh` at all, and neither pass would
+ever create one: the loop below skips absent files, and Phase 2 only processes
+templates that changed upstream since the stamp — which a project stamped after
+the hook shipped never sees. Without this step the offer `/env-chk` makes cannot
+be honoured and the project stays legacy through every refresh.
+
+```bash
+if [ -f .claude/settings.json ] && [ ! -f .claude/hooks/session-start.sh ]; then
+  mkdir -p .claude/hooks
+  curl -fsSL --connect-timeout 5 --max-time 60 \
+    "$raw/templates/claude-hooks/session-start.sh" -o .claude/hooks/session-start.sh \
+    && chmod +x .claude/hooks/session-start.sh \
+    && bash -n .claude/hooks/session-start.sh \
+    && echo "INSTALLED: .claude/hooks/session-start.sh (was absent)" \
+    || echo "COULD-NOT-INSTALL: .claude/hooks/session-start.sh — report, do not leave a half-install"
+fi
+```
+Install the settings row in the same pass, so the registration and its target
+always land together.
+
+`session-start.sh` is also in the loop below rather than only in Phase 2, because
+Phase 2 sees only what changed UPSTREAM: a locally truncated hook whose template never
 moved would otherwise stay broken through every refresh, failing session start
 each time. Restore it from the template rather than hand-editing, and re-run
 `bash -n` on it.

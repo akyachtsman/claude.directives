@@ -264,7 +264,8 @@ To add a command, skill, or agent: drop the file into the right
 `plugins/directives-toolkit/` subdir (commands are flat md files; each skill is
 a SKILL.md in its own directory; agents are flat md files with unique `name:`
 frontmatter), run the plugin check from the Local gate above, and ship through
-the normal PR flow. Downstream picks it up when its environment's cached setup
-script rebuilds (web: on an env-config change or ~weekly expiry). The
+the normal PR flow. Downstream projects carrying the `SessionStart` hook pick it
+up on their next session; legacy projects without it wait for their environment's
+cached setup script to rebuild (web: on an env-config change or ~weekly expiry). The
 install/distribution model lives in
 `directives/global.md` → Skill Bootstrap.

@@ -381,14 +381,18 @@
       "vendor": "Anthropic",
       "serves": "meta.session",
       "sockets": [
-        "CLAUDE.md"
+        "CLAUDE.md",
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json"
       ]
     },
     "hookify": {
       "vendor": "Anthropic",
       "serves": "meta.guards",
       "sockets": [
-        "CLAUDE.md"
+        "CLAUDE.md",
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json"
       ]
     },
     "dataviz-builtin": {

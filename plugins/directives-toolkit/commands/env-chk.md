@@ -75,11 +75,23 @@ verdict. Read-only — do NOT modify files. Execute in order:
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
    - `templates/` → installed copies may be stale → run `/refresh-repo`
    - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it.
-     If `.claude/hooks/session-start.sh` exists, the next session picks it up on
-     its own — say so and prescribe nothing. If it does not, this is a legacy
-     project: force the env cache rebuild (see NEW-REPO-USER-INSTRUCTIONS.md →
-     "Force a toolkit update") or wait for the ~weekly expiry, and offer to
-     install the hook via `/refresh-repo` so the manual step stops recurring
+     Whether the project self-heals depends on the hook being RUNNABLE, which
+     existence alone does not establish — an unregistered or non-executable
+     script never runs, and a content-only integrity diff sees nothing wrong with
+     either. Require all three:
+     ```bash
+     [ -x .claude/hooks/session-start.sh ] \
+       && grep -q 'session-start.sh' .claude/settings.json \
+       && grep -q '"SessionStart"' .claude/settings.json \
+       && echo "self-updating" || echo "needs remediation"
+     ```
+     Self-updating → the next session picks the toolkit up on its own; say so and
+     prescribe nothing. Otherwise → force the env cache rebuild (see
+     NEW-REPO-USER-INSTRUCTIONS.md → "Force a toolkit update") or wait for the
+     ~weekly expiry, and offer `/refresh-repo` to install or repair the hook so
+     the manual step stops recurring. Name which of the three failed: a present
+     but unregistered or non-executable hook is the trap — it looks installed and
+     never runs.
    - `docs/` only → informational
    Exception: if upstream.sha trails HEAD by exactly the commit(s) that recorded the
    stamp/baselines themselves, report current, not behind. Session Start

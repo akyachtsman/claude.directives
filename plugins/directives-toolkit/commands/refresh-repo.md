@@ -90,15 +90,25 @@ templates that changed upstream since the stamp — which a project stamped afte
 the hook shipped never sees. Without this step the offer `/env-chk` makes cannot
 be honoured and the project stays legacy through every refresh.
 
+Download to a temporary file and rename only after it validates. Writing the
+final path directly would leave a truncated or invalid hook behind on a failed
+fetch — and because the absent-hook test is `[ ! -f ]`, that wreckage then reads
+as "already installed" on every later refresh while `/env-chk` reports the
+project hook-enabled. A half-install is worse than no install here.
+
 ```bash
 if [ -f .claude/settings.json ] && [ ! -f .claude/hooks/session-start.sh ]; then
   mkdir -p .claude/hooks
-  curl -fsSL --connect-timeout 5 --max-time 60 \
-    "$raw/templates/claude-hooks/session-start.sh" -o .claude/hooks/session-start.sh \
-    && chmod +x .claude/hooks/session-start.sh \
-    && bash -n .claude/hooks/session-start.sh \
-    && echo "INSTALLED: .claude/hooks/session-start.sh (was absent)" \
-    || echo "COULD-NOT-INSTALL: .claude/hooks/session-start.sh — report, do not leave a half-install"
+  tmp=$(mktemp)
+  if curl -fsSL --connect-timeout 5 --max-time 60 \
+       "$raw/templates/claude-hooks/session-start.sh" -o "$tmp" \
+     && [ -s "$tmp" ] && bash -n "$tmp"; then
+    chmod +x "$tmp" && mv "$tmp" .claude/hooks/session-start.sh
+    echo "INSTALLED: .claude/hooks/session-start.sh (was absent)"
+  else
+    rm -f "$tmp"
+    echo "COULD-NOT-INSTALL: .claude/hooks/session-start.sh — nothing written; report it"
+  fi
 fi
 ```
 Install the settings row in the same pass, so the registration and its target

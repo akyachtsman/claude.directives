@@ -99,7 +99,7 @@ const SELF = {
 
 const DELIVERY = {
   inh: 'inherited — raw URL, live at the next session start; you do nothing',
-  ins: 'installed — plugin, lands when the environment cache rebuilds (~weekly)',
+  ins: 'installed — plugin, lands next session via the SessionStart hook (legacy projects without it: on the environment cache rebuild, ~weekly)',
   cop: 'copied — snapshot taken at bootstrap; resync with /refresh-repo',
   ref: 'referenced — read on demand, nothing stored downstream',
   int: 'internal — never leaves this repo',

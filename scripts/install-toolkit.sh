@@ -15,7 +15,13 @@
 # can't tell the environment has no toolkit.
 set -eu
 
-# Best-effort wrapper for every plugin operation below. Two properties that are
+# Best-effort wrapper for the operations that MAY fail without leaving the
+# environment unusable: marketplace registration, refreshes, and every update.
+# The three REQUIRED installs below are deliberately NOT wrapped — under `set -e`
+# they abort with non-zero, which is the whole point of the header note above: a
+# `curl | bash` caller must be able to tell that the toolkit never installed.
+# Wrapping those was a regression; best-effort is for keeping a session alive,
+# not for hiding a failed bootstrap. Two properties that are
 # separable and were previously collapsed into one `|| true`: NEVER FATAL (a
 # failed update must not block a session start) and NEVER SILENT (a masked
 # failure leaves a stale pin while the script prints success). $1 is an
@@ -42,19 +48,19 @@ soft "" claude plugin marketplace add anthropics/claude-code
 soft "" claude plugin marketplace update
 
 # 3) Install the toolkit + the official review / security / design plugins.
-soft "" claude plugin install directives-toolkit@claude-directives
-soft "" claude plugin install pr-review-toolkit@claude-plugins-official
-soft "" claude plugin install security-guidance@claude-plugins-official
+claude plugin install directives-toolkit@claude-directives
+claude plugin install pr-review-toolkit@claude-plugins-official
+claude plugin install security-guidance@claude-plugins-official
 # frontend-design: the design generator the new design.md relies on (per
 # design.md / docs/guides/design-tooling.md). || true so a marketplace-name drift can't
 # break the whole setup run.
-soft "" claude plugin install frontend-design@claude-code-plugins
+soft "" claude plugin install frontend-design@claude-code-plugins   # optional
 # plugin-dev / hookify: the authoring authorities for this toolkit's own commands,
 # agents and hooks (CLAUDE.md -> Toolkit changes). Registering a marketplace does
 # NOT attach its plugins, so naming them as authorities without installing them
 # left the requirement unmeetable in a clean environment.
-soft "" claude plugin install plugin-dev@claude-code-plugins
-soft "" claude plugin install hookify@claude-code-plugins
+soft "" claude plugin install plugin-dev@claude-code-plugins        # optional
+soft "" claude plugin install hookify@claude-code-plugins           # optional
 
 # 4) Move each plugin to its marketplace's current head. `install` is a NO-OP when
 # the plugin is already present — it prints "already installed" and leaves the old

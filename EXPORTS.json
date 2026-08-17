@@ -12,7 +12,7 @@
       ]
     },
     "installed-tooling": {
-      "mode": "installed via the plugin marketplace / env setup script — propagates on env cache rebuild (~weekly), versioned by git SHA",
+      "mode": "installed via the plugin marketplace / SessionStart hook — propagates to the next session for projects carrying .claude/hooks/session-start.sh, otherwise on the env cache rebuild (~weekly); versioned by git SHA",
       "paths": [
         ".claude-plugin/marketplace.json",
         "plugins/directives-toolkit/",

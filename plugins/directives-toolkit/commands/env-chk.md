@@ -42,11 +42,22 @@ verdict. Read-only — do NOT modify files. Execute in order:
    this check stays read-only). Flag cross-repo contradictions.
    **Staleness alarm (multi-project critical):** compare the sync stamp
    `.upstream.sha` in .claude/directive-sync.json against the live HEAD of
-   claude.directives `main` (one API call:
-   `repos/akyachtsman/claude.directives/commits/main`). If they differ — or no
-   stamp exists — report a ⚠️ finding. Make it category-aware: classify the
-   delta's changed paths (one compare call) and state the action per
-   EXPORTS.json delivery mode:
+   claude.directives `main`. Get that HEAD with
+   `git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main`
+   — git transport, so it needs no auth, no MCP and no quota, and works from a
+   session scoped to any repo. Do **not** call `api.github.com`: it is refused at
+   the proxy, and the GitHub MCP is scoped to the session's own repo, so in every
+   downstream project — which is most sessions — the API route fails outright.
+   If the stamp differs, or none exists, report a ⚠️ finding.
+   Then classify the delta by top-level path and state the action per
+   EXPORTS.json delivery mode. Classification needs the diff, which `ls-remote`
+   cannot give: use the GitHub MCP compare **only when this session is scoped to
+   claude.directives**. Everywhere else, report the SHA delta **uncategorised and
+   say classification was unavailable**, pointing at
+   MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix. Never clone the repo
+   to classify — the alarm is a diagnostic and must cost less than what it warns
+   about. Degrading loudly is correct; inheriting a blocked call one line after
+   the SHA fetch is not.
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
    - `templates/` → installed copies may be stale → run `/refresh-repo`
    - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it —

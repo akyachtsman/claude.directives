@@ -31,7 +31,9 @@ explicitly overrides it.
   with the imported directives as its constitution)
 - **Evidence before assertions** — never report something done, passing, or
   fixed without running the proving check *fresh* and reading its actual output
-  and exit status. Assumptions and stale results are not verification.
+  and exit status. Assumptions and stale results are not verification. A command
+  or tool call written into a directive, command, or agent is an assertion too:
+  run it, or confirm the tool from its live schema, before shipping it.
 - **Receiving review feedback** — review comments (human, Codex, code-reviewer)
   are suggestions to *evaluate*, not orders. Restate the requirement, verify the
   claim against the code, then apply the fix or push back with technical

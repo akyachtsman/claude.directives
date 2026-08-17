@@ -97,16 +97,24 @@ as "already installed" on every later refresh while `/env-chk` reports the
 project hook-enabled. A half-install is worse than no install here.
 
 ```bash
+raw="https://raw.githubusercontent.com/akyachtsman/claude.directives/main"
 if [ -f .claude/settings.json ] && [ ! -f .claude/hooks/session-start.sh ]; then
   mkdir -p .claude/hooks
-  tmp=$(mktemp)
-  if curl -fsSL --connect-timeout 5 --max-time 60 \
-       "$raw/templates/claude-hooks/session-start.sh" -o "$tmp" \
-     && [ -s "$tmp" ] && bash -n "$tmp"; then
-    chmod +x "$tmp" && mv "$tmp" .claude/hooks/session-start.sh
+  # mktemp inside the DESTINATION dir: a bare `mktemp` lands in /tmp, and when
+  # /tmp is a different filesystem `mv` degrades from an atomic rename to a copy
+  # — reintroducing the partial-final-file this block exists to prevent.
+  tmp=$(mktemp .claude/hooks/.session-start.XXXXXX) || tmp=''
+  # chmod and mv are INSIDE the tested condition: without set -e a failing
+  # `&&` chain would still fall through to the success message.
+  if [ -n "$tmp" ] \
+     && curl -fsSL --connect-timeout 5 --max-time 60 \
+          "$raw/templates/claude-hooks/session-start.sh" -o "$tmp" \
+     && [ -s "$tmp" ] && bash -n "$tmp" \
+     && chmod +x "$tmp" \
+     && mv "$tmp" .claude/hooks/session-start.sh; then
     echo "INSTALLED: .claude/hooks/session-start.sh (was absent)"
   else
-    rm -f "$tmp"
+    [ -n "$tmp" ] && rm -f "$tmp"
     echo "COULD-NOT-INSTALL: .claude/hooks/session-start.sh — nothing written; report it"
   fi
 fi

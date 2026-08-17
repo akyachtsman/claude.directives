@@ -33,6 +33,12 @@ claude plugin install security-guidance@claude-plugins-official
 # design.md / docs/guides/design-tooling.md). || true so a marketplace-name drift can't
 # break the whole setup run.
 claude plugin install frontend-design@claude-code-plugins || true
+# plugin-dev / hookify: the authoring authorities for this toolkit's own commands,
+# agents and hooks (CLAUDE.md -> Toolkit changes). Registering a marketplace does
+# NOT attach its plugins, so naming them as authorities without installing them
+# left the requirement unmeetable in a clean environment.
+claude plugin install plugin-dev@claude-code-plugins || true
+claude plugin install hookify@claude-code-plugins    || true
 
 # 4) Move each plugin to its marketplace's current head. `install` is a NO-OP when
 # the plugin is already present — it prints "already installed" and leaves the old
@@ -43,6 +49,8 @@ claude plugin update directives-toolkit@claude-directives      || true
 claude plugin update pr-review-toolkit@claude-plugins-official || true
 claude plugin update security-guidance@claude-plugins-official || true
 claude plugin update frontend-design@claude-code-plugins       || true
+claude plugin update plugin-dev@claude-code-plugins            || true
+claude plugin update hookify@claude-code-plugins               || true
 
 # 5) Repeat at PROJECT scope. `--scope` defaults to `user` on install AND update
 # (verified 2026-08-17 from `claude plugin update --help`), so steps 3-4 move the
@@ -56,5 +64,7 @@ claude plugin update directives-toolkit@claude-directives      --scope project |
 claude plugin update pr-review-toolkit@claude-plugins-official --scope project || true
 claude plugin update security-guidance@claude-plugins-official --scope project || true
 claude plugin update frontend-design@claude-code-plugins       --scope project || true
+claude plugin update plugin-dev@claude-code-plugins            --scope project || true
+claude plugin update hookify@claude-code-plugins               --scope project || true
 
 echo "✓ directives toolkit + official review / security / design plugins installed and up to date"

@@ -20,6 +20,14 @@
 set -u
 set -o pipefail
 
+# Bounds. A SessionStart hook runs synchronously, so an unreachable host must
+# cost seconds, not a TCP timeout: a session stuck at startup is worse than the
+# stale toolkit this hook exists to prevent. curl gets connect/transfer caps and
+# the whole updater gets a wall-clock cap, since `claude plugin update` performs
+# its own network I/O and can hang the same way.
+CURL_BOUNDS="--connect-timeout 5 --max-time 60"
+RUN_CAP=180
+
 RAW_URL="https://raw.githubusercontent.com/akyachtsman/claude.directives/main/scripts/install-toolkit.sh"
 LOCAL="${CLAUDE_PROJECT_DIR:-$(pwd)}/scripts/install-toolkit.sh"
 
@@ -43,9 +51,10 @@ fi
 # do arbitrary work AND skip the toolkit update, so the local fast path is taken
 # only when the file identifies itself as ours.
 if [ -r "$LOCAL" ] && grep -q 'install the claude.directives toolkit' "$LOCAL"; then
-  bash "$LOCAL" || echo "session-start: toolkit install failed (local) — continuing with the cached toolkit." >&2
+  timeout "$RUN_CAP" bash "$LOCAL" || echo "session-start: toolkit install failed (local) — continuing with the cached toolkit." >&2
 else
-  curl -fsSL "$RAW_URL" | bash || echo "session-start: toolkit install failed (fetch) — continuing with the cached toolkit." >&2
+  # shellcheck disable=SC2086 -- CURL_BOUNDS is a deliberate word-split flag list
+  curl -fsSL $CURL_BOUNDS "$RAW_URL" | timeout "$RUN_CAP" bash || echo "session-start: toolkit install failed (fetch) — continuing with the cached toolkit." >&2
 fi
 
 exit 0

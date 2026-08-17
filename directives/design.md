@@ -203,7 +203,8 @@ function makeSummaryList(card){
 ```
 
 ## Charts & data display
-There is **no chart standard written here.** Use the native **`dataviz`** skill —
+There is **no chart standard written here.** Use the native **`dataviz`** skill
+— a Claude Code built-in, so there is nothing to install or enable —
 it is the authority for chart-type choice, categorical/sequential palettes that
 survive both themes, stat tiles, legends, axes and tooltips. Load it before
 writing the first line of chart code, in any medium (HTML/React artifact, inline

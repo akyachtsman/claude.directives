@@ -377,20 +377,6 @@
         "NEW-REPO-USER-INSTRUCTIONS.md"
       ]
     },
-    "dataviz": {
-      "vendor": "Anthropic",
-      "serves": "design.method",
-      "sockets": [
-        "directives/design.md"
-      ]
-    },
-    "artifact-diagramming": {
-      "vendor": "Anthropic",
-      "serves": "design.method",
-      "sockets": [
-        "directives/design.md"
-      ]
-    },
     "plugin-dev": {
       "vendor": "Anthropic",
       "serves": "meta.session",
@@ -405,11 +391,18 @@
         "CLAUDE.md"
       ]
     },
-    "claude-md-improver": {
-      "vendor": "Anthropic",
-      "serves": "meta.session",
+    "dataviz-builtin": {
+      "vendor": "Anthropic (built-in skill)",
+      "serves": "design.method",
       "sockets": [
-        "plugins/directives-toolkit/commands/audit-repo.md"
+        "directives/design.md"
+      ]
+    },
+    "artifact-diagramming-builtin": {
+      "vendor": "Anthropic (built-in skill)",
+      "serves": "design.method",
+      "sockets": [
+        "directives/design.md"
       ]
     }
   },
@@ -431,6 +424,12 @@
       "vendor": "Anthropic",
       "verdict": "deferred",
       "rationale": "Adds evals and description tuning; the 3 auto-skills fire on description match with nothing testing that they do."
+    },
+    "claude-md-management": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Its claude-md-improver skill grades CLAUDE.md A-F; that rubric is copied into /audit-repo, so nothing loads the skill at runtime. Recorded under the PLUGIN name, which is what a marketplace manifest advertises and therefore what the parity diff sees.",
+      "stays": "plugins/directives-toolkit/commands/audit-repo.md"
     }
   }
 }

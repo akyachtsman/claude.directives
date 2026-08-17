@@ -29,6 +29,13 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   Report the **net line delta** of each proposed merge; **minimizing total
   codebase size is an explicit goal of this audit**, and a consolidation that
   doesn't shrink the codebase needs a reason.
+- CLAUDE.md quality — grade the project's own CLAUDE.md, don't just read it.
+  Score commands/workflows documented, architecture clarity, non-obvious
+  patterns, conciseness, currency and actionability, then report a letter grade
+  (A 90-100 comprehensive and current · B 70-89 minor gaps · C 50-69 missing key
+  sections · D 30-49 sparse or outdated · F below 30). Rubric borrowed from
+  Anthropic's `claude-md-improver`; a grade below B is a finding with the missing
+  criterion named.
 - Logic correctness — verify the logic of every statement and code path is
   actually correct: off-by-one errors, wrong conditionals, unreachable branches,
   incorrect assumptions, mismatched types, edge cases that break.

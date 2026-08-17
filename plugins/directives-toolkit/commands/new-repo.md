@@ -122,7 +122,16 @@ Execute in order:
    prompt-gated deliberately in either spelling — they can target other
    sessions or spawn new ones, making them a persistence channel under
    prompt injection (flagged by automated security review on claude.trading
-   PR #30). Hooks ship inside the plugin.
+   PR #30). The guard hooks ship inside the plugin.
+
+   The settings template also registers a `SessionStart` hook, so copy
+   `claude.directives/templates/claude-hooks/session-start.sh` to
+   `.claude/hooks/session-start.sh` and `chmod +x` it in the same step — a
+   registered hook whose script is missing is a startup error in every session.
+   That hook re-runs the toolkit install on each web session, which is what
+   lets a merged toolkit change reach this project without re-saving its
+   environment's Setup script by hand. It is web-gated and always exits 0, so
+   a failed install degrades the session rather than blocking it.
 
 7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
    into `.github/scripts/ui-tests/`:

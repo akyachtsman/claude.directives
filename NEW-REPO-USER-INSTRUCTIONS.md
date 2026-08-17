@@ -47,7 +47,9 @@ automatically — each existing repo needs the same `permissions.allow` block
 `.claude/settings.json` manually. One small PR per repo; a session scoped to
 that repo can do it on request.
 
-**Force a toolkit update (skip the ~weekly wait).** The setup-script install is
+**Force a toolkit update (skip the ~weekly wait).** Only needed for a project
+without `.claude/hooks/session-start.sh`; with the hook, the next session updates
+itself. The setup-script install is
 cached per environment, so a toolkit change merged upstream normally reaches your
 sessions only when that cache rebuilds (~weekly). To get it **now**: open the
 environment's settings, make any edit to the Setup script (even re-saving a
@@ -60,6 +62,20 @@ runs `claude plugin update` after each install, so a plain re-run moves the
 plugins to current. `claude plugin install` alone never could — it reports
 "already installed" and leaves the old sha pinned. To adopt the fix on an older
 environment, re-save its Setup script once; from then on it self-updates.
+
+**Two later fixes make the manual step rarer still.** First, `--scope` defaults to
+`user` on install *and* update, so until 2026-08-17 the script moved only the user
+pin; a repo carrying `enabledPlugins` in its own `.claude/settings.json` also holds
+a **project**-scope copy, and that stale copy is what the session resolves. An
+environment could re-run a "self-updating" script indefinitely and still serve a
+months-old toolkit. The script now updates both scopes. Second, the install also
+runs from a `SessionStart` hook committed in the repo
+(`.claude/hooks/session-start.sh`, scaffolded into new projects from
+`templates/claude-hooks/session-start.sh`), so it re-runs every web session
+instead of only when the environment's cached Setup script does. The plugin loads
+at session start, so an update the hook fetches applies to the **next** session —
+verified 2026-08-17, the CLI says "Restart to apply changes". That is still
+self-healing without owner action, which the Setup-script route never was.
 
 <details><summary>What the one-liner does / fallback if the fetch is blocked</summary>
 

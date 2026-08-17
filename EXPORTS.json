@@ -12,7 +12,7 @@
       ]
     },
     "installed-tooling": {
-      "mode": "installed via the plugin marketplace / env setup script — propagates on env cache rebuild (~weekly), versioned by git SHA",
+      "mode": "installed via the plugin marketplace / SessionStart hook — propagates to the next session for projects carrying .claude/hooks/session-start.sh, otherwise on the env cache rebuild (~weekly); versioned by git SHA",
       "paths": [
         ".claude-plugin/marketplace.json",
         "plugins/directives-toolkit/",
@@ -141,7 +141,8 @@
         ".claude-plugin/marketplace.json",
         "plugins/directives-toolkit/.claude-plugin/plugin.json",
         "scripts/install-toolkit.sh",
-        "templates/claude-settings.json"
+        "templates/claude-settings.json",
+        "templates/claude-hooks/session-start.sh"
       ],
       "session": [
         "plugins/directives-toolkit/commands/env-chk.md",
@@ -171,6 +172,7 @@
       "directives/git.md",
       "directives/test.md",
       "directives/data.md",
+      "directives/design.md",
       "docs/standards/code-review-standard.md",
       "docs/standards/ci-triage.md"
     ],
@@ -255,7 +257,8 @@
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
         "plugins/directives-toolkit/hooks/",
-        "plugins/directives-toolkit/scripts/"
+        "plugins/directives-toolkit/scripts/",
+        "templates/claude-hooks/session-start.sh"
       ]
     },
     "artifact": {
@@ -364,6 +367,73 @@
         "directives/data.md",
         "plugins/directives-toolkit/agents/supabase.md"
       ]
+    },
+    "session-start-hook": {
+      "vendor": "Anthropic",
+      "serves": "meta.delivery",
+      "sockets": [
+        "templates/claude-hooks/session-start.sh",
+        "templates/claude-settings.json",
+        "NEW-REPO-USER-INSTRUCTIONS.md"
+      ]
+    },
+    "plugin-dev": {
+      "vendor": "Anthropic",
+      "serves": "meta.session",
+      "sockets": [
+        "CLAUDE.md",
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json"
+      ]
+    },
+    "hookify": {
+      "vendor": "Anthropic",
+      "serves": "meta.guards",
+      "sockets": [
+        "CLAUDE.md",
+        "scripts/install-toolkit.sh",
+        "templates/claude-settings.json"
+      ]
+    },
+    "dataviz-builtin": {
+      "vendor": "Anthropic (built-in skill)",
+      "serves": "design.method",
+      "sockets": [
+        "directives/design.md"
+      ]
+    },
+    "artifact-diagramming-builtin": {
+      "vendor": "Anthropic (built-in skill)",
+      "serves": "design.method",
+      "sockets": [
+        "directives/design.md"
+      ]
+    }
+  },
+  "considered": {
+    "_comment": "Native capabilities evaluated by the upkeep mandate (CLAUDE.md -> Purpose) and NOT adopted wholesale. externals records what we depend on; this records what we looked at and declined, so an audit reads the verdict instead of re-deriving it. verdict: borrowed (an idea taken, the implementation stays) | rejected (does not fit) | deferred (fits, not yet done). stays = the path that keeps the job; must exist (validated).",
+    "commit-commands": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Creates commits/PRs; /commit-chk verifies BEFORE a push. Complementary, not overlapping.",
+      "stays": "plugins/directives-toolkit/commands/commit-chk.md"
+    },
+    "feature-dev": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Generic explore/architect/review flow; /sdd-loop is bound to the imported directives as its constitution.",
+      "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
+    },
+    "skill-creator": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "Adds evals and description tuning; the 3 auto-skills fire on description match with nothing testing that they do."
+    },
+    "claude-md-management": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Its claude-md-improver skill grades CLAUDE.md A-F; that rubric is copied into /audit-repo, so nothing loads the skill at runtime. Recorded under the PLUGIN name, which is what a marketplace manifest advertises and therefore what the parity diff sees.",
+      "stays": "plugins/directives-toolkit/commands/audit-repo.md"
     }
   }
 }

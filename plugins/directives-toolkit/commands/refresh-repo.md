@@ -16,9 +16,10 @@ and CI validates references.
 The session's working rules were loaded at session start and do NOT update
 themselves. Re-fetch and re-read every imported directive URL from
 CLAUDE.md (five as of `git.md`), and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
-load at session start only — mid-session upstream merges reach the toolkit when
-the environment's cached setup script rebuilds (web: on an env-config change or
-~weekly cache expiry), not necessarily the next session.
+load at session start only — a mid-session upstream merge never reaches THIS
+session. With `.claude/hooks/session-start.sh` installed it reaches the next one;
+without it, only when the environment's cached setup script rebuilds (web: on an
+env-config change or ~weekly cache expiry).
 
 ## Phase 1 — Broken upstream references
 
@@ -66,10 +67,12 @@ against the CURRENT upstream template, regardless of delta:
 ```bash
 repo="akyachtsman/claude.directives"
 raw="https://raw.githubusercontent.com/$repo/main"
-for f in .github/workflows/*.yml .github/actions/*/action.yml; do
+for f in .github/workflows/*.yml .github/actions/*/action.yml \
+         .claude/hooks/session-start.sh; do
   [ -f "$f" ] || continue
   case "$f" in
     .github/workflows/*) t="templates/workflows/$(basename "$f")";;
+    .claude/hooks/*)     t="templates/claude-hooks/$(basename "$f")";;
     *)                   t="templates/actions/$(basename "$(dirname "$f")")/action.yml";;
   esac
   tmpl=$(curl -fsSL "$raw/$t") \
@@ -79,6 +82,80 @@ done
 ```
 (raw.githubusercontent.com is CDN-served and works from remote sessions; a
 failed fetch is "cannot verify", never DRIFT.)
+
+**Hook repair (runs before the loop, delta-independent).** Three broken states,
+not one: the script absent, present but unregistered, and present but not
+executable. `/env-chk` now reports all three and names `/refresh-repo` as the
+repair, so all three must be repairable here — Phase 1.5 never inspects
+`.claude/settings.json`, and Phase 2 only sees upstream changes, so a
+current-stamped project would otherwise refresh forever without being fixed.
+After the install block below, repair registration and the exec bit:
+
+```bash
+# exec bit: invisible to a content diff, and a non-executable hook never runs
+[ -f .claude/hooks/session-start.sh ] && [ ! -x .claude/hooks/session-start.sh ] \
+  && chmod +x .claude/hooks/session-start.sh \
+  && echo "REPAIRED: exec bit on .claude/hooks/session-start.sh"
+
+# registration: merge the SessionStart row when the script exists but nothing runs it
+# Parse the SessionStart array; do not grep the file. A project may already run an
+# unrelated SessionStart hook AND reference this script under some other event, so
+# file-wide greps can both succeed while nothing invokes the updater at session start.
+if [ -f .claude/hooks/session-start.sh ] \
+   && ! jq -e '[.hooks.SessionStart[]?.hooks[]?.command] 
+            | any((gsub("\"";"") | split(" ")[0] | endswith("hooks/session-start.sh")))' \
+       .claude/settings.json >/dev/null 2>&1; then
+  echo "MISSING-REGISTRATION: .claude/settings.json has no SessionStart row —"
+  echo "  merge it from templates/claude-settings.json (do not overwrite the file;"
+  echo "  the project may carry its own keys), then re-run /env-chk to confirm."
+fi
+```
+
+**Absent-hook install (also delta-independent).** A legacy
+project has no `.claude/hooks/session-start.sh` at all, and neither pass would
+ever create one: the loop below skips absent files, and Phase 2 only processes
+templates that changed upstream since the stamp — which a project stamped after
+the hook shipped never sees. Without this step the offer `/env-chk` makes cannot
+be honoured and the project stays legacy through every refresh.
+
+Download to a temporary file and rename only after it validates. Writing the
+final path directly would leave a truncated or invalid hook behind on a failed
+fetch — and because the absent-hook test is `[ ! -f ]`, that wreckage then reads
+as "already installed" on every later refresh while `/env-chk` reports the
+project hook-enabled. A half-install is worse than no install here.
+
+```bash
+repo="akyachtsman/claude.directives"
+raw="https://raw.githubusercontent.com/$repo/main"
+if [ -f .claude/settings.json ] && [ ! -f .claude/hooks/session-start.sh ]; then
+  mkdir -p .claude/hooks
+  # mktemp inside the DESTINATION dir: a bare `mktemp` lands in /tmp, and when
+  # /tmp is a different filesystem `mv` degrades from an atomic rename to a copy
+  # — reintroducing the partial-final-file this block exists to prevent.
+  tmp=$(mktemp .claude/hooks/.session-start.XXXXXX) || tmp=''
+  # chmod and mv are INSIDE the tested condition: without set -e a failing
+  # `&&` chain would still fall through to the success message.
+  if [ -n "$tmp" ] \
+     && curl -fsSL --connect-timeout 5 --max-time 60 \
+          "$raw/templates/claude-hooks/session-start.sh" -o "$tmp" \
+     && [ -s "$tmp" ] && bash -n "$tmp" \
+     && chmod +x "$tmp" \
+     && mv "$tmp" .claude/hooks/session-start.sh; then
+    echo "INSTALLED: .claude/hooks/session-start.sh (was absent)"
+  else
+    [ -n "$tmp" ] && rm -f "$tmp"
+    echo "COULD-NOT-INSTALL: .claude/hooks/session-start.sh — nothing written; report it"
+  fi
+fi
+```
+Install the settings row in the same pass, so the registration and its target
+always land together.
+
+`session-start.sh` is also in the loop below rather than only in Phase 2, because
+Phase 2 sees only what changed UPSTREAM: a locally truncated hook whose template never
+moved would otherwise stay broken through every refresh, failing session start
+each time. Restore it from the template rather than hand-editing, and re-run
+`bash -n` on it.
 
 Disposition each DRIFT — three classes, in checking order:
 1. **Expected adaptation** — `ci-monitor.yml` / `ci-notify.yml` where the diff
@@ -123,11 +200,14 @@ project** — map each to its installed location before dispositioning:
 | `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json` |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm |
-| `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block — verbatim overwrite OK unless the project added its own keys; then merge |
+| `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
+| `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
 | `directives/*`, `docs/*`, `plugins/*` | not installed — read live / delivered by the plugin | Informational; no local file to update |
 
-Skip rows whose local path doesn't exist (the project never installed that piece).
+Skip rows whose local path doesn't exist (the project never installed that piece)
+— EXCEPT the `claude-hooks` row, whose whole purpose is first installation and
+whose absence breaks the settings row that references it.
 
 ## Phase 3 — Stamp and report
 

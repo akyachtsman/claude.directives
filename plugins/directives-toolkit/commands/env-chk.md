@@ -74,9 +74,37 @@ verdict. Read-only — do NOT modify files. Execute in order:
    one line after the SHA fetch is not.
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
    - `templates/` → installed copies may be stale → run `/refresh-repo`
-   - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it —
-     force the env cache rebuild (see NEW-REPO-USER-INSTRUCTIONS.md → "Force a
-     toolkit update") or wait for the ~weekly expiry
+   - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it.
+     Whether the project self-heals depends on the hook being RUNNABLE, which
+     existence alone does not establish — an unregistered or non-executable
+     script never runs, a content-only integrity diff sees nothing wrong with
+     either, and the hook is web-gated so it never runs locally at all. Require
+     all four:
+     ```bash
+     [ "${CLAUDE_CODE_REMOTE:-}" = true ] \
+       && [ -x .claude/hooks/session-start.sh ] \
+       && jq -e '[.hooks.SessionStart[]?.hooks[]?.command] 
+            | any((gsub("\"";"") | split(" ")[0] | endswith("hooks/session-start.sh")))' \
+       .claude/settings.json >/dev/null 2>&1 \
+       && echo "self-updating" || echo "needs remediation"
+     ```
+     The registration test parses the SessionStart array rather than grepping the
+     file: two independent greps are satisfiable by unrelated entries — an
+     unrelated `SessionStart` command plus this script under `PreToolUse` — which
+     reports self-updating for a project whose updater never runs at session
+     start.
+     On CLI/desktop the first condition is false by design — the hook exits early
+     off the web (`global.md` → Skill Bootstrap keeps local installs manual). Do
+     not report a local session as self-updating: tell it to run
+     `scripts/install-toolkit.sh` itself, and say the hook covers its web
+     sessions only.
+     Self-updating → the next session picks the toolkit up on its own; say so and
+     prescribe nothing. Otherwise → force the env cache rebuild (see
+     NEW-REPO-USER-INSTRUCTIONS.md → "Force a toolkit update") or wait for the
+     ~weekly expiry, and offer `/refresh-repo` to install or repair the hook so
+     the manual step stops recurring. Name which of the three failed: a present
+     but unregistered or non-executable hook is the trap — it looks installed and
+     never runs.
    - `docs/` only → informational
    Exception: if upstream.sha trails HEAD by exactly the commit(s) that recorded the
    stamp/baselines themselves, report current, not behind. Session Start

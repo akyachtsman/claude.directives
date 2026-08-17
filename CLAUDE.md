@@ -11,6 +11,16 @@ standard. It merges the three former repos — `claude.global.directives`,
 substance that downstream projects inherit lives in `directives/`; this file
 covers only how to operate *on this repo*.
 
+**Standing upkeep mandate.** This repo tracks Claude itself. Keep the scaffolding
+current against what Claude Code ships natively, and prefer a native Anthropic
+capability over one maintained here: when a plugin, skill, or built-in covers what
+a toolkit command, agent, hook, or directive section does, adopt it and record it
+in `EXPORTS.json` → `externals`. A path marked **permanent** (`EXPORTS.json` →
+`swap`) delegates to the native rather than being retired for it — the whole `meta`
+domain is permanent, so its commands and guards gain a native authority, never a
+replacement. Record every native evaluated and declined in `EXPORTS.json` →
+`considered`, so the next pass reads the verdict instead of re-deriving it.
+
 ## Layout
 | Path | Role |
 |------|------|
@@ -27,8 +37,9 @@ covers only how to operate *on this repo*.
 | `index.html` | The repo's GitHub Pages landing page (links to the logical map, commands reference, React demo) |
 | `docs/site/logical-map.html` | The repo map — **generated** from `EXPORTS.json` by `.github/scripts/build-logical-map.js`; never hand-edit it. Its behaviour (pan/zoom/search/isolate, layer toggles, drag-to-move and drag-to-resize with per-browser persistence) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
-| `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
-| `.claude/settings.json` | Plugin enablement only (`extraKnownMarketplaces` + `enabledPlugins`); hooks ship inside the plugin |
+| `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions do not attach plugins by themselves** — an environment's setup script performs the FIRST install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0); after that the `SessionStart` hook re-runs the same installer each session and moves it to current |
+| `.claude/settings.json` | Plugin enablement (`extraKnownMarketplaces` + `enabledPlugins`) plus the `SessionStart` hook registration; the guard hooks themselves ship inside the plugin |
+| `.claude/hooks/session-start.sh` | SessionStart hook — runs `scripts/install-toolkit.sh` on every **web** session so a merged toolkit change reaches sessions without a per-environment Setup-script re-save. Best-effort: always exits 0. Byte-identical to `templates/claude-hooks/session-start.sh` |
 | `.claude/directive-sync.json` | Upstream-sync baseline (`.upstream.sha` + snapshots) that `/env-chk` and `/refresh-repo` read to detect directive drift |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
@@ -86,7 +97,25 @@ threads, diff limited to the intended files). Repo-specific deltas:
 4. Run `/env-chk` and report status — this includes the `scope-chk` repo-scope
    verification (global.md's Session Start step 2), so it need not be run separately here
 5. **Periodically** run `/audit-repo` — a structural/efficiency sweep for
-   directive↔code drift, redundancy, and simplification opportunities. Not every
+   directive↔code drift, redundancy, and simplification opportunities, including a
+   **native-parity pass** per the standing upkeep mandate above. That pass needs an
+   authoritative inventory, not recall: read the registered marketplaces' own
+   manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
+   clone under `~/.claude/plugins/marketplaces/`) together with this session's own
+   skill and tool list, then diff that surface against `EXPORTS.json` →
+   `externals` + `considered`. Only `borrowed` and `rejected` entries suppress a
+   finding: a `deferred` verdict means the work still fits and has not been done,
+   so it stays a finding on every pass, carrying its recorded rationale rather
+   than being re-derived. Match names after normalising: strip a `-builtin`
+   suffix from a manifest key before comparing it to an inventory name (the
+   inventory calls it `dataviz`, the manifest `dataviz-builtin`), and record a
+   skill under its **parent plugin's** name, since that is what a marketplace
+   manifest advertises. Count only **Anthropic-owned** capabilities —
+   the `anthropics/*` marketplaces and the built-in skills — and exclude this
+   repo's own `claude-directives` marketplace, which advertises
+   `directives-toolkit`; without that filter the pass flags the toolkit it is
+   auditing, plus every third-party vendor plugin, as a missing native. What
+   survives the filter and is in neither list is the finding. Not every
    session: run it when starting on a fresh `main`, or when the repo has changed
    materially since the last audit. Never let it delay the user's actual request —
    skip or defer if a task is already queued.
@@ -99,8 +128,10 @@ everything hot-reloads:
   CLAUDE.md edits; `/refresh-repo` Phase 0 re-reads CLAUDE.md + directives.
 - `plugins/directives-toolkit/` — editing files here changes what the NEXT
   install delivers; the running session keeps its installed copy. On web the
-  install is cached per environment, so changes propagate when that cache rebuilds
-  (a setup-script/network change or ~weekly expiry), not guaranteed next session.
+  `SessionStart` hook re-runs the installer every session, so a merged change is
+  picked up by the session AFTER the one that fetched it ("Restart to apply
+  changes"). The environment's cached setup script no longer gates this; it only
+  performs the first install.
 - `.claude/settings.json` — **loaded at session start only**; changes take
   effect in the NEXT session.
 
@@ -202,6 +233,8 @@ node .github/scripts/build-logical-map.js --check # the committed logical map st
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages-monitor/pages-retry template pairs)
+diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh   # SessionStart hook pair
+bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
@@ -221,11 +254,18 @@ additions.
 
 ## Toolkit changes
 
+**Authoring authority.** `plugin-dev` (Anthropic) is the spec for plugin
+structure — commands, agents, hooks, MCP, settings, frontmatter — and
+`hookify` is the authority for hook rules. Read them before hand-writing either;
+`meta` is permanent, so they inform this toolkit rather than replace it
+(→ *Purpose* → the upkeep mandate).
+
 To add a command, skill, or agent: drop the file into the right
 `plugins/directives-toolkit/` subdir (commands are flat md files; each skill is
 a SKILL.md in its own directory; agents are flat md files with unique `name:`
 frontmatter), run the plugin check from the Local gate above, and ship through
-the normal PR flow. Downstream picks it up when its environment's cached setup
-script rebuilds (web: on an env-config change or ~weekly expiry). The
+the normal PR flow. Downstream projects carrying the `SessionStart` hook pick it
+up on their next session; legacy projects without it wait for their environment's
+cached setup script to rebuild (web: on an env-config change or ~weekly expiry). The
 install/distribution model lives in
 `directives/global.md` → Skill Bootstrap.

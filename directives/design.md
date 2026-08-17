@@ -202,6 +202,18 @@ function makeSummaryList(card){
 }
 ```
 
+## Charts & data display
+There is **no chart standard written here.** Use the native **`dataviz`** skill
+— a Claude Code built-in, so there is nothing to install or enable —
+it is the authority for chart-type choice, categorical/sequential palettes that
+survive both themes, stat tiles, legends, axes and tooltips. Load it before
+writing the first line of chart code, in any medium (HTML/React artifact, inline
+SVG, matplotlib/plotly/d3/Recharts).
+- The project's `tokens.css` still wins on brand: swap `dataviz`'s placeholder
+  palette for this project's `--color-*` tokens rather than shipping its defaults.
+- Accessibility above is not waived by it — contrast ratios and
+  never-colour-alone apply to series colours and legends too.
+
 ## Diagrams & connectors
 For any node-and-edge surface (relationship maps, flow/architecture diagrams, org
 charts — SVG or canvas). The invariant: **every connector stays individually
@@ -222,6 +234,12 @@ traceable to exactly one source→target pair**, at any zoom.
   small sizes.
 - If edges carry labels, each label sits on its own edge's lane — never in a
   shared corridor where it could attach to a neighbour.
+
+**Native authority.** The `artifact-diagramming` skill covers this ground and
+should be read before drawing one — it owns when a diagram earns its place and
+the inline-SVG mechanics that keep it legible in both themes. The rules below are
+the blocking criteria this directive adds on top; where the skill is silent, it
+decides.
 
 **Verify geometrically, not visually, before shipping.** A glance misses
 collinear overlaps. From the edge geometry itself (path data / computed

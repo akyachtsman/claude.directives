@@ -402,9 +402,11 @@ fetched into `.claude/`.
 At session start, **verify the plugin attached**: the `directives-toolkit:*`
 commands/skills resolve and the QA agents are available. If they don't, the
 environment's setup script didn't run — fix that rather than hand-fetching
-files. Updates track this repo's `main` (SHA-versioned); on web they arrive when
-the environment's cached setup script rebuilds — on a setup-script/network
-change or roughly weekly expiry, not necessarily every session. Commands invoke
+files. Updates track this repo's `main` (SHA-versioned). A project carrying the
+`SessionStart` hook (`.claude/hooks/session-start.sh`, current scaffold) re-runs
+the installer every web session, so an update lands in the session AFTER the one
+that fetched it. A project without it still waits on its environment's cached
+setup script — a setup-script/network change or roughly weekly expiry. Commands invoke
 as `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
 
 See docs/standards/automations.md for monitor setup and the automation-specific

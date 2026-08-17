@@ -22,13 +22,14 @@ travels determines what YOU must do when it changes:
 | What changed | Delivery mode | What you do | When it lands downstream | How you verify |
 |---|---|---|---|---|
 | `directives/*.md` | **Inherited** — fetched live by raw URL | Nothing | Next session start in each repo; mid-session via `/refresh-repo` (Phase 0 re-reads the rules) | `/env-chk` directive-freshness check |
-| `plugins/`, `.claude-plugin/marketplace.json`, `scripts/install-toolkit.sh` | **Installed** — env setup script, cached per environment | **Re-save each environment's setup script** (see Environment Maintenance) — or wait for the ~weekly cache expiry | Next **new** session after its cache rebuilds; never mid-session | `/env-chk` toolkit-attached check |
+| `plugins/`, `.claude-plugin/marketplace.json`, `scripts/install-toolkit.sh` | **Installed** — `SessionStart` hook per session; env setup script for the first install | Nothing, for a project carrying `.claude/hooks/session-start.sh`. For a legacy project without it: **re-save that environment's setup script** (see Environment Maintenance), or install the hook once via `/refresh-repo` so the step stops recurring | With the hook: the next **new** session. Without it: after that environment's cache rebuilds. Never mid-session either way | `/env-chk` toolkit-attached check |
 | `templates/**` | **Copied** — snapshotted into projects at bootstrap | Run `/refresh-repo` in a session of each project and approve the per-file dispositions | On approval, that session | The refresh report + `.claude/directive-sync.json` stamp |
 | `docs/**`, the two `*-USER-INSTRUCTIONS.md` files | **Referenced** — read on demand by link | Nothing | Immediately (nothing is stored downstream) | — |
 
 Corollaries worth memorizing:
 - A running session never updates itself — inherited rules refresh only via
-  `/refresh-repo`, installed tooling only via a NEW session after a cache rebuild.
+  `/refresh-repo`, installed tooling only via a NEW session (the `SessionStart`
+  hook fetches it; legacy projects wait for a cache rebuild).
 - One upstream PR often spans modes (a directive + a template + a plugin
   command). Walk the PR's file list against this table and do the union of
   the actions.
@@ -43,8 +44,10 @@ Corollaries worth memorizing:
 
 1. Look at the merged PR's file list and classify each file with the matrix.
 2. **Inherited only** → done; the fleet is current at next session start.
-3. **Installed touched** → re-save each environment's setup script (below), or
-   accept the ~weekly lag if it's not urgent.
+3. **Installed touched** → nothing to do for projects carrying the `SessionStart`
+   hook; they self-update next session. For legacy projects without it, re-save
+   that environment's setup script (below), or install the hook once via
+   `/refresh-repo` so this step stops recurring.
 4. **Copied touched** → in each project, run `/refresh-repo` and approve the
    dispositions it proposes.
 5. **Referenced only** → done.
@@ -74,8 +77,10 @@ never by cross-repo edits** (`global.md` → Cross-Repo Boundary):
 
 ## Environment Maintenance
 
-The installed-tooling cache is **per environment** and rebuilds on any
-environment-config change or ~weekly expiry. Since the whole fleet shares the
+This section applies to **legacy projects only** — one carrying
+`.claude/hooks/session-start.sh` re-runs the installer every session and needs
+nothing here. The installed-tooling cache is **per environment** and rebuilds on
+any environment-config change or ~weekly expiry. Since the whole fleet shares the
 single `fleet` environment, this is **one action that updates every repo**:
 
 1. Open the `fleet` environment (Claude Code on the web → the environment your
@@ -162,8 +167,10 @@ Hard-won; each cost a real debugging session:
   your single click on **Ready for review** may be all it needs — it can merge
   over REST straight after, no need to wait out the hour.
 - **Plugin supply chain has no review point in our repos** — external plugin
-  updates (even Anthropic-official) reach sessions automatically on each env
-  cache rebuild (~weekly), unreviewed by us. The defenses are layered
+  updates (even Anthropic-official) reach sessions automatically — every session
+  now, via the `SessionStart` hook, rather than on the ~weekly cache rebuild —
+  unreviewed by us. The hook shortens that window, so it raises this risk rather
+  than lowering it. The defenses are layered
   elsewhere: push-gate blocks direct-to-main, workflow files are excluded
   from auto-merge, workflow-trigger edits are stop-and-ask, and every
   workflow PR gets a line-by-line diff read (`git.md`, 2026-07-19). Keep the

@@ -86,6 +86,31 @@ for (const [name, ext] of Object.entries(manifest.externals ?? {})) {
   }
 }
 
+// 1e) Considered: natives evaluated and not adopted. Without a validated home the
+// upkeep mandate's "record why" has nowhere to land and every audit re-derives it.
+const VERDICTS = new Set(['borrowed', 'rejected', 'deferred']);
+for (const [name, c] of Object.entries(manifest.considered ?? {})) {
+  if (name.startsWith('_')) continue;
+  for (const f of ['vendor', 'verdict', 'rationale']) {
+    if (!c[f]) fail(`[considered:${name}] missing required field: ${f}`);
+  }
+  if (c.verdict && !VERDICTS.has(c.verdict)) {
+    fail(`[considered:${name}] verdict must be one of ${[...VERDICTS].join('/')}: ${c.verdict}`);
+  }
+  // A borrowed/rejected entry names the path that keeps the job, and must NAME one:
+  // validating `stays` only when present let the field be omitted, which defeats the
+  // check entirely — deleting the retained implementation would not force the verdict
+  // to be revisited. `deferred` means nothing was retained, so it carries no `stays`.
+  const RETAINS = new Set(['borrowed', 'rejected']);
+  if (RETAINS.has(c.verdict) && !c.stays) {
+    fail(`[considered:${name}] verdict '${c.verdict}' must name the path that stays`);
+  }
+  if (c.stays && !existsSync(c.stays)) {
+    fail(`[considered:${name}] stays path missing from tree: ${c.stays}`);
+  }
+  if (!failed) console.log(`OK:   [considered:${name}] ${c.verdict} (${c.vendor})`);
+}
+
 // 2) Every raw-URL self-reference resolves inside a manifest path.
 function findTextFiles(dir) {
   const out = [];

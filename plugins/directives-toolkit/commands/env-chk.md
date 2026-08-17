@@ -42,11 +42,36 @@ verdict. Read-only — do NOT modify files. Execute in order:
    this check stays read-only). Flag cross-repo contradictions.
    **Staleness alarm (multi-project critical):** compare the sync stamp
    `.upstream.sha` in .claude/directive-sync.json against the live HEAD of
-   claude.directives `main` (one API call:
-   `repos/akyachtsman/claude.directives/commits/main`). If they differ — or no
-   stamp exists — report a ⚠️ finding. Make it category-aware: classify the
-   delta's changed paths (one compare call) and state the action per
-   EXPORTS.json delivery mode:
+   claude.directives `main`. Get that HEAD with
+   `git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main`
+   — git transport, so it needs no auth, no MCP and no quota, and works from a
+   session scoped to any repo. Do **not** call `api.github.com`: it is refused at
+   the proxy, and the GitHub MCP is scoped to the session's own repo, so in every
+   downstream project — which is most sessions — the API route fails outright.
+   If the stamp differs, or none exists, report a ⚠️ finding.
+   Then classify the delta by top-level path and state the action per
+   EXPORTS.json delivery mode. Classification needs the diff, which `ls-remote`
+   cannot give — and **no GitHub MCP call compares two refs** (the surface is
+   `list_commits` / `get_commit` / `search_commits` / `list_branches`; walking the
+   delta commit-by-commit is exactly the burn `git.md` → *Quota Economy* forbids).
+   In a session scoped to claude.directives the objects are already local, so
+   classify with plain git and no API at all. Keep the SHA `ls-remote` returned
+   and diff against **that**, after `git fetch origin main` to make the object
+   available: `ls-remote` does not update remote-tracking refs, so `origin/main`
+   is only as fresh as this session's last fetch, and classifying against a
+   lagging ref silently under-reports the delta whose SHA the alarm just
+   reported — dropping `plugins/` turns "toolkit is behind" into "docs only,
+   informational". Then, guarded by `git cat-file -e <sha>^{commit}` for both
+   ends: `git diff --name-only <stamp-sha>..<live-sha> | cut -d/ -f1 | sort -u`.
+   The guard matters because these clones are frequently shallow — a commit
+   outside the fetch depth makes `git diff` fail outright rather than degrade.
+   One bounded `git fetch --deepen 100` is worth trying; bare `--deepen` exits
+   129 because it requires a value. Then stop and take the uncategorised path. Anywhere else, or when the object is still missing, report the SHA
+   delta **uncategorised and say classification was unavailable**, pointing at
+   MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix. Never clone the repo
+   to classify — the alarm is a diagnostic and must cost less than what it warns
+   about. Degrading loudly is correct; inheriting a blocked or nonexistent call
+   one line after the SHA fetch is not.
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
    - `templates/` → installed copies may be stale → run `/refresh-repo`
    - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it —

@@ -77,14 +77,21 @@ verdict. Read-only — do NOT modify files. Execute in order:
    - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it.
      Whether the project self-heals depends on the hook being RUNNABLE, which
      existence alone does not establish — an unregistered or non-executable
-     script never runs, and a content-only integrity diff sees nothing wrong with
-     either. Require all three:
+     script never runs, a content-only integrity diff sees nothing wrong with
+     either, and the hook is web-gated so it never runs locally at all. Require
+     all four:
      ```bash
-     [ -x .claude/hooks/session-start.sh ] \
+     [ "${CLAUDE_CODE_REMOTE:-}" = true ] \
+       && [ -x .claude/hooks/session-start.sh ] \
        && grep -q 'session-start.sh' .claude/settings.json \
        && grep -q '"SessionStart"' .claude/settings.json \
        && echo "self-updating" || echo "needs remediation"
      ```
+     On CLI/desktop the first condition is false by design — the hook exits early
+     off the web (`global.md` → Skill Bootstrap keeps local installs manual). Do
+     not report a local session as self-updating: tell it to run
+     `scripts/install-toolkit.sh` itself, and say the hook covers its web
+     sessions only.
      Self-updating → the next session picks the toolkit up on its own; say so and
      prescribe nothing. Otherwise → force the env cache rebuild (see
      NEW-REPO-USER-INSTRUCTIONS.md → "Force a toolkit update") or wait for the

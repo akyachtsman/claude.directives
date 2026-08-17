@@ -83,7 +83,30 @@ done
 (raw.githubusercontent.com is CDN-served and works from remote sessions; a
 failed fetch is "cannot verify", never DRIFT.)
 
-**Absent-hook install (runs before the loop, delta-independent).** A legacy
+**Hook repair (runs before the loop, delta-independent).** Three broken states,
+not one: the script absent, present but unregistered, and present but not
+executable. `/env-chk` now reports all three and names `/refresh-repo` as the
+repair, so all three must be repairable here — Phase 1.5 never inspects
+`.claude/settings.json`, and Phase 2 only sees upstream changes, so a
+current-stamped project would otherwise refresh forever without being fixed.
+After the install block below, repair registration and the exec bit:
+
+```bash
+# exec bit: invisible to a content diff, and a non-executable hook never runs
+[ -f .claude/hooks/session-start.sh ] && [ ! -x .claude/hooks/session-start.sh ] \
+  && chmod +x .claude/hooks/session-start.sh \
+  && echo "REPAIRED: exec bit on .claude/hooks/session-start.sh"
+
+# registration: merge the SessionStart row when the script exists but nothing runs it
+if [ -f .claude/hooks/session-start.sh ] \
+   && ! grep -q '"SessionStart"' .claude/settings.json 2>/dev/null; then
+  echo "MISSING-REGISTRATION: .claude/settings.json has no SessionStart row —"
+  echo "  merge it from templates/claude-settings.json (do not overwrite the file;"
+  echo "  the project may carry its own keys), then re-run /env-chk to confirm."
+fi
+```
+
+**Absent-hook install (also delta-independent).** A legacy
 project has no `.claude/hooks/session-start.sh` at all, and neither pass would
 ever create one: the loop below skips absent files, and Phase 2 only processes
 templates that changed upstream since the stamp — which a project stamped after

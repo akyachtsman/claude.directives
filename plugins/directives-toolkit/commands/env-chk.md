@@ -51,13 +51,21 @@ verdict. Read-only — do NOT modify files. Execute in order:
    If the stamp differs, or none exists, report a ⚠️ finding.
    Then classify the delta by top-level path and state the action per
    EXPORTS.json delivery mode. Classification needs the diff, which `ls-remote`
-   cannot give: use the GitHub MCP compare **only when this session is scoped to
-   claude.directives**. Everywhere else, report the SHA delta **uncategorised and
-   say classification was unavailable**, pointing at
+   cannot give — and **no GitHub MCP call compares two refs** (the surface is
+   `list_commits` / `get_commit` / `search_commits` / `list_branches`; walking the
+   delta commit-by-commit is exactly the burn `git.md` → *Quota Economy* forbids).
+   In a session scoped to claude.directives the objects are already local, so
+   classify with plain git and no API at all:
+   `git diff --name-only <stamp-sha>..origin/main | cut -d/ -f1 | sort -u`.
+   Guard it with `git cat-file -e <stamp-sha>^{commit}` first — these clones are
+   frequently shallow, and a stamp older than the fetch depth makes `git diff`
+   fail outright rather than degrade; `git fetch --deepen` once is worth trying,
+   then stop. Anywhere else, or when the object is still missing, report the SHA
+   delta **uncategorised and say classification was unavailable**, pointing at
    MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix. Never clone the repo
    to classify — the alarm is a diagnostic and must cost less than what it warns
-   about. Degrading loudly is correct; inheriting a blocked call one line after
-   the SHA fetch is not.
+   about. Degrading loudly is correct; inheriting a blocked or nonexistent call
+   one line after the SHA fetch is not.
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
    - `templates/` → installed copies may be stale → run `/refresh-repo`
    - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it —

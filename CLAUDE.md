@@ -11,6 +11,13 @@ standard. It merges the three former repos — `claude.global.directives`,
 substance that downstream projects inherit lives in `directives/`; this file
 covers only how to operate *on this repo*.
 
+**Standing upkeep mandate.** This repo tracks Claude itself. Keep the scaffolding
+current against what Claude Code ships natively, and prefer a native Anthropic
+capability over one maintained here: when a plugin, skill, or built-in covers what
+a toolkit command, agent, hook, or directive section does, adopt it and record the
+swap in `EXPORTS.json` → `externals`. Where ours stays, record why — so a rejected
+alternative is not re-derived at the next audit.
+
 ## Layout
 | Path | Role |
 |------|------|
@@ -86,7 +93,9 @@ threads, diff limited to the intended files). Repo-specific deltas:
 4. Run `/env-chk` and report status — this includes the `scope-chk` repo-scope
    verification (global.md's Session Start step 2), so it need not be run separately here
 5. **Periodically** run `/audit-repo` — a structural/efficiency sweep for
-   directive↔code drift, redundancy, and simplification opportunities. Not every
+   directive↔code drift, redundancy, and simplification opportunities, including a
+   **native-parity pass**: what Claude now ships natively that this repo still
+   hand-maintains, per the standing upkeep mandate above. Not every
    session: run it when starting on a fresh `main`, or when the repo has changed
    materially since the last audit. Never let it delay the user's actual request —
    skip or defer if a task is already queued.

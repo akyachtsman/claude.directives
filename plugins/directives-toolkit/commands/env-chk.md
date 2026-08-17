@@ -83,8 +83,8 @@ verdict. Read-only — do NOT modify files. Execute in order:
      ```bash
      [ "${CLAUDE_CODE_REMOTE:-}" = true ] \
        && [ -x .claude/hooks/session-start.sh ] \
-       && grep -q 'session-start.sh' .claude/settings.json \
        && grep -q '"SessionStart"' .claude/settings.json \
+       && grep -q 'hooks/session-start\.sh' .claude/settings.json \
        && echo "self-updating" || echo "needs remediation"
      ```
      On CLI/desktop the first condition is false by design — the hook exits early

@@ -103,7 +103,12 @@ threads, diff limited to the intended files). Repo-specific deltas:
    manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
    clone under `~/.claude/plugins/marketplaces/`) together with this session's own
    skill and tool list, then diff that surface against `EXPORTS.json` →
-   `externals` + `considered`. What is in neither is the finding. Not every
+   `externals` + `considered`. Count only **Anthropic-owned** capabilities —
+   the `anthropics/*` marketplaces and the built-in skills — and exclude this
+   repo's own `claude-directives` marketplace, which advertises
+   `directives-toolkit`; without that filter the pass flags the toolkit it is
+   auditing, plus every third-party vendor plugin, as a missing native. What
+   survives the filter and is in neither list is the finding. Not every
    session: run it when starting on a fresh `main`, or when the repo has changed
    materially since the last audit. Never let it delay the user's actual request —
    skip or defer if a task is already queued.

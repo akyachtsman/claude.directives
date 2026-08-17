@@ -123,11 +123,14 @@ project** — map each to its installed location before dispositioning:
 | `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json` |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm |
-| `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block — verbatim overwrite OK unless the project added its own keys; then merge |
+| `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
+| `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x`. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
 | `directives/*`, `docs/*`, `plugins/*` | not installed — read live / delivered by the plugin | Informational; no local file to update |
 
-Skip rows whose local path doesn't exist (the project never installed that piece).
+Skip rows whose local path doesn't exist (the project never installed that piece)
+— EXCEPT the `claude-hooks` row, whose whole purpose is first installation and
+whose absence breaks the settings row that references it.
 
 ## Phase 3 — Stamp and report
 

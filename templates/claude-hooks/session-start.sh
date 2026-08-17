@@ -14,7 +14,11 @@
 # an aborted hook is no session at all.
 #
 # Web only. CLI/desktop installs stay manual per global.md -> Skill Bootstrap.
+# pipefail: `curl … | bash` otherwise reports the exit status of bash, which
+# succeeds on empty input — so a blocked fetch would return 0 and the warning
+# below would never print, leaving a stale toolkit and no diagnostic.
 set -u
+set -o pipefail
 
 RAW_URL="https://raw.githubusercontent.com/akyachtsman/claude.directives/main/scripts/install-toolkit.sh"
 LOCAL="${CLAUDE_PROJECT_DIR:-$(pwd)}/scripts/install-toolkit.sh"
@@ -33,7 +37,12 @@ fi
 # In claude.directives itself the installer is a tracked file; downstream
 # projects have no copy, so fall back to the published one. Identical script
 # either way, which is what lets this hook ship byte-identical everywhere.
-if [ -r "$LOCAL" ]; then
+#
+# `scripts/install-toolkit.sh` is a generic enough path that a downstream project
+# can legitimately own an unrelated one. Running that at every session start would
+# do arbitrary work AND skip the toolkit update, so the local fast path is taken
+# only when the file identifies itself as ours.
+if [ -r "$LOCAL" ] && grep -q 'install the claude.directives toolkit' "$LOCAL"; then
   bash "$LOCAL" || echo "session-start: toolkit install failed (local) — continuing with the cached toolkit." >&2
 else
   curl -fsSL "$RAW_URL" | bash || echo "session-start: toolkit install failed (fetch) — continuing with the cached toolkit." >&2

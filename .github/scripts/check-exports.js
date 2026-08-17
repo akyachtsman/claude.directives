@@ -97,8 +97,14 @@ for (const [name, c] of Object.entries(manifest.considered ?? {})) {
   if (c.verdict && !VERDICTS.has(c.verdict)) {
     fail(`[considered:${name}] verdict must be one of ${[...VERDICTS].join('/')}: ${c.verdict}`);
   }
-  // A borrowed/rejected entry names the path that keeps the job; it must exist,
-  // so retiring that path forces the verdict to be revisited instead of rotting.
+  // A borrowed/rejected entry names the path that keeps the job, and must NAME one:
+  // validating `stays` only when present let the field be omitted, which defeats the
+  // check entirely — deleting the retained implementation would not force the verdict
+  // to be revisited. `deferred` means nothing was retained, so it carries no `stays`.
+  const RETAINS = new Set(['borrowed', 'rejected']);
+  if (RETAINS.has(c.verdict) && !c.stays) {
+    fail(`[considered:${name}] verdict '${c.verdict}' must name the path that stays`);
+  }
   if (c.stays && !existsSync(c.stays)) {
     fail(`[considered:${name}] stays path missing from tree: ${c.stays}`);
   }

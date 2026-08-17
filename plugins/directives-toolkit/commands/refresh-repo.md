@@ -66,10 +66,12 @@ against the CURRENT upstream template, regardless of delta:
 ```bash
 repo="akyachtsman/claude.directives"
 raw="https://raw.githubusercontent.com/$repo/main"
-for f in .github/workflows/*.yml .github/actions/*/action.yml; do
+for f in .github/workflows/*.yml .github/actions/*/action.yml \
+         .claude/hooks/session-start.sh; do
   [ -f "$f" ] || continue
   case "$f" in
     .github/workflows/*) t="templates/workflows/$(basename "$f")";;
+    .claude/hooks/*)     t="templates/claude-hooks/$(basename "$f")";;
     *)                   t="templates/actions/$(basename "$(dirname "$f")")/action.yml";;
   esac
   tmpl=$(curl -fsSL "$raw/$t") \
@@ -79,6 +81,12 @@ done
 ```
 (raw.githubusercontent.com is CDN-served and works from remote sessions; a
 failed fetch is "cannot verify", never DRIFT.)
+
+`session-start.sh` is in this loop rather than only in Phase 2 because Phase 2
+sees only what changed UPSTREAM: a locally truncated hook whose template never
+moved would otherwise stay broken through every refresh, failing session start
+each time. Restore it from the template rather than hand-editing, and re-run
+`bash -n` on it.
 
 Disposition each DRIFT — three classes, in checking order:
 1. **Expected adaptation** — `ci-monitor.yml` / `ci-notify.yml` where the diff

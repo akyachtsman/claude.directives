@@ -37,7 +37,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `index.html` | The repo's GitHub Pages landing page (links to the logical map, commands reference, React demo) |
 | `docs/site/logical-map.html` | The repo map — **generated** from `EXPORTS.json` by `.github/scripts/build-logical-map.js`; never hand-edit it. Its behaviour (pan/zoom/search/isolate, layer toggles, drag-to-move and drag-to-resize with per-browser persistence) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
-| `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
+| `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions do not attach plugins by themselves** — an environment's setup script performs the FIRST install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0); after that the `SessionStart` hook re-runs the same installer each session and moves it to current |
 | `.claude/settings.json` | Plugin enablement (`extraKnownMarketplaces` + `enabledPlugins`) plus the `SessionStart` hook registration; the guard hooks themselves ship inside the plugin |
 | `.claude/hooks/session-start.sh` | SessionStart hook — runs `scripts/install-toolkit.sh` on every **web** session so a merged toolkit change reaches sessions without a per-environment Setup-script re-save. Best-effort: always exits 0. Byte-identical to `templates/claude-hooks/session-start.sh` |
 | `.claude/directive-sync.json` | Upstream-sync baseline (`.upstream.sha` + snapshots) that `/env-chk` and `/refresh-repo` read to detect directive drift |
@@ -103,7 +103,11 @@ threads, diff limited to the intended files). Repo-specific deltas:
    manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
    clone under `~/.claude/plugins/marketplaces/`) together with this session's own
    skill and tool list, then diff that surface against `EXPORTS.json` →
-   `externals` + `considered`. Count only **Anthropic-owned** capabilities —
+   `externals` + `considered`. Match names after normalising: strip a `-builtin`
+   suffix from a manifest key before comparing it to an inventory name (the
+   inventory calls it `dataviz`, the manifest `dataviz-builtin`), and record a
+   skill under its **parent plugin's** name, since that is what a marketplace
+   manifest advertises. Count only **Anthropic-owned** capabilities —
    the `anthropics/*` marketplaces and the built-in skills — and exclude this
    repo's own `claude-directives` marketplace, which advertises
    `directives-toolkit`; without that filter the pass flags the toolkit it is
@@ -121,8 +125,10 @@ everything hot-reloads:
   CLAUDE.md edits; `/refresh-repo` Phase 0 re-reads CLAUDE.md + directives.
 - `plugins/directives-toolkit/` — editing files here changes what the NEXT
   install delivers; the running session keeps its installed copy. On web the
-  install is cached per environment, so changes propagate when that cache rebuilds
-  (a setup-script/network change or ~weekly expiry), not guaranteed next session.
+  `SessionStart` hook re-runs the installer every session, so a merged change is
+  picked up by the session AFTER the one that fetched it ("Restart to apply
+  changes"). The environment's cached setup script no longer gates this; it only
+  performs the first install.
 - `.claude/settings.json` — **loaded at session start only**; changes take
   effect in the NEXT session.
 

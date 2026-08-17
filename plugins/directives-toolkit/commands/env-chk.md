@@ -55,12 +55,16 @@ verdict. Read-only — do NOT modify files. Execute in order:
    `list_commits` / `get_commit` / `search_commits` / `list_branches`; walking the
    delta commit-by-commit is exactly the burn `git.md` → *Quota Economy* forbids).
    In a session scoped to claude.directives the objects are already local, so
-   classify with plain git and no API at all:
+   classify with plain git and no API at all. Run `git fetch origin main` first:
+   `origin/main` is a local tracking ref, only as fresh as this session's last
+   fetch, and classifying against a lagging ref silently under-reports the delta
+   whose SHA you just resolved live — dropping `plugins/` turns "toolkit is
+   behind" into "docs only, informational". Then, guarded by
+   `git cat-file -e <stamp-sha>^{commit}`:
    `git diff --name-only <stamp-sha>..origin/main | cut -d/ -f1 | sort -u`.
-   Guard it with `git cat-file -e <stamp-sha>^{commit}` first — these clones are
-   frequently shallow, and a stamp older than the fetch depth makes `git diff`
-   fail outright rather than degrade; `git fetch --deepen` once is worth trying,
-   then stop. Anywhere else, or when the object is still missing, report the SHA
+   The guard matters because these clones are frequently shallow — a stamp older
+   than the fetch depth makes `git diff` fail outright rather than degrade;
+   `git fetch --deepen` once is worth trying, then stop. Anywhere else, or when the object is still missing, report the SHA
    delta **uncategorised and say classification was unavailable**, pointing at
    MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix. Never clone the repo
    to classify — the alarm is a diagnostic and must cost less than what it warns

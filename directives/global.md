@@ -32,8 +32,11 @@ explicitly overrides it.
 - **Evidence before assertions** — never report something done, passing, or
   fixed without running the proving check *fresh* and reading its actual output
   and exit status. Assumptions and stale results are not verification. A command
-  or tool call written into a directive, command, or agent is an assertion too:
-  run it, or confirm the tool from its live schema, before shipping it.
+  or tool call in any shipped instruction — directive, command, skill, agent — is
+  an assertion too: run it, dry-run it, or confirm it against the live schema or
+  its own docs before shipping; never run a destructive command to check wording.
+  Presence in the authoring session proves nothing downstream — a tool that may
+  be absent there ships with a runtime check and fallback.
 - **Receiving review feedback** — review comments (human, Codex, code-reviewer)
   are suggestions to *evaluate*, not orders. Restate the requirement, verify the
   claim against the code, then apply the fix or push back with technical

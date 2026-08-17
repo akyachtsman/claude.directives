@@ -44,4 +44,17 @@ claude plugin update pr-review-toolkit@claude-plugins-official || true
 claude plugin update security-guidance@claude-plugins-official || true
 claude plugin update frontend-design@claude-code-plugins       || true
 
+# 5) Repeat at PROJECT scope. `--scope` defaults to `user` on install AND update
+# (verified 2026-08-17 from `claude plugin update --help`), so steps 3-4 move the
+# user pin only. A project-scope copy — which a repo carrying `enabledPlugins` in
+# its own .claude/settings.json gets — stays pinned at whatever sha it first
+# installed, and that stale copy is what the session resolves. This is why an
+# environment could re-run a "self-updating" setup script and still serve a
+# months-old toolkit. || true: most projects have no project-scope copy, and its
+# absence must not fail the run.
+claude plugin update directives-toolkit@claude-directives      --scope project || true
+claude plugin update pr-review-toolkit@claude-plugins-official --scope project || true
+claude plugin update security-guidance@claude-plugins-official --scope project || true
+claude plugin update frontend-design@claude-code-plugins       --scope project || true
+
 echo "✓ directives toolkit + official review / security / design plugins installed and up to date"

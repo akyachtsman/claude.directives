@@ -141,7 +141,8 @@
         ".claude-plugin/marketplace.json",
         "plugins/directives-toolkit/.claude-plugin/plugin.json",
         "scripts/install-toolkit.sh",
-        "templates/claude-settings.json"
+        "templates/claude-settings.json",
+        "templates/claude-hooks/session-start.sh"
       ],
       "session": [
         "plugins/directives-toolkit/commands/env-chk.md",
@@ -255,7 +256,8 @@
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
         "plugins/directives-toolkit/hooks/",
-        "plugins/directives-toolkit/scripts/"
+        "plugins/directives-toolkit/scripts/",
+        "templates/claude-hooks/session-start.sh"
       ]
     },
     "artifact": {
@@ -364,6 +366,61 @@
         "directives/data.md",
         "plugins/directives-toolkit/agents/supabase.md"
       ]
+    },
+    "session-start-hook": {
+      "vendor": "Anthropic",
+      "serves": "meta.delivery",
+      "sockets": [
+        "templates/claude-hooks/session-start.sh",
+        "templates/claude-settings.json",
+        "NEW-REPO-USER-INSTRUCTIONS.md"
+      ]
+    }
+  },
+  "considered": {
+    "_comment": "Native capabilities evaluated by the upkeep mandate (CLAUDE.md -> Purpose) and NOT adopted wholesale. externals records what we depend on; this records what we looked at and declined, so an audit reads the verdict instead of re-deriving it. verdict: borrowed (an idea taken, the implementation stays) | rejected (does not fit) | deferred (fits, not yet done). stays = the path that keeps the job; must exist (validated).",
+    "claude-md-management": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Targets CLAUDE.md; /learn targets learnings.jsonl with typed, confidence-scored, budgeted entries. Its A-F quality rubric is worth borrowing into /audit-repo; the file stays.",
+      "stays": "plugins/directives-toolkit/commands/learn.md"
+    },
+    "commit-commands": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Creates commits/PRs; /commit-chk verifies BEFORE a push. Complementary, not overlapping.",
+      "stays": "plugins/directives-toolkit/commands/commit-chk.md"
+    },
+    "feature-dev": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Generic explore/architect/review flow; /sdd-loop is bound to the imported directives as its constitution.",
+      "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
+    },
+    "plugin-dev": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "Vendor authoring spec for commands/agents/hooks; this repo writes them from convention. Adopt as the authoring reference for meta.session and meta.guards."
+    },
+    "hookify": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "Builds hooks from markdown rules; hooks.json carries 8 hand-written shell entries where a mistyped matcher fails silently."
+    },
+    "skill-creator": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "Adds evals and description tuning; the 3 auto-skills fire on description match with nothing testing that they do."
+    },
+    "dataviz": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "design.md has no charting standard."
+    },
+    "artifact-diagramming": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "Covers the same ground as design.md -> Diagrams & connectors, which is hand-written."
     }
   }
 }

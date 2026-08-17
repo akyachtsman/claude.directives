@@ -14,9 +14,12 @@ covers only how to operate *on this repo*.
 **Standing upkeep mandate.** This repo tracks Claude itself. Keep the scaffolding
 current against what Claude Code ships natively, and prefer a native Anthropic
 capability over one maintained here: when a plugin, skill, or built-in covers what
-a toolkit command, agent, hook, or directive section does, adopt it and record the
-swap in `EXPORTS.json` → `externals`. Where ours stays, record why — so a rejected
-alternative is not re-derived at the next audit.
+a toolkit command, agent, hook, or directive section does, adopt it and record it
+in `EXPORTS.json` → `externals`. A path marked **permanent** (`EXPORTS.json` →
+`swap`) delegates to the native rather than being retired for it — the whole `meta`
+domain is permanent, so its commands and guards gain a native authority, never a
+replacement. Record every native evaluated and declined in `EXPORTS.json` →
+`considered`, so the next pass reads the verdict instead of re-deriving it.
 
 ## Layout
 | Path | Role |
@@ -35,7 +38,8 @@ alternative is not re-derived at the next audit.
 | `docs/site/logical-map.html` | The repo map — **generated** from `EXPORTS.json` by `.github/scripts/build-logical-map.js`; never hand-edit it. Its behaviour (pan/zoom/search/isolate, layer toggles, drag-to-move and drag-to-resize with per-browser persistence) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions never auto-install plugins** — each environment's setup script must run the install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
-| `.claude/settings.json` | Plugin enablement only (`extraKnownMarketplaces` + `enabledPlugins`); hooks ship inside the plugin |
+| `.claude/settings.json` | Plugin enablement (`extraKnownMarketplaces` + `enabledPlugins`) plus the `SessionStart` hook registration; the guard hooks themselves ship inside the plugin |
+| `.claude/hooks/session-start.sh` | SessionStart hook — runs `scripts/install-toolkit.sh` on every **web** session so a merged toolkit change reaches sessions without a per-environment Setup-script re-save. Best-effort: always exits 0. Byte-identical to `templates/claude-hooks/session-start.sh` |
 | `.claude/directive-sync.json` | Upstream-sync baseline (`.upstream.sha` + snapshots) that `/env-chk` and `/refresh-repo` read to detect directive drift |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
@@ -94,8 +98,12 @@ threads, diff limited to the intended files). Repo-specific deltas:
    verification (global.md's Session Start step 2), so it need not be run separately here
 5. **Periodically** run `/audit-repo` — a structural/efficiency sweep for
    directive↔code drift, redundancy, and simplification opportunities, including a
-   **native-parity pass**: what Claude now ships natively that this repo still
-   hand-maintains, per the standing upkeep mandate above. Not every
+   **native-parity pass** per the standing upkeep mandate above. That pass needs an
+   authoritative inventory, not recall: read the registered marketplaces' own
+   manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
+   clone under `~/.claude/plugins/marketplaces/`) together with this session's own
+   skill and tool list, then diff that surface against `EXPORTS.json` →
+   `externals` + `considered`. What is in neither is the finding. Not every
    session: run it when starting on a fresh `main`, or when the repo has changed
    materially since the last audit. Never let it delay the user's actual request —
    skip or defer if a task is already queued.
@@ -211,6 +219,8 @@ node .github/scripts/build-logical-map.js --check # the committed logical map st
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages-monitor/pages-retry template pairs)
+diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh   # SessionStart hook pair
+bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`

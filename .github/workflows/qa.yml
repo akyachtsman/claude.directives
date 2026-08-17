@@ -78,7 +78,16 @@ jobs:
           diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
           diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
           diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
+          diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
           echo "OK: paired files in sync"
+
+      # The SessionStart hook runs at the start of every web session in this repo
+      # and in every project scaffolded from the template. A syntax error there
+      # breaks session startup, so parse it here rather than discovering it live.
+      - name: Check SessionStart hook parses
+        run: |
+          bash -n .claude/hooks/session-start.sh
+          echo "OK: SessionStart hook parses"
 
       # The two Pages landing pages (site root + /docs/ gallery) deliberately
       # duplicate one :root palette block; keep the copies from drifting.

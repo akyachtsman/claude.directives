@@ -61,6 +61,20 @@ plugins to current. `claude plugin install` alone never could — it reports
 "already installed" and leaves the old sha pinned. To adopt the fix on an older
 environment, re-save its Setup script once; from then on it self-updates.
 
+**Two later fixes make the manual step rarer still.** First, `--scope` defaults to
+`user` on install *and* update, so until 2026-08-17 the script moved only the user
+pin; a repo carrying `enabledPlugins` in its own `.claude/settings.json` also holds
+a **project**-scope copy, and that stale copy is what the session resolves. An
+environment could re-run a "self-updating" script indefinitely and still serve a
+months-old toolkit. The script now updates both scopes. Second, the install also
+runs from a `SessionStart` hook committed in the repo
+(`.claude/hooks/session-start.sh`, scaffolded into new projects from
+`templates/claude-hooks/session-start.sh`), so it re-runs every web session
+instead of only when the environment's cached Setup script does. The plugin loads
+at session start, so an update the hook fetches applies to the **next** session —
+verified 2026-08-17, the CLI says "Restart to apply changes". That is still
+self-healing without owner action, which the Setup-script route never was.
+
 <details><summary>What the one-liner does / fallback if the fetch is blocked</summary>
 
 It runs <a href="scripts/install-toolkit.sh"><code>scripts/install-toolkit.sh</code></a>

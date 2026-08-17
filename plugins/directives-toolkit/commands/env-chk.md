@@ -74,9 +74,12 @@ verdict. Read-only — do NOT modify files. Execute in order:
    one line after the SHA fetch is not.
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
    - `templates/` → installed copies may be stale → run `/refresh-repo`
-   - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it —
-     force the env cache rebuild (see NEW-REPO-USER-INSTRUCTIONS.md → "Force a
-     toolkit update") or wait for the ~weekly expiry
+   - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it.
+     If `.claude/hooks/session-start.sh` exists, the next session picks it up on
+     its own — say so and prescribe nothing. If it does not, this is a legacy
+     project: force the env cache rebuild (see NEW-REPO-USER-INSTRUCTIONS.md →
+     "Force a toolkit update") or wait for the ~weekly expiry, and offer to
+     install the hook via `/refresh-repo` so the manual step stops recurring
    - `docs/` only → informational
    Exception: if upstream.sha trails HEAD by exactly the commit(s) that recorded the
    stamp/baselines themselves, report current, not behind. Session Start

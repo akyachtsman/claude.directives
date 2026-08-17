@@ -103,7 +103,10 @@ threads, diff limited to the intended files). Repo-specific deltas:
    manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
    clone under `~/.claude/plugins/marketplaces/`) together with this session's own
    skill and tool list, then diff that surface against `EXPORTS.json` →
-   `externals` + `considered`. Match names after normalising: strip a `-builtin`
+   `externals` + `considered`. Only `borrowed` and `rejected` entries suppress a
+   finding: a `deferred` verdict means the work still fits and has not been done,
+   so it stays a finding on every pass, carrying its recorded rationale rather
+   than being re-derived. Match names after normalising: strip a `-builtin`
    suffix from a manifest key before comparing it to an inventory name (the
    inventory calls it `dataviz`, the manifest `dataviz-builtin`), and record a
    skill under its **parent plugin's** name, since that is what a marketplace

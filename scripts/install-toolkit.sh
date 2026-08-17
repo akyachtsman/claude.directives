@@ -60,11 +60,26 @@ claude plugin update hookify@claude-code-plugins               || true
 # environment could re-run a "self-updating" setup script and still serve a
 # months-old toolkit. || true: most projects have no project-scope copy, and its
 # absence must not fail the run.
-claude plugin update directives-toolkit@claude-directives      --scope project || true
-claude plugin update pr-review-toolkit@claude-plugins-official --scope project || true
-claude plugin update security-guidance@claude-plugins-official --scope project || true
-claude plugin update frontend-design@claude-code-plugins       --scope project || true
-claude plugin update plugin-dev@claude-code-plugins            --scope project || true
-claude plugin update hookify@claude-code-plugins               --scope project || true
+# A bare `|| true` here would swallow a REAL failure (permissions, marketplace,
+# network) identically to the expected "no copy at this scope", leaving the stale
+# project pin this phase exists to repair while the script still printed success.
+# Only the expected case is silent; anything else warns and is visible to the
+# SessionStart wrapper. Still never fatal — a failed update must not block a session.
+update_project_scope() {
+  out=$(claude plugin update "$1" --scope project 2>&1) && return 0
+  case "$out" in
+    *"not installed at scope project"*) return 0 ;;   # expected: no project copy
+  esac
+  echo "WARN: project-scope update failed for $1 — that pin may stay stale:" >&2
+  printf '%s\n' "$out" >&2
+  return 0
+}
+
+update_project_scope directives-toolkit@claude-directives
+update_project_scope pr-review-toolkit@claude-plugins-official
+update_project_scope security-guidance@claude-plugins-official
+update_project_scope frontend-design@claude-code-plugins
+update_project_scope plugin-dev@claude-code-plugins
+update_project_scope hookify@claude-code-plugins
 
 echo "✓ directives toolkit + official review / security / design plugins installed and up to date"

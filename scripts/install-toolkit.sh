@@ -60,6 +60,14 @@ soft "" claude plugin install frontend-design@claude-code-plugins   # optional
 # its plugins, so naming it as an authority without installing it left the
 # requirement unmeetable in a clean environment.
 # hookify is deliberately NOT installed -- see EXPORTS.json -> considered.
+# and is actively REMOVED: dropping the install lines only stops NEW installs.
+# Any environment that ran the previous installer still has it, and its hooks keep
+# failing on every tool call forever. This runs on every web session via the
+# SessionStart hook, so it heals the fleet without anyone touching an environment.
+# Both scopes, because installs default to user while a project settings file can
+# hold a second copy. "not found in installed plugins" is the expected steady state.
+soft "not found in installed plugins" claude plugin uninstall hookify@claude-code-plugins
+soft "not found in installed plugins" claude plugin uninstall hookify@claude-code-plugins --scope project
 soft "" claude plugin install plugin-dev@claude-code-plugins        # optional
 
 # 4) Move each plugin to its marketplace's current head. `install` is a NO-OP when

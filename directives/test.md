@@ -142,10 +142,71 @@ Two more shapes, from data and identity rather than interaction:
 When a human reports a defect the suite passed through, the fix is **two**
 commits' worth of work: the defect, and the assertion that would have caught it.
 Shipping only the first guarantees the next one in that class also ships. Name
-which of the five shapes it was — untested input modality, untested state or
-transition, asserted proxy, unmodelled data, or single identity.
+which of the seven shapes it was — untested input modality, untested state or
+transition, asserted proxy, unmodelled data, single identity, **stubbed
+subject**, or **occluded control** (the last two below).
 A "more tests" response that names none of them is rigor applied to the part
 already covered.
+
+## Stub the collaborators, never the subject (owner ruling, 2026-08-18)
+
+A stub stands in for something the test does not claim to prove. The moment the
+stubbed thing IS the claim, every pass is vacuous — and it fails in the worst
+way available: green forever while the feature has never worked once.
+
+The shipped incident that names this shape: the 🐛 bug-report screenshot. The
+harness stubbed the capture library with a tiny canvas, proving the whole flow —
+open, capture, upload, insert, degrade — while the REAL library (html2canvas
+1.4.1) threw on the first `oklch()`/`color-mix()` in the app's own CSS. The
+capture had **never succeeded in production**; every stubbed run passed. The
+owner found it by using the feature.
+
+The rule, with its trigger:
+- **A third-party library that processes the project's own content** (its CSS,
+  DOM, PDFs, images, fonts — anything the project authors and the library must
+  parse) gets at least ONE harness block running the REAL library against the
+  REAL content. Pin it as a devDependency and route its CDN URL to the
+  node_modules copy (the `check-acroform-fill` pdf-lib pattern; now also
+  `check-bug-report` + html2canvas-pro). Stub blocks remain right for flow,
+  error-path, and speed — the real block is the one that catches "the library
+  rejects our content".
+- **The smell:** if writing the stub required assuming what the library accepts
+  ("returns a canvas", "parses the page"), that assumption is a claim, and a
+  claim needs a real-dependency proof. A stub that encodes the answer is the
+  test grading its own homework.
+- CDN-loaded libraries make this worse: no install step, no version bump in a
+  lockfile, nothing in CI ever executes the real code unless a harness routes
+  it in deliberately.
+
+## Layered UI: rendered is not reachable (owner ruling, 2026-08-18)
+
+`offsetParent` proves an element is painted. It does not prove a hand can reach
+it. Overlays, menus, drawers, sticky bars and toasts sit ON TOP of controls that
+still pass every render assertion — the control is visible in the DOM's opinion
+and covered in the user's. (Companion to the existing lesson that `.hidden` is
+intent and only layout proves it took effect — this is that lesson one layer
+higher.)
+
+- **Hit-test, don't just render-test.** For a control that must stay usable
+  while an overlay/menu/panel is open: assert
+  `document.elementFromPoint(cx, cy)` (the control's center) resolves to the
+  control or a descendant. If the covering is intentional, assert THAT instead —
+  a control silently swallowed by a layer is the "visible control that refuses"
+  antipattern either way.
+- **Every new layer gets an occlusion scenario**: open it over each screen
+  family it can appear on and hit-test the controls that remain half-exposed at
+  its edges. A layer tested only on the screen it was built against ships its
+  overlaps with every other screen untested.
+- **Interactions have transitional states, and they are testable.** A dialog
+  that hides itself mid-flow, a button disabled during an await, a screen that
+  flashes between two paints — assert the state DURING the transition (element
+  still visible while capture runs, dialog gone immediately on send), not just
+  the endpoints. "Clunky" is usually a transitional state nobody asserted.
+- **Screenshot the new interaction at 1440×900** in its before/during/after
+  states while authoring the harness, and look at the pixels before shipping.
+  Assertions catch what they name; a screenshot catches what nobody thought to
+  name. This class of bug (flicker, squeeze, cover) is invisible to the DOM
+  query that causes it.
 
 ## Required UI scenario patterns
 `ui-tester` emits these generic scenarios by default (beyond S1–S4) for every

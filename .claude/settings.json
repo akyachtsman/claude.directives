@@ -12,8 +12,7 @@
     "pr-review-toolkit@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "frontend-design@claude-code-plugins": true,
-    "plugin-dev@claude-code-plugins": true,
-    "hookify@claude-code-plugins": true
+    "plugin-dev@claude-code-plugins": true
   },
   "hooks": {
     "SessionStart": [

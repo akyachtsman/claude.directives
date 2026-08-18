@@ -386,15 +386,6 @@
         "templates/claude-settings.json"
       ]
     },
-    "hookify": {
-      "vendor": "Anthropic",
-      "serves": "meta.guards",
-      "sockets": [
-        "CLAUDE.md",
-        "scripts/install-toolkit.sh",
-        "templates/claude-settings.json"
-      ]
-    },
     "dataviz-builtin": {
       "vendor": "Anthropic (built-in skill)",
       "serves": "design.method",
@@ -434,6 +425,12 @@
       "verdict": "borrowed",
       "rationale": "Its claude-md-improver skill grades CLAUDE.md A-F; that rubric is copied into /audit-repo, so nothing loads the skill at runtime. Recorded under the PLUGIN name, which is what a marketplace manifest advertises and therefore what the parity diff sees.",
       "stays": "plugins/directives-toolkit/commands/audit-repo.md"
+    },
+    "hookify": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Its hooks add dirname(CLAUDE_PLUGIN_ROOT) to sys.path then `import hookify`, which assumes the plugin root's basename is the package. The versioned install layout (hookify/0.1.0/) puts a version dir there instead, so all four registered hooks -- PreToolUse, PostToolUse, Stop, UserPromptSubmit -- fail with \"No module named 'hookify'\" on EVERY tool call. Not forkable (externals rule: rewire sockets, never fork vendor code). Revisit only if upstream stops assuming that layout; plugin-dev's hook-development skill covers the same authoring ground without hooks of its own.",
+      "stays": "plugins/directives-toolkit/hooks/"
     }
   }
 }

@@ -255,10 +255,11 @@ additions.
 ## Toolkit changes
 
 **Authoring authority.** `plugin-dev` (Anthropic) is the spec for plugin
-structure — commands, agents, hooks, MCP, settings, frontmatter — and
-`hookify` is the authority for hook rules. Read them before hand-writing either;
-`meta` is permanent, so they inform this toolkit rather than replace it
-(→ *Purpose* → the upkeep mandate).
+structure — commands, agents, hooks, MCP, settings, frontmatter — and its
+`hook-development` skill covers hook events and matchers. Read it before
+hand-writing either; `meta` is permanent, so it informs this toolkit rather than
+replacing it (→ *Purpose* → the upkeep mandate). `hookify` is deliberately not
+installed (`EXPORTS.json` → `considered`).
 
 To add a command, skill, or agent: drop the file into the right
 `plugins/directives-toolkit/` subdir (commands are flat md files; each skill is

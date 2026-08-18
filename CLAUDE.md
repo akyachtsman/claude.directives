@@ -220,6 +220,16 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 - `scope-chk` (auto-skill) — fires before any cross-repo offer; reports the
   session's true repository scope so access is never overclaimed.
 
+**Auto-skills are the only surface nothing else proves.** `update-pages`,
+`scope-chk` and `doc-comp` fire on description match, so a description that
+drifts stops firing silently — no error, just absence.
+`plugins/directives-toolkit/evals/run-trigger-evals.py` runs each case as a real `claude -p` session and asserts the Skill call, scored
+as a fire RATE over repeated runs because triggering is probabilistic. It costs
+tokens and is NOT in CI; run it when a description changes. Measured baseline
+(2026-08-18, 3 runs/case): `scope-chk` and `update-pages` fire on an explicit
+phrasing and miss a softer one; `doc-comp` misses both of its positives despite
+firing when run by hand. Treat those as the numbers to improve, not as passing.
+
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, verify locally — this list mirrors what `qa.yml`
 runs, so keep the two in sync:
@@ -238,6 +248,8 @@ bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hook
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
+python3 plugins/directives-toolkit/evals/run-trigger-evals.py --skill <name> \
+  --cases plugins/directives-toolkit/skills/<name>/evals/trigger.json   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json or the map, regenerate first: node .github/scripts/build-logical-map.js
 ```

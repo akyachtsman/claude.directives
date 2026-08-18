@@ -415,11 +415,6 @@
       "rationale": "Generic explore/architect/review flow; /sdd-loop is bound to the imported directives as its constitution.",
       "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
     },
-    "skill-creator": {
-      "vendor": "Anthropic",
-      "verdict": "deferred",
-      "rationale": "Adds evals and description tuning; the 3 auto-skills fire on description match with nothing testing that they do."
-    },
     "claude-md-management": {
       "vendor": "Anthropic",
       "verdict": "borrowed",
@@ -431,6 +426,17 @@
       "verdict": "rejected",
       "rationale": "Its hooks add dirname(CLAUDE_PLUGIN_ROOT) to sys.path then `import hookify`, which assumes the plugin root's basename is the package. The versioned install layout (hookify/0.1.0/) puts a version dir there instead, so all four registered hooks -- PreToolUse, PostToolUse, Stop, UserPromptSubmit -- fail with \"No module named 'hookify'\" on EVERY tool call. Not forkable (externals rule: rewire sockets, never fork vendor code). Revisit only if upstream stops assuming that layout; plugin-dev's hook-development skill covers the same authoring ground without hooks of its own.",
       "stays": "plugins/directives-toolkit/hooks/"
+    },
+    "skill-creator": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Its eval MODEL is what the toolkit now uses: {query, should_trigger} cases scored as a fire RATE over repeated runs, because triggering is probabilistic. Its runner is not: scripts/run_eval.py returns on the FIRST tool use of the FIRST assistant message, so any preamble or another tool first reads as no-trigger -- it scored the known-good pdf skill 0.00 on queries it certainly handles. evals/run-trigger-evals.py implements the model with a detector that scans every tool_use in the stream.",
+      "stays": "plugins/directives-toolkit/evals/run-trigger-evals.py"
+    },
+    "plugin-eval-builtin": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "`claude plugin eval` is the native harness and is preferred over the local runner the moment it works: it is plugin-aware, has a no-plugin ablation arm, and treats `tool_used: Skill` as a plugin-fired indicator. Both `eval` and `eval init` currently print \"currently in early access\" and do nothing, so it cannot be used. Blocked on account enablement, not on work here -- adopt it and retire the local runner when it runs."
     }
   }
 }

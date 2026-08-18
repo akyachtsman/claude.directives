@@ -1,0 +1,13 @@
+[
+  {"query": "Compare policy-v1.md and policy-v2.md and tell me what substantively changed.",
+   "should_trigger": true,
+   "files": {"policy-v1.md": "Refund Policy v1\n\nRefunds within 14 days.\nShipping is not refunded.\n",
+             "policy-v2.md": "Refund Policy v2\n\nRefunds within 30 days.\nShipping is refunded for defective items.\n"}},
+  {"query": "Diff terms-old.md against terms-new.md and show me the substantive edits.",
+   "should_trigger": true,
+   "files": {"terms-old.md": "Terms\n\nNotice period is 30 days.\nLiability capped at fees paid.\n",
+             "terms-new.md": "Terms\n\nNotice period is 60 days.\nLiability capped at twice fees paid.\n"}},
+  {"query": "Read config.json and tell me the value of the port setting.",
+   "should_trigger": false,
+   "files": {"config.json": "{\"port\": 8080, \"host\": \"localhost\"}\n"}}
+]

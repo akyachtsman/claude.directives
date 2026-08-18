@@ -222,8 +222,8 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 
 **Auto-skills are the only surface nothing else proves.** `update-pages`,
 `scope-chk` and `doc-comp` fire on description match, so a description that
-drifts stops firing silently — no error, just absence. `evals/run-trigger-evals.py`
-runs each case as a real `claude -p` session and asserts the Skill call, scored
+drifts stops firing silently — no error, just absence.
+`plugins/directives-toolkit/evals/run-trigger-evals.py` runs each case as a real `claude -p` session and asserts the Skill call, scored
 as a fire RATE over repeated runs because triggering is probabilistic. It costs
 tokens and is NOT in CI; run it when a description changes. Measured baseline
 (2026-08-18, 3 runs/case): `scope-chk` and `update-pages` fire on an explicit

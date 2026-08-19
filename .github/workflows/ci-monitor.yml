@@ -21,6 +21,12 @@ on:
 permissions:
   actions: read
   issues: write
+  # The cancelled discriminator reads the workflow file off the branch
+  # (repos/.../contents/...) to test for cancel-in-progress. An explicit
+  # permissions block zeroes every unlisted scope, so without this the probe
+  # 403s, falls to can_supersede=no, and every HEALTHY supersede alarms — the
+  # pairing with qa.yml's concurrency block breaks in the noisy direction.
+  contents: read
 
 jobs:
   monitor:

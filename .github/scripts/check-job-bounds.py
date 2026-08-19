@@ -102,8 +102,11 @@ for scan_dir in SCAN_DIRS:
                     f"      measured COLD path, not its warm one (see this file's header, rule 3)."
                 )
                 continue
-            if not isinstance(bound, int):
-                errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer.")
+            # bool FIRST: Python's bool subclasses int, so `timeout-minutes: true`
+            # (a YAML boolean) passes an isinstance(int) check while being no
+            # minute count at all — green here, broken after installation.
+            if isinstance(bound, bool) or not isinstance(bound, int):
+                errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer minute count.")
                 continue
             if bound >= GITHUB_DEFAULT:
                 errors.append(

@@ -26,6 +26,14 @@ on:
 permissions:
   pull-requests: write
   issues: write   # labels are an issues-API scope
+
+# One run at a time per PR, in arrival order. The add and the clear ride two
+# different event types, so without this a delayed all-clear run could finish
+# AFTER a newer flagged run and delete the label it just set. No
+# cancel-in-progress — a flag run must never be cancelled; losing an add is
+# strictly worse than queueing.
+concurrency:
+  group: codex-monitor-${{ github.event.pull_request.number || github.event.issue.number }}
 jobs:
   flag:
     runs-on: ubuntu-latest
@@ -47,9 +55,28 @@ jobs:
           REVIEW_STATE: ${{ github.event.review.state }}
           REVIEW_COMMIT: ${{ github.event.review.commit_id }}
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AT: ${{ github.event.comment.created_at }}
+          REVIEW_AT: ${{ github.event.review.submitted_at }}
           FLAG_LABEL: 'codex-flagged'
         run: |
           set -euo pipefail
+          # Count Codex verdicts on the current head NEWER than this event's.
+          # Same-SHA races are real: a re-requested review means an earlier
+          # all-clear and a later flagged review can name the SAME commit, and
+          # the two runs are independent — the delayed clean one must not
+          # outvote the newer flagged one. Newest verdict wins; if ANYTHING
+          # from Codex postdates this event, hold and let that event's own run
+          # decide. Holding is the conservative direction: it costs a manual
+          # clear, never a wrongly unblocked merge. Fails loudly (assignment):
+          # an unreadable review list must not read as "no newer verdict".
+          newer_codex_verdicts() { # $1 = this verdict's timestamp (RFC3339)
+            gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" --paginate \
+              --jq "[.[] | select(.user.login==\"chatgpt-codex-connector[bot]\")
+                         | select(.commit_id==\"$head_sha\")
+                         | select(.submitted_at > \"$1\")] | length" \
+              | awk '{s+=$1} END {print s+0}'
+          }
+
           clear_flag() {
             # DELETE on an absent label 404s, so check first — but the check
             # itself must fail loudly: absence-because-the-API-died reads
@@ -91,8 +118,13 @@ jobs:
                 elif case "$head_sha" in "$verdict_sha"*) false;; *) true;; esac; then
                   echo "All-clear is for $verdict_sha but head is $head_sha — stale verdict, NOT clearing."
                 else
-                  echo "Codex all-clear for the current head ($verdict_sha) on PR #$PR_NUMBER"
-                  clear_flag
+                  newer=$(newer_codex_verdicts "$COMMENT_AT")
+                  if [ "$newer" -gt 0 ]; then
+                    echo "$newer newer Codex verdict(s) postdate this all-clear — NOT clearing on it."
+                  else
+                    echo "Codex all-clear for the current head ($verdict_sha) on PR #$PR_NUMBER"
+                    clear_flag
+                  fi
                 fi
                 ;;
               *)
@@ -140,7 +172,17 @@ jobs:
             if [ -n "$REVIEW_COMMIT" ] && [ "$REVIEW_COMMIT" != "$head_sha" ]; then
               echo "Clean review is for $REVIEW_COMMIT but head is $head_sha — stale, NOT clearing."
             else
-              echo "No actionable Codex concerns in this review."
-              clear_flag
+              # Plain assignment, NOT inside the condition: set -e is suspended
+              # in an if/elif list, so an assignment there lets a dead reviews
+              # API fall through to the CLEAR branch — the exact class the
+              # label-fetch fix in this same file exists for, reintroduced one
+              # function away and caught by the stub suite, not by reading.
+              newer=$(newer_codex_verdicts "$REVIEW_AT")
+              if [ "$newer" -gt 0 ]; then
+                echo "$newer newer Codex verdict(s) postdate this clean review — NOT clearing on it."
+              else
+                echo "No actionable Codex concerns in this review."
+                clear_flag
+              fi
             fi
           fi

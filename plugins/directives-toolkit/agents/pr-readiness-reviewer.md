@@ -65,10 +65,13 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      report Ready while the Codex row is Pending, since Ready aggregates every row and
      would otherwise carry an unverified one.
    - The label is **asymmetric**: its absence proves nothing, but a `codex-flagged` label
-     that is still present IS a blocker (`git.md` → *PR Lifecycle*) — `codex-monitor` never
-     clears it, so it survives every later head. A clean response on the current head does
-     not dismiss a label left from an earlier one. While it is present, report the PR
-     **Conditional** at best, and name removal-with-rationale as the required next step.
+     that is still present IS a blocker (`git.md` → *PR Lifecycle*). `codex-monitor`
+     clears it itself on a Codex all-clear naming the current head, so a label still
+     present means concerns not yet re-reviewed, an all-clear that failed the SHA match,
+     or a monitor run that has not landed yet — never treat it as leftover noise. While
+     it is present, report the PR **Conditional** at best; the next step is either
+     waiting for the monitor's clear on a genuine all-clear, or removal-with-rationale
+     where a human judges the concerns addressed.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

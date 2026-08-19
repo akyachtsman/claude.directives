@@ -252,6 +252,27 @@ CASES = [
         None,
     ),
     (
+        "bare `name:` with no value (PyYAML hands back a null-tagged scalar)",
+        1,
+        {"target.yml": TARGET, "w.yml": "name:\non:\n  push:\n    branches: [main]\n" + JOBS},
+        None,
+    ),
+    (
+        'explicitly empty `name: ""`',
+        1,
+        {"target.yml": TARGET, "w.yml": 'name: ""\non:\n  push:\n    branches: [main]\n' + JOBS},
+        None,
+    ),
+    (
+        "`workflows:` key present with no value",
+        1,
+        {
+            "target.yml": TARGET,
+            "w.yml": "name: W\non:\n  workflow_run:\n    workflows:\n    types: [completed]\n" + JOBS,
+        },
+        None,
+    ),
+    (
         "unparseable YAML is reported, never skipped",
         1,
         {"target.yml": TARGET, "w.yml": "name: W\non:\n  workflow_run:\n   :\n  - [\n"},

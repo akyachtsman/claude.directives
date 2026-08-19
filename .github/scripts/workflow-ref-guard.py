@@ -194,6 +194,14 @@ def referenced_workflows(root, unreadable):
         return refs
 
     if isinstance(workflows, yaml.ScalarNode):
+        # The same null hole as `name:` above: a `workflows:` key left with no value
+        # is a ScalarNode, so reading `.value` would record "" as a watched name and
+        # report it dangling — a real fault, described wrongly. Name it for what it is.
+        if workflows.tag == "tag:yaml.org,2002:null" or not workflows.value.strip():
+            unreadable.append(
+                (workflows.start_mark.line + 1, "a `workflows:` key with no value")
+            )
+            return refs
         # `workflows: Name` — a bare scalar where GitHub wants a sequence. Read it
         # rather than find nothing: a dangling name here fails the same way.
         refs.append((workflows.value, workflows.start_mark.line + 1))
@@ -260,9 +268,18 @@ for path in files:
         continue
     roots[path.name] = root
     name_node = mapping_get(root, "name")
-    if not isinstance(name_node, yaml.ScalarNode):
+    # A bare `name:` and `name: ""` are the same defect as no `name:` at all — GitHub
+    # falls back to the file path in every case. PyYAML still hands back a ScalarNode
+    # for both (tagged null, or str with an empty value), so an isinstance check alone
+    # accepts them, declares "" as the workflow's display name, and exits green on a
+    # workflow nothing can reference. Require a name with something in it.
+    if (
+        not isinstance(name_node, yaml.ScalarNode)
+        or name_node.tag == "tag:yaml.org,2002:null"
+        or not name_node.value.strip()
+    ):
         errors.append(
-            f"{rel} has no top-level `name:`. GitHub falls back to the file path, "
+            f"{rel} has no usable top-level `name:`. GitHub falls back to the file path, "
             f"which no workflow_run list can reliably reference — give it an explicit name."
         )
         continue

@@ -13,14 +13,11 @@ name: CI Monitor
 # and if you do, change it in the SAME pull request, or the monitor goes quiet
 # without erroring.
 #
-# ⚠️ EVERY NAME HERE MUST RESOLVE TO A WORKFLOW THIS REPO ACTUALLY HAS. An entry
-# naming a workflow you did not install can never fire, so it is not merely
-# harmless — it is indistinguishable, by reading, from an entry that has silently
-# stopped matching. All three names below are in the STANDARD SET that
-# `/new-repo` installs in full, so in a standard scaffold all three resolve.
-# If you deliberately omit qa-response.yml, remove its name from this list and
-# from ci-notify.yml in the same edit — leaving it is the dangling entry this
-# note is about.
+# ⚠️ RULE W1 — every watched name must resolve to a workflow this repo has.
+# ACTION: all three below ship because /new-repo installs the full standard set.
+# If you omit qa-response.yml, remove its name here AND in ci-notify.yml in the
+# same edit. Rename a workflow and its watchers in the same PR.
+# Why, and the one exception: docs/standards/automations.md -> Watcher Rules (W1).
 # Listing watched workflows by name also prevents self-recursion (CI Monitor /
 # Codex Monitor are not in the list).
 on:

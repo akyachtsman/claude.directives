@@ -60,10 +60,7 @@ Execute in order:
      polling, no permission prompts)
    - `codex-monitor.yml` — Codex PR review monitor
    - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
-     every branch-source `page_build`). Edit-free ONLY if Pages is branch-
-     sourced; if Settings → Pages → Source is "GitHub Actions", `page_build`
-     never fires and you must add the `workflow_run` trigger naming your own
-     deploy workflow — the template header carries the snippet
+     every branch-source `page_build`)
    - `pages-retry.yml` — auto-re-runs the managed Pages deploy on a transient
      failure (bounded to `run_attempt < 4`); pairs with `pages-monitor.yml`.
      Applies to **branch-source** Pages projects; it only arms once it's on the
@@ -72,9 +69,17 @@ Execute in order:
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
    - `keepalive.yml` — weekly commit that keeps scheduled workflows from auto-disabling
 
-   All are drop-in — copy them verbatim, no edits. `ci-monitor.yml` is pre-wired
-   to watch both QA workflows shipped alongside it (`qa.yml` and `qa-live.yml`);
-   only touch its `workflows:` list if you rename their `name:` values.
+   Drop-in for a **branch-source** Pages project — copy verbatim, no edits.
+   `ci-monitor.yml` and `ci-notify.yml` ship watching all three QA workflows,
+   which all resolve because this step installs the full set.
+
+   ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, two files need the
+   exact `name:` of the project's own deploy workflow added before they do
+   anything: **`qa-live.yml`** (add it to `workflow_run.workflows`) and
+   **`pages-monitor.yml`** (add a `workflow_run` trigger — its header has the
+   snippet). `pages-retry.yml` must NOT get it. Omitting this step leaves the
+   live QA gate and the deploy monitor silently inert, which reads as healthy.
+   Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 
    **Composite actions (required by the qa workflows).** Copy
    `claude.directives/templates/actions/` (`secret-scan/action.yml`,

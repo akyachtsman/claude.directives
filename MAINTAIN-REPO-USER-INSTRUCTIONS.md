@@ -150,47 +150,17 @@ Hard-won; each cost a real debugging session:
 - **ci-notify bootstrap gap** — `workflow_run` reads the default branch, so
   ci-notify can never wake the PR that installs it. Verify on the FIRST
   post-install PR (the one allowed backstop check); don't call it a dud.
-- **Watch lists match workflow `name:` exactly** — repos with non-template QA
-  names must adapt `ci-monitor.yml`/`ci-notify.yml` lists. `/refresh-repo` no
-  longer carries a named exception for those two files (removed 2026-08-19):
-  every drop-in that differs from its template is flagged `DRIFT` and
-  dispositioned **by reading the diff** — there is no blind default in either
-  direction, and this summary defers to Phase 1.5's rule rather than restating
-  it. A watch-list-only diff is a recognised adaptation, so an adapted list is
-  kept by the general rule rather than by being on a list. An allow-list of
-  files permitted to differ rots the same way a watch list pinned to one
-  workflow name does — right when written, silently wrong after the next local
-  improvement.
-- **Every watched name must resolve to a workflow the repo actually has** —
-  with ONE documented exception: names GitHub itself manages, currently only
-  `pages-build-deployment`. Everything else is project-owned, and an entry
-  naming a project workflow you never installed can never fire and is
-  indistinguishable by reading from one that has silently stopped matching.
-  `ci-monitor.yml`/`ci-notify.yml` ship all three QA names because `/new-repo`
-  installs the full standard set, so all three resolve in a standard scaffold —
-  a project that deliberately omits `qa-response.yml` must remove its name from
-  both lists in the same edit. Rename a watched workflow and its watchers in the
-  SAME pull request.
-- **An Actions-sourced Pages deploy needs YOUR workflow's name added by hand.**
-  Flipping Settings → Pages → Source to "GitHub Actions" makes
-  `pages-build-deployment` inert, and any watcher naming only it stops firing
-  with no error at all. But the replacement is your own deploy workflow, whose
-  `name:` this template set does not ship and cannot guess — so `qa-live.yml`
-  and `pages-monitor.yml` ship WITHOUT one and tell you to add it. A pre-filled
-  guess would be the same defect as the bullet above. **`pages-retry.yml` is the
-  exception and stays branch-source only**: re-running a project-owned deploy
-  replays that workflow's whole build, which is a different operation from
-  re-running the managed publish. Actions-source projects build retry into their
-  own deploy workflow instead (`docs/standards/automations.md`, Automation 4b).
-- **A name resolving is not a trigger firing.** Everything above is checkable
-  against the tree; whether a watcher still receives events is not. That needs
-  run history — and the test is a COMPARISON, not a count. A watcher with no
-  runs may simply have had nothing to watch: a quiet repo, or branch/path
-  filters the source never matched. Diagnose a dead trigger only when an
-  ELIGIBLE SOURCE RUN COMPLETED WITH NO CORRESPONDING WATCHER RUN. "No runs
-  since the config change" alone is consistent with both a dead trigger and an
-  idle repository, and treating it as proof of the first manufactures false
-  alarms in exactly the repos nobody is touching.
+- **Workflow watch lists** — every rule about which names a `workflow_run`
+  watcher may carry, how the two Pages sources differ, and why retry is
+  source-specific lives in ONE place: `docs/standards/automations.md` → *Watcher Rules* (W1–W3). Stated here once as a
+  pointer on purpose; this ruleset was previously restated in five files and
+  every correction landed in four of them.
+- **A name resolving is not a trigger firing.** The tree can prove the first and
+  never the second. That needs run history, and the test is a COMPARISON: an
+  eligible SOURCE run that completed with no corresponding WATCHER run. "No runs
+  since the config change" alone is equally consistent with an idle repository,
+  and treating it as proof manufactures false alarms in exactly the repos nobody
+  is touching.
 - **Web sessions ignore project `permissions.allow`** — MCP prompt reduction
   on web comes from architecture (ci-notify wake, no-backstop ruling), not
   settings.

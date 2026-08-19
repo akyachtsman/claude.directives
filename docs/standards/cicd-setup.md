@@ -21,7 +21,7 @@ Two GitHub Actions workflows replace manual agent invocation for the mechanical 
 |---|---|---|
 | `qa.yml` | PR to main, push to feature branches | Static checks + Playwright against local server |
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
-| `qa-response.yml` *(optional)* | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
+| `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
 Three event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` (Step 9).
 
@@ -268,7 +268,7 @@ Required repository variables:
 
 - [ ] `.github/workflows/qa.yml` present and triggering on push/PR
 - [ ] `.github/workflows/qa-live.yml` present and triggering after Pages deploy
-- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch (optional)
+- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch — part of the standard set; if omitted, remove `QA — Event-Driven Response` from the `ci-monitor.yml` and `ci-notify.yml` watch lists
 - [ ] `.github/workflows/ci-monitor.yml` present, `workflow_run.workflows` filled in, manual dispatch verified
 - [ ] `.github/workflows/codex-monitor.yml` present
 - [ ] `.github/workflows/pages-monitor.yml` present

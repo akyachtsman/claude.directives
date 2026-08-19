@@ -16,14 +16,12 @@ on:
     # "pages-build-deployment" (verified via the Actions API), not the prose
     # title shown in the UI — the prose form never matches, so the retry
     # would never fire.
-    # ⚠️ BRANCH-SOURCE PAGES ONLY, BY DESIGN — do NOT add your own deploy
-    # workflow here. If Settings → Pages → Source is "GitHub Actions", the
-    # managed build goes inert and this retry correctly stops applying: build
-    # the retry into your own deploy workflow instead (docs/standards/
-    # automations.md, Automation 4b; docs/standards/cicd-setup.md Step 9d).
-    # Re-running a project-owned deploy is not the same operation as re-running
-    # the managed publish — it would replay that workflow's whole build, which
-    # this template neither intends nor bounds.
+    # ⚠️ RULE W3 — BRANCH-SOURCE ONLY. Do NOT add your own deploy workflow here:
+    # this re-runs the whole watched run, so pointing it at a project-owned
+    # deploy replays that workflow's entire build. Actions-source projects build
+    # retry into their own deploy workflow instead (Automation 4b).
+    # Why, and the narrow exception for a provably idempotent deploy:
+    # docs/standards/automations.md -> Watcher Rules (W3).
     workflows: [pages-build-deployment]
     types: [completed]
 permissions:

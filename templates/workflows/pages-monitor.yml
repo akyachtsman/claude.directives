@@ -7,21 +7,17 @@ name: Pages Monitor
 # re-check. The live URL comes from the Pages API (so user-site repos and custom
 # domains work), with a generic derivation as fallback — portable as-is.
 #
-# ⚠️ IF YOUR PAGES SOURCE IS "GITHUB ACTIONS", ADD A workflow_run TRIGGER BELOW.
-# `page_build` fires only for the MANAGED branch build. Setting Settings → Pages
-# → Source to "GitHub Actions" makes that event go inert, and this monitor then
-# never runs — silently, with no error, which reads as "no deploy problems" when
-# it means "nothing is watching". The trigger to add, using YOUR deploy
-# workflow's exact `name:` (project-owned; this template cannot supply it):
+# ⚠️ RULE W2 — `page_build` fires only for the MANAGED branch build. If your
+# Pages source is "GitHub Actions" it never fires and this monitor never runs.
+# ACTION: add a workflow_run trigger naming your own deploy workflow:
 #
 #   workflow_run:
 #     workflows: ['<your deploy workflow name>']
 #     types: [completed]
 #
 # The job below already handles that event — it normalises the two status
-# vocabularies. Do not pre-fill a guessed name: a watcher naming a workflow you
-# do not have can never fire and reads exactly like one that has stopped
-# matching.
+# vocabularies. Do not pre-fill a guessed name.
+# Why: docs/standards/automations.md -> Watcher Rules (W2, W3 — a monitor may watch either source; a retry may not).
 on:
   page_build:
   workflow_dispatch:

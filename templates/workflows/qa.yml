@@ -69,7 +69,7 @@ jobs:
       - name: Workflow cross-reference guard
         # Every `workflow_run.workflows:` entry must name a real workflow. GitHub
         # raises no error when one does not — the watcher simply never fires.
-        run: node .github/scripts/workflow-ref-guard.mjs
+        run: python3 .github/scripts/workflow-ref-guard.py
   ui-changes:
     name: Detect UI-relevant changes
     runs-on: ubuntu-latest

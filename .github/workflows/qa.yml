@@ -53,7 +53,14 @@ jobs:
         run: node .github/scripts/check-exports.js
 
       - name: Workflow cross-reference guard
-        run: node .github/scripts/workflow-ref-guard.mjs
+        run: python3 .github/scripts/workflow-ref-guard.py
+
+      # The guard's value is being trusted when it is QUIET, so a parser regression
+      # in it is silent by construction: zero references found, success printed, the
+      # dangling watcher through. These cases pin both directions — every valid form
+      # it must read, and every dangling name it must still catch.
+      - name: Check the cross-reference guard reads YAML correctly
+        run: python3 .github/scripts/check-workflow-ref-guard.py
 
       # The logical map is generated from EXPORTS.json, so a committed page that
       # no longer matches the manifest is drift — fail here rather than let the
@@ -84,7 +91,7 @@ jobs:
           # The guard ships to projects from templates/; this repo runs the .github/
           # copy. Without this diff a repair could land in the copy we execute while
           # the shipped one stays broken — and QA would stay green either way.
-          diff .github/scripts/workflow-ref-guard.mjs templates/scripts/workflow-ref-guard.mjs
+          diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
           diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
           echo "OK: paired files in sync"
 

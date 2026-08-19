@@ -239,8 +239,8 @@ fires. Install the guard so a broken cross-reference fails the build instead of
 going quiet:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.mjs \
-  -o .github/scripts/workflow-ref-guard.mjs
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.py \
+  -o .github/scripts/workflow-ref-guard.py
 ```
 
 `qa.yml` already invokes it. Populate `.github/workflow-ref-required.json` with
@@ -251,12 +251,18 @@ repo, so its second rule is configured here rather than edited into the file:
 { "qa-live.yml": ["My Deploy Workflow"] }
 ```
 
-Add to the static-checks job: `node .github/scripts/workflow-ref-guard.mjs`.
+Add to the static-checks job: `python3 .github/scripts/workflow-ref-guard.py`.
+It reads the workflows with PyYAML, which ships on GitHub's runner images and is
+already what `qa.yml` parses workflow YAML with — no install step. The guard was
+a dependency-free line scanner first; that version had to re-implement YAML and
+kept red-building valid workflows over legal forms it could not read, so a real
+parser is the cheaper of the two. It fails loudly if PyYAML is absent rather than
+skipping, because a guard that cannot read the workflows must never report them
+fine.
 
-Populate its `REQUIRED` map with the watchers this project cannot lose — a
-template cannot know those names, only the rule. ⚠️ Its green run means "no
-dangling reference and no missing required watcher"; it does **not** prove a
-trigger still fires. That needs run history. See the file's own header.
+⚠️ Its green run means "no dangling reference and no missing required watcher";
+it does **not** prove a trigger still fires. That needs run history. See the
+file's own header.
 
 ### 9d — Pages Retry
 

@@ -222,13 +222,30 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 
 **Auto-skills are the only surface nothing else proves.** `update-pages`,
 `scope-chk` and `doc-comp` fire on description match, so a description that
-drifts stops firing silently — no error, just absence.
-`plugins/directives-toolkit/evals/run-trigger-evals.py` runs each case as a real `claude -p` session and asserts the Skill call, scored
-as a fire RATE over repeated runs because triggering is probabilistic. It costs
-tokens and is NOT in CI; run it when a description changes. Measured baseline
-(2026-08-18, 3 runs/case): `scope-chk` and `update-pages` fire on an explicit
-phrasing and miss a softer one; `doc-comp` misses both of its positives despite
-firing when run by hand. Treat those as the numbers to improve, not as passing.
+drifts stops firing silently — no error, just absence. `claude plugin eval`
+(Anthropic) is the harness: cases live in `plugins/directives-toolkit/evals/`,
+each a `prompt.md` plus a skill-fired grader under its own `graders/` dir, using
+(`type: tool_used`, `tool: Skill`, `input_match` on the skill name). Run it from
+the plugin directory:
+`claude plugin eval --no-publish .`
+It defaults to `--ablation with-without`, running every case twice — with the
+plugin and without it — so the Δ column shows the skill CAUSED the behaviour
+rather than the model doing it anyway. It costs real tokens and is NOT in CI;
+run it when a description changes.
+
+Availability: `plugin eval` is early access, enabled per organization. On a
+machine that cannot receive that rollout, `CLAUDE_CODE_WALNUT_SPIRE=1` enables
+it — set in the shell, in the user-level Claude settings under `env`, or in
+managed settings. Do NOT
+commit it to this repo's `.claude/settings.json` — a committed value leaves the
+command gated off anyway.
+
+Measured baseline (2026-08-19, 2 runs/case, with/without arms):
+`scope-chk` fires on the softer phrasing (Δ +1.00) but only 1 run in 2 on the
+explicit one (Δ +0.50); `update-pages` fires on both (Δ +1.00 each); `doc-comp`
+fires on "diff the old X against the new X" (Δ +1.00) and never on "compare
+these two versions of our X" (Δ 0.00). All three negatives correctly never fire.
+`scope-chk`'s flakiness and `doc-comp`'s miss are the numbers to improve.
 
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, verify locally — this list mirrors what `qa.yml`
@@ -248,8 +265,7 @@ bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hook
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
-python3 plugins/directives-toolkit/evals/run-trigger-evals.py --skill <name> \
-  --cases plugins/directives-toolkit/skills/<name>/evals/trigger.json   # when an auto-skill's description changed
+(cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json or the map, regenerate first: node .github/scripts/build-logical-map.js
 ```

@@ -83,6 +83,17 @@ done
 (raw.githubusercontent.com is CDN-served and works from remote sessions; a
 failed fetch is "cannot verify", never DRIFT.)
 
+**`DRIFT` is a question, not a verdict — and it is what makes a curated
+exception list unnecessary.** This pass already knows, per file, whether the
+local copy differs from the template. An allow-list of files *permitted* to
+differ is the same failure shape as a watch list pinned to one workflow name:
+correct the day it is written, silently wrong after the next local improvement,
+and nothing detects the gap. `pages-retry.yml` earned an exemption on
+2026-08-17 and the list never learned; a verbatim refresh would have deleted
+that hardening and re-broken the trigger it also fixed (raised by apfp.claude,
+2026-08-19). So there is no list: a diff is self-maintaining, and every
+`DRIFT` file is resolved by looking at it.
+
 **Hook repair (runs before the loop, delta-independent).** Three broken states,
 not one: the script absent, present but unregistered, and present but not
 executable. `/env-chk` now reports all three and names `/refresh-repo` as the
@@ -196,7 +207,7 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — offer batch overwrite; EXCEPT preserve locally-adapted `workflow_run` watch lists in `ci-monitor.yml` AND `ci-notify.yml` (repos whose QA workflows carry non-template `name:` values adapt those lists; overwriting them re-breaks the trigger — verified on apfp.claude 2026-07-18) |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. For each `DRIFT` file, show the diff and decide singly, defaulting to KEEPING the local copy: local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them. Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
 | `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json` |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm |

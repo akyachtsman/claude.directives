@@ -1,3 +1,4 @@
 # Node dependencies
 node_modules/
 .claude/mcp.json
+plugins/directives-toolkit/evals/results/

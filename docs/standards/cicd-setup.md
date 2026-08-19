@@ -44,7 +44,7 @@ Do not edit the templates in place in `claude.directives` — copy to the target
 
 ## Step 1 — Copy workflow templates
 
-Copy the two core QA workflow templates from `claude.directives` into the target repo's `.github/workflows/`, **plus the two composite actions they reference** into `.github/actions/` (without them every qa run fails at step resolution):
+Copy the QA workflow templates from `claude.directives` into the target repo's `.github/workflows/` — `qa.yml` and `qa-live.yml` here, `qa-response.yml` just below, all three standard — **plus the two composite actions they reference** into `.github/actions/` (without them every qa run fails at step resolution):
 
 ```bash
 mkdir -p .github/workflows .github/actions/secret-scan .github/actions/ui-suite
@@ -63,13 +63,20 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/actions/ui-suite/action.yml
 ```
 
-Optional — event-driven QA dispatch hook (add if sessions/automations should be
-able to trigger QA via `repository_dispatch`):
+Event-driven QA dispatch hook — **part of the standard set**, so
+`ci-monitor.yml` and `ci-notify.yml` ship watching it. Lets sessions and
+automations trigger QA via `repository_dispatch`:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-response.yml \
   -o .github/workflows/qa-response.yml
 ```
+
+⚠️ **If you deliberately skip this file**, remove `'QA — Event-Driven Response'`
+from the `workflow_run.workflows` list in **both** `ci-monitor.yml` and
+`ci-notify.yml` in the same change. Leaving it is a watcher naming a workflow
+the repo does not have — see `docs/standards/automations.md` → *Watcher Rules*
+(W1).
 
 Alternatively, have the active Claude Code session fetch and write these files via GitHub MCP tools if no CLI is available.
 
@@ -77,7 +84,7 @@ Alternatively, have the active Claude Code session fetch and write these files v
 
 ## Step 2 — Set UI_TESTS_DIR
 
-In each copied workflow file (two core, or three if you added `qa-response.yml`), confirm `UI_TESTS_DIR` points to the correct path for the project's Playwright test directory (default: `.github/scripts/ui-tests`). Edit if different.
+In each copied workflow file (`qa.yml`, `qa-live.yml`, `qa-response.yml`), confirm `UI_TESTS_DIR` points to the correct path for the project's Playwright test directory (default: `.github/scripts/ui-tests`). Edit if different.
 
 ---
 
@@ -172,16 +179,19 @@ Confirm in the Actions tab that:
 
 ### 9a — CI Monitor
 
-Drop-in — copy it verbatim. It ships pre-wired to watch both QA workflows that
-come with it (`qa.yml` and `qa-live.yml`):
+Drop-in — copy it verbatim. It ships pre-wired to watch all three QA workflows
+that come with it (`qa.yml`, `qa-live.yml`, `qa-response.yml`):
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
 ```
 
-Only edit `workflow_run.workflows` if you rename those workflows' `name:` values
-or want to watch additional workflows (`grep '^name:' .github/workflows/*.yml`).
+Edit `workflow_run.workflows` only to rename (change the workflow and every
+watcher of it in the same PR), to watch an additional workflow, or to REMOVE a
+name for a standard workflow you chose not to install — every entry must resolve
+to a workflow this repo has (`grep '^name:' .github/workflows/*.yml`).
+Rules: `docs/standards/automations.md` → *Watcher Rules* (W1).
 
 After pushing, verify with a manual `workflow_dispatch` run before relying on it.
 

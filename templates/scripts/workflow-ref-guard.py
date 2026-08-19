@@ -166,7 +166,13 @@ def on_node(root):
             continue
         if key_node.value == "on" or (
             key_node.tag == "tag:yaml.org,2002:bool"
-            and key_node.value.lower() in ("true", "yes", "y")
+            # `ON:` and `On:` are bool-tagged but keep their original casing, so a
+            # lowercase-only comparison misses them and the guard reports zero
+            # references on a file that has a live trigger. `on` belongs in this list
+            # for the same reason `yes` does. The tag check is what keeps a QUOTED
+            # `"ON":` out — that is str-tagged and genuinely is not the trigger key,
+            # so it must keep being ignored.
+            and key_node.value.lower() in ("true", "yes", "y", "on")
         ):
             found = value_node
     return found
@@ -215,6 +221,19 @@ def referenced_workflows(root, unreadable):
 
     for item in workflows.value:
         if isinstance(item, yaml.ScalarNode):
+            # Same null hole as the scalar branch above, and it was inconsistent to
+            # reject it there while accepting it here. `workflows: [null]` composes to
+            # a null-tagged node whose `.value` is the string "null", so a repo that
+            # happened to contain a workflow named "null" would resolve it and pass.
+            # Empty entries go the same way: no workflow can declare an empty name, so
+            # such an entry can never resolve, and reporting it as a dangling name
+            # describes the wrong fault. Non-string scalars stay allowed — `2026` is a
+            # legal display name.
+            if item.tag == "tag:yaml.org,2002:null" or not item.value.strip():
+                unreadable.append(
+                    (item.start_mark.line + 1, "a null or empty entry in the `workflows:` list")
+                )
+                continue
             refs.append((item.value, item.start_mark.line + 1))
         else:
             # A nested mapping or sequence is not a workflow name. Report it rather

@@ -33,7 +33,15 @@ NBSP = "\u00A0"
 JOBS = 'jobs: {a: {runs-on: ubuntu-latest, steps: [{run: "true"}]}}\n'
 TARGET = "name: Target\non:\n  push:\n    branches: [main]\n" + JOBS
 
-# (label, expected_exit, {filename: body}, required-json or None)
+# (label, expected_exit, {filename: body}, required-json or None[, required diagnostic])
+#
+# The 5th element is not optional decoration. A case that only asserts "exit 1" pins
+# almost nothing: several distinct faults exit 1, so a case can keep passing while the
+# branch it was written for is reverted and some unrelated check catches the input
+# instead. That happened here — the valueless-`workflows:` case was added to pin a new
+# diagnostic, but the input already exited 1 by being read as a dangling empty name, so
+# the case would have survived the branch being deleted (Codex, #237). Every failing
+# case therefore states the diagnostic it expects.
 CASES = [
     # ── forms that must PASS: valid YAML, every watched name resolves ──────────
     (
@@ -166,6 +174,7 @@ CASES = [
             "w.yml": "name: W\non:\n  workflow_run:\n    workflows: [Ghost]\n    types: [completed]\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     (
         "quoted workflow_run key, dangling name",
@@ -176,6 +185,7 @@ CASES = [
             "    types: [completed]\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     (
         "quoted workflows key, dangling name",
@@ -186,6 +196,7 @@ CASES = [
             "    types: [completed]\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     (
         "flow-style on: mapping, dangling name",
@@ -195,6 +206,7 @@ CASES = [
             "w.yml": "name: W\non: {workflow_run: {workflows: [Ghost], types: [completed]}}\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     (
         "flow-style workflow_run: mapping, dangling name",
@@ -204,6 +216,7 @@ CASES = [
             "w.yml": "name: W\non:\n  workflow_run: {workflows: [Ghost], types: [completed]}\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     (
         "anchor on the workflows value, dangling name",
@@ -214,6 +227,7 @@ CASES = [
             "    types: [completed]\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     (
         "anchored block mapping under on:, dangling name",
@@ -224,6 +238,7 @@ CASES = [
             "    types: [completed]\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     (
         "alias as the workflows value, dangling name",
@@ -234,6 +249,7 @@ CASES = [
             "    workflows: *watched\n    types: [completed]\n" + JOBS,
         },
         None,
+        'watches "Ghost"',
     ),
     # ── rule 2, and the fail-closed floor ─────────────────────────────────────
     (
@@ -244,24 +260,28 @@ CASES = [
             "w.yml": "name: W\non:\n  push:\n    branches: [main]\n" + JOBS,
         },
         {"w.yml": ["Target"]},
+        'which this repo REQUIRES',
     ),
     (
         "workflow with no top-level name:",
         1,
         {"target.yml": TARGET, "w.yml": "on:\n  push:\n    branches: [main]\n" + JOBS},
         None,
+        'no usable top-level `name:`',
     ),
     (
         "bare `name:` with no value (PyYAML hands back a null-tagged scalar)",
         1,
         {"target.yml": TARGET, "w.yml": "name:\non:\n  push:\n    branches: [main]\n" + JOBS},
         None,
+        'no usable top-level `name:`',
     ),
     (
         'explicitly empty `name: ""`',
         1,
         {"target.yml": TARGET, "w.yml": 'name: ""\non:\n  push:\n    branches: [main]\n' + JOBS},
         None,
+        'no usable top-level `name:`',
     ),
     (
         "`workflows:` key present with no value",
@@ -271,12 +291,69 @@ CASES = [
             "w.yml": "name: W\non:\n  workflow_run:\n    workflows:\n    types: [completed]\n" + JOBS,
         },
         None,
+        'key with no value',
     ),
     (
         "unparseable YAML is reported, never skipped",
         1,
         {"target.yml": TARGET, "w.yml": "name: W\non:\n  workflow_run:\n   :\n  - [\n"},
         None,
+        'not parseable YAML',
+    ),
+    # ── the null/casing set: forms PyYAML hands back as scalars that are not names ──
+    (
+        "uppercase ON: is still the trigger key, dangling name",
+        1,
+        {
+            "target.yml": TARGET,
+            "w.yml": "name: W\nON:\n  workflow_run:\n    workflows: [Ghost]\n"
+            "    types: [completed]\n" + JOBS,
+        },
+        None,
+        'watches "Ghost"',
+    ),
+    (
+        "mixed-case On: is still the trigger key, dangling name",
+        1,
+        {
+            "target.yml": TARGET,
+            "w.yml": "name: W\nOn:\n  workflow_run:\n    workflows: [Ghost]\n"
+            "    types: [completed]\n" + JOBS,
+        },
+        None,
+        'watches "Ghost"',
+    ),
+    (
+        'quoted "ON": is NOT the trigger key — str-tagged, so there is no trigger here',
+        0,
+        {
+            "target.yml": TARGET,
+            "w.yml": 'name: W\non:\n  push:\n    branches: [main]\n"ON":\n'
+            "  workflow_run:\n    workflows: [Ghost]\n" + JOBS,
+        },
+        None,
+    ),
+    (
+        "null entry in the workflows list, against a workflow literally named null",
+        1,
+        {
+            "target.yml": 'name: "null"\non:\n  push:\n    branches: [main]\n' + JOBS,
+            "w.yml": "name: W\non:\n  workflow_run:\n    workflows: [null]\n"
+            "    types: [completed]\n" + JOBS,
+        },
+        None,
+        "null or empty entry",
+    ),
+    (
+        "empty-string entry in the workflows list",
+        1,
+        {
+            "target.yml": TARGET,
+            "w.yml": 'name: W\non:\n  workflow_run:\n    workflows: [""]\n'
+            "    types: [completed]\n" + JOBS,
+        },
+        None,
+        "null or empty entry",
     ),
 ]
 
@@ -302,12 +379,19 @@ def run_case(files, required):
 
 
 failures = []
-for label, expected, files, required in CASES:
+for case in CASES:
+    label, expected, files, required = case[:4]
+    diagnostic = case[4] if len(case) > 4 else None
     code, output = run_case(files, required)
     if code != expected:
         want = "pass" if expected == 0 else "fail"
         got = "passed" if code == 0 else "failed"
         failures.append(f"{label}\n      expected the guard to {want}; it {got}.\n      {output}")
+    elif diagnostic and diagnostic not in output:
+        failures.append(
+            f"{label}\n      exited {code} as expected, but for the wrong stated reason.\n"
+            f"      expected the output to contain: {diagnostic!r}\n      {output}"
+        )
 
 if failures:
     sys.stderr.write("❌ check-workflow-ref-guard: FAILED\n\n")

@@ -159,17 +159,24 @@ Hard-won; each cost a real debugging session:
   files permitted to differ rots the same way a watch list pinned to one
   workflow name does — right when written, silently wrong after the next local
   improvement.
-- **Every watched name must resolve to a workflow the repo actually has.** An
-  entry naming a workflow you never installed can never fire, and is
-  indistinguishable by reading from one that has silently stopped matching —
-  which is why the optional `qa-response.yml` entry is no longer pre-listed in
-  the templates. Rename a watched workflow and its watchers in the SAME pull
-  request.
-- **Watch lists must name both Pages sources.** `pages-build-deployment` is the
-  managed branch build; an Actions-sourced deploy is your own workflow's name
-  (`Pages` in this template set). Flipping Settings → Pages → Source to "GitHub
-  Actions" makes the managed build inert, and any watcher naming only it stops
-  firing with no error at all.
+- **Every watched name must resolve to a workflow the repo actually has** —
+  with ONE documented exception: names GitHub itself manages, currently only
+  `pages-build-deployment`. Everything else is project-owned, and an entry
+  naming a project workflow you never installed can never fire and is
+  indistinguishable by reading from one that has silently stopped matching. That
+  is why the optional `qa-response.yml` entry is no longer pre-listed. Rename a
+  watched workflow and its watchers in the SAME pull request.
+- **An Actions-sourced Pages deploy needs YOUR workflow's name added by hand.**
+  Flipping Settings → Pages → Source to "GitHub Actions" makes
+  `pages-build-deployment` inert, and any watcher naming only it stops firing
+  with no error at all. But the replacement is your own deploy workflow, whose
+  `name:` this template set does not ship and cannot guess — so `qa-live.yml`,
+  `pages-retry.yml` and `pages-monitor.yml` ship WITHOUT one and tell you to add
+  it. A pre-filled guess would be the same defect as the bullet above.
+- **A name resolving is not a trigger firing.** Everything above is checkable
+  against the tree; whether a watcher still receives events is not. That needs
+  run history — if a watched workflow has no runs since a config change, treat
+  it as dead regardless of how correct the file reads.
 - **Web sessions ignore project `permissions.allow`** — MCP prompt reduction
   on web comes from architecture (ci-notify wake, no-backstop ruling), not
   settings.

@@ -3,17 +3,20 @@
 # ui-suite composite from templates/actions/ into .github/actions/.
 # Triggers automatically after GitHub Pages deploys, or manually via workflow_dispatch.
 #
-# ⚠️ WATCH BOTH PAGES SOURCES. GitHub publishes Pages one of two ways, and the
-# workflow name differs: the managed branch build is `pages-build-deployment`
-# (auto-created when Pages is enabled), and an Actions-sourced deploy is whatever
-# your own workflow is named — `Pages` in this template set (pages.yml). Setting
-# Settings → Pages → Source to "GitHub Actions" makes the managed build go inert,
-# so a list naming only `pages-build-deployment` stops firing with NO error: this
-# gate simply never runs again, and an absent signal reads as "nothing failed".
-# That is not only a cutover hazard — a NEW repo scaffolded with Source = GitHub
-# Actions from day one gets a gate that has never run at all, with no "it used to
-# work" phase to notice. Naming both means the gate survives either source.
-# (Verified on apfp.claude 2026-08-19: silently dead from the 2026-08-18 cutover.)
+# ⚠️ IF YOUR PAGES SOURCE IS "GITHUB ACTIONS", ADD YOUR DEPLOY WORKFLOW'S NAME
+# BELOW. GitHub publishes Pages one of two ways. The managed branch build is
+# `pages-build-deployment`, which GitHub creates for you — that is the only name
+# this template can safely pre-fill. An Actions-sourced deploy runs YOUR OWN
+# workflow, whose `name:` this template set does not ship and cannot guess.
+#
+# Setting Settings → Pages → Source to "GitHub Actions" makes the managed build
+# go inert, so a list naming only `pages-build-deployment` stops firing with NO
+# error: this gate simply never runs again, and an absent signal reads as
+# "nothing failed". A NEW repo scaffolded with Source = GitHub Actions from day
+# one gets a gate that has never run at all, with no "it used to work" phase to
+# notice. Add the exact `name:` of your deploy workflow to the list and the gate
+# survives either source. Do NOT invent one: a watcher naming a workflow you do
+# not have is indistinguishable, by reading, from one that has stopped matching.
 #
 # The job's `if:` gate below needs NO workflow-name condition — it reads
 # `github.event.workflow_run.conclusion`, which is agnostic to which workflow
@@ -34,7 +37,8 @@ name: QA — UI Tests (live)
 
 on:
   workflow_run:
-    workflows: ['pages-build-deployment', 'Pages']
+    # + your Actions deploy workflow's `name:` if that is your Pages source
+    workflows: ['pages-build-deployment']
     types: [completed]
   workflow_dispatch:
     inputs:

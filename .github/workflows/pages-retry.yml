@@ -16,10 +16,13 @@ on:
     # "pages-build-deployment" (verified via the Actions API), not the prose
     # title shown in the UI — the prose form never matches, so the retry
     # would never fire.
-    # + "Pages" since 2026-08-18: the deploy moved to the filtered Actions workflow
-    # (pages.yml) and the managed branch build went inert with it — watching both
-    # names means the retry survives either source being active.
-    workflows: [pages-build-deployment, Pages]
+    # ⚠️ If Settings → Pages → Source is "GitHub Actions", the managed build goes
+    # inert and this retry stops firing with no error. ADD your own deploy
+    # workflow's exact `name:` to this list — it is project-owned, so this
+    # template cannot supply it. Do not invent a name: a watcher naming a
+    # workflow you do not have can never fire and reads exactly like one that
+    # has silently stopped matching.
+    workflows: [pages-build-deployment]
     types: [completed]
 permissions:
   actions: write

@@ -52,14 +52,69 @@ jobs:
           WR_BRANCH: ${{ github.event.workflow_run.head_branch }}
           WR_URL: ${{ github.event.workflow_run.html_url }}
           WR_ID: ${{ github.event.workflow_run.id }}
+          WR_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          WR_UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
           LOOKBACK: ${{ github.event.inputs.lookback_minutes || '1440' }}
           ISSUE_LABEL: 'ci-failure'
         run: |
           set -euo pipefail
           if [ "$EVENT" = "workflow_run" ]; then
             echo "workflow_run: $WR_NAME concluded $WR_CONCLUSION"
+            # `cancelled` needs a question asked before it is judged. GitHub reports
+            # BOTH a job killed by its timeout AND a run superseded by
+            # cancel-in-progress as "cancelled" — and qa-live.yml uses exactly that
+            # concurrency setting, so treating every cancellation as a failure would
+            # spam the tracking issue on healthy supersedes. Treating none of them as
+            # a failure is how a timeout-killed authoritative gate reports nothing at
+            # all, which is what happened downstream on 2026-08-19: the run died in
+            # setup, said "cancelled", and no alarm fired.
+            #
+            # ⚠️ "A newer run exists" is COINCIDENCE, not causation, and using it alone
+            # re-creates the silent timeout this exists to fix. A workflow with no
+            # concurrency block has overlapping runs on a branch as a matter of
+            # course — qa.yml is exactly that, and it carries 30-minute job timeouts —
+            # so an older run CAN time out while a newer one merely happens to exist.
+            # (Caught downstream, apfp.claude 2026-08-19, against this same first
+            # attempt.) Suppression therefore requires BOTH:
+            #   1. the workflow actually declares cancel-in-progress — without it
+            #      nothing could have superseded anything, so a cancel is a timeout
+            #      or a human;
+            #   2. the newer run was created BEFORE this run ended — one created
+            #      afterwards cannot have caused the cancellation.
+            # And NO probe may fail toward silence: an unreadable answer alarms.
+            if [ "$WR_CONCLUSION" = "cancelled" ]; then
+              can_supersede=unknown
+              wf_path=$(gh api "repos/$REPO/actions/workflows/${WR_WORKFLOW_ID}" --jq .path 2>/dev/null || true)
+              if [ -n "$wf_path" ]; then
+                if gh api "repos/$REPO/contents/${wf_path}?ref=${WR_BRANCH}" \
+                     -H "Accept: application/vnd.github.raw" 2>/dev/null \
+                     | grep -qE '^[[:space:]]*cancel-in-progress:[[:space:]]*true[[:space:]]*$'; then
+                  can_supersede=yes
+                else
+                  can_supersede=no
+                fi
+              fi
+
+              if [ "$can_supersede" = "no" ]; then
+                echo "cancelled, and this workflow declares no cancel-in-progress — nothing could have superseded it."
+              elif [ "$can_supersede" = "unknown" ]; then
+                echo "cancelled, and the workflow definition could not be read — reporting rather than assuming a supersede."
+              else
+                newer=$(gh api "repos/$REPO/actions/workflows/${WR_WORKFLOW_ID}/runs?branch=${WR_BRANCH}&per_page=50" \
+                  --jq "[.workflow_runs[] | select(.id > ${WR_ID}) | select(.created_at < \"${WR_UPDATED_AT}\")] | length" 2>/dev/null || true)
+                if [ -z "$newer" ]; then
+                  echo "cancelled, and the supersede probe failed — reporting rather than guessing."
+                elif [ "$newer" -gt 0 ]; then
+                  echo "cancelled and genuinely superseded: $newer newer run(s) started before it ended. Expected, not reported."
+                  exit 0
+                else
+                  echo "cancelled with no newer run started before it ended — a timeout or a manual cancel."
+                fi
+              fi
+              WR_CONCLUSION=cancelled_unsuperseded
+            fi
             case "$WR_CONCLUSION" in
-              failure|timed_out|startup_failure)
+              failure|timed_out|startup_failure|cancelled_unsuperseded)
                 body="- **$WR_NAME** on \`$WR_BRANCH\` @ \`${WR_SHA:0:7}\` — [run $WR_ID]($WR_URL)"
                 ;;
               *)
@@ -73,7 +128,7 @@ jobs:
             echo "Scanning $REPO for failed runs since $since"
             runs=$(gh api "repos/$REPO/actions/runs?per_page=50&status=completed" \
               --jq "[.workflow_runs[]
-                     | select(.conclusion==\"failure\" or .conclusion==\"timed_out\" or .conclusion==\"startup_failure\")
+                     | select(.conclusion==\"failure\" or .conclusion==\"timed_out\" or .conclusion==\"startup_failure\" or .conclusion==\"cancelled\")
                      | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\" and .name != \"Pages Monitor\")
                      | select(.updated_at >= \"$since\")
                      | {name, id, sha: .head_sha[0:7], branch: .head_branch, url: .html_url}]")

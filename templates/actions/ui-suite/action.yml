@@ -55,11 +55,36 @@ runs:
       run: npm install
       working-directory: ${{ inputs.tests-dir }}
 
+    # Browsers are ~400MB and were re-downloaded on EVERY run. This is a BUDGET
+    # fix, not a hang fix, and the distinction was measured rather than assumed:
+    # downstream the install step SUCCEEDED in 21m25s, and the job then hit its
+    # 30-minute ceiling during the tests. Nothing was stuck; the setup simply ate
+    # the budget the tests needed (apfp.claude, 2026-08-19, run 32267163505).
+    # Caching removes a 21-minute step from a 30-minute job, which is decisive
+    # rather than probabilistic.
+    #
+    # ⚠️ Actions caches are scoped to the branch that SAVED them, so the first run
+    # on a new default branch still misses even when a PR branch populated one.
+    # Expect one more slow run after adopting this, then hits.
+    - name: Cache Playwright browsers
+      id: pw-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: pw-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.tests-dir)) }}
+
     - name: Install Playwright browsers
       # Both browsers: playwright.config.js defines a webkit project (iPhone 12)
       # alongside chromium (Pixel 5). Installing chromium alone fails that project.
+      # On a cache hit the binaries are already present, so only the SYSTEM
+      # libraries need installing — those live in /usr/lib and are never cached.
       shell: bash
-      run: npx playwright install --with-deps chromium webkit
+      run: |
+        if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+          npx playwright install-deps chromium webkit
+        else
+          npx playwright install --with-deps chromium webkit
+        fi
       working-directory: ${{ inputs.tests-dir }}
 
     # http-server is a pinned devDependency installed in tests-dir. Invoke its

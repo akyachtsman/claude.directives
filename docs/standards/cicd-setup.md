@@ -217,7 +217,9 @@ repo). ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, `page_bu
 never fires and this monitor is inert until you add a `workflow_run` trigger
 naming your own deploy workflow — the template header carries the snippet, and
 the same name must be added to `qa-live.yml`'s watch list. Do NOT add it to
-`pages-retry.yml`. Rules: `docs/standards/automations.md` → *Watcher Rules*
+`pages-retry.yml` — unless that deploy is provably idempotent and you record why
+in the project's CLAUDE.md, which is the one exception W3 grants (Step 9d spells
+it out). Rules: `docs/standards/automations.md` → *Watcher Rules*
 (W2, W3).
 
 ```bash
@@ -228,6 +230,33 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 **What it does:** verifies every Pages build is live and tracks problems via a
 deduplicated `pages-deploy-failure` issue. Behavior detail: `docs/standards/automations.md`
 → Automation 4.
+
+### 9c-bis — Workflow cross-reference guard
+
+A `workflow_run` trigger names another workflow's `name:` as a string, and GitHub
+raises **no error** when that name matches nothing — the watcher simply never
+fires. Install the guard so a broken cross-reference fails the build instead of
+going quiet:
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.mjs \
+  -o .github/scripts/workflow-ref-guard.mjs
+```
+
+`qa.yml` already invokes it. Populate `.github/workflow-ref-required.json` with
+the watchers this project must not lose — the script is byte-identical in every
+repo, so its second rule is configured here rather than edited into the file:
+
+```json
+{ "qa-live.yml": ["My Deploy Workflow"] }
+```
+
+Add to the static-checks job: `node .github/scripts/workflow-ref-guard.mjs`.
+
+Populate its `REQUIRED` map with the watchers this project cannot lose — a
+template cannot know those names, only the rule. ⚠️ Its green run means "no
+dangling reference and no missing required watcher"; it does **not** prove a
+trigger still fires. That needs run history. See the file's own header.
 
 ### 9d — Pages Retry
 
@@ -246,7 +275,9 @@ later."* publish blips clear on retry), bounded to `run_attempt < 4` so a truly
 broken deploy can't loop — at the ceiling `pages-monitor.yml` opens the tracking
 issue. **Two prerequisites:** (1) it targets the **branch-source** Pages workflow
 (`pages-build-deployment`) — projects on the **GitHub Actions** Pages source
-should instead build retry into their own deploy workflow; (2) it only arms once
+should instead build retry into their own deploy workflow, unless that deploy is
+provably idempotent and the reasoning is recorded in the project's CLAUDE.md
+(`docs/standards/automations.md` → *Watcher Rules*, W3); (2) it only arms once
 it's on the default branch, so it covers the *next* deploy, not the one that adds
 it.
 

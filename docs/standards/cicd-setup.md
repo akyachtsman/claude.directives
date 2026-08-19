@@ -207,7 +207,8 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/workflows/codex-monitor.yml
 ```
 
-**What it does:** adds a `codex-flagged` label when Codex raises concerns.
+**What it does:** adds a `codex-flagged` label when Codex raises concerns and
+clears it on a Codex all-clear naming the current head SHA.
 Behavior detail: `docs/standards/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor

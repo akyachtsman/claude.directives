@@ -108,6 +108,13 @@ for scan_dir in SCAN_DIRS:
             if isinstance(bound, bool) or not isinstance(bound, int):
                 errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer minute count.")
                 continue
+            if bound <= 0:
+                errors.append(
+                    f"{rel} → job '{name}' declares timeout-minutes: {bound} — no usable execution\n"
+                    f"      window at all. The job dies immediately, which reads as flaky CI, not as\n"
+                    f"      a bound set to nothing."
+                )
+                continue
             if bound >= GITHUB_DEFAULT:
                 errors.append(
                     f"{rel} → job '{name}' declares timeout-minutes: {bound}, but GitHub's default is\n"

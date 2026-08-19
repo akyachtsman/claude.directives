@@ -27,13 +27,14 @@ permissions:
   pull-requests: write
   issues: write   # labels are an issues-API scope
 
-# One run at a time per PR, in arrival order. The add and the clear ride two
-# different event types, so without this a delayed all-clear run could finish
-# AFTER a newer flagged run and delete the label it just set. No
-# cancel-in-progress — a flag run must never be cancelled; losing an add is
-# strictly worse than queueing.
-concurrency:
-  group: codex-monitor-${{ github.event.pull_request.number || github.event.issue.number }}
+# ⚠️ NO concurrency group here, and that is a decision, not an omission. A
+# group looked like the fix for out-of-order runs, but GitHub keeps AT MOST ONE
+# pending run per group and EVICTS the older pending run when another arrives —
+# even without cancel-in-progress. A pending FLAG run evicted by a later
+# comment event means the merge blocker is never added, which is the one
+# direction this monitor must never fail in. Ordering safety comes from the
+# newer-verdict holds in the script instead: their failure direction is a stale
+# label that costs a manual clear, never a missing one (Codex, #239).
 jobs:
   flag:
     runs-on: ubuntu-latest
@@ -84,7 +85,7 @@ jobs:
             # SEPARATE assignment for that reason: inside an `if` condition,
             # `set -e` is suspended and a dead API would take the quiet branch
             # (Codex, #239). As an assignment, a gh failure kills the step red.
-            labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name')
+            labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --paginate --jq '.[].name')
             if printf '%s\n' "$labels" | grep -qxF "$FLAG_LABEL"; then
               echo "Clearing stale $FLAG_LABEL from PR #$PR_NUMBER"
               gh api -X DELETE "repos/$REPO/issues/$PR_NUMBER/labels/$FLAG_LABEL"

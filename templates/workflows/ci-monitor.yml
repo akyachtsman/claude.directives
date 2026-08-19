@@ -132,12 +132,34 @@ jobs:
             # Manual dispatch: scan a time window.
             since=$(date -u -d "-${LOOKBACK} minutes" +%Y-%m-%dT%H:%M:%SZ)
             echo "Scanning $REPO for failed runs since $since"
-            runs=$(gh api "repos/$REPO/actions/runs?per_page=50&status=completed" \
+            # Same discriminator as the event branch, or the scan re-reports what
+            # that branch correctly suppressed: with qa.yml carrying
+            # cancel-in-progress, every healthy supersede in the window is a
+            # `cancelled` run — flagging them all makes a manual scan cry wolf
+            # after any burst of pushes. A cancelled run is kept only when NO
+            # newer run of the same workflow+branch was created before it ended
+            # (created_at of a later run < updated_at of this one = it CAN have
+            # been superseded; nothing newer = a timeout or a human, report it).
+            # The per-run cancel-in-progress file probe is skipped here — the
+            # window scan is a coarse backstop, and the newer-run test alone
+            # only risks under-reporting a cancel that the event branch already
+            # classified in real time.
+            runs=$(gh api "repos/$REPO/actions/runs?per_page=100&status=completed" \
               --jq "[.workflow_runs[]
-                     | select(.conclusion==\"failure\" or .conclusion==\"timed_out\" or .conclusion==\"startup_failure\" or .conclusion==\"cancelled\")
-                     | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\" and .name != \"Pages Monitor\")
                      | select(.updated_at >= \"$since\")
-                     | {name, id, sha: .head_sha[0:7], branch: .head_branch, url: .html_url}]")
+                     | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\" and .name != \"Pages Monitor\")
+                     | {name, id, sha: .head_sha[0:7], branch: .head_branch, url: .html_url,
+                        conclusion, workflow_id, head_branch, created_at, updated_at}]")
+            runs=$(echo "$runs" | jq '[
+              ( group_by([.workflow_id, .head_branch]) | .[] ) as $g
+              | $g[] | . as $r
+              | select(
+                  (.conclusion=="failure" or .conclusion=="timed_out" or .conclusion=="startup_failure")
+                  or (.conclusion=="cancelled" and
+                      ([$g[] | select(.created_at > $r.created_at and .created_at < $r.updated_at)] | length) == 0)
+                )
+              | {name, id, sha, branch, url}
+            ]')
             count=$(echo "$runs" | jq 'length')
             echo "Found $count failed run(s) in window"
             [ "$count" -eq 0 ] && { echo "Nothing to report."; exit 0; }

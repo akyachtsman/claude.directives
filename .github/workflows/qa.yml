@@ -23,6 +23,10 @@ jobs:
   validate:
     name: Validate Directives
     runs-on: ubuntu-latest
+    # Bounded because it fetches: checkout, and npx for the validators. Fast in
+    # practice (~7s), which is exactly why the missing bound went unnoticed —
+    # a job that always finishes quickly is still unbounded when it does not.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -116,6 +120,10 @@ jobs:
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest
+    # The most network-dependent job here — it resolves external URLs, so a slow
+    # or black-holing host is its normal failure mode. Warn-only means a hang
+    # blocks the run without ever reporting anything, which is worse than a red.
+    timeout-minutes: 10
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4

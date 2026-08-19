@@ -7,9 +7,22 @@ name: Codex Monitor
 # comments. Approving / empty reviews are ignored. Flagged PRs get a
 # `codex-flagged` label (Codex already posted suggestions inline, so no duplicate
 # comment). Uses only GITHUB_TOKEN.
+#
+# ⚠️ THE LABEL IS TWO-WAY, and the second direction needs a second trigger.
+# The merge gate consumes this label by testing for its ABSENCE, so a label
+# that is only ever added converts "Codex has concerns" into "Codex once had
+# concerns" — permanently red until someone clears it by hand, which both PRs
+# merged on 2026-08-19 needed. And the all-clear does NOT arrive as a review:
+# Codex posts flagged rounds as pull_request_review events but posts clean
+# verdicts ("Didn't find any major issues") as plain ISSUE COMMENTS — observed
+# on #237 and #238, 2026-08-19. A monitor listening only on pull_request_review
+# can hear the complaint but never the all-clear. That is why issue_comment is
+# a trigger here: not scope creep, the only path the all-clear travels.
 on:
   pull_request_review:
     types: [submitted]
+  issue_comment:
+    types: [created]
 permissions:
   pull-requests: write
   issues: write   # labels are an issues-API scope
@@ -17,18 +30,54 @@ jobs:
   flag:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: ${{ github.event.review.user.login == 'chatgpt-codex-connector[bot]' }}
+    if: >-
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.user.login == 'chatgpt-codex-connector[bot]') ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       github.event.comment.user.login == 'chatgpt-codex-connector[bot]')
     steps:
-      - name: Flag PR when Codex raised concerns
+      - name: Flag on concerns, clear on the all-clear
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event_name == 'pull_request_review' && github.event.pull_request.number || github.event.issue.number }}
           REVIEW_ID: ${{ github.event.review.id }}
           REVIEW_STATE: ${{ github.event.review.state }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
           FLAG_LABEL: 'codex-flagged'
         run: |
           set -euo pipefail
+          clear_flag() {
+            # DELETE on an absent label 404s, so check first — but the check
+            # itself must fail loudly: absence-because-the-API-died reads
+            # exactly like absence-because-it-was-never-set.
+            if gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name' \
+                 | grep -qxF "$FLAG_LABEL"; then
+              echo "Clearing stale $FLAG_LABEL from PR #$PR_NUMBER"
+              gh api -X DELETE "repos/$REPO/issues/$PR_NUMBER/labels/$FLAG_LABEL"
+            else
+              echo "No $FLAG_LABEL on PR #$PR_NUMBER — nothing to clear."
+            fi
+          }
+
+          if [ "$EVENT" = "issue_comment" ]; then
+            # Clean verdicts travel ONLY this path (see header). Match on the
+            # stable prefix; the trailing flourish varies ("Hooray!", "Breezy!").
+            # The body is untrusted text: it is compared, never executed.
+            case "$COMMENT_BODY" in
+              "Codex Review: Didn't find any major issues"*)
+                echo "Codex all-clear comment on PR #$PR_NUMBER"
+                clear_flag
+                ;;
+              *)
+                echo "Codex comment is not an all-clear — no action."
+                ;;
+            esac
+            exit 0
+          fi
+
           echo "Codex review $REVIEW_ID on PR #$PR_NUMBER — state=$REVIEW_STATE"
           state_lc=$(echo "$REVIEW_STATE" | tr '[:upper:]' '[:lower:]')
           # State FIRST, and the comments API only in the branch that needs it.
@@ -59,5 +108,8 @@ jobs:
               --description "Codex reviewer raised concerns — review before merge" 2>/dev/null || true
             gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "$FLAG_LABEL"
           else
-            echo "No actionable Codex concerns (clean/approving review). Skipping."
+            # An approving or empty review is also an all-clear — Codex does not
+            # send these today (see header), but if it ever does, hear it.
+            echo "No actionable Codex concerns in this review."
+            clear_flag
           fi

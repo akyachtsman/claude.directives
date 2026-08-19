@@ -19,6 +19,72 @@ Applies to all repos automatically.
 
 ---
 
+## Watcher Rules — canonical
+
+Every `workflow_run` watcher below (`ci-monitor`, `ci-notify`, `qa-live`,
+`pages-monitor`, `pages-retry`) obeys these three rules. **They are stated here
+and nowhere else.** Each workflow file and setup step carries the ACTION it
+needs and points back here for the reasoning — a rule explained in five places
+is a rule corrected in four (learned the hard way, 2026-08-19).
+
+### W1 — Every watched name must resolve to a workflow this repo has
+
+A `workflow_run` entry naming a workflow you did not install can never fire. It
+is not harmless: by reading, it is indistinguishable from an entry that used to
+fire and has silently stopped. One exception, and only one — names GitHub
+itself manages, currently just `pages-build-deployment`. Everything else is
+project-owned.
+
+- `/new-repo` installs the **full standard set**, so `'QA — Static + UI Tests'`,
+  `'QA — UI Tests (live)'` and `'QA — Event-Driven Response'` all resolve in a
+  standard scaffold, and `ci-monitor`/`ci-notify` ship watching all three.
+- A project that deliberately omits `qa-response.yml` must remove
+  `'QA — Event-Driven Response'` from **both** watchers in the same edit.
+- Rename a workflow's `name:` and every watcher of it in the **same pull
+  request**. A `name:` is also its check name, so a rename can additionally
+  break branch-protection required checks.
+
+### W2 — Pages has two sources, and only one name is ours to supply
+
+The managed branch build is `pages-build-deployment`, created by GitHub — that
+is the only Pages name a template can pre-fill. An Actions-sourced deploy runs
+the project's own workflow, whose `name:` this template set neither ships nor
+can guess. Setting Settings → Pages → Source to "GitHub Actions" makes the
+managed build inert, so a watcher naming only it stops firing with no error —
+and a repo scaffolded on the Actions source from day one gets a watcher that has
+never fired at all, with no "it used to work" phase to notice.
+
+| Watcher | Actions-source Pages |
+|---|---|
+| `qa-live.yml` | **add** your deploy workflow's exact `name:` |
+| `pages-monitor.yml` | **add** a `workflow_run` trigger naming it (header has the snippet) |
+| `pages-retry.yml` | **do not add it** — see W3 |
+
+### W3 — Retry is source-specific; monitoring is not
+
+Verifying a deploy is not re-running one. `pages-monitor` and `qa-live` may
+watch either source. `pages-retry` may not: it re-runs the whole watched run, so
+pointing it at a project-owned deploy replays that workflow's entire build,
+which this template neither intends nor bounds. Actions-source projects build
+retry into their own deploy workflow instead (Automation 4b).
+
+A project MAY extend it anyway if its deploy is genuinely idempotent — no build,
+no compile, no tests, same commit in and same tree out — but must record that
+reasoning in its own CLAUDE.md, which routes the difference through
+`/refresh-repo`'s documented-customization path rather than being preserved
+silently.
+
+### Known limitation — `ci-notify` and `repository_dispatch`
+
+`ci-notify` comments on the open PR whose head SHA matches the run's. A
+`qa-response.yml` run triggered by `repository_dispatch` carries the default
+branch SHA, which normally matches no open PR, so it exits "No open PR" and
+emits no wake. Watching it in `ci-monitor` (failure tracking) works; the success
+wake does not, for that path. Tracked separately — do not "fix" it by removing
+the watcher.
+
+---
+
 ## Automation 2 — CI Monitor Workflow (infra-resident, event-driven)
 
 **Goal:** File a tracked GitHub issue the moment any watched CI workflow fails —
@@ -36,10 +102,12 @@ no session required, no polling, no Gmail.
 
 **Template:** `templates/workflows/ci-monitor.yml`
 
-**Drop-in:** ships pre-wired to watch both QA workflows that come with it
-(`qa.yml` → `QA — Static + UI Tests`, `qa-live.yml` → `QA — UI Tests (live)`),
-so copying them verbatim needs no edits. Only change `workflow_run.workflows`
-if you rename those `name:` values or want it to watch extra workflows.
+**Drop-in:** ships pre-wired to watch all three QA workflows that come with it
+(`qa.yml` → `QA — Static + UI Tests`, `qa-live.yml` → `QA — UI Tests (live)`,
+`qa-response.yml` → `QA — Event-Driven Response`), so copying them verbatim
+needs no edits. Change `workflow_run.workflows` to rename (workflow and every
+watcher in the same PR), to watch an extra workflow, or to REMOVE the name of a
+standard workflow you chose not to install — see *Watcher Rules* (W1) above.
 Optionally verify with a manual `workflow_dispatch` run.
 
 **To install in a project:**
@@ -79,8 +147,14 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 or live URL not serving — with no session required.
 
 **How it works:**
-- Trigger: `page_build` — fires on every Pages build. `workflow_dispatch` allows a
-  manual liveness re-check.
+- Trigger: `page_build` — fires on every **branch-source** Pages build.
+  `workflow_dispatch` allows a manual liveness re-check.
+- ⚠️ **GitHub Actions Pages source: `page_build` goes inert** and this monitor
+  then never runs — silently, which reads as "no deploy problems" when it means
+  "nothing is watching". Add a `workflow_run` trigger naming your own deploy
+  workflow's exact `name:`; the template's header carries the snippet, and the
+  job already normalises the two status vocabularies. Unlike Automation 4b, the
+  monitor DOES apply to both sources — verifying a deploy is not re-running one.
 - Reads the build status from the event and verifies the live URL
   (`https://<owner>.github.io/<repo>/`) returns 200, with cache-busted retries.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
@@ -89,7 +163,8 @@ or live URL not serving — with no session required.
   with a generic derivation as fallback — the file is portable to any project as-is.
 - Uses `GITHUB_TOKEN` only.
 
-**Template:** `templates/workflows/pages-monitor.yml` — drop-in, no customization needed.
+**Template:** `templates/workflows/pages-monitor.yml` — drop-in for branch-source
+Pages; Actions-source projects add the one `workflow_run` trigger above.
 
 **To install:**
 ```bash

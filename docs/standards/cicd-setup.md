@@ -21,7 +21,7 @@ Two GitHub Actions workflows replace manual agent invocation for the mechanical 
 |---|---|---|
 | `qa.yml` | PR to main, push to feature branches | Static checks + Playwright against local server |
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
-| `qa-response.yml` *(optional)* | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
+| `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
 Three event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` (Step 9).
 
@@ -44,7 +44,7 @@ Do not edit the templates in place in `claude.directives` — copy to the target
 
 ## Step 1 — Copy workflow templates
 
-Copy the two core QA workflow templates from `claude.directives` into the target repo's `.github/workflows/`, **plus the two composite actions they reference** into `.github/actions/` (without them every qa run fails at step resolution):
+Copy the QA workflow templates from `claude.directives` into the target repo's `.github/workflows/` — `qa.yml` and `qa-live.yml` here, `qa-response.yml` just below, all three standard — **plus the two composite actions they reference** into `.github/actions/` (without them every qa run fails at step resolution):
 
 ```bash
 mkdir -p .github/workflows .github/actions/secret-scan .github/actions/ui-suite
@@ -63,13 +63,20 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/actions/ui-suite/action.yml
 ```
 
-Optional — event-driven QA dispatch hook (add if sessions/automations should be
-able to trigger QA via `repository_dispatch`):
+Event-driven QA dispatch hook — **part of the standard set**, so
+`ci-monitor.yml` and `ci-notify.yml` ship watching it. Lets sessions and
+automations trigger QA via `repository_dispatch`:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-response.yml \
   -o .github/workflows/qa-response.yml
 ```
+
+⚠️ **If you deliberately skip this file**, remove `'QA — Event-Driven Response'`
+from the `workflow_run.workflows` list in **both** `ci-monitor.yml` and
+`ci-notify.yml` in the same change. Leaving it is a watcher naming a workflow
+the repo does not have — see `docs/standards/automations.md` → *Watcher Rules*
+(W1).
 
 Alternatively, have the active Claude Code session fetch and write these files via GitHub MCP tools if no CLI is available.
 
@@ -77,7 +84,7 @@ Alternatively, have the active Claude Code session fetch and write these files v
 
 ## Step 2 — Set UI_TESTS_DIR
 
-In each copied workflow file (two core, or three if you added `qa-response.yml`), confirm `UI_TESTS_DIR` points to the correct path for the project's Playwright test directory (default: `.github/scripts/ui-tests`). Edit if different.
+In each copied workflow file (`qa.yml`, `qa-live.yml`, `qa-response.yml`), confirm `UI_TESTS_DIR` points to the correct path for the project's Playwright test directory (default: `.github/scripts/ui-tests`). Edit if different.
 
 ---
 
@@ -172,16 +179,19 @@ Confirm in the Actions tab that:
 
 ### 9a — CI Monitor
 
-Drop-in — copy it verbatim. It ships pre-wired to watch both QA workflows that
-come with it (`qa.yml` and `qa-live.yml`):
+Drop-in — copy it verbatim. It ships pre-wired to watch all three QA workflows
+that come with it (`qa.yml`, `qa-live.yml`, `qa-response.yml`):
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
 ```
 
-Only edit `workflow_run.workflows` if you rename those workflows' `name:` values
-or want to watch additional workflows (`grep '^name:' .github/workflows/*.yml`).
+Edit `workflow_run.workflows` only to rename (change the workflow and every
+watcher of it in the same PR), to watch an additional workflow, or to REMOVE a
+name for a standard workflow you chose not to install — every entry must resolve
+to a workflow this repo has (`grep '^name:' .github/workflows/*.yml`).
+Rules: `docs/standards/automations.md` → *Watcher Rules* (W1).
 
 After pushing, verify with a manual `workflow_dispatch` run before relying on it.
 
@@ -202,7 +212,13 @@ Behavior detail: `docs/standards/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor
 
-Drop-in, portable as-is (the live URL is derived from the repo):
+Drop-in for a **branch-source** Pages project (the live URL is derived from the
+repo). ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, `page_build`
+never fires and this monitor is inert until you add a `workflow_run` trigger
+naming your own deploy workflow — the template header carries the snippet, and
+the same name must be added to `qa-live.yml`'s watch list. Do NOT add it to
+`pages-retry.yml`. Rules: `docs/standards/automations.md` → *Watcher Rules*
+(W2, W3).
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
@@ -268,10 +284,10 @@ Required repository variables:
 
 - [ ] `.github/workflows/qa.yml` present and triggering on push/PR
 - [ ] `.github/workflows/qa-live.yml` present and triggering after Pages deploy
-- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch (optional)
+- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch — part of the standard set; if omitted, remove `QA — Event-Driven Response` from the `ci-monitor.yml` and `ci-notify.yml` watch lists
 - [ ] `.github/workflows/ci-monitor.yml` present, `workflow_run.workflows` filled in, manual dispatch verified
 - [ ] `.github/workflows/codex-monitor.yml` present
-- [ ] `.github/workflows/pages-monitor.yml` present
+- [ ] `.github/workflows/pages-monitor.yml` present, and — if Pages is Actions-sourced — carrying a `workflow_run` trigger naming the deploy workflow
 - [ ] `.github/workflows/pages-retry.yml` present (branch-source Pages projects)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable

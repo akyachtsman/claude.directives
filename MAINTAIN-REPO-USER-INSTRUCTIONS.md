@@ -150,9 +150,17 @@ Hard-won; each cost a real debugging session:
 - **ci-notify bootstrap gap** — `workflow_run` reads the default branch, so
   ci-notify can never wake the PR that installs it. Verify on the FIRST
   post-install PR (the one allowed backstop check); don't call it a dud.
-- **Watch lists match workflow `name:` exactly** — repos with non-template QA
-  names must adapt `ci-monitor.yml`/`ci-notify.yml` lists; `/refresh-repo`
-  deliberately preserves those adaptations.
+- **Workflow watch lists** — every rule about which names a `workflow_run`
+  watcher may carry, how the two Pages sources differ, and why retry is
+  source-specific lives in ONE place: `docs/standards/automations.md` → *Watcher Rules* (W1–W3). Stated here once as a
+  pointer on purpose; this ruleset was previously restated in five files and
+  every correction landed in four of them.
+- **A name resolving is not a trigger firing.** The tree can prove the first and
+  never the second. That needs run history, and the test is a COMPARISON: an
+  eligible SOURCE run that completed with no corresponding WATCHER run. "No runs
+  since the config change" alone is equally consistent with an idle repository,
+  and treating it as proof manufactures false alarms in exactly the repos nobody
+  is touching.
 - **Web sessions ignore project `permissions.allow`** — MCP prompt reduction
   on web comes from architecture (ci-notify wake, no-backstop ruling), not
   settings.
@@ -198,4 +206,6 @@ Hard-won; each cost a real debugging session:
   it preserves them pending approval by design. Local corruption is caught by
   Phase 1.5's delta-independent integrity check (drift vs the current
   templates) and fixed by restore-from-template or `git revert` — not by
-  waiting for a refresh to notice.
+  waiting for a refresh to notice. Since 2026-08-19 that check is also the
+  whole disposition rule for workflow drop-ins: `DRIFT` is a question, answered
+  by reading the diff, never a batch overwrite.

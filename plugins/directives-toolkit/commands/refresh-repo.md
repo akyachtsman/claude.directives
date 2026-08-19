@@ -168,16 +168,33 @@ moved would otherwise stay broken through every refresh, failing session start
 each time. Restore it from the template rather than hand-editing, and re-run
 `bash -n` on it.
 
-Disposition each DRIFT — three classes, in checking order:
-1. **Expected adaptation** — `ci-monitor.yml` / `ci-notify.yml` where the diff
-   is ONLY the `workflow_run` watch list: keep, no report needed.
-2. **Documented customization** — the project's CLAUDE.md records the local
-   change: keep, mention in the report.
-3. **Unexplained drift** — everything else. Show the full diff and ask; the
-   default is **restore from the template**. An unexplained workflow drift
-   means an accidental session edit or tampering (git.md requires eyes-on-the-
-   diff for every workflow PR precisely so this class stays empty) — it is a
-   red flag to resolve, never a customization to silently preserve.
+Disposition each DRIFT by READING THE DIFF. There is no list of files allowed
+to differ and no blind default in either direction — a rule that says "restore"
+without looking deletes improvements, and one that says "keep" without looking
+preserves tampering. Both are the same mistake.
+1. **The diff is only a `workflow_run` watch list in a file whose list is
+   MEANT to vary per project** — `ci-monitor.yml`, `ci-notify.yml`,
+   `qa-live.yml`, `pages-monitor.yml` — or the project's CLAUDE.md records the
+   change. A legitimate adaptation: keep it, and report it, so an adaptation
+   nobody upstream knows about becomes a Downstream-Finding Loop item rather
+   than a permanent local secret.
+   **`pages-retry.yml` is NOT in that set.** Its list encodes an invariant, not
+   a preference: the template retries the managed branch-source deploy only,
+   because re-running a project-owned deploy replays that workflow's whole
+   build. A watch-list diff there is therefore never auto-kept — it needs the
+   project's CLAUDE.md to record why its deploy is safe to replay (idempotent,
+   no build or test steps), which routes it through the documented-customization
+   path above instead of being preserved silently.
+2. **Anything else** — show the full diff and ask. An unexplained workflow drift
+   can be an accidental session edit or tampering (git.md requires eyes-on-the-
+   diff for every workflow PR precisely so this class stays rare), and it can
+   equally be a hardening this repo has not absorbed yet — 2026-08-19 produced
+   one of each. Only the diff separates them.
+3. **If the answer is genuinely unclear, keep local and report it.** The costs
+   are asymmetric: a wrongly-kept bad edit is caught by the next review or CI
+   run, while a wrongly-restored improvement is deleted with nothing left to
+   notice. Never silently preserve — keeping without reporting is how a fix
+   spends two days in one repo.
 
 ## Phase 2 — Upstream delta since last sync (installed templates)
 
@@ -207,7 +224,7 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. For each `DRIFT` file, show the diff and decide singly, defaulting to KEEPING the local copy: local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them. Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
 | `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json` |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm |

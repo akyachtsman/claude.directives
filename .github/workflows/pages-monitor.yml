@@ -7,19 +7,36 @@ name: Pages Monitor
 # re-check. The live URL comes from the Pages API (so user-site repos and custom
 # domains work), with a generic derivation as fallback — portable as-is.
 #
-# ⚠️ WATCH BOTH PAGES SOURCES. `page_build` fires only for the MANAGED branch
-# build. Setting Settings → Pages → Source to "GitHub Actions" makes that event
-# go inert, and this monitor then never runs — silently, with no error, which
-# reads as "no deploy problems" when it means "nothing is watching". The
-# workflow_run entry covers the Actions-sourced deploy (`Pages`, i.e. pages.yml
-# in this template set); the entry is simply inert in a repo that has no such
-# workflow, so naming both is safe either way.
+# ⚠️ RULE W2 — `page_build` fires only for the MANAGED branch build. If your
+# Pages source is "GitHub Actions" it never fires and this monitor never runs.
+# ACTION: add a workflow_run trigger naming your own deploy workflow:
+#
+#   workflow_run:
+#     workflows: ['<your deploy workflow name>']
+#     types: [completed]
+#
+# The job below already handles that event — it normalises the two status
+# vocabularies. Do not pre-fill a guessed name.
+# Why: docs/standards/automations.md -> Watcher Rules (W2, W3 — a monitor may watch either source; a retry may not).
 on:
   page_build:
-  workflow_run:
-    workflows: ['Pages']
-    types: [completed]
   workflow_dispatch:
+
+# ⚠️ RACE FIX. Two Pages deploys completing close together previously launched
+# independent monitors with no ordering, each mutating the same
+# `pages-deploy-failure` issue from its own event. The liveness check retries for
+# up to ~135s, so an OLDER run still inside that loop could `gh issue reopen`
+# after a NEWER successful run had already closed it — a red alarm on a healthy
+# site, and one that reads as a real outage. Serialising on a single group with
+# cancel-in-progress removes the race rather than narrowing it: the newest deploy
+# is the one whose liveness matters, and it probes the same URL the cancelled run
+# was probing, so nothing is lost by cancelling. Pre-dates the workflow_run
+# trigger — two `page_build` events could always collide; adding the second
+# source made it likelier, not possible.
+# (Confirmed downstream on apfp.claude, 2026-08-19.)
+concurrency:
+  group: pages-monitor
+  cancel-in-progress: true
 
 permissions:
   contents: read

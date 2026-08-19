@@ -16,10 +16,13 @@ on:
     # "pages-build-deployment" (verified via the Actions API), not the prose
     # title shown in the UI — the prose form never matches, so the retry
     # would never fire.
-    # + "Pages" since 2026-08-18: the deploy moved to the filtered Actions workflow
-    # (pages.yml) and the managed branch build went inert with it — watching both
-    # names means the retry survives either source being active.
-    workflows: [pages-build-deployment, Pages]
+    # ⚠️ RULE W3 — BRANCH-SOURCE ONLY. Do NOT add your own deploy workflow here:
+    # this re-runs the whole watched run, so pointing it at a project-owned
+    # deploy replays that workflow's entire build. Actions-source projects build
+    # retry into their own deploy workflow instead (Automation 4b).
+    # Why, and the narrow exception for a provably idempotent deploy:
+    # docs/standards/automations.md -> Watcher Rules (W3).
+    workflows: [pages-build-deployment]
     types: [completed]
 permissions:
   actions: write

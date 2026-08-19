@@ -56,12 +56,19 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     line naming the reset time, so the record shows the PR merged with one reader
     rather than two. Merging while silently omitting it is precisely the failure
     this gate exists to prevent: an absent signal read as a passing one.
-  - **Codex reviews are metered — push once.** Every review spends from that
-    shared weekly pool, so iterating on an open PR bills the whole account:
-    measured 2026-08-17, thirteen reviews on one PR inside 100 minutes, one per
-    commit. Whether that alone emptied the week is not knowable — the pool is
-    shared across four products — but it was a material share of it, spent on
-    iteration that belonged in the local gate. Run the gate, push one commit.
+  - **Codex reviews are metered per REQUEST, not per push.** Each request spends
+    from that shared weekly pool, and requests come from opening a PR, flipping a
+    draft to ready, and `@codex review` — the same three the bullet below names.
+    So the expensive habit is re-requesting, not committing: measured 2026-08-17,
+    thirteen reviews on one PR inside 100 minutes, one per commit, from a draft
+    toggled ready over and over while the account's trigger was "On PR open".
+    Whether that alone emptied the week is not knowable — the pool is shared
+    across four products — but it was a material share of it, spent re-asking for
+    a verdict on work the local gate should have settled first. Verify locally,
+    open the PR once, and reserve `@codex review` for a fix you genuinely want
+    re-read. **Check which trigger the account is on before assuming any of
+    this**: the setting also offers "On every push", under which every commit
+    does spend a review, and it is account-level — invisible from the repo.
   - **Request a review after pushing a fix**; Codex responds on open,
     ready-for-review and `@codex review`, not on a push.
 - Before merging, confirm the PR's file list is **only** what you changed. A

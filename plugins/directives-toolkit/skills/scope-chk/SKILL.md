@@ -1,6 +1,6 @@
 ---
 name: scope-chk
-description: "Use BEFORE offering or promising work on any repository other than this session's — verifies true repo scope so cross-repo access is never overclaimed."
+description: "Use BEFORE offering, promising, or starting work on any repository other than this session's — including when the user asks directly (\"also do this in my other repo\", or names another repo). Verifies true repo scope so cross-repo access is never overclaimed."
 phase: cross-cutting
 ---
 Establish and report the **real** repository scope of this session, so you never

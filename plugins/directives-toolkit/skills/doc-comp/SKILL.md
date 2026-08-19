@@ -1,6 +1,6 @@
 ---
 name: doc-comp
-description: "Use whenever asked to compare two documents — produces a side-by-side HTML diff with margin notes on substantive changes."
+description: "Use whenever asked to compare, diff, or say what changed between two documents, versions, drafts or revisions — whether they are files or pasted inline. Produces a side-by-side HTML diff with margin notes on substantive changes."
 phase: cross-cutting
 ---
 When asked to compare two documents, produce a self-contained downloadable HTML

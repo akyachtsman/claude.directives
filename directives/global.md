@@ -282,7 +282,41 @@ task list, one item or more**:
   agent before the turn ends (→ *Async Operations*); shared-file conflicts stay
   a valid reason to serialize, "it's tidier one at a time" does not.
 
-## Async Operations
+## Burst Intake — Multiple Asks at Once (owner ruling, 2026-08-18)
+
+*Pipelined Execution* governs a task list already written. This governs the
+moment the asks ARRIVE — the owner firing several requests in one message, or
+interjecting new ones mid-turn while work is in flight. The failure mode it
+exists to prevent: serially finishing ask 1 while asks 2–4 sit unacknowledged,
+when three of them could have been running the whole time.
+
+**The trigger, quantified.** The moment TWO OR MORE independently actionable
+requests are pending in the same turn — one message carrying several, or
+mid-turn interjections stacking on in-flight work — decompose IMMEDIATELY, in
+that turn, before finishing the current step:
+1. Name each ask as a task with `depends:` (per *Pipelined Execution*).
+2. **Spawn a background subagent for every item that** (a) shares no files with
+   an in-flight item, and (b) is investigation, diagnosis, reproduction, or
+   authoring work of roughly three or more tool calls. One agent per item,
+   tightly scoped, told exactly what to report back.
+3. Keep inline only: items cheaper than the spawn overhead (a one-line edit, a
+   single query), integration mechanics (commit/push/merge/deploy), database
+   writes, and anything that needs the owner mid-flight.
+
+**Interjections join the queue, they don't restart it.** A mid-turn ask gets
+one sentence of acknowledgment and an immediate slot — spawned, started, or
+parked with a reason — inside the same turn. Parking is a decision the owner
+can veto, so it must be visible, never silent.
+
+**The turn-end bar.** A turn may not end with an actionable ask that is neither
+done, running under a named agent, nor explicitly parked with its reason. And
+the close of the turn carries ONE consolidated status naming every ask and its
+state — not a narration per item as it happened. ("Wrong session" asks the
+owner retracts are dropped, not parked.)
+
+**Order of a mixed turn:** spawn the delegable asks FIRST (they run while you
+work), then do the inline work, then integrate. Spawning last forfeits exactly
+the parallelism the spawn was for.
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts
   for an outcome.

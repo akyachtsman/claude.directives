@@ -82,7 +82,7 @@ Execute in order:
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 
    **Static-check scripts (required by qa.yml).** Copy
-   `claude.directives/templates/scripts/workflow-ref-guard.mjs` into
+   `claude.directives/templates/scripts/workflow-ref-guard.py` into
    `.github/scripts/` — `qa.yml` runs it, so the job fails at step resolution
    without it. Populate `.github/workflow-ref-required.json` with any watcher the
    project must not lose (absent file = none, which is the right default at

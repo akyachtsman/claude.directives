@@ -240,12 +240,15 @@ managed settings. Do NOT
 commit it to this repo's `.claude/settings.json` — a committed value leaves the
 command gated off anyway.
 
-Measured baseline (2026-08-19, 2 runs/case, with/without arms):
-`scope-chk` fires on the softer phrasing (Δ +1.00) but only 1 run in 2 on the
-explicit one (Δ +0.50); `update-pages` fires on both (Δ +1.00 each); `doc-comp`
-fires on "diff the old X against the new X" (Δ +1.00) and never on "compare
-these two versions of our X" (Δ 0.00). All three negatives correctly never fire.
-`scope-chk`'s flakiness and `doc-comp`'s miss are the numbers to improve.
+Measured baseline (2026-08-19, 2 runs/case, with/without arms), from two full
+suite runs: 8 of 9 cases pass. `update-pages` fires on both phrasings (Δ +1.00
+each). `scope-chk` fires on the softer phrasing (Δ +1.00); on the explicit one it
+scored Δ +0.50 in the first suite run and Δ +1.00 in the second — same case, two
+results, so treat it as FLAKY rather than as either number. `doc-comp` fires on
+"diff the old X against the new X" (Δ +1.00) and never on "compare these two
+versions of our X" (0/2 with the plugin) — its one hard failure. All three
+negatives correctly never fire, so every gap is under-triggering.
+`doc-comp`'s miss and `scope-chk`'s flakiness are the numbers to improve.
 
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, verify locally — this list mirrors what `qa.yml`

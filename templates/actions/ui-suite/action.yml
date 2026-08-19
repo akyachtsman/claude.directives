@@ -2,8 +2,13 @@
 # workflows reference it as `uses: ./.github/actions/ui-suite`).
 #
 # Caveats baked into this design:
-# - Composite steps cannot carry per-step `timeout-minutes` — bound the run
-#   with the CALLING job's `timeout-minutes` (all three qa workflows set 20).
+# - Composite steps cannot carry per-step `timeout-minutes` — bound the run with
+#   the CALLING job's `timeout-minutes`. The qa workflows set 40, and that number
+#   is not arbitrary: the cold-cache install below was measured at 21m25s, so the
+#   20 they used to carry killed every cold run before a single test executed.
+#   If you lower it, measure the cold path first — the browser install is the
+#   whole cost, and a kill during it also skips the cache save that would have
+#   made the next run cheap.
 # - `advisory-run` flips ONLY the Playwright run step to continue-on-error;
 #   setup/install/server/upload always stay blocking, so a broken install can
 #   never pass green.
@@ -78,6 +83,17 @@ runs:
       # alongside chromium (Pixel 5). Installing chromium alone fails that project.
       # On a cache hit the binaries are already present, so only the SYSTEM
       # libraries need installing — those live in /usr/lib and are never cached.
+      #
+      # ⚠️ "only the system libraries" is NOT the same as "cheap", and reading it
+      # that way has already cost a downstream repo a broken run. Chromium's deps
+      # are largely preinstalled on the runner image, so `install-deps chromium`
+      # finishes in ~30s and invites the conclusion that the step is incidental.
+      # Webkit's are not: gstreamer, wayland, hyphen, enchant and flite come to
+      # roughly sixty packages and minutes, not seconds (apfp.claude, 2026-08-19).
+      # Do NOT bound this step on the chromium figure, and do NOT make it
+      # warn-and-continue — a partial install does not fail here, it fails later
+      # as every webkit test dying on a missing `libwayland-server.so.0`, which
+      # turns one clear message into fifty confusing ones.
       shell: bash
       run: |
         if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then

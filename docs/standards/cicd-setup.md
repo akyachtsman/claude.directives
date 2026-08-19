@@ -217,7 +217,9 @@ repo). ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, `page_bu
 never fires and this monitor is inert until you add a `workflow_run` trigger
 naming your own deploy workflow — the template header carries the snippet, and
 the same name must be added to `qa-live.yml`'s watch list. Do NOT add it to
-`pages-retry.yml`. Rules: `docs/standards/automations.md` → *Watcher Rules*
+`pages-retry.yml` — unless that deploy is provably idempotent and you record why
+in the project's CLAUDE.md, which is the one exception W3 grants (Step 9d spells
+it out). Rules: `docs/standards/automations.md` → *Watcher Rules*
 (W2, W3).
 
 ```bash
@@ -239,6 +241,14 @@ going quiet:
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.mjs \
   -o .github/scripts/workflow-ref-guard.mjs
+```
+
+`qa.yml` already invokes it. Populate `.github/workflow-ref-required.json` with
+the watchers this project must not lose — the script is byte-identical in every
+repo, so its second rule is configured here rather than edited into the file:
+
+```json
+{ "qa-live.yml": ["My Deploy Workflow"] }
 ```
 
 Add to the static-checks job: `node .github/scripts/workflow-ref-guard.mjs`.

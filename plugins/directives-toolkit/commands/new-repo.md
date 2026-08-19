@@ -81,6 +81,13 @@ Execute in order:
    live QA gate and the deploy monitor silently inert, which reads as healthy.
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 
+   **Static-check scripts (required by qa.yml).** Copy
+   `claude.directives/templates/scripts/workflow-ref-guard.mjs` into
+   `.github/scripts/` — `qa.yml` runs it, so the job fails at step resolution
+   without it. Populate `.github/workflow-ref-required.json` with any watcher the
+   project must not lose (absent file = none, which is the right default at
+   bootstrap). Rules: `docs/standards/automations.md` → *Watcher Rules*.
+
    **Composite actions (required by the qa workflows).** Copy
    `claude.directives/templates/actions/` (`secret-scan/action.yml`,
    `ui-suite/action.yml`) into `.github/actions/` — the qa workflows reference

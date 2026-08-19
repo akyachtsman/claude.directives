@@ -47,7 +47,7 @@
 // ALLOWED_EXTERNAL is a different claim: externally HOSTED, not optional. REQUIRED is the
 // INVERSE of an allow-list — it gets louder when something breaks, not quieter.
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 
@@ -83,11 +83,26 @@ const ALLOWED_EXTERNAL = new Map([
 // repo genuinely stops needing that watcher — never to make a red build go green.
 // Per-project intent — a template cannot know these names, only the RULE. Populate with
 // the deploy workflow's own name for each file that must keep watching it.
-const REQUIRED = new Map([
-  // ['qa-live.yml',      ['<your deploy workflow name>']],
-  // ['pages-retry.yml',  ['<your deploy workflow name>']],
-  // ['pages-monitor.yml',['<your deploy workflow name>']],
-]);
+// Loaded from `.github/workflow-ref-required.json`, NOT hard-coded here — the script
+// is byte-identical across every repo that installs it (CI diffs the shipped copy
+// against the live one), so a repo could never populate this while it lived in the
+// file. That left rule 2 permanently inert in the only place it runs, which is a
+// rule that exists on paper and nowhere else.
+//
+// Format: { "qa-live.yml": ["My Deploy Workflow"], ... }
+// Absent file = no required watchers, which is the correct default for a fresh repo.
+const REQUIRED = new Map(
+  (() => {
+    const cfg = join(repoRoot, '.github', 'workflow-ref-required.json');
+    if (!existsSync(cfg)) return [];
+    try {
+      return Object.entries(JSON.parse(readFileSync(cfg, 'utf8')));
+    } catch (e) {
+      console.error(`❌ workflow-ref-guard: ${cfg} is not valid JSON — ${e.message}`);
+      process.exit(1);
+    }
+  })(),
+);
 
 /** Read a YAML scalar that may be single-quoted, double-quoted, or bare with a trailing comment. */
 function parseScalar(raw) {
@@ -102,10 +117,10 @@ function parseScalar(raw) {
         // YAML decodes these; a raw pass-through turns \u2014 into "u2014" and the
         // name then matches nothing, failing a build over a legal display name.
         const e = s[++i];
-        if (e === 'n') out += '\n';
-        else if (e === 't') out += '\t';
-        else if (e === 'r') out += '\r';
-        else if (e === '0') out += '\0';
+        const SIMPLE = { '0': '\0', a: '\x07', b: '\b', t: '\t', n: '\n',
+          v: '\v', f: '\f', r: '\r', e: '\x1B', N: '\u0085', _: '\u00A0',
+          L: '\u2028', P: '\u2029' };
+        if (e in SIMPLE) out += SIMPLE[e];
         else if (e === 'x' || e === 'u' || e === 'U') {
           const width = e === 'x' ? 2 : e === 'u' ? 4 : 8;
           const hex = s.slice(i + 1, i + 1 + width);
@@ -242,13 +257,24 @@ function referencedWorkflows(lines, unparseable = []) {
       // scalar and a sequence CANNOT contain a workflow_run.workflows mapping, so
       // nothing can hide inside them — skip, do not refuse. Refusing these was a
       // regression: it red-builds the most ordinary trigger there is.
-      if (!onRest.startsWith('{')) continue;
-      // A flow MAPPING can contain the trigger and this line-oriented scanner
-      // cannot read it. Silently finding zero references would report success
-      // while a name dangles — the exact failure this guard exists to catch — so
-      // refuse and name the alternative.
-      unparseable.push({ file: 'this workflow', line: i + 1, form: 'a flow-style `on:` mapping' });
-      continue;
+      // Node properties (`on: &events`, `on: !!map`) decorate a BLOCK mapping that
+      // follows on the next lines. Strip them before classifying, or the mapping is
+      // skipped as though it were a scalar — a silent zero-reference pass, which is
+      // the hole this whole fail-closed design exists to prevent.
+      const bare = onRest.replace(/^(?:&[^\s]+|![^\s]*)\s*/g, '').trim();
+      if (bare) {
+        // Scalar or sequence shorthand — `on: push`, `on: [push, pull_request]`.
+        // Neither can contain a workflow_run mapping, so nothing hides inside them.
+        if (!bare.startsWith('{')) continue;
+        // A flow MAPPING can contain the trigger and this line-oriented scanner
+        // cannot read it. Silently finding zero references would report success
+        // while a name dangles, so refuse and name the alternative.
+        unparseable.push({ file: 'this workflow', line: i + 1, form: 'a flow-style `on:` mapping' });
+        continue;
+      }
+      // Anchor or tag ONLY (`on: &events`): the block mapping follows on the next
+      // lines, so fall through and scan it. `continue` here would skip the whole
+      // trigger — which is what the first attempt at this did, silently.
     }
     for (let k = i + 1; k < lines.length; k++) {
       if (isSkippable(lines[k])) { inOn[k] = true; continue; }

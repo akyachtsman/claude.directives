@@ -147,7 +147,14 @@ jobs:
     # job normally finishes in ~4 minutes; 20 is generous and still reports.
     # (Self-inflicted proof: run 32269445117 sat 57 minutes on the install step
     # below while a PR waited on it, 2026-08-19.)
-    timeout-minutes: 20
+    #
+    # ⚠️ 35, NOT 20. The first bound I set was below the measured cold-cache
+    # install time (21m25s, measured downstream and quoted to me before I chose
+    # 20), so run 32277932813 was killed at 20m21s — and because the cache SAVE
+    # runs at job end, the kill also skipped it, leaving the next run equally
+    # cold. A bound below the work it bounds does not protect anything; it just
+    # fails on a schedule.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -167,12 +174,17 @@ jobs:
           key: pw-${{ runner.os }}-${{ hashFiles('.github/workflows/qa.yml') }}
           restore-keys: pw-${{ runner.os }}-
 
-      - name: Install Playwright + Chromium
-        run: |
-          npm install playwright
-          # Re-runs cheaply when the browser revision is already cached; the
-          # system libraries in /usr/lib are never cached, so --with-deps stays.
-          npx playwright install --with-deps chromium
+      # Split so the log shows WHICH half is slow. The browser download is what
+      # the cache above spares; the apt step never is, and one run cancelled
+      # mid-step told us the total and nothing about the split.
+      - name: Install Playwright (npm)
+        run: npm install playwright
+
+      - name: Install Chromium system deps (apt, never cached)
+        run: npx playwright install-deps chromium
+
+      - name: Install Chromium browser (cached above when warm)
+        run: npx playwright install chromium
 
       # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
       # here on every run (locally it's only needed when a map changed).

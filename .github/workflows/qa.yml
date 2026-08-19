@@ -19,6 +19,18 @@ on:
 permissions:
   contents: read
 
+# One run per ref: a superseded run is cancelled rather than left burning a
+# runner to its bound (run 32295895388 kept installing for 35 minutes after a
+# newer head had replaced it, 2026-08-19). ci-monitor's cancelled discriminator
+# PAIRS with this block: it suppresses a cancellation only when the workflow
+# declares cancel-in-progress AND a newer run predates the end — so this is
+# what makes healthy supersede-cancels quiet there, while a timeout kill still
+# alarms. Keep the literal `cancel-in-progress: true` line exactly as written:
+# ci-monitor greps for that form on the branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: Validate Directives

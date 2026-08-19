@@ -45,6 +45,23 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     `get_reviews` cannot tell a clean `COMMENTED` review from an actionable one.
   - **Unreadable reviews do not clear the gate** — that call is GraphQL and fails
     when the pool is empty. Wait or surface; never fall back to the label.
+  - **A usage-limit reply is a fourth outcome: _unavailable_ — not clean, not
+    pending.** When the allowance is spent, Codex answers with a comment saying so
+    instead of reviewing, and no amount of further waiting produces a review. The
+    allowance is **weekly and shared across Codex, Work, Workspace Agents and
+    ChatGPT for Excel**, so it can be exhausted by work in another repo entirely —
+    check the account, not the repo, before concluding anything about config.
+    Treat it as the gate being DOWN: it never counts as clean, but it does unblock
+    the merge decision on one condition — **say so on the PR before merging**, one
+    line naming the reset time, so the record shows the PR merged with one reader
+    rather than two. Merging while silently omitting it is precisely the failure
+    this gate exists to prevent: an absent signal read as a passing one.
+  - **Codex reviews are metered — push once.** Every review spends from that
+    shared weekly pool, so iterating on an open PR bills the whole account:
+    measured 2026-08-17, thirteen reviews on one PR inside 100 minutes, one per
+    commit. Whether that alone emptied the week is not knowable — the pool is
+    shared across four products — but it was a material share of it, spent on
+    iteration that belonged in the local gate. Run the gate, push one commit.
   - **Request a review after pushing a fix**; Codex responds on open,
     ready-for-review and `@codex review`, not on a push.
 - Before merging, confirm the PR's file list is **only** what you changed. A

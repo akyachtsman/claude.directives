@@ -57,10 +57,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     rather than two. Merging while silently omitting it is precisely the failure
     this gate exists to prevent: an absent signal read as a passing one.
   - **Codex reviews are metered — push once.** Every review spends from that
-    shared weekly pool, and a single PR pushed to repeatedly can drain it alone:
+    shared weekly pool, so iterating on an open PR bills the whole account:
     measured 2026-08-17, thirteen reviews on one PR inside 100 minutes, one per
-    commit, which is what exhausted that week for every repo on the account. Run
-    the local gate and push one commit rather than iterating in public.
+    commit. Whether that alone emptied the week is not knowable — the pool is
+    shared across four products — but it was a material share of it, spent on
+    iteration that belonged in the local gate. Run the gate, push one commit.
   - **Request a review after pushing a fix**; Codex responds on open,
     ready-for-review and `@codex review`, not on a push.
 - Before merging, confirm the PR's file list is **only** what you changed. A

@@ -124,10 +124,20 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 especially under auto-merge.
 
 **How it works:**
-- Trigger: `pull_request_review` by `chatgpt-codex-connector[bot]`
-- Acts only on flagged reviews: `changes_requested` state, or a `commented` review
-  with inline comments. Approving/empty reviews are skipped.
-- On a flagged review: adds a `codex-flagged` label to the PR.
+- Triggers: `pull_request_review` AND `issue_comment`, both filtered to
+  `chatgpt-codex-connector[bot]`. Two triggers because Codex splits its verdicts:
+  flagged rounds arrive as reviews, but the all-clear ("Didn't find any major
+  issues") arrives as a plain issue comment — a monitor listening only for
+  reviews hears the complaint and never the all-clear.
+- On a flagged review (`changes_requested`, or `commented` with inline
+  comments): adds a `codex-flagged` label to the PR.
+- **The label is two-way.** On an all-clear whose named commit matches the PR's
+  current head, the monitor removes the label. The SHA match is load-bearing —
+  the label is a merge blocker, and a delayed all-clear for an older commit must
+  not unblock a head Codex never cleared. A verdict with no SHA, or for a stale
+  SHA, holds the label. (One-way was the original design; it converted "Codex
+  has concerns" into "Codex once had concerns" — permanently red until cleared
+  by hand. Reasoning lives in the workflow's own header.)
 - Does not repost Codex suggestions — Codex already comments inline.
 - Uses `GITHUB_TOKEN` only.
 

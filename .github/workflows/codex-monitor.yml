@@ -45,6 +45,7 @@ jobs:
           PR_NUMBER: ${{ github.event_name == 'pull_request_review' && github.event.pull_request.number || github.event.issue.number }}
           REVIEW_ID: ${{ github.event.review.id }}
           REVIEW_STATE: ${{ github.event.review.state }}
+          REVIEW_COMMIT: ${{ github.event.review.commit_id }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           FLAG_LABEL: 'codex-flagged'
         run: |
@@ -52,9 +53,12 @@ jobs:
           clear_flag() {
             # DELETE on an absent label 404s, so check first — but the check
             # itself must fail loudly: absence-because-the-API-died reads
-            # exactly like absence-because-it-was-never-set.
-            if gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name' \
-                 | grep -qxF "$FLAG_LABEL"; then
+            # exactly like absence-because-it-was-never-set. The fetch is a
+            # SEPARATE assignment for that reason: inside an `if` condition,
+            # `set -e` is suspended and a dead API would take the quiet branch
+            # (Codex, #239). As an assignment, a gh failure kills the step red.
+            labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name')
+            if printf '%s\n' "$labels" | grep -qxF "$FLAG_LABEL"; then
               echo "Clearing stale $FLAG_LABEL from PR #$PR_NUMBER"
               gh api -X DELETE "repos/$REPO/issues/$PR_NUMBER/labels/$FLAG_LABEL"
             else
@@ -68,8 +72,28 @@ jobs:
             # The body is untrusted text: it is compared, never executed.
             case "$COMMENT_BODY" in
               "Codex Review: Didn't find any major issues"*)
-                echo "Codex all-clear comment on PR #$PR_NUMBER"
-                clear_flag
+                # The verdict names its commit ("Reviewed commit: `<sha>`") and
+                # the label is a MERGE BLOCKER, so the SHA is load-bearing: a
+                # delayed all-clear for an older commit, arriving after a newer
+                # push or a flagged round, must not unblock a head Codex never
+                # cleared (Codex, #239; the rule is git.md's "match by SHA, not
+                # by clock"). Both fetches fail loudly — an unreadable head or
+                # an all-clear with no SHA holds the label rather than clearing.
+                # Bare backticks, deliberately: in GNU ERE a backslash-backtick
+                # is the start-of-buffer anchor, not an escaped backtick — the
+                # escaped form silently matches nothing (caught by the stub test
+                # for this very change, not by reading).
+                verdict_sha=$(printf '%s' "$COMMENT_BODY" \
+                  | grep -oE '`[0-9a-f]{7,40}`' | head -1 | tr -d '`' || true)
+                head_sha=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)
+                if [ -z "$verdict_sha" ]; then
+                  echo "All-clear comment names no commit SHA — NOT clearing on it."
+                elif case "$head_sha" in "$verdict_sha"*) false;; *) true;; esac; then
+                  echo "All-clear is for $verdict_sha but head is $head_sha — stale verdict, NOT clearing."
+                else
+                  echo "Codex all-clear for the current head ($verdict_sha) on PR #$PR_NUMBER"
+                  clear_flag
+                fi
                 ;;
               *)
                 echo "Codex comment is not an all-clear — no action."
@@ -109,7 +133,14 @@ jobs:
             gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "$FLAG_LABEL"
           else
             # An approving or empty review is also an all-clear — Codex does not
-            # send these today (see header), but if it ever does, hear it.
-            echo "No actionable Codex concerns in this review."
-            clear_flag
+            # send these today (see header), but if it ever does, hear it. Same
+            # SHA rule as the comment path: a review of an older commit must not
+            # clear the label a newer round earned.
+            head_sha=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)
+            if [ -n "$REVIEW_COMMIT" ] && [ "$REVIEW_COMMIT" != "$head_sha" ]; then
+              echo "Clean review is for $REVIEW_COMMIT but head is $head_sha — stale, NOT clearing."
+            else
+              echo "No actionable Codex concerns in this review."
+              clear_flag
+            fi
           fi

@@ -29,8 +29,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   merge is then blocked, re-subscribe (the call is idempotent).
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
   apply the fix, or remove the label with a one-line dismissal rationale in the
-  PR. Check the PR's labels on GitHub before merging; the `codex-monitor`
-  workflow adds the label and never clears it for you.
+  PR. Check the PR's labels on GitHub before merging. The `codex-monitor`
+  workflow adds the label on a flagged round and clears it itself on a Codex
+  all-clear that names the current head SHA — so a label still present means
+  either concerns not yet re-reviewed, or an all-clear that failed the SHA
+  match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head:
   - **Wait for a Codex response** — a review with inline comments, a plain comment

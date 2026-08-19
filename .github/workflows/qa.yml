@@ -81,6 +81,10 @@ jobs:
           diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
           diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
           diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
+          # The guard ships to projects from templates/; this repo runs the .github/
+          # copy. Without this diff a repair could land in the copy we execute while
+          # the shipped one stays broken — and QA would stay green either way.
+          diff .github/scripts/workflow-ref-guard.mjs templates/scripts/workflow-ref-guard.mjs
           diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
           echo "OK: paired files in sync"
 

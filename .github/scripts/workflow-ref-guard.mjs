@@ -238,11 +238,15 @@ function referencedWorkflows(lines, unparseable = []) {
     if (!onLine) continue;
     const onRest = stripComment(onLine[1]).trim();
     if (onRest) {
-      // A flow mapping — `on: {workflow_run: {...}}` — is valid YAML this
-      // line-oriented scanner cannot read. Refusing is the whole point: silently
-      // finding zero references would report success while a name dangles, which
-      // is the exact "absent signal reads as healthy" failure this guard exists
-      // to catch. Fail loudly and name the alternative instead.
+      // `on: push` and `on: [push, pull_request]` are the common shorthands. A
+      // scalar and a sequence CANNOT contain a workflow_run.workflows mapping, so
+      // nothing can hide inside them — skip, do not refuse. Refusing these was a
+      // regression: it red-builds the most ordinary trigger there is.
+      if (!onRest.startsWith('{')) continue;
+      // A flow MAPPING can contain the trigger and this line-oriented scanner
+      // cannot read it. Silently finding zero references would report success
+      // while a name dangles — the exact failure this guard exists to catch — so
+      // refuse and name the alternative.
       unparseable.push({ file: 'this workflow', line: i + 1, form: 'a flow-style `on:` mapping' });
       continue;
     }
@@ -256,7 +260,15 @@ function referencedWorkflows(lines, unparseable = []) {
   for (let i = 0; i < lines.length; i++) {
     if (masked[i] || !inOn[i]) continue;
     // A formatter may quote mapping keys; 'workflow_run': is the same trigger.
-    if (!/^\s*(?:workflow_run|'workflow_run'|"workflow_run"):\s*(#.*)?$/.test(lines[i])) continue;
+    const wrLine = /^\s*(?:workflow_run|'workflow_run'|"workflow_run"):\s*(.*)$/.exec(lines[i]);
+    if (!wrLine) continue;
+    const wrRest = stripComment(wrLine[1]).trim();
+    if (wrRest) {
+      // `workflow_run: {workflows: [X], types: [completed]}` — block-style `on:`,
+      // flow-style trigger. Unreadable here, and previously skipped in silence.
+      unparseable.push({ file: 'this workflow', line: i + 1, form: 'a flow-style `workflow_run:` mapping' });
+      continue;
+    }
     const blockIndent = indentOf(lines[i]);
 
     for (let j = i + 1; j < lines.length; j++) {
@@ -264,7 +276,7 @@ function referencedWorkflows(lines, unparseable = []) {
       if (isSkippable(lines[j])) continue;
       if (indentOf(lines[j]) <= blockIndent) break; // left the workflow_run mapping
 
-      const m = /^\s*workflows:\s*(.*)$/.exec(lines[j]);
+      const m = /^\s*(?:workflows|'workflows'|"workflows"):\s*(.*)$/.exec(lines[j]);
       if (!m) continue;
       let rest = stripComment(m[1]).trim();
       // `workflows: &watched [A]` is still the sequence [A]. Strip a leading anchor
@@ -371,7 +383,7 @@ for (const f of files) {
   for (let i = 0; i < wfLines.length; i++) {
     if (wfMasked[i] || isSkippable(wfLines[i])) continue;
     if (indentOf(wfLines[i]) !== wfRoot) continue;
-    const nm = /^\s*name:\s*(.+)$/.exec(wfLines[i]);
+    const nm = /^\s*(?:name|'name'|"name"):\s*(.+)$/.exec(wfLines[i]);
     if (nm) { m = nm; break; }
   }
   if (!m) {

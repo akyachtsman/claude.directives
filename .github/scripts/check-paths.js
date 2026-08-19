@@ -3,7 +3,7 @@
 // Dot-paths (.claude/, .github/) ARE validated here: this script runs only in
 // claude.directives CI, where those files are committed. (Downstream projects,
 // where dot-paths may not exist until bootstrap, do not run this script.)
-import { readFileSync, existsSync, readdirSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 const raw = readFileSync('CLAUDE.md', 'utf8');
@@ -34,12 +34,20 @@ for (const p of paths) {
 // docs/standards/. Canonicalisation makes this load-bearing: every rule now
 // states its reasoning once and the other sites POINT at it, so a rotted
 // pointer silently costs a reader the reasoning entirely.
-const REF_ROOTS = [
-  'templates', '.github/workflows', 'plugins/directives-toolkit/commands',
-];
-const REF_FILES = [
-  'MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'NEW-REPO-USER-INSTRUCTIONS.md',
-];
+// DERIVE the surface from EXPORTS.json rather than hand-listing it. A list of
+// what to scan rots the moment the exported set changes -- the same failure this
+// repo removed from /refresh-repo on 2026-08-19, and one this check had already
+// reproduced twice: it silently skipped directives/ and the plugin's agents and
+// skills while claiming to cover shipped files. check-exports.js already
+// validates every path named here exists, so the two checks cannot disagree.
+const EXPORTED = Object.values(
+  JSON.parse(readFileSync('EXPORTS.json', 'utf8')).categories,
+).flatMap((c) => c.paths || []);
+
+// Plus two surfaces EXPORTS.json deliberately omits: this repo's own paired
+// workflow copies (live files, not exports) and the maintainer runbook
+// (internal-only by design). Both cite docs and both can rot.
+const EXTRA = ['.github/workflows', 'MAINTAIN-REPO-USER-INSTRUCTIONS.md'];
 
 // Never descend into installed or generated trees. templates/ui-tests carries a
 // package.json, so a developer who has run the suite locally has a node_modules
@@ -63,7 +71,11 @@ function walk(dir) {
   return out;
 }
 
-const refFiles = [...REF_ROOTS.flatMap(walk), ...REF_FILES.filter(f => existsSync(f))];
+const refFiles = [...new Set([...EXPORTED, ...EXTRA].flatMap((entry) => {
+  const p = entry.replace(/\/$/, '');
+  if (!existsSync(p)) return [];
+  return statSync(p).isDirectory() ? walk(p) : [p];
+}))];
 const refs = new Map(); // path -> Set(files citing it)
 
 for (const f of refFiles) {

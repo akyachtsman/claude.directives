@@ -79,8 +79,14 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 or live URL not serving — with no session required.
 
 **How it works:**
-- Trigger: `page_build` — fires on every Pages build. `workflow_dispatch` allows a
-  manual liveness re-check.
+- Trigger: `page_build` — fires on every **branch-source** Pages build.
+  `workflow_dispatch` allows a manual liveness re-check.
+- ⚠️ **GitHub Actions Pages source: `page_build` goes inert** and this monitor
+  then never runs — silently, which reads as "no deploy problems" when it means
+  "nothing is watching". Add a `workflow_run` trigger naming your own deploy
+  workflow's exact `name:`; the template's header carries the snippet, and the
+  job already normalises the two status vocabularies. Unlike Automation 4b, the
+  monitor DOES apply to both sources — verifying a deploy is not re-running one.
 - Reads the build status from the event and verifies the live URL
   (`https://<owner>.github.io/<repo>/`) returns 200, with cache-busted retries.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
@@ -89,7 +95,8 @@ or live URL not serving — with no session required.
   with a generic derivation as fallback — the file is portable to any project as-is.
 - Uses `GITHUB_TOKEN` only.
 
-**Template:** `templates/workflows/pages-monitor.yml` — drop-in, no customization needed.
+**Template:** `templates/workflows/pages-monitor.yml` — drop-in for branch-source
+Pages; Actions-source projects add the one `workflow_run` trigger above.
 
 **To install:**
 ```bash

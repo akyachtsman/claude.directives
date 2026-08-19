@@ -153,9 +153,11 @@ Hard-won; each cost a real debugging session:
 - **Watch lists match workflow `name:` exactly** — repos with non-template QA
   names must adapt `ci-monitor.yml`/`ci-notify.yml` lists. `/refresh-repo` no
   longer carries a named exception for those two files (removed 2026-08-19):
-  every drop-in that differs from its template is flagged `DRIFT`, shown as a
-  diff, and **defaults to keeping the local copy**, so an adapted watch list is
-  preserved by the general rule rather than by being on a list. An allow-list of
+  every drop-in that differs from its template is flagged `DRIFT` and
+  dispositioned **by reading the diff** — there is no blind default in either
+  direction, and this summary defers to Phase 1.5's rule rather than restating
+  it. A watch-list-only diff is a recognised adaptation, so an adapted list is
+  kept by the general rule rather than by being on a list. An allow-list of
   files permitted to differ rots the same way a watch list pinned to one
   workflow name does — right when written, silently wrong after the next local
   improvement.
@@ -170,9 +172,13 @@ Hard-won; each cost a real debugging session:
   Flipping Settings → Pages → Source to "GitHub Actions" makes
   `pages-build-deployment` inert, and any watcher naming only it stops firing
   with no error at all. But the replacement is your own deploy workflow, whose
-  `name:` this template set does not ship and cannot guess — so `qa-live.yml`,
-  `pages-retry.yml` and `pages-monitor.yml` ship WITHOUT one and tell you to add
-  it. A pre-filled guess would be the same defect as the bullet above.
+  `name:` this template set does not ship and cannot guess — so `qa-live.yml`
+  and `pages-monitor.yml` ship WITHOUT one and tell you to add it. A pre-filled
+  guess would be the same defect as the bullet above. **`pages-retry.yml` is the
+  exception and stays branch-source only**: re-running a project-owned deploy
+  replays that workflow's whole build, which is a different operation from
+  re-running the managed publish. Actions-source projects build retry into their
+  own deploy workflow instead (`docs/standards/automations.md`, Automation 4b).
 - **A name resolving is not a trigger firing.** Everything above is checkable
   against the tree; whether a watcher still receives events is not. That needs
   run history — if a watched workflow has no runs since a config change, treat

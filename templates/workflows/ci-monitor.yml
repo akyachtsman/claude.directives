@@ -6,12 +6,22 @@ name: CI Monitor
 # commit-hook. Uses only GITHUB_TOKEN — no Gmail, no OAuth. workflow_dispatch is
 # kept only for manual testing (window scan).
 #
-# Drop-in: the watched names below match the QA workflows shipped in the same
-# template set (qa.yml -> 'QA — Static + UI Tests'; qa-live.yml -> 'QA — UI
-# Tests (live)', the authoritative live gate; qa-response.yml -> 'QA —
-# Event-Driven Response', optional — the entry is inert if you didn't copy it),
-# so copying them verbatim needs no edits. Only change this list if you rename
-# those workflows' `name:`.
+# Drop-in: the watched names below match the QA workflows every project in this
+# template set installs (qa.yml -> 'QA — Static + UI Tests'; qa-live.yml ->
+# 'QA — UI Tests (live)', the authoritative live gate), so copying this verbatim
+# needs no edits. Only change the list if you rename those workflows' `name:` —
+# and if you do, change it in the SAME pull request, or the monitor goes quiet
+# without erroring.
+#
+# ⚠️ EVERY NAME HERE MUST RESOLVE TO A WORKFLOW THIS REPO ACTUALLY HAS. An entry
+# naming a workflow you did not install can never fire, so it is not merely
+# harmless — it is indistinguishable, by reading, from an entry that has silently
+# stopped matching. This list previously shipped 'QA — Event-Driven Response'
+# unconditionally on the grounds that the entry is "inert if you didn't copy
+# qa-response.yml"; that inertness is exactly what makes a mechanical
+# every-name-resolves check impossible. So the OPTIONAL workflow is no longer
+# pre-listed: if you install qa-response.yml, add 'QA — Event-Driven Response'
+# here and in ci-notify.yml at the same time. Its own header says so.
 # Listing watched workflows by name also prevents self-recursion (CI Monitor /
 # Codex Monitor are not in the list).
 on:
@@ -19,7 +29,6 @@ on:
     workflows:
       - 'QA — Static + UI Tests'
       - 'QA — UI Tests (live)'
-      - 'QA — Event-Driven Response'
     types: [completed]
   workflow_dispatch:
     inputs:

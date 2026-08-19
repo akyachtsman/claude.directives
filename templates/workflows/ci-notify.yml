@@ -10,8 +10,14 @@
 # no prompts. Failures are deliberately NOT commented (delivered natively;
 # ci-monitor tracks them repo-side).
 #
-# Drop-in: watched names match the QA workflows shipped in this template set;
-# entries for workflows you didn't copy are inert. Uses only GITHUB_TOKEN.
+# Drop-in: watched names match the QA workflows every project in this template
+# set installs. Uses only GITHUB_TOKEN.
+#
+# ⚠️ EVERY NAME HERE MUST RESOLVE TO A WORKFLOW THIS REPO ACTUALLY HAS — see the
+# same note in ci-monitor.yml. The optional 'QA — Event-Driven Response' is no
+# longer pre-listed: add it here AND in ci-monitor.yml if you install
+# qa-response.yml, and if you rename a watched workflow, change both in the same
+# pull request.
 #
 # BOOTSTRAP GAP — read before trusting this on its install PR: workflow_run
 # triggers are read from this file ON THE DEFAULT BRANCH, so this workflow can
@@ -26,7 +32,6 @@ on:
     workflows:
       - 'QA — Static + UI Tests'
       - 'QA — UI Tests (live)'
-      - 'QA — Event-Driven Response'
     types: [completed]
 
 name: CI Notify

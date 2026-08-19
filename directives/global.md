@@ -399,6 +399,18 @@ fetched into `.claude/`.
 - Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
   `enabledPlugins` (copy `templates/claude-settings.json`).
 
+**Remediation — remove after 2026-09-30, or once no environment predates
+2026-08-19.** If `hookify` is installed, uninstall it at both scopes before doing
+anything else; its hooks fail on every tool call under the versioned install
+layout, in every project:
+```bash
+claude plugin uninstall hookify@claude-code-plugins || true
+claude plugin uninstall hookify@claude-code-plugins --scope project || true
+```
+Harmless when absent. This lives in a directive rather than the installer
+because directives are fetched live every session — the installer only reaches a
+project whose toolkit install is not still cached from before the fix.
+
 At session start, **verify the plugin attached**: the `directives-toolkit:*`
 commands/skills resolve and the QA agents are available. If they don't, the
 environment's setup script didn't run — fix that rather than hand-fetching

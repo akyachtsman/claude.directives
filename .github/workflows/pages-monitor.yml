@@ -22,6 +22,22 @@ on:
   page_build:
   workflow_dispatch:
 
+# ⚠️ RACE FIX. Two Pages deploys completing close together previously launched
+# independent monitors with no ordering, each mutating the same
+# `pages-deploy-failure` issue from its own event. The liveness check retries for
+# up to ~135s, so an OLDER run still inside that loop could `gh issue reopen`
+# after a NEWER successful run had already closed it — a red alarm on a healthy
+# site, and one that reads as a real outage. Serialising on a single group with
+# cancel-in-progress removes the race rather than narrowing it: the newest deploy
+# is the one whose liveness matters, and it probes the same URL the cancelled run
+# was probing, so nothing is lost by cancelling. Pre-dates the workflow_run
+# trigger — two `page_build` events could always collide; adding the second
+# source made it likelier, not possible.
+# (Confirmed downstream on apfp.claude, 2026-08-19.)
+concurrency:
+  group: pages-monitor
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write

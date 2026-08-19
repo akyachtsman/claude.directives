@@ -240,15 +240,24 @@ managed settings. Do NOT
 commit it to this repo's `.claude/settings.json` — a committed value leaves the
 command gated off anyway.
 
-Measured baseline (2026-08-19, 2 runs/case, with/without arms), from two full
-suite runs: 8 of 9 cases pass. `update-pages` fires on both phrasings (Δ +1.00
-each). `scope-chk` fires on the softer phrasing (Δ +1.00); on the explicit one it
-scored Δ +0.50 in the first suite run and Δ +1.00 in the second — same case, two
-results, so treat it as FLAKY rather than as either number. `doc-comp` fires on
-"diff the old X against the new X" (Δ +1.00) and never on "compare these two
-versions of our X" (0/2 with the plugin) — its one hard failure. All three
-negatives correctly never fire, so every gap is under-triggering.
-`doc-comp`'s miss and `scope-chk`'s flakiness are the numbers to improve.
+Measured baseline (2026-08-19, 2 runs/case, with/without arms): **9 of 9 pass**,
+mean Δ +0.67. All three negatives correctly never fire in either arm, so the
+suite shows neither under- nor over-triggering.
+
+Both earlier gaps were fixed by rewriting descriptions against the measurement,
+and the lever is worth keeping: a description triggers on the WORDS a request
+actually uses, not on what the skill is for. `doc-comp` fired on "diff the old X
+against the new X" and never on "compare these two versions of our X" — identical
+prompts, one verb apart — because the old description's only strong hook was the
+word "diff" in its output clause. Naming the verbs (compare/diff/what changed)
+and the nouns (documents, versions, drafts, revisions), and saying it applies to
+text pasted inline, took that case 0.00 → +1.00. `scope-chk` was flaky on the
+explicit phrasing (1 run in 2) because its trigger was written from the
+assistant's side — "before OFFERING work" — while the missed case was the user
+asking directly; adding that case took it to 5/5 with the plugin and 0/5 without.
+
+Re-run the negatives whenever a description is widened: over-triggering is the
+failure mode a broader description buys, and it is invisible without them.
 
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, verify locally — this list mirrors what `qa.yml`

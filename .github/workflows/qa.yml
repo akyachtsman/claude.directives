@@ -23,6 +23,10 @@ jobs:
   validate:
     name: Validate Directives
     runs-on: ubuntu-latest
+    # Bounded because it fetches: checkout, and npx for the validators. Fast in
+    # practice (~7s), which is exactly why the missing bound went unnoticed —
+    # a job that always finishes quickly is still unbounded when it does not.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -123,6 +127,10 @@ jobs:
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest
+    # The most network-dependent job here — it resolves external URLs, so a slow
+    # or black-holing host is its normal failure mode. Warn-only means a hang
+    # blocks the run without ever reporting anything, which is worse than a red.
+    timeout-minutes: 10
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -140,6 +148,19 @@ jobs:
   ui-tests:
     name: Repo Map UI (Playwright)
     runs-on: ubuntu-latest
+    # ⚠️ BOUND THE JOB. Without this, a wedged browser download runs to GitHub's
+    # 6-hour default and the PR shows neither pass nor fail for the whole time —
+    # no signal at all, which reads as "still working" and then as nothing.
+    # Twice measured here: run 32269445117 sat 57 minutes on the install step,
+    # and run 32293469078 sat 23+ minutes on it while the PR that adds this very
+    # bound waited on it (2026-08-19).
+    #
+    # ⚠️ 35, NOT 20. An earlier attempt set 20 — below the measured cold-cache
+    # install time of 21m25s — so run 32277932813 was killed at 20m21s. Because
+    # the cache SAVE runs at job end, the kill also skipped it, leaving the next
+    # run equally cold. A bound below the work it bounds does not protect
+    # anything; it fails on a schedule.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -147,10 +168,37 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Playwright + Chromium
-        run: |
-          npm install playwright
-          npx playwright install --with-deps chromium
+      # Keyed on this workflow file, which only works because the Playwright
+      # version below is PINNED. Unpinned, `npm install playwright` floats to
+      # each new release while this key stays put — and a cache entry is
+      # immutable, so every later run would re-download the new browser cold
+      # and be unable to save it. The cache would silently degrade back to the
+      # cold-every-run behaviour it exists to eliminate (Codex, #238). Bumping
+      # the pin edits this file, which changes this key, which saves fresh.
+      # restore-keys means an unrelated edit still reuses the previous browsers.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('.github/workflows/qa.yml') }}
+          restore-keys: pw-${{ runner.os }}-
+
+      # Split so the log shows WHICH half is slow. The browser download is what
+      # the cache above spares; the apt step never is. A single combined step
+      # told us the total and nothing about the split, which is how 23 minutes
+      # of "Install Playwright + Chromium" stayed unexplained.
+      #
+      # ⚠️ Keep the version pinned — the cache key above depends on it. See the
+      # cache comment.
+      - name: Install Playwright (npm)
+        run: npm install playwright@1.62.1
+
+      - name: Install Chromium system deps (apt, never cached)
+        run: npx playwright install-deps chromium
+
+      - name: Install Chromium browser (cached above when warm)
+        run: npx playwright install chromium
 
       # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
       # here on every run (locally it's only needed when a map changed).

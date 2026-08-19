@@ -99,7 +99,21 @@ function parseScalar(raw) {
     for (let i = 1; i < s.length; i++) {
       const c = s[i];
       if (q === '"' && c === '\\' && i + 1 < s.length) {
-        out += s[++i];
+        // YAML decodes these; a raw pass-through turns \u2014 into "u2014" and the
+        // name then matches nothing, failing a build over a legal display name.
+        const e = s[++i];
+        if (e === 'n') out += '\n';
+        else if (e === 't') out += '\t';
+        else if (e === 'r') out += '\r';
+        else if (e === '0') out += '\0';
+        else if (e === 'x' || e === 'u' || e === 'U') {
+          const width = e === 'x' ? 2 : e === 'u' ? 4 : 8;
+          const hex = s.slice(i + 1, i + 1 + width);
+          if (new RegExp(`^[0-9a-fA-F]{${width}}$`).test(hex)) {
+            out += String.fromCodePoint(parseInt(hex, 16));
+            i += width;
+          } else out += e;
+        } else out += e; // \\ \" \/ and anything else: the character itself
         continue;
       }
       if (c === q) {
@@ -178,14 +192,62 @@ const isSkippable = (line) => !line.trim() || line.trimStart().startsWith('#');
  * Scoped to the region under each `workflow_run:` mapping so an unrelated `workflows:`
  * key elsewhere in the file is never picked up.
  */
+/**
+ * Indentation of the document's root mapping. Usually 0, but a consistently indented
+ * root mapping is legal YAML and GitHub still reads `name:` and `on:` from it.
+ */
+function rootIndentOf(lines) {
+  for (const l of lines) {
+    if (isSkippable(l) || /^\s*-/.test(l)) continue;
+    if (/^\s*[^\s#][^:]*:/.test(l)) return indentOf(l);
+  }
+  return 0;
+}
+
+/**
+ * Lines that are the BODY of a block scalar (`run: |`, `description: >`, …).
+ * They are text, not structure: a `run: |` step containing an illustrative
+ * `workflow_run:` snippet is not a trigger, and treating it as one fails the build
+ * over a comment. Masking them is what keeps this a structural check.
+ */
+function blockScalarBody(lines) {
+  const masked = new Array(lines.length).fill(false);
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*[^\s#][^:]*:\s*[|>][-+]?\d*\s*(#.*)?$/.test(lines[i])) continue;
+    const keyIndent = indentOf(lines[i]);
+    for (let k = i + 1; k < lines.length; k++) {
+      if (lines[k].trim() === '') { masked[k] = true; continue; }
+      if (indentOf(lines[k]) <= keyIndent) break;
+      masked[k] = true;
+    }
+  }
+  return masked;
+}
+
 function referencedWorkflows(lines) {
   const refs = [];
+  const masked = blockScalarBody(lines);
+  const root = rootIndentOf(lines);
+
+  // Only a `workflow_run:` under the ROOT `on:` mapping is a trigger.
+  const inOn = new Array(lines.length).fill(false);
+  for (let i = 0; i < lines.length; i++) {
+    if (masked[i] || isSkippable(lines[i])) continue;
+    if (indentOf(lines[i]) !== root || !/^\s*(on|"on"|'on'|True|true):\s*(#.*)?$/.test(lines[i])) continue;
+    for (let k = i + 1; k < lines.length; k++) {
+      if (isSkippable(lines[k])) { inOn[k] = true; continue; }
+      if (indentOf(lines[k]) <= root) break;
+      inOn[k] = true;
+    }
+  }
 
   for (let i = 0; i < lines.length; i++) {
+    if (masked[i] || !inOn[i]) continue;
     if (!/^\s*workflow_run:\s*(#.*)?$/.test(lines[i])) continue;
     const blockIndent = indentOf(lines[i]);
 
     for (let j = i + 1; j < lines.length; j++) {
+      if (masked[j]) continue;
       if (isSkippable(lines[j])) continue;
       if (indentOf(lines[j]) <= blockIndent) break; // left the workflow_run mapping
 
@@ -228,6 +290,9 @@ function referencedWorkflows(lines) {
           for (let x = 0; x < s.length; x++) {
             const c = s[x];
             if (q) {
+              // splitFlow already honours escapes; this scanner must too, or a name
+              // containing \" followed by ] ends the sequence early and truncates.
+              if (q === '"' && c === '\\') { x++; continue; }
               if (c === q) q = null;
               continue;
             }
@@ -249,9 +314,14 @@ function referencedWorkflows(lines) {
         // Block sequence on the following lines.
         for (let k = j + 1; k < lines.length; k++) {
           if (isSkippable(lines[k])) continue;
-          if (indentOf(lines[k]) <= keyIndent) break;
-          const item = /^\s*-\s*(.*)$/.exec(lines[k]);
+          const item = /^\s*-\s+(.*)$/.exec(lines[k]);
+          // YAML allows an INDENTLESS sequence: `- item` at the same column as the
+          // key it belongs to. Breaking on `<= keyIndent` skipped those entirely —
+          // rule 1 then missed dangling names, and a populated REQUIRED entry
+          // reported a correctly-listed watcher as removed. Accept an item at the
+          // key's own indent; anything shallower, or not an item, has left the value.
           if (!item) break;
+          if (indentOf(lines[k]) < keyIndent) break;
           const name = parseScalar(item[1]);
           if (name) refs.push({ name, line: k + 1 });
         }
@@ -274,7 +344,16 @@ if (!files.length) {
 const declared = new Map(); // name -> file
 for (const f of files) {
   const text = readFileSync(join(workflowDir, f), 'utf8');
-  const m = /^name:\s*(.+)$/m.exec(text);
+  const wfLines = text.split(/\r?\n/);
+  const wfRoot = rootIndentOf(wfLines);
+  const wfMasked = blockScalarBody(wfLines);
+  let m = null;
+  for (let i = 0; i < wfLines.length; i++) {
+    if (wfMasked[i] || isSkippable(wfLines[i])) continue;
+    if (indentOf(wfLines[i]) !== wfRoot) continue;
+    const nm = /^\s*name:\s*(.+)$/.exec(wfLines[i]);
+    if (nm) { m = nm; break; }
+  }
   if (!m) {
     console.error(
       `❌ workflow-ref-guard: ${relative(repoRoot, join(workflowDir, f))} has no top-level ` +

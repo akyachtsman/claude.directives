@@ -53,6 +53,7 @@ jobs:
           WR_SHA: ${{ github.event.workflow_run.head_sha }}
           WR_URL: ${{ github.event.workflow_run.html_url }}
           WR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WR_HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
         run: |
           set -euo pipefail
           num=$(gh pr list --repo "$REPO" --state open --json number,headRefOid \
@@ -63,10 +64,17 @@ jobs:
           # workflow_dispatch carry a SHA that is often not the head), and a PR
           # whose head moved while the run was in flight. Both previously exited
           # silent, which is the failure this workflow exists to prevent.
+          # `gh pr list --head` filters on the BRANCH NAME only -- it does not
+          # accept <owner>:<branch> -- so two fork PRs sharing a branch name are
+          # indistinguishable to it. Match the run's head repository owner as
+          # well, and take the result ONLY when exactly one candidate survives:
+          # commenting green on the wrong PR is worse than staying silent.
           if [ -z "$num" ] && [ -n "${WR_BRANCH:-}" ]; then
             num=$(gh pr list --repo "$REPO" --state open --head "$WR_BRANCH" \
-              --json number --jq '.[0].number // empty')
-            matched="branch"
+              --json number,headRepositoryOwner \
+              --jq "[.[] | select(.headRepositoryOwner.login == \"${WR_HEAD_OWNER:-}\")]
+                    | if length == 1 then .[0].number else empty end")
+            [ -n "$num" ] && matched="branch"
           fi
           if [ -z "$num" ]; then
             # Correct and expected for a run on the default branch: there is no

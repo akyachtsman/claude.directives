@@ -202,7 +202,13 @@ Behavior detail: `docs/standards/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor
 
-Drop-in, portable as-is (the live URL is derived from the repo):
+Drop-in for a **branch-source** Pages project (the live URL is derived from the
+repo). ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, `page_build`
+never fires and this monitor is inert until you add a `workflow_run` trigger
+naming your own deploy workflow — the template header carries the snippet, and
+the same name must be added to `qa-live.yml`'s watch list. Do NOT add it to
+`pages-retry.yml`. Rules: `docs/standards/automations.md` → *Watcher Rules*
+(W2, W3).
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
@@ -271,7 +277,7 @@ Required repository variables:
 - [ ] `.github/workflows/qa-response.yml` present and ready for dispatch — part of the standard set; if omitted, remove `QA — Event-Driven Response` from the `ci-monitor.yml` and `ci-notify.yml` watch lists
 - [ ] `.github/workflows/ci-monitor.yml` present, `workflow_run.workflows` filled in, manual dispatch verified
 - [ ] `.github/workflows/codex-monitor.yml` present
-- [ ] `.github/workflows/pages-monitor.yml` present
+- [ ] `.github/workflows/pages-monitor.yml` present, and — if Pages is Actions-sourced — carrying a `workflow_run` trigger naming the deploy workflow
 - [ ] `.github/workflows/pages-retry.yml` present (branch-source Pages projects)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable

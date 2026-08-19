@@ -41,10 +41,21 @@ const REF_FILES = [
   'MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'NEW-REPO-USER-INSTRUCTIONS.md',
 ];
 
+// Never descend into installed or generated trees. templates/ui-tests carries a
+// package.json, so a developer who has run the suite locally has a node_modules
+// under it -- and vendored docs cite their own paths, which this check would
+// then read as repo-owned and fail on. Reported with a reproduction:
+// templates/ui-tests/node_modules/safer-buffer/Porting-Buffer.md cites a
+// docs/rules/*.md that does not exist here. A check that breaks after a normal
+// local install is a check people learn to skip.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage',
+  'playwright-report', 'test-results', '.next', '.venv']);
+
 function walk(dir) {
   const out = [];
   if (!existsSync(dir)) return out;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.isDirectory() && SKIP_DIRS.has(e.name)) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) out.push(...walk(full));
     else if (/\.(ya?ml|md|sh)$/.test(e.name)) out.push(full);
@@ -56,7 +67,7 @@ const refFiles = [...REF_ROOTS.flatMap(walk), ...REF_FILES.filter(f => existsSyn
 const refs = new Map(); // path -> Set(files citing it)
 
 for (const f of refFiles) {
-  for (const m of readFileSync(f, 'utf8').matchAll(/docs\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\.md/g)) {
+  for (const m of readFileSync(f, 'utf8').matchAll(/docs\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.md/g)) {
     if (!refs.has(m[0])) refs.set(m[0], new Set());
     refs.get(m[0]).add(f);
   }

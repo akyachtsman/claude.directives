@@ -97,7 +97,8 @@ See `docs/standards/ci-triage.md` for expected vs. real failure classification a
 
 CI monitoring is infra-resident and event-driven — not session-scoped:
 - `ci-monitor.yml` fires on `workflow_run` events (+ `workflow_dispatch` for manual scans)
-- `codex-monitor.yml` fires on Codex PR reviews
+- `codex-monitor.yml` fires on Codex PR reviews and Codex issue comments — it
+  adds `codex-flagged` on concerns and clears it on a SHA-matched all-clear
 For a quick in-session CI snapshot, call `mcp__github__actions_list` directly
 (one pass — report failures and the last success, then move on).
 

@@ -194,8 +194,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   comments on the open PR for that head SHA so a watching web session wakes on
   success without scheduling-tool polling (the template's counterpart, adapted
   to this repo's workflow name).
-- `codex-monitor.yml` — fires on Codex PR reviews; adds a `codex-flagged` label
-  when Codex raised concerns.
+- `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments (the
+  all-clear travels only as a comment); adds a `codex-flagged` label when Codex
+  raised concerns and clears it on an all-clear naming the current head SHA.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
   deploy is live and on a problem opens/updates a deduplicated
   `pages-deploy-failure` issue (success → job summary only). The zero-model
@@ -270,6 +271,7 @@ node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths, class partition, raw self-references
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
+python3 .github/scripts/check-job-bounds.py       # every job bounded, none >=360, browser jobs >=30 — live AND templates
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"

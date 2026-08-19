@@ -6,7 +6,7 @@ all detected by event-driven infra workflows — no session, no polling:
 | Signal | Source | Surfaces as |
 |---|---|---|
 | A watched workflow failed | `workflow_run` → `ci-monitor.yml` | `ci-failure` tracking issue |
-| Codex raised PR concerns | `pull_request_review` → `codex-monitor.yml` | `codex-flagged` PR label |
+| Codex raised PR concerns | `pull_request_review` / `issue_comment` → `codex-monitor.yml` | `codex-flagged` PR label (auto-cleared on a SHA-matched all-clear) |
 | Playwright failure | `qa.yml` / `qa-live.yml` | failing CI check on the PR |
 
 GitHub automatically emails issue comments and label events, so the inbox is
@@ -34,7 +34,10 @@ notified without polling. For in-session fast feedback, poll via
 
 1. Open the PR and read Codex's inline comments
 2. Address each suggestion or explicitly note why it's declined
-3. Remove the label once resolved — do not merge while the label is present
+3. Request a fresh Codex pass (`@codex review`) — on an all-clear naming the
+   current head, `codex-monitor` clears the label itself. Remove it by hand
+   (with a rationale) only when a clean verdict will not come — e.g. concerns
+   declined with reasons — and never merge while the label is present.
 
 ## CI never registered on a PR
 
@@ -49,7 +52,8 @@ not edit workflows chasing a bug that isn't there.
 ## What not to do
 
 - Do not close a `ci-failure` issue without fixing the underlying failure
-- Do not remove `codex-flagged` without addressing the inline comments
+- Do not remove `codex-flagged` without addressing the inline comments — and
+  prefer letting the monitor clear it on a fresh all-clear over removing by hand
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

@@ -19,9 +19,11 @@ success via the comment webhook (no scheduling-tool polling, no permission
 prompts). No open PR → exits quietly. The template counterpart, adapted to this
 repo's workflow name.
 
-**codex-monitor.yml** — fires on every Codex PR review. Adds a `codex-flagged` label
-when Codex raised concerns (changes_requested or COMMENTED with inline comments).
-Approving/empty reviews are ignored.
+**codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments (the
+all-clear travels only as a comment). Adds a `codex-flagged` label when Codex
+raised concerns (changes_requested or COMMENTED with inline comments); clears it
+on an all-clear naming the PR's current head SHA. A stale or SHA-less all-clear
+holds the label. Contract detail: `docs/standards/automations.md` → Automation 3.
 
 **pages-monitor.yml** — fires on every GitHub Pages build (`page_build`). Reads the
 build status from the event, verifies the live URL (`https://<owner>.github.io/<repo>/`)
@@ -36,7 +38,7 @@ See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
 `.github/workflows/codex-monitor.yml`, and `.github/workflows/pages-monitor.yml`.
 
 ### Activation Checklist for New Sessions
-- Confirm `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` exist; `codex-monitor` fires only on PR-review events and `pages-monitor` only on `page_build` events, so neither has a standing "green" status to check
+- Confirm `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` exist; `codex-monitor` fires only on Codex review/comment events and `pages-monitor` only on `page_build` events, so neither has a standing "green" status to check
 - Subscribe to PR activity on any open PRs
 - See *Self-test triage* below for `ci-failure` / `codex-flagged` handling
 - Check for open `ci-failure` issues before starting new work

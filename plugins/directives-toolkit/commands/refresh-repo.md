@@ -172,10 +172,19 @@ Disposition each DRIFT by READING THE DIFF. There is no list of files allowed
 to differ and no blind default in either direction — a rule that says "restore"
 without looking deletes improvements, and one that says "keep" without looking
 preserves tampering. Both are the same mistake.
-1. **The diff is only a `workflow_run` watch list, or the project's CLAUDE.md
-   records the change** — a legitimate adaptation. Keep it, and report it, so an
-   adaptation nobody upstream knows about becomes a Downstream-Finding Loop item
-   rather than a permanent local secret.
+1. **The diff is only a `workflow_run` watch list in a file whose list is
+   MEANT to vary per project** — `ci-monitor.yml`, `ci-notify.yml`,
+   `qa-live.yml`, `pages-monitor.yml` — or the project's CLAUDE.md records the
+   change. A legitimate adaptation: keep it, and report it, so an adaptation
+   nobody upstream knows about becomes a Downstream-Finding Loop item rather
+   than a permanent local secret.
+   **`pages-retry.yml` is NOT in that set.** Its list encodes an invariant, not
+   a preference: the template retries the managed branch-source deploy only,
+   because re-running a project-owned deploy replays that workflow's whole
+   build. A watch-list diff there is therefore never auto-kept — it needs the
+   project's CLAUDE.md to record why its deploy is safe to replay (idempotent,
+   no build or test steps), which routes it through the documented-customization
+   path above instead of being preserved silently.
 2. **Anything else** — show the full diff and ask. An unexplained workflow drift
    can be an accidental session edit or tampering (git.md requires eyes-on-the-
    diff for every workflow PR precisely so this class stays rare), and it can

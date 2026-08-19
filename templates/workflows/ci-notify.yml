@@ -14,10 +14,10 @@
 # set installs. Uses only GITHUB_TOKEN.
 #
 # ⚠️ EVERY NAME HERE MUST RESOLVE TO A WORKFLOW THIS REPO ACTUALLY HAS — see the
-# same note in ci-monitor.yml. The optional 'QA — Event-Driven Response' is no
-# longer pre-listed: add it here AND in ci-monitor.yml if you install
-# qa-response.yml, and if you rename a watched workflow, change both in the same
-# pull request.
+# same note in ci-monitor.yml. All three are in the standard set `/new-repo`
+# installs in full. If you deliberately omit qa-response.yml, remove its name
+# here AND in ci-monitor.yml in the same edit; likewise, rename a watched
+# workflow and its watchers in the same pull request.
 #
 # BOOTSTRAP GAP — read before trusting this on its install PR: workflow_run
 # triggers are read from this file ON THE DEFAULT BRANCH, so this workflow can
@@ -32,6 +32,7 @@ on:
     workflows:
       - 'QA — Static + UI Tests'
       - 'QA — UI Tests (live)'
+      - 'QA — Event-Driven Response'
     types: [completed]
 
 name: CI Notify

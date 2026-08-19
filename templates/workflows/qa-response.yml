@@ -10,12 +10,12 @@
 #     -d '{"event_type":"manual-qa-trigger"}'
 #
 # Required setup:
-#   - ⚠️ ADD THIS WORKFLOW'S NAME to the `workflow_run.workflows` lists in BOTH
-#     ci-monitor.yml and ci-notify.yml: 'QA — Event-Driven Response'. Neither
-#     ships the entry, because a watcher naming a workflow the repo does not
-#     have can never fire and cannot be told apart from one that has silently
-#     stopped matching. Skip this and nothing tracks this workflow's failures
-#     and nothing wakes a session on its success — with no error either way.
+#   - ⚠️ IF YOU OMIT THIS WORKFLOW, remove 'QA — Event-Driven Response' from the
+#     `workflow_run.workflows` lists in BOTH ci-monitor.yml and ci-notify.yml.
+#     They ship with it because `/new-repo` installs the full standard set, so
+#     it resolves in a standard scaffold — but a watcher naming a workflow the
+#     repo does not have can never fire and cannot be told apart from one that
+#     has silently stopped matching.
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project
 #     has no auth; the empty secret makes auth tests self-skip
 #   - Add APP_URL as a repository variable (live URL)

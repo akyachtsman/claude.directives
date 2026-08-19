@@ -16,12 +16,11 @@ name: CI Monitor
 # ⚠️ EVERY NAME HERE MUST RESOLVE TO A WORKFLOW THIS REPO ACTUALLY HAS. An entry
 # naming a workflow you did not install can never fire, so it is not merely
 # harmless — it is indistinguishable, by reading, from an entry that has silently
-# stopped matching. This list previously shipped 'QA — Event-Driven Response'
-# unconditionally on the grounds that the entry is "inert if you didn't copy
-# qa-response.yml"; that inertness is exactly what makes a mechanical
-# every-name-resolves check impossible. So the OPTIONAL workflow is no longer
-# pre-listed: if you install qa-response.yml, add 'QA — Event-Driven Response'
-# here and in ci-notify.yml at the same time. Its own header says so.
+# stopped matching. All three names below are in the STANDARD SET that
+# `/new-repo` installs in full, so in a standard scaffold all three resolve.
+# If you deliberately omit qa-response.yml, remove its name from this list and
+# from ci-notify.yml in the same edit — leaving it is the dangling entry this
+# note is about.
 # Listing watched workflows by name also prevents self-recursion (CI Monitor /
 # Codex Monitor are not in the list).
 on:
@@ -29,6 +28,7 @@ on:
     workflows:
       - 'QA — Static + UI Tests'
       - 'QA — UI Tests (live)'
+      - 'QA — Event-Driven Response'
     types: [completed]
   workflow_dispatch:
     inputs:

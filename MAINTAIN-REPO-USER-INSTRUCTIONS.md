@@ -165,9 +165,12 @@ Hard-won; each cost a real debugging session:
   with ONE documented exception: names GitHub itself manages, currently only
   `pages-build-deployment`. Everything else is project-owned, and an entry
   naming a project workflow you never installed can never fire and is
-  indistinguishable by reading from one that has silently stopped matching. That
-  is why the optional `qa-response.yml` entry is no longer pre-listed. Rename a
-  watched workflow and its watchers in the SAME pull request.
+  indistinguishable by reading from one that has silently stopped matching.
+  `ci-monitor.yml`/`ci-notify.yml` ship all three QA names because `/new-repo`
+  installs the full standard set, so all three resolve in a standard scaffold —
+  a project that deliberately omits `qa-response.yml` must remove its name from
+  both lists in the same edit. Rename a watched workflow and its watchers in the
+  SAME pull request.
 - **An Actions-sourced Pages deploy needs YOUR workflow's name added by hand.**
   Flipping Settings → Pages → Source to "GitHub Actions" makes
   `pages-build-deployment` inert, and any watcher naming only it stops firing
@@ -181,8 +184,13 @@ Hard-won; each cost a real debugging session:
   own deploy workflow instead (`docs/standards/automations.md`, Automation 4b).
 - **A name resolving is not a trigger firing.** Everything above is checkable
   against the tree; whether a watcher still receives events is not. That needs
-  run history — if a watched workflow has no runs since a config change, treat
-  it as dead regardless of how correct the file reads.
+  run history — and the test is a COMPARISON, not a count. A watcher with no
+  runs may simply have had nothing to watch: a quiet repo, or branch/path
+  filters the source never matched. Diagnose a dead trigger only when an
+  ELIGIBLE SOURCE RUN COMPLETED WITH NO CORRESPONDING WATCHER RUN. "No runs
+  since the config change" alone is consistent with both a dead trigger and an
+  idle repository, and treating it as proof of the first manufactures false
+  alarms in exactly the repos nobody is touching.
 - **Web sessions ignore project `permissions.allow`** — MCP prompt reduction
   on web comes from architecture (ci-notify wake, no-backstop ruling), not
   settings.

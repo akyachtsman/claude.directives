@@ -60,7 +60,10 @@ Execute in order:
      polling, no permission prompts)
    - `codex-monitor.yml` — Codex PR review monitor
    - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
-     every `page_build`; portable as-is, no edits needed)
+     every branch-source `page_build`). Edit-free ONLY if Pages is branch-
+     sourced; if Settings → Pages → Source is "GitHub Actions", `page_build`
+     never fires and you must add the `workflow_run` trigger naming your own
+     deploy workflow — the template header carries the snippet
    - `pages-retry.yml` — auto-re-runs the managed Pages deploy on a transient
      failure (bounded to `run_attempt < 4`); pairs with `pages-monitor.yml`.
      Applies to **branch-source** Pages projects; it only arms once it's on the

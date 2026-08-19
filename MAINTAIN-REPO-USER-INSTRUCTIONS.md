@@ -151,8 +151,25 @@ Hard-won; each cost a real debugging session:
   ci-notify can never wake the PR that installs it. Verify on the FIRST
   post-install PR (the one allowed backstop check); don't call it a dud.
 - **Watch lists match workflow `name:` exactly** — repos with non-template QA
-  names must adapt `ci-monitor.yml`/`ci-notify.yml` lists; `/refresh-repo`
-  deliberately preserves those adaptations.
+  names must adapt `ci-monitor.yml`/`ci-notify.yml` lists. `/refresh-repo` no
+  longer carries a named exception for those two files (removed 2026-08-19):
+  every drop-in that differs from its template is flagged `DRIFT`, shown as a
+  diff, and **defaults to keeping the local copy**, so an adapted watch list is
+  preserved by the general rule rather than by being on a list. An allow-list of
+  files permitted to differ rots the same way a watch list pinned to one
+  workflow name does — right when written, silently wrong after the next local
+  improvement.
+- **Every watched name must resolve to a workflow the repo actually has.** An
+  entry naming a workflow you never installed can never fire, and is
+  indistinguishable by reading from one that has silently stopped matching —
+  which is why the optional `qa-response.yml` entry is no longer pre-listed in
+  the templates. Rename a watched workflow and its watchers in the SAME pull
+  request.
+- **Watch lists must name both Pages sources.** `pages-build-deployment` is the
+  managed branch build; an Actions-sourced deploy is your own workflow's name
+  (`Pages` in this template set). Flipping Settings → Pages → Source to "GitHub
+  Actions" makes the managed build inert, and any watcher naming only it stops
+  firing with no error at all.
 - **Web sessions ignore project `permissions.allow`** — MCP prompt reduction
   on web comes from architecture (ci-notify wake, no-backstop ruling), not
   settings.
@@ -198,4 +215,6 @@ Hard-won; each cost a real debugging session:
   it preserves them pending approval by design. Local corruption is caught by
   Phase 1.5's delta-independent integrity check (drift vs the current
   templates) and fixed by restore-from-template or `git revert` — not by
-  waiting for a refresh to notice.
+  waiting for a refresh to notice. Since 2026-08-19 that check is also the
+  whole disposition rule for workflow drop-ins: `DRIFT` is a question, answered
+  by reading the diff, never a batch overwrite.

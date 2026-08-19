@@ -55,11 +55,31 @@ runs:
       run: npm install
       working-directory: ${{ inputs.tests-dir }}
 
+    # Browsers are ~400MB and were re-downloaded on EVERY run. Downstream that
+    # became the failure mode itself: qa-live runs died during this step before a
+    # single test executed, so the authoritative gate produced no verdict for
+    # reasons that had nothing to do with the app (apfp.claude, 2026-08-19).
+    # A workflow that dies in setup reports exactly as much as one that never
+    # fires — nothing.
+    - name: Cache Playwright browsers
+      id: pw-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: pw-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.tests-dir)) }}
+
     - name: Install Playwright browsers
       # Both browsers: playwright.config.js defines a webkit project (iPhone 12)
       # alongside chromium (Pixel 5). Installing chromium alone fails that project.
+      # On a cache hit the binaries are already present, so only the SYSTEM
+      # libraries need installing — those live in /usr/lib and are never cached.
       shell: bash
-      run: npx playwright install --with-deps chromium webkit
+      run: |
+        if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+          npx playwright install-deps chromium webkit
+        else
+          npx playwright install --with-deps chromium webkit
+        fi
       working-directory: ${{ inputs.tests-dir }}
 
     # http-server is a pinned devDependency installed in tests-dir. Invoke its

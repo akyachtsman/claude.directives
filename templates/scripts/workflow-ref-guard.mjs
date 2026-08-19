@@ -224,7 +224,7 @@ function blockScalarBody(lines) {
   return masked;
 }
 
-function referencedWorkflows(lines) {
+function referencedWorkflows(lines, unparseable = []) {
   const refs = [];
   const masked = blockScalarBody(lines);
   const root = rootIndentOf(lines);
@@ -233,7 +233,19 @@ function referencedWorkflows(lines) {
   const inOn = new Array(lines.length).fill(false);
   for (let i = 0; i < lines.length; i++) {
     if (masked[i] || isSkippable(lines[i])) continue;
-    if (indentOf(lines[i]) !== root || !/^\s*(on|"on"|'on'|True|true):\s*(#.*)?$/.test(lines[i])) continue;
+    if (indentOf(lines[i]) !== root) continue;
+    const onLine = /^\s*(?:on|"on"|'on'|True|true):\s*(.*)$/.exec(lines[i]);
+    if (!onLine) continue;
+    const onRest = stripComment(onLine[1]).trim();
+    if (onRest) {
+      // A flow mapping — `on: {workflow_run: {...}}` — is valid YAML this
+      // line-oriented scanner cannot read. Refusing is the whole point: silently
+      // finding zero references would report success while a name dangles, which
+      // is the exact "absent signal reads as healthy" failure this guard exists
+      // to catch. Fail loudly and name the alternative instead.
+      unparseable.push({ file: 'this workflow', line: i + 1, form: 'a flow-style `on:` mapping' });
+      continue;
+    }
     for (let k = i + 1; k < lines.length; k++) {
       if (isSkippable(lines[k])) { inOn[k] = true; continue; }
       if (indentOf(lines[k]) <= root) break;
@@ -243,7 +255,8 @@ function referencedWorkflows(lines) {
 
   for (let i = 0; i < lines.length; i++) {
     if (masked[i] || !inOn[i]) continue;
-    if (!/^\s*workflow_run:\s*(#.*)?$/.test(lines[i])) continue;
+    // A formatter may quote mapping keys; 'workflow_run': is the same trigger.
+    if (!/^\s*(?:workflow_run|'workflow_run'|"workflow_run"):\s*(#.*)?$/.test(lines[i])) continue;
     const blockIndent = indentOf(lines[i]);
 
     for (let j = i + 1; j < lines.length; j++) {
@@ -253,7 +266,14 @@ function referencedWorkflows(lines) {
 
       const m = /^\s*workflows:\s*(.*)$/.exec(lines[j]);
       if (!m) continue;
-      const rest = stripComment(m[1]).trim();
+      let rest = stripComment(m[1]).trim();
+      // `workflows: &watched [A]` is still the sequence [A]. Strip a leading anchor
+      // so the flow-sequence branch below sees the value, rather than treating the
+      // line as "no value here" and silently recording zero references.
+      rest = rest.replace(/^&[^\s]+\s*/, '');
+      // An ALIAS (`workflows: *watched`) cannot be resolved without following the
+      // anchor, so refuse rather than report success on an unread value.
+      if (/^\*/.test(rest)) unparseable.push({ file: 'this workflow', line: j + 1, form: 'a YAML alias (`*anchor`) as the workflows value' });
       const keyIndent = indentOf(lines[j]);
 
       // Locate the value. A flow sequence may start on this line OR on the next one —
@@ -372,7 +392,21 @@ const seenPerFile = new Map();
 
 for (const f of files) {
   const lines = readFileSync(join(workflowDir, f), 'utf8').split('\n');
-  const refs = referencedWorkflows(lines);
+  // FAIL CLOSED. Anything this line-oriented scanner cannot read is reported, never
+  // skipped. A form it silently ignores produces zero references and a green run —
+  // reporting health because it did not look, which is precisely the failure mode
+  // this guard exists to catch. If you hit one of these, the answer is a check built
+  // on a real YAML parser, not a re-formatted workflow.
+  const unreadable = [];
+  const refs = referencedWorkflows(lines, unreadable);
+  for (const u of unreadable) {
+    errors.push(
+      `.github/workflows/${f}:${u.line} — this guard cannot read ${u.form}.\n` +
+        `      It is valid YAML; the limitation is this scanner's, and it refuses rather\n` +
+        `      than reporting success on a trigger it never parsed. Rewrite the trigger in\n` +
+        `      block style, or replace this guard with one built on a YAML parser.`
+    );
+  }
   seenPerFile.set(f, new Set(refs.map((r) => r.name)));
   for (const { name, line } of refs) {
     checked++;

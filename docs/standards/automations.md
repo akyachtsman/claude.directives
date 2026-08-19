@@ -186,7 +186,10 @@ on the previous version until someone re-runs the deploy by hand.
 - On a failed deploy with `run_attempt < 4`: re-runs the whole deploy run. At the
   ceiling it stops and lets `pages-monitor.yml` (Automation 4) open the tracking issue.
 - Projects deploying Pages via their own GitHub **Actions** source should build the
-  retry into that workflow instead — this template only covers the branch source.
+  retry into that workflow instead — this template covers the branch source by
+  default. One narrow exception, per *Watcher Rules* → W3: a project MAY point it
+  at its own deploy if that deploy is provably idempotent (no build, no compile,
+  no tests) and records the reasoning in its own CLAUDE.md.
 - Uses `GITHUB_TOKEN` only (`actions: write`).
 
 **Template:** `templates/workflows/pages-retry.yml` — drop-in, no customization

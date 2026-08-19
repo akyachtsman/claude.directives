@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""check-job-bounds.py — every workflow job must carry a bound that can actually trip.
+
+WHY: an unbounded job that wedges runs to GitHub's 6-hour default, and for all
+of it the PR shows neither pass nor fail — no signal, which reads as "still
+working" and then as nothing. Measured here twice in one day (2026-08-19): run
+32269445117 sat 57 minutes on a browser install; run 32293469078 sat 35 on the
+same step and was only stopped because a bound had landed by then.
+
+THREE RULES, because presence alone proves nothing:
+  1. Every job declares `timeout-minutes`. (Exception: a job that `uses:` a
+     reusable workflow — GitHub does not accept timeout-minutes there; the
+     called workflow's own jobs carry the bounds.)
+  2. No bound may be >= 360. GitHub's default IS 360, so declaring 360 or more
+     is the absent bound wearing a declared one's clothes — it changes nothing
+     and reads as protection.
+  3. A browser-install job (any step running `playwright install*` or using the
+     ui-suite composite) needs >= 30. The cold-cache install alone measured
+     21m25s, and a 20-minute bound killed run 32277932813 at 20m21s — a bound
+     below the work it bounds does not protect anything; it fails on a
+     schedule, and because the cache save runs at job END, each kill also
+     leaves the next run cold. Rule 3 exists because rule 1 passed the exact
+     defect #238 fixed: every broken template job DECLARED a bound; the value
+     was the fault.
+
+Scans .github/workflows AND templates/workflows. The templates are what every
+downstream project inherits, and #238's defect lived only in the templates
+while this repo's own copy was fine — a scan of the live workflows alone
+reports health precisely when the shipped ones are broken.
+
+Composite actions (templates/actions/*/action.yml) are not scanned: composite
+steps cannot carry timeout-minutes at all; their ceiling is the calling job's,
+which is exactly what rules 1-3 police.
+"""
+
+import sys
+from pathlib import Path
+
+try:
+    import yaml
+except ModuleNotFoundError:
+    sys.stderr.write(
+        "❌ check-job-bounds: PyYAML is not installed. It ships with GitHub's "
+        "runner images; on a bare host: pip install PyYAML.\n"
+    )
+    raise SystemExit(1)
+
+# Optional root override so the check can be exercised against synthetic trees;
+# defaults to the repo this file lives in.
+REPO_ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
+SCAN_DIRS = [".github/workflows", "templates/workflows"]
+
+GITHUB_DEFAULT = 360
+BROWSER_FLOOR = 30
+BROWSER_MARKERS = ("playwright install", "ui-suite")
+
+
+def is_browser_job(job):
+    for step in job.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        text = str(step.get("run", "")) + " " + str(step.get("uses", ""))
+        if any(marker in text for marker in BROWSER_MARKERS):
+            return True
+    return False
+
+
+errors = []
+checked = 0
+
+for scan_dir in SCAN_DIRS:
+    directory = REPO_ROOT / scan_dir
+    if not directory.is_dir():
+        errors.append(f"{scan_dir}/ does not exist — wrong root? Scanned from {REPO_ROOT}.")
+        continue
+    for path in sorted(directory.glob("*.yml")) + sorted(directory.glob("*.yaml")):
+        rel = path.relative_to(REPO_ROOT)
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            # FAIL CLOSED: a file this check cannot read is reported, never
+            # skipped — a workflow silently treated as empty passes every rule.
+            errors.append(f"{rel} is not parseable YAML, so its jobs were never checked: {str(exc).strip()}")
+            continue
+        jobs = (doc or {}).get("jobs")
+        if not isinstance(jobs, dict):
+            errors.append(f"{rel} has no jobs mapping — not a workflow, or malformed.")
+            continue
+        for name, job in jobs.items():
+            if not isinstance(job, dict):
+                errors.append(f"{rel} → job '{name}' is not a mapping.")
+                continue
+            if "uses" in job:
+                continue  # reusable-workflow call: cannot carry timeout-minutes
+            checked += 1
+            bound = job.get("timeout-minutes")
+            if bound is None:
+                errors.append(
+                    f"{rel} → job '{name}' has no timeout-minutes.\n"
+                    f"      Unbounded means GitHub's 6-hour default: a wedged step shows neither pass\n"
+                    f"      nor fail for the whole time. Bound it — and size the bound from the job's\n"
+                    f"      measured COLD path, not its warm one (see this file's header, rule 3)."
+                )
+                continue
+            if not isinstance(bound, int):
+                errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer.")
+                continue
+            if bound >= GITHUB_DEFAULT:
+                errors.append(
+                    f"{rel} → job '{name}' declares timeout-minutes: {bound}, but GitHub's default is\n"
+                    f"      {GITHUB_DEFAULT} — declaring >= it changes nothing and reads as protection. Pick a\n"
+                    f"      bound the job's real worst case fits under."
+                )
+                continue
+            if bound < BROWSER_FLOOR and is_browser_job(job):
+                errors.append(
+                    f"{rel} → job '{name}' installs Playwright browsers under timeout-minutes: {bound}.\n"
+                    f"      The cold-cache install alone measured 21m25s; a bound of {bound} kills every\n"
+                    f"      cold run before a test executes AND skips the cache save that would warm the\n"
+                    f"      next one (#238). Browser jobs need >= {BROWSER_FLOOR}."
+                )
+
+if errors:
+    sys.stderr.write("❌ check-job-bounds: FAILED\n\n")
+    for err in errors:
+        sys.stderr.write("  • " + err + "\n\n")
+    raise SystemExit(1)
+
+print(f"✅ check-job-bounds: {checked} job(s) bounded, none >= {GITHUB_DEFAULT}, browser jobs >= {BROWSER_FLOOR}.")

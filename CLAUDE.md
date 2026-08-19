@@ -270,6 +270,7 @@ node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths, class partition, raw self-references
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
+python3 .github/scripts/check-job-bounds.py       # every job bounded, none >=360, browser jobs >=30 — live AND templates
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"

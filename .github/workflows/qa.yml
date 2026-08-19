@@ -66,6 +66,12 @@ jobs:
       - name: Check the cross-reference guard reads YAML correctly
         run: python3 .github/scripts/check-workflow-ref-guard.py
 
+      # Presence, sanity ceiling, and a floor for browser jobs — all three,
+      # because #238's defect DECLARED a bound on every broken job; the value
+      # was the fault, and a presence check reports health on exactly that.
+      - name: Check every job carries a usable bound
+        run: python3 .github/scripts/check-job-bounds.py
+
       # The logical map is generated from EXPORTS.json, so a committed page that
       # no longer matches the manifest is drift — fail here rather than let the
       # map quietly describe a repo that has moved on.

@@ -2,7 +2,22 @@
 # Copy to .github/workflows/qa-live.yml in your project, along with the
 # ui-suite composite from templates/actions/ into .github/actions/.
 # Triggers automatically after GitHub Pages deploys, or manually via workflow_dispatch.
-# pages-build-deployment is auto-created by GitHub when Pages is enabled — no extra setup.
+#
+# ⚠️ WATCH BOTH PAGES SOURCES. GitHub publishes Pages one of two ways, and the
+# workflow name differs: the managed branch build is `pages-build-deployment`
+# (auto-created when Pages is enabled), and an Actions-sourced deploy is whatever
+# your own workflow is named — `Pages` in this template set (pages.yml). Setting
+# Settings → Pages → Source to "GitHub Actions" makes the managed build go inert,
+# so a list naming only `pages-build-deployment` stops firing with NO error: this
+# gate simply never runs again, and an absent signal reads as "nothing failed".
+# That is not only a cutover hazard — a NEW repo scaffolded with Source = GitHub
+# Actions from day one gets a gate that has never run at all, with no "it used to
+# work" phase to notice. Naming both means the gate survives either source.
+# (Verified on apfp.claude 2026-08-19: silently dead from the 2026-08-18 cutover.)
+#
+# The job's `if:` gate below needs NO workflow-name condition — it reads
+# `github.event.workflow_run.conclusion`, which is agnostic to which workflow
+# fired it. Do not "helpfully" add one; that re-breaks exactly what this fixes.
 #
 # Required setup:
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project has
@@ -19,7 +34,7 @@ name: QA — UI Tests (live)
 
 on:
   workflow_run:
-    workflows: [pages-build-deployment]
+    workflows: ['pages-build-deployment', 'Pages']
     types: [completed]
   workflow_dispatch:
     inputs:

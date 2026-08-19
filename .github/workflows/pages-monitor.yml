@@ -1,13 +1,24 @@
 name: Pages Monitor
-# Zero-model GitHub Pages deploy monitor. Fires on every Pages build (page_build),
+# Zero-model GitHub Pages deploy monitor. Fires on every Pages deploy,
 # verifies the deploy is healthy and the live URL is serving, and on a problem
 # opens/updates a single deduplicated tracking issue (which notifies the owner).
 # Success is reported in the job summary only — no inbox noise. Uses only
 # GITHUB_TOKEN — no external services. workflow_dispatch allows a manual liveness
 # re-check. The live URL comes from the Pages API (so user-site repos and custom
 # domains work), with a generic derivation as fallback — portable as-is.
+#
+# ⚠️ WATCH BOTH PAGES SOURCES. `page_build` fires only for the MANAGED branch
+# build. Setting Settings → Pages → Source to "GitHub Actions" makes that event
+# go inert, and this monitor then never runs — silently, with no error, which
+# reads as "no deploy problems" when it means "nothing is watching". The
+# workflow_run entry covers the Actions-sourced deploy (`Pages`, i.e. pages.yml
+# in this template set); the entry is simply inert in a repo that has no such
+# workflow, so naming both is safe either way.
 on:
   page_build:
+  workflow_run:
+    workflows: ['Pages']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -28,6 +39,10 @@ jobs:
           BUILD_STATUS: ${{ github.event.build.status }}
           BUILD_ERROR: ${{ github.event.build.error.message }}
           BUILD_COMMIT: ${{ github.event.build.commit }}
+          # Actions-sourced deploys populate these instead; both sets are empty
+          # on workflow_dispatch, which the "manual" default below covers.
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_COMMIT: ${{ github.event.workflow_run.head_sha }}
           ISSUE_LABEL: 'pages-deploy-failure'
         run: |
           set -euo pipefail
@@ -39,9 +54,23 @@ jobs:
             url="https://${OWNER}.github.io/${repo_name}/"
           fi
           case "$url" in */) ;; *) url="${url}/" ;; esac
-          status="${BUILD_STATUS:-manual}"
-          short="${BUILD_COMMIT:0:7}"
-          echo "page_build status: $status (commit ${short:-n/a}) — target $url"
+          # Normalise the two event vocabularies to one. page_build reports
+          # built/errored; a workflow_run reports success/failure. Mapping here
+          # keeps the single decision below unchanged — and note a non-success
+          # conclusion includes 'cancelled' and 'timed_out', which leave the site
+          # on its previous build just as surely as a failure does.
+          status="${BUILD_STATUS:-}"
+          commit="${BUILD_COMMIT:-}"
+          if [ -z "$status" ] && [ -n "${RUN_CONCLUSION:-}" ]; then
+            case "$RUN_CONCLUSION" in
+              success) status="built" ;;
+              *)       status="errored" ;;
+            esac
+            commit="${RUN_COMMIT:-}"
+          fi
+          status="${status:-manual}"
+          short="${commit:0:7}"
+          echo "Pages deploy status: $status (commit ${short:-n/a}) — target $url"
 
           problems=""
 

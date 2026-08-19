@@ -168,10 +168,14 @@ jobs:
         with:
           node-version: '20'
 
-      # The browser download is the slowest thing here and was repeated every
-      # run. Keyed on this workflow file so a deliberate bump misses; restore-keys
-      # means an unrelated edit still reuses the previous browsers rather than
-      # starting cold.
+      # Keyed on this workflow file, which only works because the Playwright
+      # version below is PINNED. Unpinned, `npm install playwright` floats to
+      # each new release while this key stays put — and a cache entry is
+      # immutable, so every later run would re-download the new browser cold
+      # and be unable to save it. The cache would silently degrade back to the
+      # cold-every-run behaviour it exists to eliminate (Codex, #238). Bumping
+      # the pin edits this file, which changes this key, which saves fresh.
+      # restore-keys means an unrelated edit still reuses the previous browsers.
       - name: Cache Playwright browsers
         id: pw-cache
         uses: actions/cache@v4
@@ -184,8 +188,11 @@ jobs:
       # the cache above spares; the apt step never is. A single combined step
       # told us the total and nothing about the split, which is how 23 minutes
       # of "Install Playwright + Chromium" stayed unexplained.
+      #
+      # ⚠️ Keep the version pinned — the cache key above depends on it. See the
+      # cache comment.
       - name: Install Playwright (npm)
-        run: npm install playwright
+        run: npm install playwright@1.62.1
 
       - name: Install Chromium system deps (apt, never cached)
         run: npx playwright install-deps chromium

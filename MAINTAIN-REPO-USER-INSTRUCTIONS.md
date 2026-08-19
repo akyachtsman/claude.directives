@@ -79,19 +79,35 @@ never by cross-repo edits** (`global.md` → Cross-Repo Boundary):
 
 This section applies to **legacy projects only** — one carrying
 `.claude/hooks/session-start.sh` re-runs the installer every session and needs
-nothing here. The installed-tooling cache is **per environment** and rebuilds on
-any environment-config change or ~weekly expiry. Since the whole fleet shares the
-single `fleet` environment, this is **one action that updates every repo**:
+nothing here. The installed-tooling cache is **per environment** and is *meant* to
+rebuild on any environment-config change or ~weekly expiry. Since the whole fleet
+shares the single `fleet` environment, this is **one action that reaches every
+repo**:
 
 1. Open the `fleet` environment (Claude Code on the web → the environment your
    sessions run in — NOT a global account setting).
 2. Choose **Edit environment** and **re-save the setup script unchanged**.
-3. The next NEW session in that environment — in ANY repo — installs the
-   toolkit fresh from `main`. Running sessions keep their old copy.
+3. Start a NEW session and run `/env-chk` to confirm what actually attached.
 
-`/env-chk` in the new session confirms the toolkit version attached. (If the
-fleet ever splits across multiple environments, repeat per environment and
-update the fleet list above.)
+**Step 3 is a verification step, not a formality — the re-save is best-effort.**
+Measured 2026-08-19: the owner re-saved `fleet`, and the next new session in a
+legacy project still carried a plugin the current installer had already removed
+(`hookify` was live in `~/.claude/plugins/installed_plugins.json` and
+`~/.claude/settings.json`), spewing an import error on every tool call. A
+`claude.directives` session in that same environment, at that same time, was
+clean — because it commits the hook and re-runs the installer itself. One repo
+broken and one repo clean in one environment is the signature: the difference is
+the hook, not the environment, and no further re-saving fixes it.
+
+So treat the re-save as a nudge that may not land, and treat the hook as the
+cure. If `/env-chk` still reports a stale or unwanted plugin after a re-save,
+stop re-saving and **install the hook once** in that project — `/refresh-repo`
+does it (Phase 2 installs `.claude/hooks/session-start.sh` and merges the
+`SessionStart` row even when the local path does not exist). From then on the
+project heals itself every session and never needs this section again.
+
+(If the fleet ever splits across multiple environments, repeat per environment
+and update the fleet list above.)
 
 ## Domain Boundaries — the logical view
 

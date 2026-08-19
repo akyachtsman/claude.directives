@@ -53,8 +53,11 @@ itself. The setup-script install is
 cached per environment, so a toolkit change merged upstream normally reaches your
 sessions only when that cache rebuilds (~weekly). To get it **now**: open the
 environment's settings, make any edit to the Setup script (even re-saving a
-whitespace change), save — that invalidates the cache — then start a **new**
-session. `/env-chk` tells you when this is needed ("plugins/ changed upstream").
+whitespace change), save — that is *meant* to invalidate the cache — then start a
+**new** session and run `/env-chk` to check what actually attached. Verify rather
+than assume: a re-save has been observed not to rebuild (2026-08-19, see
+`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → Environment Maintenance). `/env-chk` tells
+you when this is needed ("plugins/ changed upstream") and whether it worked.
 
 Environments whose setup script predates 2026-08-05 need that cache-invalidation
 step every time. Newer ones do not: the script now refreshes the marketplaces and

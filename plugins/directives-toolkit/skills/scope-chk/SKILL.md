@@ -15,13 +15,12 @@ Execute in order:
      configured for the session). These are the ONLY repos you can read, write,
      branch, or open PRs against.
 
-2. **Can other repos be added?** Check via **ToolSearch** whether the
+2. **Attach tools are not permission.** Check via **ToolSearch** whether the
    `add_repo` / `list_repos` tools (claude-code-remote server) actually exist in
-   THIS session:
-   - If `list_repos` exists → run it and list the repos that `add_repo` could pull
-     in.
-   - If they are **absent** → cross-repo is impossible here; another repo can only
-     be worked on from a session scoped to it. Do **not** offer to "add" it.
+   THIS session, and report their presence as a capability fact only —
+   `global.md` → *One Session, One Repo* forbids attaching another repository
+   mid-session either way. A request targeting a different repo is answered by
+   naming the repo it belongs to and stopping, never by adding it.
 
 3. **READ scope is a different thing — and it is never restricted for public
    repos.** Raw URLs, the public GitHub API, and codeload tarballs work from
@@ -32,9 +31,10 @@ Execute in order:
 4. **Report** a compact verdict:
    - **In scope (can ACT on):** `<owner/repo …>`
    - **Readable regardless:** any public repo, via raw/API/tarball (`/do-repo`)
-   - **Add-repo capability:** available → `<addable repos>` | **NOT available**
-   - **Rule:** do not offer to add, reach, or act on any repo not listed above
-     unless `add_repo` was confirmed available.
+   - **Add-repo tools:** present | absent — either way attaching is off-policy
+     (`global.md` → *One Session, One Repo*)
+   - **Rule:** never offer to add, reach, or act on any repo not listed in
+     scope; a cross-repo ask is redirected to that repo's own session.
 
 Use it at **session start** to set the boundary up front, and **any time** you —
 or the user — suspect drift toward promising cross-repo work. When in doubt about

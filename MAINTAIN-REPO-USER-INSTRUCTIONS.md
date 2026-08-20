@@ -58,7 +58,7 @@ Corollaries worth memorizing:
 
 The standing procedure when a project session surfaces a bug, gap, or
 improvement that belongs upstream. Findings propagate **upstream by hand-off,
-never by cross-repo edits** (`global.md` → Cross-Repo Boundary):
+never by cross-repo edits** (`global.md` → One Session, One Repo):
 
 1. **Capture** — the downstream session emits a hand-off block
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).

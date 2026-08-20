@@ -175,10 +175,9 @@ styles/          ← the committed design contract (tokens.css + components.css)
 ## Repository Scope
 Two different scopes — never conflate them:
 - **ACT scope (hard-limited):** the GitHub MCP can write — branch, push, PR,
-  comment, merge — only against the repo(s) this session was opened on. Before
-  offering to ACT on another repo, confirm the `add_repo` / `list_repos` tools
-  (claude-code-remote server) exist via ToolSearch; if absent, that work needs a
-  session scoped to the target repo — say so plainly.
+  comment, merge — only against the repo(s) this session was opened on, and
+  there is no attach path around it: work targeting another repo belongs to
+  that repo's own session (→ *One Session, One Repo*) — say so plainly.
 - **READ scope (unrestricted for public repos):** any public repo is always
   readable — `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`,
   `https://api.github.com/repos/<owner>/<repo>/...`, or the codeload tarball —
@@ -500,13 +499,11 @@ before reporting "no access":
    typography, spacing, and interaction behavior from the image before
    implementing.
 
-## Cross-Repo Boundary
-A Claude Code session is connected to exactly one repository. Do NOT offer to
-add or modify other repositories from within a session (no `add_repo` offers, no
-cross-repo PRs). When work belongs in another repo — including this directives
-repo — compose a complete, paste-ready hand-off message for the owner to deliver
-to a session scoped to that repo, and stop there. This holds **even when the
-owner asks mid-session** ("upstream this to X"): respond with the hand-off
-message first, and use `add_repo` only if the owner then explicitly declines the
-hand-off and directs the add in so many words. (Owner reaffirmation 2026-07-13:
-one repo per session is less error-prone.)
+## One Session, One Repo (owner ruling, 2026-08-18)
+A session works in exactly the repository it was opened for. Never attach,
+clone, read, or write another repository mid-session — not to "help", not
+because a request seems to belong there. When a request targets a different
+repo — including this directives repo — say which repo it belongs to and stop;
+the owner takes it to that repo's own session (a paste-ready hand-off message
+is welcome, per the Downstream-Finding Loop). Read-only inspection of public
+repos via `/do-repo` is the sole exception, and it never becomes an attach.

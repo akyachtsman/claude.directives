@@ -197,6 +197,10 @@ higher.)
   family it can appear on and hit-test the controls that remain half-exposed at
   its edges. A layer tested only on the screen it was built against ships its
   overlaps with every other screen untested.
+- **A cap is proven BINDING, never assumed.** When asserting a size/position
+  cap, force the content past the cap first (entries force-visible, rendered
+  height ≤ cap while `scrollHeight` exceeds it) — a cap asserted against short
+  content passes vacuously.
 - **Interactions have transitional states, and they are testable.** A dialog
   that hides itself mid-flow, a button disabled during an await, a screen that
   flashes between two paints — assert the state DURING the transition (element

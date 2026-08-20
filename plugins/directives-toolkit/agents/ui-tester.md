@@ -104,6 +104,30 @@ auth-diagnostics attachment:
 
 After exploration, set viewport to 390×844 and reload. Assert `document.body.scrollWidth <= window.innerWidth + 1`. Report overflow as a finding.
 
+### Phase 6 — Occlusion & Transition Checks
+
+DOM-level queries pass while the pixels are wrong (`test.md` → *Layered UI:
+rendered is not reachable*); these checks look where the DOM cannot:
+
+- **Occlusion hit-test.** For every overlay, menu, drawer, or sticky layer
+  discovered in Phase 2: open it over each screen family it can appear on,
+  then for each control left half-exposed at its edges assert
+  `document.elementFromPoint(cx, cy)` (the control's center) resolves to the
+  control or a descendant. A covered control that still passes render
+  assertions is a finding, not a pass.
+- **Caps proven binding.** Where a dropdown/panel declares a max-height or
+  max-width, force its content past the cap and assert the rendered box stays
+  ≤ the cap while `scrollHeight` exceeds it — a cap asserted against short
+  content passes vacuously.
+- **Transitional states.** For every multi-step interaction (send, capture,
+  save-with-spinner): assert the state DURING the operation — the control or
+  dialog that must stay visible mid-flight is visible, the one that must
+  leave immediately is gone — not just the endpoints.
+- **Screenshots at 1440×900.** Capture before/during/after screenshots of
+  every new interaction and LOOK at them before reporting the run clean —
+  assertions catch what they name; a screenshot catches what nobody thought
+  to name. Save them under `.agent-reports/screenshots/`.
+
 ### Default Navigation & Control Scenarios (always run)
 
 Beyond S1–S4, emit these two generic scenarios on **every** app — they catch

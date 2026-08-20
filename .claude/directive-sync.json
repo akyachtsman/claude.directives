@@ -8,7 +8,7 @@
   "directives": {
     "directives/global.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md",
-      "sha256": "08a4a9d3529c05f47f6cbffa394f44cfbb528d9fa7de61332d2ac1a07ee6a592"
+      "sha256": "41c164aaf56f292eec54957a4d012c4de27ccffbe07db1d8c511eb1d78979680"
     },
     "directives/git.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md",

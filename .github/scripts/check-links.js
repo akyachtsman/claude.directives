@@ -97,10 +97,14 @@ for (const url of internalTargets) {
 // skipped rather than guessed at.
 if (mode !== '--external') {
   const headingCache = new Map();
+  // Strip fenced code blocks first, exactly as check-sections.js does: a deleted
+  // section whose name survives inside a fenced example would otherwise satisfy
+  // the scan and report a broken cross-reference as resolved.
+  const stripFences = (content) => content.replace(/^```[\s\S]*?^```/gm, '');
   const headingsOf = (file) => {
     if (!headingCache.has(file)) {
       const heads = existsSync(file)
-        ? [...readFileSync(file, 'utf8').matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)].map(m => m[1])
+        ? [...stripFences(readFileSync(file, 'utf8')).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)].map(m => m[1])
         : null;
       headingCache.set(file, heads);
     }

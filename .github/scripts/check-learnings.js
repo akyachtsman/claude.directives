@@ -21,6 +21,17 @@ lines.forEach((line, i) => {
     return fail(`line ${n}: not valid JSON — ${e.message}`);
   }
   for (const k of REQUIRED) if (!(k in d)) fail(`line ${n}: missing required field "${k}"`);
+  // Presence is not a value. `{"ts":null,"key":"","text":null}` satisfied every
+  // check below (the truthy `d.ts &&` guard skipped date parsing) and reported
+  // well-formed — and a keyless entry cannot take part in latest-key-wins at all.
+  for (const k of ['key', 'text']) {
+    if (k in d && !(typeof d[k] === 'string' && d[k].trim())) {
+      fail(`line ${n}: "${k}" must be a non-empty string, got ${JSON.stringify(d[k])}`);
+    }
+  }
+  if ('ts' in d && !(typeof d.ts === 'string' && d.ts.trim())) {
+    fail(`line ${n}: "ts" must be an ISO-8601 string, got ${JSON.stringify(d.ts)}`);
+  }
   // Test a PRESENT type directly. `d.type && ...` lets null and "" skip the enum
   // check entirely, so the entry is reported well-formed while consumers filtering
   // by type silently miss it — the drift this gate exists to prevent.
@@ -34,7 +45,9 @@ lines.forEach((line, i) => {
       && d.confidence >= 1 && d.confidence <= 10)) {
     fail(`line ${n}: confidence ${JSON.stringify(d.confidence)} must be a number 1-10`);
   }
-  if (d.ts && Number.isNaN(Date.parse(d.ts))) fail(`line ${n}: ts "${d.ts}" is not a valid date`);
+  if (typeof d.ts === 'string' && d.ts.trim() && Number.isNaN(Date.parse(d.ts))) {
+    fail(`line ${n}: ts "${d.ts}" is not a valid date`);
+  }
   if (d.key) keys.set(d.key, (keys.get(d.key) ?? 0) + 1);
 });
 

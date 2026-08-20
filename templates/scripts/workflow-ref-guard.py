@@ -394,6 +394,18 @@ for path in template_files:
         and name_node.value.strip()
     ):
         t_declared[name_node.value.strip()] = path.name
+    else:
+        # Error, don't skip. The live pass rejects a workflow with no usable
+        # display name; silently omitting the template from t_declared would
+        # certify scaffolding that fails that same guard the moment a project
+        # installs it — and nothing here would have said so.
+        errors.append(
+            f"templates/workflows/{path.name} - has no usable top-level `name:`, so no "
+            f"workflow_run list can reference it.\n"
+            f"      GitHub falls back to the file path, and this guard's live-workflow "
+            f"pass rejects that — a project installing this template would fail its own "
+            f"validation immediately. Give it an explicit name."
+        )
 
 for path in template_files:
     root = t_roots.get(path.name)

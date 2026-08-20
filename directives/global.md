@@ -371,7 +371,7 @@ parallelism the spawn was for.
        session; a one-time prompt in an already-running session is accepted
        (→ *Scheduling Tools Never Prompt*). A PR-attached wait with
        `ci-notify.yml` installed needs no completion polling — webhook wake
-       covers failure and success — but a wait expected to exceed six minutes
+       covers failure and success — but a wait expected to exceed five minutes
        still arms the heartbeat (→ *Status Line on Every Stop*).
      - Event wakes stay the primary signal; the heartbeat (→ *Status Line on
        Every Stop*) is the owner-visible liveness line on top, never a

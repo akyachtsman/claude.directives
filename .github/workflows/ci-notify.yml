@@ -28,7 +28,7 @@
 # predated it on main). For that one PR only, arm a scheduled verification
 # check-in and confirm the FIRST post-install PR gets its green comment; from
 # then on the webhook covers completion (heartbeats per global.md → Status
-# Line on Every Stop still apply to waits over six minutes). Do not conclude
+# Line on Every Stop still apply to waits over five minutes). Do not conclude
 # "dud" from the install PR's silence.
 on:
   workflow_run:

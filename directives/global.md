@@ -27,12 +27,16 @@ explicitly overrides it.
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
   or user input
 - **When a value's provenance changes, re-audit its sinks in the same diff.**
+  The trigger is a property of the diff you are already writing: am I repointing
+  something at config, a database column, or user input? If so, grep the value's
+  name and check every place it lands, before that diff ships.
   Interpolation that looked safe because the value came from a fixed, known-safe
   set stops being safe the moment a change makes it user-editable — and the sinks
   are unchanged, so nothing in them looks wrong. A constraint bounds which values
   are possible, never whether they are safe in HTML, SQL or shell grammar: encode
   or parameterize at the sink either way. Check it in the diff that moves the
-  value, never a later sweep — a passing audit judged the value as it was then.
+  value, never a later sweep — a passing audit judged the value as it was then,
+  and a linter cannot tell composed markup from raw data.
 - For non-trivial features, separate WHAT from HOW: specify intent before
   planning a stack, and refine in phases rather than one-shotting (`/sdd-loop`,
   with the imported directives as its constitution)
@@ -94,7 +98,9 @@ statement — shorten the wording, never drop the update.
 Every time a session stops working — end of turn, end of task, blocked, or
 parked — the message's final line is a status line in this vocabulary (the
 four canonical states below, or an intermediate state named the same way), so
-the owner never has to ask whether the session is working or waiting:
+the owner never has to ask whether the session is working or waiting. It sits
+BELOW the ask ledger (→ *Burst Intake — Multiple Asks at Once*): the ledger is
+the reply's final block, this is its final line.
 
 - **"Waiting for CI"** — tests running; the session resumes itself on the
   result.
@@ -354,21 +360,31 @@ owner retracts are dropped, not parked.)
 work), then do the inline work, then integrate — spawning last forfeits the
 parallelism the spawn was for.
 
-**Every ask gets its own visible line (owner ruling, 2026-08-20).** The bar
-above covers work items; this covers ANSWERS. When a turn CARRIES two or more
-asks — one message holding several, or interjections arriving mid-turn — it
-closes with a consolidated **ledger**: one line per ask, in the order asked, each
-with its answer or state. Asks made, not asks still open: one answered before the
-next arrived still gets its line. Not a narrative that happens to contain them.
+**Every reply ends with the ask ledger (owner ruling, 2026-08-20).** The
+**ledger** is the short list that closes a reply: one line per thing the user
+asked, each with its answer or current state. The bar above covers work items;
+this covers ANSWERS.
+
+EVERY reply carries one — not "when two or more asks are pending", because
+counting pending asks is the judgement that degrades first in a long turn, which
+is exactly when the ledger is needed. A trigger that depends on the attention it
+compensates for cannot fire. One line per ask received since the user's last
+message, in the order asked, one sentence each, plus whatever the previous
+ledger left open. One ask means one line, and on a conversational turn that line
+is simply the closing sentence — there is no ceremony to skip.
 - **A question is an ask.** "Is X part of the record?" needs a line as much as
   "fix X" does. Questions are what prose absorbs.
-- **Answered-but-buried is unanswered.** The test is whether the owner can scan
-  the close of the turn and see every ask they made.
-- **Emit the ledger BEFORE parking** on anything external — CI, a deploy, a
-  review, a decision. Parking is when items go missing, because attention moves
-  to the thing being waited on.
-- **One sentence each.** Detail goes above; the ledger is the index, not the
-  report.
+- **Answered-but-buried is unanswered.** The value is the fixed position: the
+  reader scans the close and sees everything. An answer given correctly three
+  paragraphs up does not count.
+- **Read each state before writing its line.** "Done", "merged", "still open"
+  are claims, and the ledger is where claims made from memory collect. This is
+  Evidence before assertions applied at the close — the line is written from a
+  fresh check, never from recall.
+- **Anything unfinished carries its reason:** `waiting on X`, or `not doing,
+  because Y`. Silence is not a state.
+- **The status line still comes last** (→ *Status Line on Every Stop*): the
+  ledger is the final block, the status line the final line.
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block

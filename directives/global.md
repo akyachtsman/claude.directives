@@ -237,7 +237,7 @@ without explicit owner sign-off.
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo
 - Never echo secrets in workflow logs
-- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-" --include="*.js" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.html" --include="*.css" --include="*.json" --include="*.md" --include="*.sh" --include="*.yml" --exclude-dir=node_modules --exclude-dir=.git .`
+- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]" --include="*.js" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.html" --include="*.css" --include="*.json" --include="*.md" --include="*.sh" --include="*.yml" --exclude-dir=node_modules --exclude-dir=.git .`
 
 ## Pre-Push Verification (Local Gate)
 Before committing or pushing, verify locally — never rely on CI alone:

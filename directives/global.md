@@ -347,11 +347,12 @@ owner retracts are dropped, not parked.)
 work), then do the inline work, then integrate — spawning last forfeits the
 parallelism the spawn was for.
 
-### Every ask gets its own visible line (owner ruling, 2026-08-20)
-The bar above covers work items; this covers ANSWERS. When two or more asks are
-pending — one message carrying several, or interjections arriving mid-turn — the
-turn closes with a consolidated **ledger**: one line per ask, in the order asked,
-each with its answer or state. Not a narrative that happens to contain them.
+**Every ask gets its own visible line (owner ruling, 2026-08-20).** The bar
+above covers work items; this covers ANSWERS. When a turn CARRIES two or more
+asks — one message holding several, or interjections arriving mid-turn — it
+closes with a consolidated **ledger**: one line per ask, in the order asked, each
+with its answer or state. Asks made, not asks still open: one answered before the
+next arrived still gets its line. Not a narrative that happens to contain them.
 - **A question is an ask.** "Is X part of the record?" needs a line as much as
   "fix X" does. Questions are what prose absorbs.
 - **Answered-but-buried is unanswered.** The test is whether the owner can scan

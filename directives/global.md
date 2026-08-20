@@ -26,6 +26,13 @@ explicitly overrides it.
   phone (iPhone/Android)
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
   or user input
+- **When a value's provenance changes, re-audit its sinks in the same diff.**
+  Interpolation that looked safe because the value came from a fixed, known-safe
+  set stops being safe the moment a change makes it user-editable — and the sinks
+  are unchanged, so nothing in them looks wrong. A constraint bounds which values
+  are possible, never whether they are safe in HTML, SQL or shell grammar: encode
+  or parameterize at the sink either way. Check it in the diff that moves the
+  value, never a later sweep — a passing audit judged the value as it was then.
 - For non-trivial features, separate WHAT from HOW: specify intent before
   planning a stack, and refine in phases rather than one-shotting (`/sdd-loop`,
   with the imported directives as its constitution)
@@ -346,6 +353,22 @@ owner retracts are dropped, not parked.)
 **Order of a mixed turn:** spawn the delegable asks FIRST (they run while you
 work), then do the inline work, then integrate — spawning last forfeits the
 parallelism the spawn was for.
+
+**Every ask gets its own visible line (owner ruling, 2026-08-20).** The bar
+above covers work items; this covers ANSWERS. When a turn CARRIES two or more
+asks — one message holding several, or interjections arriving mid-turn — it
+closes with a consolidated **ledger**: one line per ask, in the order asked, each
+with its answer or state. Asks made, not asks still open: one answered before the
+next arrived still gets its line. Not a narrative that happens to contain them.
+- **A question is an ask.** "Is X part of the record?" needs a line as much as
+  "fix X" does. Questions are what prose absorbs.
+- **Answered-but-buried is unanswered.** The test is whether the owner can scan
+  the close of the turn and see every ask they made.
+- **Emit the ledger BEFORE parking** on anything external — CI, a deploy, a
+  review, a decision. Parking is when items go missing, because attention moves
+  to the thing being waited on.
+- **One sentence each.** Detail goes above; the ledger is the index, not the
+  report.
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block

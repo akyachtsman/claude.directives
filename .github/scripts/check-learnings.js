@@ -4,7 +4,7 @@
 import { readFileSync } from 'fs';
 
 const TYPES = new Set(['pattern', 'pitfall', 'preference', 'architecture', 'tool']);
-const REQUIRED = ['ts', 'type', 'key', 'text', 'confidence'];
+const REQUIRED = ['ts', 'type', 'key', 'text', 'confidence', 'files'];
 
 let failed = false;
 const fail = (m) => { console.error(`FAIL: ${m}`); failed = true; };
@@ -44,6 +44,13 @@ lines.forEach((line, i) => {
   if ('confidence' in d && !(typeof d.confidence === 'number' && Number.isFinite(d.confidence)
       && d.confidence >= 1 && d.confidence <= 10)) {
     fail(`line ${n}: confidence ${JSON.stringify(d.confidence)} must be a number 1-10`);
+  }
+  // `files` is part of every entry /learn declares, and the /diagnose pipeline
+  // greps it for file attribution — but it was absent from REQUIRED, so an entry
+  // omitting it (or setting it to null) was certified well-formed. An empty array
+  // stays legal: that is how a file-independent lesson is written.
+  if ('files' in d && !(Array.isArray(d.files) && d.files.every((f) => typeof f === 'string' && f.trim()))) {
+    fail(`line ${n}: "files" must be an array of non-empty path strings (use [] when the lesson concerns none), got ${JSON.stringify(d.files)}`);
   }
   // Validate the FORMAT, not just that JS can read it: Date.parse accepts many
   // implementation-dependent forms ("2026", "August 20, 2026") whose meaning can

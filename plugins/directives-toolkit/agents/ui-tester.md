@@ -119,9 +119,10 @@ rendered is not reachable*); these checks look where the DOM cannot:
   assertions is a finding, not a pass.
 - **Caps proven binding.** Where a dropdown/panel declares a max-height or
   max-width, force its content past the cap and assert the rendered box stays
-  ≤ the cap on the capped axis while the matching scroll extent
-  (`scrollHeight` for height caps, `scrollWidth` for width caps) exceeds it —
-  a cap asserted against short content passes vacuously.
+  ≤ the cap on the capped axis while the content demands more: `scrollHeight`
+  for height caps; the intrinsic (uncapped / `max-content`) width for width
+  caps, since wrapping content grows height rather than `scrollWidth` — a cap
+  asserted against short content passes vacuously.
 - **Transitional states.** For every multi-step interaction (send, capture,
   save-with-spinner): assert the state DURING the operation — the control or
   dialog that must stay visible mid-flight is visible, the one that must

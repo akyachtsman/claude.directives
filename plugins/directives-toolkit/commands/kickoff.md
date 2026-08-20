@@ -50,8 +50,8 @@ Execute in order:
 
 2. **State the plan, then go hands-off.** Tell the user what happens next so the
    autonomous stretch isn't a surprise: "I'll now scaffold the repo, [run
-   discovery,] and start the spec — I'll pause for you again at `clarify`, plan
-   approval, and each merge."
+   discovery,] and start the spec — I'll pause for you again at `clarify` and
+   plan approval; merges happen automatically on green per `git.md`."
 
 3. **Bootstrap if needed.** If `CLAUDE.md` is absent, run **`/new-repo`** and let it
    finish (it scaffolds `CLAUDE.md` + inherited directives, CI, the Playwright kit,
@@ -92,4 +92,5 @@ Execute in order:
    Pre-Push gate (`/commit-chk`) and PR lifecycle.
 
 Keep it **stepwise — never one-shot.** The human supplies the brief up front,
-answers `clarify`, provides backend secrets, and approves the plan and each merge.
+answers `clarify`, provides backend secrets, and approves the plan; merges
+happen automatically on green per `git.md`.

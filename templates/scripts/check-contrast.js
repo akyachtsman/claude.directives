@@ -50,11 +50,30 @@ const pairs = [
 ];
 
 let failed = false;
+let evaluated = 0;
 for (const [fg, bg, thr, name] of pairs) {
   if (!fg || !bg) { console.log(`  skip  ${name} (token missing)`); continue; }
+  evaluated++;
   const r = ratio(fg, bg), ok = r >= thr;
   if (!ok) failed = true;
   console.log(`${ok ? '  ok' : 'FAIL'}  ${name.padEnd(30)} ${r.toFixed(2)} (need ${thr.toFixed(1)})`);
 }
-console.log(failed ? '\ncheck-contrast: FAIL — fix styles/tokens.css' : '\ncheck-contrast: OK — all pairs meet WCAG AA');
+
+// A green report on zero evaluated pairs is the worst outcome available: it
+// certifies WCAG AA having measured nothing. The token regex only reads #hex,
+// so a tokens.css written in oklch()/rgb()/hsl()/var() skips every pair —
+// exactly the palettes /design-intake now produces.
+// ALL six pairs must be evaluable, not merely one. These are the standard token
+// contract, and every pair is a required check — warning on a partial run let a
+// palette be certified while normal-text contrast was never measured at all,
+// which is the same vacuous pass as measuring nothing.
+if (evaluated < pairs.length) {
+  const missing = pairs.filter(([fg, bg]) => !fg || !bg).map(([, , , name]) => name);
+  console.error(`\ncheck-contrast: FAIL — only ${evaluated}/${pairs.length} pairs were evaluable.`);
+  console.error(`  Not measured: ${missing.join('; ')}`);
+  console.error('  Each needs both tokens declared in #hex form (oklch()/rgb()/hsl()/var()');
+  console.error('  are not parsed). Declare the missing tokens, or extend this script.');
+  process.exit(1);
+}
+console.log(failed ? '\ncheck-contrast: FAIL — fix styles/tokens.css' : `\ncheck-contrast: OK — ${evaluated}/${pairs.length} pairs meet WCAG AA`);
 if (failed) process.exit(1);

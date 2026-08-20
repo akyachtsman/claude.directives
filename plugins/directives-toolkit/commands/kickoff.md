@@ -45,13 +45,14 @@ Execute in order:
 
    In the same message, ask the **competitive-discovery** yes/no (step 4, off by
    default). Don't invent answers — if the user is unsure on one, log it as an open
-   item for `clarify` rather than guessing. **Wait for the user's reply before
-   proceeding.**
+   item for the clarification pass inside `specify` rather than guessing. **Wait
+   for the user's reply before proceeding.**
 
 2. **State the plan, then go hands-off.** Tell the user what happens next so the
    autonomous stretch isn't a surprise: "I'll now scaffold the repo, [run
-   discovery,] and start the spec — I'll pause for you again at `clarify` and
-   plan approval; merges happen automatically on green per `git.md`."
+   discovery,] and start the spec — I'll pause for you again at the spec's
+   clarification questions and at plan approval; merges happen automatically on
+   green per `git.md`."
 
 3. **Bootstrap if needed.** If `CLAUDE.md` is absent, run **`/new-repo`** and let it
    finish (it scaffolds `CLAUDE.md` + inherited directives, CI, the Playwright kit,
@@ -86,11 +87,12 @@ Execute in order:
 
 6. **Drive the loop.** Hand the brief (and `research.md` if produced) to
    **`/sdd-loop specify`**, then proceed phase by phase
-   (`specify → clarify → plan → tasks → analyze → implement`). `/sdd-loop` owns the
-   phase mechanics and delegates `analyze`/`implement` to the `pr-review-toolkit`
-   reviewers and `qa-pipeline`; the directives are the constitution. Honor the
-   Pre-Push gate (`/commit-chk`) and PR lifecycle.
+   (`specify → plan → implement` — `clarify` folded into `specify`, `tasks` and
+   `analyze` into `plan`). `/sdd-loop` owns the phase mechanics and delegates
+   review to the `pr-review-toolkit` reviewers and `qa-pipeline`; the directives
+   are the constitution. Honor the Pre-Push gate (`/commit-chk`) and PR
+   lifecycle.
 
 Keep it **stepwise — never one-shot.** The human supplies the brief up front,
-answers `clarify`, provides backend secrets, and approves the plan; merges
-happen automatically on green per `git.md`.
+answers the spec's clarification questions, provides backend secrets, and
+approves the plan; merges happen automatically on green per `git.md`.

@@ -68,7 +68,12 @@ production; Vercel compiles the real thing). Make a local `preview.html`:
 <link rel="stylesheet" href="app/globals.css">
 <div id="root"></div>
 
-<!-- Pin EXACT versions (immutable URLs) and add Subresource Integrity so a
+<!-- React 18.3.1 here, while package.json runs React 19: this is deliberate, not
+     drift. React 19 REMOVED the UMD builds, and a no-build script-tag preview has
+     nothing else to load — 19's umd/ paths 404. The preview is a local dev tool
+     for eyeballing a component's markup and state; the app itself builds on 19.
+     Verified by CI's external-link check: 18.3.1's UMD resolves, 19.0.0's does not.
+     Pin EXACT versions (immutable URLs) and add Subresource Integrity so a
      compromised CDN can't inject code. Compute each hash once with:
        curl -fsSL <url> | openssl dgst -sha384 -binary | openssl base64 -A
      then paste it as integrity="sha384-…". crossorigin="anonymous" is required

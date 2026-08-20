@@ -237,7 +237,7 @@ traceable to exactly one source→target pair**, at any zoom.
 
 **Native authority.** The `artifact-diagramming` skill covers this ground and
 should be read before drawing one — it owns when a diagram earns its place and
-the inline-SVG mechanics that keep it legible in both themes. The rules below are
+the inline-SVG mechanics that keep it legible in both themes. The rules above are
 the blocking criteria this directive adds on top; where the skill is silent, it
 decides.
 

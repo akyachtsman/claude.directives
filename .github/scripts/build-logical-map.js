@@ -14,7 +14,7 @@
 //   node .github/scripts/build-logical-map.js --check  # fail if it would change
 //
 // ESM (matches the other check-*.js).
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 
 const OUT = 'docs/site/logical-map.html';
 const manifest = JSON.parse(readFileSync('EXPORTS.json', 'utf8'));
@@ -81,14 +81,18 @@ const EDGES = [
 // but every path is existence-checked below, so the list still cannot rot.
 const SELF = {
   'self.ops': ['CLAUDE.md', 'EXPORTS.json', 'README.md', '.gitignore',
-    '.claude/settings.json', '.claude/directive-sync.json', 'learnings.jsonl'],
-  'self.docs': ['docs/README.md', 'docs/internal/design-migration.md',
-    'docs/internal/repo-monitors.md'],
-  'self.checks': ['.github/scripts/check-exports.js', '.github/scripts/check-links.js',
-    '.github/scripts/check-paths.js', '.github/scripts/check-plugin.js',
-    '.github/scripts/check-repo-map-ui.js', '.github/scripts/check-secret-scan.js',
-    '.github/scripts/check-sections.js', '.github/scripts/build-logical-map.js',
-    '.github/scripts/required-sections.json', '.github/scripts/package.json'],
+    '.claude/settings.json', '.claude/directive-sync.json', 'learnings.jsonl',
+    '.claude/hooks/session-start.sh'],
+  'self.docs': ['docs/README.md', 'docs/internal/archive/design-migration.md',
+    'docs/internal/repo-monitors.md', 'docs/internal/repo-map-ui.md',
+    'docs/internal/skill-eval-notes.md', 'docs/internal/accepted-residuals.md'],
+  // Derived, not hand-listed. The existence check below catches a DELETION but
+  // never an ADDITION, so a hand-list silently under-reports the repo's own
+  // validation surface every time a gate is added — it had drifted to 10 of 13.
+  'self.checks': [
+    ...readdirSync('.github/scripts').sort().map(f => `.github/scripts/${f}`),
+    '.github/workflow-ref-required.json',
+  ],
   'self.ci': ['.github/workflows/qa.yml', '.github/workflows/ci-monitor.yml',
     '.github/workflows/ci-notify.yml', '.github/workflows/codex-monitor.yml',
     '.github/workflows/pages-monitor.yml', '.github/workflows/pages-retry.yml'],
@@ -193,6 +197,16 @@ for (const [cls, def] of Object.entries(manifest.classes)) {
     chips: (n => def.paths.map(p => chip(p, { name: n(p) })).join(''))(labeller(def.paths)),
   };
 }
+// frameHtml fails loudly for a FRAME with no content; the reverse is just as
+// silent-and-worse — a class the manifest declares but FRAMES does not list is
+// built into `bodies`, never rendered, and --check still passes, so a whole class
+// of exported files disappears from the map with both gates green.
+for (const cls of Object.keys(bodies)) {
+  if (!FRAMES.some(f => f.id === cls)) {
+    fail(`manifest class "${cls}" has no FRAMES entry — it would be dropped from the map silently. Add a frame (id, label, geometry) in build-logical-map.js.`);
+  }
+}
+
 const vendors = Object.entries(manifest.externals).filter(([k]) => !k.startsWith('_'));
 bodies.external = {
   title: 'Vendor sockets',
@@ -497,7 +511,7 @@ if (check) {
     .filter(([k]) => !k.startsWith('_'))
     .reduce((n, [, c]) => n + c.paths.length, 0);
   console.log(`build-logical-map: wrote ${OUT} — ${exported} exported files across `
-    + `${FRAMES.length - 2} classes, ${vendors.length} vendor sockets, `
+    + `${Object.keys(manifest.classes).filter(k => !k.startsWith('_')).length} classes, ${vendors.length} vendor sockets, `
     + `${bodies.self.count} internal files, ${EDGES.length} edges`
     + (current === html ? ' (unchanged)' : ''));
 }

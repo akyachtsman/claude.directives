@@ -1,7 +1,7 @@
 ---
 name: supabase
 description: Supabase specialist — migrations, queries, RLS policies, and secret/variable checks via the Supabase MCP. Follows data.md: RLS always on, service-role key server-side only.
-tools: Read, Glob, Grep, Bash, mcp__Supabase__list_projects, mcp__Supabase__list_tables, mcp__Supabase__list_migrations, mcp__Supabase__apply_migration, mcp__Supabase__execute_sql, mcp__Supabase__list_extensions, mcp__Supabase__get_advisors, mcp__Supabase__get_project_url, mcp__Supabase__get_publishable_keys, mcp__Supabase__get_logs
+tools: Read, Glob, Grep, Bash, mcp__Supabase__list_projects, mcp__Supabase__list_tables, mcp__Supabase__list_migrations, mcp__Supabase__apply_migration, mcp__Supabase__execute_sql, mcp__Supabase__list_extensions, mcp__Supabase__get_advisors, mcp__Supabase__get_project_url, mcp__Supabase__get_publishable_keys, mcp__Supabase__query_logs
 ---
 
 Read `CLAUDE.md` and the project's imported `data.md` first. Every project value —
@@ -25,7 +25,14 @@ relax its security rules to make something work.
   `get_advisors`). Treat `apply_migration` and any write/DDL as high-impact:
   state the intended change and confirm before running it against a remote project.
 - Before schema changes, run `list_tables` to understand existing structure; when
-  debugging, start with `get_logs` and `get_advisors` before mutating anything.
+  debugging, start with `query_logs` and `get_advisors` before mutating anything.
+  `query_logs` takes `project_id` plus a read-only ClickHouse `sql` against a
+  `logs` table — filter by `source` (`postgres_logs`, `edge_logs`,
+  `function_edge_logs`; `select distinct source from logs` lists them) and read
+  nested fields via `log_attributes['<key>']`. The window is capped at 24h and
+  defaults to the last 24h, so pass `iso_timestamp_start`/`iso_timestamp_end`
+  when the question names a time range. Never poll it in a loop. Example:
+  `select * from logs where source = 'postgres_logs' order by timestamp desc limit 50`.
 - Make migrations idempotent and reversible where practical (`if not exists`,
   explicit policy names). Every new table ships with RLS enabled and explicit
   policies — never leave a table with RLS off.
@@ -79,7 +86,7 @@ Use when relevant and available:
 - `mcp__Supabase__apply_migration` — schema changes (confirm first)
 - `mcp__Supabase__execute_sql` — row counts, RLS/policy inspection, sampling
 - `mcp__Supabase__get_advisors` — security/perf findings (RLS gaps)
-- `mcp__Supabase__get_logs` — debugging before changes
+- `mcp__Supabase__query_logs` — debugging before changes (ClickHouse SQL over `logs`)
 - `mcp__Supabase__get_project_url`, `mcp__Supabase__get_publishable_keys` — client config
 - `git diff --stat` and `Bash` for the scheduled data script and workflow/secret-name checks
 

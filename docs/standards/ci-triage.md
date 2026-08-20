@@ -10,8 +10,9 @@ all detected by event-driven infra workflows — no session, no polling:
 | Playwright failure | `qa.yml` / `qa-live.yml` | failing CI check on the PR |
 
 GitHub automatically emails issue comments and label events, so the inbox is
-notified without polling. For in-session fast feedback, poll via
-`mcp__github__actions_list`.
+notified without polling. A watching session is woken by the PR-comment webhook
+(`ci-notify.yml`) on green and natively on failure — never poll (`git.md` →
+*GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
 > This repo's own `ci-failure` issues come from its **directive-validation**
 > checks (link / section / path); a downstream project's come from its build /
@@ -66,16 +67,19 @@ Every project using these agents runs two Playwright workflows:
 - `qa.yml` — static checks + Playwright against local server (runs on every PR/push)
 - `qa-live.yml` — Playwright against live deployed URL (runs after deployment, authoritative gate)
 
-### Expected failures — do not investigate
+### Expected outcomes — do not investigate
 
 > Scenario **numbers are per-project** — projects renumber as their suite grows
 > (check the project CLAUDE.md scenario table). Match rules by the scenario's
 > **role**, never by its number alone.
 
-- `UI Tests (local server)` failures in the **auth scenario** or **interaction
-  sweep** (upstream kit: S2/S3) — and any backend-dependent project scenarios —
-  with `API status: no call` or `API status: 4xx`
-  → Backend API is blocked on GitHub Actions runners — expected, non-blocking, `continue-on-error: true`
+- `UI Tests (local server)` **skips** in the auth scenario or interaction sweep
+  (upstream kit: S2/S3) when no `TEST_AUTH_CREDENTIAL` is set
+  → The kit self-skips these rather than failing; a skip is the exemption, and it
+  is the ONLY one. `advisory-run` ships `'false'`, so the job is blocking: an
+  actual red in those scenarios — a credential IS supplied and the backend is
+  unreachable or returns `4xx`, printed as `API status: no call` / `API status:
+  4xx` — is a real failure to fix, not an expected one to wave through.
 - Any sandbox-run Playwright failure with "Host not in allowlist"
   → Environment network policy blocks the live URL — not an app defect
 

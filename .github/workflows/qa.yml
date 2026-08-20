@@ -68,6 +68,9 @@ jobs:
       - name: Check export boundary (EXPORTS.json)
         run: node .github/scripts/check-exports.js
 
+      - name: Check learnings.jsonl is well-formed
+        run: node .github/scripts/check-learnings.js
+
       - name: Workflow cross-reference guard
         run: python3 .github/scripts/workflow-ref-guard.py
 

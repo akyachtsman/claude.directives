@@ -178,7 +178,7 @@ complete, nothing to toggle or forget. Browser-only throughout: the only "CLI"
 remains the one-time env setup-script paste.
 
 What `/new-repo` scaffolds in **every** project:
-- `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs + `index.html`
+- `CLAUDE.md` (from `CLAUDE-template.md`) + the five directive URLs + `index.html`
   + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
 - **all ten** workflows: `qa.yml`, `qa-live.yml`, `ci-notify.yml`, `ci-monitor.yml`,
@@ -224,4 +224,4 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;
   `design.md` is now a thin method, `/design-intake` establishes each project's
   own `styles/tokens.css` + `styles/components.css` via `frontend-design` + Stitch,
-  and the WCAG guardrail ships per-project. See `docs/internal/design-migration.md`.
+  and the WCAG guardrail ships per-project. See `docs/internal/archive/design-migration.md`.

@@ -43,7 +43,7 @@ This project's look is its own — established at kickoff via `/design-intake`
 
 ## Agent Workflow
 1. Use a `claude/<name>` feature branch
-2. For a non-trivial feature, run `/sdd-loop` (`specify` → `clarify` → `plan` → `tasks`) before coding — separate WHAT from HOW; trivial changes skip to step 3
+2. For a non-trivial feature, run `/sdd-loop` (`specify` → `plan` → `implement`) before coding — separate WHAT from HOW; trivial changes skip to step 3
 3. Implement changes in [main source file] — or `/sdd-loop plan` then `/sdd-loop implement` to settle the approach and work its task list
 4. Run Required Commands above — all must pass
 5. Prefer `qa-pipeline`; run steps individually only if it fails:
@@ -87,31 +87,11 @@ Agents write evidence to `.agent-reports/`:
 
 ## Scheduling Permissions
 Per `global.md` → *Scheduling Tools Never Prompt*: this repo's committed
-`.claude/settings.json` (installed from `templates/claude-settings.json` at
-bootstrap) carries the scheduling-tool allowlist — exactly these six tools,
-both server-name spellings; riskier remote tools (attaching repos, creating
-or archiving sessions) must keep prompting:
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "mcp__claude-code-remote__send_later",
-      "mcp__claude-code-remote__create_trigger",
-      "mcp__claude-code-remote__delete_trigger",
-      "mcp__claude-code-remote__update_trigger",
-      "mcp__claude-code-remote__fire_trigger",
-      "mcp__claude-code-remote__list_triggers",
-      "mcp__Claude_Code_Remote__send_later",
-      "mcp__Claude_Code_Remote__create_trigger",
-      "mcp__Claude_Code_Remote__delete_trigger",
-      "mcp__Claude_Code_Remote__update_trigger",
-      "mcp__Claude_Code_Remote__fire_trigger",
-      "mcp__Claude_Code_Remote__list_triggers"
-    ]
-  }
-}
-```
+`.claude/settings.json` carries the six-tool scheduling allowlist under both
+server-name spellings, installed verbatim from `claude.directives`'
+`templates/claude-settings.json` at bootstrap. Riskier remote tools — attaching
+repos, creating or archiving sessions — must keep prompting. Do not hand-edit
+the list here; copy it from the template so the two cannot drift.
 
 ## Session Start
 1. Read all Imported Directive URLs above fully

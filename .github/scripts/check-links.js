@@ -89,6 +89,88 @@ for (const url of internalTargets) {
   }
 }
 
+// Section cross-references: `<file>.md` → *Section Name*, and the bare
+// `→ *Section Name*` form that means "in this same file". These are the repo's
+// densest form of internal reference and nothing validated them, so deleting a
+// heading left seven live pointers aimed at nothing while CI stayed green.
+// Only .md files are scanned for headings; a reference naming a non-.md file is
+// skipped rather than guessed at.
+if (mode !== '--external') {
+  const headingCache = new Map();
+  // Strip fenced code blocks first, exactly as check-sections.js does: a deleted
+  // section whose name survives inside a fenced example would otherwise satisfy
+  // the scan and report a broken cross-reference as resolved.
+  const stripFences = (content) => content.replace(/^```[\s\S]*?^```/gm, '');
+  const headingsOf = (file) => {
+    if (!headingCache.has(file)) {
+      const heads = existsSync(file)
+        ? [...stripFences(readFileSync(file, 'utf8')).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)].map(m => m[1])
+        : null;
+      headingCache.set(file, heads);
+    }
+    return headingCache.get(file);
+  };
+  // A heading matches if the referenced name appears in it — headings carry
+  // trailing qualifiers ("## Session start — required actions", "## Pipelined
+  // Execution (owner ruling, 2026-07-18)") that references legitimately omit.
+  const resolves = (file, section) => {
+    const heads = headingsOf(file);
+    if (heads === null) return null;               // file not found — reported elsewhere
+    const want = section.toLowerCase();
+    return heads.some(h => h.toLowerCase().includes(want));
+  };
+  // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
+  const XREF_FILE = /`([A-Za-z0-9_./-]+\.md)`\s*(?:→|->)\s*\*([^*\n]+?)\*/g;
+  // → *Bar*   with no file named: the current file
+  const XREF_SELF = /(?:^|[^`\w])(?:→|->)\s*\*([^*\n]+?)\*/g;
+  let xrefs = 0, badXrefs = 0;
+  for (const file of findMarkdown('.')) {
+    // Fence-stripped on the SOURCE side as well as the target side: an
+    // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
+    // a live reference, and collecting it fails CI on correct documentation.
+    const content = stripFences(readFileSync(file, 'utf8'));
+    const checks = [];
+    for (const m of content.matchAll(XREF_FILE)) checks.push([m[1], m[2], true]);
+    // Record where the explicit-file form matched, so the self form below does
+    // not re-flag the same reference as if it named no file.
+    const claimed = [...content.matchAll(XREF_FILE)]
+      .map(m => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
+    for (const m of content.matchAll(XREF_SELF)) {
+      const idx = m.index ?? 0;
+      if (claimed.some(([a, b]) => idx >= a - 2 && idx < b)) continue;
+      checks.push([file, m[1], false]);
+    }
+    for (const [target, section, explicit] of checks) {
+      // Resolve a bare filename against the repo's known locations.
+      let path = target;
+      if (explicit && !existsSync(path)) {
+        const base = target.split('/').pop();
+        const cand = findMarkdown('.').filter(f => f.endsWith('/' + base) || f === base);
+        if (cand.length === 1) path = cand[0];
+      }
+      const r = resolves(path, section);
+      if (r === null) {
+        // Only a BARE reference (no file named) may be skipped — its target is the
+        // current file, which exists by construction. An explicit `foo.md` → *Bar*
+        // naming a file nothing can resolve is broken, and no other check covers
+        // bare filenames in arbitrary Markdown: silently skipping it reported
+        // "0/0 cross-references resolve" and exited 0.
+        if (explicit) {
+          console.error(`FAIL: ${file}: cross-reference names "${target}", which resolves to no file in the repo`);
+          failed = true;
+        }
+        continue;
+      }
+      xrefs++;
+      if (!r) {
+        console.error(`FAIL: ${file}: section cross-reference "${section}" has no matching heading in ${path}`);
+        failed = true; badXrefs++;
+      }
+    }
+  }
+  console.log(`OK:   ${xrefs - badXrefs}/${xrefs} section cross-references resolve to a heading`);
+}
+
 // External links: verify over the network with retry. Authed requests do not
 // follow redirects (`-L` forwards the Authorization header cross-host); without
 // `-L` a 3xx is a curl success, which is fine — the link resolved.

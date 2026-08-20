@@ -33,6 +33,10 @@
     let used = false;
     for (const [id, g] of Object.entries(saved)) {
       if (!geom[id]) continue;                       // frame retired since save
+      // `g` is whatever was in localStorage: a null or a string throws on the
+      // property read below, and the throw aborts the whole IIFE — no pan, no
+      // zoom, no drag, no search, and nothing on screen saying why.
+      if (!g || typeof g !== 'object') continue;
       for (const k of ['x', 'y', 'w', 'h']) {
         if (typeof g[k] === 'number' && isFinite(g[k])) { geom[id][k] = g[k]; used = true; }
       }
@@ -68,7 +72,12 @@
       const row = rows.get(y);
       let need = 0;
       for (const id of row) {
-        geom[id].y = y + shift;
+        // Keep each frame's OWN y within the row. Assigning the row KEY (the y of
+        // whichever frame grouped first) collapsed every frame in the +/-40px band
+        // onto one line — so a frame the reader nudged 30px snapped back on the
+        // next "show files" click or search keystroke, and reflow() then save()d
+        // it. Shift the reader's position; never replace it.
+        geom[id].y = from[id].y + shift;
         byId[id].style.height = 'auto';
         // offsetHeight, not scrollHeight: these are border-box frames, and
         // scrollHeight omits the borders — which is exactly a 4px clip.
@@ -824,11 +833,11 @@
       case '-': case '_': zoomBy(1 / 1.2); return void ev.preventDefault();
       case '0': fit(); return void ev.preventDefault();
       case 'Escape':
-        showAll = false; solo = null;
-    frames.forEach(f => setOpen(f, false));
-    document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
-    isolate(null); search.value = '';
-        document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
+        // Go through the toggles' own reset functions. Setting `showAll` directly
+        // left each toggle's internal `on` flag true, so the next click on
+        // "all arrows" computed `on = !true` and drew nothing — the button needed
+        // two clicks and lied to screen readers in between.
+        escapeReset();
         return void ev.preventDefault();
       case 'Enter':
         if (ev.target.classList?.contains('fr')) {
@@ -897,7 +906,12 @@
   /* ---------------- isolate + search ---------------- */
   function isolate(id) {
     selected = id;
-    if (!id) { solo = null; document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on')); }
+    // Always clear the pinned relationship, not only when deselecting:
+    // visibleEdges() checks `solo` BEFORE `selected`, so a chip left pinned from
+    // an earlier click kept ITS arrow on screen while a different frame took the
+    // focus — one arrow joining two frames that are now both faded.
+    solo = null;
+    document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
     frames.forEach(f => f.classList.remove('focused', 'faded'));
     if (!id) { drawEdges(); return; }
     const keep = new Set([id]);
@@ -999,6 +1013,18 @@
     toggle(document.getElementById('t_edge'), on => { showAll = on; drawEdges(); },
       ['all arrows', 'selected only']),
   ];
+
+  // Shared by Escape and t_reset so the two can never drift: both must run the
+  // toggles' own reset closures, not poke the module-level flags behind them.
+  function escapeReset() {
+    resets.forEach(r => r());
+    showAll = false; solo = null;
+    frames.forEach(f => setOpen(f, false));
+    document.querySelectorAll('.rel.on').forEach(r => r.classList.remove('on'));
+    isolate(null);
+    search.value = '';
+    document.querySelectorAll('.f').forEach(c => c.classList.remove('hit', 'miss'));
+  }
 
   document.getElementById('t_reset').addEventListener('click', () => {
     resets.forEach(r => r());

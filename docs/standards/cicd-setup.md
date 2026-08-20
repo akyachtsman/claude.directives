@@ -23,7 +23,7 @@ Two GitHub Actions workflows replace manual agent invocation for the mechanical 
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
 | `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-Three event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, and `pages-monitor.yml` (Step 9).
+Five event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and `ci-notify.yml` (Step 9), plus `cron-notify.yml` / `keepalive.yml` for scheduled jobs.
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -288,6 +288,41 @@ provably idempotent and the reasoning is recorded in the project's CLAUDE.md
 it's on the default branch, so it covers the *next* deploy, not the one that adds
 it.
 
+### 9e — CI Notify
+
+Drop-in — edit only the watched names to match the QA workflows you installed
+(`docs/standards/automations.md` → *Watcher Rules*, W1):
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-notify.yml \
+  -o .github/workflows/ci-notify.yml
+```
+
+**What it does:** comments on the open PR for a head SHA when a watched QA
+workflow completes **green**, so a watching session wakes on success — GitHub
+delivers failures natively but never green. Without it, a PR-attached wait has
+no success signal at all. Behavior detail: `docs/standards/automations.md` →
+Automation 4c.
+
+⚠️ `workflow_run` triggers are read from the DEFAULT branch, so this workflow can
+never wake the PR that installs it. Verify on the first post-install PR; don't
+call it a dud.
+
+### 9f — Scheduled-job notifications and keepalive
+
+Both are drop-ins; install them if the project has scheduled workflows:
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
+  -o .github/workflows/cron-notify.yml
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/keepalive.yml \
+  -o .github/workflows/keepalive.yml
+```
+
+**What they do:** `cron-notify.yml` surfaces scheduled-job failures the same way
+`ci-monitor` surfaces CI failures; `keepalive.yml` keeps scheduled workflows from
+being auto-disabled after 60 days of repository inactivity.
+
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.
 
@@ -327,6 +362,10 @@ Required repository variables:
 - [ ] `.github/workflows/codex-monitor.yml` present
 - [ ] `.github/workflows/pages-monitor.yml` present, and — if Pages is Actions-sourced — carrying a `workflow_run` trigger naming the deploy workflow
 - [ ] `.github/workflows/pages-retry.yml` present (branch-source Pages projects)
+- [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
+- [ ] `.github/workflows/cron-notify.yml` / `keepalive.yml` present (projects with scheduled jobs)
+- [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
+- [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret

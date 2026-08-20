@@ -33,3 +33,8 @@ superpowers `brainstorming` — alternatives mandatory, one question per turn):
 6. **Hand off, don't auto-advance:** end with "Next: `/sdd-loop specify` — it
    reads `brief.md`." Stopping at the gate is deliberate; the user starts the
    next phase.
+
+
+> The closing format above ends the BODY. The status line required by
+> `global.md` → *Status Line on Every Stop* still follows it as the message's
+> final line.

@@ -64,7 +64,7 @@ never by cross-repo edits** (`global.md` → One Session, One Repo):
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).
 2. **Relay** — you paste it into a `claude.directives` session and ask for
    analysis first. The session verifies legitimacy against git history and
-   live state before implementing (`global.md` → evidence before assertions —
+   live state before implementing (`global.md` → *Behavior Rules* → evidence before assertions —
    downstream reports have been wrong before).
 3. **Implement + self-apply** — the fix lands under `directives/`, `templates/`,
    or `plugins/`, AND is applied to this repo itself in the same PR when it
@@ -114,14 +114,14 @@ and update the fleet list above.)
 The folder layout is **physical** (organized by delivery mode, because that is
 what the raw-URL / plugin / template machinery enforces). The **logical** view
 lives in `EXPORTS.json` and is drawn interactively at
-`docs/site/logical-map.html` (the physical map's sibling — each links to the
-other). Three layers, all CI-validated so they can't rot:
+`docs/site/logical-map.html`, the repo's single map (the physical-folders view
+was retired 2026-07-21). Three layers, all CI-validated so they can't rot:
 
 - **`domains`** — domain → compartment → paths. The **compartment** is the
   swappable unit (e.g. `test.ui-kit`, `git.monitors`): replace its file set
   honoring its interface and nothing outside it moves. The compartment's
   paths ARE the shopping list for a swap, across all delivery modes at once.
-- **`swap`** — the classes. **Permanent** paths (the four directive contracts;
+- **`swap`** — the classes. **Permanent** paths (the five directive contracts;
   the whole `meta` domain) evolve via PR, never wholesale replacement.
   **Orchestrators** (`sdd-loop` for development, `qa-pipeline` for testing)
   are permanent AND define the interfaces components must fit — **a new
@@ -149,7 +149,7 @@ Standing rules:
 Hard-won; each cost a real debugging session:
 - **ci-notify bootstrap gap** — `workflow_run` reads the default branch, so
   ci-notify can never wake the PR that installs it. Verify on the FIRST
-  post-install PR (the one allowed backstop check); don't call it a dud.
+  post-install PR; don't call it a dud.
 - **Workflow watch lists** — every rule about which names a `workflow_run`
   watcher may carry, how the two Pages sources differ, and why retry is
   source-specific lives in ONE place: `docs/standards/automations.md` → *Watcher Rules* (W1–W3). Stated here once as a

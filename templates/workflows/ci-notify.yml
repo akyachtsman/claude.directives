@@ -25,7 +25,7 @@
 # predated it on main). For that one PR only, arm a scheduled verification
 # check-in and confirm the FIRST post-install PR gets its green comment; from
 # then on the webhook covers completion (heartbeats per global.md → Status
-# Line on Every Stop still apply to waits over six minutes). Do not conclude
+# Line on Every Stop still apply to waits over five minutes). Do not conclude
 # "dud" from the install PR's silence.
 on:
   workflow_run:
@@ -57,8 +57,12 @@ jobs:
           WR_HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
         run: |
           set -euo pipefail
+          # jq picks the first match rather than `| head -1`: under `set -o pipefail`
+          # head can close the pipe before gh finishes, and gh dies on SIGPIPE (141),
+          # failing the step on what is actually a successful lookup.
           num=$(gh pr list --repo "$REPO" --state open --json number,headRefOid \
-            --jq ".[] | select(.headRefOid == \"$WR_SHA\") | .number" | head -1)
+            --jq "[.[] | select(.headRefOid == \"$WR_SHA\") | .number]
+                  | if length > 0 then .[0] else empty end")
           matched="sha"
           # Fall back to the branch when the SHA is not a PR head. Two real cases:
           # a run dispatched onto a PR branch (repository_dispatch /

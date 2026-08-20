@@ -2,7 +2,8 @@
 
 > This file is **internal-only**. It governs sessions working *inside* this repo.
 > It is **not** imported downstream. The exported, company-wide directives that
-> other repos inherit live in `directives/` (`global.md`, `design.md`, `test.md`, `data.md`).
+> other repos inherit live in `directives/` (`global.md`, `git.md`, `design.md`,
+> `test.md`, `data.md`).
 
 ## Purpose
 `claude.directives` is the single, consolidated home for the company-wide agent
@@ -81,9 +82,10 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 ## Branch policy
 `global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
 (`claude/<name>` branches, never commit to `main`, draft PR on first push,
-squash-merge only when CI is green **and** the global.md merge gates hold —
-approval covers the merge, no `codex-flagged` label, no unresolved review
-threads, diff limited to the intended files). Repo-specific deltas:
+squash-merge on green — no approval is sought — once `git.md` → *Conditional
+Auto-Merge on Green* holds: a current-head Codex response or its documented
+unavailable outcome, no `codex-flagged` label, no unresolved review threads,
+diff limited to the intended files). Repo-specific deltas:
 - Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
   next from updated `main` rather than reusing/force-pushing one long-lived branch.
 - Before merging, verify the PR's file list against GitHub's own diff, not the
@@ -137,57 +139,23 @@ everything hot-reloads:
 
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.
-- `qa.yml` — `QA — Directive Validation`: internal link check (hard fail, verified
-  against the local working tree), path-existence check, required-section check,
-  workflow YAML validation, a secret-scan-pattern sync check (the canonical regex
-  stays byte-identical across `global.md` and the qa workflow templates), and a
-  paired-file diff check, plus a warn-only external-link job. It also runs a
-  **Playwright UI test** (`Repo Map UI`) — this repo dogfooding its own exported
-  UI-testing standard (`test.md` / `templates/ui-tests`) on its interactive
-  Pages artifact, `docs/site/logical-map.html` (the repo map, logical view —
-  the physical-folders view was retired 2026-07-21): a headless Chromium asserts
-  the map renders, that no frame clips its contents, that dragging a frame moves
-  it and dragging its corner resizes it, that the layout survives a reload, that
-  every layer toggle works and reverses, that the legend opens, that search and
-  isolate behave, and that dragging the canvas selects no text. It also covers the
-  **input surface** a mouse-only test never reaches — scroll pans on both axes
-  without zooming, ctrl/pinch zooms, two-finger pinch zooms on touch, middle-drag
-  pans over a frame, frames are keyboard-reachable and arrow keys pan, and `fit`
-  recentres without discarding the reader's arranged layout. It also asserts the
-  **visual** invariant the interaction checks kept missing: every frame states its
-  relationships in words, nothing is drawn at rest, selecting a frame draws only
-  its own connections, and **no arrow crosses a frame it does not connect** —
-  verified on the shipped layout AND after frames are dragged around, which is
-  the case the earlier router had never been exercised against. It also asserts
-  the invariants a human had to report because nothing measured them: **no two
-  arrows run alongside each other** (measured as the length of one line lying
-  within 11px of another — a crossing costs a few px, a bundle costs its whole
-  span), no two edge labels overlap, labels draw above every line, and frames
-  sitting level with each other are linked straight across rather than detouring
-  through the band above. Two arrangements a READER made — not the suite's own
-  scripted drags — are pinned as cases, because both defects a human reported
-  lived only in layouts the script never produced: neighbours offset just enough
-  to miss the side-link threshold, and one frame edge carrying three runs.
-  `arrange()` fails loudly if a test layout names a frame that does not exist,
-  since a mistyped id is silently ignored on load and quietly tests nothing.
-  The router is **ported from `claude.insurance`** — its
-  `relmap.js` and `relmap-view.js` under js/keep: reserve space rather than
-  search for it, with hop-breaks where lines cross. Their layout computes node
-  positions; ours lets the reader drag, so the channels are MEASURED from the
-  frames' own extents — the complement of the y-intervals gives the horizontal
-  bands, the complement of the x-intervals over a y-range gives the vertical
-  corridors — and ports are ordered by where each run is heading, which is
-  Sugiyama's crossing-minimisation step applied where a hand-placed layout still
-  leaves a choice. `build-logical-map.js`'s default geometry is a GRID whose
-  gutters line up across rows precisely so those corridors exist. The map opens
-  **collapsed** — each frame leads with its meaning and a delivery-mix bar, and its
-  files appear on request (search opens the frame holding a hit), because 109
-  filenames shown at once is a reference table rather than a map.
-  `qa.yml` also runs `build-logical-map.js --check`, so a committed map that no
-  longer matches `EXPORTS.json` fails the build.
-  (The old design-theme parity + contrast checks were retired with the fixed
-  design system — design is now per-project; the contrast guardrail ships in
-  `templates/scripts/` for projects.)
+- `qa.yml` — `QA — Directive Validation`: internal link check (hard fail,
+  verified against the local working tree, including `→ *Section*`
+  cross-references), path-existence, required-section headings, workflow YAML
+  validation, secret-scan pattern+filter sync, the export boundary
+  (`check-exports.js`, both directions), job bounds, the workflow-ref guard, and
+  a paired-file diff check, plus a warn-only external-link job. It also runs
+  `build-logical-map.js --check`, so a committed map that no longer matches
+  `EXPORTS.json` fails the build.
+  It also runs a **Playwright UI test** (`Repo Map UI`) — this repo dogfooding
+  its own exported UI-testing standard (`test.md` / `templates/ui-tests`) on its
+  interactive Pages artifact, `docs/site/logical-map.html`. It asserts rendering
+  and layout, the whole input surface (pointer, wheel, touch, keyboard), the
+  arrangement a READER makes rather than only the shipped one, and the visual
+  invariants — no arrow crosses a frame it does not connect, no two arrows run
+  alongside each other, no two edge labels overlap. What each case covers and
+  why it exists is in `docs/internal/repo-map-ui.md`; read that before changing
+  the map, the router, or the suite.
 - `ci-monitor.yml` — fires when `QA — Directive Validation` completes; on failure
   opens/updates a deduplicated `ci-failure` tracking issue.
 - `ci-notify.yml` — fires when `QA — Directive Validation` completes **green**;
@@ -242,20 +210,13 @@ commit it to this repo's `.claude/settings.json` — a committed value leaves th
 command gated off anyway.
 
 Measured baseline (2026-08-19, 2 runs/case, with/without arms): **9 of 9 pass**,
-mean Δ +0.67. All three negatives correctly never fire in either arm, so the
-suite shows neither under- nor over-triggering.
-
-Both earlier gaps were fixed by rewriting descriptions against the measurement,
-and the lever is worth keeping: a description triggers on the WORDS a request
-actually uses, not on what the skill is for. `doc-comp` fired on "diff the old X
-against the new X" and never on "compare these two versions of our X" — identical
-prompts, one verb apart — because the old description's only strong hook was the
-word "diff" in its output clause. Naming the verbs (compare/diff/what changed)
-and the nouns (documents, versions, drafts, revisions), and saying it applies to
-text pasted inline, took that case 0.00 → +1.00. `scope-chk` was flaky on the
-explicit phrasing (1 run in 2) because its trigger was written from the
-assistant's side — "before OFFERING work" — while the missed case was the user
-asking directly; adding that case took it to 5/5 with the plugin and 0/5 without.
+mean Δ +0.67 — neither under- nor over-triggering. Two cases added 2026-08-20
+(`update-pages-stale`, `doc-comp-contract`) alongside the description widenings
+that motivated them are **unmeasured** until the suite is next run. The durable lesson, and the
+reason to keep measuring: **a description triggers on the WORDS a request
+actually uses, not on what the skill is for.** Both gaps found were fixed by
+rewriting the description against the measurement; the worked cases are in
+`docs/internal/skill-eval-notes.md`.
 
 Re-run the negatives whenever a description is widened: over-triggering is the
 failure mode a broader description buys, and it is invisible without them.
@@ -268,7 +229,8 @@ node .github/scripts/check-paths.js
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
-node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths, class partition, raw self-references
+node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
+node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py       # every job bounded, none >=360, browser jobs >=30 — live AND templates
@@ -291,10 +253,8 @@ check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
 local skip is fine for non-map changes.
 
 ## Escalation rules
-`global.md` → *Escalation Rules* apply here unchanged (stop and ask before
-deleting any file on `main`, modifying any workflow's trigger conditions, or
-pushing after 3 consecutive CI failures on the same issue). No repo-specific
-additions.
+`global.md` → *Escalation Rules* apply here unchanged — all four gates, not a
+subset. No repo-specific additions.
 
 ## Toolkit changes
 

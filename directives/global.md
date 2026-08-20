@@ -77,7 +77,8 @@ Narration is overhead, never the deliverable.
   gates." Never "Let me…", "I'll now…", "First, I'm going to…".
 - **Never narrate compliance.** Following the rulebook is compliance; saying you
   are following it is performance.
-- **No preamble, no sign-off.** Answer, then stop.
+- **No preamble, no sign-off.** Answer, then stop. (The status line is not a
+  sign-off — it is required; → *Status Line on Every Stop*.)
 
 Long operations keep their announce line, between-step status, and "parked"
 statement — shorten the wording, never drop the update.
@@ -105,9 +106,9 @@ definition fixes its own closing line or block keeps it — the status line
 follows it as the message's true final line; command formats end the body,
 never the message.
 
-**Heartbeat:** any external wait longer than SIX minutes — CI, a deploy, a
+**Heartbeat:** any external wait longer than five minutes — CI, a deploy, a
 long-running job — arms a visible heartbeat: a one-line status ("Waiting for
-CI (PR #845) — 12m elapsed") roughly every 5 minutes until the wait resolves,
+CI (PR #845) — 12m elapsed") roughly every five minutes until the wait resolves,
 never a silent re-arm. A missing heartbeat means the session is hung — which
 is otherwise indistinguishable from waiting, and that distinction is the
 heartbeat's whole purpose.
@@ -236,7 +237,7 @@ without explicit owner sign-off.
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo
 - Never echo secrets in workflow logs
-- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb-" --include="*.js" --include="*.html" --include="*.css" --include="*.json" --exclude-dir=node_modules --exclude-dir=.git .`
+- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]" --include="*.js" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.html" --include="*.css" --include="*.json" --include="*.md" --include="*.sh" --include="*.yml" --exclude-dir=node_modules --exclude-dir=.git .`
 
 ## Pre-Push Verification (Local Gate)
 Before committing or pushing, verify locally — never rely on CI alone:
@@ -250,7 +251,7 @@ plugin's push-gate hook enforces no-direct-push-to-main mechanically).
 
 ## PR Lifecycle
 Lives in `directives/git.md` → *PR Lifecycle*: draft-first, subscribe on open,
-green-before-ready, auto-merge-on-approval, `codex-flagged` blocker, diff check,
+green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
 never force-push `main`.
 
 ## Conditional Auto-Merge on Green
@@ -316,9 +317,7 @@ task list, one item or more**:
 
 *Pipelined Execution* governs a task list already written. This governs the
 moment the asks ARRIVE — the owner firing several requests in one message, or
-interjecting new ones mid-turn while work is in flight. The failure mode it
-exists to prevent: serially finishing ask 1 while asks 2–4 sit unacknowledged,
-when three of them could have been running the whole time.
+interjecting new ones mid-turn while work is in flight.
 
 **The trigger, quantified.** The moment TWO OR MORE independently actionable
 requests are pending in the same turn — one message carrying several, or
@@ -345,8 +344,10 @@ state — not a narration per item as it happened. ("Wrong session" asks the
 owner retracts are dropped, not parked.)
 
 **Order of a mixed turn:** spawn the delegable asks FIRST (they run while you
-work), then do the inline work, then integrate. Spawning last forfeits exactly
-the parallelism the spawn was for.
+work), then do the inline work, then integrate — spawning last forfeits the
+parallelism the spawn was for.
+
+## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts
   for an outcome.
@@ -356,9 +357,10 @@ the parallelism the spawn was for.
      (standard scaffold), CI SUCCESS arrives too, as a PR comment. A PR-attached
      wait therefore needs NO scheduler: end the turn saying you'll report back,
      and act on the event.
-  2. **Self-pace with `ScheduleWakeup`** (or `send_later` — frequently
-     **absent**, so verify per `/env-chk`, never assume). Schedule a check-in
-     sized to the operation, re-check on wake, re-arm until terminal.
+  2. **Self-pace with `send_later`** (pre-approved per *Scheduling Tools Never
+     Prompt*; `ScheduleWakeup` where a session has it instead — verify per
+     `/env-chk`, never assume either). Schedule a check-in sized to the
+     operation, re-check on wake, re-arm until terminal.
      - All six scheduling tools (`send_later`, `create_trigger`,
        `delete_trigger`, `update_trigger`, `fire_trigger`, `list_triggers`) are
        pre-approved in the settings template under both server-name spellings —
@@ -369,15 +371,11 @@ the parallelism the spawn was for.
        session; a one-time prompt in an already-running session is accepted
        (→ *Scheduling Tools Never Prompt*). A PR-attached wait with
        `ci-notify.yml` installed needs no completion polling — webhook wake
-       covers failure and success — but a wait expected to exceed six minutes
+       covers failure and success — but a wait expected to exceed five minutes
        still arms the heartbeat (→ *Status Line on Every Stop*).
-     - **Heartbeats supersede the old no-backstop rule** (2026-07-18 ruling
-       superseded 2026-08-18): any external wait longer than six minutes arms a
-       visible ~5-minute heartbeat (→ *Status Line on Every Stop*). The prompt
-       cost that motivated backstop-avoidance is gone — the scheduling tools
-       are pre-approved (→ *Scheduling Tools Never Prompt*). Event wakes remain
-       the primary signal; the heartbeat is the owner-visible liveness line on
-       top, never a replacement for them.
+     - Event wakes stay the primary signal; the heartbeat (→ *Status Line on
+       Every Stop*) is the owner-visible liveness line on top, never a
+       replacement for them.
      - `create_trigger` / `update_trigger` / `fire_trigger` are pre-approved
        since 2026-08-18 (→ *Scheduling Tools Never Prompt*, whose accepted
        residuals record the persistence-vector trade-off). **Deployment tools**
@@ -390,7 +388,7 @@ the parallelism the spawn was for.
        in an older repo, PR the current template's `permissions.allow` block
        (both spellings, all six scheduling tools) into that repo's own
        `.claude/settings.json` — no need to ask; it's the session's own repo and
-       `.claude/` config is auto-merge class. Note in the PR that the
+       merges on green like every other change. Note in the PR that the
        pre-approval activates from the NEXT session.
   3. **Condition-wait with `Monitor`** only when you must block on a specific
      state — always with an exit condition and a hard timeout.
@@ -464,18 +462,6 @@ fetched into `.claude/`.
 - Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
   `enabledPlugins` (copy `templates/claude-settings.json`).
 
-**Remediation — remove after 2026-09-30, or once no environment predates
-2026-08-19.** If `hookify` is installed, uninstall it at both scopes before doing
-anything else; its hooks fail on every tool call under the versioned install
-layout, in every project:
-```bash
-claude plugin uninstall hookify@claude-code-plugins || true
-claude plugin uninstall hookify@claude-code-plugins --scope project || true
-```
-Harmless when absent. This lives in a directive rather than the installer
-because directives are fetched live every session — the installer only reaches a
-project whose toolkit install is not still cached from before the fix.
-
 At session start, **verify the plugin attached**: the `directives-toolkit:*`
 commands/skills resolve and the QA agents are available. If they don't, the
 environment's setup script didn't run — fix that rather than hand-fetching
@@ -493,43 +479,16 @@ See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 ## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)
 Self-scheduling is how a session heartbeats, resumes after CI, and re-arms
 check-ins — a permission prompt the owner must click defeats the point. Every
-project repo's committed `.claude/settings.json` carries this allowlist
-(exactly these six tools; riskier remote tools — attaching repos, creating or
-archiving sessions — must keep prompting). Settings load at session start; a
-one-time prompt in an already-running session is accepted.
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "mcp__claude-code-remote__send_later",
-      "mcp__claude-code-remote__create_trigger",
-      "mcp__claude-code-remote__delete_trigger",
-      "mcp__claude-code-remote__update_trigger",
-      "mcp__claude-code-remote__fire_trigger",
-      "mcp__claude-code-remote__list_triggers",
-      "mcp__Claude_Code_Remote__send_later",
-      "mcp__Claude_Code_Remote__create_trigger",
-      "mcp__Claude_Code_Remote__delete_trigger",
-      "mcp__Claude_Code_Remote__update_trigger",
-      "mcp__Claude_Code_Remote__fire_trigger",
-      "mcp__Claude_Code_Remote__list_triggers"
-    ]
-  }
-}
-```
-
-(Both server-name spellings on purpose — the prefix differs between session
-surfaces.)
-
-**Accepted residuals (owner-approved 2026-08-18, after automated security
-review flagged both):** (i) auto-allowed trigger mutation is a persistence
-vector — content that hijacked a session could schedule itself future
-instructions without a prompt; accepted because the tools only message the
-owner's own sessions, `list_triggers` keeps the schedule auditable, and the
-owner chose ergonomics explicitly. (ii) carrying both server-name spellings
-means a future MCP server registering under the unused one would inherit the
-allows; accepted as unlikely — the owner controls their MCP config.
+project repo's committed `.claude/settings.json` carries the scheduling
+allowlist verbatim from `templates/claude-settings.json` → `permissions.allow`:
+exactly six tools (`send_later`, `create_trigger`, `update_trigger`,
+`delete_trigger`, `fire_trigger`, `list_triggers`) under BOTH server-name
+spellings, since the prefix differs between session surfaces and permission
+rules match names exactly. Riskier remote tools — attaching repos, creating or
+archiving sessions — must keep prompting. Settings load at session start; a
+one-time prompt in an already-running session is accepted. The security
+trade-offs the owner accepted when approving this are recorded in
+`docs/internal/accepted-residuals.md`.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.
@@ -557,13 +516,13 @@ before reporting "no access":
 5. **curl/CLI in the sandbox** — goes through the agent proxy; the environment
    allowlist applies. A 403 on CONNECT is a policy denial: report it, never
    route around it. The owner can add the host in the environment's network
-   settings, which takes effect in RUNNING sessions immediately (verified
-   2026-07-12; no new session needed). Diagnose with
+   settings, which takes effect in RUNNING sessions immediately — no new
+   session needed. Diagnose with
    `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
 6. **Sandbox browser (Playwright)** — launch with executablePath
    '/opt/pw-browsers/chromium'. Known gateway quirk: some hosts reset
-   BROWSER-originated connections even when allowlisted (github.io,
-   finviz.com) — ERR_CONNECTION_RESET while curl succeeds means use curl for
+   BROWSER-originated connections even when allowlisted —
+   ERR_CONNECTION_RESET while curl succeeds means use curl for
    content, and for UI verification serve the project locally
    (`python3 -m http.server` + the project's demo mode) and screenshot that.
 7. **The owner** — for pixel-level truth on browser-blocked third-party sites,

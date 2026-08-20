@@ -107,7 +107,17 @@ jobs:
             echo "Non-PR event — UI tests run unconditionally."
             exit 0
           fi
-          if git diff --name-only "$BASE_SHA"...HEAD | grep -qE "$UI_PATHS"; then
+          # Capture the diff FIRST and fail loudly if git could not produce it.
+          # Piping straight into grep hides the failure: `-e` is suspended inside
+          # an `if` condition and there is no pipefail here, so an unresolvable
+          # BASE_SHA (shallow fetch, force-push, fork PR) makes git error, grep
+          # see nothing, and the job report "No UI-relevant changes" — silently
+          # skipping the browser tests on a PR that may be entirely UI.
+          if ! files=$(git diff --name-only "$BASE_SHA"...HEAD); then
+            echo "::error::could not diff $BASE_SHA...HEAD — refusing to guess whether UI tests are needed."
+            exit 1
+          fi
+          if printf '%s\n' "$files" | grep -qE "$UI_PATHS"; then
             echo "ui=true" >> "$GITHUB_OUTPUT"
             echo "UI-relevant changes detected."
           else
@@ -134,12 +144,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # advisory-run is TEMPORARY: it is set 'true' here only while a repo has
-      # a known open UI failure (e.g. a mobile overflow mid-fix) — flip it back
-      # to 'false' as soon as that lands. Blocking is the default posture for
-      # the static/no-backend tier, where the suite runs fully against the
-      # bundled local server; auth/backend-gated scenarios self-skip on an
-      # empty TEST_AUTH_CREDENTIAL, and qa-live.yml stays the live gate.
+      # advisory-run ships 'false': blocking is the default posture for the
+      # static/no-backend tier, where the suite runs fully against the bundled
+      # local server. A template that shipped 'true' handed every new project a
+      # UI suite whose failures show green. Set it 'true' ONLY in a project with
+      # a known open UI failure mid-fix, and flip it back as soon as that lands.
+      # Auth/backend-gated scenarios self-skip on an empty TEST_AUTH_CREDENTIAL,
+      # and qa-live.yml stays the live gate.
       - uses: ./.github/actions/ui-suite
         with:
           tests-dir: ${{ env.UI_TESTS_DIR }}
@@ -147,4 +158,4 @@ jobs:
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
           artifact-name: playwright-results-local
           start-local-server: 'true'
-          advisory-run: 'true'
+          advisory-run: 'false'

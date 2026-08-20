@@ -66,7 +66,7 @@ function walk(dir) {
     if (e.isDirectory() && SKIP_DIRS.has(e.name)) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) out.push(...walk(full));
-    else if (/\.(ya?ml|md|sh|[cm]?js)$/.test(e.name)) out.push(full);
+    else if (/\.(ya?ml|md|sh|py|[cm]?js)$/.test(e.name)) out.push(full);
   }
   return out;
 }

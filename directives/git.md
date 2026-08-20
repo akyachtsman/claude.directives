@@ -43,6 +43,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     its triggering review request postdates the latest push.
   - **Read the inline comments** (`pull_request_read` → `get_review_comments`).
     `get_reviews` cannot tell a clean `COMMENTED` review from an actionable one.
+  - **Check EVERY unresolved thread, not just this round's.** An all-clear
+    covers only the round it reviews; it never re-raises threads left open by an
+    earlier one, so a clean verdict can sit above unaddressed findings on the
+    same head. Findings arrive as review THREADS while the issue comments show
+    nothing — judging from comments alone reads an unreviewed PR as clean.
   - **Unreadable reviews do not clear the gate** — that call is GraphQL and fails
     when the pool is empty. Wait or surface; never fall back to the label.
   - **A usage-limit reply is a fourth outcome: _unavailable_ — not clean, not
@@ -70,7 +75,13 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     this**: the setting also offers "On every push", under which every commit
     does spend a review, and it is account-level — invisible from the repo.
   - **Request a review after pushing a fix**; Codex responds on open,
-    ready-for-review and `@codex review`, not on a push.
+    ready-for-review and `@codex review`, not on a push. Ready-for-review is
+    UNRELIABLE — measured 2026-08-20, un-drafting drew no review at all on two
+    consecutive PRs, while an explicit `@codex review` naming the head answered
+    within two minutes each time. Un-drafting leaves no comment to carry a 👀,
+    so silence is indistinguishable from a missed trigger: after ~10 minutes
+    with no response, request explicitly. Once only — re-asking spends the
+    shared weekly pool.
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or

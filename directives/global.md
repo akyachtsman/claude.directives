@@ -78,6 +78,11 @@ genuinely help, but are not required.
   it, the diagnosis, and the alternatives weighed belong in the commit message
   and PR body. Every session pays a rule's length forever and reads it only to
   learn what to do.
+- **A rule's trigger is an observable event, not a judgement.** "When it
+  matters", or "when two or more are pending", requires noticing something
+  mid-turn — and noticing is the first thing to go in a long turn, which is
+  exactly when the rule was needed. Ask whether it can fire without anyone
+  noticing anything; if not, fix the trigger before the wording.
 - **Detail on request, not by default.** Keep the mechanism, move it down. When
   asked, give all of it — simpler never means vaguer, and "it's handled" is not
   an answer.

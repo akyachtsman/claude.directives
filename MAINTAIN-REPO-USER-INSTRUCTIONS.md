@@ -58,7 +58,7 @@ Corollaries worth memorizing:
 
 The standing procedure when a project session surfaces a bug, gap, or
 improvement that belongs upstream. Findings propagate **upstream by hand-off,
-never by cross-repo edits** (`global.md` → Cross-Repo Boundary):
+never by cross-repo edits** (`global.md` → One Session, One Repo):
 
 1. **Capture** — the downstream session emits a hand-off block
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).
@@ -161,9 +161,11 @@ Hard-won; each cost a real debugging session:
   since the config change" alone is equally consistent with an idle repository,
   and treating it as proof manufactures false alarms in exactly the repos nobody
   is touching.
-- **Web sessions ignore project `permissions.allow`** — MCP prompt reduction
-  on web comes from architecture (ci-notify wake, no-backstop ruling), not
-  settings.
+- **Scheduling tools are pre-approved via committed settings** (`global.md` →
+  *Scheduling Tools Never Prompt*, 2026-08-18): the six-tool allowlist in
+  `.claude/settings.json` loads at session start; a one-time prompt in an
+  already-running session is accepted. ci-notify's webhook wake still covers
+  PR-attached completion without any scheduling call.
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,
   not the UI prose title.
 - **Mid-session staleness** — `CLAUDE.md` → *Mid-session change semantics*:
@@ -195,9 +197,9 @@ Hard-won; each cost a real debugging session:
   now, via the `SessionStart` hook, rather than on the ~weekly cache rebuild —
   unreviewed by us. The hook shortens that window, so it raises this risk rather
   than lowering it. The defenses are layered
-  elsewhere: push-gate blocks direct-to-main, workflow files are excluded
-  from auto-merge, workflow-trigger edits are stop-and-ask, and every
-  workflow PR gets a line-by-line diff read (`git.md`, 2026-07-19). Keep the
+  elsewhere: push-gate blocks direct-to-main, workflow PRs merge only after a
+  line-by-line diff read (`git.md`, 2026-07-19), and workflow-trigger edits
+  are stop-and-ask before the change is made. Keep the
   install list minimal — ours plus the named Anthropic-official set in
   `scripts/install-toolkit.sh`.
 - **`/refresh-repo` is a sync negotiator, not a restore-from-backup** — its

@@ -43,7 +43,7 @@ and **every repo you open in this environment** has them from then on.
 **Scheduling-tools pre-approval is template-only.** Projects bootstrapped
 before the current `templates/claude-settings.json` inherit nothing
 automatically — each existing repo needs the same `permissions.allow` block
-(both connector spellings, low-risk three tools only) PR'd into its
+(both connector spellings, all six scheduling tools) PR'd into its
 `.claude/settings.json` manually. One small PR per repo; a session scoped to
 that repo can do it on request.
 

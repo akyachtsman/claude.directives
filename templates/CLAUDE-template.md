@@ -83,6 +83,34 @@ Agents write evidence to `.agent-reports/`:
 - Destructive commands, data resets, migrations, or deploys require explicit approval.
 - If a check can't run locally, explain why and name the closest substitute.
 
+## Scheduling Permissions
+Per `global.md` → *Scheduling Tools Never Prompt*: this repo's committed
+`.claude/settings.json` (installed from `templates/claude-settings.json` at
+bootstrap) carries the scheduling-tool allowlist — exactly these six tools,
+both server-name spellings; riskier remote tools (attaching repos, creating
+or archiving sessions) must keep prompting:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude-code-remote__send_later",
+      "mcp__claude-code-remote__create_trigger",
+      "mcp__claude-code-remote__delete_trigger",
+      "mcp__claude-code-remote__update_trigger",
+      "mcp__claude-code-remote__fire_trigger",
+      "mcp__claude-code-remote__list_triggers",
+      "mcp__Claude_Code_Remote__send_later",
+      "mcp__Claude_Code_Remote__create_trigger",
+      "mcp__Claude_Code_Remote__delete_trigger",
+      "mcp__Claude_Code_Remote__update_trigger",
+      "mcp__Claude_Code_Remote__fire_trigger",
+      "mcp__Claude_Code_Remote__list_triggers"
+    ]
+  }
+}
+```
+
 ## Session Start
 1. Read all Imported Directive URLs above fully
 2. Verify the directives-toolkit plugin attached (commands/agents resolve) per global.md → Skill Bootstrap

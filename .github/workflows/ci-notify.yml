@@ -9,8 +9,8 @@
 #
 # BOOTSTRAP GAP: workflow_run triggers are read from this file ON THE DEFAULT
 # BRANCH — this workflow can never wake the PR that installs it. For that one
-# PR only, arm the single verification check global.md's no-backstop ruling
-# allows; confirm the first post-install PR gets its green comment.
+# PR only, arm a scheduled verification check-in; confirm the first
+# post-install PR gets its green comment.
 on:
   workflow_run:
     workflows:

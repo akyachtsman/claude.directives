@@ -82,6 +82,33 @@ Narration is overhead, never the deliverable.
 Long operations keep their announce line, between-step status, and "parked"
 statement — shorten the wording, never drop the update.
 
+## Status Line on Every Stop (owner ruling, 2026-08-18)
+Every time a session stops working — end of turn, end of task, blocked, or
+parked — the message's final line is a status line in this vocabulary (the
+four canonical states below, or an intermediate state named the same way), so
+the owner never has to ask whether the session is working or waiting:
+
+- **"Waiting for CI"** — tests running; the session resumes itself on the
+  result.
+- **"Waiting for response"** — blocked on the owner; the question sits
+  directly above the status line.
+- **"Deployed"** — merged AND verified live at the deployed URL; safe to test.
+- **"all done"** — the queue is genuinely empty: nothing in flight, no CI, no
+  background agents, no scheduled check-ins. Reserved for exactly that.
+
+The grammar: a short status phrase, optionally a parenthetical subject with
+elapsed time ("Waiting for CI (PR #845) — 12m elapsed"), optionally pending
+items after a colon ("Waiting for CI: PR #845 → merge → deploy-verify").
+Intermediate states name themselves the same way ("Merged" while the deploy
+builds). A stop with no status line is a directive violation.
+
+**Heartbeat:** any external wait longer than SIX minutes — CI, a deploy, a
+long-running job — arms a visible heartbeat: a one-line status ("Waiting for
+CI (PR #845) — 12m elapsed") roughly every 5 minutes until the wait resolves,
+never a silent re-arm. A missing heartbeat means the session is hung — which
+is otherwise indistinguishable from waiting, and that distinction is the
+heartbeat's whole purpose.
+
 ## Handoffs Carry Only What Dies With the Session (owner ruling, 2026-08-05)
 Applies to `/handoff-session` and any summary written for a successor session.
 Apply the test to every line *before* writing it, not as a pass afterwards:
@@ -175,10 +202,9 @@ styles/          ← the committed design contract (tokens.css + components.css)
 ## Repository Scope
 Two different scopes — never conflate them:
 - **ACT scope (hard-limited):** the GitHub MCP can write — branch, push, PR,
-  comment, merge — only against the repo(s) this session was opened on. Before
-  offering to ACT on another repo, confirm the `add_repo` / `list_repos` tools
-  (claude-code-remote server) exist via ToolSearch; if absent, that work needs a
-  session scoped to the target repo — say so plainly.
+  comment, merge — only against the repo(s) this session was opened on, and
+  there is no attach path around it: work targeting another repo belongs to
+  that repo's own session (→ *One Session, One Repo*) — say so plainly.
 - **READ scope (unrestricted for public repos):** any public repo is always
   readable — `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`,
   `https://api.github.com/repos/<owner>/<repo>/...`, or the codeload tarball —
@@ -225,9 +251,10 @@ green-before-ready, auto-merge-on-approval, `codex-flagged` blocker, diff check,
 never force-push `main`.
 
 ## Conditional Auto-Merge on Green
-Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner ruling,
-2026-07-12): the diff classification for merging on green without a per-change
-approval, and the revert-first safety net.
+Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner rulings,
+2026-07-12 / 2026-08-18): auto-merge on green is the rule for every diff class —
+plus the two surviving stops (secrets or personal data in the diff; invented
+scope) and the revert-first safety net.
 
 ## Progress Visibility (owner ruling, 2026-07-17)
 Silent processing is indistinguishable from a hang. For any operation expected
@@ -329,35 +356,36 @@ the parallelism the spawn was for.
   2. **Self-pace with `ScheduleWakeup`** (or `send_later` — frequently
      **absent**, so verify per `/env-chk`, never assume). Schedule a check-in
      sized to the operation, re-check on wake, re-arm until terminal.
-     - The low-risk scheduling tools (`send_later`, `list_triggers`,
-       `delete_trigger`) are pre-approved in the settings template under both
-       server-name spellings — `mcp__Claude_Code_Remote__*` and
-       `mcp__claude-code-remote__*` — since permission rules match names exactly.
-     - **Web caveat (verified 2026-07-16):** claude.ai cloud sessions do NOT
-       apply project-level permission rules, and no personal-account setting
-       suppresses these prompts. Never tell the owner the settings block fixes
-       web popups.
-     - On web, minimize prompts instead: a PR-attached wait with `ci-notify.yml`
-       installed uses webhook wake ONLY (zero scheduling calls). Scheduling is
-       the fallback for waits with no PR attached — and then at most ONE
-       `send_later` per watched operation, re-armed only on fire, never one per
-       polling cycle.
-     - **No scheduled "backstop" checks** (owner ruling, 2026-07-18): failure
-       wakes natively, success wakes via ci-notify, and the owner's next message
-       covers the rare case both break. A parked session costs nothing; a
-       backstop costs a prompt every time. Sole exception: the one PR that
-       changes the wake mechanism itself may arm a single verification check.
-     - `create_trigger` / `update_trigger` / `fire_trigger` stay prompt-gated
-       deliberately — they can target other sessions or spawn new ones, a
-       persistence channel under prompt injection. **Deployment tools**
+     - All six scheduling tools (`send_later`, `create_trigger`,
+       `delete_trigger`, `update_trigger`, `fire_trigger`, `list_triggers`) are
+       pre-approved in the settings template under both server-name spellings —
+       `mcp__Claude_Code_Remote__*` and `mcp__claude-code-remote__*` — per
+       *Scheduling Tools Never Prompt* below; permission rules match names
+       exactly.
+     - Settings load at session start, so the allowlist covers the NEXT
+       session; a one-time prompt in an already-running session is accepted
+       (→ *Scheduling Tools Never Prompt*). A PR-attached wait with
+       `ci-notify.yml` installed needs no completion polling — webhook wake
+       covers failure and success — but a wait expected to exceed six minutes
+       still arms the heartbeat (→ *Status Line on Every Stop*).
+     - **Heartbeats supersede the old no-backstop rule** (2026-07-18 ruling
+       superseded 2026-08-18): any external wait longer than six minutes arms a
+       visible ~5-minute heartbeat (→ *Status Line on Every Stop*). The prompt
+       cost that motivated backstop-avoidance is gone — the scheduling tools
+       are pre-approved (→ *Scheduling Tools Never Prompt*). Event wakes remain
+       the primary signal; the heartbeat is the owner-visible liveness line on
+       top, never a replacement for them.
+     - `create_trigger` / `update_trigger` / `fire_trigger` are pre-approved
+       since 2026-08-18 (→ *Scheduling Tools Never Prompt*, whose accepted
+       residuals record the persistence-vector trade-off). **Deployment tools**
        (`mcp__Supabase__deploy_edge_function`, and anything else pushing
-       code/config to a live backend) likewise, by owner decision (2026-07-12):
-       never offer to add them to `permissions.allow`; reduce prompt fatigue by
-       **batching deploys**, not by removing the gate.
+       code/config to a live backend) stay prompt-gated, by owner decision
+       (2026-07-12): never offer to add them to `permissions.allow`; reduce
+       prompt fatigue by **batching deploys**, not by removing the gate.
      - **Projects bootstrapped before this template inherit nothing
        automatically.** The FIRST time a session hits a scheduling-tool prompt
        in an older repo, PR the current template's `permissions.allow` block
-       (both spellings, low-risk three only) into that repo's own
+       (both spellings, all six scheduling tools) into that repo's own
        `.claude/settings.json` — no need to ask; it's the session's own repo and
        `.claude/` config is auto-merge class. Note in the PR that the
        pre-approval activates from the NEXT session.
@@ -401,8 +429,8 @@ which is KEEP GOING.
   violation**, symmetric to idle-waiting during verification (→ *Pipelined
   Execution*'s turn-end test).
 - The stop gates are NEVER overridden by a standing authorization: Escalation
-  Rules above, the hold-for-approval diff classes (`git.md` → *Conditional
-  Auto-Merge on Green* — secrets, elevated config, any Supabase backend change),
+  Rules above, the surviving merge stops (`git.md` → *Conditional
+  Auto-Merge on Green* — secrets or personal data in the diff; invented scope),
   and genuine scope changes. Work NOT in the declared plan still needs the
   owner — momentum is never a license to invent scope.
 - When the declared list drains: report done and stop. A standing authorization
@@ -459,6 +487,47 @@ See docs/standards/automations.md for monitor setup and the automation-specific
 PR-lifecycle/escalation additions.
 See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 
+## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)
+Self-scheduling is how a session heartbeats, resumes after CI, and re-arms
+check-ins — a permission prompt the owner must click defeats the point. Every
+project repo's committed `.claude/settings.json` carries this allowlist
+(exactly these six tools; riskier remote tools — attaching repos, creating or
+archiving sessions — must keep prompting). Settings load at session start; a
+one-time prompt in an already-running session is accepted.
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude-code-remote__send_later",
+      "mcp__claude-code-remote__create_trigger",
+      "mcp__claude-code-remote__delete_trigger",
+      "mcp__claude-code-remote__update_trigger",
+      "mcp__claude-code-remote__fire_trigger",
+      "mcp__claude-code-remote__list_triggers",
+      "mcp__Claude_Code_Remote__send_later",
+      "mcp__Claude_Code_Remote__create_trigger",
+      "mcp__Claude_Code_Remote__delete_trigger",
+      "mcp__Claude_Code_Remote__update_trigger",
+      "mcp__Claude_Code_Remote__fire_trigger",
+      "mcp__Claude_Code_Remote__list_triggers"
+    ]
+  }
+}
+```
+
+(Both server-name spellings on purpose — the prefix differs between session
+surfaces.)
+
+**Accepted residuals (owner-approved 2026-08-18, after automated security
+review flagged both):** (i) auto-allowed trigger mutation is a persistence
+vector — content that hijacked a session could schedule itself future
+instructions without a prompt; accepted because the tools only message the
+owner's own sessions, `list_triggers` keeps the schedule auditable, and the
+owner chose ergonomics explicitly. (ii) carrying both server-name spellings
+means a future MCP server registering under the unused one would inherit the
+allows; accepted as unlikely — the owner controls their MCP config.
+
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.
 They now live alongside this file in the consolidated `claude.directives` repo:
@@ -499,13 +568,13 @@ before reporting "no access":
    typography, spacing, and interaction behavior from the image before
    implementing.
 
-## Cross-Repo Boundary
-A Claude Code session is connected to exactly one repository. Do NOT offer to
-add or modify other repositories from within a session (no `add_repo` offers, no
-cross-repo PRs). When work belongs in another repo — including this directives
-repo — compose a complete, paste-ready hand-off message for the owner to deliver
-to a session scoped to that repo, and stop there. This holds **even when the
-owner asks mid-session** ("upstream this to X"): respond with the hand-off
-message first, and use `add_repo` only if the owner then explicitly declines the
-hand-off and directs the add in so many words. (Owner reaffirmation 2026-07-13:
-one repo per session is less error-prone.)
+## One Session, One Repo (owner ruling, 2026-08-18)
+A session works in exactly the repository it was opened for. Never attach,
+clone, or write to another repository mid-session — not to "help", not because
+a request seems to belong there. When a request targets a different repo —
+including this directives repo — say which repo it belongs to and stop; the
+owner takes it to that repo's own session (a paste-ready hand-off message is
+welcome, per the Downstream-Finding Loop). Read access is unchanged
+(→ *Repository Scope*): the mandatory session-start directive fetches and
+read-only inspection of public repos (`/do-repo`) stay open — and reading
+never becomes an attach.

@@ -2,7 +2,8 @@
 
 > This file is **internal-only**. It governs sessions working *inside* this repo.
 > It is **not** imported downstream. The exported, company-wide directives that
-> other repos inherit live in `directives/` (`global.md`, `design.md`, `test.md`, `data.md`).
+> other repos inherit live in `directives/` (`global.md`, `git.md`, `design.md`,
+> `test.md`, `data.md`).
 
 ## Purpose
 `claude.directives` is the single, consolidated home for the company-wide agent
@@ -81,9 +82,10 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 ## Branch policy
 `global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
 (`claude/<name>` branches, never commit to `main`, draft PR on first push,
-squash-merge only when CI is green **and** the global.md merge gates hold —
-approval covers the merge, no `codex-flagged` label, no unresolved review
-threads, diff limited to the intended files). Repo-specific deltas:
+squash-merge on green — no approval is sought — once `git.md` → *Conditional
+Auto-Merge on Green* holds: a current-head Codex response or its documented
+unavailable outcome, no `codex-flagged` label, no unresolved review threads,
+diff limited to the intended files). Repo-specific deltas:
 - Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
   next from updated `main` rather than reusing/force-pushing one long-lived branch.
 - Before merging, verify the PR's file list against GitHub's own diff, not the
@@ -181,8 +183,8 @@ A directive repo must pass its own CI before it can be trusted downstream.
   leaves a choice. `build-logical-map.js`'s default geometry is a GRID whose
   gutters line up across rows precisely so those corridors exist. The map opens
   **collapsed** — each frame leads with its meaning and a delivery-mix bar, and its
-  files appear on request (search opens the frame holding a hit), because 109
-  filenames shown at once is a reference table rather than a map.
+  files appear on request (search opens the frame holding a hit), because a full
+  filename list shown at once is a reference table rather than a map.
   `qa.yml` also runs `build-logical-map.js --check`, so a committed map that no
   longer matches `EXPORTS.json` fails the build.
   (The old design-theme parity + contrast checks were retired with the fixed
@@ -291,10 +293,8 @@ check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
 local skip is fine for non-map changes.
 
 ## Escalation rules
-`global.md` → *Escalation Rules* apply here unchanged (stop and ask before
-deleting any file on `main`, modifying any workflow's trigger conditions, or
-pushing after 3 consecutive CI failures on the same issue). No repo-specific
-additions.
+`global.md` → *Escalation Rules* apply here unchanged — all four gates, not a
+subset. No repo-specific additions.
 
 ## Toolkit changes
 

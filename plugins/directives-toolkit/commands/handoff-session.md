@@ -150,3 +150,8 @@ copied forward until someone happens to read it.
 The same rule generalises — **anything only the human can do goes in the reply,
 not the block.** The block addresses the next session; if the next session cannot
 act on a line, it does not belong in it.
+
+
+> The closing format above ends the BODY. The status line required by
+> `global.md` → *Status Line on Every Stop* still follows it as the message's
+> final line.

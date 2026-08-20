@@ -66,7 +66,8 @@ verdict. Read-only — do NOT modify files. Execute in order:
    The guard matters because these clones are frequently shallow — a commit
    outside the fetch depth makes `git diff` fail outright rather than degrade.
    One bounded `git fetch --deepen 100` is worth trying; bare `--deepen` exits
-   129 because it requires a value. Then stop and take the uncategorised path. Anywhere else, or when the object is still missing, report the SHA
+   129 because it requires a value. If the object is STILL missing after that one
+   attempt, stop retrying. Anywhere else, or when the object is still missing, report the SHA
    delta **uncategorised and say classification was unavailable**, pointing at
    MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix. Never clone the repo
    to classify — the alarm is a diagnostic and must cost less than what it warns
@@ -149,3 +150,8 @@ Output a compact checklist with a checkmark or X per item for steps 1–7. End
 with a one-line "ready / not ready" verdict and any actions needed before
 starting work, then append the step-8 connectors/tools inventory below the
 verdict (reference info, not pass/fail).
+
+
+> The closing format above ends the BODY. The status line required by
+> `global.md` → *Status Line on Every Stop* still follows it as the message's
+> final line.

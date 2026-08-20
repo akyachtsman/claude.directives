@@ -1,5 +1,6 @@
 ---
 description: "Spec-driven build loop with the inherited directives as the constitution."
+argument-hint: "[specify|plan|implement|status] [feature-slug]"
 phase: plan
 benefits-from: [kickoff, diagnose]
 ---
@@ -18,6 +19,7 @@ defeats the methodology. With no phase, print `status` (below).
 One directory per feature, committed in the project repo:
 ```
 specs/<feature-slug>/
+  brief.md      ← written by /diagnose (Think), when run — `specify` reads it first
   spec.md       ← specify (WHAT & WHY, plus the clarifications it resolved)
   plan.md       ← plan (HOW: stack, architecture, task list, consistency check)
   research.md   ← written by /kickoff (competitive discovery), when run
@@ -29,11 +31,13 @@ specify → plan → implement.
 
 **Constitution: inherited, never regenerated.** spec-kit's first phase writes a
 constitution of principles. We already have one — the directives imported via
-`CLAUDE.md` (`global.md`, `design.md`, `data.md`, `test.md`). Every phase treats
+`CLAUDE.md` (`global.md`, `git.md`, `design.md`, `data.md`, `test.md`). Every phase treats
 those as binding: read them, cite the relevant rules, flag any violation. Do not
 generate a fresh principles file.
 
 ## Phase 1 — specify  (`/sdd-loop specify <feature>`)
+Read `specs/<slug>/brief.md` first if it exists — `/diagnose` writes it and hands
+off here, so its problem statement and chosen approach are this phase's input.
 Write `specs/<slug>/spec.md`: WHAT and WHY only — user stories, functional
 requirements, success criteria, explicit non-goals. **No tech stack, no
 "how".** Keep it testable: each requirement should map to something verifiable

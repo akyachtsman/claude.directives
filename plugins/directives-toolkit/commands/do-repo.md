@@ -1,5 +1,6 @@
 ---
 description: "Inspect, compare, or audit any public GitHub repo via gh api — no clone."
+argument-hint: "<owner/repo> [inspect|compare <target>|audit]"
 phase: cross-cutting
 ---
 Generic cross-repo operator. Invoked as `/do-repo <repo> <command>`, where
@@ -56,3 +57,8 @@ path/section exists and report which are missing.
 Always end with a compact verdict: for `inspect`, the file count and tree; for
 `compare`, the three-way only-left / only-right / differs summary; for `audit`,
 a pass/fail list of checks. Keep it scannable. Never modify the target repo.
+
+
+> The closing format above ends the BODY. The status line required by
+> `global.md` → *Status Line on Every Stop* still follows it as the message's
+> final line.

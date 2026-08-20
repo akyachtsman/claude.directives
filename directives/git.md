@@ -17,13 +17,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   applies)
 - Fix all CI failures before marking ready for review
 - Mark PR ready only when all checks pass
-- **Auto-merge on approval:** once the user approves a change, that approval
-  covers merging it — don't ask a second time. Squash-merge as soon as the
-  required CI checks are green, **provided** the PR has no `codex-flagged`
-  label, no unresolved review threads, and a diff limited to the intended files.
-  If any condition fails, pause and surface it instead of merging. Always report
-  the merge result. Merging on green **without** a per-change approval is the
-  rule, not the exception — see *Conditional Auto-Merge on Green* below.
+- **Auto-merge on green:** squash-merge as soon as the gates hold — see
+  *Conditional Auto-Merge on Green* below for the gate list and the two
+  surviving stops. If any gate fails, pause and surface it instead of merging.
+  Always report the merge result; reporting is not asking.
 - **Unsubscribe before merging** via `unsubscribe_pr_activity` — past that point
   every delivered event is a notice about the merge you are performing. If the
   merge is then blocked, re-subscribe (the call is idempotent).

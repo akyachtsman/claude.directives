@@ -10,8 +10,9 @@ all detected by event-driven infra workflows — no session, no polling:
 | Playwright failure | `qa.yml` / `qa-live.yml` | failing CI check on the PR |
 
 GitHub automatically emails issue comments and label events, so the inbox is
-notified without polling. For in-session fast feedback, poll via
-`mcp__github__actions_list`.
+notified without polling. A watching session is woken by the PR-comment webhook
+(`ci-notify.yml`) on green and natively on failure — never poll (`git.md` →
+*GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
 > This repo's own `ci-failure` issues come from its **directive-validation**
 > checks (link / section / path); a downstream project's come from its build /

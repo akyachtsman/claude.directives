@@ -178,7 +178,7 @@ complete, nothing to toggle or forget. Browser-only throughout: the only "CLI"
 remains the one-time env setup-script paste.
 
 What `/new-repo` scaffolds in **every** project:
-- `CLAUDE.md` (from `CLAUDE-template.md`) + the four directive URLs + `index.html`
+- `CLAUDE.md` (from `CLAUDE-template.md`) + the five directive URLs + `index.html`
   + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
 - **all ten** workflows: `qa.yml`, `qa-live.yml`, `ci-notify.yml`, `ci-monitor.yml`,

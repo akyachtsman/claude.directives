@@ -210,8 +210,7 @@ needed. Full detail: `docs/standards/cicd-setup.md` Step 9d.
 ## Automation 4c — CI-Success Wake Signal (infra-resident, event-driven)
 
 **Goal:** Let a watching web session wake on CI **success** without polling —
-GitHub delivers failures natively but never green, and on web every
-scheduling-tool poll costs a permission prompt.
+GitHub delivers failures natively but never green.
 
 **How it works:**
 - Trigger: `workflow_run` (completed) on the QA workflows shipped in the set.

@@ -54,7 +54,9 @@ re-derive it from the tree.
 Execute these before any task work:
 1. Read `CLAUDE.md` for current project state (and any Project-Specific Test Scenarios)
 2. Subscribe to PR activity on all open PRs via `subscribe_pr_activity`
-3. Poll GitHub Actions API (`mcp__github__actions_list`) for any failures since the last session
+3. Read the last run's status ONCE via `mcp__github__actions_list` to catch up on
+   failures since the last session — a single catch-up read, never a poll loop
+   (`git.md` → *GitHub API Quota Economy*)
 4. Confirm `ci-monitor.yml`, `codex-monitor.yml`, and (for Pages projects) `pages-monitor.yml`
    are present in `.github/workflows/` — add any missing from `templates/workflows/`
 
@@ -66,7 +68,9 @@ Execute these before any task work:
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach
 the backend**, so auth-gated views (login, portal, drill-downs) are untestable
-there and its `ui-tests` job is non-blocking by design. The **canonical
+there and those scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
+`ui-tests` job itself stays **blocking** for everything it can reach (→ *CI
+triage*); only the auth-gated scenarios are exempt, by skipping. The **canonical
 mechanism for testing authenticated flows is `qa-live.yml`**: it runs Playwright
 against the deployed URL and logs in with a per-project seeded test account
 (`TEST_AUTH_CREDENTIAL` secret + `APP_URL` variable). Its live step is blocking —

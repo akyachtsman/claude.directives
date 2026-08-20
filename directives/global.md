@@ -77,7 +77,8 @@ Narration is overhead, never the deliverable.
   gates." Never "Let me…", "I'll now…", "First, I'm going to…".
 - **Never narrate compliance.** Following the rulebook is compliance; saying you
   are following it is performance.
-- **No preamble, no sign-off.** Answer, then stop.
+- **No preamble, no sign-off.** Answer, then stop. (The status line is not a
+  sign-off — it is required; → *Status Line on Every Stop*.)
 
 Long operations keep their announce line, between-step status, and "parked"
 statement — shorten the wording, never drop the update.
@@ -105,9 +106,9 @@ definition fixes its own closing line or block keeps it — the status line
 follows it as the message's true final line; command formats end the body,
 never the message.
 
-**Heartbeat:** any external wait longer than SIX minutes — CI, a deploy, a
+**Heartbeat:** any external wait longer than five minutes — CI, a deploy, a
 long-running job — arms a visible heartbeat: a one-line status ("Waiting for
-CI (PR #845) — 12m elapsed") roughly every 5 minutes until the wait resolves,
+CI (PR #845) — 12m elapsed") roughly every five minutes until the wait resolves,
 never a silent re-arm. A missing heartbeat means the session is hung — which
 is otherwise indistinguishable from waiting, and that distinction is the
 heartbeat's whole purpose.
@@ -250,7 +251,7 @@ plugin's push-gate hook enforces no-direct-push-to-main mechanically).
 
 ## PR Lifecycle
 Lives in `directives/git.md` → *PR Lifecycle*: draft-first, subscribe on open,
-green-before-ready, auto-merge-on-approval, `codex-flagged` blocker, diff check,
+green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
 never force-push `main`.
 
 ## Conditional Auto-Merge on Green
@@ -357,9 +358,10 @@ work), then do the inline work, then integrate.
      (standard scaffold), CI SUCCESS arrives too, as a PR comment. A PR-attached
      wait therefore needs NO scheduler: end the turn saying you'll report back,
      and act on the event.
-  2. **Self-pace with `ScheduleWakeup`** (or `send_later` — frequently
-     **absent**, so verify per `/env-chk`, never assume). Schedule a check-in
-     sized to the operation, re-check on wake, re-arm until terminal.
+  2. **Self-pace with `send_later`** (pre-approved per *Scheduling Tools Never
+     Prompt*; `ScheduleWakeup` where a session has it instead — verify per
+     `/env-chk`, never assume either). Schedule a check-in sized to the
+     operation, re-check on wake, re-arm until terminal.
      - All six scheduling tools (`send_later`, `create_trigger`,
        `delete_trigger`, `update_trigger`, `fire_trigger`, `list_triggers`) are
        pre-approved in the settings template under both server-name spellings —
@@ -391,7 +393,7 @@ work), then do the inline work, then integrate.
        in an older repo, PR the current template's `permissions.allow` block
        (both spellings, all six scheduling tools) into that repo's own
        `.claude/settings.json` — no need to ask; it's the session's own repo and
-       `.claude/` config is auto-merge class. Note in the PR that the
+       merges on green like every other change. Note in the PR that the
        pre-approval activates from the NEXT session.
   3. **Condition-wait with `Monitor`** only when you must block on a specific
      state — always with an exit condition and a hard timeout.

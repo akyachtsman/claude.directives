@@ -11,8 +11,12 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // contains fenced snippets whose lines start with `#`, so a deleted section whose
 // name survives inside an example would satisfy a raw heading match.
 const stripFences = (content) => content.replace(/^```[\s\S]*?^```/gm, '');
+// Anchor the name at the START of the heading text. A leading `.*` let a renamed
+// heading keep the old phrase as a qualifier — `## Deprecated Session Start`
+// satisfied the gate for `Session Start`, certifying a section that is gone.
+// A TRAILING qualifier stays legal (`## Session Start (legacy)`).
 const hasHeading = (content, section) =>
-  new RegExp(`^#{1,6}[ \\t]+.*${esc(section)}`, 'm').test(stripFences(content));
+  new RegExp(`^#{1,6}[ \\t]+${esc(section)}(?![A-Za-z0-9])`, 'm').test(stripFences(content));
 
 let failed = false;
 

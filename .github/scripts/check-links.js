@@ -142,7 +142,18 @@ if (mode !== '--external') {
         if (cand.length === 1) path = cand[0];
       }
       const r = resolves(path, section);
-      if (r === null) continue;                    // unresolvable target file
+      if (r === null) {
+        // Only a BARE reference (no file named) may be skipped — its target is the
+        // current file, which exists by construction. An explicit `foo.md` → *Bar*
+        // naming a file nothing can resolve is broken, and no other check covers
+        // bare filenames in arbitrary Markdown: silently skipping it reported
+        // "0/0 cross-references resolve" and exited 0.
+        if (explicit) {
+          console.error(`FAIL: ${file}: cross-reference names "${target}", which resolves to no file in the repo`);
+          failed = true;
+        }
+        continue;
+      }
       xrefs++;
       if (!r) {
         console.error(`FAIL: ${file}: section cross-reference "${section}" has no matching heading in ${path}`);

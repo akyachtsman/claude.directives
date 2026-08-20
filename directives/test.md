@@ -63,7 +63,10 @@ Execute these before any task work:
 ## Playwright
 - Always use `page.goto('./')`, never `page.goto('/')`
 - Normalize `APP_URL` to end with `/` in `playwright.config.js`
-- `UI Tests (local server)` failures with `API status: no call` are expected and non-blocking in CI
+- `API status: no call` is expected for a local run that cannot reach the backend;
+  the auth-gated scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
+  `UI Tests (local server)` job itself is **blocking** — only those skipped
+  scenarios are exempt, never a real Playwright failure (→ *CI triage*)
 
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach

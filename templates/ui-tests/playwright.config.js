@@ -32,6 +32,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
     },
     {
+      // Tablet is its own class, not an interpolation between the two: global.md
+      // requires laptop, tablet AND phone, and Pixel 5 + iPhone 12 are both phone
+      // profiles, so a tablet-only breakpoint regression was invisible.
+      name: 'tablet',
+      use: { ...devices['iPad (gen 7) landscape'] },
+    },
+    {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 5'] },
     },

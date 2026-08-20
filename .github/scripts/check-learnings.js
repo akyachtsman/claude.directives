@@ -24,8 +24,12 @@ lines.forEach((line, i) => {
   if (d.type && !TYPES.has(d.type)) {
     fail(`line ${n}: type "${d.type}" is not one of ${[...TYPES].join(' | ')} (see commands/learn.md)`);
   }
-  if (typeof d.confidence === 'number' && (d.confidence < 1 || d.confidence > 10)) {
-    fail(`line ${n}: confidence ${d.confidence} outside 1-10`);
+  // Guard the TYPE first: `typeof x === 'number' && out-of-range` passes a string
+  // "high" straight through, so the gate certified an entry whose numeric contract
+  // consumers rely on was never numeric.
+  if ('confidence' in d && !(typeof d.confidence === 'number' && Number.isFinite(d.confidence)
+      && d.confidence >= 1 && d.confidence <= 10)) {
+    fail(`line ${n}: confidence ${JSON.stringify(d.confidence)} must be a number 1-10`);
   }
   if (d.ts && Number.isNaN(Date.parse(d.ts))) fail(`line ${n}: ts "${d.ts}" is not a valid date`);
   if (d.key) keys.set(d.key, (keys.get(d.key) ?? 0) + 1);

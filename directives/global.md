@@ -84,8 +84,9 @@ statement — shorten the wording, never drop the update.
 
 ## Status Line on Every Stop (owner ruling, 2026-08-18)
 Every time a session stops working — end of turn, end of task, blocked, or
-parked — the message's final line is exactly one of these statuses, so the
-owner never has to ask whether the session is working or waiting:
+parked — the message's final line is a status line in this vocabulary (the
+four canonical states below, or an intermediate state named the same way), so
+the owner never has to ask whether the session is working or waiting:
 
 - **"Waiting for CI"** — tests running; the session resumes itself on the
   result.
@@ -95,9 +96,11 @@ owner never has to ask whether the session is working or waiting:
 - **"all done"** — the queue is genuinely empty: nothing in flight, no CI, no
   background agents, no scheduled check-ins. Reserved for exactly that.
 
+The grammar: a short status phrase, optionally a parenthetical subject with
+elapsed time ("Waiting for CI (PR #845) — 12m elapsed"), optionally pending
+items after a colon ("Waiting for CI: PR #845 → merge → deploy-verify").
 Intermediate states name themselves the same way ("Merged" while the deploy
-builds). A stop with no status line is a directive violation. Multiple pending
-items append after a colon: "Waiting for CI: PR #845 → merge → deploy-verify."
+builds). A stop with no status line is a directive violation.
 
 **Heartbeat:** any external wait longer than SIX minutes — CI, a deploy, a
 long-running job — arms a visible heartbeat: a one-line status ("Waiting for
@@ -362,8 +365,9 @@ the parallelism the spawn was for.
      - Settings load at session start, so the allowlist covers the NEXT
        session; a one-time prompt in an already-running session is accepted
        (→ *Scheduling Tools Never Prompt*). A PR-attached wait with
-       `ci-notify.yml` installed still needs no scheduling call at all —
-       webhook wake covers failure and success alike.
+       `ci-notify.yml` installed needs no completion polling — webhook wake
+       covers failure and success — but a wait expected to exceed six minutes
+       still arms the heartbeat (→ *Status Line on Every Stop*).
      - **Heartbeats supersede the old no-backstop rule** (2026-07-18 ruling
        superseded 2026-08-18): any external wait longer than six minutes arms a
        visible ~5-minute heartbeat (→ *Status Line on Every Stop*). The prompt
@@ -566,9 +570,11 @@ before reporting "no access":
 
 ## One Session, One Repo (owner ruling, 2026-08-18)
 A session works in exactly the repository it was opened for. Never attach,
-clone, read, or write another repository mid-session — not to "help", not
-because a request seems to belong there. When a request targets a different
-repo — including this directives repo — say which repo it belongs to and stop;
-the owner takes it to that repo's own session (a paste-ready hand-off message
-is welcome, per the Downstream-Finding Loop). Read-only inspection of public
-repos via `/do-repo` is the sole exception, and it never becomes an attach.
+clone, or write to another repository mid-session — not to "help", not because
+a request seems to belong there. When a request targets a different repo —
+including this directives repo — say which repo it belongs to and stop; the
+owner takes it to that repo's own session (a paste-ready hand-off message is
+welcome, per the Downstream-Finding Loop). Read access is unchanged
+(→ *Repository Scope*): the mandatory session-start directive fetches and
+read-only inspection of public repos (`/do-repo`) stay open — and reading
+never becomes an attach.

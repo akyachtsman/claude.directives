@@ -9,11 +9,12 @@ offer cross-repo capability you can't deliver (the Repository Scope rule in
 
 Execute in order:
 
-1. **In-scope repo(s).** Identify the repo(s) this session can actually act on:
+1. **In-scope repo(s).** Identify the repo(s) this session was OPENED for:
    - `git remote -v` — the cloned repo this session is working in.
-   - The GitHub MCP is hard-scoped to that repo (and any others explicitly
-     configured for the session). These are the ONLY repos you can read, write,
-     branch, or open PRs against.
+   - The GitHub MCP is hard-scoped to the session's opened repo(s). A repo the
+     MCP can merely see but that this session was not opened for is NOT
+     actionable (`global.md` → *One Session, One Repo*) — acting on it
+     mid-session is off-policy even where a tool call would succeed.
 
 2. **Attach tools are not permission.** Check via **ToolSearch** whether the
    `add_repo` / `list_repos` tools (claude-code-remote server) actually exist in

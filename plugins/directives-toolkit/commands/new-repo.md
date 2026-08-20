@@ -125,19 +125,18 @@ Execute in order:
    Also copy `claude.directives/templates/claude-settings.json` to
    `.claude/settings.json` (merge into any existing one): it registers the
    claude-directives marketplace, enables the directives-toolkit plugin
-   for every session on this repo, and pre-approves the low-risk Claude Code
-   Remote scheduling tools (`send_later`, `list_triggers`, `delete_trigger`) —
-   they only schedule messages back into the session's own future
-   (PR-babysitting check-ins), and per-call permission prompts defeat
-   unattended monitoring. The connector registers under two server-name
+   for every session on this repo, and pre-approves all six Claude Code
+   Remote scheduling tools (`send_later`, `create_trigger`, `delete_trigger`,
+   `update_trigger`, `fire_trigger`, `list_triggers`) per `global.md` →
+   *Scheduling Tools Never Prompt* (owner ruling, 2026-08-18; its accepted
+   residuals record the persistence-vector trade-off) — self-scheduling is how
+   a session heartbeats and resumes after CI, and per-call permission prompts
+   defeat unattended monitoring. The connector registers under two server-name
    spellings depending on surface (`mcp__Claude_Code_Remote__*` vs
    `mcp__claude-code-remote__*`) and permission rules match exactly, so the
-   template lists each tool in BOTH spellings — keep both. Do NOT "complete
-   the set": `create_trigger` / `update_trigger` / `fire_trigger` stay
-   prompt-gated deliberately in either spelling — they can target other
-   sessions or spawn new ones, making them a persistence channel under
-   prompt injection (flagged by automated security review on claude.trading
-   PR #30). The guard hooks ship inside the plugin.
+   template lists each tool in BOTH spellings — keep both. Riskier remote
+   tools — attaching repos, creating or archiving sessions — must keep
+   prompting; do not add them. The guard hooks ship inside the plugin.
 
    The settings template also registers a `SessionStart` hook, so copy
    `claude.directives/templates/claude-hooks/session-start.sh` to

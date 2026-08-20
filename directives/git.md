@@ -79,12 +79,14 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or
   re-cut from `main`, if they disagree)
 - **Any PR touching `.github/workflows/**` gets a line-by-line read of that diff
-  before approval or merge** (owner ruling, 2026-07-19), regardless of source or
-  green CI. Workflow files run with secrets and outlive the session that wrote
-  them. They're already excluded from auto-merge; this adds that the approval
-  itself must be eyes-on-the-diff, never approval-by-momentum. A workflow file
-  appearing in a PR that wasn't supposed to touch workflows is a
-  stop-and-diagnose, not a merge-and-see.
+  before merge** (owner ruling, 2026-07-19), regardless of source or green CI.
+  Workflow files run with secrets and outlive the session that wrote them.
+  They auto-merge on green like every other class (2026-08-18) — this gate
+  makes the merging session read the diff eyes-on first, never
+  merge-by-momentum. A workflow file appearing in a PR that wasn't supposed to
+  touch workflows is a stop-and-diagnose, not a merge-and-see. Modifying a
+  workflow's TRIGGER conditions remains stop-and-ask before making the change
+  (`global.md` → Escalation Rules) — a change-authority gate, not a merge gate.
 - Never force-push to `main`
 
 ## Conditional Auto-Merge on Green (owner rulings, 2026-07-12 / 2026-08-18)

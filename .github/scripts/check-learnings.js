@@ -45,8 +45,16 @@ lines.forEach((line, i) => {
       && d.confidence >= 1 && d.confidence <= 10)) {
     fail(`line ${n}: confidence ${JSON.stringify(d.confidence)} must be a number 1-10`);
   }
-  if (typeof d.ts === 'string' && d.ts.trim() && Number.isNaN(Date.parse(d.ts))) {
-    fail(`line ${n}: ts "${d.ts}" is not a valid date`);
+  // Validate the FORMAT, not just that JS can read it: Date.parse accepts many
+  // implementation-dependent forms ("2026", "August 20, 2026") whose meaning can
+  // differ between consumers, while /learn declares ISO-8601.
+  if (typeof d.ts === 'string' && d.ts.trim()) {
+    const ISO = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+    if (!ISO.test(d.ts.trim())) {
+      fail(`line ${n}: ts "${d.ts}" is not ISO-8601 (expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)`);
+    } else if (Number.isNaN(Date.parse(d.ts))) {
+      fail(`line ${n}: ts "${d.ts}" is ISO-shaped but not a real date`);
+    }
   }
   if (d.key) keys.set(d.key, (keys.get(d.key) ?? 0) + 1);
 });

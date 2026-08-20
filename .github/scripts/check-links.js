@@ -125,7 +125,10 @@ if (mode !== '--external') {
   const XREF_SELF = /(?:^|[^`\w])(?:→|->)\s*\*([^*\n]+?)\*/g;
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
-    const content = readFileSync(file, 'utf8');
+    // Fence-stripped on the SOURCE side as well as the target side: an
+    // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
+    // a live reference, and collecting it fails CI on correct documentation.
+    const content = stripFences(readFileSync(file, 'utf8'));
     const checks = [];
     for (const m of content.matchAll(XREF_FILE)) checks.push([m[1], m[2], true]);
     // Record where the explicit-file form matched, so the self form below does

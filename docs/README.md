@@ -34,11 +34,15 @@ Referenced by the exported directives and the qa agents.
 | File | What it covers |
 |------|----------------|
 | `internal/repo-monitors.md` | This repo's own infrastructure monitors (`ci-monitor`, `codex-monitor`, `pages-monitor`) **and self-test triage** (the `ci-failure` / `codex-flagged` flow) |
-| `internal/design-migration.md` | The per-project generative design migration (tokens + `/design-intake` + Stitch/frontend-design) — the record of the plan, now implemented |
+| `internal/archive/design-migration.md` | The per-project generative design migration (tokens + `/design-intake` + Stitch/frontend-design) — the record of the plan, now implemented |
+| `internal/repo-map-ui.md` | What the `Repo Map UI` suite covers and why — interaction, input surface, visual invariants, the router's provenance. Read before changing the map, the generator or the suite |
+| `internal/skill-eval-notes.md` | Auto-skill eval baseline and the worked description-tuning cases behind it |
+| `internal/accepted-residuals.md` | Security trade-offs the owner explicitly accepted, with the reasoning (currently: the scheduling-tool allowlist) |
 
 ## `site/` — GitHub Pages assets
 | File | What it is |
 |------|------------|
+| `site/logical-map.js` | The map's hand-written behaviour — pan/zoom/search/isolate, drag-to-move and drag-to-resize with per-browser persistence, and the edge router. Generated HTML loads it; never generated itself |
 | `site/logical-map.html` | The repo map (logical view) — domains, compartments, swap classes, vendor sockets (the `EXPORTS.json` view); zoom/pan/search, self-contained (no CDN). The physical-folders view was retired 2026-07-21 |
 | `site/commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
 | `site/react-demo.html` | Live browser-only React button (vendored React, no build, no CDN) — demos the production-tier preview technique; pairs with `site/vendor/` |

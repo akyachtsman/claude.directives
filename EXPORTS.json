@@ -2,7 +2,7 @@
   "_comment": "The machine-readable export boundary: every path downstream projects consume, grouped by HOW it reaches them (which determines how changes propagate). Validated by .github/scripts/check-exports.js in qa.yml: every path must exist, and every raw-URL self-reference in the tree must point inside one of these paths. Anything not listed here is internal to this repo and safe to move.",
   "categories": {
     "inherited-rules": {
-      "mode": "fetched live by raw URL at session start — changes propagate immediately",
+      "mode": "fetched live by raw URL at session start \u2014 changes propagate immediately",
       "paths": [
         "directives/global.md",
         "directives/git.md",
@@ -12,7 +12,7 @@
       ]
     },
     "installed-tooling": {
-      "mode": "installed via the plugin marketplace / SessionStart hook — propagates to the next session for projects carrying .claude/hooks/session-start.sh, otherwise on the env cache rebuild (~weekly); versioned by git SHA",
+      "mode": "installed via the plugin marketplace / SessionStart hook \u2014 propagates to the next session for projects carrying .claude/hooks/session-start.sh, otherwise on the env cache rebuild (~weekly); versioned by git SHA",
       "paths": [
         ".claude-plugin/marketplace.json",
         "plugins/directives-toolkit/",
@@ -20,13 +20,13 @@
       ]
     },
     "copied-scaffolding": {
-      "mode": "copied into projects at bootstrap — snapshots that drift by design; /refresh-repo detects drift",
+      "mode": "copied into projects at bootstrap \u2014 snapshots that drift by design; /refresh-repo detects drift",
       "paths": [
         "templates/"
       ]
     },
     "referenced-docs": {
-      "mode": "read on demand via links — no copy, no install",
+      "mode": "read on demand via links \u2014 no copy, no install",
       "paths": [
         "docs/standards/",
         "docs/guides/",
@@ -36,7 +36,7 @@
     }
   },
   "domains": {
-    "_comment": "The LOGICAL view, orthogonal to categories (which encode propagation): domain → compartment → paths. A compartment is the swappable unit — replace its file set honoring its interface and nothing outside it moves. Rendered visually at docs/site/logical-map.html; boundaries and swap procedure in MAINTAIN-REPO-USER-INSTRUCTIONS.md → Domain Boundaries. Validated by check-exports.js: every path must exist.",
+    "_comment": "The LOGICAL view, orthogonal to categories (which encode propagation): domain \u2192 compartment \u2192 paths. A compartment is the swappable unit \u2014 replace its file set honoring its interface and nothing outside it moves. Rendered visually at docs/site/logical-map.html; boundaries and swap procedure in MAINTAIN-REPO-USER-INSTRUCTIONS.md \u2192 Domain Boundaries. Validated by check-exports.js: every path must exist.",
     "global": {
       "core": [
         "directives/global.md"
@@ -170,7 +170,7 @@
     }
   },
   "swap": {
-    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced — this covers directives/ and the exported standards under docs/standards/, since both carry blocking criteria; the meta domain is permanent in its entirety. ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit — a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
+    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced \u2014 this covers directives/ and the exported standards under docs/standards/, since both carry blocking criteria; the meta domain is permanent in its entirety. ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit \u2014 a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
     "permanent": [
       "directives/global.md",
       "directives/git.md",
@@ -178,7 +178,9 @@
       "directives/data.md",
       "directives/design.md",
       "docs/standards/code-review-standard.md",
-      "docs/standards/ci-triage.md"
+      "docs/standards/ci-triage.md",
+      "docs/standards/automations.md",
+      "docs/standards/cicd-setup.md"
     ],
     "orchestrators": [
       "plugins/directives-toolkit/commands/sdd-loop.md",
@@ -186,7 +188,7 @@
     ]
   },
   "classes": {
-    "_comment": "Durability classes over the exported set — WHAT KIND of thing each file is, and therefore what happens to it as models improve. Independent of `swap` (which says whether a path may be replaced) and of `domains` (which says what it belongs to). Every path in `domains` must appear in exactly one class; check-exports.js enforces the partition, so this view cannot rot the way an unchecked diagram would. Drawn at docs/site/logical-map.html, which build-logical-map.js generates from this file.",
+    "_comment": "Durability classes over the exported set \u2014 WHAT KIND of thing each file is, and therefore what happens to it as models improve. Independent of `swap` (which says whether a path may be replaced) and of `domains` (which says what it belongs to). Every path in `domains` must appear in exactly one class; check-exports.js enforces the partition, so this view cannot rot the way an unchecked diagram would. Drawn at docs/site/logical-map.html, which build-logical-map.js generates from this file.",
     "standard": {
       "label": "Standards",
       "blurb": "State blocking criteria a change must satisfy. Model-independent: a smarter model still has to meet them.",
@@ -213,7 +215,7 @@
     },
     "behavioral": {
       "label": "Behavioral scaffolding",
-      "blurb": "Tells a model HOW to act. The only class that decays as models improve — audit it whenever the model tier changes.",
+      "blurb": "Tells a model HOW to act. The only class that decays as models improve \u2014 audit it whenever the model tier changes.",
       "paths": [
         "plugins/directives-toolkit/commands/diagnose.md",
         "plugins/directives-toolkit/commands/kickoff.md",
@@ -294,7 +296,7 @@
     }
   },
   "externals": {
-    "_comment": "Vendor-owned capabilities this system depends on but does not contain — we hold only the sockets. To swap a vendor: rewire the listed socket files, never fork the vendor's code. serves = domain.compartment from the domains view. sockets = the files here that name/enable/configure it (must exist; validated).",
+    "_comment": "Vendor-owned capabilities this system depends on but does not contain \u2014 we hold only the sockets. To swap a vendor: rewire the listed socket files, never fork the vendor's code. serves = domain.compartment from the domains view. sockets = the files here that name/enable/configure it (must exist; validated).",
     "pr-review-toolkit": {
       "vendor": "Anthropic",
       "serves": "test.review",
@@ -446,6 +448,66 @@
       "verdict": "rejected",
       "rationale": "Its eval MODEL (query + should-fire, scored over repeated runs) shaped the first local runner, which `claude plugin eval` has now replaced entirely. Its own runner is unusable: scripts/run_eval.py returns on the FIRST tool use of the FIRST assistant message, so any preamble reads as no-trigger -- it scored the known-good pdf skill 0.00. Nothing of it remains in the repo; kept as a rejected-with-reason so no audit re-adopts it for trigger testing.",
       "stays": "CLAUDE.md"
+    },
+    "update-config": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "Built-in skill for settings.json editing: permissions, env vars, and hook registration. Overlaps /refresh-repo Phase 1.5, which hand-writes jq to merge the SessionStart row and the permissions.allow block. Deferred rather than borrowed because refresh-repo's job is a NEGOTIATED sync (diff the installed copy against upstream, disposition each drift), not a settings edit; update-config performs the write but decides nothing. Revisit if refresh-repo's jq needs another repair - the write half should delegate then.",
+      "stays": "plugins/directives-toolkit/commands/refresh-repo.md"
+    },
+    "fewer-permission-prompts": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Built-in skill that mines transcripts for common tool calls and proposes an allowlist. Our allowlist is not discovered from usage - it is an owner ruling (global.md -> Scheduling Tools Never Prompt) naming exactly six tools with recorded accepted residuals, deliberately excluding the riskier remote tools a usage-mined list would surface. Adopting it would widen the grant by exactly the mechanism the ruling rejects.",
+      "stays": "directives/global.md"
+    },
+    "init": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Built-in skill that writes a CLAUDE.md by reading the codebase. /new-repo writes one from templates/CLAUDE-template.md, which carries the imported directive URLs, the UI-test config table, the project-specific test scenarios table the ui-tester refuses to run without, and the reporting contract. A codebase-derived CLAUDE.md has none of those, and a new repo has no codebase to derive from.",
+      "stays": "templates/CLAUDE-template.md"
+    },
+    "claude-code-setup": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Sets up Claude Code in an existing repo. /new-repo bootstraps against THIS fleet's standard: the workflow set, the composite actions, the Playwright kit, styles/, the marketplace + plugin enablement, and the SessionStart hook. Generic setup delivers none of it.",
+      "stays": "plugins/directives-toolkit/commands/new-repo.md"
+    },
+    "session-report": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Summarises a session. /handoff-session is deliberately the opposite: global.md -> Handoffs Carry Only What Dies With the Session makes it delta-only, and a comprehensive summary is precisely the failure mode that ruling exists to prevent.",
+      "stays": "plugins/directives-toolkit/commands/handoff-session.md"
+    },
+    "code-simplifier": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Anthropic plugin, plus the built-in /simplify skill. Used for per-file quality cleanup; /audit-repo keeps only what neither does - repo-wide directive drift, the CLAUDE.md grade, native-parity, and structural soundness across the tree.",
+      "stays": "plugins/directives-toolkit/commands/audit-repo.md"
+    },
+    "artifact-design": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Built-in skill; the design-side sibling of artifact-diagramming and dataviz, both already borrowed. Authority for any published Artifact's design pass. design.md defers to it the way it defers to the other two.",
+      "stays": "directives/design.md"
+    },
+    "artifact-capabilities": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Built-in skill defining the runtime capabilities a published Artifact may declare. Required reading before /doc-comp publishes its diff as an Artifact rather than writing an undeliverable local file.",
+      "stays": "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
+    },
+    "lsp-plugins": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "The eleven language-server plugins (typescript-lsp, pyright-lsp, gopls-lsp, ...). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive eleven verdicts.",
+      "stays": "CLAUDE.md"
+    },
+    "output-styles": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "explanatory-output-style and learning-output-style change how a session narrates. global.md -> Plain Language First and Say It in Verbs already own that, as owner rulings; a plugin that overrides them would contradict the directives.",
+      "stays": "directives/global.md"
     }
   }
 }

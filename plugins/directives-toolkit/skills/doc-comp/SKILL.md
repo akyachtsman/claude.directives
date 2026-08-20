@@ -1,11 +1,15 @@
 ---
 name: doc-comp
-description: "Use whenever asked to compare, diff, or say what changed between two documents, versions, drafts or revisions — whether they are files or pasted inline. Produces a side-by-side HTML diff with margin notes on substantive changes."
+description: "Use whenever asked to compare, diff, redline, or say what changed between two documents, contracts, agreements, versions, drafts or revisions — whether they are files or pasted inline. Produces a side-by-side HTML diff with margin notes on substantive changes."
 phase: cross-cutting
 ---
-When asked to compare two documents, produce a self-contained downloadable HTML
-file with a line-by-line side-by-side comparison. Provide a link to the file
-after creation.
+When asked to compare two documents, produce a self-contained HTML file with a
+line-by-line side-by-side comparison, then **publish it with the `Artifact`
+tool** and hand the user the returned URL. (Load the `artifact-design` skill
+before writing it, and `artifact-capabilities` if the page needs any runtime
+behaviour.) Do NOT promise a "downloadable file" and a local path: in a
+web/remote session a path is not a link, and the viewer sandbox blocks
+page-initiated downloads — the Artifact URL is the deliverable.
 
 Layout:
 - Left column:  original / baseline document

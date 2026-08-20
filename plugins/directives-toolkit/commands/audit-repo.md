@@ -12,7 +12,11 @@ Then recursively visit EVERY file in the repository (skip only vendored/build
 artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
 - Directive drift — code/config that violates a directive rule.
 - Errors — syntax errors, broken references, dead imports, invalid config,
-  malformed data, things that won't run.
+  malformed data, things that won't run. For per-file correctness and quality
+  depth, delegate to the natives — `/code-review --effort high` and `/simplify`
+  (`EXPORTS.json` → `considered.code-simplifier`) — and keep this sweep on what
+  they cannot see: repo-wide directive drift, the CLAUDE.md grade, native
+  parity, and structural soundness across the tree.
 - Redundancies and duplications — **a first-class finding class, not a
   footnote** (`global.md` → *Reuse Before Rewrite*). Hunt for: duplicated code,
   repeated literals/constants, copy-pasted blocks, overlapping functions, dead/

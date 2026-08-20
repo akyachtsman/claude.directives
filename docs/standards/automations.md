@@ -110,11 +110,9 @@ watcher in the same PR), to watch an extra workflow, or to REMOVE the name of a
 standard workflow you chose not to install — see *Watcher Rules* (W1) above.
 Optionally verify with a manual `workflow_dispatch` run.
 
-**To install in a project:**
-```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
-  -o .github/workflows/ci-monitor.yml
-```
+**To install:** `docs/standards/cicd-setup.md` → Step 9a (that doc is the single
+canonical install procedure; carrying a second copy here is how a correction
+lands in one place and not the other).
 
 ---
 
@@ -143,11 +141,7 @@ especially under auto-merge.
 
 **Template:** `templates/workflows/codex-monitor.yml` — drop-in, no customization needed.
 
-**To install:**
-```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/codex-monitor.yml \
-  -o .github/workflows/codex-monitor.yml
-```
+**To install:** `docs/standards/cicd-setup.md` → Step 9b.
 
 ---
 
@@ -176,11 +170,7 @@ or live URL not serving — with no session required.
 **Template:** `templates/workflows/pages-monitor.yml` — drop-in for branch-source
 Pages; Actions-source projects add the one `workflow_run` trigger above.
 
-**To install:**
-```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
-  -o .github/workflows/pages-monitor.yml
-```
+**To install:** `docs/standards/cicd-setup.md` → Step 9c.
 
 ---
 
@@ -253,8 +243,8 @@ When a Claude Code session is live, it subscribes to PR activity for fast feedba
 ## PR Lifecycle Rules
 
 The canonical lifecycle (draft-first, subscribe on open, green-before-ready,
-diff verification, no force-push to `main`) lives in `directives/global.md` →
-PR Lifecycle. Additions for automated sessions:
+diff verification, no force-push to `main`) lives in `directives/git.md` →
+*PR Lifecycle*. Additions for automated sessions:
 
 ### Superseded PRs
 Post a comment on the **previous PR** pointing to the new one:

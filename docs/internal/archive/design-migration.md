@@ -1,5 +1,9 @@
 # Design migration — from a fixed company system to per-project generative design
 
+> **ARCHIVED — historical record.** This plan is implemented; it is kept for
+> the reasoning, not as instructions. Paths and targets named below reflect the
+> repo as it was, not as it is.
+
 > **Status: implemented — kept as the migration record.** The cutover is done
 > (`design.md` is now a thin per-project method, `/design-intake` ships, the fixed
 > 10-theme system + `design-system.html` are retired). This doc is retained as the
@@ -83,7 +87,7 @@ The WCAG contrast check moves from "validate the 10 company schemes" to a
 ## File-by-file change list
 
 **DELETE**
-- `docs/design-system.html` — its Pages slot is taken by `docs/site/repo-map.html`
+- `docs/design-system.html` — its Pages slot is taken by `docs/site/logical-map.html` (then `repo-map.html`)
 - `.github/scripts/check-theme-parity.js`, `.github/scripts/parse-themes.js`
 - `tests/theme.spec.js`, `tests/playwright.config.js`, `tests/package.json`
 

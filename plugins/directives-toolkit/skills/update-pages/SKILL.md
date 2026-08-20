@@ -1,6 +1,6 @@
 ---
 name: update-pages
-description: "Use whenever asked to deploy, ship, publish, or push a site change live, or to confirm the live site is serving the latest version — and automatically whenever an edit touches a Pages-served file or Pages config. Runs the gates, pushes, watches the Pages deploy to a terminal state, reports live/stuck/failed."
+description: "Use whenever asked to deploy, ship, publish, or push a site change live; to confirm the live site is serving the latest version; or when the site still shows the old version, a change did not go live, or a deploy looks stuck or failed — and automatically whenever an edit touches a Pages-served file or Pages config. Runs the gates, pushes, watches the Pages deploy to a terminal state, reports live/stuck/failed."
 phase: ship
 ---
 Drive a GitHub Pages deploy from commit to "live" and report back **proactively**,

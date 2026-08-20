@@ -82,7 +82,7 @@ const EDGES = [
 const SELF = {
   'self.ops': ['CLAUDE.md', 'EXPORTS.json', 'README.md', '.gitignore',
     '.claude/settings.json', '.claude/directive-sync.json', 'learnings.jsonl'],
-  'self.docs': ['docs/README.md', 'docs/internal/design-migration.md',
+  'self.docs': ['docs/README.md', 'docs/internal/archive/design-migration.md',
     'docs/internal/repo-monitors.md'],
   'self.checks': ['.github/scripts/check-exports.js', '.github/scripts/check-links.js',
     '.github/scripts/check-paths.js', '.github/scripts/check-plugin.js',

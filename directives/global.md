@@ -317,9 +317,7 @@ task list, one item or more**:
 
 *Pipelined Execution* governs a task list already written. This governs the
 moment the asks ARRIVE — the owner firing several requests in one message, or
-interjecting new ones mid-turn while work is in flight. The failure mode it
-exists to prevent: serially finishing ask 1 while asks 2–4 sit unacknowledged,
-when three of them could have been running the whole time.
+interjecting new ones mid-turn while work is in flight.
 
 **The trigger, quantified.** The moment TWO OR MORE independently actionable
 requests are pending in the same turn — one message carrying several, or
@@ -346,7 +344,8 @@ state — not a narration per item as it happened. ("Wrong session" asks the
 owner retracts are dropped, not parked.)
 
 **Order of a mixed turn:** spawn the delegable asks FIRST (they run while you
-work), then do the inline work, then integrate.
+work), then do the inline work, then integrate — spawning last forfeits the
+parallelism the spawn was for.
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
@@ -374,13 +373,9 @@ work), then do the inline work, then integrate.
        `ci-notify.yml` installed needs no completion polling — webhook wake
        covers failure and success — but a wait expected to exceed six minutes
        still arms the heartbeat (→ *Status Line on Every Stop*).
-     - **Heartbeats supersede the old no-backstop rule** (2026-07-18 ruling
-       superseded 2026-08-18): any external wait longer than six minutes arms a
-       visible ~5-minute heartbeat (→ *Status Line on Every Stop*). The prompt
-       cost that motivated backstop-avoidance is gone — the scheduling tools
-       are pre-approved (→ *Scheduling Tools Never Prompt*). Event wakes remain
-       the primary signal; the heartbeat is the owner-visible liveness line on
-       top, never a replacement for them.
+     - Event wakes stay the primary signal; the heartbeat (→ *Status Line on
+       Every Stop*) is the owner-visible liveness line on top, never a
+       replacement for them.
      - `create_trigger` / `update_trigger` / `fire_trigger` are pre-approved
        since 2026-08-18 (→ *Scheduling Tools Never Prompt*, whose accepted
        residuals record the persistence-vector trade-off). **Deployment tools**
@@ -467,18 +462,6 @@ fetched into `.claude/`.
 - Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
   `enabledPlugins` (copy `templates/claude-settings.json`).
 
-**Remediation — remove after 2026-09-30, or once no environment predates
-2026-08-19.** If `hookify` is installed, uninstall it at both scopes before doing
-anything else; its hooks fail on every tool call under the versioned install
-layout, in every project:
-```bash
-claude plugin uninstall hookify@claude-code-plugins || true
-claude plugin uninstall hookify@claude-code-plugins --scope project || true
-```
-Harmless when absent. This lives in a directive rather than the installer
-because directives are fetched live every session — the installer only reaches a
-project whose toolkit install is not still cached from before the fix.
-
 At session start, **verify the plugin attached**: the `directives-toolkit:*`
 commands/skills resolve and the QA agents are available. If they don't, the
 environment's setup script didn't run — fix that rather than hand-fetching
@@ -496,43 +479,16 @@ See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 ## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)
 Self-scheduling is how a session heartbeats, resumes after CI, and re-arms
 check-ins — a permission prompt the owner must click defeats the point. Every
-project repo's committed `.claude/settings.json` carries this allowlist
-(exactly these six tools; riskier remote tools — attaching repos, creating or
-archiving sessions — must keep prompting). Settings load at session start; a
-one-time prompt in an already-running session is accepted.
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "mcp__claude-code-remote__send_later",
-      "mcp__claude-code-remote__create_trigger",
-      "mcp__claude-code-remote__delete_trigger",
-      "mcp__claude-code-remote__update_trigger",
-      "mcp__claude-code-remote__fire_trigger",
-      "mcp__claude-code-remote__list_triggers",
-      "mcp__Claude_Code_Remote__send_later",
-      "mcp__Claude_Code_Remote__create_trigger",
-      "mcp__Claude_Code_Remote__delete_trigger",
-      "mcp__Claude_Code_Remote__update_trigger",
-      "mcp__Claude_Code_Remote__fire_trigger",
-      "mcp__Claude_Code_Remote__list_triggers"
-    ]
-  }
-}
-```
-
-(Both server-name spellings on purpose — the prefix differs between session
-surfaces.)
-
-**Accepted residuals (owner-approved 2026-08-18, after automated security
-review flagged both):** (i) auto-allowed trigger mutation is a persistence
-vector — content that hijacked a session could schedule itself future
-instructions without a prompt; accepted because the tools only message the
-owner's own sessions, `list_triggers` keeps the schedule auditable, and the
-owner chose ergonomics explicitly. (ii) carrying both server-name spellings
-means a future MCP server registering under the unused one would inherit the
-allows; accepted as unlikely — the owner controls their MCP config.
+project repo's committed `.claude/settings.json` carries the scheduling
+allowlist verbatim from `templates/claude-settings.json` → `permissions.allow`:
+exactly six tools (`send_later`, `create_trigger`, `update_trigger`,
+`delete_trigger`, `fire_trigger`, `list_triggers`) under BOTH server-name
+spellings, since the prefix differs between session surfaces and permission
+rules match names exactly. Riskier remote tools — attaching repos, creating or
+archiving sessions — must keep prompting. Settings load at session start; a
+one-time prompt in an already-running session is accepted. The security
+trade-offs the owner accepted when approving this are recorded in
+`docs/internal/accepted-residuals.md`.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.
@@ -560,13 +516,13 @@ before reporting "no access":
 5. **curl/CLI in the sandbox** — goes through the agent proxy; the environment
    allowlist applies. A 403 on CONNECT is a policy denial: report it, never
    route around it. The owner can add the host in the environment's network
-   settings, which takes effect in RUNNING sessions immediately (verified
-   2026-07-12; no new session needed). Diagnose with
+   settings, which takes effect in RUNNING sessions immediately — no new
+   session needed. Diagnose with
    `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
 6. **Sandbox browser (Playwright)** — launch with executablePath
    '/opt/pw-browsers/chromium'. Known gateway quirk: some hosts reset
-   BROWSER-originated connections even when allowlisted (github.io,
-   finviz.com) — ERR_CONNECTION_RESET while curl succeeds means use curl for
+   BROWSER-originated connections even when allowlisted —
+   ERR_CONNECTION_RESET while curl succeeds means use curl for
    content, and for UI verification serve the project locally
    (`python3 -m http.server` + the project's demo mode) and screenshot that.
 7. **The owner** — for pixel-level truth on browser-blocked third-party sites,

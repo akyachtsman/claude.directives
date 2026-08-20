@@ -347,6 +347,21 @@ owner retracts are dropped, not parked.)
 work), then do the inline work, then integrate — spawning last forfeits the
 parallelism the spawn was for.
 
+### Every ask gets its own visible line (owner ruling, 2026-08-20)
+The bar above covers work items; this covers ANSWERS. When two or more asks are
+pending — one message carrying several, or interjections arriving mid-turn — the
+turn closes with a consolidated **ledger**: one line per ask, in the order asked,
+each with its answer or state. Not a narrative that happens to contain them.
+- **A question is an ask.** "Is X part of the record?" needs a line as much as
+  "fix X" does. Questions are what prose absorbs.
+- **Answered-but-buried is unanswered.** The test is whether the owner can scan
+  the close of the turn and see every ask they made.
+- **Emit the ledger BEFORE parking** on anything external — CI, a deploy, a
+  review, a decision. Parking is when items go missing, because attention moves
+  to the thing being waited on.
+- **One sentence each.** Detail goes above; the ledger is the index, not the
+  report.
+
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts

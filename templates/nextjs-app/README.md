@@ -73,9 +73,9 @@ production; Vercel compiles the real thing). Make a local `preview.html`:
        curl -fsSL <url> | openssl dgst -sha384 -binary | openssl base64 -A
      then paste it as integrity="sha384-…". crossorigin="anonymous" is required
      for SRI to be checked. -->
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"
+<script src="https://unpkg.com/react@19.0.0/umd/react.development.js"
         integrity="sha384-REPLACE_WITH_COMPUTED_HASH" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"
+<script src="https://unpkg.com/react-dom@19.0.0/umd/react-dom.development.js"
         integrity="sha384-REPLACE_WITH_COMPUTED_HASH" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"
         integrity="sha384-REPLACE_WITH_COMPUTED_HASH" crossorigin="anonymous"></script>

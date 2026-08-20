@@ -15,7 +15,7 @@
   --color-accent-hover: #114F98;
   --radius-md: 10px;
   --space-4: 16px;
-  --font-sans: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-base: 15px;
 }
 

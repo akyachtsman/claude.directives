@@ -95,9 +95,11 @@ if (moved.x <= resized.x || moved.y <= resized.y) {
 await page.reload();
 await page.waitForTimeout(400);
 const restored = await geomOf('orchestrator');
-if (Math.abs(restored.x - moved.x) > 1 || Math.abs(restored.w - moved.w) > 1) {
-  fail(`layout not persisted across reload (${JSON.stringify(moved)} -> ${JSON.stringify(restored)})`);
-} else ok('a moved and resized frame survives a reload');
+// All four fields: a save() that dropped y or h passed the old x/w-only check.
+const lost = ['x', 'y', 'w', 'h'].filter(k => Math.abs(restored[k] - moved[k]) > 1);
+if (lost.length) {
+  fail(`layout not persisted across reload (${lost.join('/')} lost: ${JSON.stringify(moved)} -> ${JSON.stringify(restored)})`);
+} else ok('a moved and resized frame survives a reload (x, y, w, h)');
 
 /* ----------------------------------------------------------------- toggles */
 // Header controls must stay clickable — a wrapped header once let the canvas
@@ -105,9 +107,17 @@ if (Math.abs(restored.x - moved.x) > 1 || Math.abs(restored.w - moved.w) > 1) {
 await page.click('#t_reset');
 await page.waitForTimeout(250);
 const afterReset = await geomOf('orchestrator');
-if (Math.abs(afterReset.x - restored.x) < 1 && Math.abs(afterReset.w - restored.w) < 1) {
-  fail('reset did not restore the default layout');
-} else ok('reset restores the default layout');
+// Compare against `before` — the geometry of a clean first load, which is the
+// default AFTER autofit has settled it and therefore exactly what reset must
+// reproduce. (The generator's raw data-x/y/w/h is the wrong target: autofit
+// legitimately grows frames and pushes the rows below them down, so reset lands
+// ~18px below the declared y by design.)
+// The old check only asserted afterReset DIFFERED from the dragged state by >=1px,
+// which any wrong layout also satisfies.
+const offBy = ['x', 'y', 'w', 'h'].filter(k => Math.abs(afterReset[k] - before[k]) > 1);
+if (offBy.length) {
+  fail(`reset did not restore the default layout (${offBy.map(k => `${k}: ${afterReset[k]} vs ${before[k]}`).join(', ')})`);
+} else ok('reset restores the default layout exactly');
 
 // A frame must be draggable past the canvas origin. Clamping x/y at 0 made
 // frames stop dead when dragged left or up, with empty canvas still beside them.
@@ -115,8 +125,10 @@ if (Math.abs(afterReset.x - restored.x) < 1 && Math.abs(afterReset.w - restored.
 // stored layout those checks depend on.
 await drag('.fr[data-id="standard"] .fd', -400, -300);
 const pushed = await geomOf('standard');
-if (pushed.x >= 0 && pushed.y >= 0) {
-  fail(`a frame cannot be dragged past the origin (landed at ${pushed.x},${pushed.y})`);
+// `||`, not `&&`: a clamp restored on ONE axis leaves the other negative, and a
+// conjunction then reports the drag as free while half of it is pinned.
+if (pushed.x >= 0 || pushed.y >= 0) {
+  fail(`a frame cannot be dragged past the origin on both axes (landed at ${pushed.x},${pushed.y})`);
 } else ok('a frame drags past the canvas origin into negative space');
 await page.click('#t_fit');
 await page.waitForTimeout(250);
@@ -226,16 +238,20 @@ if (await page.$$eval('.edge', e => e.length) !== 0) {
 // guaranteed by drawing a single line. Every relationship chip must draw exactly
 // one — this is the assertion that makes the guarantee real rather than hoped for.
 const chips = await page.$$('.rel');
-let worst = 0;
+// EVERY count, not a running max: `Math.max` passes as long as ONE chip draws a
+// single arrow, so a routing regression that drew nothing for the other 19 would
+// still report "exactly one arrow" for all of them.
+const chipCounts = [];
 for (const c of chips) {
   await c.click();
   await page.waitForTimeout(80);
-  worst = Math.max(worst, await page.$$eval('.edge', e => e.length));
+  chipCounts.push(await page.$$eval('.edge', e => e.length));
   await c.click();
   await page.waitForTimeout(50);
 }
+const badChip = chipCounts.findIndex(n => n !== 1);
 if (chips.length < 15) fail(`expected a chip per relationship, found ${chips.length}`);
-else if (worst !== 1) fail(`a relationship chip drew ${worst} arrows — must be exactly 1`);
+else if (badChip !== -1) fail(`relationship chip #${badChip + 1} drew ${chipCounts[badChip]} arrows — every chip must draw exactly 1 (counts: ${chipCounts.join(',')})`);
 else ok(`each of the ${chips.length} relationship chips draws exactly one arrow`);
 if (await page.$$eval('.edge', e => e.length) !== 0) fail('clicking a chip twice left it drawn');
 else ok('clicking a chip again clears it');
@@ -619,6 +635,13 @@ const arrange = async layout => {
   }
   await page.click('#t_edge');
   await page.waitForTimeout(400);
+  // Assert arrows were actually drawn. Everything downstream of arrange()
+  // inspects `.edge` geometry, so if #t_edge regressed — or the router bailed
+  // for every pair — those checks iterate an empty list and report success
+  // ("0 arrows attach at 0 distinct points"). An empty edge set can never be
+  // evidence that routing is correct.
+  const drawn = await page.$$eval('.edge', e => e.length);
+  if (drawn < 10) fail(`arrange(): only ${drawn} arrows drawn after "all arrows" — the geometry assertions below would pass vacuously`);
 };
 
 await arrange({

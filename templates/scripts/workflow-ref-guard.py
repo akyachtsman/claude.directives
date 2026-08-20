@@ -359,6 +359,65 @@ for filename, names in REQUIRED.items():
             f"rather than deleting the REQUIRED entry."
         )
 
+# ---------------------------------------------------------------------------
+# Second pass: templates/workflows/, resolved against ITS OWN name set.
+# The templates are what every downstream project inherits, so a dangling
+# watcher introduced there propagates to every project with nothing failing
+# here - a scan of the live workflows alone reports health precisely when the
+# shipped ones are broken. (Same argument check-job-bounds.py makes for
+# scanning both; #238's defect lived only in the templates.)
+# REQUIRED is deliberately NOT applied: it encodes THIS repo's watchers, and a
+# project legitimately installs a subset of the template set.
+TEMPLATE_DIR = REPO_ROOT / "templates" / "workflows"
+template_files = sorted(
+    p for p in TEMPLATE_DIR.iterdir() if p.suffix in (".yml", ".yaml")
+) if TEMPLATE_DIR.is_dir() else []
+
+template_checked = 0
+t_declared = {}
+t_roots = {}
+for path in template_files:
+    try:
+        root = compose(path)
+    except yaml.YAMLError as exc:
+        errors.append(
+            f"templates/workflows/{path.name} - not parseable YAML, so its triggers "
+            f"were never checked.\n      {str(exc).strip()}"
+        )
+        t_roots[path.name] = None
+        continue
+    t_roots[path.name] = root
+    name_node = mapping_get(root, "name")
+    if (
+        isinstance(name_node, yaml.ScalarNode)
+        and name_node.tag != "tag:yaml.org,2002:null"
+        and name_node.value.strip()
+    ):
+        t_declared[name_node.value.strip()] = path.name
+
+for path in template_files:
+    root = t_roots.get(path.name)
+    if root is None:
+        continue
+    unreadable = []
+    refs = referenced_workflows(root, unreadable)
+    for line, form in unreadable:
+        errors.append(
+            f"templates/workflows/{path.name}:{line} - {form}.\n"
+            f"      GitHub matches workflow_run entries against workflow display names, "
+            f"so anything else here watches nothing."
+        )
+    for name, line in refs:
+        template_checked += 1
+        if name in t_declared or name in ALLOWED_EXTERNAL:
+            continue
+        errors.append(
+            f'templates/workflows/{path.name}:{line} - workflow_run watches "{name}", '
+            f"which no template in templates/workflows/ declares.\n"
+            f"      Every project installing this template inherits a trigger that NEVER "
+            f"FIRES, silently. Fix the name, or ship the template that declares it."
+        )
+
 if errors:
     sys.stderr.write("❌ workflow-ref-guard: FAILED\n\n")
     for err in errors:
@@ -368,6 +427,7 @@ if errors:
 required_count = sum(len(v) for v in REQUIRED.values())
 print(
     f"✅ workflow-ref-guard: {checked} workflow_run reference(s) across {len(files)} "
-    f"workflow(s) — all resolve, and {required_count} required watcher(s) intact. "
+    f"workflow(s) + {template_checked} across {len(template_files)} template(s) — all "
+    f"resolve, and {required_count} required watcher(s) intact. "
     f"(Existence only; does not prove they still fire.)"
 )

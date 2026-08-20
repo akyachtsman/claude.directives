@@ -229,7 +229,8 @@ node .github/scripts/check-paths.js
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
-node .github/scripts/check-exports.js            # export boundary: EXPORTS.json paths, class partition, raw self-references
+node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
+node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py       # every job bounded, none >=360, browser jobs >=30 — live AND templates

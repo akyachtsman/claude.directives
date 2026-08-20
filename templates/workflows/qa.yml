@@ -107,7 +107,17 @@ jobs:
             echo "Non-PR event — UI tests run unconditionally."
             exit 0
           fi
-          if git diff --name-only "$BASE_SHA"...HEAD | grep -qE "$UI_PATHS"; then
+          # Capture the diff FIRST and fail loudly if git could not produce it.
+          # Piping straight into grep hides the failure: `-e` is suspended inside
+          # an `if` condition and there is no pipefail here, so an unresolvable
+          # BASE_SHA (shallow fetch, force-push, fork PR) makes git error, grep
+          # see nothing, and the job report "No UI-relevant changes" — silently
+          # skipping the browser tests on a PR that may be entirely UI.
+          if ! files=$(git diff --name-only "$BASE_SHA"...HEAD); then
+            echo "::error::could not diff $BASE_SHA...HEAD — refusing to guess whether UI tests are needed."
+            exit 1
+          fi
+          if printf '%s\n' "$files" | grep -qE "$UI_PATHS"; then
             echo "ui=true" >> "$GITHUB_OUTPUT"
             echo "UI-relevant changes detected."
           else

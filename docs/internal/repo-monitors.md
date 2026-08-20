@@ -38,7 +38,7 @@ See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
 `.github/workflows/codex-monitor.yml`, and `.github/workflows/pages-monitor.yml`.
 
 ### Activation Checklist for New Sessions
-- Confirm all five exist: `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` and `pages-retry` only on `page_build`, and `ci-notify` only on a watched QA workflow completing green — none has a standing "green" status to check
+- Confirm all five exist: `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check
 - Subscribe to PR activity on any open PRs
 - See *Self-test triage* below for `ci-failure` / `codex-flagged` handling
 - Check for open `ci-failure` issues before starting new work

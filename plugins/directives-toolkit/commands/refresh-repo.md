@@ -209,20 +209,27 @@ uses `ls-remote` for the same reason). The compare call is optional enrichment �
 the stamp must never depend on it.
 
 ```bash
+classified=
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
 head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
 elif [ -n "$last" ] && [ "$last" != "$head" ]; then
   # Optional: file-level classification. Needs gh; degrade loudly when absent.
-  if command -v gh >/dev/null 2>&1; then
-    gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
-      --jq '.files[] | select(.filename|test("^(templates|docs|directives)/")) | "\(.status)\t\(.filename)"' \
-      || echo "compare unavailable — delta known by SHA only, classification skipped"
+  if command -v gh >/dev/null 2>&1 \
+     && gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
+          --jq '.files[] | select(.filename|test("^(templates|docs|directives)/")) | "\(.status)\t\(.filename)"'; then
+    classified=yes   # the delta was READ — Phase 3 may advance the stamp
   else
-    echo "gh absent — delta known by SHA only ($last -> $head); classify per the"
-    echo "Propagation Matrix in MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+    echo "compare unavailable (gh absent or call failed) — delta known by SHA only"
+    echo "($last -> $head); classify per the Propagation Matrix in"
+    echo "MAINTAIN-REPO-USER-INSTRUCTIONS.md. The stamp will NOT advance."
   fi
+else
+  # Nothing to classify: either no prior stamp (first run — the per-file policy
+  # is applied directly, below) or the stamp already equals head. Both are
+  # legitimately stampable.
+  classified=yes
 fi
 ```
 (First run with no stamp: skip the delta and apply the per-file policy directly.)
@@ -254,19 +261,33 @@ whose absence breaks the settings row that references it.
 
 ## Phase 3 — Stamp and report
 
-Guard the write on a non-empty `$head`. An unguarded stamp writes
-`{"sha": "", "synced": "<today>"}` when the fetch failed — destroying the only
-field `/env-chk`'s staleness alarm reads AND back-dating it as freshly synced,
-so the project then reports current forever while drifting.
+**The stamp means "the delta up to this SHA was classified and dispositioned",
+not "this SHA was observed."** Advance it ONLY when Phase 2 actually obtained the
+file-level delta. Two distinct failures make an unguarded stamp destructive:
+- An empty `$head` writes `{"sha": "", "synced": "<today>"}`, destroying the only
+  field `/env-chk`'s staleness alarm reads AND back-dating it as freshly synced.
+- A `$head` obtained by `ls-remote` while the compare call was unavailable
+  (`gh` absent — the common case this command documents) advances the stamp past
+  a delta nobody looked at. Phase 1.5 does not inspect customized paths like
+  `.github/scripts/ui-tests/**`, so the next refresh sees the new SHA as already
+  synced and never revisits it: the skipped change is missed permanently, not
+  merely deferred.
+
+Set `classified=yes` in Phase 2 only on the branch where the compare output was
+actually read (including "no files changed"); leave it unset otherwise.
 
 ```bash
-if [ -n "$head" ]; then
+if [ -z "$head" ]; then
+  echo "upstream head unavailable this run — stamp unchanged, re-run /refresh-repo later"
+elif [ "$classified" != "yes" ]; then
+  echo "delta from $last to $head was NOT classified (compare unavailable) — stamp"
+  echo "left at $last on purpose, so the next run re-examines it. Classify by hand"
+  echo "via MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix to clear it."
+else
   jq --arg sha "$head" --arg d "$(date -u +%F)" \
     '.upstream = {sha: $sha, synced: $d}' .claude/directive-sync.json \
     > /tmp/ds.json && mv /tmp/ds.json .claude/directive-sync.json
   echo "stamped: $head"
-else
-  echo "upstream delta unavailable this run — stamp unchanged, re-run /refresh-repo later"
 fi
 ```
 (Create the file with `{}` first if the project has none.)

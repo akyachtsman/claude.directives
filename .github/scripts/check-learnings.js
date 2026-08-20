@@ -21,8 +21,11 @@ lines.forEach((line, i) => {
     return fail(`line ${n}: not valid JSON — ${e.message}`);
   }
   for (const k of REQUIRED) if (!(k in d)) fail(`line ${n}: missing required field "${k}"`);
-  if (d.type && !TYPES.has(d.type)) {
-    fail(`line ${n}: type "${d.type}" is not one of ${[...TYPES].join(' | ')} (see commands/learn.md)`);
+  // Test a PRESENT type directly. `d.type && ...` lets null and "" skip the enum
+  // check entirely, so the entry is reported well-formed while consumers filtering
+  // by type silently miss it — the drift this gate exists to prevent.
+  if ('type' in d && !TYPES.has(d.type)) {
+    fail(`line ${n}: type ${JSON.stringify(d.type)} is not one of ${[...TYPES].join(' | ')} (see commands/learn.md)`);
   }
   // Guard the TYPE first: `typeof x === 'number' && out-of-range` passes a string
   // "high" straight through, so the gate certified an entry whose numeric contract

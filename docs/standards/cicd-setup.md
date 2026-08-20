@@ -302,7 +302,7 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 workflow completes **green**, so a watching session wakes on success — GitHub
 delivers failures natively but never green. Without it, a PR-attached wait has
 no success signal at all. Behavior detail: `docs/standards/automations.md` →
-Automation 5.
+Automation 4c.
 
 ⚠️ `workflow_run` triggers are read from the DEFAULT branch, so this workflow can
 never wake the PR that installs it. Verify on the first post-install PR; don't

@@ -402,6 +402,10 @@ naming what remains open, or "nothing open" — never absent.
      Prompt*; `ScheduleWakeup` where a session has it instead — verify per
      `/env-chk`, never assume either). Schedule a check-in sized to the
      operation, re-check on wake, re-arm until terminal.
+     - **A check-in is a snapshot, not current state.** Its text was written
+       when it was armed, so by the time it fires the SHAs, PR states and open
+       items in it may be wrong. Verify anything you are about to act on before
+       acting; never quote one of its identifiers back without checking it.
      - All six scheduling tools (`send_later`, `create_trigger`,
        `delete_trigger`, `update_trigger`, `fire_trigger`, `list_triggers`) are
        pre-approved in the settings template under both server-name spellings —

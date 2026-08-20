@@ -67,6 +67,15 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 When you change an exported directive, edit the file under `directives/` — never
 relocate the export into this file.
 
+**Write a rule's trigger as an observable event, not a judgement.** A rule that
+fires "when it matters", or "when two or more are pending", needs the author to
+notice something mid-turn — and noticing is the first thing to go in a long
+turn, which is exactly when the rule was needed. Test a new rule by asking
+whether it can fire without anyone noticing anything; if not, fix the trigger
+before polishing the wording. Measured 2026-08-20: the ask-ledger rule shipped
+with a "two or more asks pending" trigger and was broken by its own author
+within hours; the rewrite changed the trigger, not the content.
+
 ## Self-application
 This repo eats its own cooking: **whenever a directive or template change ships,
 check whether it applies to THIS repo too**, in the same PR. Two patterns:

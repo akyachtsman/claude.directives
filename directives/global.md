@@ -38,8 +38,7 @@ explicitly overrides it.
   are unchanged, so nothing in them looks wrong. A constraint bounds which values
   are possible, never whether they are safe in HTML, SQL or shell grammar: encode
   or parameterize at the sink either way. Check it in the diff that moves the
-  value, never a later sweep — a passing audit judged the value as it was then,
-  and a linter cannot tell composed markup from raw data.
+  value, never a later sweep.
 - For non-trivial features, separate WHAT from HOW: specify intent before
   planning a stack, and refine in phases rather than one-shotting (`/sdd-loop`,
   with the imported directives as its constitution)

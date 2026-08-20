@@ -82,6 +82,30 @@ Narration is overhead, never the deliverable.
 Long operations keep their announce line, between-step status, and "parked"
 statement — shorten the wording, never drop the update.
 
+## Status Line on Every Stop (owner ruling, 2026-08-18)
+Every time a session stops working — end of turn, end of task, blocked, or
+parked — the message's final line is exactly one of these statuses, so the
+owner never has to ask whether the session is working or waiting:
+
+- **"Waiting for CI"** — tests running; the session resumes itself on the
+  result.
+- **"Waiting for response"** — blocked on the owner; the question sits
+  directly above the status line.
+- **"Deployed"** — merged AND verified live at the deployed URL; safe to test.
+- **"all done"** — the queue is genuinely empty: nothing in flight, no CI, no
+  background agents, no scheduled check-ins. Reserved for exactly that.
+
+Intermediate states name themselves the same way ("Merged" while the deploy
+builds). A stop with no status line is a directive violation. Multiple pending
+items append after a colon: "Waiting for CI: PR #845 → merge → deploy-verify."
+
+**Heartbeat:** any external wait longer than SIX minutes — CI, a deploy, a
+long-running job — arms a visible heartbeat: a one-line status ("Waiting for
+CI (PR #845) — 12m elapsed") roughly every 5 minutes until the wait resolves,
+never a silent re-arm. A missing heartbeat means the session is hung — which
+is otherwise indistinguishable from waiting, and that distinction is the
+heartbeat's whole purpose.
+
 ## Handoffs Carry Only What Dies With the Session (owner ruling, 2026-08-05)
 Applies to `/handoff-session` and any summary written for a successor session.
 Apply the test to every line *before* writing it, not as a pass afterwards:
@@ -342,11 +366,13 @@ the parallelism the spawn was for.
        the fallback for waits with no PR attached — and then at most ONE
        `send_later` per watched operation, re-armed only on fire, never one per
        polling cycle.
-     - **No scheduled "backstop" checks** (owner ruling, 2026-07-18): failure
-       wakes natively, success wakes via ci-notify, and the owner's next message
-       covers the rare case both break. A parked session costs nothing; a
-       backstop costs a prompt every time. Sole exception: the one PR that
-       changes the wake mechanism itself may arm a single verification check.
+     - **Heartbeats supersede the old no-backstop rule** (2026-07-18 ruling
+       superseded 2026-08-18): any external wait longer than six minutes arms a
+       visible ~5-minute heartbeat (→ *Status Line on Every Stop*). The prompt
+       cost that motivated backstop-avoidance is gone — the scheduling tools
+       are pre-approved (→ *Scheduling Tools Never Prompt*). Event wakes remain
+       the primary signal; the heartbeat is the owner-visible liveness line on
+       top, never a replacement for them.
      - `create_trigger` / `update_trigger` / `fire_trigger` stay prompt-gated
        deliberately — they can target other sessions or spawn new ones, a
        persistence channel under prompt injection. **Deployment tools**

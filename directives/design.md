@@ -86,7 +86,8 @@ contrast guardrail (`templates/scripts/check-contrast.js`, run in CI against
 - **WCAG AA contrast:** normal text ≥ 4.5:1, large/icon ≥ 3.0:1
 - Visible keyboard focus: pair `:hover` with `:focus-visible`
 - Honor `prefers-reduced-motion`
-- Use `textContent` for DOM text from any backend/user input — never `innerHTML` (per `global.md`)
+- Use `textContent` for DOM text from any backend/user input — never `innerHTML`;
+  re-audit sinks when a value becomes user-editable (both per `global.md`)
 
 ## Motion
 - Keep transitions short and calm (≈0.15s ease is a good default)

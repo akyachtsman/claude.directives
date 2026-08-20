@@ -95,8 +95,10 @@ and waiting has a real cost.
 
 **Auto-merge on green is the RULE, not a class (owner ruling, 2026-08-18: "all
 sessions auto-merge — don't ask me permission to merge each time").** When the
-gates hold — CI green on the head SHA, no `codex-flagged` label, no unresolved
-review threads, diff limited to the intended files — squash-merge WITHOUT
+gates hold — CI green on the head SHA, a current-head Codex response per the
+gate above (or its documented unavailable outcome, noted on the PR), no
+`codex-flagged` label, no unresolved review threads, diff limited to the
+intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged
 SHA to a terminal state and confirm the live site serves it). This covers every
 diff class, including Supabase record files and workflow config: the prior
@@ -195,8 +197,10 @@ results):
   throttled, route reads through WebFetch (server-side — does not draw on the
   shared quota).
 - **Writes:** batch related changes into fewer PR cycles — one PR carrying three
-  changes beats three PRs. On a throttled write, arm ONE scheduled check-in
-  sized to the rolling hour; never retry-loop or burst.
+  changes beats three PRs. On a throttled write, arm ONE scheduled completion
+  check-in sized to the rolling hour; never retry-loop or burst. That single
+  check-in is the retry, not the liveness signal — heartbeats per `global.md` →
+  *Status Line on Every Stop* keep their own cadence through the wait.
 - **Stagger heavy sessions across repos.** Many PR cycles, audits, or migration
   sweeps in two repos within the same hour share one pot — sequence them.
 - **The owner's browser is the unmetered fallback**: for a green, gate-clean PR,

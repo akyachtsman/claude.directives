@@ -74,7 +74,9 @@ invoking agents (the ui-tester stops and asks if this table is missing).
 ## Reporting Requirements
 Agents write evidence to `.agent-reports/`:
 - `implementation-summary.md`, `test-report.md`, `ui-test-report.md`
-- `playwright-results.json`, `screenshots/` (on failure)
+- `playwright-results.json`, `screenshots/` (on failure — and for every new
+  interaction, before/during/after at 1440×900 on passing runs too, per
+  `test.md` → *Layered UI*)
 - `code-review-report.md`, `test-coverage-report.md`, `security-review-report.md`, `pr-readiness-report.md`
 
 ## Safety Rules for Agents

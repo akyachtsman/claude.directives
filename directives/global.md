@@ -100,7 +100,10 @@ The grammar: a short status phrase, optionally a parenthetical subject with
 elapsed time ("Waiting for CI (PR #845) — 12m elapsed"), optionally pending
 items after a colon ("Waiting for CI: PR #845 → merge → deploy-verify").
 Intermediate states name themselves the same way ("Merged" while the deploy
-builds). A stop with no status line is a directive violation.
+builds). A stop with no status line is a directive violation. A command whose
+definition fixes its own closing line or block keeps it — the status line
+follows it as the message's true final line; command formats end the body,
+never the message.
 
 **Heartbeat:** any external wait longer than SIX minutes — CI, a deploy, a
 long-running job — arms a visible heartbeat: a one-line status ("Waiting for

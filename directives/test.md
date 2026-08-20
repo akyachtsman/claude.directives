@@ -283,7 +283,7 @@ loop, CI triage), stop before thrashing:
 - **Watch the diff** — if a "fix" balloons or starts touching files unrelated to
   the failure, stop: that signals the diagnosis is wrong. Re-diagnose from the
   evidence rather than piling on more changes.
-- **Re-verify each attempt fresh** (`global.md` → *Evidence before assertions*) —
+- **Re-verify each attempt fresh** (`global.md` → *Behavior Rules* → evidence before assertions) —
   never assume the previous fix held.
 
 ## Escalation

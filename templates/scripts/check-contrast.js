@@ -50,11 +50,27 @@ const pairs = [
 ];
 
 let failed = false;
+let evaluated = 0;
 for (const [fg, bg, thr, name] of pairs) {
   if (!fg || !bg) { console.log(`  skip  ${name} (token missing)`); continue; }
+  evaluated++;
   const r = ratio(fg, bg), ok = r >= thr;
   if (!ok) failed = true;
   console.log(`${ok ? '  ok' : 'FAIL'}  ${name.padEnd(30)} ${r.toFixed(2)} (need ${thr.toFixed(1)})`);
 }
-console.log(failed ? '\ncheck-contrast: FAIL — fix styles/tokens.css' : '\ncheck-contrast: OK — all pairs meet WCAG AA');
+
+// A green report on zero evaluated pairs is the worst outcome available: it
+// certifies WCAG AA having measured nothing. The token regex only reads #hex,
+// so a tokens.css written in oklch()/rgb()/hsl()/var() skips every pair —
+// exactly the palettes /design-intake now produces.
+if (evaluated === 0) {
+  console.error('\ncheck-contrast: FAIL — no colour pair was evaluable.');
+  console.error('  Every --color-* token is missing or not in #hex form (oklch()/rgb()/hsl()/var()');
+  console.error('  are not parsed). Express the six checked tokens as #hex, or extend this script.');
+  process.exit(1);
+}
+if (evaluated < pairs.length) {
+  console.log(`\n::warning::check-contrast evaluated ${evaluated}/${pairs.length} pairs; the rest had missing tokens.`);
+}
+console.log(failed ? '\ncheck-contrast: FAIL — fix styles/tokens.css' : `\ncheck-contrast: OK — ${evaluated}/${pairs.length} pairs meet WCAG AA`);
 if (failed) process.exit(1);

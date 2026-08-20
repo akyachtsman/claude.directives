@@ -6,6 +6,7 @@
 //     or breaking here, instead of 404ing silently in every downstream repo.
 // ESM (matches the other check-*.js).
 import { readFileSync, readdirSync, existsSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { join } from 'path';
 
 const REPO = 'akyachtsman/claude.directives';
@@ -133,12 +134,48 @@ for (const file of findTextFiles('.')) {
     if (seen.has(path)) continue;
     seen.add(path);
     if (exportPaths.some(p => p.endsWith('/') ? path.startsWith(p) : path === p)) {
-      console.log(`OK:   raw self-reference is exported: ${path}`);
+      // Inside the boundary is necessary but NOT sufficient: a directory entry
+      // matches by prefix, so a URL naming a file that was never created (or was
+      // deleted under an exported directory) passes the membership test and then
+      // 404s in every downstream repo — the exact failure this file exists to stop.
+      if (existsSync(path)) console.log(`OK:   raw self-reference is exported: ${path}`);
+      else fail(`raw self-reference is inside the boundary but the file does not exist: ${path} (first seen in ${file})`);
     } else {
       fail(`raw self-reference to a NON-exported path (add to EXPORTS.json or fix the link): ${path} (first seen in ${file})`);
     }
   }
 }
+
+// 5) REVERSE PASS: every shipped file is classified.
+// Sections 1-4 all walk manifest -> tree, so a file added under an exported
+// directory root inherits shipping (the whole dir is installed downstream) while
+// appearing in no domains compartment and therefore no durability class. The
+// partition check cannot see it: it only compares paths the manifest already
+// names. Walk tree -> manifest to close it.
+const UNCLASSIFIED_OK = [
+  // Deliberate exclusions. Add a path here only with the reason it ships
+  // without belonging to a domain; an empty list is the healthy state.
+];
+const trackedFiles = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
+  .split('\n').filter(Boolean).filter(f => !f.includes('node_modules/'));
+const domainPathList = [];
+for (const [dom, comps] of Object.entries(manifest.domains ?? {})) {
+  if (dom.startsWith('_')) continue;
+  for (const [comp, paths] of Object.entries(comps)) {
+    if (comp.startsWith('_')) continue;
+    for (const p of paths ?? []) domainPathList.push(p);
+  }
+}
+const inside = (f, list) => list.some(p => p.endsWith('/') ? f.startsWith(p) : f === p);
+let unclassified = 0;
+for (const f of trackedFiles) {
+  if (!inside(f, exportPaths)) continue;            // not shipped downstream
+  if (inside(f, domainPathList)) continue;          // classified
+  if (inside(f, UNCLASSIFIED_OK)) continue;         // deliberate
+  fail(`shipped file in no domains compartment (so in no durability class): ${f}`);
+  unclassified++;
+}
+if (!unclassified) console.log(`OK:   reverse pass — every shipped file is classified`);
 
 if (failed) { console.error('check-exports: FAIL'); process.exit(1); }
 console.log(`check-exports: OK — ${exportPaths.length} exported paths, ${seen.size} raw self-references all inside the boundary`);

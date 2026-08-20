@@ -345,8 +345,9 @@ state — not a narration per item as it happened. ("Wrong session" asks the
 owner retracts are dropped, not parked.)
 
 **Order of a mixed turn:** spawn the delegable asks FIRST (they run while you
-work), then do the inline work, then integrate. Spawning last forfeits exactly
-the parallelism the spawn was for.
+work), then do the inline work, then integrate.
+
+## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts
   for an outcome.

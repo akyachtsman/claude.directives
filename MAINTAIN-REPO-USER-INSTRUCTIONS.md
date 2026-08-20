@@ -64,7 +64,7 @@ never by cross-repo edits** (`global.md` → One Session, One Repo):
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).
 2. **Relay** — you paste it into a `claude.directives` session and ask for
    analysis first. The session verifies legitimacy against git history and
-   live state before implementing (`global.md` → evidence before assertions —
+   live state before implementing (`global.md` → *Behavior Rules* → evidence before assertions —
    downstream reports have been wrong before).
 3. **Implement + self-apply** — the fix lands under `directives/`, `templates/`,
    or `plugins/`, AND is applied to this repo itself in the same PR when it

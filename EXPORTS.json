@@ -163,6 +163,9 @@
       "runbooks": [
         "NEW-REPO-USER-INSTRUCTIONS.md",
         "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+      ],
+      "evals": [
+        "plugins/directives-toolkit/evals/"
       ]
     }
   },
@@ -196,7 +199,8 @@
         "directives/test.md",
         "docs/standards/code-review-standard.md",
         "docs/standards/ci-triage.md",
-        "directives/data.md"
+        "directives/data.md",
+        "plugins/directives-toolkit/evals/"
       ]
     },
     "orchestrator": {

@@ -193,6 +193,16 @@ for (const [cls, def] of Object.entries(manifest.classes)) {
     chips: (n => def.paths.map(p => chip(p, { name: n(p) })).join(''))(labeller(def.paths)),
   };
 }
+// frameHtml fails loudly for a FRAME with no content; the reverse is just as
+// silent-and-worse — a class the manifest declares but FRAMES does not list is
+// built into `bodies`, never rendered, and --check still passes, so a whole class
+// of exported files disappears from the map with both gates green.
+for (const cls of Object.keys(bodies)) {
+  if (!FRAMES.some(f => f.id === cls)) {
+    fail(`manifest class "${cls}" has no FRAMES entry — it would be dropped from the map silently. Add a frame (id, label, geometry) in build-logical-map.js.`);
+  }
+}
+
 const vendors = Object.entries(manifest.externals).filter(([k]) => !k.startsWith('_'));
 bodies.external = {
   title: 'Vendor sockets',
@@ -497,7 +507,7 @@ if (check) {
     .filter(([k]) => !k.startsWith('_'))
     .reduce((n, [, c]) => n + c.paths.length, 0);
   console.log(`build-logical-map: wrote ${OUT} — ${exported} exported files across `
-    + `${FRAMES.length - 2} classes, ${vendors.length} vendor sockets, `
+    + `${Object.keys(manifest.classes).filter(k => !k.startsWith('_')).length} classes, ${vendors.length} vendor sockets, `
     + `${bodies.self.count} internal files, ${EDGES.length} edges`
     + (current === html ? ' (unchanged)' : ''));
 }

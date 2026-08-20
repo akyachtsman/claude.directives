@@ -202,12 +202,27 @@ The actionable signal for the project's installed template copies is what
 changed UPSTREAM since this project's last sync — stamped in
 `.claude/directive-sync.json` under `upstream.sha` (Phase 3).
 
+Get the head SHA over **git transport**, not the API: `gh` is absent in most
+remote/web sessions and `api.github.com` is refused at the proxy, so the API
+route returns empty in exactly the sessions that run this command (`/env-chk`
+uses `ls-remote` for the same reason). The compare call is optional enrichment —
+the stamp must never depend on it.
+
 ```bash
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
-head=$(gh api repos/akyachtsman/claude.directives/commits/main --jq .sha)
-if [ -n "$last" ] && [ "$last" != "$head" ]; then
-  gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
-    --jq '.files[] | select(.filename|test("^(templates|docs|directives)/")) | "\(.status)\t\(.filename)"'
+head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
+if [ -z "$head" ]; then
+  echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
+elif [ -n "$last" ] && [ "$last" != "$head" ]; then
+  # Optional: file-level classification. Needs gh; degrade loudly when absent.
+  if command -v gh >/dev/null 2>&1; then
+    gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
+      --jq '.files[] | select(.filename|test("^(templates|docs|directives)/")) | "\(.status)\t\(.filename)"' \
+      || echo "compare unavailable — delta known by SHA only, classification skipped"
+  else
+    echo "gh absent — delta known by SHA only ($last -> $head); classify per the"
+    echo "Propagation Matrix in MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+  fi
 fi
 ```
 (First run with no stamp: skip the delta and apply the per-file policy directly.)
@@ -239,10 +254,20 @@ whose absence breaks the settings row that references it.
 
 ## Phase 3 — Stamp and report
 
+Guard the write on a non-empty `$head`. An unguarded stamp writes
+`{"sha": "", "synced": "<today>"}` when the fetch failed — destroying the only
+field `/env-chk`'s staleness alarm reads AND back-dating it as freshly synced,
+so the project then reports current forever while drifting.
+
 ```bash
-jq --arg sha "$head" --arg d "$(date -u +%F)" \
-  '.upstream = {sha: $sha, synced: $d}' .claude/directive-sync.json \
-  > /tmp/ds.json && mv /tmp/ds.json .claude/directive-sync.json
+if [ -n "$head" ]; then
+  jq --arg sha "$head" --arg d "$(date -u +%F)" \
+    '.upstream = {sha: $sha, synced: $d}' .claude/directive-sync.json \
+    > /tmp/ds.json && mv /tmp/ds.json .claude/directive-sync.json
+  echo "stamped: $head"
+else
+  echo "upstream delta unavailable this run — stamp unchanged, re-run /refresh-repo later"
+fi
 ```
 (Create the file with `{}` first if the project has none.)
 
@@ -250,7 +275,7 @@ jq --arg sha "$head" --arg d "$(date -u +%F)" \
 unreachable this run (proxy rate limits), skip Phases 2–3 gracefully: report
 "upstream delta unavailable this run — stamp unchanged, re-run /refresh-repo
 later", keep the old stamp, and never fabricate a SHA or an unverified delta
-(global.md → Evidence before assertions).
+(global.md → Behavior Rules → evidence before assertions).
 
 Report: rules re-read (Phase 0), broken references and fixes, the upstream
 delta with per-file dispositions, the new stamp — and remind that any toolkit

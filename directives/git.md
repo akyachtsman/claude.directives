@@ -22,8 +22,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   required CI checks are green, **provided** the PR has no `codex-flagged`
   label, no unresolved review threads, and a diff limited to the intended files.
   If any condition fails, pause and surface it instead of merging. Always report
-  the merge result. To merge on green **without** a per-change approval, classify
-  the diff per *Conditional Auto-Merge on Green* below.
+  the merge result. Merging on green **without** a per-change approval is the
+  rule, not the exception — see *Conditional Auto-Merge on Green* below.
 - **Unsubscribe before merging** via `unsubscribe_pr_activity` — past that point
   every delivered event is a notice about the merge you are performing. If the
   merge is then blocked, re-subscribe (the call is idempotent).
@@ -87,33 +87,35 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   stop-and-diagnose, not a merge-and-see.
 - Never force-push to `main`
 
-## Conditional Auto-Merge on Green (owner ruling, 2026-07-12)
+## Conditional Auto-Merge on Green (owner rulings, 2026-07-12 / 2026-08-18)
 All projects deploy GitHub Pages from `main`, so work is invisible until merged
-and waiting has a real cost. When a PR's CI gates are fully green, classify the
-diff and act:
+and waiting has a real cost.
 
-**Auto-merge immediately, without asking** — squash, then follow the
-update-pages flow (watch the Pages build for the merged sha to a terminal state
-and confirm the live site serves it):
-- Frontend code, styles, static assets, data-pipeline scripts
-- Docs, specs, tests, CLAUDE.md, .claude/ config
-- Anything fully undone by a plain `git revert`
+**Auto-merge on green is the RULE, not a class (owner ruling, 2026-08-18: "all
+sessions auto-merge — don't ask me permission to merge each time").** When the
+gates hold — CI green on the head SHA, no `codex-flagged` label, no unresolved
+review threads, diff limited to the intended files — squash-merge WITHOUT
+asking, then follow the update-pages flow (watch the Pages build for the merged
+SHA to a terminal state and confirm the live site serves it). This covers every
+diff class, including Supabase record files and workflow config: the prior
+hold-for-approval list is SUPERSEDED — asking the owner permission to merge is
+now a directive violation, not caution. Always report the merge result;
+reporting is not asking.
 
-**Hold for explicit owner approval, even on green CI** — the PR waits, with a
-clear note of what it touches and why it's held:
-1. Secrets, tokens, PINs, or personal data anywhere in the diff — on a public
-   repo a merge is irreversible in the only way that matters; this class is
-   never merged, it's fixed first.
-2. Environment variables / repo or workflow configuration that runs with
-   elevated secrets.
-3. ANY Supabase backend change — migrations, RPCs, RLS, grants, edge functions
-   — regardless of how safe it looks. These follow `data.md` →
-   *Reversible-by-Design*; the owner approves the merge per instance.
+Two stops survive, neither a permission ask:
+1. **Secrets, tokens, PINs, or personal data anywhere in the diff** — the PR is
+   defective: scrub first, never merge as-is.
+2. **Merge authority covers requested or standing-scope changes only** —
+   invented scope needs approval for the CHANGE, after which the merge again
+   needs none.
 
-The safety net for the auto-merge class is reversibility, not hesitation: a
-regression found after merge is handled revert-first (`git revert` or GitHub's
-Revert button), investigate second; a small roll-forward fix is fine when
-clearly faster.
+Applying changes to the live database still follows `data.md` →
+*Reversible-by-Design* and each project's escalation rules — that governs the
+operation, never the merge.
+
+The safety net is reversibility, not hesitation: a regression found after merge
+is handled revert-first (`git revert` or GitHub's Revert button), investigate
+second; a small roll-forward fix is fine when clearly faster.
 
 If CI never registers on a PR (no run at all — different from a red run), walk
 this ladder in order; each rung is a fresh event source:

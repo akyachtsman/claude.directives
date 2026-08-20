@@ -94,9 +94,10 @@ one:
    its compensating action ("revert: DROP FUNCTION x; restore y from migration
    desk_004").
 4. **Additive over destructive.** Prefer deprecating (rename, null, ignore) over
-   DROP/DELETE. Anything that destroys data is the auto-merge hard exception:
-   explicit owner approval, and note that undo = backups/PITR only, not a
-   migration.
+   DROP/DELETE. Anything that destroys data needs explicit owner approval before
+   it is applied to the live database — approval governs the operation, never
+   the merge (`git.md` → *Conditional Auto-Merge on Green*) — and note that
+   undo = backups/PITR only, not a migration.
 
 **Revert procedure** (when the owner says "undo PR #N"):
 1. `git revert` the squash commit (or GitHub's Revert button) → PR → green → merge.
@@ -106,9 +107,11 @@ one:
 4. Verify: `get_advisors` clean, spot-check the restored RPC/table via
    `execute_sql`, and confirm the live site against the reverted Pages deploy.
 
-(Merge timing for backend changes is governed by `global.md` → *Conditional
-Auto-Merge on Green* — two halves of one policy: that decides when a merge waits
-for the owner; this guarantees whatever merged can be walked back.)
+(Merge timing for backend changes is governed by `git.md` → *Conditional
+Auto-Merge on Green* — backend PRs merge on green like every other class, and
+this section is what makes that safe: whatever merged can be walked back.
+Applying the change to the live database still follows the escalation rules
+here.)
 
 ## Escalation
 - Stop and ask before disabling RLS on any table.

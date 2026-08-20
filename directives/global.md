@@ -225,9 +225,10 @@ green-before-ready, auto-merge-on-approval, `codex-flagged` blocker, diff check,
 never force-push `main`.
 
 ## Conditional Auto-Merge on Green
-Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner ruling,
-2026-07-12): the diff classification for merging on green without a per-change
-approval, and the revert-first safety net.
+Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner rulings,
+2026-07-12 / 2026-08-18): auto-merge on green is the rule for every diff class —
+plus the two surviving stops (secrets or personal data in the diff; invented
+scope) and the revert-first safety net.
 
 ## Progress Visibility (owner ruling, 2026-07-17)
 Silent processing is indistinguishable from a hang. For any operation expected
@@ -401,8 +402,8 @@ which is KEEP GOING.
   violation**, symmetric to idle-waiting during verification (→ *Pipelined
   Execution*'s turn-end test).
 - The stop gates are NEVER overridden by a standing authorization: Escalation
-  Rules above, the hold-for-approval diff classes (`git.md` → *Conditional
-  Auto-Merge on Green* — secrets, elevated config, any Supabase backend change),
+  Rules above, the surviving merge stops (`git.md` → *Conditional
+  Auto-Merge on Green* — secrets or personal data in the diff; invented scope),
   and genuine scope changes. Work NOT in the declared plan still needs the
   owner — momentum is never a license to invent scope.
 - When the declared list drains: report done and stop. A standing authorization

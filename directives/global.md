@@ -78,12 +78,13 @@ genuinely help, but are not required.
   it, the diagnosis, and the alternatives weighed belong in the commit message
   and PR body. Every session pays a rule's length forever and reads it only to
   learn what to do.
-- **Trigger a rule at a boundary you already reach, not on a state you must
-  track.** Closing a reply, writing a diff, opening a PR — points every turn
-  passes anyway. Not "when it matters" or "when two or more are pending", which
-  need a tally maintained while attention is elsewhere. If obeying the rule
-  depends on remembering to watch for it, move the trigger to the nearest
-  boundary.
+- **Trigger a rule at a boundary you already reach, not on state you must
+  watch.** Closing a reply, writing a diff, a CI result arriving — points every
+  turn passes anyway. A count is fine when it is READ at such a boundary ("CI
+  failed 3+ times", checked as each result lands); what fails is state needing
+  attention between boundaries, like "when two or more asks are pending". If
+  obeying the rule depends on remembering to watch for it, move the trigger to
+  the nearest boundary.
 - **Detail on request, not by default.** Keep the mechanism, move it down. When
   asked, give all of it — simpler never means vaguer, and "it's handled" is not
   an answer.

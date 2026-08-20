@@ -49,11 +49,24 @@ lines.forEach((line, i) => {
   // implementation-dependent forms ("2026", "August 20, 2026") whose meaning can
   // differ between consumers, while /learn declares ISO-8601.
   if (typeof d.ts === 'string' && d.ts.trim()) {
-    const ISO = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
-    if (!ISO.test(d.ts.trim())) {
+    const ts = d.ts.trim();
+    const ISO = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
+    const m = ISO.exec(ts);
+    if (!m) {
       fail(`line ${n}: ts "${d.ts}" is not ISO-8601 (expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)`);
-    } else if (Number.isNaN(Date.parse(d.ts))) {
-      fail(`line ${n}: ts "${d.ts}" is ISO-shaped but not a real date`);
+    } else {
+      // Date.parse is not a calendar check: it NORMALIZES, so 2026-02-30 becomes
+      // 2026-03-02 and returns a valid timestamp. Round-trip the Y/M/D components
+      // instead — if the date the parser produced differs from the one written,
+      // the written one does not exist.
+      const [, y, mo, day] = m;
+      const utc = new Date(`${y}-${mo}-${day}T00:00:00Z`);
+      const roundTrips = !Number.isNaN(utc.getTime())
+        && utc.getUTCFullYear() === Number(y)
+        && utc.getUTCMonth() + 1 === Number(mo)
+        && utc.getUTCDate() === Number(day);
+      if (!roundTrips) fail(`line ${n}: ts "${d.ts}" is ISO-shaped but not a real calendar date`);
+      else if (Number.isNaN(Date.parse(ts))) fail(`line ${n}: ts "${d.ts}" is not a parseable date`);
     }
   }
   if (d.key) keys.set(d.key, (keys.get(d.key) ?? 0) + 1);

@@ -24,7 +24,7 @@ runs:
         rc=0
         grep -rE \
           'pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]' \
-          --include="*.js" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.html" --include="*.css" --include="*.json" --include="*.md" --include="*.sh" --include="*.yml" \
+          --include="*.js" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.html" --include="*.css" --include="*.json" --include="*.md" --include="*.sh" --include="*.yml" --include="*.yaml" \
           --exclude-dir=node_modules --exclude-dir=.git . || rc=$?
         # 0 = a match (a secret), 1 = clean, >=2 = grep itself failed. Folding
         # the error case into "clean" is how a scan reports green after failing

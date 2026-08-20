@@ -5,7 +5,7 @@
 //     file can never be moved or deleted without either updating the manifest
 //     or breaking here, instead of 404ing silently in every downstream repo.
 // ESM (matches the other check-*.js).
-import { readFileSync, readdirSync, existsSync } from 'fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join } from 'path';
 
@@ -138,7 +138,12 @@ for (const file of findTextFiles('.')) {
       // matches by prefix, so a URL naming a file that was never created (or was
       // deleted under an exported directory) passes the membership test and then
       // 404s in every downstream repo — the exact failure this file exists to stop.
-      if (existsSync(path)) console.log(`OK:   raw self-reference is exported: ${path}`);
+      // Existence is not sufficient either: `existsSync` is true for a DIRECTORY,
+      // and the raw endpoint serves only blobs, so a URL ending at a directory
+      // (`…/main/templates/workflows`) 404s just the same. Require a regular file.
+      const st = statSync(path, { throwIfNoEntry: false });
+      if (st?.isFile()) console.log(`OK:   raw self-reference is exported: ${path}`);
+      else if (st) fail(`raw self-reference resolves to a directory, which the raw endpoint cannot serve: ${path} (first seen in ${file})`);
       else fail(`raw self-reference is inside the boundary but the file does not exist: ${path} (first seen in ${file})`);
     } else {
       fail(`raw self-reference to a NON-exported path (add to EXPORTS.json or fix the link): ${path} (first seen in ${file})`);

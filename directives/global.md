@@ -26,12 +26,13 @@ explicitly overrides it.
   phone (iPhone/Android)
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
   or user input
-- **When a value's provenance changes, re-audit its sinks in the same diff.** A
-  literal, an enum, or a CHECK-constrained column can be interpolated safely
-  because it is constrained; the moment a change makes it user-editable, every
-  sink it reaches becomes untrusted — and the sinks are unchanged, so nothing in
-  them looks wrong. Check it in the diff that moves the value, never in a later
-  sweep: a passing audit judged the value as it was then.
+- **When a value's provenance changes, re-audit its sinks in the same diff.**
+  Interpolation that looked safe because the value came from a fixed, known-safe
+  set stops being safe the moment a change makes it user-editable — and the sinks
+  are unchanged, so nothing in them looks wrong. A constraint bounds which values
+  are possible, never whether they are safe in HTML, SQL or shell grammar: encode
+  or parameterize at the sink either way. Check it in the diff that moves the
+  value, never a later sweep — a passing audit judged the value as it was then.
 - For non-trivial features, separate WHAT from HOW: specify intent before
   planning a stack, and refine in phases rather than one-shotting (`/sdd-loop`,
   with the imported directives as its constitution)

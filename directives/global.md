@@ -353,19 +353,17 @@ the parallelism the spawn was for.
   2. **Self-pace with `ScheduleWakeup`** (or `send_later` — frequently
      **absent**, so verify per `/env-chk`, never assume). Schedule a check-in
      sized to the operation, re-check on wake, re-arm until terminal.
-     - The low-risk scheduling tools (`send_later`, `list_triggers`,
-       `delete_trigger`) are pre-approved in the settings template under both
-       server-name spellings — `mcp__Claude_Code_Remote__*` and
-       `mcp__claude-code-remote__*` — since permission rules match names exactly.
-     - **Web caveat (verified 2026-07-16):** claude.ai cloud sessions do NOT
-       apply project-level permission rules, and no personal-account setting
-       suppresses these prompts. Never tell the owner the settings block fixes
-       web popups.
-     - On web, minimize prompts instead: a PR-attached wait with `ci-notify.yml`
-       installed uses webhook wake ONLY (zero scheduling calls). Scheduling is
-       the fallback for waits with no PR attached — and then at most ONE
-       `send_later` per watched operation, re-armed only on fire, never one per
-       polling cycle.
+     - All six scheduling tools (`send_later`, `create_trigger`,
+       `delete_trigger`, `update_trigger`, `fire_trigger`, `list_triggers`) are
+       pre-approved in the settings template under both server-name spellings —
+       `mcp__Claude_Code_Remote__*` and `mcp__claude-code-remote__*` — per
+       *Scheduling Tools Never Prompt* below; permission rules match names
+       exactly.
+     - Settings load at session start, so the allowlist covers the NEXT
+       session; a one-time prompt in an already-running session is accepted
+       (→ *Scheduling Tools Never Prompt*). A PR-attached wait with
+       `ci-notify.yml` installed still needs no scheduling call at all —
+       webhook wake covers failure and success alike.
      - **Heartbeats supersede the old no-backstop rule** (2026-07-18 ruling
        superseded 2026-08-18): any external wait longer than six minutes arms a
        visible ~5-minute heartbeat (→ *Status Line on Every Stop*). The prompt
@@ -373,17 +371,17 @@ the parallelism the spawn was for.
        are pre-approved (→ *Scheduling Tools Never Prompt*). Event wakes remain
        the primary signal; the heartbeat is the owner-visible liveness line on
        top, never a replacement for them.
-     - `create_trigger` / `update_trigger` / `fire_trigger` stay prompt-gated
-       deliberately — they can target other sessions or spawn new ones, a
-       persistence channel under prompt injection. **Deployment tools**
+     - `create_trigger` / `update_trigger` / `fire_trigger` are pre-approved
+       since 2026-08-18 (→ *Scheduling Tools Never Prompt*, whose accepted
+       residuals record the persistence-vector trade-off). **Deployment tools**
        (`mcp__Supabase__deploy_edge_function`, and anything else pushing
-       code/config to a live backend) likewise, by owner decision (2026-07-12):
-       never offer to add them to `permissions.allow`; reduce prompt fatigue by
-       **batching deploys**, not by removing the gate.
+       code/config to a live backend) stay prompt-gated, by owner decision
+       (2026-07-12): never offer to add them to `permissions.allow`; reduce
+       prompt fatigue by **batching deploys**, not by removing the gate.
      - **Projects bootstrapped before this template inherit nothing
        automatically.** The FIRST time a session hits a scheduling-tool prompt
        in an older repo, PR the current template's `permissions.allow` block
-       (both spellings, low-risk three only) into that repo's own
+       (both spellings, all six scheduling tools) into that repo's own
        `.claude/settings.json` — no need to ask; it's the session's own repo and
        `.claude/` config is auto-merge class. Note in the PR that the
        pre-approval activates from the NEXT session.
@@ -484,6 +482,47 @@ as `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:
 See docs/standards/automations.md for monitor setup and the automation-specific
 PR-lifecycle/escalation additions.
 See docs/standards/ci-triage.md for CI and Codex failure triage rules.
+
+## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)
+Self-scheduling is how a session heartbeats, resumes after CI, and re-arms
+check-ins — a permission prompt the owner must click defeats the point. Every
+project repo's committed `.claude/settings.json` carries this allowlist
+(exactly these six tools; riskier remote tools — attaching repos, creating or
+archiving sessions — must keep prompting). Settings load at session start; a
+one-time prompt in an already-running session is accepted.
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude-code-remote__send_later",
+      "mcp__claude-code-remote__create_trigger",
+      "mcp__claude-code-remote__delete_trigger",
+      "mcp__claude-code-remote__update_trigger",
+      "mcp__claude-code-remote__fire_trigger",
+      "mcp__claude-code-remote__list_triggers",
+      "mcp__Claude_Code_Remote__send_later",
+      "mcp__Claude_Code_Remote__create_trigger",
+      "mcp__Claude_Code_Remote__delete_trigger",
+      "mcp__Claude_Code_Remote__update_trigger",
+      "mcp__Claude_Code_Remote__fire_trigger",
+      "mcp__Claude_Code_Remote__list_triggers"
+    ]
+  }
+}
+```
+
+(Both server-name spellings on purpose — the prefix differs between session
+surfaces.)
+
+**Accepted residuals (owner-approved 2026-08-18, after automated security
+review flagged both):** (i) auto-allowed trigger mutation is a persistence
+vector — content that hijacked a session could schedule itself future
+instructions without a prompt; accepted because the tools only message the
+owner's own sessions, `list_triggers` keeps the schedule auditable, and the
+owner chose ergonomics explicitly. (ii) carrying both server-name spellings
+means a future MCP server registering under the unused one would inherit the
+allows; accepted as unlikely — the owner controls their MCP config.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.

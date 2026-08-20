@@ -198,10 +198,13 @@ higher.)
   its edges. A layer tested only on the screen it was built against ships its
   overlaps with every other screen untested.
 - **A cap is proven BINDING, never assumed.** When asserting a size/position
-  cap, force the content past the cap first: rendered extent on the capped
-  axis ≤ cap while the matching scroll extent — `scrollHeight` for height
-  caps, `scrollWidth` for width caps — exceeds it. A cap asserted against
-  short content passes vacuously.
+  cap, force the content past the cap first, then prove both halves: rendered
+  extent on the capped axis ≤ cap, AND the content demands more than the cap.
+  For height caps that demand is `scrollHeight`; for width caps it is the
+  intrinsic (uncapped / `max-content`) width — wrapping content grows down,
+  not sideways, so `scrollWidth` proves a width cap only where content
+  genuinely overflows horizontally. A cap asserted against short content
+  passes vacuously.
 - **Interactions have transitional states, and they are testable.** A dialog
   that hides itself mid-flow, a button disabled during an await, a screen that
   flashes between two paints — assert the state DURING the transition (element

@@ -27,9 +27,12 @@ explicitly overrides it.
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
   or user input
 - **When a value's provenance changes, re-audit its sinks in the same diff.**
-  The trigger is a property of the diff you are already writing: am I repointing
-  something at config, a database column, or user input? If so, grep the value's
-  name and check every place it lands, before that diff ships.
+  The trigger is a property of the diff you are already writing: does it change
+  where a value comes from, or who may write it — repointing a read at config, a
+  column or user input, or granting an update policy, an edit endpoint, or a
+  looser constraint on one that already exists? A widened writer changes the
+  provenance of every existing read without touching any of them. If so, grep
+  the value's name and check every place it lands, before that diff ships.
   Interpolation that looked safe because the value came from a fixed, known-safe
   set stops being safe the moment a change makes it user-editable — and the sinks
   are unchanged, so nothing in them looks wrong. A constraint bounds which values
@@ -365,13 +368,13 @@ parallelism the spawn was for.
 asked, each with its answer or current state. The bar above covers work items;
 this covers ANSWERS.
 
-EVERY reply carries one — not "when two or more asks are pending", because
-counting pending asks is the judgement that degrades first in a long turn, which
-is exactly when the ledger is needed. A trigger that depends on the attention it
-compensates for cannot fire. One line per ask received since the user's last
-message, in the order asked, one sentence each, plus whatever the previous
-ledger left open. One ask means one line, and on a conversational turn that line
-is simply the closing sentence — there is no ceremony to skip.
+EVERY reply carries one — never "when two or more asks are pending". One line
+per ask received **since your previous reply**, in the order asked, one sentence
+each, plus whatever the previous ledger left open. That boundary is the whole
+turn, so an ask answered before the next one interrupted still gets its line.
+One ask means one line, and on a conversational turn that line is simply the
+closing sentence. When a message carries no ask at all, the ledger is one line
+naming what remains open, or "nothing open" — never absent.
 - **A question is an ask.** "Is X part of the record?" needs a line as much as
   "fix X" does. Questions are what prose absorbs.
 - **Answered-but-buried is unanswered.** The value is the fixed position: the

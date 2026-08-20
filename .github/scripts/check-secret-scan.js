@@ -54,4 +54,36 @@ if (!values.every((v) => v === values[0])) {
   process.exit(1);
 }
 
-console.log(`check-secret-scan: OK — pattern identical across ${values.length} sources`);
+// The regex is only half the contract: two copies can share it and still scan
+// DIFFERENT FILE SETS, so a coverage fix (adding *.ts, say) can land in one copy
+// and CI stays green while the other keeps its blind spot. Compare the filters
+// too. They cannot be compared byte-for-byte across a one-line Markdown command
+// and a backslash-continued YAML block, so compare the normalized flag SET.
+const FLAG_RE = /--(?:include|exclude-dir)=(?:"[^"\n]*"|[^\s\\]+)/g;
+const flagsOf = (text) => {
+  const idx = text.search(PATTERN);
+  if (idx === -1) return null;
+  // Look only at the invocation: from the pattern to the end of the command
+  // (the directive ends at a backtick, the action at the redirect/`|| rc=`).
+  const tail = text.slice(idx, idx + 800);
+  return [...tail.matchAll(FLAG_RE)]
+    .map((m) => m[0].replace(/"/g, ''))
+    .sort()
+    .join(' ');
+};
+
+const flags = {};
+for (const file of SOURCES) flags[file] = flagsOf(readFileSync(file, 'utf8'));
+const flagValues = Object.values(flags);
+if (flagValues.some((v) => !v)) {
+  console.error('check-secret-scan: FAIL — could not read scan filters from every source');
+  process.exit(1);
+}
+if (!flagValues.every((v) => v === flagValues[0])) {
+  console.error('check-secret-scan: FAIL — secret-scan FILE FILTERS have diverged (same regex, different coverage):');
+  for (const [file, value] of Object.entries(flags)) console.error(`  ${file}: ${value}`);
+  process.exit(1);
+}
+
+console.log(`check-secret-scan: OK — pattern and file filters identical across ${values.length} sources`);
+console.log(`  filters: ${flagValues[0]}`);

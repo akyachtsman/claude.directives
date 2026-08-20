@@ -22,6 +22,15 @@ export default defineConfig({
   },
   outputDir: '../../../.agent-reports/screenshots',
   projects: [
+    // Desktop first: global.md requires laptop + tablet + phone coverage, and
+    // test.md → Layered UI mandates before/during/after screenshots at
+    // 1440x900 — neither is reachable from a device-emulated project, whose
+    // viewport is fixed. Its presence is also what makes S4's explicit
+    // setViewportSize(390) a real narrowing rather than a no-op.
+    {
+      name: 'desktop',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+    },
     {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 5'] },

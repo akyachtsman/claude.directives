@@ -134,9 +134,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # advisory-run is TEMPORARY: it is set 'true' here only while a repo has
-      # a known open UI failure (e.g. a mobile overflow mid-fix) — flip it back
-      # to 'false' as soon as that lands. Blocking is the default posture for
+      # advisory-run ships 'false': blocking is the default posture, and a
+      # template that shipped 'true' handed every new project a UI suite whose
+      # failures show green. Set it 'true' ONLY in a project with a known open
+      # UI failure mid-fix, and flip it back as soon as that lands. Blocking is the default posture for
       # the static/no-backend tier, where the suite runs fully against the
       # bundled local server; auth/backend-gated scenarios self-skip on an
       # empty TEST_AUTH_CREDENTIAL, and qa-live.yml stays the live gate.
@@ -147,4 +148,4 @@ jobs:
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
           artifact-name: playwright-results-local
           start-local-server: 'true'
-          advisory-run: 'true'
+          advisory-run: 'false'

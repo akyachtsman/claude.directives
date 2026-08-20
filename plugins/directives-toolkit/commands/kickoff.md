@@ -92,4 +92,5 @@ Execute in order:
    Pre-Push gate (`/commit-chk`) and PR lifecycle.
 
 Keep it **stepwise — never one-shot.** The human supplies the brief up front,
-answers `clarify`, provides backend secrets, and approves the plan and each merge.
+answers `clarify`, provides backend secrets, and approves the plan; merges
+happen automatically on green per `git.md`.

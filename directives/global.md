@@ -400,12 +400,6 @@ naming what remains open, or "nothing open" — never absent.
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts
   for an outcome.
-- **"Waiting" means something will wake you.** Say it only with a wake channel
-  actually armed — a webhook subscription, a scheduled check-in. If none is and
-  the operation is still running, arm one or poll in-turn to the terminal state;
-  never end a turn on a live operation nothing is watching. Reserve
-  **"stopped"** for work that is finished or deliberately abandoned, naming the
-  last state observed and when: "stopped — CI green at 00:49 UTC".
 - **How to wait, in order of preference:**
   1. **Let the event wake you.** CI failures, PR reviews, and merges arrive as
      webhooks that resume the session — and with `ci-notify.yml` installed

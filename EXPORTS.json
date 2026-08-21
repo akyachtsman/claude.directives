@@ -59,8 +59,7 @@
         "templates/workflows/pages-retry.yml"
       ],
       "starter": [
-        "templates/CLAUDE-template.md",
-        "templates/nextjs-app/"
+        "templates/CLAUDE-template.md"
       ]
     },
     "git": {
@@ -274,7 +273,6 @@
       "blurb": "Fill-in templates and scaffolds. Consumed by a project, never executed here.",
       "paths": [
         "templates/CLAUDE-template.md",
-        "templates/nextjs-app/",
         "templates/pr-checklist.md",
         "templates/styles/",
         "templates/implementation-summary-template.md",

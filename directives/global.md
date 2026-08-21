@@ -18,10 +18,9 @@ explicitly overrides it.
 - Default stack: plain HTML + CSS + vanilla JS with **no *local* build**.
   Development is browser-only (no terminal), so nothing may require a build on
   your machine. This is a **dev-environment** rule, not a deployment ceiling.
-- Frameworks and build tooling are a deliberate per-project **production-tier**
-  choice (React / Next.js on Vercel), built **remotely on `git push`**, never
-  locally (→ *Hosting & Deployment*). Don't add a framework a static site
-  doesn't need.
+- **No framework tier.** Don't add a framework or a build step; a static site
+  doesn't need one, and adopting one was evaluated and rejected
+  (→ *Hosting & Deployment*).
 - All code works responsively on every target platform — laptop, tablet (iPad),
   phone (iPhone/Android)
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
@@ -191,9 +190,6 @@ styles/          ← the committed design contract (tokens.css + components.css)
   scripts/
     ui-tests/
 ```
-> This is the **static-tier** layout. A production-tier (Next.js) project is
-> scaffolded from the Next starter template instead — `app/` router,
-> `package.json`, Next config — see *Hosting & Deployment*.
 
 ## Backend
 - All backend/data rules — provider, connection config, keys, RLS, MCP setup —
@@ -236,21 +232,24 @@ Two different scopes — never conflate them:
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
   the same verification at session start.
 
-## Hosting & Deployment
-The **dev environment is the same for both tiers** — browser-only, no *local*
-build. The **deployment target** is a per-project choice:
-- **Static tier (default):** GitHub Pages, branch-source. Plain HTML/CSS/JS, and
-  still dynamic via client-side Supabase + RLS. No build; the push *is* the
-  deploy. Use for prototypes, previews, and apps that don't need a server.
-- **Production tier (explicit, per-project):** React + **Next.js on Vercel**
-  with **Supabase**. Vercel runs `next build` on every `git push`, so
-  development stays browser-only, and adds server-side rendering/data, edge
-  delivery, and image optimization. The design contract carries over unchanged:
-  `styles/tokens.css` + `styles/components.css` drop straight into the Next app.
+## Hosting & Deployment (owner ruling, 2026-08-21)
+**GitHub Pages, branch-source, is the deployment target.** Plain HTML/CSS/JS,
+dynamic via client-side Supabase + RLS. No build; the push *is* the deploy.
 
-Stay static until the project actually needs the production tier (auth,
-server-rendered or per-user data, real scale). No other hosts (Netlify, etc.)
-without explicit owner sign-off.
+**A React / Next.js-on-Vercel "production tier" was evaluated and REJECTED** —
+a different development platform, changing a lot of code for a need no project
+had. Do not re-propose it, and do not scaffold toward it.
+
+- **Needing a server is not a reason to reach for one.** The gap a framework
+  tier would have filled is server-side execution — a real secret at request
+  time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth
+  Pattern*). **Supabase Edge Functions already cover that**, with no framework,
+  no build step and no new platform (`data.md` → *Reversible-by-Design Backend
+  Changes*).
+- **If a project ever genuinely outgrows Pages**, the owner's stated direction
+  is **Cloudflare** — response time, caching, security. That names a direction,
+  not a decision: it still needs explicit sign-off, against a real requirement.
+- No other host without explicit owner sign-off.
 
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo

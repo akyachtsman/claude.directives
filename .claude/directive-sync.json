@@ -1,22 +1,22 @@
 {
-  "recorded": "2026-08-20",
+  "recorded": "2026-08-21",
   "source": "env.chk baseline",
   "upstream": {
-    "sha": "bf1c88ed1fe9f10dbf1b8b3458c1e101378be243",
-    "synced": "2026-08-20"
+    "sha": "88c80a05603fbcd3892a09443110f41aefd5dfe1",
+    "synced": "2026-08-21"
   },
   "directives": {
     "directives/global.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md",
-      "sha256": "41c164aaf56f292eec54957a4d012c4de27ccffbe07db1d8c511eb1d78979680"
+      "sha256": "0ac0bedec7d9fd82b1d055b29b97a9c4ac6ea16fd012541e49de8352a90448c1"
     },
     "directives/git.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md",
-      "sha256": "286c327fb8d3a79d951c6bda77ca34fda2f5dba1f6943a2cf8d39002edcff594"
+      "sha256": "734519cf389e466e793061e9282c8be31d8f8486b38279c9d41d6fee18a7751e"
     },
     "directives/design.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md",
-      "sha256": "6ea19c280272f839dd02bbb0d7a72e480abe739d80698ef915a02abb39bb6ad7"
+      "sha256": "285f5e252b25e5d615890b71eb4cb05c09504c2d74f7ae2be08fedf2d2551418"
     },
     "directives/test.md": {
       "url": "https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md",

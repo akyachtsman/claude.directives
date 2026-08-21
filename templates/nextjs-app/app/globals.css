@@ -57,7 +57,7 @@ body {
   min-height: 44px;
   padding: 0 20px;
   font: 600 16px var(--font-sans);
-  color: #fff;
+  color: var(--color-on-accent);
   background: var(--color-accent);
   border: none;
   border-radius: var(--radius-md);

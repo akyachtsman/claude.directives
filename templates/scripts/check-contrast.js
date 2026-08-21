@@ -4,7 +4,7 @@
 // .github/scripts/ and run it from qa.yml. If styles/tokens.css doesn't exist yet
 // (before /design-intake), it prints a notice and exits 0 — safe in a fresh repo.
 // CommonJS (matches the other .github/scripts/ helpers, e.g. notify-email.js).
-const { readFileSync, existsSync } = require('fs');
+const { readFileSync, existsSync, readdirSync } = require('fs');
 
 // Static tier keeps tokens in styles/tokens.css; a production-tier (Next.js)
 // project keeps them in app/globals.css. Checking only the first made this
@@ -20,7 +20,19 @@ if (FILES.length === 0) {
   // A repo with no CSS at all has nothing to check (a fresh scaffold before
   // /design-intake). A repo that HAS stylesheets but none at a known token path
   // is a real gap: failing here is the whole point of a guardrail.
-  const hasCss = existsSync('styles') || existsSync('app') || existsSync('index.html');
+  //
+  // "Has CSS" must mean an actual .css file. Treating index.html — or a `styles/`
+  // directory that exists but is empty — as proof of CSS failed the static-check
+  // job for a fresh project that had a page and no stylesheet yet, contradicting
+  // the bootstrap behaviour documented at the top of this file.
+  const cssIn = (dir) => {
+    try {
+      return readdirSync(dir).some((f) => f.endsWith('.css'));
+    } catch {
+      return false;
+    }
+  };
+  const hasCss = ['styles', 'app', '.'].some(cssIn);
   if (!hasCss) {
     console.log(`::notice::no stylesheet yet — run /design-intake to establish this project's look. Skipping contrast check.`);
     process.exit(0);

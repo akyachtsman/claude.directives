@@ -50,12 +50,30 @@ const BLOCKING_RESOURCE_TYPES = new Set(['document', 'script', 'stylesheet']);
 function watchPageErrors(page) {
   const js = [];
   const resources = [];
-  const noteResource = (url, why, type) => {
-    if (!BLOCKING_RESOURCE_TYPES.has(type)) return;
+  // The MAIN DOCUMENT is the page under test, so a 404/500 for it blocks
+  // whatever origin it is on — and it must NOT go through the same-origin
+  // filter below. At document-response time `page.url()` is still the PREVIOUS
+  // document (`about:blank` on the first navigation, whose origin is the string
+  // "null"), so filtering by origin silently discarded exactly the failure the
+  // `document` type was added to catch.
+  const isMainDocument = (req) => {
     try {
-      if (new URL(url).origin !== new URL(page.url()).origin) return;
+      return req.resourceType() === 'document' && req.frame() === page.mainFrame();
     } catch {
-      return;
+      return false;
+    }
+  };
+  const noteResource = (url, why, type, mainDoc) => {
+    if (!BLOCKING_RESOURCE_TYPES.has(type)) return;
+    if (!mainDoc) {
+      // Sub-resources load after the navigation commits, so page.url() is the
+      // real document by then and same-origin is the right test: it keeps a
+      // third-party beacon or CDN blip from reddening the build.
+      try {
+        if (new URL(url).origin !== new URL(page.url()).origin) return;
+      } catch {
+        return;
+      }
     }
     resources.push(`${type} ${why}: ${url}`);
   };
@@ -67,9 +85,12 @@ function watchPageErrors(page) {
     if (/Failed to load resource/i.test(m.text())) return;
     js.push(m.text());
   });
-  page.on('requestfailed', r => noteResource(r.url(), 'request failed', r.resourceType()));
-  page.on('response', r => {
-    if (r.status() >= 400) noteResource(r.url(), `HTTP ${r.status()}`, r.request().resourceType());
+  page.on('requestfailed', r =>
+    noteResource(r.url(), 'request failed', r.resourceType(), isMainDocument(r)));
+  page.on('response', (r) => {
+    if (r.status() < 400) return;
+    const req = r.request();
+    noteResource(r.url(), `HTTP ${r.status()}`, req.resourceType(), isMainDocument(req));
   });
   return { js, resources, all: () => [...js, ...resources] };
 }

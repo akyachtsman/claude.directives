@@ -92,10 +92,11 @@ jobs:
           # js/ and styles/ (a source-only change must not skip the browser
           # job) and .github/actions/ (changes to the composites are exercised
           # pre-merge).
-          # Any deployed .html is an entry point, not just the root one: with
-          # APP_PAGES=admin.html, a PR touching only admin.html used to set
-          # ui=false and skip the very ENTRY gate that page exists for.
-          UI_PATHS: '^([^/]*\.html$|js/|styles/|\.github/actions/|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
+          # ANY deployed .html is an entry point, nested ones included: APP_PAGES
+          # advertises paths like vendor/console.html, and a matcher anchored to
+          # root-level files let a PR touching only that page set ui=false and
+          # skip the very ENTRY gate the page exists for.
+          UI_PATHS: '(\.html$|^js/|^styles/|^\.github/actions/|^\.github/scripts/ui-tests/|^\.github/workflows/qa\.yml$)'
         run: |
           # This job gates the LOCAL suite, which serves the repo root as static
           # files. That can only test a static-tier app.

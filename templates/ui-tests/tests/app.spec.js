@@ -72,12 +72,21 @@ function watchPageErrors(page) {
       return false;
     }
   };
+  // Only script and stylesheet are origin-filtered. That filter exists to stop a
+  // third-party beacon or CDN blip reddening the build — a concern that applies
+  // to assets, not to the two things that ARE the app:
+  //   * the main document, which is the page under test at any origin;
+  //   * API calls, which in the canonical stack go to Supabase — a DIFFERENT
+  //     origin by design. Origin-filtering those discarded exactly the failure
+  //     the xhr/fetch rule was added to catch.
+  const ORIGIN_FILTERED = new Set(['script', 'stylesheet']);
   const noteResource = (url, why, type, mainDoc) => {
     if (!BLOCKING_RESOURCE_TYPES.has(type)) return;
-    if (!mainDoc) {
-      // Sub-resources load after the navigation commits, so page.url() is the
-      // real document by then and same-origin is the right test: it keeps a
-      // third-party beacon or CDN blip from reddening the build.
+    // A child frame's document is not the page under test: an embedded iframe
+    // returning 404 is the embed's problem, and failing the load gate on it
+    // reddens a page that rendered correctly.
+    if (type === 'document' && !mainDoc) return;
+    if (ORIGIN_FILTERED.has(type)) {
       try {
         if (new URL(url).origin !== new URL(page.url()).origin) return;
       } catch {

@@ -4,15 +4,67 @@
 // .github/scripts/ and run it from qa.yml. If styles/tokens.css doesn't exist yet
 // (before /design-intake), it prints a notice and exits 0 — safe in a fresh repo.
 // CommonJS (matches the other .github/scripts/ helpers, e.g. notify-email.js).
-const { readFileSync, existsSync } = require('fs');
+const { readFileSync, existsSync, readdirSync } = require('fs');
+const { join } = require('path');
 
-const FILE = 'styles/tokens.css';
-if (!existsSync(FILE)) {
-  console.log(`::notice::${FILE} not found — run /design-intake to establish this project's look. Skipping contrast check.`);
-  process.exit(0);
+// Static tier keeps tokens in styles/tokens.css; a production-tier (Next.js)
+// project keeps them in app/globals.css. Checking only the first made this
+// guardrail a permanent no-op on the Next tier while CI still reported green.
+const CANDIDATES = ['styles/tokens.css', 'app/globals.css'];
+// EVERY candidate that exists is checked, not just the first. A project that
+// graduated to the production tier has both, and the Next root layout imports
+// app/globals.css — so picking one would measure the unused static starter and
+// leave the stylesheet users actually see unchecked, which is the production-tier
+// no-op this script exists to close.
+const FILES = CANDIDATES.filter((f) => existsSync(f));
+if (FILES.length === 0) {
+  // A repo with no CSS at all has nothing to check (a fresh scaffold before
+  // /design-intake). A repo that HAS stylesheets but none at a known token path
+  // is a real gap: failing here is the whole point of a guardrail.
+  //
+  // "Has CSS" must mean an actual .css file. Treating index.html — or a `styles/`
+  // directory that exists but is empty — as proof of CSS failed the static-check
+  // job for a fresh project that had a page and no stylesheet yet, contradicting
+  // the bootstrap behaviour documented at the top of this file.
+  // Recursive, because projects keep stylesheets in src/, public/css/,
+  // assets/styles/ and elsewhere. A shallow look at styles/ + app/ + root
+  // answered "no CSS" for those and exited 0 — the vacuous green this branch
+  // exists to reject.
+  const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'coverage', '.next', 'vendor']);
+  // No depth cap. A cutoff turns "I stopped looking" into "there is no CSS" —
+  // a monorepo keeping its only stylesheet at packages/client/src/features/…
+  // would have passed green. The ignore list below bounds the walk instead,
+  // and the search short-circuits on the first .css file found.
+  const hasCssUnder = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    for (const e of entries) {
+      if (e.isFile() && e.name.endsWith('.css')) return true;
+      if (e.isDirectory() && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name)) {
+        if (hasCssUnder(join(dir, e.name))) return true;
+      }
+    }
+    return false;
+  };
+  const hasCss = hasCssUnder('.');
+  if (!hasCss) {
+    console.log(`::notice::no stylesheet yet — run /design-intake to establish this project's look. Skipping contrast check.`);
+    process.exit(0);
+  }
+  console.error(`FAIL  this project has CSS but no tokens file at ${CANDIDATES.join(' or ')}.`);
+  console.error('      design.md makes tokens.css the single source of truth — the contrast');
+  console.error('      guardrail cannot run without it. Create one via /design-intake.');
+  process.exit(1);
 }
 
+let exitCode = 0;
+for (const FILE of FILES) {
 const css = readFileSync(FILE, 'utf8');
+console.log(`\n── ${FILE}`);
 const t = {};
 // Capture every color token, then validate its hex length (3/4/6/8). A 5- or
 // 7-digit value is malformed: fail loudly rather than silently skip it — a
@@ -41,12 +93,25 @@ const ratio = (a, b) => { const la = lum(a), lb = lum(b); return (Math.max(la, l
 
 const AA = 4.5, AA_LARGE = 3.0;
 const pairs = [
-  ['#FFFFFF', t['--color-accent'], AA, 'white / accent (button)'],
+  // No `|| '#FFFFFF'` fallback: substituting a default made the pair "evaluable"
+  // while measuring a colour the page may not use, so a project that DROPPED the
+  // token still scored 8/8. A missing required token must fail like any other.
+  [t['--color-on-accent'], t['--color-accent'], AA, 'on-accent / accent (button)'],
   [t['--color-text-primary'], t['--color-bg'], AA, 'text-primary / bg'],
   [t['--color-text-primary'], t['--color-surface'], AA, 'text-primary / surface'],
   [t['--color-text-secondary'], t['--color-bg'], AA, 'text-secondary / bg'],
   [t['--color-text-secondary'], t['--color-surface'], AA, 'text-secondary / surface'],
+  // Both button templates render the on-accent foreground over accent-hover on
+  // hover (and the static one on keyboard focus), so the hover background is a
+  // real background for this text and needs its own pair. Checking only the
+  // resting state passed themes that go nearly-black-on-dark the moment a
+  // pointer touches the control.
+  [t['--color-on-accent'], t['--color-accent-hover'], AA, 'on-accent / accent-hover (button hover)'],
   [t['--color-accent'], t['--color-surface'], AA_LARGE, 'accent / surface (large)'],
+  // design.md's error-message copy rule creates --color-danger; it carries meaning,
+  // so it needs the same AA floor as any other body text.
+  [t['--color-danger'], t['--color-surface'], AA, 'danger / surface'],
+  [t['--color-danger'], t['--color-bg'], AA, 'danger / bg'],
 ];
 
 let failed = false;
@@ -69,11 +134,14 @@ for (const [fg, bg, thr, name] of pairs) {
 // which is the same vacuous pass as measuring nothing.
 if (evaluated < pairs.length) {
   const missing = pairs.filter(([fg, bg]) => !fg || !bg).map(([, , , name]) => name);
-  console.error(`\ncheck-contrast: FAIL — only ${evaluated}/${pairs.length} pairs were evaluable.`);
+  console.error(`\ncheck-contrast: FAIL — ${FILE}: only ${evaluated}/${pairs.length} pairs were evaluable.`);
   console.error(`  Not measured: ${missing.join('; ')}`);
   console.error('  Each needs both tokens declared in #hex form (oklch()/rgb()/hsl()/var()');
   console.error('  are not parsed). Declare the missing tokens, or extend this script.');
-  process.exit(1);
+  exitCode = 1;
+  continue;
 }
-console.log(failed ? '\ncheck-contrast: FAIL — fix styles/tokens.css' : `\ncheck-contrast: OK — ${evaluated}/${pairs.length} pairs meet WCAG AA`);
-if (failed) process.exit(1);
+console.log(failed ? `check-contrast: FAIL — fix ${FILE}` : `check-contrast: OK — ${evaluated}/${pairs.length} pairs meet WCAG AA in ${FILE}`);
+if (failed) exitCode = 1;
+}
+process.exit(exitCode);

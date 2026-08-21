@@ -39,6 +39,14 @@ inputs:
     description: 'Directory the local server serves'
     required: false
     default: '.'
+  app-pages:
+    description: >
+      Comma-separated extra HTML entry points (beyond the app root) that the
+      ENTRY scenario load-gates, e.g. 'admin.html,vendor/console.html'. Empty
+      means the app ships a single page. test.md makes a deployed page with zero
+      tests a release blocker, so leaving this empty is a claim, not a default.
+    required: false
+    default: ''
   advisory-run:
     description: "Set 'true' to make ONLY the run step advisory; setup/install/server/upload stay blocking."
     required: false
@@ -122,7 +130,11 @@ runs:
       env:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
-      run: npx playwright test --reporter=list
+        APP_PAGES: ${{ inputs.app-pages }}
+      # No --reporter flag: a CLI reporter REPLACES the config's list, which
+      # would drop the json reporter and leave playwright-results.json unwritten
+      # while the upload step below still claims to publish it.
+      run: npx playwright test
       working-directory: ${{ inputs.tests-dir }}
 
     - name: Upload test results

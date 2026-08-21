@@ -92,10 +92,16 @@ jobs:
           # js/ and styles/ (a source-only change must not skip the browser
           # job) and .github/actions/ (changes to the composites are exercised
           # pre-merge).
-          UI_PATHS: '^(index\.html$|js/|styles/|\.github/actions/|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
+          # ANY deployed .html is an entry point, nested ones included: APP_PAGES
+          # advertises paths like vendor/console.html, and a matcher anchored to
+          # root-level files let a PR touching only that page set ui=false and
+          # skip the very ENTRY gate the page exists for.
+          UI_PATHS: '(\.html$|^js/|^styles/|^\.github/actions/|^\.github/scripts/ui-tests/|^\.github/workflows/qa\.yml$)'
         run: |
-          # No app yet (no index.html in the repo) → nothing to browser-test.
-          # Keeps the scaffold/bootstrap PR clean: skip until the app exists.
+          # This job gates the LOCAL suite, which serves the repo root as static
+          # files, so it needs a static entry point. Enabling it for a repo with
+          # no index.html would hand Playwright a directory listing to assert
+          # against — a green run that never loaded an application.
           if [ ! -f index.html ]; then
             echo "ui=false" >> "$GITHUB_OUTPUT"
             echo "No index.html yet — skipping browser job."
@@ -157,5 +163,6 @@ jobs:
           app-url: http://localhost:8080
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
           artifact-name: playwright-results-local
+          app-pages: ${{ vars.APP_PAGES }}
           start-local-server: 'true'
           advisory-run: 'false'

@@ -1,5 +1,5 @@
 // Generic exploratory UI test — no project-specific selectors or credentials.
-// Reads auth credentials from CLAUDE.md at runtime.
+// Credential comes from the TEST_AUTH_CREDENTIAL environment variable only.
 // Discovers app structure, exercises all interactive elements, captures API calls.
 //
 // ⚠️ Known CI compatibility issue — 100dvh not supported in older CI browsers:
@@ -11,32 +11,110 @@
 // replace with vh.
 
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CREDENTIAL DISCOVERY — read from CLAUDE.md at runtime
+// CREDENTIAL — environment only
 // ─────────────────────────────────────────────────────────────────────────────
-function readCredentialFromClaude() {
-  try {
-    const root = resolve(process.cwd(), '../../..'); // up from .github/scripts/ui-tests
-    const claude = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8');
-    // Matches all of:
-    //   Test PIN: 0100        Valid PIN: 0100
-    //   TEST_AUTH_CREDENTIAL: 0100
-    //   | Valid test PIN | `0100` |   (table format)
-    const match = claude.match(
-      /(?:valid\s+(?:test\s+)?pin|test\s+(?:pin|credential|password)|TEST_AUTH_CREDENTIAL)\s*[:|]\s*`?([0-9a-zA-Z!@#$%^&*]{2,})`?/i
-    );
-    return match?.[1]?.trim() ?? null;
-  } catch {
-    return null;
-  }
+// The credential comes from the TEST_AUTH_CREDENTIAL secret and nowhere else.
+// This used to fall back to scraping CLAUDE.md, which was both a standing
+// instruction to commit a credential (global.md -> Security) and a live hazard:
+// the regex matched the TABLE LABEL, so prose in the row returned a bogus
+// "credential" that S3 then typed into the first text input it found. An unset
+// secret must mean "no credential" — auth tests self-skip, and nothing is typed.
+const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
+// ─────────────────────────────────────────────────────────────────────────────
+// A JS error is ALWAYS blocking: one throw silently kills every handler bound
+// after it (design.md → Script loading), so the screen can look rendered while
+// nothing on it works.
+//
+// A resource-load failure is blocking only when the missing file is one the
+// page's own code depends on — a script or stylesheet on the app's own origin.
+// Chromium reports every failed request as a console `error` as well, carrying
+// no type information, so counting raw console errors fails the suite on a
+// missing favicon or a blocked third-party beacon. That is not a defect in the
+// app, and a gate that reddens on it only teaches the team to ignore the gate.
+//
+// `.js` is a real array of JS errors (what the diagnostics in S2/S3 report);
+// `.all()` adds the resource failures that genuinely break a page, and is what
+// the load gates (S1, ENTRY) assert.
+// `document` is here because the navigation itself is the page: a 404/500 for
+// the URL under test is reported as a document response, its console copy is
+// discarded as "Failed to load resource", and a provider's styled error page
+// satisfies the body-text assertion — so a mistyped or down APP_URL would pass
+// the authoritative live gate. Images, fonts and beacons stay non-blocking.
+const BLOCKING_RESOURCE_TYPES = new Set(['document', 'script', 'stylesheet', 'xhr', 'fetch']);
+// API calls block on 5xx only. Before this suite classified failures at all, a
+// raw console listener caught every "Failed to load resource", so an API 500
+// during initial load DID fail S1 — dropping it would ship a gate weaker than
+// the one it replaces. 4xx is excluded deliberately: 401 on an auth probe and
+// 404 for an optional resource are normal app flows, and blocking on them would
+// redden healthy builds. Server-side failures are the ones that mean the page
+// rendered a shell over broken data.
+const API_TYPES = new Set(['xhr', 'fetch']);
+const blockingStatus = (type) => (API_TYPES.has(type) ? 500 : 400);
+
+function watchPageErrors(page) {
+  const js = [];
+  const resources = [];
+  // The MAIN DOCUMENT is the page under test, so a 404/500 for it blocks
+  // whatever origin it is on — and it must NOT go through the same-origin
+  // filter below. At document-response time `page.url()` is still the PREVIOUS
+  // document (`about:blank` on the first navigation, whose origin is the string
+  // "null"), so filtering by origin silently discarded exactly the failure the
+  // `document` type was added to catch.
+  const isMainDocument = (req) => {
+    try {
+      return req.resourceType() === 'document' && req.frame() === page.mainFrame();
+    } catch {
+      return false;
+    }
+  };
+  // Only script and stylesheet are origin-filtered. That filter exists to stop a
+  // third-party beacon or CDN blip reddening the build — a concern that applies
+  // to assets, not to the two things that ARE the app:
+  //   * the main document, which is the page under test at any origin;
+  //   * API calls, which in the canonical stack go to Supabase — a DIFFERENT
+  //     origin by design. Origin-filtering those discarded exactly the failure
+  //     the xhr/fetch rule was added to catch.
+  const ORIGIN_FILTERED = new Set(['script', 'stylesheet']);
+  const noteResource = (url, why, type, mainDoc) => {
+    if (!BLOCKING_RESOURCE_TYPES.has(type)) return;
+    // A child frame's document is not the page under test: an embedded iframe
+    // returning 404 is the embed's problem, and failing the load gate on it
+    // reddens a page that rendered correctly.
+    if (type === 'document' && !mainDoc) return;
+    if (ORIGIN_FILTERED.has(type)) {
+      try {
+        if (new URL(url).origin !== new URL(page.url()).origin) return;
+      } catch {
+        return;
+      }
+    }
+    resources.push(`${type} ${why}: ${url}`);
+  };
+  page.on('pageerror', e => js.push(e.message));
+  page.on('console', m => {
+    if (m.type() !== 'error') return;
+    // Classification comes from the request handlers below; skipping the console
+    // copy keeps a single 404 from also counting as a JS error.
+    if (/Failed to load resource/i.test(m.text())) return;
+    js.push(m.text());
+  });
+  page.on('requestfailed', r =>
+    noteResource(r.url(), 'request failed', r.resourceType(), isMainDocument(r)));
+  // NOTE: requestfailed covers transport failures for every blocking type,
+  // including xhr/fetch — a refused or aborted API call never yields a status.
+  page.on('response', (r) => {
+    const req = r.request();
+    const type = req.resourceType();
+    if (r.status() < blockingStatus(type)) return;
+    noteResource(r.url(), `HTTP ${r.status()}`, type, isMainDocument(req));
+  });
+  return { js, resources, all: () => [...js, ...resources] };
 }
-
-// Falls back to null if neither env var nor CLAUDE.md has a credential.
-// Auth-dependent tests skip gracefully rather than failing when null.
-const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL ?? readCredentialFromClaude() ?? null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API CALL CAPTURE — must wrap fetch before page load via addInitScript
@@ -213,14 +291,12 @@ function testValueFor(el) {
 // SCENARIO 1 — Page Load
 // ─────────────────────────────────────────────────────────────────────────────
 test('S1: page loads without JS errors', async ({ page }) => {
-  const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  const errors = watchPageErrors(page);
   await page.goto('./');
   await page.waitForLoadState('networkidle').catch(() => {});
   const bodyText = await page.evaluate(() => document.body.innerText?.trim());
   expect(bodyText?.length, 'Page body is empty').toBeGreaterThan(0);
-  expect(errors, `JS errors on load: ${errors.join('; ')}`).toHaveLength(0);
+  expect(errors.all(), `Errors on load: ${errors.all().join('; ')}`).toHaveLength(0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,9 +304,7 @@ test('S1: page loads without JS errors', async ({ page }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential found in CLAUDE.md or TEST_AUTH_CREDENTIAL env var — skipping auth test');
-  const consoleErrors = [];
-  page.on('pageerror', e => consoleErrors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+  const pageErrors = watchPageErrors(page);
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
@@ -267,7 +341,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       mechanism,
       credentialProvided: AUTH_CREDENTIAL ? 'yes' : 'none — check CLAUDE.md',
       onscreenError: errText,
-      consoleErrors,
+      consoleErrors: pageErrors.all(),
       apiCalls,
       responseShape: firstKey
         ? `rows returned, first field "${firstKey}"`
@@ -282,7 +356,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       `API status: ${apiCalls[0]?.status ?? 'no call'} | ` +
       `recordCount: ${apiCalls[0]?.recordCount ?? 'n/a'} | ` +
       `responseShape: ${diag.responseShape} | ` +
-      `consoleErrors: ${consoleErrors.join('; ') || 'none'}`
+      `consoleErrors: ${pageErrors.all().join('; ') || 'none'}`
     );
   }
 
@@ -303,10 +377,8 @@ test('S3: interactive elements discovered and exercised without errors', async (
   test.setTimeout(240_000);
   // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
   // only auth-gated apps with no credential are skipped (decided after page load below).
-  const consoleErrors = [];
+  const pageErrors = watchPageErrors(page);
   const apiAnomalies  = [];
-  page.on('pageerror', e => consoleErrors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
@@ -331,7 +403,10 @@ test('S3: interactive elements discovered and exercised without errors', async (
   const findings = [];
 
   for (const el of elements) {
-    const errorsBefore = consoleErrors.length;
+    // .all(), not .js: a click that triggers a failed dynamic import, route
+    // chunk or lazily-loaded stylesheet breaks the interaction without adding a
+    // JS error, and the raw-console listener this replaced did catch those.
+    const errorsBefore = pageErrors.all().length;
     // Only calls made by THIS interaction count as findings. callsBefore is the baseline
     // length; loadIdBefore detects whether the interaction navigated (which resets the
     // array) so we don't mis-slice the new page's calls — see recentBadCalls below.
@@ -369,7 +444,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
       const snapAfter      = await domSnapshot(page);
       const domTransition  = JSON.stringify(snapBefore) !== JSON.stringify(snapAfter);
-      const newErrors      = consoleErrors.slice(errorsBefore);
+      const newErrors      = pageErrors.all().slice(errorsBefore);
       const apiCalls       = (await getApiCalls()) ?? [];
       // If the interaction navigated, window.__apiCalls was reset to the new page's calls
       // (which are unrelated to callsBefore and may be the same length or longer). Detect
@@ -464,7 +539,31 @@ async function gotoAndAuth(page) {
 // false-fails, narrow it to a stable view title (e.g. the h1/h2 only).
 async function viewSignature(page) {
   return page.evaluate(() => {
-    const h = (document.querySelector('h1, h2, [role=heading]')?.textContent || '').trim().slice(0, 80);
+    // First VISIBLE heading, not first in the DOM: a display:none SPA keeps the
+    // previous view mounted, so querySelector returns the heading of the screen
+    // the user just left and every level shares one signature.
+    const heads = [...document.querySelectorAll('h1, h2, [role=heading]')];
+    const visible = heads.find((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      // A non-empty box is not visibility: an SPA that hides the previous view
+      // with `visibility: hidden` (or opacity 0) keeps its heading's box, so the
+      // stale heading was still picked and sibling levels shared one signature —
+      // NAV then stopped drilling or declared the invariant inapplicable.
+      // checkVisibility walks the rendered ancestor chain, which a computed-style
+      // read on the element alone cannot: opacity is not inherited, so a panel at
+      // opacity:0 leaves its heading reporting opacity 1 and a non-empty box.
+      if (typeof el.checkVisibility === 'function') {
+        return el.checkVisibility({
+          opacityProperty: true,
+          visibilityProperty: true,
+          contentVisibilityAuto: true,
+        });
+      }
+      const cs = getComputedStyle(el);
+      return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0';
+    });
+    const h = (visible?.textContent || '').trim().slice(0, 80);
     const buttons = document.querySelectorAll('button, [role=button]').length;
     const inputs = document.querySelectorAll('input:not([type=hidden]), select, textarea').length;
     const text = (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -479,7 +578,11 @@ function backControl(page) {
   return page.locator(
     '[data-back], [aria-label*="back" i], button:has-text("Back"), a:has-text("Back"), ' +
     'button:has-text("←"), a:has-text("←")'
-  ).first();
+  // `.first()` alone grabs the FIRST IN THE DOM, which in the common SPA pattern
+  // (prior views kept mounted under display:none) is the hidden control from the
+  // level above — so the back-flow test drove a dead element and self-skipped as
+  // "invariant N/A" on an app that fully exercises the invariant.
+  ).locator('visible=true').first();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -587,19 +690,17 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
 test('ENTRY: every deployed entry point renders without JS errors', async ({ page }) => {
   const pages = (process.env.APP_PAGES || '').split(',').map(s => s.trim()).filter(Boolean);
   test.skip(pages.length === 0, 'No extra entry points declared (APP_PAGES) — the baseURL is covered by S1');
+  const watcher = watchPageErrors(page);
   for (const path of pages) {
-    const errors = [];
-    const onPageError = e => errors.push(e.message);
-    const onConsole = m => { if (m.type() === 'error') errors.push(m.text()); };
-    page.on('pageerror', onPageError);
-    page.on('console', onConsole);
+    // One watcher for the whole loop; each page is judged on the errors that
+    // arrived after the previous one, so a failure names the page that caused it.
+    const before = watcher.all().length;
     await page.goto('./' + path.replace(/^\//, ''));
     await page.waitForLoadState('networkidle').catch(() => {});
     const bodyText = await page.evaluate(() => document.body.innerText?.trim());
     expect(bodyText?.length, `${path}: page body is empty`).toBeGreaterThan(0);
-    expect(errors, `${path}: JS errors on load: ${errors.join('; ')}`).toHaveLength(0);
-    page.off('pageerror', onPageError);
-    page.off('console', onConsole);
+    const fresh = watcher.all().slice(before);
+    expect(fresh, `${path}: errors on load: ${fresh.join('; ')}`).toHaveLength(0);
   }
 });
 

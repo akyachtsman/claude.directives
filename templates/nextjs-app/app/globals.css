@@ -13,6 +13,17 @@
   --color-text-secondary: #5F6573;
   --color-accent: #1565C0;
   --color-accent-hover: #114F98;
+  /* Kept in step with templates/styles/tokens.css: the CI contrast guardrail
+     checks every token file it finds, and the static starter's contract is the
+     one this tier inherits (design.md -> Stack: the contract carries over
+     unchanged). Missing tokens fail the check rather than skipping it. */
+  --color-accent-light: #E5EEF8;
+  --color-danger: #C0392B;
+  --color-on-accent: #FFFFFF;
+  --size-target-min: 44px;
+  --size-check-min: 24px;
+  --size-input-min: 48px;
+  --font-input-min: 16px;
   --radius-md: 10px;
   --space-4: 16px;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -46,12 +57,12 @@ body {
   min-height: 44px;
   padding: 0 20px;
   font: 600 16px var(--font-sans);
-  color: #fff;
+  color: var(--color-on-accent);
   background: var(--color-accent);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: filter .15s ease;
+  transition: background .15s ease;
 }
 .btn:hover { background: var(--color-accent-hover); }
 .btn:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }

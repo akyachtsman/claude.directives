@@ -85,13 +85,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Without APP_URL there is nothing to test against: the suite would run
+      # every scenario against the placeholder and fail for a config gap rather
+      # than a defect. Say so once and stop.
+      - name: Require APP_URL
+        if: ${{ vars.APP_URL == '' }}
+        run: |
+          echo "::error::APP_URL repository variable is not set — cannot run the live suite."
+          exit 1
+
       # Blocking, against the live URL.
       - uses: ./.github/actions/ui-suite
+        if: ${{ vars.APP_URL != '' }}
         with:
           tests-dir: ${{ env.UI_TESTS_DIR }}
           app-url: ${{ vars.APP_URL }}
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
           artifact-name: playwright-results-response-${{ github.run_id }}
+          app-pages: ${{ vars.APP_PAGES }}
 
       # Results are available in the Actions tab for the active session to read
       # and act on via the GitHub MCP tools (pull_request_read, get_job_logs, etc.)

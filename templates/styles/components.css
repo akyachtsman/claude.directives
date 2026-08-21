@@ -4,18 +4,31 @@
    universal craft rules in design.md (iPad sizes, :focus-visible, reduced-motion). */
 
 .btn {
-  min-height: 44px; padding: 12px 24px; border: none; cursor: pointer;
+  min-height: var(--size-target-min); padding: var(--space-3) var(--space-6);
+  border: none; cursor: pointer;
   border-radius: var(--radius-md);
-  background: var(--color-accent); color: #fff;
+  background: var(--color-accent); color: var(--color-on-accent);
   font: 500 var(--font-base)/1 var(--font-sans);
   box-shadow: var(--shadow-sm); transition: all .15s ease;
 }
-.btn:hover, .btn:focus-visible { background: var(--color-accent-hover); box-shadow: var(--shadow-md); }
+.btn:hover { background: var(--color-accent-hover); box-shadow: var(--shadow-md); }
+/* Focus needs its OWN indicator, not the hover state: accent -> accent-hover is a
+   ~1.4:1 shift, so a keyboard user cannot tell where focus is (design.md ->
+   Accessibility, non-negotiable). Outline sits outside the box, so it also reads
+   against whatever surface the button is on. */
+.btn:focus-visible {
+  background: var(--color-accent-hover); box-shadow: var(--shadow-md);
+  outline: 3px solid var(--color-accent); outline-offset: 2px;
+}
 .btn-secondary {
   background: var(--color-surface); color: var(--color-text-primary);
   border: 1px solid var(--color-border);
 }
-.btn-secondary:hover, .btn-secondary:focus-visible { border-color: var(--color-accent); color: var(--color-accent); }
+.btn-secondary:hover { border-color: var(--color-accent); color: var(--color-accent); }
+.btn-secondary:focus-visible {
+  border-color: var(--color-accent); color: var(--color-accent);
+  outline: 3px solid var(--color-accent); outline-offset: 2px;
+}
 
 .card {
   background: var(--color-surface); border: 1px solid var(--color-border);
@@ -23,11 +36,20 @@
 }
 
 .input {
-  min-height: 48px; padding: 10px 14px; font-size: 16px; /* 16px: no iOS zoom */
+  min-height: var(--size-input-min); padding: var(--space-2) var(--space-4);
+  font-size: var(--font-input-min); /* never below 16px: prevents iOS zoom on focus */
   border: 1px solid var(--color-border); border-radius: var(--radius-sm);
   background: var(--color-surface); color: var(--color-text-primary);
 }
 .input:focus-visible { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-accent-light); }
+
+/* design.md names checkbox among the five components and sets a 24x24px floor
+   (larger than the browser default, which is ~13px). */
+.checkbox {
+  width: var(--size-check-min); height: var(--size-check-min);
+  accent-color: var(--color-accent); cursor: pointer;
+}
+.checkbox:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 
 .section-header {
   font-size: var(--font-sm); font-weight: 600; text-transform: uppercase;
@@ -35,4 +57,9 @@
   border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-2);
 }
 
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* `transition` alone is not enough: design.md's own reference flashRow() pulse is
+   an @keyframes animation, and smooth scrolling is motion too. */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  html { scroll-behavior: auto !important; }
+}

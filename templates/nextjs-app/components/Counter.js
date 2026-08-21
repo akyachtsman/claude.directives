@@ -1,7 +1,8 @@
 'use client';
 // A Client Component: interactive, runs in the browser. This is the "active
 // React button" — real useState + event handler. Author/preview it browser-only
-// in ../preview.html (CDN React, no build), then it runs here verbatim under
+// with the CDN-React preview page in README.md ("Browser-only preview", no
+// build step), then it runs here verbatim under
 // Next. Styling comes from the shared design contract (.btn in globals.css).
 import { useState } from 'react';
 

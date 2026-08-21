@@ -15,6 +15,9 @@
   --color-accent-hover:   #114F98;
   --color-accent-light:   #E5EEF8;
   --color-danger:         #C0392B;
+  /* Foreground for text/icons ON --color-accent. Named rather than hardcoded so
+     a dark accent stays legible after a re-theme. */
+  --color-on-accent:      #FFFFFF;
 
   /* type */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -22,6 +25,12 @@
 
   /* space */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
+
+  /* target sizes — design.md -> Cross-platform & responsive (touch AND pointer) */
+  --size-target-min: 44px;  /* min tap/click target */
+  --size-check-min:  24px;  /* min checkbox */
+  --size-input-min:  48px;  /* min input height */
+  --font-input-min:  16px;  /* never below 16px: prevents iOS zoom on focus */
 
   /* radius */
   --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;

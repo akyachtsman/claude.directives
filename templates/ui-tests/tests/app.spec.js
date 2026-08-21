@@ -36,7 +36,53 @@ function readCredentialFromClaude() {
 
 // Falls back to null if neither env var nor CLAUDE.md has a credential.
 // Auth-dependent tests skip gracefully rather than failing when null.
-const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL ?? readCredentialFromClaude() ?? null;
+const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || readCredentialFromClaude() || null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
+// ─────────────────────────────────────────────────────────────────────────────
+// A JS error is ALWAYS blocking: one throw silently kills every handler bound
+// after it (design.md → Script loading), so the screen can look rendered while
+// nothing on it works.
+//
+// A resource-load failure is blocking only when the missing file is one the
+// page's own code depends on — a script or stylesheet on the app's own origin.
+// Chromium reports every failed request as a console `error` as well, carrying
+// no type information, so counting raw console errors fails the suite on a
+// missing favicon or a blocked third-party beacon. That is not a defect in the
+// app, and a gate that reddens on it only teaches the team to ignore the gate.
+//
+// `.js` is a real array of JS errors (what the diagnostics in S2/S3 report);
+// `.all()` adds the resource failures that genuinely break a page, and is what
+// the load gates (S1, ENTRY) assert.
+const BLOCKING_RESOURCE_TYPES = new Set(['script', 'stylesheet']);
+
+function watchPageErrors(page) {
+  const js = [];
+  const resources = [];
+  const noteResource = (url, why, type) => {
+    if (!BLOCKING_RESOURCE_TYPES.has(type)) return;
+    try {
+      if (new URL(url).origin !== new URL(page.url()).origin) return;
+    } catch {
+      return;
+    }
+    resources.push(`${type} ${why}: ${url}`);
+  };
+  page.on('pageerror', e => js.push(e.message));
+  page.on('console', m => {
+    if (m.type() !== 'error') return;
+    // Classification comes from the request handlers below; skipping the console
+    // copy keeps a single 404 from also counting as a JS error.
+    if (/Failed to load resource/i.test(m.text())) return;
+    js.push(m.text());
+  });
+  page.on('requestfailed', r => noteResource(r.url(), 'request failed', r.resourceType()));
+  page.on('response', r => {
+    if (r.status() >= 400) noteResource(r.url(), `HTTP ${r.status()}`, r.request().resourceType());
+  });
+  return { js, resources, all: () => [...js, ...resources] };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API CALL CAPTURE — must wrap fetch before page load via addInitScript
@@ -213,14 +259,12 @@ function testValueFor(el) {
 // SCENARIO 1 — Page Load
 // ─────────────────────────────────────────────────────────────────────────────
 test('S1: page loads without JS errors', async ({ page }) => {
-  const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  const errors = watchPageErrors(page);
   await page.goto('./');
   await page.waitForLoadState('networkidle').catch(() => {});
   const bodyText = await page.evaluate(() => document.body.innerText?.trim());
   expect(bodyText?.length, 'Page body is empty').toBeGreaterThan(0);
-  expect(errors, `JS errors on load: ${errors.join('; ')}`).toHaveLength(0);
+  expect(errors.all(), `Errors on load: ${errors.all().join('; ')}`).toHaveLength(0);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,9 +272,7 @@ test('S1: page loads without JS errors', async ({ page }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential found in CLAUDE.md or TEST_AUTH_CREDENTIAL env var — skipping auth test');
-  const consoleErrors = [];
-  page.on('pageerror', e => consoleErrors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+  const consoleErrors = watchPageErrors(page).js;
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
@@ -303,10 +345,8 @@ test('S3: interactive elements discovered and exercised without errors', async (
   test.setTimeout(240_000);
   // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
   // only auth-gated apps with no credential are skipped (decided after page load below).
-  const consoleErrors = [];
+  const consoleErrors = watchPageErrors(page).js;
   const apiAnomalies  = [];
-  page.on('pageerror', e => consoleErrors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
@@ -464,7 +504,15 @@ async function gotoAndAuth(page) {
 // false-fails, narrow it to a stable view title (e.g. the h1/h2 only).
 async function viewSignature(page) {
   return page.evaluate(() => {
-    const h = (document.querySelector('h1, h2, [role=heading]')?.textContent || '').trim().slice(0, 80);
+    // First VISIBLE heading, not first in the DOM: a display:none SPA keeps the
+    // previous view mounted, so querySelector returns the heading of the screen
+    // the user just left and every level shares one signature.
+    const heads = [...document.querySelectorAll('h1, h2, [role=heading]')];
+    const visible = heads.find((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    const h = (visible?.textContent || '').trim().slice(0, 80);
     const buttons = document.querySelectorAll('button, [role=button]').length;
     const inputs = document.querySelectorAll('input:not([type=hidden]), select, textarea').length;
     const text = (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -479,7 +527,11 @@ function backControl(page) {
   return page.locator(
     '[data-back], [aria-label*="back" i], button:has-text("Back"), a:has-text("Back"), ' +
     'button:has-text("←"), a:has-text("←")'
-  ).first();
+  // `.first()` alone grabs the FIRST IN THE DOM, which in the common SPA pattern
+  // (prior views kept mounted under display:none) is the hidden control from the
+  // level above — so the back-flow test drove a dead element and self-skipped as
+  // "invariant N/A" on an app that fully exercises the invariant.
+  ).locator('visible=true').first();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -587,19 +639,17 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
 test('ENTRY: every deployed entry point renders without JS errors', async ({ page }) => {
   const pages = (process.env.APP_PAGES || '').split(',').map(s => s.trim()).filter(Boolean);
   test.skip(pages.length === 0, 'No extra entry points declared (APP_PAGES) — the baseURL is covered by S1');
+  const watcher = watchPageErrors(page);
   for (const path of pages) {
-    const errors = [];
-    const onPageError = e => errors.push(e.message);
-    const onConsole = m => { if (m.type() === 'error') errors.push(m.text()); };
-    page.on('pageerror', onPageError);
-    page.on('console', onConsole);
+    // One watcher for the whole loop; each page is judged on the errors that
+    // arrived after the previous one, so a failure names the page that caused it.
+    const before = watcher.all().length;
     await page.goto('./' + path.replace(/^\//, ''));
     await page.waitForLoadState('networkidle').catch(() => {});
     const bodyText = await page.evaluate(() => document.body.innerText?.trim());
     expect(bodyText?.length, `${path}: page body is empty`).toBeGreaterThan(0);
-    expect(errors, `${path}: JS errors on load: ${errors.join('; ')}`).toHaveLength(0);
-    page.off('pageerror', onPageError);
-    page.off('console', onConsole);
+    const fresh = watcher.all().slice(before);
+    expect(fresh, `${path}: errors on load: ${fresh.join('; ')}`).toHaveLength(0);
   }
 });
 

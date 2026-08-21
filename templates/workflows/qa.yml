@@ -92,13 +92,18 @@ jobs:
           # js/ and styles/ (a source-only change must not skip the browser
           # job) and .github/actions/ (changes to the composites are exercised
           # pre-merge).
-          UI_PATHS: '^(index\.html$|js/|styles/|\.github/actions/|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
+          # Covers BOTH tiers: the static tier's index.html/js/styles and the
+          # production tier's Next sources. Without app|components|lib a Next
+          # project's every source change skipped the browser job entirely.
+          UI_PATHS: '^(index\.html$|js/|styles/|app/|components/|lib/|\.github/actions/|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
         run: |
-          # No app yet (no index.html in the repo) → nothing to browser-test.
-          # Keeps the scaffold/bootstrap PR clean: skip until the app exists.
-          if [ ! -f index.html ]; then
+          # No app yet → nothing to browser-test; keeps the scaffold/bootstrap PR
+          # clean. "No app" means neither tier is present: no static entry point
+          # AND no Next app dir. Testing index.html alone declared every
+          # production-tier repo appless and silently skipped its UI job forever.
+          if [ ! -f index.html ] && [ ! -d app ]; then
             echo "ui=false" >> "$GITHUB_OUTPUT"
-            echo "No index.html yet — skipping browser job."
+            echo "No index.html and no app/ yet — skipping browser job."
             exit 0
           fi
           # Non-PR events (push to main) always run UI tests unconditionally.
@@ -157,5 +162,6 @@ jobs:
           app-url: http://localhost:8080
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
           artifact-name: playwright-results-local
+          app-pages: ${{ vars.APP_PAGES }}
           start-local-server: 'true'
           advisory-run: 'false'

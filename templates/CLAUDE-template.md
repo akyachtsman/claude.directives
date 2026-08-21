@@ -55,8 +55,8 @@ Read by `ui-tester` and the Playwright kit at runtime — fill in before invokin
 | Key | Value |
 |---|---|
 | App URL | `https://akyachtsman.github.io/[repo-name]/` |
-| Valid test credential | `[a real read-only TEST_AUTH_CREDENTIAL]` |
-| Invalid test credential | `[any value the app rejects]` |
+| Valid test credential | stored as the `TEST_AUTH_CREDENTIAL` repository secret — **never write the value here** |
+| Invalid test credential | `[any value the app rejects — safe to write, it unlocks nothing]` |
 | Primary nav button | `[label of the first feature button]` |
 | Primary content selector | `[CSS selector for loaded content, e.g. .task]` |
 | Nav cards | `[top-level menu labels, e.g. ['Morning','Evening','Dashboard']]` |
@@ -64,7 +64,8 @@ Read by `ui-tester` and the Playwright kit at runtime — fill in before invokin
 | Key selectors | `[login / home / error element selectors]` |
 
 ## Project-Specific Test Scenarios
-Authoritative list of coverage beyond the generic S1–S4 suite — the ui-tester
+Authoritative list of coverage beyond the generic suite (S1–S4 plus the
+NAV, CTRL, ENTRY and DISMISS scenarios) — the ui-tester
 adds one `app.spec.js` scenario per row, numbered from S5. Fill in before
 invoking agents (the ui-tester stops and asks if this table is missing).
 | # | Feature | What to verify | Failure indicator |

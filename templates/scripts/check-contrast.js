@@ -6,10 +6,24 @@
 // CommonJS (matches the other .github/scripts/ helpers, e.g. notify-email.js).
 const { readFileSync, existsSync } = require('fs');
 
-const FILE = 'styles/tokens.css';
-if (!existsSync(FILE)) {
-  console.log(`::notice::${FILE} not found — run /design-intake to establish this project's look. Skipping contrast check.`);
-  process.exit(0);
+// Static tier keeps tokens in styles/tokens.css; a production-tier (Next.js)
+// project keeps them in app/globals.css. Checking only the first made this
+// guardrail a permanent no-op on the Next tier while CI still reported green.
+const CANDIDATES = ['styles/tokens.css', 'app/globals.css'];
+const FILE = CANDIDATES.find((f) => existsSync(f));
+if (!FILE) {
+  // A repo with no CSS at all has nothing to check (a fresh scaffold before
+  // /design-intake). A repo that HAS stylesheets but none at a known token path
+  // is a real gap: failing here is the whole point of a guardrail.
+  const hasCss = existsSync('styles') || existsSync('app') || existsSync('index.html');
+  if (!hasCss) {
+    console.log(`::notice::no stylesheet yet — run /design-intake to establish this project's look. Skipping contrast check.`);
+    process.exit(0);
+  }
+  console.error(`FAIL  this project has CSS but no tokens file at ${CANDIDATES.join(' or ')}.`);
+  console.error('      design.md makes tokens.css the single source of truth — the contrast');
+  console.error('      guardrail cannot run without it. Create one via /design-intake.');
+  process.exit(1);
 }
 
 const css = readFileSync(FILE, 'utf8');
@@ -41,12 +55,17 @@ const ratio = (a, b) => { const la = lum(a), lb = lum(b); return (Math.max(la, l
 
 const AA = 4.5, AA_LARGE = 3.0;
 const pairs = [
-  ['#FFFFFF', t['--color-accent'], AA, 'white / accent (button)'],
+  // Read the token the button actually uses rather than assuming white.
+  [t['--color-on-accent'] || '#FFFFFF', t['--color-accent'], AA, 'on-accent / accent (button)'],
   [t['--color-text-primary'], t['--color-bg'], AA, 'text-primary / bg'],
   [t['--color-text-primary'], t['--color-surface'], AA, 'text-primary / surface'],
   [t['--color-text-secondary'], t['--color-bg'], AA, 'text-secondary / bg'],
   [t['--color-text-secondary'], t['--color-surface'], AA, 'text-secondary / surface'],
   [t['--color-accent'], t['--color-surface'], AA_LARGE, 'accent / surface (large)'],
+  // design.md's error-message copy rule creates --color-danger; it carries meaning,
+  // so it needs the same AA floor as any other body text.
+  [t['--color-danger'], t['--color-surface'], AA, 'danger / surface'],
+  [t['--color-danger'], t['--color-bg'], AA, 'danger / bg'],
 ];
 
 let failed = false;

@@ -112,7 +112,12 @@ rootTargets.forEach((t, i) => {
 // Everything except the href must be byte-identical.
 rootCards.forEach((block, i) => {
   if (i >= galleryCards.length) return;
-  const strip = (s) => s.replace(/(<a class="demo-card"\s+href=")[^"]*(")/, '$1$2');
+  // Blank the href VALUE wherever it sits in the open tag: attribute order and
+  // extra class tokens are cosmetic, and must not read as a divergence.
+  const strip = (s) => {
+    const end = s.indexOf('>') + 1;
+    return s.slice(0, end).replace(/(\shref\s*=\s*")[^"]*(")/i, '$1$2') + s.slice(end);
+  };
   if (strip(block) !== strip(galleryCards[i])) {
     fail(`card ${i + 1} differs between the two pages beyond its href:\n--- ${ROOT}\n${block}\n--- ${GALLERY}\n${galleryCards[i]}`);
   }

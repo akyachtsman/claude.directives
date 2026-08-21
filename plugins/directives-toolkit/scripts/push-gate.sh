@@ -11,10 +11,21 @@
 #    containing "push to main" cannot trigger the gate;
 #  - `push` must be an actual git subcommand, so branch/file names that
 #    merely contain "push" (e.g. claude/push-gate-quotes) cannot either;
-#  - BACKTICK code spans are stripped too. Found by dogfooding: a commit message
-#    documenting this very gate ("`git push -u origin claude/foo` from main was
-#    refused") was itself blocked, because prose inside backticks reached the
-#    matcher exactly like a real command would.
+#
+# COMMAND SUBSTITUTION is a subcommand position: `result=`git push origin main``
+# and `$(git push origin main)` used to slip past the anchor entirely — the
+# separator class had no backtick, and a ref followed by `)` failed the ref test.
+# Both verified as live bypasses on a scratch repo, and both predate this file's
+# current shape; they are closed above.
+#
+# BACKTICKS ARE NOT STRIPPED, deliberately. In shell they are COMMAND
+# SUBSTITUTION, not documentation: stripping them let `result=`git push origin
+# main`` through the matcher entirely and the gate exited 0 — a bypass, verified
+# on a scratch repo. The cost is a known false positive: a commit message that
+# quotes a push command inside backticks, passed inline via a heredoc, still
+# trips the gate. The fix belongs on the calling side, not here — write long
+# prose to a file and use `git commit -F <file>`, so message text never reaches
+# the command line. A false BLOCK is recoverable; a false ALLOW is not.
 
 in=$(cat) || exit 0
 
@@ -32,13 +43,12 @@ fi
 # message-like text — are removed entirely.
 stripped=$(printf '%s' "$cmd" \
   | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
-  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g' \
-  | sed -e 's/`[^`]*`//g')
+  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var
 # prefix (`GIT_TRACE=1 git push ...`) must not defeat the anchor.
-GIT_PUSH='(^|[;&|(][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*)([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]]|$)'
+GIT_PUSH='(^|[;&|(`][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*|[$]\([[:space:]]*|=[`]|=[$]\()([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]]|$)'
 printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 
 # Isolate every push subcommand segment — a compound command can carry more
@@ -46,7 +56,7 @@ printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 pushparts=$(printf '%s' "$stripped" | grep -oE 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push[^|;&]*')
 
 # Any push that names main/master as a target ref (standalone word or after /).
-if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/])(main|master)([[:space:]]|$)'; then
+if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/])(main|master)([[:space:]`)]|$)'; then
   echo 'BLOCKED by directives push-gate: direct push to main is never allowed — all main updates go through a claude/<name> branch and a PR (squash-merge on green CI). Push to your feature branch instead.' >&2
   exit 2
 fi
@@ -67,7 +77,7 @@ names_ref() {
     case "$1" in
       --) shift; [ $# -gt 0 ] && return 0; return 1 ;;
       # options that consume the NEXT token as their value
-      -o|--push-option|--repo|--receive-pack|--exec)
+      -o|--push-option|--repo|--receive-pack|--exec|--recurse-submodules)
         shift 2 2>/dev/null || return 1 ;;
       -*) shift ;;                            # any other flag, incl. --opt=value
       *) return 0 ;;                          # a real argument: a remote or ref

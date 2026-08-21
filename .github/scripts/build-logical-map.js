@@ -105,12 +105,18 @@ const SELF = {
   // never an ADDITION, so a hand-list silently under-reports the repo's own
   // validation surface every time a gate is added — it had drifted to 10 of 13.
   'self.checks': [
-    // Extension-filtered: an unfiltered read let ANY stray file into the map —
-    // __pycache__/ from running the python gates was enough — and then --check
-    // failed with "logical-map.html is stale", which is a MISDIAGNOSIS. A
-    // session following that message regenerates and commits the junk.
-    ...readdirSync('.github/scripts')
-      .filter(f => /\.(js|py|json)$/.test(f))
+    // DENY-list, not an allow-list. An unfiltered read let any stray file in —
+    // __pycache__/ from running the python gates was enough — and --check then
+    // failed with "logical-map.html is stale", a MISDIAGNOSIS that sends a
+    // session to regenerate and commit the junk. But allow-listing .js/.py/.json
+    // reintroduces the under-reporting this derivation exists to prevent: a gate
+    // added as check-foo.sh, .mjs, .cjs or an extensionless executable would be
+    // silently dropped, and --check would still pass because both sides of the
+    // comparison use the same filtered inventory. So: exclude known junk and
+    // anything that is not a regular file; admit everything else.
+    ...readdirSync('.github/scripts', { withFileTypes: true })
+      .filter(e => e.isFile() && !/^\./.test(e.name) && !/\.(pyc|pyo|log|tmp|bak|swp)$/.test(e.name))
+      .map(e => e.name)
       .sort()
       .map(f => `.github/scripts/${f}`),
     '.github/workflow-ref-required.json',

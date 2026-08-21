@@ -216,11 +216,19 @@ if [ -z "$head" ]; then
   echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
 elif [ -n "$last" ] && [ "$last" != "$head" ]; then
   # Optional: file-level classification. Needs gh; degrade loudly when absent.
+  # Lists EVERY changed path, not just templates|docs|directives: a delta made
+  # only of plugins/ changes printed nothing while still recording "classified",
+  # so the next run treated an unseen change as handled. The disposition table
+  # below covers plugins/ as informational — it still has to be SEEN.
   if command -v gh >/dev/null 2>&1 \
      && gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
-          --jq '.files[] | select(.filename|test("^(templates|docs|directives)/")) | "\(.status)\t\(.filename)"'; then
+          --jq '.files[] | "\(.status)\t\(.filename)"'; then
     classified=yes   # the delta was READ — Phase 3 may advance the stamp
-    printf 'yes' > .git/refresh-repo-classified
+    # Record WHICH head was classified, not just "yes": an interrupted run could
+    # otherwise leave a bare marker that a later Phase 3 reads as approval to
+    # stamp whatever ls-remote returns now. `git rev-parse --git-path` because
+    # in a linked worktree .git is a FILE, and a redirect into it fails.
+    printf '%s' "$head" > "$(git rev-parse --git-path refresh-repo-classified)"
   else
     echo "compare unavailable (gh absent or call failed) — delta known by SHA only"
     echo "($last -> $head); classify per the Propagation Matrix in"
@@ -231,7 +239,7 @@ else
   # is applied directly, below) or the stamp already equals head. Both are
   # legitimately stampable.
   classified=yes
-  printf 'yes' > .git/refresh-repo-classified
+  printf '%s' "$head" > "$(git rev-parse --git-path refresh-repo-classified)"
 fi
 ```
 (First run with no stamp: skip the delta and apply the per-file policy directly.)
@@ -285,13 +293,19 @@ actually read (including "no files changed"); leave it unset otherwise.
 # advance. Phase 2 leaves its verdict in a file for exactly this reason.
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
 head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
-classified=$(cat .git/refresh-repo-classified 2>/dev/null)
-rm -f .git/refresh-repo-classified
+marker=$(git rev-parse --git-path refresh-repo-classified)
+classified_head=$(cat "$marker" 2>/dev/null)
+rm -f "$marker"
+# The verdict is only valid for the SHA it was made against. If upstream moved
+# between the two Bash calls, or a stale marker survived an interrupted run,
+# this mismatch makes Phase 3 refuse rather than stamp a delta nobody read.
+classified=no
+[ -n "$classified_head" ] && [ "$classified_head" = "$head" ] && classified=yes
 
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — stamp unchanged, re-run /refresh-repo later"
 elif [ "$classified" != "yes" ]; then
-  echo "delta from $last to $head was NOT classified (compare unavailable) — stamp"
+  echo "delta from $last to $head was NOT classified for THIS head — stamp"
   echo "left at $last on purpose, so the next run re-examines it. Classify by hand"
   echo "via MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix to clear it."
 else

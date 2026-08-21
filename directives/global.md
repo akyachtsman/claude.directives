@@ -391,10 +391,8 @@ naming what remains open, or "nothing open" — never absent.
 - **Every open PR gets a line too**, whether or not it was asked about this
   turn — an unmerged PR is an open item.
 - **Nothing goes between the ledger and the status line.** Not a caveat, not
-  "one more thing". A remark after the ledger pushes it off the bottom, and
-  being findable at the bottom is the property that makes it work; anything
-  worth saying goes above. The ledger is the reply's final block, the status
-  line its final line (→ *Status Line on Every Stop*).
+  "one more thing"; anything worth saying goes above. The ledger is the reply's
+  final block, the status line its final line (→ *Status Line on Every Stop*).
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block

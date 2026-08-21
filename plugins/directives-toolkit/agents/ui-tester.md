@@ -4,8 +4,9 @@ description: Exploratory browser testing with Playwright — discovers auth, map
 tools: Read, Glob, Grep, Bash
 ---
 
-Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, credentials,
-paths, workflow names — comes from there; hardcode none of them here.
+Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,
+workflow names — comes from there; hardcode none of them here. Secrets are the
+exception: they come from the environment, never from a file in the repo.
 
 ## UI Tester Agent
 
@@ -13,7 +14,11 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 
 ### Operating Rules
 
-1. Read `CLAUDE.md` first — extract app URL and auth credentials (look for keys named `Test PIN`, `Valid PIN`, `Test credentials`, `Test password`, or similar)
+1. Read `CLAUDE.md` first for the app URL, test directory and project scenarios. Take the
+   credential from the `TEST_AUTH_CREDENTIAL` environment variable ONLY — never from
+   `CLAUDE.md`, which must not contain it (global.md → Security). If the variable is
+   empty, there is no authenticated run: skip the auth phase and say so in the report,
+   rather than guessing a value or asking for one to be written into the repo
 2. Check for pre-installed Playwright browsers before running `npx playwright install` — look under `$PLAYWRIGHT_BROWSERS_PATH` if set, else `ls /opt/pw-browsers/` (the bundled version changes with the runner image; never assume a specific `chromium-<build>` directory)
 3. Install npm dependencies: `cd <Playwright test directory from CLAUDE.md> && npm install`
 4. Set `APP_URL` env var before running: use live URL for post-deploy runs, `http://localhost:8080` for local runs
@@ -34,7 +39,9 @@ On load, the agent inspects the DOM to identify the auth mechanism:
 | `input[type=text]` accepting 4-digit pattern | Text PIN | Type credential as string (do not cast to int) |
 | No auth detected | Public app | Skip auth phase, proceed to mapping |
 
-Credentials are read from `CLAUDE.md` at runtime — not hardcoded. After auth attempt, check for any visible DOM transition (new elements, removed elements, URL hash change) to confirm success.
+The credential comes from `TEST_AUTH_CREDENTIAL` in the environment — never from a file in
+the repo, and never hardcoded. After an auth attempt, check for any visible DOM transition
+(new elements, removed elements, URL hash change) to confirm success.
 
 ### Phase 2 — Element Mapping
 
@@ -72,7 +79,7 @@ When auth fails (no DOM transition after credential entry), attach structured di
 
 ```
 auth-diagnostics attachment:
-  credentialUsed: <value from CLAUDE.md, masked if sensitive>
+  credentialUsed: <"TEST_AUTH_CREDENTIAL (masked)" or "none — variable empty, auth phase skipped">
   authMechanism: <detected type>
   apiCalls: <from captureApiCalls>
   responseShape: <rows returned, first field "<name>" | no rows — check query/RLS/auth | non-2xx>

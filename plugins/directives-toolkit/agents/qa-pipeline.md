@@ -4,8 +4,9 @@ description: Runs the QA pipeline in sequence — test-verifier, ui-tester, code
 tools: Read, Glob, Grep, Bash, Agent, Skill
 ---
 
-Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, credentials,
-paths, workflow names — comes from there; hardcode none of them here.
+Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,
+workflow names — comes from there; hardcode none of them here. Secrets are the
+exception: they come from the environment, never from a file in the repo.
 
 ## QA Pipeline Orchestrator
 

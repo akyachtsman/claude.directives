@@ -5,6 +5,7 @@
 // (before /design-intake), it prints a notice and exits 0 — safe in a fresh repo.
 // CommonJS (matches the other .github/scripts/ helpers, e.g. notify-email.js).
 const { readFileSync, existsSync, readdirSync } = require('fs');
+const { join } = require('path');
 
 // Static tier keeps tokens in styles/tokens.css; a production-tier (Next.js)
 // project keeps them in app/globals.css. Checking only the first made this
@@ -25,14 +26,28 @@ if (FILES.length === 0) {
   // directory that exists but is empty — as proof of CSS failed the static-check
   // job for a fresh project that had a page and no stylesheet yet, contradicting
   // the bootstrap behaviour documented at the top of this file.
-  const cssIn = (dir) => {
+  // Recursive, because projects keep stylesheets in src/, public/css/,
+  // assets/styles/ and elsewhere. A shallow look at styles/ + app/ + root
+  // answered "no CSS" for those and exited 0 — the vacuous green this branch
+  // exists to reject.
+  const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'coverage', '.next', 'vendor']);
+  const hasCssUnder = (dir, depth = 0) => {
+    if (depth > 5) return false;
+    let entries;
     try {
-      return readdirSync(dir).some((f) => f.endsWith('.css'));
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       return false;
     }
+    for (const e of entries) {
+      if (e.isFile() && e.name.endsWith('.css')) return true;
+      if (e.isDirectory() && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name)) {
+        if (hasCssUnder(join(dir, e.name), depth + 1)) return true;
+      }
+    }
+    return false;
   };
-  const hasCss = ['styles', 'app', '.'].some(cssIn);
+  const hasCss = hasCssUnder('.');
   if (!hasCss) {
     console.log(`::notice::no stylesheet yet — run /design-intake to establish this project's look. Skipping contrast check.`);
     process.exit(0);
@@ -75,8 +90,10 @@ const ratio = (a, b) => { const la = lum(a), lb = lum(b); return (Math.max(la, l
 
 const AA = 4.5, AA_LARGE = 3.0;
 const pairs = [
-  // Read the token the button actually uses rather than assuming white.
-  [t['--color-on-accent'] || '#FFFFFF', t['--color-accent'], AA, 'on-accent / accent (button)'],
+  // No `|| '#FFFFFF'` fallback: substituting a default made the pair "evaluable"
+  // while measuring a colour the page may not use, so a project that DROPPED the
+  // token still scored 8/8. A missing required token must fail like any other.
+  [t['--color-on-accent'], t['--color-accent'], AA, 'on-accent / accent (button)'],
   [t['--color-text-primary'], t['--color-bg'], AA, 'text-primary / bg'],
   [t['--color-text-primary'], t['--color-surface'], AA, 'text-primary / surface'],
   [t['--color-text-secondary'], t['--color-bg'], AA, 'text-secondary / bg'],

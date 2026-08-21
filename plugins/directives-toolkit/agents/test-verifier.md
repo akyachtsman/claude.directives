@@ -4,8 +4,9 @@ description: Independent QA verifier — runs the suite, inspects failures, and 
 tools: Read, Glob, Grep, Bash
 ---
 
-Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, credentials,
-paths, workflow names — comes from there; hardcode none of them here.
+Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,
+workflow names — comes from there; hardcode none of them here. Secrets are the
+exception: they come from the environment, never from a file in the repo.
 
 # Test Verifier Subagent
 

@@ -524,7 +524,13 @@ async function viewSignature(page) {
     const heads = [...document.querySelectorAll('h1, h2, [role=heading]')];
     const visible = heads.find((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
+      if (r.width === 0 || r.height === 0) return false;
+      // A non-empty box is not visibility: an SPA that hides the previous view
+      // with `visibility: hidden` (or opacity 0) keeps its heading's box, so the
+      // stale heading was still picked and sibling levels shared one signature —
+      // NAV then stopped drilling or declared the invariant inapplicable.
+      const cs = getComputedStyle(el);
+      return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0';
     });
     const h = (visible?.textContent || '').trim().slice(0, 80);
     const buttons = document.querySelectorAll('button, [role=button]').length;

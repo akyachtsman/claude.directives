@@ -31,8 +31,11 @@ if (FILES.length === 0) {
   // answered "no CSS" for those and exited 0 — the vacuous green this branch
   // exists to reject.
   const IGNORED_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'coverage', '.next', 'vendor']);
-  const hasCssUnder = (dir, depth = 0) => {
-    if (depth > 5) return false;
+  // No depth cap. A cutoff turns "I stopped looking" into "there is no CSS" —
+  // a monorepo keeping its only stylesheet at packages/client/src/features/…
+  // would have passed green. The ignore list below bounds the walk instead,
+  // and the search short-circuits on the first .css file found.
+  const hasCssUnder = (dir) => {
     let entries;
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -42,7 +45,7 @@ if (FILES.length === 0) {
     for (const e of entries) {
       if (e.isFile() && e.name.endsWith('.css')) return true;
       if (e.isDirectory() && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name)) {
-        if (hasCssUnder(join(dir, e.name), depth + 1)) return true;
+        if (hasCssUnder(join(dir, e.name))) return true;
       }
     }
     return false;
@@ -98,6 +101,12 @@ const pairs = [
   [t['--color-text-primary'], t['--color-surface'], AA, 'text-primary / surface'],
   [t['--color-text-secondary'], t['--color-bg'], AA, 'text-secondary / bg'],
   [t['--color-text-secondary'], t['--color-surface'], AA, 'text-secondary / surface'],
+  // Both button templates render the on-accent foreground over accent-hover on
+  // hover (and the static one on keyboard focus), so the hover background is a
+  // real background for this text and needs its own pair. Checking only the
+  // resting state passed themes that go nearly-black-on-dark the moment a
+  // pointer touches the control.
+  [t['--color-on-accent'], t['--color-accent-hover'], AA, 'on-accent / accent-hover (button hover)'],
   [t['--color-accent'], t['--color-surface'], AA_LARGE, 'accent / surface (large)'],
   // design.md's error-message copy rule creates --color-danger; it carries meaning,
   // so it needs the same AA floor as any other body text.

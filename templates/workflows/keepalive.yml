@@ -19,26 +19,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # Without this guard an unset PAT gives checkout an empty token, the push
-      # below 403s, and the workflow reddens silently every week while the
-      # 60-day scheduler clock it exists to reset is never actually reset.
-      - name: Check keepalive PAT is configured
-        id: pat
+      # An unset PAT gives checkout an empty token and the push below 403s with an
+      # opaque error. Fail FAST and LOUD instead: skipping to a green run would
+      # hide a config error until GitHub disables scheduled workflows at 60 days,
+      # because this repo's monitoring surfaces failed runs, not notices buried in
+      # successful ones. A red keepalive is the signal; a green no-op is not.
+      - name: Require the keepalive PAT
         env:
           KEEPALIVE_PAT: ${{ secrets.KEEPALIVE_PAT }}
         run: |
           if [ -z "$KEEPALIVE_PAT" ]; then
-            echo "::notice::KEEPALIVE_PAT is not set — skipping. Add the secret to keep the scheduler alive."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "::error::KEEPALIVE_PAT is not set, so the 60-day scheduler clock cannot be reset. Add the secret (Settings -> Secrets and variables -> Actions), or delete this workflow if the repo does not need it."
+            exit 1
           fi
       - uses: actions/checkout@v4
-        if: steps.pat.outputs.ready == 'true'
         with:
           token: ${{ secrets.KEEPALIVE_PAT }}
-      - if: steps.pat.outputs.ready == 'true'
-        run: |
+      - run: |
           git config user.name "keepalive-bot"
           git config user.email "keepalive@users.noreply.github.com"
           git commit --allow-empty -m "chore: keepalive — reset 60-day scheduler clock"

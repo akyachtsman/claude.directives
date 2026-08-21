@@ -38,14 +38,19 @@ Run in order:
 4. **Watch to a terminal state — never a blocking or backgrounded sleep.** Find
    the deploy run whose `head_sha` == the pushed SHA and re-check until
    `status == completed`:
-   - Query via the GitHub Actions API — github MCP `actions_list`
-     (`event: dynamic`), or `gh run list` where `gh` is available.
-   - Re-check proactively: schedule the next check with `ScheduleWakeup`
-     (`send_later` only where it exists — usually it does not), and re-poll on
-     wake until terminal. Do **not** background a `sleep` poll and do not sit in a
-     foreground sleep — a backgrounded sleep orphans into a phantom "running" task
-     on session resume (see global.md → Async Operations; the `wait-gate` hook
-     blocks it).
+   - Query via the GitHub Actions API — github MCP `actions_list` with
+     `method: "list_workflow_runs"` plus `owner`/`repo`, then match the run whose
+     `head_sha` is the pushed SHA. There is no top-level `event` argument (it
+     lives under `workflow_runs_filter`, and `dynamic` is not one of its values),
+     so do not try to filter the managed Pages deploy by event — match on the
+     SHA. `gh run list` where `gh` is available.
+   - Re-check proactively: schedule the next check with `send_later` — the
+     pre-approved primary per `global.md` → *Async Operations* — or with
+     `ScheduleWakeup` where a session has that instead. Verify which exists per
+     `/env-chk` rather than assuming either. Do **not** background a `sleep` poll
+     and do not sit in a foreground sleep — a backgrounded sleep orphans into a
+     phantom "running" task on session resume (see global.md → Async Operations;
+     the `wait-gate` hook blocks it).
 
 5. **Stuck detection.** If no run for the pushed SHA appears within ~2 minutes,
    the branch-source build is not auto-firing (common right after enabling Pages,

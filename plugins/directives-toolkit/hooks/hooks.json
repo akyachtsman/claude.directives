@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "in=$(cat); if echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*(index\\.html|/docs/[^\"]*\\.html|\\.css)\"' && ! echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*/templates/'; then echo 'Edited a GitHub Pages file - apply the update-pages skill: ship it, watch the pages build for the pushed SHA, and report live/stuck/failed proactively.' >&2; exit 2; fi; exit 0"
+            "command": "in=$(cat); if echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*(index\\.html|/docs/[^\"]*\\.(html|js)|\\.css)\"' && ! echo \"$in\" | grep -qE '\"file_path\": ?\"[^\"]*/templates/'; then echo 'Edited a GitHub Pages file - apply the update-pages skill: ship it, watch the pages build for the pushed SHA, and report live/stuck/failed proactively.' >&2; exit 2; fi; exit 0"
           },
           {
             "type": "command",

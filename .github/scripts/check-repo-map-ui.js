@@ -526,6 +526,14 @@ const crossings = () => page.evaluate(() => {
 if (await page.$$eval('.edge', e => e.length) < 10) {
   await page.click('#t_edge'); await page.waitForTimeout(250);
 }
+// Same floor arrange() applies, for the same reason: crossings() inspects
+// `.edge` geometry, so if #t_edge regressed the conditional click above leaves
+// an empty set and BOTH crossing assertions below report success having
+// examined nothing. An empty edge list is never evidence that routing is clean.
+{
+  const drawn = await page.$$eval('.edge', e => e.length);
+  if (drawn < 10) fail(`only ${drawn} arrows drawn after enabling "all arrows" — the crossing assertions below would pass vacuously`);
+}
 const clean = await crossings();
 if (clean.length) fail(`edges cross frames in the default layout: ${clean.join(' | ')}`);
 else ok('no edge crosses a frame it does not connect (default layout)');
@@ -535,6 +543,10 @@ for (const [id, dx, dy] of [['behavioral', 260, 180], ['mechanical', -150, 120],
   await drag(`.fr[data-id="${id}"] .fd`, dx, dy);
 }
 await page.waitForTimeout(250);
+{
+  const drawn = await page.$$eval('.edge', e => e.length);
+  if (drawn < 10) fail(`only ${drawn} arrows drawn after rearranging — the crossing assertion below would pass vacuously`);
+}
 const shuffled = await crossings();
 if (shuffled.length) fail(`edges cross frames after the layout is rearranged: ${shuffled.join(' | ')}`);
 else ok('no edge crosses a frame after the layout is rearranged');

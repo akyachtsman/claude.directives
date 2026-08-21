@@ -7,7 +7,8 @@
 # resumes, the sleep process is reaped but the harness keeps showing it as a
 # **phantom "running" task** that never clears — and it was watching nothing.
 # The sanctioned alternatives wake the session on the real event (PR/CI
-# webhooks) or self-pace with ScheduleWakeup; see global.md -> Async Operations.
+# webhooks) or self-pace with send_later (or ScheduleWakeup where a session has
+# that instead); see global.md -> Async Operations.
 #
 # Fail-open by design: any parse problem exits 0 (allow) — this gate must never
 # break unrelated Bash calls. Exit 2 = block, stderr fed to Claude.
@@ -53,5 +54,5 @@ if [ -n "$dur" ]; then
   [ "$dur" -ge 15 ] 2>/dev/null || exit 0
 fi
 
-echo 'BLOCKED by directives wait-gate: do not background a `sleep` to wait. A backgrounded sleep orphans into a phantom "running" task when the session suspends/resumes, and it watches nothing. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) or just re-check on your next turn; (2) to self-pace a re-check, use ScheduleWakeup (sanctioned here — `send_later` is usually unavailable); (3) for a genuine condition-wait, use Monitor with an exit condition. See global.md -> Async Operations.' >&2
+echo 'BLOCKED by directives wait-gate: do not background a `sleep` to wait. A backgrounded sleep orphans into a phantom "running" task when the session suspends/resumes, and it watches nothing. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) or just re-check on your next turn; (2) to self-pace a re-check, use `send_later` (the pre-approved primary) or `ScheduleWakeup` where a session has that instead — verify which exists rather than assuming; (3) for a genuine condition-wait, use Monitor with an exit condition. See global.md -> Async Operations.' >&2
 exit 2

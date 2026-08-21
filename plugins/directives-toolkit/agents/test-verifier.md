@@ -1,7 +1,7 @@
 ---
 name: test-verifier
 description: Independent QA verifier — runs the suite, inspects failures, and rules on merge safety. Does not edit code unless told to.
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, Write
 ---
 
 Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,

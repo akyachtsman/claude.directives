@@ -11,6 +11,24 @@ Read CLAUDE.md in the current repo and all imported directive URLs it references
 Then recursively visit EVERY file in the repository (skip only vendored/build
 artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
 - Directive drift — code/config that violates a directive rule.
+- **Rule provenance — was this ever DECIDED?** Consistency checks cannot see
+  this: a rule nobody ratified is usually perfectly self-consistent, which is
+  exactly why it survives every other pass. On 2026-08-21 a six-agent run
+  produced 60 findings and flagged none of an entire React/Next.js-on-Vercel
+  "production tier" — a scaffold, a directive section, CI wiring and command
+  prompts — that had arrived in a bulk import and was never put to the owner.
+  Scope it narrowly or it becomes noise: a section only qualifies when it NAMES
+  a specific vendor, product or stack as the company-wide choice ("X is the
+  default backend", "deploy to Y"). A section that merely mentions a tool while
+  explaining something else does not. Across every file in `directives/` plus
+  `CLAUDE.md`, check each qualifying section for an `(owner ruling, <date>)`
+  stamp. Report any that has
+  none, naming the commit that introduced it
+  (`git log --oneline --reverse -S '<distinctive phrase>' -- <file>`) and
+  whether that commit's message argues for the choice or merely carries it.
+  A rule with no stamp and no advocating commit is UNRATIFIED, not settled —
+  surface it for the owner to confirm or drop. Do not treat length of service
+  as ratification.
 - Errors — syntax errors, broken references, dead imports, invalid config,
   malformed data, things that won't run. For per-file correctness depth, run
   `/code-review --effort high` (read-only, reports findings) and fold its

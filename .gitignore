@@ -2,3 +2,7 @@
 node_modules/
 .claude/mcp.json
 plugins/directives-toolkit/evals/results/
+
+# Python bytecode from running the .github/scripts gates locally.
+__pycache__/
+*.pyc

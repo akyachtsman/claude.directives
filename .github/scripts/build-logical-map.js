@@ -79,18 +79,46 @@ const EDGES = [
 
 // This repo's own body. Never exported, so it cannot live in EXPORTS.json —
 // but every path is existence-checked below, so the list still cannot rot.
+// Recursive .md walk for the derived self.docs list above.
+function walkFiles(dir) {
+  const out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = `${dir}/${e.name}`;
+    if (e.isDirectory()) out.push(...walkFiles(full));
+    else out.push(full);
+  }
+  return out;
+}
+
 const SELF = {
   'self.ops': ['CLAUDE.md', 'EXPORTS.json', 'README.md', '.gitignore',
     '.claude/settings.json', '.claude/directive-sync.json', 'learnings.jsonl',
     '.claude/hooks/session-start.sh'],
-  'self.docs': ['docs/README.md', 'docs/internal/archive/design-migration.md',
-    'docs/internal/repo-monitors.md', 'docs/internal/repo-map-ui.md',
-    'docs/internal/skill-eval-notes.md', 'docs/internal/accepted-residuals.md'],
+  // Derived for the same reason self.checks is: a hand-list catches a deletion
+  // (the existence check) but never an addition, so a new internal doc would go
+  // unmapped and nothing would say so.
+  'self.docs': [
+    'docs/README.md',
+    ...walkFiles('docs/internal').filter(f => f.endsWith('.md')).sort(),
+  ],
   // Derived, not hand-listed. The existence check below catches a DELETION but
   // never an ADDITION, so a hand-list silently under-reports the repo's own
   // validation surface every time a gate is added — it had drifted to 10 of 13.
   'self.checks': [
-    ...readdirSync('.github/scripts').sort().map(f => `.github/scripts/${f}`),
+    // DENY-list, not an allow-list. An unfiltered read let any stray file in —
+    // __pycache__/ from running the python gates was enough — and --check then
+    // failed with "logical-map.html is stale", a MISDIAGNOSIS that sends a
+    // session to regenerate and commit the junk. But allow-listing .js/.py/.json
+    // reintroduces the under-reporting this derivation exists to prevent: a gate
+    // added as check-foo.sh, .mjs, .cjs or an extensionless executable would be
+    // silently dropped, and --check would still pass because both sides of the
+    // comparison use the same filtered inventory. So: exclude known junk and
+    // anything that is not a regular file; admit everything else.
+    ...readdirSync('.github/scripts', { withFileTypes: true })
+      .filter(e => e.isFile() && !/^\./.test(e.name) && !/\.(pyc|pyo|log|tmp|bak|swp)$/.test(e.name))
+      .map(e => e.name)
+      .sort()
+      .map(f => `.github/scripts/${f}`),
     '.github/workflow-ref-required.json',
   ],
   'self.ci': ['.github/workflows/qa.yml', '.github/workflows/ci-monitor.yml',

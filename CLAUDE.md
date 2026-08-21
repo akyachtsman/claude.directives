@@ -236,8 +236,13 @@ python3 .github/scripts/check-job-bounds.py       # every job bounded, none >=36
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
-diff .claude/settings.json templates/claude-settings.json   # paired files (also codex/pages-monitor/pages-retry template pairs)
-diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh   # SessionStart hook pair
+diff .claude/settings.json templates/claude-settings.json
+diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
+diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
+diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
+diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
+diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
+test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)

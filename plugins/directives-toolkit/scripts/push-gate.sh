@@ -10,7 +10,22 @@
 #  - quoted strings are stripped before matching, so a commit MESSAGE
 #    containing "push to main" cannot trigger the gate;
 #  - `push` must be an actual git subcommand, so branch/file names that
-#    merely contain "push" (e.g. claude/push-gate-quotes) cannot either.
+#    merely contain "push" (e.g. claude/push-gate-quotes) cannot either;
+#
+# COMMAND SUBSTITUTION is a subcommand position: `result=`git push origin main``
+# and `$(git push origin main)` used to slip past the anchor entirely — the
+# separator class had no backtick, and a ref followed by `)` failed the ref test.
+# Both verified as live bypasses on a scratch repo, and both predate this file's
+# current shape; they are closed above.
+#
+# BACKTICKS ARE NOT STRIPPED, deliberately. In shell they are COMMAND
+# SUBSTITUTION, not documentation: stripping them let `result=`git push origin
+# main`` through the matcher entirely and the gate exited 0 — a bypass, verified
+# on a scratch repo. The cost is a known false positive: a commit message that
+# quotes a push command inside backticks, passed inline via a heredoc, still
+# trips the gate. The fix belongs on the calling side, not here — write long
+# prose to a file and use `git commit -F <file>`, so message text never reaches
+# the command line. A false BLOCK is recoverable; a false ALLOW is not.
 
 in=$(cat) || exit 0
 
@@ -26,14 +41,19 @@ fi
 # Single-WORD quoted tokens are unquoted first (so `push origin "main"` cannot
 # hide the ref), then any remaining quoted runs — which contain spaces, i.e.
 # message-like text — are removed entirely.
+# NOTE the ordering constraint: a DOUBLE-quoted span may contain a live command
+# substitution — bash expands $(...) and `...` inside double quotes — so removing
+# such a span would hide an executable push. Only spans with no substitution are
+# discarded. Single-quoted spans are inert and always safe to drop.
 stripped=$(printf '%s' "$cmd" \
   | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
-  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+  | sed -e "s/'[^']*'//g" \
+  | sed -E -e 's/"[^"$`]*"//g')
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var
 # prefix (`GIT_TRACE=1 git push ...`) must not defeat the anchor.
-GIT_PUSH='(^|[;&|(][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*)([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]]|$)'
+GIT_PUSH='(^|[;&|(`][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*|[$]\([[:space:]]*|=[`]|=[$]\()([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]]|$)'
 printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 
 # Isolate every push subcommand segment — a compound command can carry more
@@ -41,13 +61,52 @@ printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 pushparts=$(printf '%s' "$stripped" | grep -oE 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push[^|;&]*')
 
 # Any push that names main/master as a target ref (standalone word or after /).
-if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/])(main|master)([[:space:]]|$)'; then
+if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/])(main|master)([[:space:]`)]|$)'; then
   echo 'BLOCKED by directives push-gate: direct push to main is never allowed — all main updates go through a claude/<name> branch and a PR (squash-merge on green CI). Push to your feature branch instead.' >&2
   exit 2
 fi
 
 # Any bare `git push` (no ref argument) while checked out on main -> block.
-if printf '%s\n' "$pushparts" | grep -qvE 'push[[:space:]]+[^-[:space:]]'; then
+#
+# A ref counts as named only AFTER option tokens are skipped. The previous test
+# (`push[[:space:]]+[^-[:space:]]`) treated a leading flag as proof that no ref
+# followed, so `git push -u origin claude/foo` from main was BLOCKED — the exact
+# push form the standard mandates. Verified against the matrix in the repo's
+# gate tests before shipping.
+names_ref() {
+  # shellcheck disable=SC2086
+  set -- $1                                   # word-split this push segment
+  positionals=0
+  while [ $# -gt 0 ] && [ "$1" != 'push' ]; do shift; done
+  [ $# -gt 0 ] && shift                       # drop `push` itself
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --) shift; positionals=$((positionals + $#)); break ;;
+      # options that consume the NEXT token as their value
+      -o|--push-option|--repo|--receive-pack|--exec|--recurse-submodules)
+        shift 2 2>/dev/null || return 1 ;;
+      -*) shift ;;                            # any other flag, incl. --opt=value
+      *) positionals=$((positionals + 1)); shift ;;
+    esac
+  done
+  # `git push origin` is ONE positional: the repository. No refspec follows, so
+  # git pushes the configured/default ref — on a main checkout, that is main.
+  # Requiring two positionals makes the ambiguous case BLOCK rather than pass,
+  # which is the only safe default for a gate whose failure mode is a bad commit
+  # on the default branch.
+  [ "$positionals" -ge 2 ] && return 0
+  return 1
+}
+
+bare=0
+while IFS= read -r seg; do
+  [ -n "$seg" ] || continue
+  names_ref "$seg" || bare=1
+done <<PUSHPARTS
+$pushparts
+PUSHPARTS
+
+if [ "$bare" = 1 ]; then
   branch=$(git branch --show-current 2>/dev/null)
   if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
     echo 'BLOCKED by directives push-gate: you are on main and this would push it directly. Work on a claude/<name> branch and open a PR.' >&2

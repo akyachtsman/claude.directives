@@ -147,12 +147,34 @@ jobs:
 
       # Both landing pages hand-carry the same demo list; the only legitimate
       # difference is the href prefix (root links into docs/site/, the gallery
-      # links to siblings). Normalise that and the card blocks must match.
+      # links to siblings). Assert each page's own prefix FIRST -- normalising
+      # both inputs would let a gallery card wrongly written with the
+      # docs/site/ prefix match the root card and pass, while the published
+      # link resolved to /docs/site/docs/site/<page>. check-links.js scans
+      # only Markdown, so nothing else would catch it.
       - name: Check landing-page demo cards in sync
         run: |
-          cards() { sed -n '/<a class="demo-card"/,/<\/a>/p' "$1" | sed 's|href="docs/site/|href="|'; }
-          diff <(cards index.html) <(cards docs/site/index.html)
-          echo "OK: landing-page demo cards in sync"
+          cards() { sed -n '/<a class="demo-card"/,/<\/a>/p' "$1"; }
+          hrefs() { cards "$1" | grep -o 'href="[^"]*"'; }
+
+          n=$(hrefs index.html | wc -l)
+          if [ "$n" -eq 0 ]; then
+            echo "FAIL: no .demo-card found in index.html -- the check would pass vacuously"; exit 1
+          fi
+
+          if hrefs index.html | grep -qv '^href="docs/site/'; then
+            echo "FAIL: a root index.html demo-card href does not point into docs/site/:"
+            hrefs index.html | grep -v '^href="docs/site/'
+            exit 1
+          fi
+          if hrefs docs/site/index.html | grep -q '[/"]docs/site/'; then
+            echo "FAIL: a docs/site/index.html demo-card href is not a bare sibling filename:"
+            hrefs docs/site/index.html | grep '[/"]docs/site/'
+            exit 1
+          fi
+
+          diff <(cards index.html | sed 's|href="docs/site/|href="|') <(cards docs/site/index.html)
+          echo "OK: landing-page demo cards in sync ($n cards, prefixes verified per page)"
 
   check-external-links:
     name: Check External Links (warn only)

@@ -172,7 +172,7 @@ Execute in order:
    - confirm `git status` shows only intended changes
    Fix any failure before pushing.
 
-9. **Commit, PR, subscribe.** Commit all scaffolding to the `claude/<name>`
+9. **Commit and PR.** Commit all scaffolding to the `claude/<name>`
    branch and push. **Ensure the base branch exists first:** if the repo was
    created empty (no README, so `git ls-remote --heads origin main` is empty),
    establish `main` before opening the PR — create it from an empty root commit

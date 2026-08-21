@@ -50,6 +50,9 @@ explicitly overrides it.
   its own docs before shipping; never run a destructive command to check wording.
   Presence in the authoring session proves nothing downstream — a tool that may
   be absent there ships with a runtime check and fallback.
+- **Correct a prior answer explicitly.** When something you already told the
+  user turns out to be wrong, name that specific claim and replace it — not a
+  general apology, and never a quiet restatement in new words.
 - **Receiving review feedback** — review comments (human, Codex, code-reviewer)
   are suggestions to *evaluate*, not orders. Restate the requirement, verify the
   claim against the code, then apply the fix or push back with technical
@@ -385,8 +388,11 @@ naming what remains open, or "nothing open" — never absent.
   fresh check, never from recall.
 - **Anything unfinished carries its reason:** `waiting on X`, or `not doing,
   because Y`. Silence is not a state.
-- **The status line still comes last** (→ *Status Line on Every Stop*): the
-  ledger is the final block, the status line the final line.
+- **Every open PR gets a line too**, whether or not it was asked about this
+  turn — an unmerged PR is an open item.
+- **Nothing goes between the ledger and the status line.** Not a caveat, not
+  "one more thing"; anything worth saying goes above. The ledger is the reply's
+  final block, the status line its final line (→ *Status Line on Every Stop*).
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block

@@ -50,6 +50,11 @@ explicitly overrides it.
   its own docs before shipping; never run a destructive command to check wording.
   Presence in the authoring session proves nothing downstream — a tool that may
   be absent there ships with a runtime check and fallback.
+- **Correct a prior answer explicitly.** When something you already told the
+  user turns out to be wrong, name that specific claim and replace it — not a
+  general apology, and never a quiet restatement in new words. A confident wrong
+  answer costs more than an uncertain one, and it stays uncorrected until it is
+  named.
 - **Receiving review feedback** — review comments (human, Codex, code-reviewer)
   are suggestions to *evaluate*, not orders. Restate the requirement, verify the
   claim against the code, then apply the fix or push back with technical
@@ -385,13 +390,25 @@ naming what remains open, or "nothing open" — never absent.
   fresh check, never from recall.
 - **Anything unfinished carries its reason:** `waiting on X`, or `not doing,
   because Y`. Silence is not a state.
-- **The status line still comes last** (→ *Status Line on Every Stop*): the
-  ledger is the final block, the status line the final line.
+- **Every open PR gets a line too**, whether or not it was asked about this
+  turn — an unmerged PR is an open item.
+- **Nothing goes between the ledger and the status line.** Not a caveat, not
+  "one more thing". A remark after the ledger pushes it off the bottom, and
+  being findable at the bottom is the property that makes it work; anything
+  worth saying goes above. The ledger is the reply's final block, the status
+  line its final line (→ *Status Line on Every Stop*).
 
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts
   for an outcome.
+- **"Waiting" means something will wake you.** Say it only when a wake channel
+  is actually armed — a webhook subscription, a scheduled check-in, an in-turn
+  poll. If none is, either poll in-turn to the terminal state or say
+  **"stopped"**, naming the last state you observed and when: "stopped — CI
+  green at 00:49 UTC". A turn that ends under the word "waiting" with nothing
+  attached describes a wait nobody is performing, and the work sits until the
+  user asks again.
 - **How to wait, in order of preference:**
   1. **Let the event wake you.** CI failures, PR reviews, and merges arrive as
      webhooks that resume the session — and with `ci-notify.yml` installed

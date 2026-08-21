@@ -3,75 +3,153 @@
 // difference is the href: the root page links into docs/site/, the gallery links
 // to siblings. Everything else must match exactly.
 //
-// Both hrefs are validated against a strict ALLOWLIST rather than by rejecting
-// known-bad shapes. Two rounds of review found bypasses in the reject-list form
-// (normalising both inputs made a wrongly-prefixed gallery card match; then
-// `docs/site//outside.html` vs `/outside.html` normalised equal while resolving
-// to different URLs). An allowlist has no unenumerated remainder.
-//
 // Invoked by qa.yml AND by the local gate in CLAUDE.md — one implementation, so
 // the two cannot drift.
+//
+// WHY A TOKENIZER, NOT PATTERNS (issue #259, from four review rounds on #258):
+// every earlier version matched shapes — an exact `<a class="demo-card"` prefix,
+// then a double-quoted class attribute — and each one silently SKIPPED whatever
+// it failed to match, which is the worst failure available: a card the browser
+// renders, invisible to the check, so the gate passes. This version consumes the
+// tag-open grammar instead. That grammar is small and fully specifiable, so it
+// has no unenumerated remainder, and anything it cannot parse FAILS rather than
+// being skipped. Kept dependency-free on purpose: every other validator here
+// runs on bare node, and the local gate in CLAUDE.md has no install step.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 const ROOT = 'index.html';
 const GALLERY = 'docs/site/index.html';
+const GALLERY_DIR = 'docs/site';
 
 // A bare sibling filename: no slash, no scheme, no query, no leading dot.
 const FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.html$/;
 
 const fail = (msg) => { console.error(`FAIL: ${msg}`); process.exitCode = 1; };
 
+const isSpace = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f';
+
 /**
- * Every element carrying the `demo-card` class, verbatim, in document order.
+ * Blank out regions whose contents are NOT markup, preserving length so every
+ * offset still indexes the original string. Comments are the reason this exists:
+ * a commented-out card is text, and treating it as live let one page carry a
+ * card the other did not while the counts still matched.
  *
- * Detection is attribute-order independent and class-token exact: the CSS rule
- * `.demo-card` styles ANY element with that token, so anything the browser
- * would render as a card must be seen here. An element that carries the class
- * but cannot be extracted as a closed anchor FAILS rather than being skipped —
- * a silent skip would drop the card from every count and comparison below.
+ * An unterminated region is fatal — past it we cannot tell markup from text.
  */
-const cards = (file) => {
-  const html = readFileSync(file, 'utf8');
-  const withoutStyle = html.replace(/<style[\s\S]*?<\/style>/gi, (m) => ' '.repeat(m.length));
-  const blocks = [];
+const maskInert = (html, file) => {
+  const blank = (m) => m.replace(/[^\n]/g, ' ');
+  const masked = html
+    .replace(/<!--[\s\S]*?-->/g, blank)
+    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, blank)
+    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, blank);
 
-  for (const tag of withoutStyle.matchAll(/<([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>/g)) {
-    const [openTag, tagName] = tag;
-    const classAttr = /\sclass\s*=\s*"([^"]*)"/i.exec(openTag);
-    if (!classAttr) continue;
-    if (!classAttr[1].trim().split(/\s+/).includes('demo-card')) continue;
-
-    if (tagName.toLowerCase() !== 'a') {
-      fail(`${file}: a .demo-card is a <${tagName}>, not a link — cards must be anchors: ${openTag}`);
-      continue;
+  for (const [re, what] of [[/<!--/, 'comment'], [/<script\b/i, '<script>'], [/<style\b/i, '<style>']]) {
+    if (re.test(masked)) {
+      fail(`${file}: unterminated ${what} — cannot tell markup from text past it`);
+      return null;
     }
-    const close = withoutStyle.indexOf('</a>', tag.index);
-    if (close === -1) {
-      fail(`${file}: a .demo-card anchor is never closed by </a>: ${openTag}`);
-      continue;
-    }
-    const block = html.slice(tag.index, close + '</a>'.length);
-    // Anchors cannot nest, so a second <a inside means this card was never
-    // closed and we ran on into a LATER element's </a>. Fail rather than
-    // compare a block that isn't the card.
-    if (/<a\b/i.test(block.slice(openTag.length))) {
-      fail(`${file}: a .demo-card anchor is not closed before the next <a> — its </a> is missing: ${openTag}`);
-      continue;
-    }
-    blocks.push(block);
   }
-  return blocks;
+  return masked;
 };
 
-const hrefOf = (block, file, i) => {
-  const m = /\shref\s*=\s*"([^"]*)"/i.exec(block.slice(0, block.indexOf('>') + 1));
-  if (!m) { fail(`${file}: demo-card ${i + 1} has no href`); return null; }
-  return m[1];
+/**
+ * Parse ONE tag-open starting at `i` (which must point at '<'). Returns the tag
+ * with its attributes, or null when this '<' does not begin one (plain text).
+ * Throws on a tag-open that begins but cannot be completed — the caller turns
+ * that into a failure rather than skipping it.
+ */
+const parseTag = (s, i) => {
+  if (s[i] !== '<' || !/[a-zA-Z]/.test(s[i + 1] ?? '')) return null;
+
+  let j = i + 1;
+  while (j < s.length && /[a-zA-Z0-9-]/.test(s[j])) j++;
+  const name = s.slice(i + 1, j).toLowerCase();
+  const attrs = new Map();
+
+  for (;;) {
+    while (j < s.length && isSpace(s[j])) j++;
+    if (j >= s.length) throw new Error(`unterminated <${name}> tag`);
+
+    if (s[j] === '>') return { name, attrs, start: i, end: j + 1 };
+    if (s[j] === '/' && s[j + 1] === '>') return { name, attrs, start: i, end: j + 2 };
+
+    // Attribute name: anything up to whitespace, '=', '/' or '>'.
+    const nameStart = j;
+    while (j < s.length && !isSpace(s[j]) && s[j] !== '=' && s[j] !== '>' && !(s[j] === '/' && s[j + 1] === '>')) j++;
+    if (j === nameStart) throw new Error(`malformed attribute in <${name}> at offset ${j}`);
+    const attrName = s.slice(nameStart, j).toLowerCase();
+
+    while (j < s.length && isSpace(s[j])) j++;
+    let value = '';
+    if (s[j] === '=') {
+      j++;
+      while (j < s.length && isSpace(s[j])) j++;
+      const q = s[j];
+      if (q === '"' || q === "'") {
+        const close = s.indexOf(q, j + 1);
+        if (close === -1) throw new Error(`unterminated ${q === '"' ? 'double' : 'single'}-quoted value for "${attrName}"`);
+        value = s.slice(j + 1, close);
+        j = close + 1;
+      } else {
+        // Unquoted: ends at whitespace or '>'. The spec forbids " ' = < ` here,
+        // so their presence means the markup is malformed, not that we guessed.
+        const valStart = j;
+        while (j < s.length && !isSpace(s[j]) && s[j] !== '>') j++;
+        value = s.slice(valStart, j);
+        if (value === '' || /["'=<`]/.test(value)) {
+          throw new Error(`malformed unquoted value for "${attrName}": ${JSON.stringify(value)}`);
+        }
+      }
+    }
+    // First occurrence wins, as browsers do.
+    if (!attrs.has(attrName)) attrs.set(attrName, value);
+  }
+};
+
+/** Every element carrying the `demo-card` class token, in document order. */
+const cards = (file) => {
+  const html = readFileSync(file, 'utf8');
+  const masked = maskInert(html, file);
+  if (masked === null) return null;
+
+  const found = [];
+  for (let i = masked.indexOf('<'); i !== -1; i = masked.indexOf('<', i + 1)) {
+    let tag;
+    try {
+      tag = parseTag(masked, i);
+    } catch (e) {
+      fail(`${file}: ${e.message} — refusing to guess`);
+      return null;
+    }
+    if (!tag) continue;
+
+    const cls = tag.attrs.get('class');
+    if (cls === undefined || !cls.trim().split(/\s+/).includes('demo-card')) continue;
+
+    if (tag.name !== 'a') {
+      fail(`${file}: a .demo-card is a <${tag.name}>, not a link — cards must be anchors`);
+      return null;
+    }
+    const close = masked.indexOf('</a>', tag.end);
+    if (close === -1) {
+      fail(`${file}: a .demo-card anchor is never closed by </a>`);
+      return null;
+    }
+    // Anchors cannot nest, so a second <a inside means this card was never
+    // closed and we ran on into a LATER element's </a>.
+    if (/<a\b/i.test(masked.slice(tag.end, close))) {
+      fail(`${file}: a .demo-card anchor is not closed before the next <a> — its </a> is missing`);
+      return null;
+    }
+    found.push({ attrs: tag.attrs, inner: html.slice(tag.end, close), raw: html.slice(tag.start, close + 4) });
+  }
+  return found;
 };
 
 const rootCards = cards(ROOT);
 const galleryCards = cards(GALLERY);
+if (rootCards === null || galleryCards === null) process.exit(1);
 
 if (rootCards.length === 0) {
   fail(`${ROOT}: no .demo-card found — the check would otherwise pass vacuously`);
@@ -80,48 +158,52 @@ if (rootCards.length !== galleryCards.length) {
   fail(`card count differs: ${ROOT} has ${rootCards.length}, ${GALLERY} has ${galleryCards.length}`);
 }
 
-// Each page's href shape, checked on its own terms BEFORE any normalisation.
-const rootTargets = rootCards.map((b, i) => {
-  const href = hrefOf(b, ROOT, i);
-  if (href === null) return null;
-  const rest = href.startsWith('docs/site/') ? href.slice('docs/site/'.length) : null;
+/** The target page each card points at, validated against its own page's shape. */
+const targetOf = (card, file, i, prefix) => {
+  const href = card.attrs.get('href');
+  if (href === undefined) { fail(`${file}: demo-card ${i + 1} has no href`); return null; }
+  const rest = prefix === '' ? href
+    : href.startsWith(prefix) ? href.slice(prefix.length)
+    : null;
   if (rest === null || !FILENAME.test(rest)) {
-    fail(`${ROOT} card ${i + 1}: href="${href}" is not docs/site/<filename>.html`);
+    fail(`${file} card ${i + 1}: href="${href}" is not ${prefix}<filename>.html`);
     return null;
   }
   return rest;
-});
+};
 
-const galleryTargets = galleryCards.map((b, i) => {
-  const href = hrefOf(b, GALLERY, i);
-  if (href === null) return null;
-  if (!FILENAME.test(href)) {
-    fail(`${GALLERY} card ${i + 1}: href="${href}" is not a bare sibling <filename>.html`);
-    return null;
-  }
-  return href;
-});
+const rootTargets = rootCards.map((c, i) => targetOf(c, ROOT, i, 'docs/site/'));
+const galleryTargets = galleryCards.map((c, i) => targetOf(c, GALLERY, i, ''));
 
-// Same page, same order.
+// Same page, same order — and a page that actually exists. Both hrefs resolve to
+// docs/site/<target>; nothing else covers this, since check-links.js reads only
+// Markdown and html-validate never resolves an href to the filesystem.
 rootTargets.forEach((t, i) => {
-  if (t !== null && galleryTargets[i] !== null && t !== galleryTargets[i]) {
+  if (t === null) return;
+  if (galleryTargets[i] != null && t !== galleryTargets[i]) {
     fail(`card ${i + 1} points at different pages: ${ROOT} → ${t}, ${GALLERY} → ${galleryTargets[i]}`);
   }
+  if (!existsSync(`${GALLERY_DIR}/${t}`)) {
+    fail(`card ${i + 1} targets ${GALLERY_DIR}/${t}, which does not exist — both published links would 404`);
+  }
 });
 
-// Everything except the href must be byte-identical.
-rootCards.forEach((block, i) => {
+// Everything except the href must match: same attributes, same inner content.
+// Compared from the PARSED tag, so attribute order and quoting style — cosmetic
+// by definition — never read as a divergence.
+const shape = (card) =>
+  JSON.stringify([...card.attrs].filter(([k]) => k !== 'href').sort());
+
+rootCards.forEach((card, i) => {
   if (i >= galleryCards.length) return;
-  // Blank the href VALUE wherever it sits in the open tag: attribute order and
-  // extra class tokens are cosmetic, and must not read as a divergence.
-  const strip = (s) => {
-    const end = s.indexOf('>') + 1;
-    return s.slice(0, end).replace(/(\shref\s*=\s*")[^"]*(")/i, '$1$2') + s.slice(end);
-  };
-  if (strip(block) !== strip(galleryCards[i])) {
-    fail(`card ${i + 1} differs between the two pages beyond its href:\n--- ${ROOT}\n${block}\n--- ${GALLERY}\n${galleryCards[i]}`);
+  const other = galleryCards[i];
+  if (shape(card) !== shape(other)) {
+    fail(`card ${i + 1} has different attributes beyond its href:\n--- ${ROOT}\n${shape(card)}\n--- ${GALLERY}\n${shape(other)}`);
+  }
+  if (card.inner !== other.inner) {
+    fail(`card ${i + 1} differs in content:\n--- ${ROOT}\n${card.inner}\n--- ${GALLERY}\n${other.inner}`);
   }
 });
 
 if (process.exitCode) process.exit(1);
-console.log(`OK:   landing-page demo cards in sync (${rootCards.length} cards, href shape verified per page)`);
+console.log(`OK:   landing-page demo cards in sync (${rootCards.length} cards, parsed; href shape and target existence verified per page)`);

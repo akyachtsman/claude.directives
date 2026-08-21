@@ -6,6 +6,12 @@
 # ⚠️ RULE W2 — Pages has two sources and only one name is ours to pre-fill.
 # ACTION: if Settings -> Pages -> Source is "GitHub Actions", add your own deploy
 # workflow's exact `name:` to the list below. Do not invent one.
+# ACTION: on the PRODUCTION tier (Vercel), neither name applies — the deploy
+# happens off-Actions entirely. The deployment_status trigger covers that tier;
+# leave it in place even on a static-tier repo, where nothing posts one.
+# NOTE: Vercel now also offers repository_dispatch with a richer payload and is
+# steering integrations toward it. deployment_status is used here because it
+# needs no Vercel-side configuration; switch if you want the fuller payload.
 # ACTION: the job's `if:` gate needs NO workflow-name condition — it reads
 # workflow_run.conclusion, which is agnostic to which workflow fired it.
 # Why: docs/standards/automations.md -> Watcher Rules (W2).
@@ -32,6 +38,13 @@ on:
     # + your Actions deploy workflow's `name:` if that is your Pages source
     workflows: ['pages-build-deployment']
     types: [completed]
+  # Production tier (Vercel/Next): a Vercel deploy fires no workflow_run in this
+  # repo, so the workflow_run trigger above covers the STATIC tier only and the
+  # authoritative live gate auto-fired on one tier while the other relied on
+  # someone remembering to dispatch it. Vercel posts a deployment_status, which
+  # is the event that closes that gap. Harmless on a static-tier repo: nothing
+  # posts one, so it simply never fires.
+  deployment_status:
   workflow_dispatch:
     inputs:
       app_url:
@@ -55,11 +68,23 @@ env:
 
 jobs:
   ui-tests-live:
-    # For workflow_run: only run when Pages deploy succeeded.
-    # For workflow_dispatch: always run.
+    # Each trigger reports success in its own field, and the other fields are
+    # empty for a given event — so all three conditions must be spelled out.
+    # workflow_run  -> workflow_run.conclusion == 'success'  (Pages build)
+    # deployment_status -> deployment_status.state == 'success'  (Vercel)
+    # workflow_dispatch -> always run.
+    # Deliberately NOT filtered on deployment.environment: the exact value Vercel
+    # sends on deployment_status is not something this template can guarantee, and
+    # an equality that never matches would give you a live gate that silently
+    # never fires — the failure this trigger exists to fix. A preview deploy
+    # therefore also fires a run, against APP_URL (production); concurrency above
+    # cancels the older one. Once you have confirmed the value your project
+    # actually receives, tighten this with an environment condition.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.conclusion == 'success' ||
+      (github.event_name == 'deployment_status' &&
+       github.event.deployment_status.state == 'success')
     runs-on: ubuntu-latest
     # ⚠️ 40, NOT 20. This job runs ui-suite, whose COLD-cache path is
     # `playwright install --with-deps chromium webkit` — measured at 21m25s

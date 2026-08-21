@@ -45,7 +45,16 @@ const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 // discarded as "Failed to load resource", and a provider's styled error page
 // satisfies the body-text assertion — so a mistyped or down APP_URL would pass
 // the authoritative live gate. Images, fonts and beacons stay non-blocking.
-const BLOCKING_RESOURCE_TYPES = new Set(['document', 'script', 'stylesheet']);
+const BLOCKING_RESOURCE_TYPES = new Set(['document', 'script', 'stylesheet', 'xhr', 'fetch']);
+// API calls block on 5xx only. Before this suite classified failures at all, a
+// raw console listener caught every "Failed to load resource", so an API 500
+// during initial load DID fail S1 — dropping it would ship a gate weaker than
+// the one it replaces. 4xx is excluded deliberately: 401 on an auth probe and
+// 404 for an optional resource are normal app flows, and blocking on them would
+// redden healthy builds. Server-side failures are the ones that mean the page
+// rendered a shell over broken data.
+const API_TYPES = new Set(['xhr', 'fetch']);
+const blockingStatus = (type) => (API_TYPES.has(type) ? 500 : 400);
 
 function watchPageErrors(page) {
   const js = [];
@@ -87,10 +96,13 @@ function watchPageErrors(page) {
   });
   page.on('requestfailed', r =>
     noteResource(r.url(), 'request failed', r.resourceType(), isMainDocument(r)));
+  // NOTE: requestfailed covers transport failures for every blocking type,
+  // including xhr/fetch — a refused or aborted API call never yields a status.
   page.on('response', (r) => {
-    if (r.status() < 400) return;
     const req = r.request();
-    noteResource(r.url(), `HTTP ${r.status()}`, req.resourceType(), isMainDocument(req));
+    const type = req.resourceType();
+    if (r.status() < blockingStatus(type)) return;
+    noteResource(r.url(), `HTTP ${r.status()}`, type, isMainDocument(req));
   });
   return { js, resources, all: () => [...js, ...resources] };
 }
@@ -529,6 +541,16 @@ async function viewSignature(page) {
       // with `visibility: hidden` (or opacity 0) keeps its heading's box, so the
       // stale heading was still picked and sibling levels shared one signature —
       // NAV then stopped drilling or declared the invariant inapplicable.
+      // checkVisibility walks the rendered ancestor chain, which a computed-style
+      // read on the element alone cannot: opacity is not inherited, so a panel at
+      // opacity:0 leaves its heading reporting opacity 1 and a non-empty box.
+      if (typeof el.checkVisibility === 'function') {
+        return el.checkVisibility({
+          opacityProperty: true,
+          visibilityProperty: true,
+          contentVisibilityAuto: true,
+        });
+      }
       const cs = getComputedStyle(el);
       return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0';
     });

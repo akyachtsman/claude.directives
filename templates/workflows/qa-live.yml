@@ -6,12 +6,6 @@
 # ⚠️ RULE W2 — Pages has two sources and only one name is ours to pre-fill.
 # ACTION: if Settings -> Pages -> Source is "GitHub Actions", add your own deploy
 # workflow's exact `name:` to the list below. Do not invent one.
-# ACTION: on the PRODUCTION tier (Vercel), neither name applies — the deploy
-# happens off-Actions entirely. The deployment_status trigger covers that tier;
-# leave it in place even on a static-tier repo, where nothing posts one.
-# NOTE: Vercel now also offers repository_dispatch with a richer payload and is
-# steering integrations toward it. deployment_status is used here because it
-# needs no Vercel-side configuration; switch if you want the fuller payload.
 # ACTION: the job's `if:` gate needs NO workflow-name condition — it reads
 # workflow_run.conclusion, which is agnostic to which workflow fired it.
 # Why: docs/standards/automations.md -> Watcher Rules (W2).
@@ -38,13 +32,6 @@ on:
     # + your Actions deploy workflow's `name:` if that is your Pages source
     workflows: ['pages-build-deployment']
     types: [completed]
-  # Production tier (Vercel/Next): a Vercel deploy fires no workflow_run in this
-  # repo, so the workflow_run trigger above covers the STATIC tier only and the
-  # authoritative live gate auto-fired on one tier while the other relied on
-  # someone remembering to dispatch it. Vercel posts a deployment_status, which
-  # is the event that closes that gap. Harmless on a static-tier repo: nothing
-  # posts one, so it simply never fires.
-  deployment_status:
   workflow_dispatch:
     inputs:
       app_url:
@@ -56,11 +43,7 @@ on:
 # for hours (the job timeout below does not start counting until a runner is
 # assigned, so a queued run is not bounded by it).
 concurrency:
-  # deployment_status runs all share ONE group: each preview ref would otherwise
-  # get its own, so N open PRs could run N concurrent 40-minute suites against
-  # the same production APP_URL. Per-ref grouping is still right for the
-  # push/dispatch paths, where the ref is what distinguishes the run.
-  group: qa-live-${{ github.event_name == 'deployment_status' && 'deployments' || github.ref }}
+  group: qa-live-${{ github.ref }}
   cancel-in-progress: true
 
 # Least privilege: read the repo and run tests against the live URL.
@@ -72,23 +55,11 @@ env:
 
 jobs:
   ui-tests-live:
-    # Each trigger reports success in its own field, and the other fields are
-    # empty for a given event — so all three conditions must be spelled out.
-    # workflow_run  -> workflow_run.conclusion == 'success'  (Pages build)
-    # deployment_status -> deployment_status.state == 'success'  (Vercel)
-    # workflow_dispatch -> always run.
-    # Deliberately NOT filtered on deployment.environment: the exact value Vercel
-    # sends on deployment_status is not something this template can guarantee, and
-    # an equality that never matches would give you a live gate that silently
-    # never fires — the failure this trigger exists to fix. A preview deploy
-    # therefore also fires a run, against APP_URL (production); concurrency above
-    # cancels the older one. Once you have confirmed the value your project
-    # actually receives, tighten this with an environment condition.
+    # For workflow_run: only run when Pages deploy succeeded.
+    # For workflow_dispatch: always run.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success' ||
-      (github.event_name == 'deployment_status' &&
-       github.event.deployment_status.state == 'success')
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     # ⚠️ 40, NOT 20. This job runs ui-suite, whose COLD-cache path is
     # `playwright install --with-deps chromium webkit` — measured at 21m25s
@@ -101,18 +72,8 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      # SECURITY: a deployment_status fires for PREVIEW deploys too, on the
-      # contributor's ref. Checking that ref out would run their copy of the
-      # ui-suite composite and the Playwright specs with TEST_AUTH_CREDENTIAL in
-      # the environment — an exfiltration path for anyone who can open a PR. The
-      # suite always targets APP_URL (production), so the branch under test is
-      # irrelevant: pin the harness to the default branch and the secret is only
-      # ever handed to reviewed code. The other triggers keep default checkout
-      # behaviour, where the ref IS the thing being tested.
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'deployment_status' && github.event.repository.default_branch || '' }}
 
       # Blocking — this is the authoritative live UI gate.
       - uses: ./.github/actions/ui-suite

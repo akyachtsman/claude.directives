@@ -99,20 +99,12 @@ jobs:
           UI_PATHS: '(\.html$|^js/|^styles/|^\.github/actions/|^\.github/scripts/ui-tests/|^\.github/workflows/qa\.yml$)'
         run: |
           # This job gates the LOCAL suite, which serves the repo root as static
-          # files. That can only test a static-tier app.
-          #
-          # A production-tier (Next) repo is deliberately NOT enabled here: there
-          # is no build step in this job, so http-server would serve a directory
-          # listing at / and Playwright would assert against THAT — a green run
-          # that never loaded the application. qa-live.yml is the gate for that
-          # tier, and it now fires on deployment_status.
+          # files, so it needs a static entry point. Enabling it for a repo with
+          # no index.html would hand Playwright a directory listing to assert
+          # against — a green run that never loaded an application.
           if [ ! -f index.html ]; then
             echo "ui=false" >> "$GITHUB_OUTPUT"
-            if [ -d app ]; then
-              echo "::notice::Next-tier repo (app/, no index.html) — the local static suite cannot run a Next app; qa-live.yml is the authoritative gate for this tier."
-            else
-              echo "No index.html yet — skipping browser job."
-            fi
+            echo "No index.html yet — skipping browser job."
             exit 0
           fi
           # Non-PR events (push to main) always run UI tests unconditionally.

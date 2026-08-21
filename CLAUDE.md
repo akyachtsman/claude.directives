@@ -256,6 +256,15 @@ local skip is fine for non-map changes.
 `global.md` → *Escalation Rules* apply here unchanged — all four gates, not a
 subset. No repo-specific additions.
 
+## Notifications (owner preference)
+Do not keep PR activity subscriptions. Opening a PR auto-subscribes the session
+harness-side — unsubscribe immediately, every time. Prefer one consolidated
+scheduled check-in to several wakes. Broader than `git.md` → *PR Lifecycle*,
+which only requires unsubscribing before a merge.
+
+No setting suppresses the `<wake reason=…>` envelopes themselves (verified
+2026-08-21); fewer wakes is the only lever — don't hunt for a config toggle.
+
 ## Toolkit changes
 
 **Authoring authority.** `plugin-dev` (Anthropic) is the spec for plugin

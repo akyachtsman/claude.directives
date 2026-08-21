@@ -241,7 +241,7 @@ feedback. The subscription is **harness-side and automatic** — no tool call:
 - [ ] Confirm `pages-retry.yml` is present (branch-source Pages projects)
 - [ ] Confirm `ci-notify.yml` is present (wakes web sessions on CI green)
 - [ ] Check for any open `ci-failure` tracking issues before starting work
-- [ ] Do **not** subscribe to open PRs — subscription is harness-side on open (Automation 5)
+- [ ] Do **not** subscribe to open PRs as a blanket session-start step — subscription is harness-side on open. The one exception stands: a session TAKING OVER a PR it did not open subscribes explicitly (Automation 5)
 - [ ] Read `CLAUDE.md` for full project context
 
 ---

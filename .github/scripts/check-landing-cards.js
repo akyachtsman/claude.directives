@@ -22,22 +22,50 @@ const FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.html$/;
 
 const fail = (msg) => { console.error(`FAIL: ${msg}`); process.exitCode = 1; };
 
-/** Card blocks, verbatim, in document order. */
+/**
+ * Every element carrying the `demo-card` class, verbatim, in document order.
+ *
+ * Detection is attribute-order independent and class-token exact: the CSS rule
+ * `.demo-card` styles ANY element with that token, so anything the browser
+ * would render as a card must be seen here. An element that carries the class
+ * but cannot be extracted as a closed anchor FAILS rather than being skipped —
+ * a silent skip would drop the card from every count and comparison below.
+ */
 const cards = (file) => {
-  const lines = readFileSync(file, 'utf8').split('\n');
+  const html = readFileSync(file, 'utf8');
+  const withoutStyle = html.replace(/<style[\s\S]*?<\/style>/gi, (m) => ' '.repeat(m.length));
   const blocks = [];
-  let cur = null;
-  for (const line of lines) {
-    if (/<a class="demo-card"/.test(line)) cur = [];
-    if (cur) cur.push(line);
-    if (cur && /<\/a>/.test(line)) { blocks.push(cur.join('\n')); cur = null; }
+
+  for (const tag of withoutStyle.matchAll(/<([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*>/g)) {
+    const [openTag, tagName] = tag;
+    const classAttr = /\sclass\s*=\s*"([^"]*)"/i.exec(openTag);
+    if (!classAttr) continue;
+    if (!classAttr[1].trim().split(/\s+/).includes('demo-card')) continue;
+
+    if (tagName.toLowerCase() !== 'a') {
+      fail(`${file}: a .demo-card is a <${tagName}>, not a link — cards must be anchors: ${openTag}`);
+      continue;
+    }
+    const close = withoutStyle.indexOf('</a>', tag.index);
+    if (close === -1) {
+      fail(`${file}: a .demo-card anchor is never closed by </a>: ${openTag}`);
+      continue;
+    }
+    const block = html.slice(tag.index, close + '</a>'.length);
+    // Anchors cannot nest, so a second <a inside means this card was never
+    // closed and we ran on into a LATER element's </a>. Fail rather than
+    // compare a block that isn't the card.
+    if (/<a\b/i.test(block.slice(openTag.length))) {
+      fail(`${file}: a .demo-card anchor is not closed before the next <a> — its </a> is missing: ${openTag}`);
+      continue;
+    }
+    blocks.push(block);
   }
-  if (cur) fail(`${file}: a .demo-card block is never closed by </a>`);
   return blocks;
 };
 
 const hrefOf = (block, file, i) => {
-  const m = /<a class="demo-card"\s+href="([^"]*)"/.exec(block);
+  const m = /\shref\s*=\s*"([^"]*)"/i.exec(block.slice(0, block.indexOf('>') + 1));
   if (!m) { fail(`${file}: demo-card ${i + 1} has no href`); return null; }
   return m[1];
 };

@@ -10,7 +10,11 @@
 #  - quoted strings are stripped before matching, so a commit MESSAGE
 #    containing "push to main" cannot trigger the gate;
 #  - `push` must be an actual git subcommand, so branch/file names that
-#    merely contain "push" (e.g. claude/push-gate-quotes) cannot either.
+#    merely contain "push" (e.g. claude/push-gate-quotes) cannot either;
+#  - BACKTICK code spans are stripped too. Found by dogfooding: a commit message
+#    documenting this very gate ("`git push -u origin claude/foo` from main was
+#    refused") was itself blocked, because prose inside backticks reached the
+#    matcher exactly like a real command would.
 
 in=$(cat) || exit 0
 
@@ -28,7 +32,8 @@ fi
 # message-like text — are removed entirely.
 stripped=$(printf '%s' "$cmd" \
   | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
-  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g' \
+  | sed -e 's/`[^`]*`//g')
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var
@@ -47,7 +52,39 @@ if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/])(main|master)([[:space:
 fi
 
 # Any bare `git push` (no ref argument) while checked out on main -> block.
-if printf '%s\n' "$pushparts" | grep -qvE 'push[[:space:]]+[^-[:space:]]'; then
+#
+# A ref counts as named only AFTER option tokens are skipped. The previous test
+# (`push[[:space:]]+[^-[:space:]]`) treated a leading flag as proof that no ref
+# followed, so `git push -u origin claude/foo` from main was BLOCKED — the exact
+# push form the standard mandates. Verified against the matrix in the repo's
+# gate tests before shipping.
+names_ref() {
+  # shellcheck disable=SC2086
+  set -- $1                                   # word-split this push segment
+  while [ $# -gt 0 ] && [ "$1" != 'push' ]; do shift; done
+  [ $# -gt 0 ] && shift                       # drop `push` itself
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --) shift; [ $# -gt 0 ] && return 0; return 1 ;;
+      # options that consume the NEXT token as their value
+      -o|--push-option|--repo|--receive-pack|--exec)
+        shift 2 2>/dev/null || return 1 ;;
+      -*) shift ;;                            # any other flag, incl. --opt=value
+      *) return 0 ;;                          # a real argument: a remote or ref
+    esac
+  done
+  return 1
+}
+
+bare=0
+while IFS= read -r seg; do
+  [ -n "$seg" ] || continue
+  names_ref "$seg" || bare=1
+done <<PUSHPARTS
+$pushparts
+PUSHPARTS
+
+if [ "$bare" = 1 ]; then
   branch=$(git branch --show-current 2>/dev/null)
   if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
     echo 'BLOCKED by directives push-gate: you are on main and this would push it directly. Work on a claude/<name> branch and open a PR.' >&2

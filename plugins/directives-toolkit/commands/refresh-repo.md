@@ -220,6 +220,7 @@ elif [ -n "$last" ] && [ "$last" != "$head" ]; then
      && gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
           --jq '.files[] | select(.filename|test("^(templates|docs|directives)/")) | "\(.status)\t\(.filename)"'; then
     classified=yes   # the delta was READ — Phase 3 may advance the stamp
+    printf 'yes' > .git/refresh-repo-classified
   else
     echo "compare unavailable (gh absent or call failed) — delta known by SHA only"
     echo "($last -> $head); classify per the Propagation Matrix in"
@@ -230,6 +231,7 @@ else
   # is applied directly, below) or the stamp already equals head. Both are
   # legitimately stampable.
   classified=yes
+  printf 'yes' > .git/refresh-repo-classified
 fi
 ```
 (First run with no stamp: skip the delta and apply the per-file policy directly.)
@@ -277,6 +279,15 @@ Set `classified=yes` in Phase 2 only on the branch where the compare output was
 actually read (including "no files changed"); leave it unset otherwise.
 
 ```bash
+# RE-DERIVED, not inherited. Every Bash call is a FRESH SHELL, so $head/$last/
+# $classified set in Phase 2's block are all empty here — the guard would take
+# the "upstream head unavailable" branch every time and the stamp could NEVER
+# advance. Phase 2 leaves its verdict in a file for exactly this reason.
+last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
+head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
+classified=$(cat .git/refresh-repo-classified 2>/dev/null)
+rm -f .git/refresh-repo-classified
+
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — stamp unchanged, re-run /refresh-repo later"
 elif [ "$classified" != "yes" ]; then
@@ -284,10 +295,20 @@ elif [ "$classified" != "yes" ]; then
   echo "left at $last on purpose, so the next run re-examines it. Classify by hand"
   echo "via MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix to clear it."
 else
-  jq --arg sha "$head" --arg d "$(date -u +%F)" \
-    '.upstream = {sha: $sha, synced: $d}' .claude/directive-sync.json \
-    > /tmp/ds.json && mv /tmp/ds.json .claude/directive-sync.json
-  echo "stamped: $head"
+  # mktemp in the DESTINATION dir: a fixed /tmp name races a second session, and
+  # a cross-filesystem mv degrades from an atomic rename to a copy — which is the
+  # partial-write hazard this same file warns about under Phase 1.5.
+  tmp=$(mktemp .claude/.directive-sync.XXXXXX) || tmp=''
+  if [ -n "$tmp" ] \
+     && jq --arg sha "$head" --arg d "$(date -u +%F)" \
+          '.upstream = {sha: $sha, synced: $d}' .claude/directive-sync.json > "$tmp" \
+     && [ -s "$tmp" ] \
+     && mv "$tmp" .claude/directive-sync.json; then
+    echo "stamped: $head"
+  else
+    [ -n "$tmp" ] && rm -f "$tmp"
+    echo "COULD-NOT-STAMP: .claude/directive-sync.json left unchanged; report it"
+  fi
 fi
 ```
 (Create the file with `{}` first if the project has none.)

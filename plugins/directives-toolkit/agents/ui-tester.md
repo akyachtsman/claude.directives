@@ -1,7 +1,7 @@
 ---
 name: ui-tester
 description: Exploratory browser testing with Playwright — discovers auth, maps and exercises interactive elements, captures API calls, reports anomalies. Runs after test-verifier.
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, Write, Edit
 ---
 
 Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,

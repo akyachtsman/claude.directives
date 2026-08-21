@@ -79,18 +79,40 @@ const EDGES = [
 
 // This repo's own body. Never exported, so it cannot live in EXPORTS.json —
 // but every path is existence-checked below, so the list still cannot rot.
+// Recursive .md walk for the derived self.docs list above.
+function walkFiles(dir) {
+  const out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = `${dir}/${e.name}`;
+    if (e.isDirectory()) out.push(...walkFiles(full));
+    else out.push(full);
+  }
+  return out;
+}
+
 const SELF = {
   'self.ops': ['CLAUDE.md', 'EXPORTS.json', 'README.md', '.gitignore',
     '.claude/settings.json', '.claude/directive-sync.json', 'learnings.jsonl',
     '.claude/hooks/session-start.sh'],
-  'self.docs': ['docs/README.md', 'docs/internal/archive/design-migration.md',
-    'docs/internal/repo-monitors.md', 'docs/internal/repo-map-ui.md',
-    'docs/internal/skill-eval-notes.md', 'docs/internal/accepted-residuals.md'],
+  // Derived for the same reason self.checks is: a hand-list catches a deletion
+  // (the existence check) but never an addition, so a new internal doc would go
+  // unmapped and nothing would say so.
+  'self.docs': [
+    'docs/README.md',
+    ...walkFiles('docs/internal').filter(f => f.endsWith('.md')).sort(),
+  ],
   // Derived, not hand-listed. The existence check below catches a DELETION but
   // never an ADDITION, so a hand-list silently under-reports the repo's own
   // validation surface every time a gate is added — it had drifted to 10 of 13.
   'self.checks': [
-    ...readdirSync('.github/scripts').sort().map(f => `.github/scripts/${f}`),
+    // Extension-filtered: an unfiltered read let ANY stray file into the map —
+    // __pycache__/ from running the python gates was enough — and then --check
+    // failed with "logical-map.html is stale", which is a MISDIAGNOSIS. A
+    // session following that message regenerates and commits the junk.
+    ...readdirSync('.github/scripts')
+      .filter(f => /\.(js|py|json)$/.test(f))
+      .sort()
+      .map(f => `.github/scripts/${f}`),
     '.github/workflow-ref-required.json',
   ],
   'self.ci': ['.github/workflows/qa.yml', '.github/workflows/ci-monitor.yml',

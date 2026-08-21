@@ -212,6 +212,15 @@ the stamp must never depend on it.
 classified=
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
 head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
+# INVALIDATE FIRST. Any marker left by an earlier invocation is cleared before
+# this run attempts anything, so a verdict can only ever be THIS run's. Without
+# it, a run interrupted after writing the marker left approval lying around: a
+# later run against the same head whose compare FAILED would find the stale
+# marker, match it against the unchanged head, and permanently advance the stamp
+# past a delta nobody dispositioned. SHA-binding alone does not catch that,
+# because the SHA is the same.
+rm -f "$(git rev-parse --git-path refresh-repo-classified)"
+
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
 elif [ -n "$last" ] && [ "$last" != "$head" ]; then
@@ -224,10 +233,10 @@ elif [ -n "$last" ] && [ "$last" != "$head" ]; then
      && gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
           --jq '.files[] | "\(.status)\t\(.filename)"'; then
     classified=yes   # the delta was READ — Phase 3 may advance the stamp
-    # Record WHICH head was classified, not just "yes": an interrupted run could
-    # otherwise leave a bare marker that a later Phase 3 reads as approval to
-    # stamp whatever ls-remote returns now. `git rev-parse --git-path` because
-    # in a linked worktree .git is a FILE, and a redirect into it fails.
+    # Written only AFTER the delta has actually been listed. Records WHICH head
+    # was classified, so Phase 3 can refuse a verdict made against a different
+    # head. `git rev-parse --git-path` because in a linked worktree .git is a
+    # FILE, and a redirect into it fails.
     printf '%s' "$head" > "$(git rev-parse --git-path refresh-repo-classified)"
   else
     echo "compare unavailable (gh absent or call failed) — delta known by SHA only"

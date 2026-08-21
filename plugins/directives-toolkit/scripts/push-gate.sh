@@ -41,9 +41,14 @@ fi
 # Single-WORD quoted tokens are unquoted first (so `push origin "main"` cannot
 # hide the ref), then any remaining quoted runs — which contain spaces, i.e.
 # message-like text — are removed entirely.
+# NOTE the ordering constraint: a DOUBLE-quoted span may contain a live command
+# substitution — bash expands $(...) and `...` inside double quotes — so removing
+# such a span would hide an executable push. Only spans with no substitution are
+# discarded. Single-quoted spans are inert and always safe to drop.
 stripped=$(printf '%s' "$cmd" \
   | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
-  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+  | sed -e "s/'[^']*'//g" \
+  | sed -E -e 's/"[^"$`]*"//g')
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var
@@ -71,18 +76,25 @@ fi
 names_ref() {
   # shellcheck disable=SC2086
   set -- $1                                   # word-split this push segment
+  positionals=0
   while [ $# -gt 0 ] && [ "$1" != 'push' ]; do shift; done
   [ $# -gt 0 ] && shift                       # drop `push` itself
   while [ $# -gt 0 ]; do
     case "$1" in
-      --) shift; [ $# -gt 0 ] && return 0; return 1 ;;
+      --) shift; positionals=$((positionals + $#)); break ;;
       # options that consume the NEXT token as their value
       -o|--push-option|--repo|--receive-pack|--exec|--recurse-submodules)
         shift 2 2>/dev/null || return 1 ;;
       -*) shift ;;                            # any other flag, incl. --opt=value
-      *) return 0 ;;                          # a real argument: a remote or ref
+      *) positionals=$((positionals + 1)); shift ;;
     esac
   done
+  # `git push origin` is ONE positional: the repository. No refspec follows, so
+  # git pushes the configured/default ref — on a main checkout, that is main.
+  # Requiring two positionals makes the ambiguous case BLOCK rather than pass,
+  # which is the only safe default for a gate whose failure mode is a bad commit
+  # on the default branch.
+  [ "$positionals" -ge 2 ] && return 0
   return 1
 }
 

@@ -207,8 +207,9 @@ results):
 - **Writes:** batch related changes into fewer PR cycles — one PR carrying three
   changes beats three PRs. On a throttled write, arm ONE scheduled completion
   check-in sized to the rolling hour; never retry-loop or burst. That single
-  check-in is the retry, not the liveness signal — heartbeats per `global.md` →
-  *Status Line on Every Stop* keep their own cadence through the wait.
+  check-in is both the retry and the heartbeat's next opportunity — it carries
+  the liveness line per `global.md` → *Status Line on Every Stop*, which never
+  justifies a second wake.
 - **Stagger heavy sessions across repos.** Many PR cycles, audits, or migration
   sweeps in two repos within the same hour share one pot — sequence them.
 - **The owner's browser is the unmetered fallback**: for a green, gate-clean PR,

@@ -145,6 +145,13 @@ jobs:
           diff <(extract index.html) <(extract docs/site/index.html)
           echo "OK: landing-page palette blocks in sync"
 
+      # Both landing pages hand-carry the same demo list. The script is the
+      # single implementation -- CLAUDE.md's local gate invokes the same file,
+      # so the two cannot drift (they did: round 1 fixed this step and left the
+      # local gate on the old logic).
+      - name: Check landing-page demo cards in sync
+        run: node .github/scripts/check-landing-cards.js
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

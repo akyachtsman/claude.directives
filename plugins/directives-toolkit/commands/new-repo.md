@@ -130,8 +130,10 @@ Execute in order:
    `update_trigger`, `fire_trigger`, `list_triggers`) per `global.md` →
    *Scheduling Tools Never Prompt* (owner ruling, 2026-08-18; its accepted
    residuals record the persistence-vector trade-off) — self-scheduling is how
-   a session heartbeats and resumes after CI, and per-call permission prompts
-   defeat unattended monitoring. The connector registers under two server-name
+   a session resumes after CI and re-arms check-ins, and per-call permission
+   prompts defeat unattended monitoring. It is NOT how a session heartbeats:
+   schedule a wake to perform a real check, never for liveness alone
+   (`global.md` → *Status Line on Every Stop*). The connector registers under two server-name
    spellings depending on surface (`mcp__Claude_Code_Remote__*` vs
    `mcp__claude-code-remote__*`) and permission rules match exactly, so the
    template lists each tool in BOTH spellings — keep both. Riskier remote
@@ -172,7 +174,7 @@ Execute in order:
    - confirm `git status` shows only intended changes
    Fix any failure before pushing.
 
-9. **Commit, PR, subscribe.** Commit all scaffolding to the `claude/<name>`
+9. **Commit and PR.** Commit all scaffolding to the `claude/<name>`
    branch and push. **Ensure the base branch exists first:** if the repo was
    created empty (no README, so `git ls-remote --heads origin main` is empty),
    establish `main` before opening the PR — create it from an empty root commit

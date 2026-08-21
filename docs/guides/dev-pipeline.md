@@ -32,6 +32,11 @@ importing only browser-only-safe *methods*:
 | 9 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/refresh-repo` (re-sync); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
+Numbers **3 and 4 are retired, not missing**: the former `tasks.md` (3) and
+`analysis.md` (4) steps folded into `/sdd-loop plan`, which now writes both into
+`plan.md` as `## Tasks` and `## Consistency`. The surviving numbers are held
+stable so existing specs, reports, and cross-references still resolve.
+
 ## The artifact chain
 
 The chain is the point: each phase **reads the prior artifact and writes its

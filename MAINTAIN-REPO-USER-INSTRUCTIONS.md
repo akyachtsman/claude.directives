@@ -178,8 +178,10 @@ Hard-won; each cost a real debugging session:
   exceeded for user ID 108373010`), so an API-heavy day throttles *write*
   calls at the worst moment — un-draft/merge got struck four times on
   2026-07-21 alone. Failed calls are retryable, not fatal: the window rolls
-  hourly, so arm ONE `send_later` completion check-in and park (liveness
-  heartbeats per the Status Line ruling keep their own cadence). The owner's browser
+  hourly, so arm ONE `send_later` completion check-in and park — that single
+  check-in is also the heartbeat's next opportunity, never a reason to arm a
+  second wake for liveness (`directives/global.md` → *Status Line on Every
+  Stop*). The owner's browser
   session has its own separate quota — a UI "Ready for review → Squash and
   merge" is the instant fallback. Economize the budget: small `per_page`,
   jq-summarize oversized saved payloads instead of re-fetching, WebFetch

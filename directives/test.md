@@ -53,7 +53,8 @@ re-derive it from the tree.
 
 Execute these before any task work:
 1. Read `CLAUDE.md` for current project state (and any Project-Specific Test Scenarios)
-2. Subscribe to PR activity on all open PRs via `subscribe_pr_activity`
+2. Do not subscribe to open PRs as a session-start step — subscription is
+   harness-side on open and governed by `git.md` → *PR Lifecycle*
 3. Read the last run's status ONCE via `mcp__github__actions_list` to catch up on
    failures since the last session — a single catch-up read, never a poll loop
    (`git.md` → *GitHub API Quota Economy*)

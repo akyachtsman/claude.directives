@@ -245,6 +245,7 @@ diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
 test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
+node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
@@ -268,6 +269,12 @@ which only requires unsubscribing before a merge.
 
 No setting suppresses the `<wake reason=…>` envelopes themselves (verified
 2026-08-21); fewer wakes is the only lever — don't hunt for a config toggle.
+
+**Precedence over the heartbeat.** This preference wins over any reading of
+`global.md` → *Status Line on Every Stop* that treats the heartbeat's five
+minutes as a cadence to be met. The heartbeat is a line emitted on a wake that
+already happens; here the consolidated check-in IS that wake, and the heartbeat
+rides on it. Never arm an extra wake to keep a heartbeat rhythm.
 
 ## Toolkit changes
 

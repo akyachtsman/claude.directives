@@ -7,15 +7,10 @@
 const { readFileSync, existsSync, readdirSync } = require('fs');
 const { join } = require('path');
 
-// Static tier keeps tokens in styles/tokens.css; a production-tier (Next.js)
-// project keeps them in app/globals.css. Checking only the first made this
-// guardrail a permanent no-op on the Next tier while CI still reported green.
-const CANDIDATES = ['styles/tokens.css', 'app/globals.css'];
-// EVERY candidate that exists is checked, not just the first. A project that
-// graduated to the production tier has both, and the Next root layout imports
-// app/globals.css — so picking one would measure the unused static starter and
-// leave the stylesheet users actually see unchecked, which is the production-tier
-// no-op this script exists to close.
+// styles/tokens.css is the design contract's single home (design.md -> Tokens &
+// components). Kept as a list so a project with a second token file can add it
+// here; every candidate that exists is checked, never just the first.
+const CANDIDATES = ['styles/tokens.css'];
 const FILES = CANDIDATES.filter((f) => existsSync(f));
 if (FILES.length === 0) {
   // A repo with no CSS at all has nothing to check (a fresh scaffold before

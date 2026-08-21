@@ -97,8 +97,7 @@ const SELF = {
     '.github/workflows/ci-notify.yml', '.github/workflows/codex-monitor.yml',
     '.github/workflows/pages-monitor.yml', '.github/workflows/pages-retry.yml'],
   'self.pages': ['index.html', 'docs/site/index.html', 'docs/site/logical-map.html',
-    'docs/site/logical-map.js', 'docs/site/commands.html', 'docs/site/react-demo.html',
-    'docs/site/vendor/'],
+    'docs/site/logical-map.js', 'docs/site/commands.html'],
 };
 
 const DELIVERY = {

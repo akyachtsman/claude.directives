@@ -28,12 +28,13 @@ Execute in order:
      production-grade, not a skeleton.** Carry this bar into `plan` and `implement` —
      do **not** quietly trim it to a minimal MVP.
    - **Explicit non-goals (MVP)** — what's out of scope for v1
-   - **Deployment tier** — *static* (GitHub Pages; plain HTML/CSS/JS, the default —
-     fine for most apps, including dynamic ones via client-side Supabase) or
-     *production* (React + Next.js on Vercel + Supabase, for auth / server-rendered
-     or per-user data / real scale). **Default static** unless the app clearly needs
-     production (per `global.md` → *Hosting & Deployment*). The tier picks the
-     scaffold: a static `index.html` app vs the `templates/nextjs-app/` Next starter.
+
+   **Deployment is fixed, so it is not on that list:** GitHub Pages, plain
+   HTML/CSS/JS, no build. That still covers dynamic apps — auth and per-user data
+   via client-side Supabase + RLS, and server-side work (a secret at request time,
+   rate limiting) via a Supabase Edge Function. There is no tier to choose
+   (`global.md` → *Hosting & Deployment*). State it if the user asks; never put
+   the question to them.
 
    Then **invite a detailed spec + reference material, and pause for it.** Ask the
    user to paste any **fuller written spec** they have AND to **attach reference
@@ -57,9 +58,6 @@ Execute in order:
 3. **Bootstrap if needed.** If `CLAUDE.md` is absent, run **`/new-repo`** and let it
    finish (it scaffolds `CLAUDE.md` + inherited directives, CI, the Playwright kit,
    and settings). If `CLAUDE.md` already exists, skip — the repo is bootstrapped.
-   If the **production tier** was chosen at step 1, the app is scaffolded from the
-   `templates/nextjs-app/` Next starter (Vercel + Supabase) instead of the static
-   `index.html` layout — deploy per `docs/standards/cicd-setup.md` → *Production tier — Vercel*.
 
 4. **Optional — competitive discovery fan-out** (only if the user opted in at
    step 1). Spawn parallel worker agents **in one batch so they run concurrently**

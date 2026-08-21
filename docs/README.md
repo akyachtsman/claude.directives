@@ -45,9 +45,7 @@ Referenced by the exported directives and the qa agents.
 | `site/logical-map.js` | The map's hand-written behaviour — pan/zoom/search/isolate, drag-to-move and drag-to-resize with per-browser persistence, and the edge router. Generated HTML loads it; never generated itself |
 | `site/logical-map.html` | The repo map (logical view) — domains, compartments, swap classes, vendor sockets (the `EXPORTS.json` view); zoom/pan/search, self-contained (no CDN). The physical-folders view was retired 2026-07-21 |
 | `site/commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
-| `site/react-demo.html` | Live browser-only React button (vendored React, no build, no CDN) — demos the production-tier preview technique; pairs with `site/vendor/` |
 | `site/index.html` | Demo gallery — links to the repo map, React preview, and commands reference (same list as the site-root `../index.html`) |
-| `site/vendor/` | Same-origin vendored React (`react.production.min.js`, `react-dom.production.min.js`) + its README — the no-CDN dependency that makes `react-demo.html` work |
 | `site/.htmlvalidate.json` | html-validate config for the site pages |
 
 > Fill-in **templates** (project CLAUDE.md scaffold, PR checklist, test plan,

@@ -1,9 +1,0 @@
-# Dependencies & build output (Vercel builds remotely; never commit these)
-node_modules/
-.next/
-out/
-.vercel
-
-# Local env — never commit real keys
-.env
-.env*.local

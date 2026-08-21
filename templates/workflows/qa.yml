@@ -92,18 +92,26 @@ jobs:
           # js/ and styles/ (a source-only change must not skip the browser
           # job) and .github/actions/ (changes to the composites are exercised
           # pre-merge).
-          # Covers BOTH tiers: the static tier's index.html/js/styles and the
-          # production tier's Next sources. Without app|components|lib a Next
-          # project's every source change skipped the browser job entirely.
-          UI_PATHS: '^(index\.html$|js/|styles/|app/|components/|lib/|\.github/actions/|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
+          # Any deployed .html is an entry point, not just the root one: with
+          # APP_PAGES=admin.html, a PR touching only admin.html used to set
+          # ui=false and skip the very ENTRY gate that page exists for.
+          UI_PATHS: '^([^/]*\.html$|js/|styles/|\.github/actions/|\.github/scripts/ui-tests/|\.github/workflows/qa\.yml$)'
         run: |
-          # No app yet → nothing to browser-test; keeps the scaffold/bootstrap PR
-          # clean. "No app" means neither tier is present: no static entry point
-          # AND no Next app dir. Testing index.html alone declared every
-          # production-tier repo appless and silently skipped its UI job forever.
-          if [ ! -f index.html ] && [ ! -d app ]; then
+          # This job gates the LOCAL suite, which serves the repo root as static
+          # files. That can only test a static-tier app.
+          #
+          # A production-tier (Next) repo is deliberately NOT enabled here: there
+          # is no build step in this job, so http-server would serve a directory
+          # listing at / and Playwright would assert against THAT — a green run
+          # that never loaded the application. qa-live.yml is the gate for that
+          # tier, and it now fires on deployment_status.
+          if [ ! -f index.html ]; then
             echo "ui=false" >> "$GITHUB_OUTPUT"
-            echo "No index.html and no app/ yet — skipping browser job."
+            if [ -d app ]; then
+              echo "::notice::Next-tier repo (app/, no index.html) — the local static suite cannot run a Next app; qa-live.yml is the authoritative gate for this tier."
+            else
+              echo "No index.html yet — skipping browser job."
+            fi
             exit 0
           fi
           # Non-PR events (push to main) always run UI tests unconditionally.

@@ -1,5 +1,5 @@
 // Generic exploratory UI test — no project-specific selectors or credentials.
-// Reads auth credentials from CLAUDE.md at runtime.
+// Credential comes from the TEST_AUTH_CREDENTIAL environment variable only.
 // Discovers app structure, exercises all interactive elements, captures API calls.
 //
 // ⚠️ Known CI compatibility issue — 100dvh not supported in older CI browsers:
@@ -11,32 +11,17 @@
 // replace with vh.
 
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CREDENTIAL DISCOVERY — read from CLAUDE.md at runtime
+// CREDENTIAL — environment only
 // ─────────────────────────────────────────────────────────────────────────────
-function readCredentialFromClaude() {
-  try {
-    const root = resolve(process.cwd(), '../../..'); // up from .github/scripts/ui-tests
-    const claude = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8');
-    // Matches all of:
-    //   Test PIN: 0100        Valid PIN: 0100
-    //   TEST_AUTH_CREDENTIAL: 0100
-    //   | Valid test PIN | `0100` |   (table format)
-    const match = claude.match(
-      /(?:valid\s+(?:test\s+)?pin|test\s+(?:pin|credential|password)|TEST_AUTH_CREDENTIAL)\s*[:|]\s*`?([0-9a-zA-Z!@#$%^&*]{2,})`?/i
-    );
-    return match?.[1]?.trim() ?? null;
-  } catch {
-    return null;
-  }
-}
-
-// Falls back to null if neither env var nor CLAUDE.md has a credential.
-// Auth-dependent tests skip gracefully rather than failing when null.
-const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || readCredentialFromClaude() || null;
+// The credential comes from the TEST_AUTH_CREDENTIAL secret and nowhere else.
+// This used to fall back to scraping CLAUDE.md, which was both a standing
+// instruction to commit a credential (global.md -> Security) and a live hazard:
+// the regex matched the TABLE LABEL, so prose in the row returned a bogus
+// "credential" that S3 then typed into the first text input it found. An unset
+// secret must mean "no credential" — auth tests self-skip, and nothing is typed.
+const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
@@ -55,7 +40,12 @@ const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || readCredentialFromCl
 // `.js` is a real array of JS errors (what the diagnostics in S2/S3 report);
 // `.all()` adds the resource failures that genuinely break a page, and is what
 // the load gates (S1, ENTRY) assert.
-const BLOCKING_RESOURCE_TYPES = new Set(['script', 'stylesheet']);
+// `document` is here because the navigation itself is the page: a 404/500 for
+// the URL under test is reported as a document response, its console copy is
+// discarded as "Failed to load resource", and a provider's styled error page
+// satisfies the body-text assertion — so a mistyped or down APP_URL would pass
+// the authoritative live gate. Images, fonts and beacons stay non-blocking.
+const BLOCKING_RESOURCE_TYPES = new Set(['document', 'script', 'stylesheet']);
 
 function watchPageErrors(page) {
   const js = [];
@@ -272,7 +262,7 @@ test('S1: page loads without JS errors', async ({ page }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential found in CLAUDE.md or TEST_AUTH_CREDENTIAL env var — skipping auth test');
-  const consoleErrors = watchPageErrors(page).js;
+  const pageErrors = watchPageErrors(page);
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
@@ -309,7 +299,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       mechanism,
       credentialProvided: AUTH_CREDENTIAL ? 'yes' : 'none — check CLAUDE.md',
       onscreenError: errText,
-      consoleErrors,
+      consoleErrors: pageErrors.all(),
       apiCalls,
       responseShape: firstKey
         ? `rows returned, first field "${firstKey}"`
@@ -324,7 +314,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       `API status: ${apiCalls[0]?.status ?? 'no call'} | ` +
       `recordCount: ${apiCalls[0]?.recordCount ?? 'n/a'} | ` +
       `responseShape: ${diag.responseShape} | ` +
-      `consoleErrors: ${consoleErrors.join('; ') || 'none'}`
+      `consoleErrors: ${pageErrors.all().join('; ') || 'none'}`
     );
   }
 
@@ -345,7 +335,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
   test.setTimeout(240_000);
   // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
   // only auth-gated apps with no credential are skipped (decided after page load below).
-  const consoleErrors = watchPageErrors(page).js;
+  const pageErrors = watchPageErrors(page);
   const apiAnomalies  = [];
 
   const getApiCalls = await captureApiCalls(page);
@@ -371,7 +361,10 @@ test('S3: interactive elements discovered and exercised without errors', async (
   const findings = [];
 
   for (const el of elements) {
-    const errorsBefore = consoleErrors.length;
+    // .all(), not .js: a click that triggers a failed dynamic import, route
+    // chunk or lazily-loaded stylesheet breaks the interaction without adding a
+    // JS error, and the raw-console listener this replaced did catch those.
+    const errorsBefore = pageErrors.all().length;
     // Only calls made by THIS interaction count as findings. callsBefore is the baseline
     // length; loadIdBefore detects whether the interaction navigated (which resets the
     // array) so we don't mis-slice the new page's calls — see recentBadCalls below.
@@ -409,7 +402,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
       const snapAfter      = await domSnapshot(page);
       const domTransition  = JSON.stringify(snapBefore) !== JSON.stringify(snapAfter);
-      const newErrors      = consoleErrors.slice(errorsBefore);
+      const newErrors      = pageErrors.all().slice(errorsBefore);
       const apiCalls       = (await getApiCalls()) ?? [];
       // If the interaction navigated, window.__apiCalls was reset to the new page's calls
       // (which are unrelated to callsBefore and may be the same length or longer). Detect

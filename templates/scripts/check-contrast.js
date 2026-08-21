@@ -10,8 +10,13 @@ const { readFileSync, existsSync } = require('fs');
 // project keeps them in app/globals.css. Checking only the first made this
 // guardrail a permanent no-op on the Next tier while CI still reported green.
 const CANDIDATES = ['styles/tokens.css', 'app/globals.css'];
-const FILE = CANDIDATES.find((f) => existsSync(f));
-if (!FILE) {
+// EVERY candidate that exists is checked, not just the first. A project that
+// graduated to the production tier has both, and the Next root layout imports
+// app/globals.css — so picking one would measure the unused static starter and
+// leave the stylesheet users actually see unchecked, which is the production-tier
+// no-op this script exists to close.
+const FILES = CANDIDATES.filter((f) => existsSync(f));
+if (FILES.length === 0) {
   // A repo with no CSS at all has nothing to check (a fresh scaffold before
   // /design-intake). A repo that HAS stylesheets but none at a known token path
   // is a real gap: failing here is the whole point of a guardrail.
@@ -26,7 +31,10 @@ if (!FILE) {
   process.exit(1);
 }
 
+let exitCode = 0;
+for (const FILE of FILES) {
 const css = readFileSync(FILE, 'utf8');
+console.log(`\n── ${FILE}`);
 const t = {};
 // Capture every color token, then validate its hex length (3/4/6/8). A 5- or
 // 7-digit value is malformed: fail loudly rather than silently skip it — a
@@ -88,11 +96,14 @@ for (const [fg, bg, thr, name] of pairs) {
 // which is the same vacuous pass as measuring nothing.
 if (evaluated < pairs.length) {
   const missing = pairs.filter(([fg, bg]) => !fg || !bg).map(([, , , name]) => name);
-  console.error(`\ncheck-contrast: FAIL — only ${evaluated}/${pairs.length} pairs were evaluable.`);
+  console.error(`\ncheck-contrast: FAIL — ${FILE}: only ${evaluated}/${pairs.length} pairs were evaluable.`);
   console.error(`  Not measured: ${missing.join('; ')}`);
   console.error('  Each needs both tokens declared in #hex form (oklch()/rgb()/hsl()/var()');
   console.error('  are not parsed). Declare the missing tokens, or extend this script.');
-  process.exit(1);
+  exitCode = 1;
+  continue;
 }
-console.log(failed ? '\ncheck-contrast: FAIL — fix styles/tokens.css' : `\ncheck-contrast: OK — ${evaluated}/${pairs.length} pairs meet WCAG AA`);
-if (failed) process.exit(1);
+console.log(failed ? `check-contrast: FAIL — fix ${FILE}` : `check-contrast: OK — ${evaluated}/${pairs.length} pairs meet WCAG AA in ${FILE}`);
+if (failed) exitCode = 1;
+}
+process.exit(exitCode);

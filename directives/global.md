@@ -214,8 +214,8 @@ styles/          ← the committed design contract (tokens.css + components.css)
   after each squash-merge — recycling branches tangles lineage and can attach
   the wrong diff to a PR
 - Subscribe to PR activity; fix CI before marking ready
-- Deploy per the project's chosen tier (→ *Hosting & Deployment*) — GitHub Pages
-  by default
+- Deploy to **GitHub Pages** — the only target; any other host needs explicit
+  owner sign-off (→ *Hosting & Deployment*)
 
 ## Repository Scope
 Two different scopes — never conflate them:

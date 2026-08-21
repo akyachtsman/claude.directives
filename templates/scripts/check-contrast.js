@@ -11,11 +11,6 @@ const { join } = require('path');
 // components). Kept as a list so a project with a second token file can add it
 // here; every candidate that exists is checked, never just the first.
 const CANDIDATES = ['styles/tokens.css'];
-// EVERY candidate that exists is checked, not just the first. A project that
-// graduated to the production tier has both, and the Next root layout imports
-// app/globals.css — so picking one would measure the unused static starter and
-// leave the stylesheet users actually see unchecked, which is the production-tier
-// no-op this script exists to close.
 const FILES = CANDIDATES.filter((f) => existsSync(f));
 if (FILES.length === 0) {
   // A repo with no CSS at all has nothing to check (a fresh scaffold before

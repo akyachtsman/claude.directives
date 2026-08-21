@@ -28,11 +28,13 @@ Execute in order:
      production-grade, not a skeleton.** Carry this bar into `plan` and `implement` —
      do **not** quietly trim it to a minimal MVP.
    - **Explicit non-goals (MVP)** — what's out of scope for v1
-   - **Deployment** — GitHub Pages, plain HTML/CSS/JS, no build. Dynamic apps
-     included: auth and per-user data come from client-side Supabase + RLS, and
-     server-side work (a secret at request time, rate limiting) from a Supabase
-     Edge Function. There is no framework tier to choose (`global.md` →
-     *Hosting & Deployment*), so don't ask.
+
+   **Deployment is fixed, so it is not on that list:** GitHub Pages, plain
+   HTML/CSS/JS, no build. That still covers dynamic apps — auth and per-user data
+   via client-side Supabase + RLS, and server-side work (a secret at request time,
+   rate limiting) via a Supabase Edge Function. There is no tier to choose
+   (`global.md` → *Hosting & Deployment*). State it if the user asks; never put
+   the question to them.
 
    Then **invite a detailed spec + reference material, and pause for it.** Ask the
    user to paste any **fuller written spec** they have AND to **attach reference

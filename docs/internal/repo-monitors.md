@@ -35,11 +35,12 @@ zero-model counterpart to the `update-pages` skill: the deploy already happens o
 The live URL is derived generically, so the file is portable to any project as-is.
 
 See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
-`.github/workflows/codex-monitor.yml`, and `.github/workflows/pages-monitor.yml`.
+`.github/workflows/codex-monitor.yml`, `.github/workflows/pages-monitor.yml`, and
+`.github/workflows/pages-retry.yml` — the five the checklist below expects.
 
 ### Activation Checklist for New Sessions
 - Confirm all five exist: `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check
-- Subscribe to PR activity on any open PRs
+- Do not subscribe to open PRs — subscription is harness-side on open, and this repo unsubscribes immediately (`CLAUDE.md` → *Notifications*)
 - See *Self-test triage* below for `ci-failure` / `codex-flagged` handling
 - Check for open `ci-failure` issues before starting new work
 

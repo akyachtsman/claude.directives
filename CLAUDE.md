@@ -270,6 +270,12 @@ which only requires unsubscribing before a merge.
 No setting suppresses the `<wake reason=…>` envelopes themselves (verified
 2026-08-21); fewer wakes is the only lever — don't hunt for a config toggle.
 
+**Precedence over the heartbeat.** This preference wins over any reading of
+`global.md` → *Status Line on Every Stop* that treats the heartbeat's five
+minutes as a cadence to be met. The heartbeat is a line emitted on a wake that
+already happens; here the consolidated check-in IS that wake, and the heartbeat
+rides on it. Never arm an extra wake to keep a heartbeat rhythm.
+
 ## Toolkit changes
 
 **Authoring authority.** `plugin-dev` (Anthropic) is the spec for plugin

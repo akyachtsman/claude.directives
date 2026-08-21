@@ -43,7 +43,7 @@ Referenced by the exported directives and the qa agents.
 | File | What it is |
 |------|------------|
 | `site/logical-map.js` | The map's hand-written behaviour — pan/zoom/search/isolate, drag-to-move and drag-to-resize with per-browser persistence, and the edge router. Generated HTML loads it; never generated itself |
-| `site/logical-map.html` | The repo map (logical view) — domains, compartments, swap classes, vendor sockets (the `EXPORTS.json` view); zoom/pan/search, self-contained (no CDN). The physical-folders view was retired 2026-07-21 |
+| `site/logical-map.html` | The repo map (logical view) — domains, compartments, swap classes, vendor sockets (the `EXPORTS.json` view); zoom/pan/search, self-contained (no CDN). **Generated** by `.github/scripts/build-logical-map.js` from `EXPORTS.json` — never hand-edit it; `qa.yml` fails a committed copy that no longer matches. The physical-folders view was retired 2026-07-21 |
 | `site/commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
 | `site/index.html` | Demo gallery — links to the repo map, React preview, and commands reference (same list as the site-root `../index.html`) |
 | `site/.htmlvalidate.json` | html-validate config for the site pages |

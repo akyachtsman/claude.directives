@@ -15,7 +15,7 @@ Step-by-step guide for deploying the QA pipeline to a new project repo. Follow i
 
 ## Overview
 
-Two GitHub Actions workflows replace manual agent invocation for the mechanical parts of the QA pipeline:
+Three GitHub Actions workflows replace manual agent invocation for the mechanical parts of the QA pipeline:
 
 | Workflow | Trigger | What it runs |
 |---|---|---|

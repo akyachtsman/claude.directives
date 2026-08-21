@@ -245,6 +245,7 @@ diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
 test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
+cards() { sed -n '/<a class="demo-card"/,/<\/a>/p' "$1" | sed 's|href="docs/site/|href="|'; }; diff <(cards index.html) <(cards docs/site/index.html)   # landing-page demo-card sync
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed

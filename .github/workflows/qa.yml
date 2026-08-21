@@ -145,6 +145,15 @@ jobs:
           diff <(extract index.html) <(extract docs/site/index.html)
           echo "OK: landing-page palette blocks in sync"
 
+      # Both landing pages hand-carry the same demo list; the only legitimate
+      # difference is the href prefix (root links into docs/site/, the gallery
+      # links to siblings). Normalise that and the card blocks must match.
+      - name: Check landing-page demo cards in sync
+        run: |
+          cards() { sed -n '/<a class="demo-card"/,/<\/a>/p' "$1" | sed 's|href="docs/site/|href="|'; }
+          diff <(cards index.html) <(cards docs/site/index.html)
+          echo "OK: landing-page demo cards in sync"
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

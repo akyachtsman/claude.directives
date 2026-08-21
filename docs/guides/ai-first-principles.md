@@ -2,8 +2,8 @@
 
 A short, opinionated checklist for working *with* an AI agent on this repo and
 downstream projects. Treat it as orientation, not enforced policy — the binding
-rules still live in `../directives/` (`global.md`, `design.md`, `test.md`,
-`data.md`). Where this guidance and a directive disagree, the directive wins.
+rules still live in `../directives/` (`global.md`, `git.md`, `design.md`,
+`test.md`, `data.md`). Where this guidance and a directive disagree, the directive wins.
 
 > **Attribution.** These nine principles are adapted (paraphrased) from the
 > **TechWolf AI-First Toolkit** (`ai-firstify` skill), MIT-licensed.

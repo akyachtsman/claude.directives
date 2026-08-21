@@ -125,10 +125,19 @@ never the message.
 
 **Heartbeat:** any external wait longer than five minutes — CI, a deploy, a
 long-running job — arms a visible heartbeat: a one-line status ("Waiting for
-CI (PR #845) — 12m elapsed") roughly every five minutes until the wait resolves,
+CI (PR #845) — 12m elapsed") each time the session surfaces during the wait,
 never a silent re-arm. A missing heartbeat means the session is hung — which
 is otherwise indistinguishable from waiting, and that distinction is the
 heartbeat's whole purpose.
+
+**A heartbeat never buys a wake.** It is a line the session emits when it is
+already awake — on any stop, on an event wake, on a scheduled check-in it
+already had. It does not authorise extra wakes to keep a cadence: the wait's
+existing signals set the cadence, and where the owner prefers one consolidated
+check-in, that check-in carries the heartbeat rather than being supplemented by
+it. A wait whose only signal is a webhook heartbeats when the webhook fires;
+five minutes is the threshold that arms the line, not a polling interval
+(→ *Async Operations*, and `git.md` → *GitHub API Quota Economy*).
 
 ## Handoffs Carry Only What Dies With the Session (owner ruling, 2026-08-05)
 Applies to `/handoff-session` and any summary written for a successor session.
@@ -213,7 +222,9 @@ styles/          ← the committed design contract (tokens.css + components.css)
 - Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
   after each squash-merge — recycling branches tangles lineage and can attach
   the wrong diff to a PR
-- Subscribe to PR activity; fix CI before marking ready
+- PR activity arrives on its own — opening a PR subscribes the session
+  harness-side; unsubscribe before merging (`git.md` → *PR Lifecycle*)
+- Fix CI before marking ready
 - Deploy to **GitHub Pages** — the only target; any other host needs explicit
   owner sign-off (→ *Hosting & Deployment*)
 
@@ -267,8 +278,8 @@ Report the result before pushing; fix failures locally rather than on the PR.
 plugin's push-gate hook enforces no-direct-push-to-main mechanically).
 
 ## PR Lifecycle
-Lives in `directives/git.md` → *PR Lifecycle*: draft-first, subscribe on open,
-green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
+Lives in `directives/git.md` → *PR Lifecycle*: draft-first, auto-subscribed on
+open, unsubscribe before merging, green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
 never force-push `main`.
 
 ## Conditional Auto-Merge on Green
@@ -424,8 +435,9 @@ naming what remains open, or "nothing open" — never absent.
        covers failure and success — but a wait expected to exceed five minutes
        still arms the heartbeat (→ *Status Line on Every Stop*).
      - Event wakes stay the primary signal; the heartbeat (→ *Status Line on
-       Every Stop*) is the owner-visible liveness line on top, never a
-       replacement for them.
+       Every Stop*) is the owner-visible liveness line carried by whatever wake
+       already happens — never a replacement for event wakes, and never a
+       reason to arm extra ones.
      - `create_trigger` / `update_trigger` / `fire_trigger` are pre-approved
        since 2026-08-18 (→ *Scheduling Tools Never Prompt*, whose accepted
        residuals record the persistence-vector trade-off). **Deployment tools**
@@ -496,7 +508,9 @@ At the start of every session:
    anything cross-repo.
 3. Confirm the active branch is not `main` before writing any code.
 4. Review open PRs for this repo before starting new work.
-5. Subscribe to active PRs via `subscribe_pr_activity`.
+5. Do not subscribe to PR activity as a session-start step — opening a PR
+   subscribes the session harness-side. `subscribe_pr_activity` is only for
+   taking over a PR this session did not open (`git.md` → *PR Lifecycle*).
 
 ## Skill Bootstrap
 The toolkit — commands, auto-skills, agents, and guard hooks — ships as the

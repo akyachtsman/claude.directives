@@ -1,8 +1,8 @@
 # docs/ — index
 
 Reference material, split by audience. This is **supporting** documentation; the
-canonical exported directives live in `../directives/` (`global.md`, `design.md`,
-`test.md`, `data.md`).
+canonical exported directives live in `../directives/` (`global.md`, `git.md`,
+`design.md`, `test.md`, `data.md`).
 
 **Provenance is now the directory structure** (the split `EXPORTS.json` encodes):
 `standards/` and `guides/` are **exported** (downstream projects inherit or

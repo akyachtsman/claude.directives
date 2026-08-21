@@ -541,8 +541,11 @@ PR-lifecycle/escalation additions.
 See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 
 ## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)
-Self-scheduling is how a session heartbeats, resumes after CI, and re-arms
-check-ins — a permission prompt the owner must click defeats the point. Every
+Self-scheduling is how a session resumes after CI and re-arms check-ins — a
+permission prompt the owner must click defeats the point. It is NOT how a
+session heartbeats: a wake is scheduled to perform a real check, and the
+heartbeat rides the wake that check already needed (→ *Status Line on Every
+Stop*). Never schedule one for liveness alone. Every
 project repo's committed `.claude/settings.json` carries the scheduling
 allowlist verbatim from `templates/claude-settings.json` → `permissions.allow`:
 exactly six tools (`send_later`, `create_trigger`, `update_trigger`,

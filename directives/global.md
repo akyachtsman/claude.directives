@@ -52,9 +52,7 @@ explicitly overrides it.
   be absent there ships with a runtime check and fallback.
 - **Correct a prior answer explicitly.** When something you already told the
   user turns out to be wrong, name that specific claim and replace it — not a
-  general apology, and never a quiet restatement in new words. A confident wrong
-  answer costs more than an uncertain one, and it stays uncorrected until it is
-  named.
+  general apology, and never a quiet restatement in new words.
 - **Receiving review feedback** — review comments (human, Codex, code-reviewer)
   are suggestions to *evaluate*, not orders. Restate the requirement, verify the
   claim against the code, then apply the fix or push back with technical
@@ -402,13 +400,12 @@ naming what remains open, or "nothing open" — never absent.
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts
   for an outcome.
-- **"Waiting" means something will wake you.** Say it only when a wake channel
-  is actually armed — a webhook subscription, a scheduled check-in, an in-turn
-  poll. If none is, either poll in-turn to the terminal state or say
-  **"stopped"**, naming the last state you observed and when: "stopped — CI
-  green at 00:49 UTC". A turn that ends under the word "waiting" with nothing
-  attached describes a wait nobody is performing, and the work sits until the
-  user asks again.
+- **"Waiting" means something will wake you.** Say it only with a wake channel
+  actually armed — a webhook subscription, a scheduled check-in. If none is and
+  the operation is still running, arm one or poll in-turn to the terminal state;
+  never end a turn on a live operation nothing is watching. Reserve
+  **"stopped"** for work that is finished or deliberately abandoned, naming the
+  last state observed and when: "stopped — CI green at 00:49 UTC".
 - **How to wait, in order of preference:**
   1. **Let the event wake you.** CI failures, PR reviews, and merges arrive as
      webhooks that resume the session — and with `ci-notify.yml` installed

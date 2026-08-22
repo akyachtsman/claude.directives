@@ -41,10 +41,18 @@ project's `tokens.css`/`components.css`**, never invent a parallel system.
 Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack
-Plain HTML + CSS + vanilla JS, no *local* build (per `global.md`). Tokens are
-plain CSS custom properties; components are plain CSS — both drop straight onto
-GitHub Pages, which is the deployment target (`global.md` → *Hosting &
-Deployment*). File layout:
+Plain HTML + CSS + vanilla JS on GitHub Pages, no *local* build — set by
+`global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21), which owns it.
+
+**Tokens are plain CSS custom properties; components are plain CSS.** This
+follows from that ruling rather than being a separate choice: with no build step,
+and utility-class / React-emitting output rejected wherever it arises
+(`docs/guides/dev-pipeline.md` → AI UI generators; `/design-intake` → Figma
+codegen MCPs), custom properties are the only token mechanism native to the
+platform. Re-proposing Tailwind or a JS theme object means re-opening the Hosting
+ruling first.
+
+File layout:
 ```
 styles/
   tokens.css       ← brand primitives (this project's look)

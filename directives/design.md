@@ -41,10 +41,20 @@ project's `tokens.css`/`components.css`**, never invent a parallel system.
 Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack
-Plain HTML + CSS + vanilla JS, no *local* build (per `global.md`). Tokens are
-plain CSS custom properties; components are plain CSS — both drop straight onto
-GitHub Pages, which is the deployment target (`global.md` → *Hosting &
-Deployment*). File layout:
+Plain HTML + CSS + vanilla JS on GitHub Pages, no *local* build — set by
+`global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21), which owns it.
+
+**Tokens are plain CSS custom properties; components are plain CSS.** Current
+practice in every project, and **not a stamped ruling** — it has never been
+compared against a utility-class system delivered without a build. The Hosting
+ruling settles something narrower: no React, no build step, no local server, no
+new platform. That is why frameworked generators are rejected
+(`docs/guides/dev-pipeline.md` → AI UI generators; `/design-intake` → Figma
+codegen MCPs), but it does not decide the token mechanism. Take an alternative to
+the owner rather than adopting one — and do not cite this line as authority for
+refusing one.
+
+File layout:
 ```
 styles/
   tokens.css       ← brand primitives (this project's look)

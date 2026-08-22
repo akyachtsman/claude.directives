@@ -20,11 +20,18 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   Scope it narrowly or it becomes noise: a section only qualifies when it NAMES
   a specific vendor, product or stack as the company-wide choice ("X is the
   default backend", "deploy to Y"). A section that merely mentions a tool while
-  explaining something else does not. Across every file in `directives/` plus
+  explaining something else does not — and neither does one whose claim
+  explicitly DEFERS to an already-stamped ruling: the stamp lives at the source,
+  so flagging the deferring copy is a false positive (`design.md` → *Stack*
+  names a stack and cites `global.md` → *Hosting & Deployment*, 2026-08-21). Across every file in `directives/` plus
   `CLAUDE.md`, check each qualifying section for an `(owner ruling, <date>)`
   stamp. Report any that has
   none, naming the commit that introduced it
-  (`git log --oneline --reverse -S '<distinctive phrase>' -- <file>`) and
+  (`git log --oneline --reverse -S '<distinctive phrase>' -- <file>` — run
+  `git rev-parse --is-shallow-repository` FIRST and `git fetch --unshallow` if
+  true, or this reports the oldest commit REACHABLE rather than the origin and
+  names the wrong commit; on 2026-08-22 it returned the bulk-import SHA for a
+  section that predated it by two months) and
   whether that commit's message argues for the choice or merely carries it.
   A rule with no stamp and no advocating commit is UNRATIFIED, not settled —
   surface it for the owner to confirm or drop. Do not treat length of service

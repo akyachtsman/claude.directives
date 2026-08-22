@@ -116,6 +116,11 @@ Framing rules for UNRESOLVED items — the part that makes a handoff usable:
   session can simply look and see it, cut the bullet.
 - **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
   session would otherwise burn a round-trip re-deriving.
+- **A claim about an UPSTREAM file names the SHA it was verified at**, re-checked
+  as the item is written, not when the file was fetched. Upstream can move inside
+  one session, so "I fetched it from main" and "it was current when I filed" are
+  different claims and only the second supports a finding. Read the file's header
+  comments first — they often record the behaviour as a deliberate trade-off.
 
 Self-check every line against §0. If it's already in CLAUDE.md, the README, a
 workflow file, **a PR body, a commit message, an issue thread, the diff**, or an

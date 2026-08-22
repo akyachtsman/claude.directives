@@ -16,7 +16,6 @@ of `notify-task.js` with your project's real notification.
 - `.github/scripts/notify-task.js`     — task entry point: config-guard + your notification logic
 - `.github/scripts/notify-email.js`    — SMTP helper, `require`d by `notify-task.js`
 - `.github/scripts/package.json`       — declares `nodemailer` (run `npm install` once to generate a lockfile)
-- `.github/workflows/keepalive.yml`    — keeps the schedule alive
 
 ## GitHub settings (Settings → Secrets and variables → Actions)
 
@@ -24,7 +23,6 @@ of `notify-task.js` with your project's real notification.
 | Name | Value |
 |---|---|
 | `SMTP_PASS` | app password / API key |
-| `KEEPALIVE_PAT` | PAT (fine-grained, this repo, **Contents: read/write**) |
 
 **Variables** (non-sensitive) → *Variables* tab:
 | Name | Value |
@@ -78,10 +76,20 @@ of `notify-task.js` with your project's real notification.
   }
   ```
 
-## Keep it alive (important)
-GitHub **disables scheduled workflows after 60 days of no commits**. `keepalive.yml`
-makes a weekly empty commit (via `KEEPALIVE_PAT`) to reset that clock for all crons.
-GitHub also emails repo admins before disabling — a one-click re-enable is the fallback.
+## Keep it alive
+GitHub **disables scheduled workflows after 60 days of repository inactivity** —
+inactivity, not elapsed time, so a repo where PRs land never approaches it and
+needs nothing here. GitHub emails repo admins before disabling, and re-enabling
+is one click.
+
+`templates/workflows/keepalive.yml` makes a weekly empty commit via
+`KEEPALIVE_PAT` to reset that clock. **Do not install it under this standard.**
+It pushes directly to `main`, and the required default-branch ruleset — empty
+bypass list — refuses that, so it would be red on every run. The template is
+retained only for a repo outside this standard. Do not resolve the conflict by
+bypassing your own account: a bypass exempts an *actor*, so it would exempt
+every push you and your sessions make. See
+`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
 ## When the GitHub cron isn't enough
 If timing must be exact or the job is data-heavy, move it to the **data tier** —

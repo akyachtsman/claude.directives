@@ -54,6 +54,80 @@ Corollaries worth memorizing:
 6. If the change closes out a downstream finding, paste the prepared reply
    back into the session that reported it (see the loop below).
 
+## Branch Protection — one-time, per repo (owner ruling, 2026-08-22)
+
+An agent cannot set this: it is a repository setting, and the whole point is
+that it binds every actor including the session. Do it once per repo.
+
+**Why it exists.** The toolkit's `push-gate` hook catches a direct push to main
+only in the session running it, and only for shapes it can parse — three review
+rounds on #256 found the bypass surface is not enumerable (#257). A ruleset
+moves the rule server-side, where no shell form evades it.
+
+**Setup** — *Settings → Rules → Rulesets → New branch ruleset*:
+1. Name it (e.g. `main protection`); **Enforcement status: Active**.
+2. **Target branches → Add target → Include default branch.**
+3. Tick **Restrict deletions**, **Block force pushes**, and **Require a pull
+   request before merging**.
+4. Inside that last rule set **Required approvals to `0`.** GitHub defaults it
+   to 1, and at 1 every agent PR waits forever for a reviewer who does not
+   exist — `git.md` → *Conditional Auto-Merge on Green* has sessions merge their
+   own PRs without approval.
+5. Leave **Restrict updates** UNCHECKED. With an empty bypass list it blocks
+   every update to the branch, including merging a PR — it locks the repo rather
+   than protecting it.
+6. Leave **Require status checks** unchecked. It pins a check by NAME, so a
+   renamed workflow silently blocks every merge; sessions already verify CI
+   green before merging and `ci-monitor` catches failures independently.
+
+**The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
+with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
+60 days. Protection blocks that push, the workflow goes red, and ~60 days later
+every cron in that repo is disabled — a slow, quiet failure.
+
+**Delete `keepalive.yml`; do not bypass anything.** GitHub disables scheduled
+workflows after 60 days of *repository inactivity* — not on a timer. A repo where
+PRs land never approaches that, so the workflow buys nothing there. Remove it and
+its `KEEPALIVE_PAT` secret, and keep the ruleset's bypass list **empty**. If a
+genuinely idle repo ever does trip the limit, GitHub emails and one click
+re-enables the workflow — cheaper than a standing exemption.
+
+**Never resolve it by bypassing your own account.** A bypass entry exempts an
+**actor**, not a workflow and not a token. The account that owns
+`KEEPALIVE_PAT` is the account sessions push as, so exempting it lets *every*
+session push skip the pull-request rule — and it hides itself, because the
+ruleset still reads Active afterwards. If some repo genuinely needs a recurring
+direct push, that is a deliberate decision requiring a narrow identity that is
+not you; work it out then, and never reach for a bypass merely to keep a
+workflow green.
+
+Nothing else in the standard set pushes: the monitors only open issues, comment
+and label, and `pages-retry` re-runs a deploy rather than pushing.
+
+**Verify it took**, rather than trusting the form. A ruleset fails in two
+directions and the settings page shows neither: it can be inactive or aimed at
+the wrong branch (protects nothing), or over-tight (locks you out). Run both
+probes.
+
+1. **A direct write to main must be refused.** Use a **disposable payload** —
+   create a file such as `.ruleset-probe` at the repo root, via the API or the
+   web editor's *commit directly to main* option — never a real change, because
+   this probe exists precisely for the case where it goes through. Expected:
+   ```
+   409 Repository rule violations found
+   Changes must be made through a pull request.
+   ```
+   **If it succeeds, the ruleset is not in force** and main now carries the
+   probe file. Fix the rule first (Enforcement **Active**, target includes the
+   default branch, *Require a pull request* ticked), then re-probe with a
+   **fresh filename** — repeating the same one can be refused for already
+   existing, which reads exactly like the rule working. Once a fresh probe is
+   refused, delete every probe file **through an ordinary PR** — not a second
+   direct write.
+2. **One ordinary PR must still merge.** Branch → PR → squash-merge. This is the
+   probe that catches an over-tight ruleset, and it is the one people skip
+   because the first one felt like the real test.
+
 ## Downstream-Finding Loop
 
 The standing procedure when a project session surfaces a bug, gap, or
@@ -200,7 +274,7 @@ Hard-won; each cost a real debugging session:
   now, via the `SessionStart` hook, rather than on the ~weekly cache rebuild —
   unreviewed by us. The hook shortens that window, so it raises this risk rather
   than lowering it. The defenses are layered
-  elsewhere: push-gate blocks direct-to-main, workflow PRs merge only after a
+  elsewhere: branch protection blocks direct-to-main server-side, workflow PRs merge only after a
   line-by-line diff read (`git.md`, 2026-07-19), and workflow-trigger edits
   are stop-and-ask before the change is made. Keep the
   install list minimal — ours plus the named Anthropic-official set in

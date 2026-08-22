@@ -192,10 +192,13 @@ index.html       ← the app's entry page (additional pages are fine — every
                    page matches the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
-  workflows/     ← the full template set from templates/workflows/ (10 files):
+  workflows/     ← the standard template set from templates/workflows/ (9 files):
     qa.yml, qa-live.yml, qa-response.yml,
     ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml,
-    pages-retry.yml, cron-notify.yml, keepalive.yml
+    pages-retry.yml, cron-notify.yml
+                 ← keepalive.yml is NOT standard: it pushes to main weekly, which
+                   the required default-branch ruleset refuses, and a repo where
+                   PRs land never hits the 60-day inactivity limit it exists for
   scripts/
     ui-tests/
 ```
@@ -274,8 +277,15 @@ Before committing or pushing, verify locally — never rely on CI alone:
 - Review `git status` and the diff — no unintended changes staged.
 
 Report the result before pushing; fix failures locally rather than on the PR.
-`/commit-chk` is the manual backup when this auto-check did not fire (the
-plugin's push-gate hook enforces no-direct-push-to-main mechanically).
+`/commit-chk` is the manual backup when this auto-check did not fire.
+
+The plugin's push-gate hook catches an obvious direct push to main in the
+session running it, but it is a local speed bump and **not** an enforcement
+point — its bypass surface is not enumerable, so never read a green hook run as
+evidence that main is protected. The enforcement is a **GitHub ruleset on the
+default branch**, which every repo installing this toolkit must have; the setup
+and its verification probes are in the toolkit repo's
+`MAINTAIN-REPO-USER-INSTRUCTIONS.md`.
 
 ## PR Lifecycle
 Lives in `directives/git.md` → *PR Lifecycle*: draft-first, auto-subscribed on

@@ -23,7 +23,7 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   explaining something else does not — and neither does one whose claim
   explicitly DEFERS to an already-stamped ruling: the stamp lives at the source,
   so flagging the deferring copy is a false positive (`design.md` → *Stack*
-  names a stack and cites `global.md` → *Hosting & Deployment*, 2026-08-22). Across every file in `directives/` plus
+  names a stack and cites `global.md` → *Hosting & Deployment*, 2026-08-21). Across every file in `directives/` plus
   `CLAUDE.md`, check each qualifying section for an `(owner ruling, <date>)`
   stamp. Report any that has
   none, naming the commit that introduced it

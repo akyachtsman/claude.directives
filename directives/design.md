@@ -44,13 +44,15 @@ Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 Plain HTML + CSS + vanilla JS on GitHub Pages, no *local* build — set by
 `global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21), which owns it.
 
-**Tokens are plain CSS custom properties; components are plain CSS.** This
-follows from that ruling rather than being a separate choice: with no build step,
-and utility-class / React-emitting output rejected wherever it arises
+**Tokens are plain CSS custom properties; components are plain CSS.** Current
+practice in every project, and **not a stamped ruling** — it has never been
+compared against a utility-class system delivered without a build. The Hosting
+ruling settles something narrower: no React, no build step, no local server, no
+new platform. That is why frameworked generators are rejected
 (`docs/guides/dev-pipeline.md` → AI UI generators; `/design-intake` → Figma
-codegen MCPs), custom properties are the only token mechanism native to the
-platform. Re-proposing Tailwind or a JS theme object means re-opening the Hosting
-ruling first.
+codegen MCPs), but it does not decide the token mechanism. Take an alternative to
+the owner rather than adopting one — and do not cite this line as authority for
+refusing one.
 
 File layout:
 ```

@@ -13,20 +13,28 @@
 // renders, invisible to the check, so the gate passes. Consuming the tag grammar
 // in order removes that whole class of miss for ordinary markup.
 //
-// WHAT THIS DOES AND DOES NOT GUARANTEE. It is NOT a spec-compliant HTML
-// tokenizer, and must not be described as one. It reliably catches the failure
-// this gate exists for: someone edits one landing page and not the other. It
-// does NOT withstand deliberately adversarial markup — review (#262) enumerated
-// six such gaps, tracked in a follow-up issue: character references in attribute
-// values (`class="&#100;emo-card"`), `</a>` appearing as text inside a comment
-// or raw-text element, raw-text modes beyond script/style/textarea/title (e.g.
+// WHAT THIS DOES AND DOES NOT GUARANTEE (owner ruling, 2026-08-22). It is NOT a
+// spec-compliant HTML tokenizer, and must not be described as one. It reliably
+// catches the failure this gate exists for: someone edits one landing page and
+// not the other. It does NOT withstand deliberately adversarial markup — review
+// (#262) enumerated six such gaps: character references in attribute values
+// (`class="&#100;emo-card"`), `</a>` appearing as text inside a comment or
+// raw-text element, raw-text modes beyond script/style/textarea/title (e.g.
 // iframe), end tags carrying attributes, abrupt comment endings (`<!-->`), and
-// `.demo-card` elements nested inside a card. Closing those means adopting a
-// real HTML parser, which is a dependency decision — see the issue.
+// `.demo-card` elements nested inside a card.
 //
-// Kept dependency-free for now: every other validator here runs on bare node,
+// THE OWNER ACCEPTED THAT LIMIT rather than adopt a real HTML parser (#263,
+// closed 2026-08-22). Every one of the six needs deliberately hostile markup
+// written by someone who already has commit access — and who could simply delete
+// this check instead. So the limit is the decision, not a deferral: do NOT
+// reopen it by adding a parser dependency, and do NOT patch the six one at a
+// time. Six review rounds across #258 and #262 established that patching them
+// individually is slowly reimplementing an HTML parser by hand.
+//
+// Dependency-free is the point: every other validator here runs on bare node,
 // and the local gate in CLAUDE.md has no install step, so a parser dependency
 // would make the documented local gate require `npm i` for every contributor.
+// Revisit only if these pages stop being a hand-maintained pair.
 
 import { readFileSync, statSync } from 'node:fs';
 

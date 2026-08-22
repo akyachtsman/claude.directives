@@ -5,9 +5,14 @@ Company-wide standards for data access and backend integration. Applies to every
 project repo that needs persistence, auth, realtime, or storage. Project-level
 `CLAUDE.md` may add specifics but must never relax the security rules here.
 
-## Preferred Backend
-- **Supabase is the default backend.** Reach for it before standing up any
-  custom server or alternative managed backend.
+## Preferred Backend (owner ruling, 2026-08-22)
+- **Supabase is THE backend, permanently** — chosen, not inherited, and kept
+  until something better appears. Reach for it before standing up any custom
+  server or alternative managed backend.
+- **Do not re-propose an alternative** without naming the specific capability
+  Supabase lacks. "Evaluated and rejected" applies here as it does to the
+  framework tier (`global.md` → *Hosting & Deployment*): a session preferring a
+  different stack is not a reason, and neither is a general comparison.
 - Use hosted Postgres directly via `supabase-js` or the Supabase MCP tools —
   prefer these over bespoke data layers.
 - No other managed backend (Firebase, custom Express servers, etc.) without
@@ -95,6 +100,8 @@ Applying the change to the live database still follows the escalation rules
 here.)
 
 ## Escalation
+- Stop and ask before adopting any backend other than Supabase, or adding a
+  second one alongside it (→ *Preferred Backend*).
 - Stop and ask before disabling RLS on any table.
 - Stop and ask before using the service-role key anywhere a browser can reach it.
 - Stop and ask before committing `.claude/mcp.json` or any key material.

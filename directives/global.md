@@ -270,7 +270,8 @@ had. Do not re-propose it, and do not scaffold toward it.
   tier would have filled is server-side execution — a real secret at request
   time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth
   Pattern*). **Supabase Edge Functions already cover that**, with no framework,
-  no build step and no new platform (`data.md` → *Reversible-by-Design Backend
+  no build step and no new platform — this ruling rests on `data.md` →
+  *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend
   Changes*).
 - **If a project ever genuinely outgrows Pages**, the owner's stated direction
   is **Cloudflare** — response time, caching, security. That names a direction,

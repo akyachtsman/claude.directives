@@ -98,6 +98,18 @@ Narration is overhead, never the deliverable.
 Long operations keep their announce line, between-step status, and "parked"
 statement — shorten the wording, never drop the update.
 
+## Pasteable Messages Go in Chat, Fenced (owner ruling, 2026-08-22)
+Anything written for the owner to relay elsewhere — a hand-off to another repo's
+session, a prompt, an issue body, a message to a person — goes **in chat, inside a
+fenced code block**, so the copy button takes it in one click.
+- **Never hand over a file to copy from.** Compose the message in the reply.
+- **Fence it; prose in chat is not enough.**
+- **The outer fence must be LONGER than the longest backtick run inside it.**
+  Four backticks for content holding ordinary triple-backtick blocks; five when
+  the content itself uses four.
+- **A file is still right when the artifact IS a file** — something to commit,
+  run, or open in another tool. This governs messages, not deliverables.
+
 ## Status Line on Every Stop (owner ruling, 2026-08-18)
 Every time a session stops working — end of turn, end of task, blocked, or
 parked — the message's final line is a status line in this vocabulary (the

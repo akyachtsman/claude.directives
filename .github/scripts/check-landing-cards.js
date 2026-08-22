@@ -16,7 +16,7 @@
 // being skipped. Kept dependency-free on purpose: every other validator here
 // runs on bare node, and the local gate in CLAUDE.md has no install step.
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 
 const ROOT = 'index.html';
 const GALLERY = 'docs/site/index.html';
@@ -29,29 +29,6 @@ const fail = (msg) => { console.error(`FAIL: ${msg}`); process.exitCode = 1; };
 
 const isSpace = (c) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f';
 
-/**
- * Blank out regions whose contents are NOT markup, preserving length so every
- * offset still indexes the original string. Comments are the reason this exists:
- * a commented-out card is text, and treating it as live let one page carry a
- * card the other did not while the counts still matched.
- *
- * An unterminated region is fatal — past it we cannot tell markup from text.
- */
-const maskInert = (html, file) => {
-  const blank = (m) => m.replace(/[^\n]/g, ' ');
-  const masked = html
-    .replace(/<!--[\s\S]*?-->/g, blank)
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, blank)
-    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, blank);
-
-  for (const [re, what] of [[/<!--/, 'comment'], [/<script\b/i, '<script>'], [/<style\b/i, '<style>']]) {
-    if (re.test(masked)) {
-      fail(`${file}: unterminated ${what} — cannot tell markup from text past it`);
-      return null;
-    }
-  }
-  return masked;
-};
 
 /**
  * Parse ONE tag-open starting at `i` (which must point at '<'). Returns the tag
@@ -107,42 +84,94 @@ const parseTag = (s, i) => {
   }
 };
 
-/** Every element carrying the `demo-card` class token, in document order. */
+// Elements whose CONTENT is text, not markup. A `.demo-card` inside one of
+// these is not a card — the browser never parses it as an element.
+const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title']);
+
+/** Index just past `</name ... >`, or -1. */
+const findClose = (s, from, name) => {
+  const re = new RegExp(`</${name}\\s*>`, 'i');
+  const m = re.exec(s.slice(from));
+  return m ? from + m.index + m[0].length : -1;
+};
+
+/**
+ * Every element carrying the `demo-card` class token, in document order.
+ *
+ * ONE tokenizing pass handles comments, raw-text elements and tags together.
+ * An earlier version masked comments and raw text with regexes BEFORE scanning,
+ * and review found three separate bugs in exactly that seam — `<script\b`
+ * matching the custom element `<script-editor>`, `existsSync` accepting a
+ * directory, and comment-masking running before script-masking so a `<!--` in
+ * one script string paired with a `-->` in another and blanked the live markup
+ * between them. Every one came from deciding structure with patterns instead of
+ * consuming it in order, which is the same mistake this rewrite existed to fix.
+ * Walking once removes the seam: at any point we are either inside a comment,
+ * inside raw text, or looking at markup — never guessing which.
+ */
 const cards = (file) => {
   const html = readFileSync(file, 'utf8');
-  const masked = maskInert(html, file);
-  if (masked === null) return null;
-
   const found = [];
-  for (let i = masked.indexOf('<'); i !== -1; i = masked.indexOf('<', i + 1)) {
+
+  for (let i = 0; i < html.length; ) {
+    const lt = html.indexOf('<', i);
+    if (lt === -1) break;
+
+    if (html.startsWith('<!--', lt)) {
+      const end = html.indexOf('-->', lt + 4);
+      if (end === -1) {
+        fail(`${file}: unterminated comment — cannot tell markup from text past it`);
+        return null;
+      }
+      i = end + 3;
+      continue;
+    }
+
     let tag;
     try {
-      tag = parseTag(masked, i);
+      tag = parseTag(html, lt);
     } catch (e) {
       fail(`${file}: ${e.message} — refusing to guess`);
       return null;
     }
-    if (!tag) continue;
+    if (!tag) { i = lt + 1; continue; }
+
+    // Exact tag-name match, from the parser — never a prefix pattern, which is
+    // what made <script-editor> read as <script>.
+    if (RAW_TEXT.has(tag.name)) {
+      const close = findClose(html, tag.end, tag.name);
+      if (close === -1) {
+        fail(`${file}: unterminated <${tag.name}> — cannot tell markup from text past it`);
+        return null;
+      }
+      i = close;
+      continue;
+    }
 
     const cls = tag.attrs.get('class');
-    if (cls === undefined || !cls.trim().split(/\s+/).includes('demo-card')) continue;
+    if (cls === undefined || !cls.trim().split(/\s+/).includes('demo-card')) {
+      i = tag.end;
+      continue;
+    }
 
     if (tag.name !== 'a') {
       fail(`${file}: a .demo-card is a <${tag.name}>, not a link — cards must be anchors`);
       return null;
     }
-    const close = masked.indexOf('</a>', tag.end);
+    // Anchors cannot nest, so the card ends at the first </a>; a nested <a>
+    // before it means this card was never closed.
+    const close = findClose(html, tag.end, 'a');
     if (close === -1) {
       fail(`${file}: a .demo-card anchor is never closed by </a>`);
       return null;
     }
-    // Anchors cannot nest, so a second <a inside means this card was never
-    // closed and we ran on into a LATER element's </a>.
-    if (/<a\b/i.test(masked.slice(tag.end, close))) {
+    const inner = html.slice(tag.end, close).replace(/<\/a\s*>$/i, '');
+    if (/<a\b/i.test(inner)) {
       fail(`${file}: a .demo-card anchor is not closed before the next <a> — its </a> is missing`);
       return null;
     }
-    found.push({ attrs: tag.attrs, inner: html.slice(tag.end, close), raw: html.slice(tag.start, close + 4) });
+    found.push({ attrs: tag.attrs, inner, raw: html.slice(tag.start, close) });
+    i = close;
   }
   return found;
 };
@@ -183,8 +212,12 @@ rootTargets.forEach((t, i) => {
   if (galleryTargets[i] != null && t !== galleryTargets[i]) {
     fail(`card ${i + 1} points at different pages: ${ROOT} → ${t}, ${GALLERY} → ${galleryTargets[i]}`);
   }
-  if (!existsSync(`${GALLERY_DIR}/${t}`)) {
-    fail(`card ${i + 1} targets ${GALLERY_DIR}/${t}, which does not exist — both published links would 404`);
+  // isFile(), not existsSync(): a DIRECTORY named example.html exists happily
+  // while the published link still 404s, so presence alone proves nothing.
+  let isFile = false;
+  try { isFile = statSync(`${GALLERY_DIR}/${t}`).isFile(); } catch { isFile = false; }
+  if (!isFile) {
+    fail(`card ${i + 1} targets ${GALLERY_DIR}/${t}, which is not a regular file — both published links would 404`);
   }
 });
 

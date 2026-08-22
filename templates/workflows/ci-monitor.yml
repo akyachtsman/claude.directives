@@ -59,11 +59,8 @@ jobs:
           WR_URL: ${{ github.event.workflow_run.html_url }}
           WR_ID: ${{ github.event.workflow_run.id }}
           WR_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
-          # The workflow-definition probe below must read the file from the repo
-          # the run's branch actually lives in. A fork PR's branch exists ONLY in
-          # the fork, so probing the base repo 404s, can_supersede falls to `no`,
-          # and every healthy supersede on a fork PR alarms. Same-repo runs have
-          # head_repository == repository, so this degrades to the old behaviour.
+          # Used ONLY to tell a same-repo run from a fork run. The fork case is
+          # deliberately NOT handled — see the probe below for why.
           WR_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           WR_UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
           LOOKBACK: ${{ github.event.inputs.lookback_minutes || '1440' }}
@@ -98,13 +95,29 @@ jobs:
               can_supersede=unknown
               wf_path=$(gh api "repos/$REPO/actions/workflows/${WR_WORKFLOW_ID}" --jq .path 2>/dev/null || true)
               if [ -n "$wf_path" ]; then
-                # Read at the run's head SHA, not its branch name: the SHA is
-                # reachable in the head repo regardless of fork, and it reads the
-                # definition AS OF that run rather than whatever the branch holds now.
-                probe_repo="${WR_HEAD_REPO:-$REPO}"
-                if gh api "repos/${probe_repo}/contents/${wf_path}?ref=${WR_SHA}" \
+                # FORK RUNS ARE NOT CLASSIFIED — they report, and that is deliberate.
+                # Two things cannot be made sound from here, and both were found by
+                # review rather than reasoned out, so do not "improve" this without
+                # re-checking them:
+                #   1. A PRIVATE fork is outside this token's scope. contents: read
+                #      on the base repo grants nothing in a separate repository, so
+                #      the probe 404s and we would guess `no` — the same false alarm
+                #      this was meant to remove, now with a misleading cause.
+                #   2. The newer-run query below matches on workflow_id + head_branch
+                #      only. Two forks using the SAME branch name would let fork B's
+                #      run count as superseding fork A's cancelled one — silently
+                #      dropping a real failure. That is a false SILENCE, strictly
+                #      worse than the false alarm being fixed.
+                # So a fork run leaves can_supersede=unknown and is reported. Loud is
+                # the correct direction when a probe cannot answer.
+                if [ -n "${WR_HEAD_REPO:-}" ] && [ "$WR_HEAD_REPO" != "$REPO" ]; then
+                  echo "cancelled on a run from fork ${WR_HEAD_REPO} — not classifiable from the base repo; reporting."
+                elif gh api "repos/$REPO/contents/${wf_path}?ref=${WR_SHA}" \
                      -H "Accept: application/vnd.github.raw" 2>/dev/null \
                      | grep -qE '^[[:space:]]*cancel-in-progress:[[:space:]]*true[[:space:]]*$'; then
+                  # Same-repo: read at the run's head SHA rather than its branch name,
+                  # so the definition is the one AS OF that run, not whatever the
+                  # branch holds now.
                   can_supersede=yes
                 else
                   can_supersede=no

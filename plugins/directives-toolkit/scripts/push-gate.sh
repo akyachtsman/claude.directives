@@ -2,8 +2,12 @@
 # PreToolUse gate on Bash: catch a direct `git push` to main before it is run.
 #
 # THIS IS NOT A SECURITY BOUNDARY, and must never be described as one.
-# It is a fast LOCAL speed bump for the honest case: a session that types a push
-# while sitting on main, or names main as the target. It catches that reliably.
+# It is a fast LOCAL speed bump for two specific shapes: a push that names main or
+# master as a literal ref, and a BARE push (no refspec) made while sitting on main.
+# Those two it catches. Nothing beyond them is a guarantee — `git push origin HEAD`
+# from a main checkout, for one, supplies a positional the ref test accepts and
+# names no literal main, so this hook allows it. That is not a bug to file; it is
+# the point of the paragraph below.
 #
 # THE REAL CONTROL IS GITHUB BRANCH PROTECTION (owner ruling, 2026-08-22; #257).
 # A ruleset on the default branch requires a pull request server-side, so no

@@ -68,11 +68,11 @@ Execute in order:
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
 
-   **Do NOT copy `keepalive.yml`.** It pushes to `main` weekly, which branch
-   protection refuses, and it is unnecessary in any repo where PRs land — the
-   60-day auto-disable counts repository *inactivity*, not elapsed time. It is
-   opt-in for a repo that genuinely goes quiet for two months; see
-   `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
+   **Do NOT copy `keepalive.yml`.** It pushes to `main` weekly, which the
+   required default-branch ruleset refuses — so it would be red on every run.
+   It is also unnecessary: the 60-day auto-disable counts repository
+   *inactivity*, not elapsed time, and a repo where PRs land never approaches
+   it. See `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
    Drop-in for a **branch-source** Pages project — copy verbatim, no edits.
    `ci-monitor.yml` and `ci-notify.yml` ship watching all three QA workflows,

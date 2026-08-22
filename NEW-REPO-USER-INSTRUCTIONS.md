@@ -102,9 +102,6 @@ once locally — it persists.
    - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests
    - `DB_SERVICE_KEY` — backend service-role key (required before the project's scheduled data workflow, if any, can run)
    - `SMTP_PASS` — SMTP app password / API key for the standard email-notification job (`cron-notify.yml`)
-   - *(not standard)* `KEEPALIVE_PAT` — only if you deliberately opt into
-     `keepalive.yml`, which is not part of the scaffold and conflicts with branch
-     protection; see step 7
    - Any project-specific secrets the app requires
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`

@@ -188,16 +188,17 @@ What `/new-repo` scaffolds in **every** project:
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
 - **all nine** standard workflows: `qa.yml`, `qa-live.yml`, `ci-notify.yml`,
   `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`,
-  `qa-response.yml`, `cron-notify.yml` (`keepalive.yml` is opt-in — it pushes to
-  `main`, which branch protection refuses)
+  `qa-response.yml`, `cron-notify.yml` (`keepalive.yml` is NOT installed — it
+  pushes to `main`, which the required ruleset refuses)
 - the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job /
   guardrail scripts (`.github/scripts/`: `notify-email.js`, `notify-task.js`,
   `check-contrast.js`, `package.json`)
 
 **Mandatory setup** (NEW-REPO-USER-INSTRUCTIONS Step 1): data secrets (`DB_URL`,
 `DB_SERVICE_KEY`), the test credential (`TEST_AUTH_CREDENTIAL`), and the email
-transport (`SMTP_PASS`, `KEEPALIVE_PAT` secrets; `SMTP_HOST`, `SMTP_USER`,
-`ALERT_TO` variables). The Supabase connection (`.claude/mcp.json`) stays
+transport (`SMTP_PASS` secret; `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` variables).
+No `KEEPALIVE_PAT`: `keepalive.yml` is not scaffolded, so a standard repo has no
+consumer for that Contents-write PAT and should not hold one. The Supabase connection (`.claude/mcp.json`) stays
 per-repo + gitignored by the data directive's security rule — the one thing never
 committed.
 
@@ -224,7 +225,7 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   subagent scores `plan.md`, revises under ~8, forces data-flow/failure-mode).
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
   scaffolds the full set (all nine standard workflows + Playwright kit +
-  scheduled-job scripts; `keepalive.yml` is opt-in).
+  scheduled-job scripts; `keepalive.yml` is excluded).
   The email kit is standard + active with mandatory secrets and a config-guard
   notice in `notify-task.js`. See "Complete standard scaffold" above.
 - **Design — per-project generative (done):** the fixed company design system

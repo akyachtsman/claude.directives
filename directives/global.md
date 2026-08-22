@@ -626,9 +626,9 @@ a request seems to belong there. When a request targets a different repo —
 including this directives repo — say which repo it belongs to and stop; the
 owner takes it to that repo's own session (a paste-ready hand-off message is
 welcome, per the Downstream-Finding Loop). A finding about an upstream file
-names the **SHA it was verified at**, re-checked when the finding is written
-rather than when the file was fetched — upstream moves inside a session. Read
-the file's header comments before reporting it. Read access is unchanged
+names the **SHA it was verified at**, re-resolved from the upstream default
+branch as the finding is written — never the SHA fetched earlier. Read the
+file's header comments before reporting it. Read access is unchanged
 (→ *Repository Scope*): the mandatory session-start directive fetches and
 read-only inspection of public repos (`/do-repo`) stay open — and reading
 never becomes an attach.

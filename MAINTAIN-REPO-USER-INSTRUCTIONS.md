@@ -83,23 +83,50 @@ moves the rule server-side, where no shell form evades it.
 **The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
 with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
 60 days. Protection blocks that push, the workflow goes red, and ~60 days later
-every cron in that repo is disabled — a slow, quiet failure. In any repo that
-has `.github/workflows/keepalive.yml`, add the PAT's owning account under
-**Add bypass → Users**. A repo with no scheduled workflows worth keeping can
-delete `keepalive.yml` instead and skip the exception entirely.
+every cron in that repo is disabled — a slow, quiet failure.
+
+**Do not resolve that by bypassing with your own account.** A bypass entry
+exempts an **actor**, not a workflow or a token: adding the owner account lets
+*every* push made as that account skip the pull-request rule — including the
+ones sessions make, which is the exact case this ruleset exists to stop. It also
+hides itself, because the ruleset still reads Active afterwards. Resolve it one
+of these two ways instead, in order of preference:
+
+1. **Stop pushing.** GitHub disables scheduled workflows after 60 days of
+   *repository inactivity* — not on a timer. A repo that merges PRs is never
+   idle that long, so `keepalive.yml` earns its keep only where nothing else
+   lands for two months. Delete it everywhere else. (If a truly idle repo ever
+   does trip the limit, GitHub emails and the workflow is re-enabled with one
+   click — cheaper than a standing bypass.)
+2. **Give it a dedicated identity.** If the weekly push must stay, own
+   `KEEPALIVE_PAT` with a separate machine account, or install a GitHub App with
+   contents:write, and put **that** identity under **Add bypass → Users** /
+   **Apps** — never the account sessions push as.
 
 Nothing else in the standard set pushes: the monitors only open issues, comment
 and label, and `pages-retry` re-runs a deploy rather than pushing.
 
-**Verify it took**, rather than trusting the form — attempt a direct write to
-main and confirm it is refused:
-```
-409 Repository rule violations found
-Changes must be made through a pull request.
-```
-Then merge one ordinary PR to confirm the normal flow still works. A
-misconfigured ruleset does not leak; it locks you out, so the second check is
-the one that matters.
+**Verify it took**, rather than trusting the form. A ruleset fails in two
+directions and the settings page shows neither: it can be inactive or aimed at
+the wrong branch (protects nothing), or over-tight (locks you out). Run both
+probes.
+
+1. **A direct write to main must be refused.** Use a **disposable payload** —
+   create a file such as `.ruleset-probe` at the repo root, via the API or the
+   web editor's *commit directly to main* option — never a real change, because
+   this probe exists precisely for the case where it goes through. Expected:
+   ```
+   409 Repository rule violations found
+   Changes must be made through a pull request.
+   ```
+   **If it succeeds, the ruleset is not in force** and main now carries the
+   probe file. Fix the rule first (Enforcement **Active**, target includes the
+   default branch, *Require a pull request* ticked), re-run this probe until it
+   is refused, and only then delete the file **through an ordinary PR** — not a
+   second direct write.
+2. **One ordinary PR must still merge.** Branch → PR → squash-merge. This is the
+   probe that catches an over-tight ruleset, and it is the one people skip
+   because the first one felt like the real test.
 
 ## Downstream-Finding Loop
 
@@ -247,7 +274,7 @@ Hard-won; each cost a real debugging session:
   now, via the `SessionStart` hook, rather than on the ~weekly cache rebuild —
   unreviewed by us. The hook shortens that window, so it raises this risk rather
   than lowering it. The defenses are layered
-  elsewhere: push-gate blocks direct-to-main, workflow PRs merge only after a
+  elsewhere: branch protection blocks direct-to-main server-side, workflow PRs merge only after a
   line-by-line diff read (`git.md`, 2026-07-19), and workflow-trigger edits
   are stop-and-ask before the change is made. Keep the
   install list minimal — ours plus the named Anthropic-official set in

@@ -274,8 +274,15 @@ Before committing or pushing, verify locally — never rely on CI alone:
 - Review `git status` and the diff — no unintended changes staged.
 
 Report the result before pushing; fix failures locally rather than on the PR.
-`/commit-chk` is the manual backup when this auto-check did not fire (the
-plugin's push-gate hook enforces no-direct-push-to-main mechanically).
+`/commit-chk` is the manual backup when this auto-check did not fire.
+
+The plugin's push-gate hook catches an obvious direct push to main in the
+session running it, but it is a local speed bump and **not** an enforcement
+point — its bypass surface is not enumerable, so never read a green hook run as
+evidence that main is protected. The enforcement is a **GitHub ruleset on the
+default branch**, which every repo installing this toolkit must have; the setup
+and its verification probes are in the toolkit repo's
+`MAINTAIN-REPO-USER-INSTRUCTIONS.md`.
 
 ## PR Lifecycle
 Lives in `directives/git.md` → *PR Lifecycle*: draft-first, auto-subscribed on

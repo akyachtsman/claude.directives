@@ -45,6 +45,12 @@ jobs:
           WR_URL: ${{ github.event.workflow_run.html_url }}
           WR_ID: ${{ github.event.workflow_run.id }}
           WR_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          # The workflow-definition probe below must read the file from the repo
+          # the run's branch actually lives in. A fork PR's branch exists ONLY in
+          # the fork, so probing the base repo 404s, can_supersede falls to `no`,
+          # and every healthy supersede on a fork PR alarms. Same-repo runs have
+          # head_repository == repository, so this degrades to the old behaviour.
+          WR_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           WR_UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
           LOOKBACK: ${{ github.event.inputs.lookback_minutes || '1440' }}
           ISSUE_LABEL: 'ci-failure'
@@ -78,7 +84,11 @@ jobs:
               can_supersede=unknown
               wf_path=$(gh api "repos/$REPO/actions/workflows/${WR_WORKFLOW_ID}" --jq .path 2>/dev/null || true)
               if [ -n "$wf_path" ]; then
-                if gh api "repos/$REPO/contents/${wf_path}?ref=${WR_BRANCH}" \
+                # Read at the run's head SHA, not its branch name: the SHA is
+                # reachable in the head repo regardless of fork, and it reads the
+                # definition AS OF that run rather than whatever the branch holds now.
+                probe_repo="${WR_HEAD_REPO:-$REPO}"
+                if gh api "repos/${probe_repo}/contents/${wf_path}?ref=${WR_SHA}" \
                      -H "Accept: application/vnd.github.raw" 2>/dev/null \
                      | grep -qE '^[[:space:]]*cancel-in-progress:[[:space:]]*true[[:space:]]*$'; then
                   can_supersede=yes
@@ -130,7 +140,15 @@ jobs:
             # window scan is a coarse backstop, and the newer-run test alone
             # only risks under-reporting a cancel that the event branch already
             # classified in real time.
-            runs=$(gh api "repos/$REPO/actions/runs?per_page=100&status=completed" \
+            # NOT status=completed. The supersede test below asks whether a NEWER
+            # run of the same workflow+branch started before this one ended — and a
+            # scan dispatched while that superseding run is STILL RUNNING would not
+            # see it, leaving the cancelled predecessor alone in its group and
+            # opening a false tracking issue. In-flight runs are fetched so the
+            # discriminator can see them; they carry a null conclusion, so the
+            # report filter below (which names four concrete conclusions) never
+            # reports one.
+            runs=$(gh api "repos/$REPO/actions/runs?per_page=100" \
               --jq "[.workflow_runs[]
                      | select(.updated_at >= \"$since\")
                      | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\" and .name != \"Pages Monitor\")

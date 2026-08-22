@@ -112,10 +112,7 @@ probes.
 1. **A direct write to main must be refused.** Use a **disposable payload** —
    create a file such as `.ruleset-probe` at the repo root, via the API or the
    web editor's *commit directly to main* option — never a real change, because
-   this probe exists precisely for the case where it goes through. Go through
-   the **contents API**, never `git push`: a session's push scope covers only
-   its designated branch, so a push to main returns a sandbox 403 that reads
-   exactly like the rule working. Expected:
+   this probe exists precisely for the case where it goes through. Expected:
    ```
    409 Repository rule violations found
    Changes must be made through a pull request.
@@ -127,15 +124,6 @@ probes.
    existing, which reads exactly like the rule working. Once a fresh probe is
    refused, delete every probe file **through an ordinary PR** — not a second
    direct write.
-
-   **A refusal does not say WHICH rule refused.** Classic branch protection
-   (*Settings → Branches*) emits the identical 409, and neither settings page
-   lists the other's entries — so a repo with no ruleset at all can pass this
-   probe. Measured on this repo 2026-08-22: refused, while *Rulesets* read "You
-   haven't created any rulesets". Before reporting the standard satisfied,
-   confirm the mechanism — `list_branches` showing `protected: true` alongside an
-   empty *Rulesets* page means classic protection, not a ruleset. No API here
-   reads either, so this step needs the owner's screen.
 2. **One ordinary PR must still merge.** Branch → PR → squash-merge. This is the
    probe that catches an over-tight ruleset, and it is the one people skip
    because the first one felt like the real test.

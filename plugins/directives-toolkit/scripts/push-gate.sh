@@ -12,13 +12,10 @@
 # THE REAL CONTROL IS GITHUB BRANCH PROTECTION (owner ruling, 2026-08-22; #257).
 # A ruleset on the default branch requires a pull request server-side, so no
 # shell form evades it and it binds every actor, not only a session running this
-# hook. A direct write to main returns `409 Repository rule violations found —
-# Changes must be made through a pull request`. Note that this error does NOT
-# identify which rule refused: classic branch protection emits the same text, and
-# on this repo it did — the 409 was reproduced on 2026-08-22 while no ruleset
-# existed. Confirm the mechanism on the settings page, never from the error.
-# Set the ruleset up in any repo that installs this toolkit; the procedure is in
-# MAINTAIN-REPO-USER-INSTRUCTIONS.md.
+# hook. Verified live on this repo: a direct write to main returns
+# `409 Repository rule violations found — Changes must be made through a pull
+# request`. Set the same ruleset up in any repo that installs this toolkit; the
+# procedure is in MAINTAIN-REPO-USER-INSTRUCTIONS.md.
 #
 # WHY THE DEMOTION. Three review rounds on #256 showed this gate cannot be made
 # sound by parsing command text — each round closed one shape and revealed

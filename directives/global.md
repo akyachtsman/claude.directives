@@ -100,20 +100,15 @@ statement — shorten the wording, never drop the update.
 
 ## Pasteable Messages Go in Chat, Fenced (owner ruling, 2026-08-22)
 Anything written for the owner to relay elsewhere — a hand-off to another repo's
-session, a prompt, an issue body, a message to a person — is delivered **in chat,
-inside a fenced code block**, so the UI's copy button takes it in one click.
-- **Never hand over a file to copy from.** Writing it to `.md` and sending the
-  file makes the owner open it and select text for something whose whole purpose
-  is to be pasted. Compose it in the reply.
-- **Prose in chat is not enough** — it is still a manual selection. The fence is
-  what makes the message one click, so it is not optional decoration.
+session, a prompt, an issue body, a message to a person — goes **in chat, inside a
+fenced code block**, so the copy button takes it in one click.
+- **Never hand over a file to copy from.** Compose the message in the reply.
+- **Fence it; prose in chat is not enough.**
 - **The outer fence must be LONGER than the longest backtick run inside it.**
-  Four backticks is the usual case, for content holding ordinary triple-backtick
-  blocks; content that already uses a four-backtick fence needs five. An outer
-  fence that ties the inner one is closed early by it, and everything after that
-  point falls outside the copyable block — including, silently, out of the copy.
+  Four backticks for content holding ordinary triple-backtick blocks; five when
+  the content itself uses four.
 - **A file is still right when the artifact IS a file** — something to commit,
-  run, or open in another tool. The rule is about messages, not deliverables.
+  run, or open in another tool. This governs messages, not deliverables.
 
 ## Status Line on Every Stop (owner ruling, 2026-08-18)
 Every time a session stops working — end of turn, end of task, blocked, or

@@ -1,10 +1,30 @@
 #!/usr/bin/env bash
-# PreToolUse gate on Bash: deterministically block direct `git push` to main.
-# The directives standard routes all main updates through PRs (squash-merge);
-# a direct push to main from a session is always a policy violation.
+# PreToolUse gate on Bash: catch a direct `git push` to main before it is run.
+#
+# THIS IS NOT A SECURITY BOUNDARY, and must never be described as one.
+# It is a fast LOCAL speed bump for the honest case: a session that types a push
+# while sitting on main, or names main as the target. It catches that reliably.
+#
+# THE REAL CONTROL IS GITHUB BRANCH PROTECTION (owner ruling, 2026-08-22; #257).
+# A ruleset on the default branch requires a pull request server-side, so no
+# shell form evades it and it binds every actor, not only a session running this
+# hook. Verified live on this repo: a direct write to main returns
+# `409 Repository rule violations found — Changes must be made through a pull
+# request`. Set the same ruleset up in any repo that installs this toolkit; the
+# procedure is in MAINTAIN-REPO-USER-INSTRUCTIONS.md.
+#
+# WHY THE DEMOTION. Three review rounds on #256 showed this gate cannot be made
+# sound by parsing command text — each round closed one shape and revealed
+# another, and round three produced seven at once (`git push origin HEAD`,
+# `bash -c '…'`, `command git push`, `git -C /path push`, a redirection parsed
+# as a positional, and more). The bypass surface is not enumerable, so hardening
+# it further buys close to nothing. #257 records the full list. Do not treat a
+# green run of this hook as evidence that main is protected.
 #
 # Fail-open by design: any parse problem exits 0 (allow) — this gate must
 # never break unrelated Bash calls. Exit 2 = block, stderr fed to Claude.
+# Fail-open is correct for a speed bump and would be wrong for a boundary; that
+# asymmetry is the clearest statement of what this file is.
 #
 # False-positive hardening (both found in production on day one):
 #  - quoted strings are stripped before matching, so a commit MESSAGE

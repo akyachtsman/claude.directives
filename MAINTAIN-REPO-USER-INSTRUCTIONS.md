@@ -54,6 +54,53 @@ Corollaries worth memorizing:
 6. If the change closes out a downstream finding, paste the prepared reply
    back into the session that reported it (see the loop below).
 
+## Branch Protection — one-time, per repo (owner ruling, 2026-08-22)
+
+An agent cannot set this: it is a repository setting, and the whole point is
+that it binds every actor including the session. Do it once per repo.
+
+**Why it exists.** The toolkit's `push-gate` hook catches a direct push to main
+only in the session running it, and only for shapes it can parse — three review
+rounds on #256 found the bypass surface is not enumerable (#257). A ruleset
+moves the rule server-side, where no shell form evades it.
+
+**Setup** — *Settings → Rules → Rulesets → New branch ruleset*:
+1. Name it (e.g. `main protection`); **Enforcement status: Active**.
+2. **Target branches → Add target → Include default branch.**
+3. Tick **Restrict deletions**, **Block force pushes**, and **Require a pull
+   request before merging**.
+4. Inside that last rule set **Required approvals to `0`.** GitHub defaults it
+   to 1, and at 1 every agent PR waits forever for a reviewer who does not
+   exist — `git.md` → *Conditional Auto-Merge on Green* has sessions merge their
+   own PRs without approval.
+5. Leave **Restrict updates** UNCHECKED. With an empty bypass list it blocks
+   every update to the branch, including merging a PR — it locks the repo rather
+   than protecting it.
+6. Leave **Require status checks** unchecked. It pins a check by NAME, so a
+   renamed workflow silently blocks every merge; sessions already verify CI
+   green before merging and `ci-monitor` catches failures independently.
+
+**The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
+with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
+60 days. Protection blocks that push, the workflow goes red, and ~60 days later
+every cron in that repo is disabled — a slow, quiet failure. In any repo that
+has `.github/workflows/keepalive.yml`, add the PAT's owning account under
+**Add bypass → Users**. A repo with no scheduled workflows worth keeping can
+delete `keepalive.yml` instead and skip the exception entirely.
+
+Nothing else in the standard set pushes: the monitors only open issues, comment
+and label, and `pages-retry` re-runs a deploy rather than pushing.
+
+**Verify it took**, rather than trusting the form — attempt a direct write to
+main and confirm it is refused:
+```
+409 Repository rule violations found
+Changes must be made through a pull request.
+```
+Then merge one ordinary PR to confirm the normal flow still works. A
+misconfigured ruleset does not leak; it locks you out, so the second check is
+the one that matters.
+
 ## Downstream-Finding Loop
 
 The standing procedure when a project session surfaces a bug, gap, or

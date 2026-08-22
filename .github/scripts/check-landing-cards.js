@@ -10,11 +10,23 @@
 // every earlier version matched shapes — an exact `<a class="demo-card"` prefix,
 // then a double-quoted class attribute — and each one silently SKIPPED whatever
 // it failed to match, which is the worst failure available: a card the browser
-// renders, invisible to the check, so the gate passes. This version consumes the
-// tag-open grammar instead. That grammar is small and fully specifiable, so it
-// has no unenumerated remainder, and anything it cannot parse FAILS rather than
-// being skipped. Kept dependency-free on purpose: every other validator here
-// runs on bare node, and the local gate in CLAUDE.md has no install step.
+// renders, invisible to the check, so the gate passes. Consuming the tag grammar
+// in order removes that whole class of miss for ordinary markup.
+//
+// WHAT THIS DOES AND DOES NOT GUARANTEE. It is NOT a spec-compliant HTML
+// tokenizer, and must not be described as one. It reliably catches the failure
+// this gate exists for: someone edits one landing page and not the other. It
+// does NOT withstand deliberately adversarial markup — review (#262) enumerated
+// six such gaps, tracked in a follow-up issue: character references in attribute
+// values (`class="&#100;emo-card"`), `</a>` appearing as text inside a comment
+// or raw-text element, raw-text modes beyond script/style/textarea/title (e.g.
+// iframe), end tags carrying attributes, abrupt comment endings (`<!-->`), and
+// `.demo-card` elements nested inside a card. Closing those means adopting a
+// real HTML parser, which is a dependency decision — see the issue.
+//
+// Kept dependency-free for now: every other validator here runs on bare node,
+// and the local gate in CLAUDE.md has no install step, so a parser dependency
+// would make the documented local gate require `npm i` for every contributor.
 
 import { readFileSync, statSync } from 'node:fs';
 
@@ -98,9 +110,10 @@ const findClose = (s, from, name) => {
 /**
  * Every element carrying the `demo-card` class token, in document order.
  *
- * ONE tokenizing pass handles comments, raw-text elements and tags together.
- * An earlier version masked comments and raw text with regexes BEFORE scanning,
- * and review found three separate bugs in exactly that seam — `<script\b`
+ * ONE tokenizing pass handles comments, raw-text elements and tags together —
+ * for the ordinary markup these two pages contain; see the header for what this
+ * does not cover. An earlier version masked comments and raw text with regexes
+ * BEFORE scanning, and review found three separate bugs in exactly that seam — `<script\b`
  * matching the custom element `<script-editor>`, `existsSync` accepting a
  * directory, and comment-masking running before script-masking so a `<!--` in
  * one script string paired with a `-->` in another and blanked the live markup

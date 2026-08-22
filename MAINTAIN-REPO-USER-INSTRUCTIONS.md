@@ -136,10 +136,18 @@ never by cross-repo edits** (`global.md` → One Session, One Repo):
 
 1. **Capture** — the downstream session emits a hand-off block
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).
+   A finding that names an upstream file must **pin its claim to a SHA, and
+   re-verify at the moment of asserting rather than of fetching** — upstream
+   moves inside a session, so a correct fetch can be stale by the time the report
+   is written. Read the file's **header comments** first: they often record the
+   reported behaviour as a deliberate trade-off.
 2. **Relay** — you paste it into a `claude.directives` session and ask for
    analysis first. The session verifies legitimacy against git history and
    live state before implementing (`global.md` → *Behavior Rules* → evidence before assertions —
-   downstream reports have been wrong before).
+   downstream reports have been wrong before). Before dismissing one as stale,
+   check what `main` held at the SHA the reporter names: a finding correct at
+   fetch time and obsolete by filing time is not a stale clone, and telling the
+   reporter to re-fetch prescribes what they already did.
 3. **Implement + self-apply** — the fix lands under `directives/`, `templates/`,
    or `plugins/`, AND is applied to this repo itself in the same PR when it
    applies here (`CLAUDE.md` → Self-application).

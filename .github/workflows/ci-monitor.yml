@@ -153,22 +153,45 @@ jobs:
             # window scan is a coarse backstop, and the newer-run test alone
             # only risks under-reporting a cancel that the event branch already
             # classified in real time.
-            # NOT status=completed. The supersede test below asks whether a NEWER
-            # run of the same workflow+branch started before this one ended — and a
-            # scan dispatched while that superseding run is STILL RUNNING would not
-            # see it, leaving the cancelled predecessor alone in its group and
-            # opening a false tracking issue. In-flight runs are fetched so the
-            # discriminator can see them; they carry a null conclusion, so the
-            # report filter below (which names four concrete conclusions) never
-            # reports one.
-            runs=$(gh api "repos/$REPO/actions/runs?per_page=100" \
-              --jq "[.workflow_runs[]
-                     | select(.updated_at >= \"$since\")
-                     | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\" and .name != \"Pages Monitor\")
-                     | {name, id, sha: .head_sha[0:7], branch: .head_branch, url: .html_url,
-                        conclusion, workflow_id, head_branch, created_at, updated_at}]")
+            # TWO fetches, deliberately, and NOT one broadened query.
+            #
+            # The supersede test below asks whether a NEWER run of the same
+            # workflow+branch started before this one ended — so a scan dispatched
+            # while that superseding run is STILL RUNNING must be able to see it,
+            # or the cancelled predecessor sits alone in its group and opens a
+            # false tracking issue. That is issue #240's first case.
+            #
+            # But simply dropping status=completed is wrong: queued and in-progress
+            # runs would then consume slots in this single per_page=100 page, and a
+            # COMPLETED failure still inside the lookback could be pushed onto a page
+            # never fetched (no --paginate here) and silently dropped. Splitting the
+            # fetch keeps the completed page's budget exactly as it was, and adds the
+            # in-flight runs the discriminator needs without competing for slots.
+            project='{name, id, sha: .head_sha[0:7], branch: .head_branch, url: .html_url,
+                      conclusion, workflow_id, head_branch, created_at, updated_at,
+                      repo: (.head_repository.full_name // "")}'
+            fetch() {
+              gh api "repos/$REPO/actions/runs?per_page=100&status=$1" \
+                --jq "[.workflow_runs[]
+                       | select(.updated_at >= \"$since\")
+                       | select(.name != \"CI Monitor\" and .name != \"Codex Monitor\" and .name != \"Pages Monitor\")
+                       | $project]"
+            }
+            # Reported from `completed`; grouped WITH the in-flight ones so a genuine
+            # supersede is still recognised. In-flight runs carry a null conclusion,
+            # and the report filter names four concrete conclusions, so one is never
+            # itself reported.
+            runs=$(jq -n \
+              --argjson c "$(fetch completed)" \
+              --argjson p "$(fetch in_progress)" \
+              --argjson q "$(fetch queued)" \
+              '$c + $p + $q')
             runs=$(echo "$runs" | jq '[
-              ( group_by([.workflow_id, .head_branch]) | .[] ) as $g
+              # Grouped by REPO too. Without it, two forks using the same branch
+              # name share a group, and fork B's run can suppress fork A's cancelled
+              # one — silently dropping a real failure. The fork guard on the
+              # workflow_run path above does not reach this scan.
+              ( group_by([.workflow_id, .head_branch, .repo]) | .[] ) as $g
               | $g[] | . as $r
               | select(
                   (.conclusion=="failure" or .conclusion=="timed_out" or .conclusion=="startup_failure")

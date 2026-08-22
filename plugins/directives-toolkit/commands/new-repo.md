@@ -50,7 +50,7 @@ Execute in order:
    step, no tier to choose.
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
-   copy all ten workflow files from `claude.directives/templates/workflows/`
+   copy these nine workflow files from `claude.directives/templates/workflows/`
    into `.github/workflows/`:
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages
@@ -67,7 +67,12 @@ Execute in order:
      default branch, so it covers the *next* deploy, not the one that adds it
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
-   - `keepalive.yml` — weekly commit that keeps scheduled workflows from auto-disabling
+
+   **Do NOT copy `keepalive.yml`.** It pushes to `main` weekly, which branch
+   protection refuses, and it is unnecessary in any repo where PRs land — the
+   60-day auto-disable counts repository *inactivity*, not elapsed time. It is
+   opt-in for a repo that genuinely goes quiet for two months; see
+   `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
    Drop-in for a **branch-source** Pages project — copy verbatim, no edits.
    `ci-monitor.yml` and `ci-notify.yml` ship watching all three QA workflows,

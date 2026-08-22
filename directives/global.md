@@ -192,10 +192,13 @@ index.html       ← the app's entry page (additional pages are fine — every
                    page matches the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
-  workflows/     ← the full template set from templates/workflows/ (10 files):
+  workflows/     ← the standard template set from templates/workflows/ (9 files):
     qa.yml, qa-live.yml, qa-response.yml,
     ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml,
-    pages-retry.yml, cron-notify.yml, keepalive.yml
+    pages-retry.yml, cron-notify.yml
+                 ← keepalive.yml is NOT standard: it pushes to main weekly, which
+                   the required default-branch ruleset refuses, and a repo where
+                   PRs land never hits the 60-day inactivity limit it exists for
   scripts/
     ui-tests/
 ```

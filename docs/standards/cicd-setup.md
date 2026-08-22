@@ -23,7 +23,7 @@ Three GitHub Actions workflows replace manual agent invocation for the mechanica
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
 | `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-Five event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and `ci-notify.yml` (Step 9), plus `cron-notify.yml` / `keepalive.yml` for scheduled jobs.
+Five event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and `ci-notify.yml` (Step 9), plus `cron-notify.yml` for scheduled jobs (and opt-in `keepalive.yml`, Step 9f).
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -305,20 +305,19 @@ Automation 4c.
 never wake the PR that installs it. Verify on the first post-install PR; don't
 call it a dud.
 
-### 9f — Scheduled-job notifications and keepalive
+### 9f — Scheduled-job notifications
 
-Both are drop-ins; install them if the project has scheduled workflows:
+A drop-in; install it if the project has scheduled workflows:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
   -o .github/workflows/cron-notify.yml
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/keepalive.yml \
-  -o .github/workflows/keepalive.yml
 ```
 
-**What they do:** `cron-notify.yml` surfaces scheduled-job failures the same way
-`ci-monitor` surfaces CI failures; `keepalive.yml` keeps scheduled workflows from
-being auto-disabled after 60 days of repository inactivity.
+**What it does:** `cron-notify.yml` surfaces scheduled-job failures the same way
+`ci-monitor` surfaces CI failures.
+
+**`keepalive.yml` is opt-in and conflicts with branch protection.** It pushes to `main` weekly, which the mandatory default-branch ruleset refuses, and the 60-day auto-disable counts repository *inactivity* — so a repo where PRs land never needs it. Install it only in a repo that genuinely goes quiet for two months, and see `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection* first.
 
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.
@@ -360,7 +359,7 @@ Required repository variables:
 - [ ] `.github/workflows/pages-monitor.yml` present, and — if Pages is Actions-sourced — carrying a `workflow_run` trigger naming the deploy workflow
 - [ ] `.github/workflows/pages-retry.yml` present (branch-source Pages projects)
 - [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
-- [ ] `.github/workflows/cron-notify.yml` / `keepalive.yml` present (projects with scheduled jobs)
+- [ ] `.github/workflows/cron-notify.yml` present (projects with scheduled jobs); `keepalive.yml` ABSENT unless the repo is deliberately opted in (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)

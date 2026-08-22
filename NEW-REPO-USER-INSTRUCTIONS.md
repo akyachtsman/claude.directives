@@ -102,12 +102,26 @@ once locally — it persists.
    - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests
    - `DB_SERVICE_KEY` — backend service-role key (required before the project's scheduled data workflow, if any, can run)
    - `SMTP_PASS` — SMTP app password / API key for the standard email-notification job (`cron-notify.yml`)
-   - `KEEPALIVE_PAT` — fine-grained PAT (this repo, **Contents: read/write**) for `keepalive.yml`
+   - *(not standard)* `KEEPALIVE_PAT` — only if you deliberately opt into
+     `keepalive.yml`, which is not part of the scaffold and conflicts with branch
+     protection; see step 7
    - Any project-specific secrets the app requires
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
    - `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` — email transport for the standard notification job (`SMTP_PORT` / `ALERT_FROM` optional). Until these + `SMTP_PASS` are set, the job emits a notice and skips — see `docs/guides/cron-email-notifications.md`
+7. **Protect `main`** (**Settings → Rules → Rulesets → New branch ruleset**).
+   This is the only thing that actually stops a direct push to the default
+   branch — the toolkit's `push-gate` hook is a local speed bump with a bypass
+   surface that is not enumerable, so a repo without this ruleset is unprotected
+   no matter what the hook reports. `/new-repo` cannot set it; only you can.
+   Enforcement **Active**, target **Include default branch**, tick **Restrict
+   deletions**, **Block force pushes** and **Require a pull request before
+   merging**, set **Required approvals to `0`**, leave **Restrict updates**
+   unchecked, and leave the **bypass list empty**. Then run both probes — a
+   direct write to `main` must be refused, and one ordinary PR must still merge.
+   Full procedure and the reasoning for each setting:
+   `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
 ### Step 2 — Build the app
 Open a Claude Code session scoped to the new repo and type:
@@ -146,7 +160,7 @@ re-theme. Details: `directives/design.md` and `docs/guides/design-tooling.md`.
 ---
 
 ### Scheduled email notifications (standard)
-`/new-repo` already scaffolds the email kit (`cron-notify.yml`, `keepalive.yml`,
+`/new-repo` already scaffolds the email kit (`cron-notify.yml`,
 `notify-email.js`, `notify-task.js`) into every project. You just set the secrets
 and variables in items 5–6 of Step 1 above, then edit `.github/scripts/notify-task.js` to
 send your project's actual notification. Until the SMTP secrets are set, the job

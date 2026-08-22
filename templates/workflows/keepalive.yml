@@ -11,8 +11,9 @@ name: Keepalive
 # the default branch, which a branch-protection ruleset refuses. Resolving that by
 # putting your own account in the ruleset's bypass list exempts that ACTOR for
 # every push it makes, sessions included — it silently undoes the protection.
-# If the weekly push must stay, own KEEPALIVE_PAT with a dedicated machine account
-# and bypass that. See MAINTAIN-REPO-USER-INSTRUCTIONS.md -> Branch Protection.
+# So this workflow and branch protection do not coexist: in a protected repo,
+# delete this file rather than bypass anything.
+# See MAINTAIN-REPO-USER-INSTRUCTIONS.md -> Branch Protection.
 
 on:
   schedule:

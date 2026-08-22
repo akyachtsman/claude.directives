@@ -85,23 +85,21 @@ with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
 60 days. Protection blocks that push, the workflow goes red, and ~60 days later
 every cron in that repo is disabled — a slow, quiet failure.
 
-**Do not resolve that by bypassing with your own account.** A bypass entry
-exempts an **actor**, not a workflow or a token: adding the owner account lets
-*every* push made as that account skip the pull-request rule — including the
-ones sessions make, which is the exact case this ruleset exists to stop. It also
-hides itself, because the ruleset still reads Active afterwards. Resolve it one
-of these two ways instead, in order of preference:
+**Delete `keepalive.yml`; do not bypass anything.** GitHub disables scheduled
+workflows after 60 days of *repository inactivity* — not on a timer. A repo where
+PRs land never approaches that, so the workflow buys nothing there. Remove it and
+its `KEEPALIVE_PAT` secret, and keep the ruleset's bypass list **empty**. If a
+genuinely idle repo ever does trip the limit, GitHub emails and one click
+re-enables the workflow — cheaper than a standing exemption.
 
-1. **Stop pushing.** GitHub disables scheduled workflows after 60 days of
-   *repository inactivity* — not on a timer. A repo that merges PRs is never
-   idle that long, so `keepalive.yml` earns its keep only where nothing else
-   lands for two months. Delete it everywhere else. (If a truly idle repo ever
-   does trip the limit, GitHub emails and the workflow is re-enabled with one
-   click — cheaper than a standing bypass.)
-2. **Give it a dedicated identity.** If the weekly push must stay, own
-   `KEEPALIVE_PAT` with a separate machine account, or install a GitHub App with
-   contents:write, and put **that** identity under **Add bypass → Users** /
-   **Apps** — never the account sessions push as.
+**Never resolve it by bypassing your own account.** A bypass entry exempts an
+**actor**, not a workflow and not a token. The account that owns
+`KEEPALIVE_PAT` is the account sessions push as, so exempting it lets *every*
+session push skip the pull-request rule — and it hides itself, because the
+ruleset still reads Active afterwards. If some repo genuinely needs a recurring
+direct push, that is a deliberate decision requiring a narrow identity that is
+not you; work it out then, and never reach for a bypass merely to keep a
+workflow green.
 
 Nothing else in the standard set pushes: the monitors only open issues, comment
 and label, and `pages-retry` re-runs a deploy rather than pushing.
@@ -121,9 +119,11 @@ probes.
    ```
    **If it succeeds, the ruleset is not in force** and main now carries the
    probe file. Fix the rule first (Enforcement **Active**, target includes the
-   default branch, *Require a pull request* ticked), re-run this probe until it
-   is refused, and only then delete the file **through an ordinary PR** — not a
-   second direct write.
+   default branch, *Require a pull request* ticked), then re-probe with a
+   **fresh filename** — repeating the same one can be refused for already
+   existing, which reads exactly like the rule working. Once a fresh probe is
+   refused, delete every probe file **through an ordinary PR** — not a second
+   direct write.
 2. **One ordinary PR must still merge.** Branch → PR → squash-merge. This is the
    probe that catches an over-tight ruleset, and it is the one people skip
    because the first one felt like the real test.

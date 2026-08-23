@@ -58,8 +58,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     reaches the session waiting on the PR.** Arm the check-in.
   - **an ordinary successful run whose PR cannot be resolved unambiguously.**
     Neither dispatched nor cancelled: since `ba1f7ba` both `ci-notify` lookups
-    require **exactly one** match, so when two open PRs share a head commit
-    NEITHER is commented and both sessions wait. (Before that the SHA lookup took
+    require **exactly one** match, so two open PRs sharing a head commit make the
+    SHA step ambiguous. That alone is not silence: the branch-plus-owner fallback
+    still runs, and where those PRs sit on *distinct* branches it uniquely
+    resolves the one matching `workflow_run.head_branch` and comments it. Silence
+    needs **both** steps ambiguous or empty — same head AND same branch. (Before
+    `ba1f7ba` the SHA lookup took
     the first match and one PR got a wrong-PR green — do not go looking for that
     comment; the shipped notifier no longer emits it.) A `repository_dispatch`
     run is a live case of this rather than a separate one — it carries the
@@ -143,15 +147,22 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     `get` returns reactions as counts only (`{"total_count":1,"+1":1}`) — no
     author, no timestamp.
 
-    **But the summary is not useless: it is decisive in the NEGATIVE.** The counts
-    are per emoji, so `"+1": 0` is positive evidence that **no clean verdict has
-    been delivered at all** — which is a different situation from "a 👍 I cannot
-    attribute," and calls for the opposite action. Absence is attributable even
-    though presence is not; nobody needs to own a reaction that does not exist.
-    Read it before escalating: on `"+1": 0` the answer is *keep waiting*, and
-    spending another `@codex review` from the shared weekly allowance buys
-    nothing. Measured on this repo 2026-08-23 — #293 `{"eyes":1,"+1":0}` and #294
-    `{"total_count":0}`, both genuinely pending, neither a clean round.
+    **The summary is not useless, but it is decisive only in the NEGATIVE and only
+    in second place.** The counts are per emoji, so `"+1": 0` means no 👍 exists —
+    which distinguishes *not yet run* from *ran clean and I cannot attribute it*,
+    and those call for opposite actions.
+
+    ⚠️ **Check for a SHA-bearing response at the current head FIRST.** A clean
+    verdict delivered as a comment may leave no reaction at all, so `"+1": 0` is
+    equally consistent with *already cleared* — reading it as "keep waiting"
+    without that check can strand a PR whose gate is open. Only once no review
+    and no comment names HEAD does `"+1": 0` mean genuinely pending. (This
+    paragraph originally stated the inference unconditionally — written before
+    the comment form was observed, and not revisited when it was.)
+
+    Measured on this repo 2026-08-23 — #293 `{"eyes":1,"+1":0}` and #294
+    `{"total_count":0}`, both with no response at their heads, both genuinely
+    pending.
 
     A 👀 is also not a 👍. Codex reacts 👀 to acknowledge a request it has
     started; that is *received*, not *clean*. Two reactions, two meanings, and
@@ -209,10 +220,20 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     is.** ⚠️ **Check the COMMENTS first.** A clean verdict often arrives as a
     plain comment naming the reviewed commit, which clears the gate normally and
     clears `codex-flagged` automatically — that is the ordinary path and it is
-    what merged #293. This ladder applies **only when the review list AND the
-    comment list are both empty** and a 👍 is the only signal present. Entering it
+    what merged #293. This ladder applies **only when no SHA-bearing Codex response
+    names the CURRENT head** — no review whose reviewed commit matches HEAD, and
+    no Codex comment naming it — with a 👍 the only signal present. Entering it
     while a SHA-bearing all-clear is sitting in the comments means attesting your
     way past a gate that had already opened.
+
+    ⚠️ **Scope that to the current head, not to the lists.** "Both lists empty"
+    was the previous wording here and it is wrong: after any flagged round the
+    review list is permanently non-empty, and the comment list holds your own
+    `@codex review` request — so a later reaction-only clean rerun could never
+    satisfy it, and the hatch was unreachable in exactly the case it exists for.
+    That is the *third* time this one rule has been written as a condition
+    nothing can meet; the tell each time was a test phrased over a whole history
+    rather than over the current head.
 
     In that genuinely reaction-only case the problem is real: no SHA-bearing
     response will arrive, and each retry spends the shared weekly allowance to

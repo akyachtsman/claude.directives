@@ -49,10 +49,9 @@ Corollaries worth memorizing:
   as ordinary disposition work, not as undetectable. The genuinely silent class
   is the paths Phase 1.5's loop does not walk, `.github/scripts/ui-tests/**`
   above all: nothing diffs them, so drift there surfaces only when a person
-  looks. Where such drift is a coverage gap the suite cannot report, the repair
-  is a targeted check upstream — see `/refresh-repo` Phase 1.5's viewport-class
-  check, which exists because `claude.prop`'s Playwright config had lost its
-  laptop and tablet profiles and green CI said nothing.
+  looks. `claude.prop`'s Playwright config had lost its laptop and tablet
+  profiles and green CI said nothing — a viewport never instantiated produces no
+  failing test. Read that file yourself during a refresh; no tooling checks it.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).

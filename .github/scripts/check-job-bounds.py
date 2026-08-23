@@ -145,30 +145,40 @@ GITHUB_DEFAULT = 360
 # exact state #290 raised three of them out of — and this guard passed it.
 BROWSER_FLOOR = 30
 UI_SUITE_FLOOR = 60
-BROWSER_MARKERS = ("playwright install",)
-UI_SUITE_MARKERS = ("ui-suite",)
+
+# Each marker is matched against the ONE field it can actually appear in, never
+# against `run` and `uses` concatenated. Concatenating made a docs job running
+# `rg ui-suite` look like a job that CALLS the composite, and the exported guard
+# then rejected its perfectly reasonable 5-minute bound. Mentioning a thing is
+# not doing it — the fourth instance in this PR of treating a name-shape as the
+# fact, and the reason each marker below names its field.
+BROWSER_MARKERS = ("playwright install",)     # a shell command -> `run` only
+UI_SUITE_ACTION = "/.github/actions/ui-suite"  # an action reference -> `uses` only
 
 
-def _job_matches(job, markers):
+def _steps(job):
     for step in job.get("steps") or []:
-        if not isinstance(step, dict):
-            continue
-        text = str(step.get("run", "")) + " " + str(step.get("uses", ""))
-        if any(m in text for m in markers):
+        if isinstance(step, dict):
+            yield step
+
+
+def is_ui_suite_job(job):
+    """True when a step USES the composite, by action path — not when one names it."""
+    for step in _steps(job):
+        uses = str(step.get("uses", "")).strip()
+        # Tolerate ./ and / prefixes and a trailing @ref, but require the path to
+        # BE the action, not merely contain the word.
+        path = uses.split("@", 1)[0].rstrip("/")
+        if path.endswith(UI_SUITE_ACTION) or path == UI_SUITE_ACTION.lstrip("/"):
             return True
     return False
 
 
-def is_ui_suite_job(job):
-    return _job_matches(job, UI_SUITE_MARKERS)
-
-
 def is_browser_job(job):
-    for step in job.get("steps") or []:
-        if not isinstance(step, dict):
-            continue
-        text = str(step.get("run", "")) + " " + str(step.get("uses", ""))
-        if any(marker in text for marker in BROWSER_MARKERS):
+    """True when a step RUNS the install — `run` only; a `uses:` cannot install."""
+    for step in _steps(job):
+        run = str(step.get("run", ""))
+        if any(marker in run for marker in BROWSER_MARKERS):
             return True
     return False
 
@@ -179,10 +189,19 @@ skipped = []
 
 for scan_dir, marker in SCAN_DIRS:
     directory = REPO_ROOT / scan_dir
+    # The manifest decides whether this directory is OURS, and it decides that
+    # BEFORE existence is consulted. Checking the marker only when the directory
+    # was missing left the mirror-image hole: a downstream repo with its own
+    # templates/workflows — Argo manifests, anything — had those files parsed as
+    # GitHub Actions workflows and red-built on "has no jobs mapping". Existence
+    # is a name-shape exactly like the name was.
+    if marker is not None and not _manifest_declares(REPO_ROOT, marker, scan_dir):
+        skipped.append(scan_dir)
+        continue
     if not directory.is_dir():
         if marker is None:
             errors.append(f"{scan_dir}/ does not exist — wrong root? Scanned from {REPO_ROOT}.")
-        elif _manifest_declares(REPO_ROOT, marker, scan_dir):
+        else:
             errors.append(
                 f"{scan_dir}/ is missing, but {marker} still declares paths under it — so this\n"
                 f"      is the repo that SHIPS those templates, and the directory this guard covers has\n"
@@ -190,8 +209,6 @@ for scan_dir, marker in SCAN_DIRS:
                 f"      #238's defect lived ONLY in them while the live workflows were fine. Restore\n"
                 f"      the path or update SCAN_DIRS deliberately — do not let it drop out quietly."
             )
-        else:
-            skipped.append(scan_dir)
         continue
     for path in sorted(directory.glob("*.yml")) + sorted(directory.glob("*.yaml")):
         rel = path.relative_to(REPO_ROOT)

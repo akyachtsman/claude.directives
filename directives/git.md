@@ -31,7 +31,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   (`global.md` → *Async Operations*, item 2). This is not a licence to ignore wakes — `ci-notify` usually does
   comment. It is a refusal to *depend* on one where the outcome may produce none.
 
-  Two instances, and the second is not specific to dispatched runs at all:
+  Instances found so far — treat this as evidence that the class is broad, **not
+  as a list to check against.** Three rounds of review added one each; a fourth
+  is not knowable in advance, which is why the rule is the question above and not
+  this list:
   - **a dispatched run on a PR branch** — seven ways below;
   - **any run that is CANCELLED**, ordinary `pull_request` CI included.
     `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
@@ -45,6 +48,14 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     were each wrong in a different direction, which is why this text no longer
     tries. What matters for THIS rule is unchanged either way: **none of it
     reaches the session waiting on the PR.** Arm the check-in.
+  - **an ordinary successful run whose PR cannot be resolved unambiguously.**
+    Neither dispatched nor cancelled: `ci-notify`'s exact-SHA lookup takes the
+    FIRST match, so when two open PRs share a head commit one is commented and
+    the other gets nothing. A `repository_dispatch` run is a live case of this
+    rather than a separate one — it carries the DEFAULT-BRANCH SHA, and if the
+    default branch happens to be the head of an open PR (a `main` → `release`
+    promotion, say) that unrelated PR is commented while the session that
+    triggered the dispatch waits.
 
   That refusal is earned, not cautious. Seven ways the dispatched-run wake fails
   to arrive, each verified in the workflow's own source:
@@ -54,9 +65,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
      the PR that installs it (its header says so);
   3. the list is *read* from the default branch, so a PR that renames a watched
      workflow and updates the watcher together still fires the OLD name;
-  4. `repository_dispatch` runs carry the **default-branch SHA**, match no open
-     PR, and exit silent — a documented limitation
-     (`docs/standards/automations.md` → *Known limitation*);
+  4. `repository_dispatch` runs carry the **default-branch SHA**. Usually that
+     matches no open PR and the run exits silent — a documented limitation
+     (`docs/standards/automations.md` → *Known limitation*). When the default
+     branch IS an open PR's head, it is worse than silent: that unrelated PR is
+     commented and the waiting session still gets nothing;
   5. both PR lookups are `gh pr list` without `--limit`, which returns **30**.
      This is narrower than "a repo with >30 open PRs": the SHA lookup is
      unfiltered, but the branch fallback re-queries server-side with

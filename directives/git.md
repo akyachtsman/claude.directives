@@ -128,7 +128,27 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     — compare it to HEAD.
   - **A bare 👍 never clears the gate FROM THE EMBEDDED SUMMARY.** `issue_read` →
     `get` returns reactions as counts only (`{"total_count":1,"+1":1}`) — no
-    author, no timestamp. Read that way, a 👍 left by an earlier clean round
+    author, no timestamp.
+
+    **But the summary is not useless: it is decisive in the NEGATIVE.** The counts
+    are per emoji, so `"+1": 0` is positive evidence that **no clean verdict has
+    been delivered at all** — which is a different situation from "a 👍 I cannot
+    attribute," and calls for the opposite action. Absence is attributable even
+    though presence is not; nobody needs to own a reaction that does not exist.
+    Read it before escalating: on `"+1": 0` the answer is *keep waiting*, and
+    spending another `@codex review` from the shared weekly allowance buys
+    nothing. Measured on this repo 2026-08-23 — #293 `{"eyes":1,"+1":0}` and #294
+    `{"total_count":0}`, both genuinely pending, neither a clean round.
+
+    A 👀 is also not a 👍. Codex reacts 👀 to acknowledge a request it has
+    started; that is *received*, not *clean*. Two reactions, two meanings, and
+    only the per-emoji counts tell them apart — a `total_count` of 1 says
+    nothing.
+
+    ⚠️ Read reactions with `issue_read` → **`get`**, passing the PR number.
+    `pull_request_read` → `get` returns no `reactions` field, and `issue_read` →
+    `get_labels` fails outright on a PR number (*"Could not resolve to an
+    Issue"*) while `get` accepts the same number — verified 2026-08-23. Read that way, a 👍 left by an earlier clean round
     survives every later push and is indistinguishable from a fresh one, and a
     human's is indistinguishable from Codex's. "Accept it when the review request
     postdates the push" does not work there: there is nothing to correlate with

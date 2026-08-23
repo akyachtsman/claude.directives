@@ -76,9 +76,9 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      would otherwise carry an unverified one.
    - The label is **asymmetric**: its absence proves nothing, but a `codex-flagged` label
      that is still present IS a blocker (`git.md` → *PR Lifecycle*). `codex-monitor`
-     clears it itself on a Codex all-clear **comment** naming the current head, which is
-     the ordinary path — but never on a 👍, nor on an inline review-thread reply, since
-     neither fires a trigger it watches. So a label still
+     clears it itself on a Codex all-clear **comment** naming the current head — the only
+     form it can act on — but never on a 👍, nor on an inline review-thread reply, since
+     neither fires a trigger it watches, and which form arrives is not predictable. So a label still
      present means concerns not yet re-reviewed, a clean round delivered in a form the
      monitor cannot see, an all-clear that failed the SHA match,
      or a monitor run that has not landed yet — never treat it as leftover noise. While

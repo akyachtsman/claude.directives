@@ -47,8 +47,8 @@ anyway.
 2. Address each suggestion or explicitly note why it's declined
 3. Request a fresh Codex pass (`@codex review`). The monitor clears the label
    itself only when the all-clear arrives as a **comment** naming the current
-   head — which does happen, and is the ordinary happy path. ⚠️ **But a clean rerun
-   can instead arrive as a bare 👍 reaction**, which fires neither monitor trigger,
+   head — which does happen, and clears the label with no action from you.
+   ⚠️ **But a clean rerun can equally arrive as a bare 👍 reaction**, which fires neither monitor trigger,
    leaving the label with nothing to remove it. Both forms were observed in
    `claude.directives` on 2026-08-23, so do not assume either: check the PR's
    comments first, and if the clear is reaction-only remove the label **by hand

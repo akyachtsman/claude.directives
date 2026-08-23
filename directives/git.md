@@ -131,10 +131,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging. The `codex-monitor`
   workflow adds the label on a flagged round and clears it itself on a Codex
-  all-clear **comment** that names the current head SHA — which is the ordinary
-  path and is what cleared #293. A clean rerun can instead be a 👍 reaction, or an
-  inline review-thread reply; the monitor sees neither, and only then is manual
-  removal with a rationale expected. A label still present means concerns not yet
+  all-clear **comment** that names the current head SHA — the only form it can
+  act on, and the form that cleared #293. A clean rerun can equally be a 👍
+  reaction or an inline review-thread reply; the monitor sees neither, and then
+  manual removal with a rationale is required. Which form arrives is not
+  predictable: check before assuming either. A label still present means concerns not yet
   re-reviewed, a clean round delivered in a form the monitor cannot see, or an
   all-clear that failed the SHA match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
@@ -220,8 +221,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **The clean-round escape hatch — for when the reaction really is all there
     is.** ⚠️ **Check the COMMENTS first.** A clean verdict often arrives as a
     plain comment naming the reviewed commit, which clears the gate normally and
-    clears `codex-flagged` automatically — that is the ordinary path and it is
-    what merged #293. This ladder applies **only when no SHA-bearing Codex response
+    clears `codex-flagged` automatically — that is the form that merged #293.
+    This ladder applies **only when no SHA-bearing Codex response
     names the CURRENT head** — no review whose reviewed commit matches HEAD, and
     no Codex comment naming it. Earlier rounds' reviews and comments are
     irrelevant — they are history, and history is what made the previous wording
@@ -266,8 +267,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 
     **Both forms occur, and which one you get is not predictable from here.** So:
     an empty REVIEW list means nothing on its own — check the comments before
-    concluding anything, because the ordinary happy path is a SHA-bearing comment
-    that clears the gate normally. Only when **nothing from Codex names the
+    concluding anything, because a SHA-bearing comment clears the gate normally
+    and is one of the two forms a clean verdict takes. Only when **nothing from Codex names the
     current head** — not "when the comment list is empty", which after one round
     it never is — does the reaction become the discriminator, readable via
     `issue_read` → `get`

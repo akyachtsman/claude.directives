@@ -22,24 +22,35 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   PR; do not ban it in both places at once, or a non-PR gate can sit red
   indefinitely with nothing able to say so.
 
-  A dispatched run on an open PR's branch is covered **only when both hold**, and
-  the check is cheap enough that there is no excuse for assuming either:
-  1. the run's workflow is **named in `ci-notify.yml`'s `workflows:` list** — it
-     watches three by name, and a run outside that list produces no comment at
-     all; and
-  2. `ci-notify.yml` is already live **on the default branch**. `workflow_run`
-     triggers are read from the default branch, so the workflow can never wake
-     the PR that installs it (the file says so in its own header).
+  **A dispatched run on a PR branch is the exception, and the rule for it is: arm
+  the check-in, then drop it the moment the comment arrives.** `ci-notify` often
+  does comment — it falls back to matching by branch, and names dispatched runs
+  as a case that fallback exists for — so this is not a licence to ignore the
+  wake. It is a refusal to *depend* on one.
 
-  When both hold, do not arm a check-in — `ci-notify` falls back to matching by
-  branch when the run's SHA is not a PR head, and names `workflow_dispatch` as
-  one of the two cases that fallback exists for. Arming one anyway is the
-  redundant PR check-in this rule bans one sentence earlier.
+  That refusal is earned, not cautious. Seven ways the wake fails to arrive, each
+  verified in the workflow's own source:
+  1. the run's workflow is not in `ci-notify.yml`'s `workflows:` list — it watches
+     three **by name**;
+  2. `ci-notify.yml` is not yet live on the **default branch**, so it cannot wake
+     the PR that installs it (its header says so);
+  3. the list is *read* from the default branch, so a PR that renames a watched
+     workflow and updates the watcher together still fires the OLD name;
+  4. `repository_dispatch` runs carry the **default-branch SHA**, match no open
+     PR, and exit silent — a documented limitation
+     (`docs/standards/automations.md` → *Known limitation*);
+  5. the PR lookup is `gh pr list` without `--limit`, which returns **30**, so a
+     repo with more open PRs can omit the target;
+  6. the branch fallback deliberately stays silent when two same-owner PRs share
+     a branch, because commenting green on the wrong PR is worse;
+  7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
+     nothing — and a cancelled run is not a red one, so nothing else chases it.
 
-  When **either** fails, no wake can occur and a check-in is the only thing that
-  can observe the outcome — arm one. Getting this backwards is the worse error of
-  the two: a redundant check-in costs a wasted wake, while a forbidden one costs
-  an agent waiting indefinitely for a signal that cannot arrive.
+  Do not attempt to enumerate your way to a "covered" test. That list grew from
+  one item to seven under review, and the eighth is not knowable in advance.
+  Compare the costs instead: a check-in armed unnecessarily costs **one wasted
+  wake**; a check-in withheld on a false promise of coverage costs an agent
+  **waiting forever** for a signal that cannot arrive. Those are not close.
 
   Read the green it does produce with the caveat the workflow itself attaches: a
   branch match can name a **superseded** commit, so verify the SHA is still head

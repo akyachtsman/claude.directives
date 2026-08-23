@@ -441,7 +441,12 @@ naming what remains open, or "nothing open" — never absent.
      webhooks that resume the session — and with `ci-notify.yml` installed
      (standard scaffold), CI SUCCESS arrives too, as a PR comment. A PR-attached
      wait therefore needs NO scheduler: end the turn saying you'll report back,
-     and act on the event.
+     and act on the event. **Exception, and it is not rare:** a wake only covers
+     what something actually emits. A dispatched run on a PR branch has seven
+     verified ways to emit nothing (`git.md` → *PR Lifecycle*), and a cancelled
+     run emits nothing anywhere, since `ci-notify` fires only on success. Where
+     nothing will wake you, a check-in is the only observer — arming one there is
+     not the polling `git.md` bans.
   2. **Self-pace with `send_later`** (pre-approved per *Scheduling Tools Never
      Prompt*; `ScheduleWakeup` where a session has it instead — verify per
      `/env-chk`, never assume either). Schedule a check-in sized to the

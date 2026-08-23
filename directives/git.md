@@ -258,6 +258,12 @@ results):
 - **Never poll** for CI, deploy, or PR status — webhook wakes + `ci-notify`
   (`global.md` → *Async Operations*). A watching session is woken by success; it
   does not ask for it.
+  - **Polling is asking for something that would have arrived anyway.** A
+    check-in armed for an outcome with NO wake path is not polling, and this ban
+    does not reach it — see *PR Lifecycle* on dispatched PR-branch runs, where
+    seven verified failure modes mean the comment may never come. The test is not
+    "is this a PR?" but "will anything wake me if I do nothing?" If the honest
+    answer is no, arm the check-in and drop it the moment a wake arrives.
 - **Reads:** request small pages (`per_page` 5–10, minimal output); reuse
   already-fetched payloads (jq the saved file) instead of re-fetching; when
   throttled, route reads through WebFetch (server-side — does not draw on the

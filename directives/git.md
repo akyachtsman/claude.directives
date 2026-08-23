@@ -78,15 +78,23 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     ready-for-review and `@codex review`, not on a push. Un-drafting leaves no
     comment to carry a 👀, so silence is indistinguishable from a missed trigger.
   - **Whether ready-for-review fires is PER-REPO — learn yours, don't assume.**
-    Measured 2026-08-22, same account, same day: `claude.directives` 5 of 7
-    un-drafts drew a review in ~3–4 minutes; `claude.insurance` 0 of 4, while an
-    explicit `@codex review` answered within ~2.5 minutes every time. Default to
-    waiting ~10 minutes, then request explicitly, **once only**. But after **two
-    consecutive un-drafts draw nothing in a repo, stop waiting there** and
-    request explicitly as soon as CI is green. Do not generalise either way: in a
-    repo where the trigger works, a reflex explicit request is a duplicate, and
-    reviews are metered per request from a pool that is weekly and
-    account-wide — the waste lands on every other repo.
+    Measured 2026-08-22/23, same account: `claude.directives` 5 of 7 un-drafts
+    drew a review in ~3–4 minutes; `claude.insurance` 0 of 4, while an explicit
+    `@codex review` answered within ~2.5 minutes every time. Default to waiting
+    ~10 minutes, then request explicitly, **once only**. After **two consecutive
+    un-drafts draw nothing in a repo, stop waiting there** and request as soon as
+    CI is green.
+  - **Re-test that judgement, or it never unsticks.** The trigger is
+    intermittent, not binary — two misses in a row happen in a repo where it
+    mostly works, and once you stop waiting you can no longer observe it
+    recovering, so a transient fault or a fixed setting would go on costing a
+    duplicate on every PR. So while in the no-wait state, **take the full wait
+    again every ~5th PR in that repo**, and immediately after any change to the
+    account's Codex settings. One firing returns the repo to the default; two
+    consecutive misses re-enter no-wait.
+  - Do not generalise either way: where the trigger works, a reflex explicit
+    request is a duplicate, and reviews are metered per request from a pool that
+    is weekly and account-wide — the waste lands on every other repo.
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or

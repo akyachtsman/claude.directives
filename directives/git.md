@@ -222,9 +222,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     clears `codex-flagged` automatically — that is the ordinary path and it is
     what merged #293. This ladder applies **only when no SHA-bearing Codex response
     names the CURRENT head** — no review whose reviewed commit matches HEAD, and
-    no Codex comment naming it — with a 👍 the only signal present. Entering it
-    while a SHA-bearing all-clear is sitting in the comments means attesting your
-    way past a gate that had already opened.
+    no Codex comment naming it. Earlier rounds' reviews and comments are
+    irrelevant — they are history, and history is what made the previous wording
+    unsatisfiable. Entering the ladder while a SHA-bearing all-clear names the
+    current head means attesting your way past a gate that had already opened.
 
     ⚠️ **Scope that to the current head, not to the lists.** "Both lists empty"
     was the previous wording here and it is wrong: after any flagged round the
@@ -266,8 +267,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     **Both forms occur, and which one you get is not predictable from here.** So:
     an empty REVIEW list means nothing on its own — check the comments before
     concluding anything, because the ordinary happy path is a SHA-bearing comment
-    that clears the gate normally. Only when comments are empty too does the
-    reaction become the discriminator, readable via `issue_read` → `get`
+    that clears the gate normally. Only when **nothing from Codex names the
+    current head** — not "when the comment list is empty", which after one round
+    it never is — does the reaction become the discriminator, readable via
+    `issue_read` → `get`
     (**`pull_request_read` → `get` returns no `reactions` field at all**, verified
     2026-08-23), and only then does the ladder below apply.
 

@@ -446,11 +446,36 @@ def _statically_disabled(step):
     here is a closed set of spellings, not free-form shell.
     """
     cond = step.get("if", True)
+    if cond is True:
+        return False
     if cond is False:
         return True
+    # GitHub CASTS a literal condition to boolean, so `false` is not the only
+    # spelling that skips a step: its documented table makes every zero number
+    # and the empty string falsy too. Round 15 arrived asking for `if: 0` alone;
+    # adding just that would have been the `070` -> `080` mistake a third time,
+    # so the whole cast table is handled here at once.
+    if isinstance(cond, (int, float)):
+        return cond == 0
     if not isinstance(cond, str):
+        # `if:` with no value parses as None, indistinguishable at this layer
+        # from an explicit `if: null`. Excluding a step is the UNSAFE direction
+        # (it lets a 40-minute ui-suite caller through), so an ambiguous
+        # condition counts.
         return False
-    return re.fullmatch(r"(?:false|\$\{\{\s*false\s*\}\})", cond.strip(), re.I) is not None
+    text = cond.strip()
+    wrapped = re.fullmatch(r"\$\{\{(.*)\}\}", text, re.S)
+    inner = wrapped.group(1).strip() if wrapped else text
+    if wrapped and not inner:
+        return False                      # `${{ }}` is malformed; do not guess
+    if not inner or inner in ("''", '""'):
+        return True                       # empty string literal -> false
+    if inner.lower() == "false":
+        return True
+    try:
+        return float(inner) == 0.0        # 0, -0, 00, 0.0, 0e0, ${{ 0 }}
+    except ValueError:
+        return False                      # an expression: unevaluatable, counts
 
 
 def _steps(node):

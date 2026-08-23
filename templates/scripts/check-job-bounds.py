@@ -18,33 +18,46 @@ THREE RULES, because presence alone proves nothing:
        - a job running `playwright install*` DIRECTLY pays the install: >= 30
        - a job using the ui-suite composite pays install + EVERY project in
          playwright.config.js + retries + upload, in one sum it cannot
-         subdivide: >= 60 (a 21m25s cold install plus a 16.6min complete warm
-         job measured downstream = ~38min healthy cold; 40 cancels it, and a
-         cancelled run is not a red one — it reads as inconclusive)
-     The cold-cache install alone measured
-     21m25s, and a 20-minute bound killed run 32277932813 at 20m21s — a bound
-     below the work it bounds does not protect anything; it fails on a
-     schedule, and because the cache save runs at job END, each kill also
-     leaves the next run cold. Rule 3 exists because rule 1 passed the exact
-     defect #238 fixed: every broken template job DECLARED a bound; the value
-     was the fault.
+         subdivide: >= 60
+     Rule 3 exists because rule 1 passed the exact defect #238 fixed: every
+     broken template job DECLARED a bound; the value was the fault.
 
-Scans .github/workflows AND, where it exists, templates/workflows. The
-templates are what every downstream project inherits, and #238's defect lived
-only in the templates while this repo's own copy was fine — a scan of the live
-workflows alone reports health precisely when the shipped ones are broken.
+────────────────────────────────────────────────────────────────────────────
+THIS FILE IS EXPORTED (templates/scripts/check-job-bounds.py, byte-paired with
+it) and runs in downstream repos that this repo has never seen. That inverts the
+usual risk, and the inversion is the single most important thing to understand
+before editing:
 
-This file is EXPORTED (templates/scripts/check-job-bounds.py, byte-paired with
-this one) and runs downstream too, where templates/workflows does not exist. So
-the scan list decides absence from a sibling marker rather than forking the
-file or trusting a printed skip: see SCAN_DIRS.
+    A FALSE POSITIVE COSTS MORE THAN A FALSE NEGATIVE.
 
-Composite actions (templates/actions/*/action.yml) are not scanned: composite
-steps cannot carry timeout-minutes at all; their ceiling is the calling job's,
-which is exactly what rules 1-3 police.
+A missed defect leaves one bound unchecked, with rules 1-2 still covering it and
+the number still in the comment. A guard that red-builds a repo doing nothing
+wrong gets DELETED — and takes the real rules with it.
+
+Seven rounds of review on this file produced one finding of the first kind and
+eleven of the second, every one from the same mistake: testing a NAME-SHAPE and
+treating the result as the FACT. `templates/` present. `EXPORTS.json` present. A
+path prefix matching a sibling directory. A docs job that merely MENTIONS
+ui-suite. A remote action whose path happens to END in the same segments.
+
+So the classification below is deliberately CONSERVATIVE and EXACT. Where a job
+cannot be identified with certainty, rule 3 is not applied. Do not "improve" any
+of these into a looser match.
+────────────────────────────────────────────────────────────────────────────
+
+Scans .github/workflows always. Scans templates/workflows ONLY with
+--include-templates, which this repo's own qa.yml passes and no downstream
+workflow does. That flag replaced four successive attempts to DETECT which repo
+was running — each was forged by a legitimate downstream layout. An explicit
+argument cannot be: removing it is a visible edit to a workflow file in a PR
+diff, which is exactly the review surface a silent heuristic did not have.
+
+Composite actions are not scanned as workflows: composite steps cannot carry
+timeout-minutes at all, and their ceiling is the calling job's. They ARE read,
+transitively, to see whether a caller reaches ui-suite through a local wrapper.
 """
 
-import json
+import re
 import sys
 from pathlib import Path
 
@@ -57,169 +70,132 @@ except ModuleNotFoundError:
     )
     raise SystemExit(1)
 
-# Optional root override so the check can be exercised against synthetic trees;
-# defaults to the repo this file lives in.
-REPO_ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
-# (directory, marker). A missing directory is AMBIGUOUS on its own, and that is
-# the whole problem this pairing solves. `templates/workflows` SHOULD be absent
-# downstream; here, its absence means the guard has stopped covering the tree
-# where #238's defect actually lived. Same input, opposite significance.
-#
-# An earlier version of this file resolved that by skipping and PRINTING the skip
-# on the pass line. claude.trading rejected the mitigation using the argument
-# this repo had just made to them: a printed line on a green run is neutral
-# informational text that reads identically whether the situation is fine or
-# gutted — the same shape as Playwright announcing two phone projects as though
-# that were a matrix. A printed skip is not a scanned directory, and relying on a
-# human to read green output adversarially is not enforcement.
-#
-# So absence is no longer interpreted. It is DECIDED by asking whether this repo
-# CLAIMS to export the directory — read out of the export manifest, not guessed
-# from a filename.
-#
-# Two earlier attempts were both false-positive machines, and the pattern in how
-# they failed is the point:
-#
-#   `templates/` present      -> a downstream project may have a top-level
-#                                templates/ for email or app templates. Red build
-#                                in a repo doing nothing wrong.
-#   `EXPORTS.json` present    -> a downstream project may have its own root
-#                                EXPORTS.json for unrelated reasons. Same failure,
-#                                rarer, therefore worse: it survives longer.
-#
-# Both treated a NAME as proof of a FACT. The fact wanted here is narrow and
-# checkable: does the manifest declare a path under this scan directory? So read
-# it. A repo that exports templates/workflows says so in EXPORTS.json; a repo that
-# merely happens to have that filename does not.
-#
-# This matters more than tidiness. A guard that red-builds healthy repos gets
-# deleted, and takes the real rule with it — so a false positive here costs more
-# than the false negative it was introduced to fix.
-#
-# One code path, byte-identical upstream and downstream, no fork. marker=None
-# means required unconditionally.
-SCAN_DIRS = [(".github/workflows", None), ("templates/workflows", "EXPORTS.json")]
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+flags = {a for a in sys.argv[1:] if a.startswith("--")}
+INCLUDE_TEMPLATES = "--include-templates" in flags
 
+REPO_ROOT = Path(args[0]).resolve() if args else Path(__file__).resolve().parents[2]
 
-def _manifest_declares(root, manifest_name, prefix):
-    """True only if manifest_name parses AND declares some path under prefix.
-
-    Presence of the file proves nothing — that was the defect this replaces. An
-    unparseable or unrelated manifest returns False, so a downstream repo that
-    happens to own this filename is left alone. Upstream that same file failing to
-    parse is not silent either: check-exports.js and build-logical-map.js --check
-    both read it and both run in this workflow's static-checks job.
-    """
-    manifest = root / manifest_name
-    if not manifest.is_file():
-        return False
-    try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-
-    # Match the DIRECTORY, not the string. A bare startswith() also matches
-    # "templates/workflows-archive/old.yml" and "templates/workflows.bak" — a
-    # third instance of this PR's recurring bug, treating a name-shape as the
-    # fact. Require the path to BE the directory or lie under it.
-    def declares(path):
-        return path == prefix or path.startswith(prefix + "/")
-
-    def walk(node):
-        if isinstance(node, str):
-            return declares(node)
-        if isinstance(node, dict):
-            return any(walk(v) for v in node.values())
-        if isinstance(node, list):
-            return any(walk(v) for v in node)
-        return False
-
-    return walk(data)
+SCAN_DIRS = [".github/workflows"]
+if INCLUDE_TEMPLATES:
+    SCAN_DIRS.append("templates/workflows")
 
 GITHUB_DEFAULT = 360
-# TWO floors, because the two shapes cost different amounts and a single floor
-# cannot police both. A job running `playwright install` directly pays the
-# install; a job using the ui-suite composite pays install + EVERY project in
-# playwright.config.js + retries + artifact upload, in one sum the composite
-# cannot subdivide. Holding both at 30 let a ui-suite caller sit at 40 — the
-# exact state #290 raised three of them out of — and this guard passed it.
 BROWSER_FLOOR = 30
 UI_SUITE_FLOOR = 60
 
-# Each marker is matched against the ONE field it can actually appear in, never
-# against `run` and `uses` concatenated. Concatenating made a docs job running
-# `rg ui-suite` look like a job that CALLS the composite, and the exported guard
-# then rejected its perfectly reasonable 5-minute bound. Mentioning a thing is
-# not doing it — the fourth instance in this PR of treating a name-shape as the
-# fact, and the reason each marker below names its field.
-BROWSER_MARKERS = ("playwright install",)     # a shell command -> `run` only
-UI_SUITE_ACTION = "/.github/actions/ui-suite"  # an action reference -> `uses` only
+# The shipped composite, as a LOCAL reference. `./` is load-bearing: a remote
+# `acme/tools/.github/actions/ui-suite@v1` is a different action that merely ends
+# in the same segments, and applying a 60-minute floor to it red-builds a repo
+# using an unrelated fast action.
+UI_SUITE_LOCAL = "./.github/actions/ui-suite"
+
+# An actual invocation at a COMMAND POSITION — not the phrase anywhere in a
+# script. `rg 'playwright install' docs/` mentions it; it does not run it, and a
+# five-minute docs job must not be forced to 30.
+BROWSER_RE = re.compile(
+    r"(?:^|[;&|]|\n)\s*"                       # start of a command
+    r"(?:[A-Za-z_][\w-]*=\S*\s+)*"             # optional VAR=value prefixes
+    r"(?:sudo\s+)?"
+    r"(?:npx\s+|yarn\s+|pnpm\s+(?:dlx\s+)?|bunx\s+)?"
+    r"playwright\s+install\b",
+    re.MULTILINE,
+)
 
 
-def _steps(job):
-    for step in job.get("steps") or []:
+def load_jobs(path):
+    """Return {job_id: job_mapping}, preserving YAML 1.1-collapsed key spellings.
+
+    PyYAML speaks YAML 1.1, where the bare keys `on`, `yes`, `no`, `y` and `n`
+    resolve to booleans. Two jobs named `yes` and `on` therefore collapse to a
+    single `True` key and the later silently OVERWRITES the earlier — so an
+    unbounded job disappears from this scan while GitHub still runs it. That is a
+    green guard over a real defect, the one failure mode this file exists to
+    prevent. workflow-ref-guard.py hit the same edge and solved it the same way:
+    compose to NODES, where the original spelling survives.
+
+    Raises yaml.YAMLError so the caller can fail closed on an unreadable file.
+    """
+    root = yaml.compose(path.read_text(encoding="utf-8"))
+    if not isinstance(root, yaml.MappingNode):
+        return None
+    for key_node, value_node in root.value:
+        if isinstance(key_node, yaml.ScalarNode) and key_node.value == "jobs":
+            if not isinstance(value_node, yaml.MappingNode):
+                return None
+            jobs = {}
+            for jk, jv in value_node.value:
+                if isinstance(jk, yaml.ScalarNode):
+                    jobs[jk.value] = yaml.serialize(jv)
+            # Re-parse each job body individually: the collision only affects the
+            # jobs mapping's own keys, and per-job bodies are ordinary data.
+            return {k: yaml.safe_load(v) for k, v in jobs.items()}
+    return None
+
+
+def _steps(node):
+    for step in (node or {}).get("steps") or []:
         if isinstance(step, dict):
             yield step
 
 
-def is_ui_suite_job(job):
-    """True when a step USES the composite, by action path — not when one names it."""
-    for step in _steps(job):
+def _uses_ui_suite(node, seen):
+    """True when this job/composite reaches the LOCAL ui-suite composite.
+
+    Transitive on purpose: a wrapper composite that itself uses ui-suite incurs
+    the identical cost, and a direct-reference-only test let a 40-minute caller
+    pass simply by renaming or wrapping the shipped action.
+    """
+    for step in _steps(node):
         uses = str(step.get("uses", "")).strip()
-        # Tolerate ./ and / prefixes and a trailing @ref, but require the path to
-        # BE the action, not merely contain the word.
-        path = uses.split("@", 1)[0].rstrip("/")
-        if path.endswith(UI_SUITE_ACTION) or path == UI_SUITE_ACTION.lstrip("/"):
+        ref = uses.split("@", 1)[0].rstrip("/")
+        if ref == UI_SUITE_LOCAL:
             return True
+        # Follow LOCAL composites only. A remote action's definition is not on
+        # disk, and guessing at its cost is how the suffix match went wrong.
+        if ref.startswith("./") and ref not in seen:
+            seen.add(ref)
+            for name in ("action.yml", "action.yaml"):
+                path = REPO_ROOT / ref[2:] / name
+                if path.is_file():
+                    try:
+                        sub = yaml.safe_load(path.read_text(encoding="utf-8"))
+                    except yaml.YAMLError:
+                        break
+                    runs = (sub or {}).get("runs")
+                    if isinstance(runs, dict) and _uses_ui_suite(runs, seen):
+                        return True
+                    break
     return False
+
+
+def is_ui_suite_job(job):
+    return _uses_ui_suite(job, set())
 
 
 def is_browser_job(job):
-    """True when a step RUNS the install — `run` only; a `uses:` cannot install."""
-    for step in _steps(job):
-        run = str(step.get("run", ""))
-        if any(marker in run for marker in BROWSER_MARKERS):
-            return True
-    return False
+    """True when a step RUNS the install. `uses:` cannot install browsers."""
+    return any(BROWSER_RE.search(str(step.get("run", ""))) for step in _steps(job))
 
 
 errors = []
 checked = 0
-skipped = []
+unevaluatable = []
 
-for scan_dir, marker in SCAN_DIRS:
+for scan_dir in SCAN_DIRS:
     directory = REPO_ROOT / scan_dir
-    # The manifest decides whether this directory is OURS, and it decides that
-    # BEFORE existence is consulted. Checking the marker only when the directory
-    # was missing left the mirror-image hole: a downstream repo with its own
-    # templates/workflows — Argo manifests, anything — had those files parsed as
-    # GitHub Actions workflows and red-built on "has no jobs mapping". Existence
-    # is a name-shape exactly like the name was.
-    if marker is not None and not _manifest_declares(REPO_ROOT, marker, scan_dir):
-        skipped.append(scan_dir)
-        continue
     if not directory.is_dir():
-        if marker is None:
-            errors.append(f"{scan_dir}/ does not exist — wrong root? Scanned from {REPO_ROOT}.")
-        else:
-            errors.append(
-                f"{scan_dir}/ is missing, but {marker} still declares paths under it — so this\n"
-                f"      is the repo that SHIPS those templates, and the directory this guard covers has\n"
-                f"      been deleted or renamed. Every downstream project inherits those templates;\n"
-                f"      #238's defect lived ONLY in them while the live workflows were fine. Restore\n"
-                f"      the path or update SCAN_DIRS deliberately — do not let it drop out quietly."
-            )
+        errors.append(f"{scan_dir}/ does not exist — wrong root? Scanned from {REPO_ROOT}.")
         continue
     for path in sorted(directory.glob("*.yml")) + sorted(directory.glob("*.yaml")):
         rel = path.relative_to(REPO_ROOT)
         try:
-            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+            jobs = load_jobs(path)
         except yaml.YAMLError as exc:
             # FAIL CLOSED: a file this check cannot read is reported, never
             # skipped — a workflow silently treated as empty passes every rule.
             errors.append(f"{rel} is not parseable YAML, so its jobs were never checked: {str(exc).strip()}")
             continue
-        jobs = (doc or {}).get("jobs")
         if not isinstance(jobs, dict):
             errors.append(f"{rel} has no jobs mapping — not a workflow, or malformed.")
             continue
@@ -242,7 +218,18 @@ for scan_dir, marker in SCAN_DIRS:
             # bool FIRST: Python's bool subclasses int, so `timeout-minutes: true`
             # (a YAML boolean) passes an isinstance(int) check while being no
             # minute count at all — green here, broken after installation.
-            if isinstance(bound, bool) or not isinstance(bound, int):
+            if isinstance(bound, bool):
+                errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer minute count.")
+                continue
+            if isinstance(bound, str) and "${{" in bound:
+                # GitHub PERMITS expressions here. Their value is not knowable
+                # without the matrix/inputs/vars context, so the numeric rules
+                # cannot be applied — but the job IS bounded, which is rule 1.
+                # Failing it would red-build a valid workflow, and this file's
+                # header says which way that error runs.
+                unevaluatable.append(f"{rel} → {name}")
+                continue
+            if not isinstance(bound, int):
                 errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer minute count.")
                 continue
             if bound <= 0:
@@ -263,17 +250,15 @@ for scan_dir, marker in SCAN_DIRS:
                 errors.append(
                     f"{rel} → job '{name}' runs the ui-suite composite under timeout-minutes: {bound}.\n"
                     f"      That composite is install + EVERY project + retries + upload in ONE sum. A\n"
-                    f"      cold install measures 21m25s and a complete warm job measured 16.6min\n"
-                    f"      (apfp.claude, c302827, 4 projects) — ~38min healthy cold. A bound of {bound}\n"
-                    f"      cancels a HEALTHY run, and a cancelled run is not a red one: it reads as\n"
-                    f"      inconclusive, so nobody chases it. ui-suite callers need >= {UI_SUITE_FLOOR}."
+                    f"      bound of {bound} cancels a HEALTHY run, and a cancelled run is not a red one:\n"
+                    f"      it reads as inconclusive, so nobody chases it. ui-suite callers need >= {UI_SUITE_FLOOR}."
                 )
             elif bound < BROWSER_FLOOR and is_browser_job(job):
                 errors.append(
                     f"{rel} → job '{name}' installs Playwright browsers under timeout-minutes: {bound}.\n"
-                    f"      The cold-cache install alone measured 21m25s; a bound of {bound} kills every\n"
-                    f"      cold run before a test executes AND skips the cache save that would warm the\n"
-                    f"      next one (#238). Browser jobs need >= {BROWSER_FLOOR}."
+                    f"      A cold-cache install has been measured as high as 21m25s upstream; a bound of\n"
+                    f"      {bound} risks killing a cold run before a test executes AND skipping the cache\n"
+                    f"      save that would warm the next one (#238). Browser jobs need >= {BROWSER_FLOOR}."
                 )
 
 if errors:
@@ -282,10 +267,9 @@ if errors:
         sys.stderr.write("  • " + err + "\n\n")
     raise SystemExit(1)
 
-# Name what was NOT scanned. This is INFORMATIONAL only — it is not what makes
-# the skip safe. The marker check above is; see SCAN_DIRS.
-note = f" (not present, not scanned: {', '.join(skipped)})" if skipped else ""
+scope = ", ".join(SCAN_DIRS)
+note = f" {len(unevaluatable)} expression-bounded job(s) not range-checked." if unevaluatable else ""
 print(
-    f"✅ check-job-bounds: {checked} job(s) bounded, none >= {GITHUB_DEFAULT}, "
+    f"✅ check-job-bounds: {checked} job(s) in {scope} bounded, none >= {GITHUB_DEFAULT}, "
     f"direct browser jobs >= {BROWSER_FLOOR}, ui-suite callers >= {UI_SUITE_FLOOR}.{note}"
 )

@@ -292,13 +292,18 @@ exact defect it was written for: every broken job DECLARED a bound, and the
 value was the fault. Until this guard shipped downstream, the 60 in the qa
 workflows was a number in a comment — three callers had already drifted to 40.
 
-The guard scans `.github/workflows`, and also `templates/workflows` in the repo
-that ships these templates. It tells the two apart by reading `EXPORTS.json` and
-asking whether that manifest actually declares paths under `templates/workflows` —
-not by the filename. So your repo skips the second scan silently and correctly,
-and neither a top-level `templates/` of your own nor an unrelated root
-`EXPORTS.json` can trip it. Same file both sides, nothing to configure, no forked
-copy to keep in sync.
+The guard scans `.github/workflows`. Nothing else, unless you pass
+`--include-templates` — a flag only claude.directives uses, to also cover the
+workflow templates it ships. Run it plain and it will never look at any directory
+of yours. Same file both sides, nothing to configure, no forked copy to keep in
+sync.
+
+It is also deliberately conservative about rule 3: where it cannot identify a job
+with certainty it does **not** apply a floor. A job that merely mentions
+`playwright install` in a grep, a remote action whose path ends in the same
+segments as the shipped composite, or a bound derived from a `${{ }}` expression
+are all left alone. The reasoning is in the file's header — a guard that
+red-builds a healthy repo gets deleted, taking the real rules with it.
 
 Install it **with** the `qa.yml` update, not after: the workflow names the script
 by path, so an updated `qa.yml` without it fails every run at step resolution.

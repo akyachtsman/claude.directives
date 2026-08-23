@@ -85,7 +85,12 @@ jobs:
       # because #238's defect DECLARED a bound on every broken job; the value
       # was the fault, and a presence check reports health on exactly that.
       - name: Check every job carries a usable bound
-        run: python3 .github/scripts/check-job-bounds.py
+        # --include-templates is THIS repo's flag and only this repo's: it adds
+        # templates/workflows to the scan, where #238's defect lived while the
+        # live workflows were fine. It replaced four attempts to DETECT which
+        # repo was running, each forged by a legitimate downstream layout. Do
+        # not remove it — a downstream copy simply omits it.
+        run: python3 .github/scripts/check-job-bounds.py --include-templates
 
       # The logical map is generated from EXPORTS.json, so a committed page that
       # no longer matches the manifest is drift — fail here rather than let the

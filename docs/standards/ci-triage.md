@@ -14,6 +14,16 @@ notified without polling. A watching session is woken by the PR-comment webhook
 (`ci-notify.yml`) on green and natively on failure — never poll (`git.md` →
 *GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
+⚠️ **"Woken on green" is not universal, and the exceptions need a check-in, not
+a poll.** `ci-notify` fires only on `conclusion == 'success'` and only for
+workflows it watches by name, and its PR lookup can resolve to the wrong PR or to
+none. A cancelled run, a dispatched run, and an ordinary success whose PR is
+ambiguous can all end with no wake at all. `git.md` → *PR Lifecycle* carries the
+list and the rule: **arm a check-in for any awaited outcome that can end without
+emitting a wake, and drop it when THAT outcome is terminal.** That is not the
+polling this line bans — polling is asking for something that would have arrived
+anyway.
+
 > This repo's own `ci-failure` issues come from its **directive-validation**
 > checks (link / section / path); a downstream project's come from its build /
 > Playwright suite. The triage steps below are the same either way — see

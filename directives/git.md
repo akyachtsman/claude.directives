@@ -70,11 +70,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
      (`docs/standards/automations.md` → *Known limitation*). When the default
      branch IS an open PR's head, it is worse than silent: that unrelated PR is
      commented and the waiting session still gets nothing;
-  5. both PR lookups are `gh pr list` without `--limit`, which returns **30**.
-     This is narrower than "a repo with >30 open PRs": the SHA lookup is
-     unfiltered, but the branch fallback re-queries server-side with
-     `--head`, so a unique branch match is still found. It bites only when the
-     FILTERED query itself has more than 30 candidates;
+  5. the **SHA** lookup is `gh pr list` without `--limit`, so it sees only the
+     first **30** open PRs. (The branch fallback used to share that default and
+     no longer does: it fetches 100 and stays silent when the page comes back
+     full, since uniqueness cannot be proven from a truncated set.);
   6. **both** PR lookups can resolve to the wrong PR or to none. The branch
      fallback deliberately stays silent when two same-owner PRs share a branch
      (commenting green on the wrong one is worse), and the exact-SHA lookup takes

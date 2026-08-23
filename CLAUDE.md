@@ -261,20 +261,20 @@ local skip is fine for non-map changes.
 `global.md` → *Escalation Rules* apply here unchanged — all four gates, not a
 subset. No repo-specific additions.
 
-## Notifications (owner preference)
-Do not keep PR activity subscriptions. Opening a PR auto-subscribes the session
-harness-side — unsubscribe immediately, every time. Prefer one consolidated
-scheduled check-in to several wakes. Broader than `git.md` → *PR Lifecycle*,
-which only requires unsubscribing before a merge.
+## Notifications (owner ruling, 2026-08-23)
+**Keep the PR subscription until the PR merges.** Opening a PR auto-subscribes the
+session harness-side — leave it. Unsubscribe at merge per `git.md` →
+*PR Lifecycle*, no earlier. This replaces the former preference for immediate
+unsubscription plus one consolidated check-in.
+
+Do not arm a timed check-in as a substitute for a subscription. A timer cannot
+know whether anything changed.
 
 No setting suppresses the `<wake reason=…>` envelopes themselves (verified
-2026-08-21); fewer wakes is the only lever — don't hunt for a config toggle.
+2026-08-21) — don't hunt for a config toggle.
 
-**Precedence over the heartbeat.** This preference wins over any reading of
-`global.md` → *Status Line on Every Stop* that treats the heartbeat's five
-minutes as a cadence to be met. The heartbeat is a line emitted on a wake that
-already happens; here the consolidated check-in IS that wake, and the heartbeat
-rides on it. Never arm an extra wake to keep a heartbeat rhythm.
+**Heartbeat.** `global.md` → *Status Line on Every Stop* rides on a wake that
+already happens. Never arm an extra wake to keep a rhythm.
 
 ## Toolkit changes
 

@@ -77,13 +77,15 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **Request a review after pushing a fix**; Codex responds on open,
     ready-for-review and `@codex review`, not on a push. Un-drafting leaves no
     comment to carry a 👀, so silence is indistinguishable from a missed trigger.
-  - **Whether ready-for-review fires is PER-REPO — learn yours, don't assume.**
-    Measured 2026-08-22/23, same account: in this repo 5 of 7 un-drafts drew a
-    review in ~3–4 minutes; a sibling project repo reported 0 of 4, while an
-    explicit `@codex review` answered within ~2.5 minutes every time. Default to waiting
-    ~10 minutes, then request explicitly, **once only**. After **two consecutive
-    un-drafts draw nothing in a repo, stop waiting there** and request as soon as
-    CI is green.
+  - **Ready-for-review fires SOMETIMES, at a rate that differs by repo — learn
+    yours, don't assume.** Measured 2026-08-22/23, same account: in this repo 5
+    of 7 un-drafts drew a review in ~3–4 minutes; a sibling project repo reported
+    1 of 4, and ~5.7 minutes when it did fire. An explicit `@codex review`
+    answered within ~2.5 minutes in both. Treat these as rates on small samples,
+    not as an on/off setting — nothing here establishes *why* they differ.
+    Default to waiting ~10 minutes, then request explicitly, **once only**. After
+    **two consecutive un-drafts draw nothing in a repo, stop waiting there** and
+    request as soon as CI is green.
   - **Re-test that judgement, or it never unsticks.** The trigger is
     intermittent, not binary — two misses in a row happen in a repo where it
     mostly works, and once you stop waiting you can no longer observe it

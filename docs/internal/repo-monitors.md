@@ -16,8 +16,10 @@ opens or updates a deduplicated `ci-failure` tracking issue. Uses only GITHUB_TO
 **ci-notify.yml** — fires when `QA — Directive Validation` completes **green**.
 Comments on the open PR for that head SHA so a watching web session wakes on
 success via the comment webhook (no scheduling-tool polling, no permission
-prompts). No open PR → exits quietly. The template counterpart, adapted to this
-repo's workflow name.
+prompts). Needs **one** lookup — head SHA, else branch + head-repo owner — to
+resolve exactly one open PR; no PR, or more than one, → exits quietly, so a
+green run does not guarantee a wake and the waiting session still arms a
+check-in. The template counterpart, adapted to this repo's workflow name.
 
 **codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments (the
 an all-clear can travel as a SHA-bearing comment, which the monitor sees and

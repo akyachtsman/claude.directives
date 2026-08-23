@@ -57,7 +57,8 @@ Execute in order:
    - `ci-monitor.yml` — event-driven CI failure tracker
    - `ci-notify.yml` — comments CI success on the open PR so a watching web
      session wakes on green via the comment webhook (no scheduling-tool
-     polling, no permission prompts)
+     polling, no permission prompts). Partial by design: it needs one lookup to
+     resolve exactly one open PR and exits silently otherwise
    - `codex-monitor.yml` — Codex PR review monitor
    - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
      every branch-source `page_build`)

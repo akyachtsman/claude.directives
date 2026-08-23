@@ -160,7 +160,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
 - `ci-notify.yml` — fires when `QA — Directive Validation` completes **green**;
   comments on the open PR for that head SHA so a watching web session wakes on
   success without scheduling-tool polling (the template's counterpart, adapted
-  to this repo's workflow name).
+  to this repo's workflow name). Coverage is partial: it needs **one** lookup —
+  head SHA, else branch + head-repo owner — to resolve exactly one open PR, and
+  exits silently otherwise, so a wait still arms a check-in (`git.md` → *PR
+  Lifecycle*).
 - `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments; adds
   a `codex-flagged` label when Codex raised concerns and clears it on an
   all-clear **comment** naming the current head SHA — observed working at `b64ff09`. ⚠️ A clean rerun can instead

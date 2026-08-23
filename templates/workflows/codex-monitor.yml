@@ -15,9 +15,17 @@ name: Codex Monitor
 # merged on 2026-08-19 needed. And the all-clear does NOT arrive as a review:
 # Codex posts flagged rounds as pull_request_review events but posts clean
 # verdicts ("Didn't find any major issues") as plain ISSUE COMMENTS — observed
-# on #237 and #238, 2026-08-19. A monitor listening only on pull_request_review
-# can hear the complaint but never the all-clear. That is why issue_comment is
-# a trigger here: not scope creep, the only path the all-clear travels.
+# on #237 and #238 (2026-08-19) and again on #293 (2026-08-23), where it cleared
+# the label automatically. A monitor listening only on pull_request_review can
+# hear the complaint but never that all-clear. That is why issue_comment is a
+# trigger here: not scope creep.
+#
+# ⚠️ It is NOT the only path a clean verdict travels, and the other two are
+# invisible to this workflow: a bare 👍 reaction, and an INLINE REVIEW COMMENT
+# (pull_request_review_comment) when Codex replies inside a review thread. Both
+# observed on #294, 2026-08-23. When a clean round arrives either way the label
+# cannot clear itself and must be removed by hand with a rationale — see
+# git.md -> PR Lifecycle. Do not read a stuck label as unaddressed concerns.
 on:
   pull_request_review:
     types: [submitted]

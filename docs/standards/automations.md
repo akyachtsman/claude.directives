@@ -76,7 +76,9 @@ silently.
 
 ### Known limitation — `ci-notify` and `repository_dispatch`
 
-`ci-notify` comments on the open PR whose head SHA matches the run's. A
+`ci-notify` comments on the open PR its lookups resolve the run to — head SHA
+first, then head branch plus head-repo owner — and only when exactly one
+candidate survives. A
 `qa-response.yml` run triggered by `repository_dispatch` carries the default
 branch SHA, which normally matches no open PR, so it exits "No open PR" and
 emits no wake. Watching it in `ci-monitor` (failure tracking) works; the success

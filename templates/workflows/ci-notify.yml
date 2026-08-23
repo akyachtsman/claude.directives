@@ -5,9 +5,11 @@
 # session natively, but never CI SUCCESS — so sessions had to poll for green
 # via the scheduling tools, which permission-prompt on every call in web
 # sessions. This workflow turns success into a deliverable event: when a
-# watched QA workflow completes green, it comments on the open PR for that
-# head SHA, and the comment webhook wakes the watching session — no polling,
-# no prompts. Failures are deliberately NOT commented (delivered natively;
+# watched QA workflow completes green, it resolves the run to exactly ONE open
+# PR -- head SHA first, else head branch + head-repo owner -- and comments there,
+# and the comment webhook wakes the watching session. No polling, no prompts.
+# It exits SILENTLY when neither lookup yields a unique candidate, so a green run
+# is not a guaranteed wake and a waiting session still arms a check-in. Failures are deliberately NOT commented (delivered natively;
 # ci-monitor tracks them repo-side).
 #
 # Drop-in: watched names match the QA workflows every project in this template

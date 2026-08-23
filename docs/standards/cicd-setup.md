@@ -358,7 +358,10 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 **What it does:** comments on the open PR for a head SHA when a watched QA
 workflow completes **green**, so a watching session wakes on success — GitHub
 delivers failures natively but never green. Without it, a PR-attached wait has
-no success signal at all. Behavior detail: `docs/standards/automations.md` →
+no success signal at all. With it the coverage is still partial: one of its two
+lookups (head SHA, else branch + head-repo owner) must resolve exactly one open
+PR, and it exits silently otherwise — so arm a check-in rather than treating a
+green run as a guaranteed wake. Behavior detail: `docs/standards/automations.md` →
 Automation 4c.
 
 ⚠️ `workflow_run` triggers are read from the DEFAULT branch, so this workflow can

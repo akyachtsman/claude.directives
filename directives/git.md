@@ -286,14 +286,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     nothing — and neither does an **inline review comment**, which is how Codex
     replies inside a review thread (`pull_request_review_comment`, an event the
     workflow does not watch; verified against its `on:` block 2026-08-23). Both
-    leave the label sitting there looking like an open concern.** `codex-monitor.yml` triggers
-    only on `pull_request_review` and `issue_comment`, and its clear path
+    leave the label sitting there looking like an open concern. The clear path
     requires an all-clear **comment** matching `"Codex Review: Didn't find any
-    major issues"`. A reaction fires neither trigger. So after a flagged round,
-    a clean rerun delivered as a 👍 — rather than as the comment form above —
-    leaves the blocker in place with nothing to remove it automatically — the label must come off by hand, with the one-line
-    dismissal rationale the rule above requires. Do not read the stuck label as
-    unaddressed concerns; read the PR.
+    major issues"`. So a clean rerun delivered in either unwatched form leaves the
+    blocker in place with nothing to remove it automatically: take the label off
+    by hand, with the one-line dismissal rationale the rule above requires. **Do
+    not read the stuck label as unaddressed concerns; read the PR.**
   - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
     current head.** Its `head_sha` is whatever the suite ran against, and on a PR
     under active push that is routinely a commit you have already replaced.

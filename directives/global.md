@@ -286,7 +286,7 @@ had. Do not re-propose it, and do not scaffold toward it.
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo
 - Never echo secrets in workflow logs
-- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share): `grep -rE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]" --include="*.js" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.html" --include="*.css" --include="*.json" --include="*.md" --include="*.sh" --include="*.yml" --include="*.yaml" --exclude-dir=node_modules --exclude-dir=.git .`
+- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share). **`-l` is load-bearing**: it prints matching FILENAMES, never the matched line — an accidentally committed token is not a registered repo secret, so Actions will not mask it, and a scan that echoes the line leaks the credential it just caught: `grep -rlE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]" --include="*.js" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.html" --include="*.css" --include="*.json" --include="*.md" --include="*.sh" --include="*.yml" --include="*.yaml" --exclude-dir=node_modules --exclude-dir=.git .`
 
 ## Pre-Push Verification (Local Gate)
 Before committing or pushing, verify locally — never rely on CI alone:

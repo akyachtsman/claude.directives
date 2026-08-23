@@ -242,8 +242,8 @@ page you came from, tracked via a nav stack — not the last page visited).
 ## UI coverage gates (blocking)
 Five gates every project's UI suite must satisfy. The kit enforces the first
 four with a scenario (named in parentheses); the fifth is a property of the
-runner's config, not of any test, so it is checked at refresh time instead.
-Project-specific suites must keep all five:
+runner's config rather than of any test, and nothing enforces it automatically —
+read it. Project-specific suites must keep all five:
 - **Console-error gate.** Every UI test run attaches `page.on('pageerror')` and
   `page.on('console')` (type `error`) and **fails if either fires** during load
   or interaction (S1, S3, ENTRY). An uncaught error on load is a broken page even
@@ -269,8 +269,8 @@ Project-specific suites must keep all five:
   execute at laptop or tablet width, so a breakpoint regression there is
   untested. (S4 is the exception and not the evidence: it sets 390 explicitly,
   so it runs the same in every project — a phone-only list makes it redundant,
-  not skipped.) This gate lives in the config rather than in any scenario, so no
-  test failure surfaces it; `/refresh-repo` Phase 1.5 checks it instead.
+  not skipped.) Because this gate lives in the config and not in any scenario, a
+  green suite is not evidence for it: read the `projects` list.
 
 These are **completion gates, not sequencing gates**: everything must pass before
 the work is called done, but a task never waits for the previous task's suite to

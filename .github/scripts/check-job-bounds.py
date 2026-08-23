@@ -51,8 +51,30 @@ REPO_ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__)
 SCAN_DIRS = [".github/workflows", "templates/workflows"]
 
 GITHUB_DEFAULT = 360
+# TWO floors, because the two shapes cost different amounts and a single floor
+# cannot police both. A job running `playwright install` directly pays the
+# install; a job using the ui-suite composite pays install + EVERY project in
+# playwright.config.js + retries + artifact upload, in one sum the composite
+# cannot subdivide. Holding both at 30 let a ui-suite caller sit at 40 — the
+# exact state #290 raised three of them out of — and this guard passed it.
 BROWSER_FLOOR = 30
-BROWSER_MARKERS = ("playwright install", "ui-suite")
+UI_SUITE_FLOOR = 60
+BROWSER_MARKERS = ("playwright install",)
+UI_SUITE_MARKERS = ("ui-suite",)
+
+
+def _job_matches(job, markers):
+    for step in job.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        text = str(step.get("run", "")) + " " + str(step.get("uses", ""))
+        if any(m in text for m in markers):
+            return True
+    return False
+
+
+def is_ui_suite_job(job):
+    return _job_matches(job, UI_SUITE_MARKERS)
 
 
 def is_browser_job(job):
@@ -122,7 +144,16 @@ for scan_dir in SCAN_DIRS:
                     f"      bound the job's real worst case fits under."
                 )
                 continue
-            if bound < BROWSER_FLOOR and is_browser_job(job):
+            if bound < UI_SUITE_FLOOR and is_ui_suite_job(job):
+                errors.append(
+                    f"{rel} → job '{name}' runs the ui-suite composite under timeout-minutes: {bound}.\n"
+                    f"      That composite is install + EVERY project + retries + upload in ONE sum. A\n"
+                    f"      cold install measures 21m25s and a complete warm job measured 16.6min\n"
+                    f"      (apfp.claude, c302827, 4 projects) — ~38min healthy cold. A bound of {bound}\n"
+                    f"      cancels a HEALTHY run, and a cancelled run is not a red one: it reads as\n"
+                    f"      inconclusive, so nobody chases it. ui-suite callers need >= {UI_SUITE_FLOOR}."
+                )
+            elif bound < BROWSER_FLOOR and is_browser_job(job):
                 errors.append(
                     f"{rel} → job '{name}' installs Playwright browsers under timeout-minutes: {bound}.\n"
                     f"      The cold-cache install alone measured 21m25s; a bound of {bound} kills every\n"
@@ -136,4 +167,4 @@ if errors:
         sys.stderr.write("  • " + err + "\n\n")
     raise SystemExit(1)
 
-print(f"✅ check-job-bounds: {checked} job(s) bounded, none >= {GITHUB_DEFAULT}, browser jobs >= {BROWSER_FLOOR}.")
+print(f"✅ check-job-bounds: {checked} job(s) bounded, none >= {GITHUB_DEFAULT}, direct browser jobs >= {BROWSER_FLOOR}, ui-suite callers >= {UI_SUITE_FLOOR}.")

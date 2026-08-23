@@ -83,7 +83,7 @@ jobs:
   ui-tests:
     needs: static-checks
     runs-on: ubuntu-latest
-    # 60, NOT 40. This job runs the ui-suite composite: npm ci + playwright
+    # 60, NOT 40. This job runs the ui-suite composite: dependency install + playwright
     # install + EVERY project in playwright.config.js + retries + artifact
     # upload, in one sum the composite cannot subdivide.
     #
@@ -91,7 +91,12 @@ jobs:
     #     cold-cache browser install   21m25s   (check-job-bounds.py, rule 3)
     #   + complete job, warm cache     16.6min  (apfp.claude, qa-live on
     #                                            c302827: 4 projects, 204 specs,
-    #                                            checkout + npm ci + suite)
+    #                                            checkout + dependency install
+    #                                            + suite)
+    #
+    # NOTE the composite installs with `npm install`, not `npm ci` — an earlier
+    # version of this block said ci. They differ in resolution and speed, so
+    # treat the 16.6 as measuring THIS path, not a stricter one.
     #     -------------------------------------
     #     healthy COLD run            ~38min    → 60 leaves ~58% headroom
     #

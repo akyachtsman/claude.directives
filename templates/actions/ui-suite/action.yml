@@ -5,8 +5,11 @@
 # - Composite steps cannot carry per-step `timeout-minutes` — bound the run with
 #   the CALLING job's `timeout-minutes`. The qa workflows set 60, sized from two
 #   measured numbers: a cold-cache install at 21m25s, plus a complete warm job at
-#   16.6min (apfp.claude, 4 projects / 204 specs, checkout + npm ci + suite) —
-#   ~38min for a healthy cold run, and 60 leaves headroom.
+#   16.6min (apfp.claude, 4 projects / 204 specs, checkout + dependency install +
+#   suite) — ~38min for a healthy cold run, and 60 leaves headroom. That 16.6
+#   measures THIS composite's `npm install` path below, not a stricter `npm ci`.
+#   check-job-bounds.py enforces the 60 as a distinct ui-suite floor, so a caller
+#   cannot quietly drop back to 40.
 #   The browser install is NOT the whole cost, whatever an earlier version of
 #   this note said: that 16.6min is the suite's own share, and it scales with the
 #   number of projects in playwright.config.js. Raise the CALLERS before adding

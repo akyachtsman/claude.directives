@@ -78,9 +78,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     ready-for-review and `@codex review`, not on a push. Un-drafting leaves no
     comment to carry a 👀, so silence is indistinguishable from a missed trigger.
   - **Whether ready-for-review fires is PER-REPO — learn yours, don't assume.**
-    Measured 2026-08-22/23, same account: `claude.directives` 5 of 7 un-drafts
-    drew a review in ~3–4 minutes; `claude.insurance` 0 of 4, while an explicit
-    `@codex review` answered within ~2.5 minutes every time. Default to waiting
+    Measured 2026-08-22/23, same account: in this repo 5 of 7 un-drafts drew a
+    review in ~3–4 minutes; a sibling project repo reported 0 of 4, while an
+    explicit `@codex review` answered within ~2.5 minutes every time. Default to waiting
     ~10 minutes, then request explicitly, **once only**. After **two consecutive
     un-drafts draw nothing in a repo, stop waiting there** and request as soon as
     CI is green.

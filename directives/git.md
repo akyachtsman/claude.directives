@@ -36,10 +36,14 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **any run that is CANCELLED**, ordinary `pull_request` CI included.
     `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
     **no PR wake**. Be precise about what that does and does not mean:
-    `ci-monitor.yml` DOES classify an unsuperseded cancellation
-    (`cancelled_unsuperseded`) and opens or updates the `ci-failure` issue, so
-    the outcome is tracked — it just is not delivered to the session waiting on
-    the PR. The check-in is still required; "unmonitored" would be wrong.
+    `ci-monitor.yml` classifies an unsuperseded cancellation
+    (`cancelled_unsuperseded`) and opens or updates the `ci-failure` issue — but
+    **only for workflows its own `workflow_run:` list names**, read from the
+    default branch. The template watches three; this repo watches one. A
+    cancelled run of any other workflow reaches no monitor at all. So: tracked
+    for watched workflows and not delivered to the waiting session; untracked
+    entirely for the rest. The check-in is required either way, and neither
+    "unmonitored" nor "tracked" is right unqualified.
 
   That refusal is earned, not cautious. Seven ways the dispatched-run wake fails
   to arrive, each verified in the workflow's own source:
@@ -52,8 +56,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   4. `repository_dispatch` runs carry the **default-branch SHA**, match no open
      PR, and exit silent — a documented limitation
      (`docs/standards/automations.md` → *Known limitation*);
-  5. the PR lookup is `gh pr list` without `--limit`, which returns **30**, so a
-     repo with more open PRs can omit the target;
+  5. both PR lookups are `gh pr list` without `--limit`, which returns **30**.
+     This is narrower than "a repo with >30 open PRs": the SHA lookup is
+     unfiltered, but the branch fallback re-queries server-side with
+     `--head`, so a unique branch match is still found. It bites only when the
+     FILTERED query itself has more than 30 candidates;
   6. the branch fallback deliberately stays silent when two same-owner PRs share
      a branch, because commenting green on the wrong PR is worse;
   7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits

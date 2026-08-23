@@ -108,9 +108,12 @@ Execute these before any task work:
   | page cache hit 4 rows | 83ms — the account held **0** |
   | the account reached 4 rows | 492ms |
 
-  Unthrottled the gap is 0ms, which is why five weeks of local runs never found
-  it and a shared runner did. A local green is not evidence against this class:
-  the defect is a race whose window only opens under load.
+  Unthrottled the gap measures 0ms — which is the **resolution of the
+  measurement, not the absence of a window**. The unawaited upsert is still
+  unsettled for some interval after the synchronous cache write on an idle
+  runner; load only widens it enough to observe. Do not read an unthrottled
+  green as intrinsically safe: it is the same race, sampled too coarsely to see.
+  That is why five weeks of local runs never found it and one shared runner did.
 
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach

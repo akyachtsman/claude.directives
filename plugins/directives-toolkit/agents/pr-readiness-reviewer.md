@@ -59,8 +59,11 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      comment naming the reviewed commit. A review with unresolved findings is **Flagged**;
      a clean comment is **Clear** only when it both SHA-matches HEAD **and** was authored
      by the Codex bot identity — text and SHA alone are forgeable by any commenter. A bare
-     👍 cannot be used at all: no granted tool enumerates who reacted, so it cannot be
-     attributed. That case, a missing PR number, or unreadable reviews/comments are all
+     👍 cannot be used at all, and not merely because no granted tool enumerates
+     reactors: the reactions payload itself carries counts only — no author and no
+     **timestamp** — so no tool could attribute one or date it, and a 👍 from an earlier
+     clean round survives every later push indistinguishably. Reporting Clear from one
+     would pass an **unreviewed head**. That case, a missing PR number, or unreadable reviews/comments are all
      **Pending**, with the merger applying `git.md`'s gate. Pending is a correct output of
      this item, not a failure of it — but it **caps Final Status at Conditional**: never
      report Ready while the Codex row is Pending, since Ready aggregates every row and

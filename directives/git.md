@@ -29,10 +29,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   *Conditional Auto-Merge on Green* below for the gate list and the two
   surviving stops. If any gate fails, pause and surface it instead of merging.
   Always report the merge result; reporting is not asking.
-- **Unsubscribe before merging** via `unsubscribe_pr_activity` — past that point
-  every delivered event is a notice about the merge you are performing. That is
-  the ONLY point at which to unsubscribe. If the merge is then blocked,
-  re-subscribe (the call is idempotent).
+- **Never unsubscribe from your own PR.** The harness drops the subscription
+  itself when the PR merges or closes; `unsubscribe_pr_activity` is for a PR you
+  were asked to stop watching, not for one you are driving.
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging. The `codex-monitor`

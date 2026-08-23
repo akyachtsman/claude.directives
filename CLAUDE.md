@@ -263,9 +263,9 @@ subset. No repo-specific additions.
 
 ## Notifications (owner ruling, 2026-08-23)
 **Keep the PR subscription until the PR merges.** Opening a PR auto-subscribes the
-session harness-side — leave it. Unsubscribe at merge per `git.md` →
-*PR Lifecycle*, no earlier. This replaces the former preference for immediate
-unsubscription plus one consolidated check-in.
+session harness-side — leave it alone; the harness drops it at merge. Never
+unsubscribe from a PR you are driving (`git.md` → *PR Lifecycle*). This replaces
+the former preference for immediate unsubscription plus one consolidated check-in.
 
 Do not arm a timed check-in as a substitute for a subscription. A timer cannot
 know whether anything changed.

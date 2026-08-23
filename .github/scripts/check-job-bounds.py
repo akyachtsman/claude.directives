@@ -14,8 +14,14 @@ THREE RULES, because presence alone proves nothing:
   2. No bound may be >= 360. GitHub's default IS 360, so declaring 360 or more
      is the absent bound wearing a declared one's clothes — it changes nothing
      and reads as protection.
-  3. A browser-install job (any step running `playwright install*` or using the
-     ui-suite composite) needs >= 30. The cold-cache install alone measured
+  3. TWO floors, because the two shapes cost different amounts:
+       - a job running `playwright install*` DIRECTLY pays the install: >= 30
+       - a job using the ui-suite composite pays install + EVERY project in
+         playwright.config.js + retries + upload, in one sum it cannot
+         subdivide: >= 60 (a 21m25s cold install plus a 16.6min complete warm
+         job measured downstream = ~38min healthy cold; 40 cancels it, and a
+         cancelled run is not a red one — it reads as inconclusive)
+     The cold-cache install alone measured
      21m25s, and a 20-minute bound killed run 32277932813 at 20m21s — a bound
      below the work it bounds does not protect anything; it fails on a
      schedule, and because the cache save runs at job END, each kill also

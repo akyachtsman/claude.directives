@@ -141,7 +141,8 @@ jobs:
     # upload, in one sum the composite cannot subdivide.
     #
     # Sized from two MEASURED numbers, not from one anchor:
-    #     cold-cache browser install   21m25s   (check-job-bounds.py, rule 3)
+    #     cold-cache browser install   21m25s   (claude.directives
+    #                                            check-job-bounds.py, rule 3)
     #   + complete job, warm cache     16.6min  (apfp.claude, qa-live on
     #                                            c302827: 4 projects, 204 specs,
     #                                            checkout + dependency install
@@ -153,7 +154,7 @@ jobs:
     #     -------------------------------------
     #     healthy COLD run            ~38min    → 60 leaves ~58% headroom
     #
-    # The 57-minute figure in check-job-bounds.py's header is NOT a sizing input,
+    # The 57-minute figure in claude.directives' check-job-bounds.py header is NOT a sizing input,
     # however tempting the arithmetic. Read it in context: that run "sat 57
     # minutes on a browser install", cited under "an unbounded job that WEDGES".
     # It is the pathology bounds exist to kill. Size to survive it and you have

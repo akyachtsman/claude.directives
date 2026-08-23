@@ -8,8 +8,11 @@
 #   16.6min (apfp.claude, 4 projects / 204 specs, checkout + dependency install +
 #   suite) — ~38min for a healthy cold run, and 60 leaves headroom. That 16.6
 #   measures THIS composite's `npm install` path below, not a stricter `npm ci`.
-#   check-job-bounds.py enforces the 60 as a distinct ui-suite floor, so a caller
-#   cannot quietly drop back to 40.
+#   UPSTREAM ONLY: claude.directives' check-job-bounds.py enforces that 60 as a
+#   distinct ui-suite floor, but that guard is NOT exported and the qa workflows
+#   you copied do not invoke it. Nothing mechanical stops THIS repo dropping back
+#   to 40 — the number and this note are the only protection you have, so treat a
+#   lowered bound as a change that needs the same measurement, not a tweak.
 #   The browser install is NOT the whole cost, whatever an earlier version of
 #   this note said: that 16.6min is the suite's own share, and it scales with the
 #   number of projects in playwright.config.js. Raise the CALLERS before adding

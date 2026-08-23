@@ -60,7 +60,7 @@ transitively, to see whether a caller reaches ui-suite through a local wrapper.
 import re
 import shlex
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     import yaml
@@ -128,19 +128,20 @@ UI_SUITE_LOCAL = "./.github/actions/ui-suite"
 # lesson from the same day, applied to the file that kept relearning it: parse,
 # do not grep, when the question is "is this executed" rather than "is this
 # mentioned."
-HEREDOC_TOKEN = re.compile(r"<<-?(.+)")
+HEREDOC_TOKEN = re.compile(r"<<-?(.*)")
+ENV_ASSIGN = re.compile(r"[A-Za-z_]\w*=.*")
+HEREDOC_OPERATORS = {"<<", "<<-"}
 
-# Words that can precede `playwright` and still leave it at a command position.
-LAUNCHERS = {"npx", "sudo", "yarn", "pnpm", "bunx", "dlx", "exec", "command", "time"}
+# Words that can precede the real command and still leave it at a command
+# position. Matched by BASENAME, so /usr/bin/sudo counts.
+LAUNCHERS = {"npx", "sudo", "yarn", "pnpm", "bunx", "dlx", "exec", "command", "time", "env"}
+
+# Tokens that END one command and begin another.
+SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "{", "}"}
 
 
 def _lines_of_tokens(script):
-    """Tokenize each line, dropping comments and heredoc BODIES.
-
-    A heredoc opener only counts when it survives tokenization — inside a comment
-    or a quoted string it never reaches the shell, so it must not arm the
-    stripper either. That asymmetry is the whole bug this replaces.
-    """
+    """Tokenize each line, dropping comments and heredoc BODIES."""
     delim = None
     for raw in script.splitlines():
         if delim is not None:
@@ -156,27 +157,74 @@ def _lines_of_tokens(script):
             # browsers on text we cannot read is the false positive this file
             # exists to avoid — see the header's asymmetry.
             continue
-        for token in tokens:
-            match = HEREDOC_TOKEN.fullmatch(token)
-            if match:
-                delim = match.group(1)
-                break
+        delim = _heredoc_delim(tokens)
         yield tokens
 
 
+def _heredoc_delim(tokens):
+    """The delimiter a real heredoc opens on this line, or None.
+
+    Both spellings are valid shell and shlex tokenizes them differently:
+    `<<'EOF'` arrives as one token, `<< EOF` as two. Recognising only the
+    attached form left the body of the spaced form treated as executable code.
+    """
+    for index, token in enumerate(tokens):
+        if token in HEREDOC_OPERATORS:
+            if index + 1 < len(tokens):
+                return tokens[index + 1]
+            continue
+        match = HEREDOC_TOKEN.fullmatch(token)
+        if match and match.group(1):
+            return match.group(1)
+    return None
+
+
+def _segments(tokens):
+    """Split a line's tokens into command segments at shell separators."""
+    current = []
+    for token in tokens:
+        if token in SEPARATORS:
+            if current:
+                yield current
+            current = []
+            continue
+        current.append(token)
+        # shlex keeps a trailing `;` attached: `echo hi; playwright install`
+        # tokenizes as ['echo', 'hi;', 'playwright', 'install'].
+        if token.endswith((";", "&", "|")):
+            yield current
+            current = []
+    if current:
+        yield current
+
+
+def _segment_installs(segment):
+    """True when this ONE command is a playwright install.
+
+    Position within the segment is what makes a launcher meaningful. Checking
+    only the PRECEDING token made `echo npx playwright install` match, because
+    `npx` sits immediately before `playwright` while `echo` is the actual
+    command. And matching the command word exactly rejected
+    `./node_modules/.bin/playwright install`, which certainly installs — a
+    false negative the discarded substring version did not have. Basename
+    comparison from the segment's head fixes both.
+    """
+    index = 0
+    while index < len(segment) and ENV_ASSIGN.fullmatch(segment[index]):
+        index += 1
+    while index < len(segment) and PurePosixPath(segment[index]).name in LAUNCHERS:
+        index += 1
+    if index >= len(segment) or PurePosixPath(segment[index]).name != "playwright":
+        return False
+    return index + 1 < len(segment) and segment[index + 1].startswith("install")
+
+
 def _runs_playwright_install(script):
-    for tokens in _lines_of_tokens(script):
-        for i, token in enumerate(tokens):
-            if token != "playwright" or i + 1 >= len(tokens):
-                continue
-            if tokens[i + 1] != "install" and not tokens[i + 1].startswith("install"):
-                continue
-            if i == 0:
-                return True
-            previous = tokens[i - 1]
-            if previous in LAUNCHERS or previous.endswith((";", "&", "|")):
-                return True
-    return False
+    return any(
+        _segment_installs(segment)
+        for tokens in _lines_of_tokens(script)
+        for segment in _segments(tokens)
+    )
 
 
 def load_jobs(path):
@@ -195,18 +243,23 @@ def load_jobs(path):
     root = yaml.compose(path.read_text(encoding="utf-8"))
     if not isinstance(root, yaml.MappingNode):
         return None
+    # LAST wins, not first. Duplicate top-level `jobs:` keys resolve to the last
+    # occurrence in both GitHub and PyYAML — workflow-ref-guard.py:138-140 already
+    # records this. Taking the first left a bounded decoy mapping shadowing the
+    # real unbounded one, green here and running there.
+    found = None
     for key_node, value_node in root.value:
         if isinstance(key_node, yaml.ScalarNode) and key_node.value == "jobs":
-            if not isinstance(value_node, yaml.MappingNode):
-                return None
-            jobs = {}
-            for jk, jv in value_node.value:
-                if isinstance(jk, yaml.ScalarNode):
-                    jobs[jk.value] = yaml.serialize(jv)
-            # Re-parse each job body individually: the collision only affects the
-            # jobs mapping's own keys, and per-job bodies are ordinary data.
-            return {k: yaml.safe_load(v) for k, v in jobs.items()}
-    return None
+            found = value_node
+    if found is None or not isinstance(found, yaml.MappingNode):
+        return None
+    jobs = {}
+    for jk, jv in found.value:
+        if isinstance(jk, yaml.ScalarNode):
+            jobs[jk.value] = yaml.serialize(jv)
+    # Re-parse each job body individually: the collision only affects the jobs
+    # mapping's own keys, and per-job bodies are ordinary data.
+    return {k: yaml.safe_load(v) for k, v in jobs.items()}
 
 
 def _steps(node):

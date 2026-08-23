@@ -68,25 +68,31 @@ Execute these before any task work:
   the auth-gated scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
-- **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` callback
-  returns a Promise, a Promise is always truthy, and the poller tests the returned
-  value for truthiness — so the wait resolves on the first tick and its `timeout`
-  is fiction. It never observes what the function actually returns. Poll from Node
-  instead: `expect.poll()`, or a loop over `page.evaluate`, both of which await.
+- **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` one is
+  invoked exactly **once**. Playwright adopts the Promise it returns, and whatever
+  that Promise settles to — `false` included — ends the wait. It never polls
+  again. So the condition is evaluated at t≈0 and never actually waited *for*.
+  Poll from Node instead: `expect.poll()`, or a loop over `page.evaluate`, both of
+  which await.
 
-  Measured on `playwright-core` 1.62.1:
+  Measured on `playwright-core` 1.62.1. A page flag flipped to `true` at 300ms,
+  2000ms budget, one character between the two rows — and identical in every
+  polling mode (`raf`, default, and a fixed interval):
 
-  | predicate | budget | result |
-  |---|---|---|
-  | `async () => false` | 1500ms | **resolved at 75ms** |
-  | `() => false` | 600ms | TimeoutError at 603ms |
-  | `async () => { await sleep(50); return false }` | 1200ms | **resolved at 54ms** |
+  | page function | outcome |
+  |---|---|
+  | `() => window.ok` | resolved at **307ms**, value `true` — polled, correct |
+  | `async () => window.ok` | resolved at **4ms**, value `false` — one shot, wrong |
 
-  The third row is the trap: a real `await` inside does not help, because the
-  Promise is returned — and consumed as truthy — before the body finishes. This
-  passes review by eye, is invisible in a green run, and turns any seed-or-state
-  poll into a race the spec silently loses. Found in `claude.prop`'s S28, where a
-  15-second seed poll had been resolving instantly since it was written.
+  **The `timeout` is not the broken part.** An async function awaiting 1500ms
+  under a 1200ms budget does raise `TimeoutError`, at 1202ms — the bound still
+  holds over that single invocation. What is missing is the *waiting*: the call
+  returns a handle to `false` and the spec proceeds as though the condition held.
+
+  That is why it survives review. It reads as a guard, it is a guard everywhere
+  except in the one mode nobody tests, and a green run is exactly what it
+  produces. Found in `claude.prop`'s S28, where a 15-second seed poll had been
+  resolving instantly since the day it was written.
 
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach

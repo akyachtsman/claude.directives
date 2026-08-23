@@ -140,13 +140,18 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   all-clear that failed the SHA match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head:
-  - **Wait for a Codex response** — a review with inline comments, or a plain
-    comment naming the reviewed commit. Absence is *pending*, never clean.
-    A bare 👍 is **not** one of these: see below.
+  - **Wait for a Codex response** — a review with inline comments, a plain comment
+    naming the reviewed commit, or a **clean inline reply inside a review thread**
+    (`pull_request_review_comment`), which Codex also uses. All three clear the
+    gate on the same terms: Codex-authored, naming the current head. Absence is
+    *pending*, never clean. A bare 👍 is **not** one of these: see below.
+    ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
+    does not watch that event — so expect to remove `codex-flagged` by hand with
+    a rationale in that case.
   - **Check the author.** Wording and a current SHA are forgeable; only the Codex
     bot's own response clears the gate.
-  - **Match by SHA, not by clock.** Reviews and clean comments both name the commit
-    — compare it to HEAD.
+  - **Match by SHA, not by clock.** Reviews, clean comments and inline replies all
+    name the commit — compare it to HEAD.
   - **A bare 👍 never clears the gate FROM THE EMBEDDED SUMMARY.** `issue_read` →
     `get` returns reactions as counts only (`{"total_count":1,"+1":1}`) — no
     author, no timestamp.
@@ -265,10 +270,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     and the second cleared `codex-flagged` automatically, exactly as the monitor
     intends. `claude.trading` separately observed the reaction-only form.
 
-    **Both forms occur, and which one you get is not predictable from here.** So:
-    an empty REVIEW list means nothing on its own — check the comments before
-    concluding anything, because a SHA-bearing comment clears the gate normally
-    and is one of the two forms a clean verdict takes. Only when **nothing from Codex names the
+    **Three forms occur — a comment, an inline reply, a reaction — and which one
+    you get is not predictable from here.** So: an empty REVIEW list means nothing
+    on its own. Check the comments AND the review threads before concluding
+    anything, since a SHA-bearing response in either clears the gate normally. Only when **nothing from Codex names the
     current head** — not "when the comment list is empty", which after one round
     it never is — does the reaction become the discriminator, readable via
     `issue_read` → `get`

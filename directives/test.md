@@ -93,6 +93,24 @@ Execute these before any task work:
   except in the one mode nobody tests, and a green run is exactly what it
   produces. Found in `claude.prop`'s S28, where a 15-second seed poll had been
   resolving instantly since the day it was written.
+- **Poll the side of the write you are about to assert on.** A store whose
+  `save()` writes a local cache synchronously and then fires an UNAWAITED remote
+  upsert has two observable states, and a poll that watches the cache reports
+  success while the remote still holds nothing. Any assertion that reloads in
+  between is racing a write it never waited for. Poll the persisted side — read
+  back what the reload will read.
+
+  Measured in `claude.prop`, POSTs throttled to 400ms to stand in for a loaded CI
+  runner:
+
+  | observation | at |
+  |---|---|
+  | page cache hit 4 rows | 83ms — the account held **0** |
+  | the account reached 4 rows | 492ms |
+
+  Unthrottled the gap is 0ms, which is why five weeks of local runs never found
+  it and a shared runner did. A local green is not evidence against this class:
+  the defect is a race whose window only opens under load.
 
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach

@@ -14,12 +14,21 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   whole life** — never drop it earlier than the merge, and never poll a PR you
   could have stayed subscribed to. `subscribe_pr_activity` is for taking over a
   PR you did not open, or re-subscribing after unsubscribing
-- **A subscription covers that PR and nothing else.** A `workflow_dispatch` run,
-  a Pages deploy, a live gate on `main`, a scheduled workflow — none of it is PR
-  activity, and no subscription reports it. For those, arm ONE scheduled check-in
-  naming the specific outcome and drop it when the outcome lands. A check-in is
-  the right tool there and the wrong tool on a PR; do not ban it in both places
-  at once, or a non-PR gate can sit red indefinitely with nothing able to say so.
+- **A subscription covers that PR and nothing else.** A Pages deploy, a live gate
+  on `main`, a scheduled workflow, or a `workflow_dispatch` run **with no open PR
+  on its branch** — none of it is PR activity, and no subscription reports it. For
+  those, arm ONE scheduled check-in naming the specific outcome and drop it when
+  the outcome lands. A check-in is the right tool there and the wrong tool on a
+  PR; do not ban it in both places at once, or a non-PR gate can sit red
+  indefinitely with nothing able to say so.
+
+  A dispatched run **on an open PR's branch is covered** — do not arm a check-in
+  for it. `ci-notify.yml` falls back to matching by branch when the run's SHA is
+  not a PR head, and names `workflow_dispatch` as one of the two cases that
+  fallback exists for. Arming a check-in anyway is the redundant PR check-in this
+  same rule bans one sentence earlier. Read the green it produces with the caveat
+  the workflow itself attaches: a branch match can name a **superseded** commit,
+  so verify the SHA is still head before treating it as a gate.
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
   applies)

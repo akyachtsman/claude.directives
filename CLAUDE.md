@@ -241,6 +241,7 @@ diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
 diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
 diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
 diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
+diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
 diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
 test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed

@@ -117,6 +117,7 @@ jobs:
           # copy. Without this diff a repair could land in the copy we execute while
           # the shipped one stays broken — and QA would stay green either way.
           diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
+          diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
           diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
           echo "OK: paired files in sync"
 

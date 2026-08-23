@@ -70,6 +70,15 @@ jobs:
         # Every `workflow_run.workflows:` entry must name a real workflow. GitHub
         # raises no error when one does not — the watcher simply never fires.
         run: python3 .github/scripts/workflow-ref-guard.py
+
+      - name: Job bounds guard
+        # Every job bounded, none >= 360, and the two browser floors (direct
+        # `playwright install` >= 30, ui-suite callers >= 60). Without this step
+        # the 60 below is a NUMBER IN A COMMENT: an edit back to 40 passes CI and
+        # then cancels healthy cold runs, which read as inconclusive rather than
+        # red, so nobody chases them. Scans .github/workflows; it skips
+        # templates/workflows, which only claude.directives has, and says so.
+        run: python3 .github/scripts/check-job-bounds.py
   ui-changes:
     name: Detect UI-relevant changes
     runs-on: ubuntu-latest

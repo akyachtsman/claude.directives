@@ -268,15 +268,23 @@ project** — map each to its installed location before dispositioning:
 | `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
 | `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json` |
-| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm |
+| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except the scripts `qa.yml` invokes** (`check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`), which install WITH any qa workflow update **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: `qa.yml` names them by path, so an absent one fails every `static-checks` run at step resolution. A refresh that takes the workflow and skips the script it calls installs a red build |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
 | `directives/*`, `docs/*`, `plugins/*` | not installed — read live / delivered by the plugin | Informational; no local file to update |
 
 Skip rows whose local path doesn't exist (the project never installed that piece)
-— EXCEPT the `claude-hooks` row, whose whole purpose is first installation and
-whose absence breaks the settings row that references it.
+— with TWO exceptions, both for the same reason: a file another installed file
+names by path is not optional, and skipping it ships a broken reference.
+- the `claude-hooks` row, whose whole purpose is first installation and whose
+  absence breaks the settings row that references it;
+- the qa-invoked entries of the `templates/scripts/*` row, whose absence fails
+  every `static-checks` run at step resolution once the workflow is updated.
+
+The general form, worth applying to any row added later: **if the thing being
+installed REFERENCES a path, that path installs with it, present or not.** The
+composites row already carries this rule; these two are the same rule.
 
 ## Phase 3 — Stamp and report
 

@@ -72,16 +72,24 @@ REPO_ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__)
 # that were a matrix. A printed skip is not a scanned directory, and relying on a
 # human to read green output adversarially is not enforcement.
 #
-# So absence is no longer interpreted. It is DECIDED, by a sibling that exists
+# So absence is no longer interpreted. It is DECIDED, by a marker that exists
 # only where the scan is mandatory:
 #
-#   templates/ absent   -> a downstream repo. Skip: correct, expected, silent.
-#   templates/ present  -> this repo, with the scanned directory deleted or
-#                          renamed. FAIL.
+#   EXPORTS.json absent   -> a downstream repo. Skip: correct, expected, silent.
+#   EXPORTS.json present  -> this repo, with the scanned directory deleted or
+#                            renamed. FAIL.
+#
+# The marker is EXPORTS.json and NOT `templates/`, which was the first attempt.
+# `templates/` is an ordinary directory name — a downstream project may well have
+# one for email or application templates while having no templates/workflows, and
+# the generic marker would then fail every QA run in a repo that is behaving
+# correctly. A guard that red-builds healthy repos gets deleted, taking the real
+# rule with it. EXPORTS.json is this repo's export manifest: never installed into
+# a project, and the very file that DECLARES templates/workflows as exported.
 #
 # One code path, byte-identical upstream and downstream, no fork. marker=None
 # means required unconditionally.
-SCAN_DIRS = [(".github/workflows", None), ("templates/workflows", "templates")]
+SCAN_DIRS = [(".github/workflows", None), ("templates/workflows", "EXPORTS.json")]
 
 GITHUB_DEFAULT = 360
 # TWO floors, because the two shapes cost different amounts and a single floor
@@ -129,9 +137,9 @@ for scan_dir, marker in SCAN_DIRS:
     if not directory.is_dir():
         if marker is None:
             errors.append(f"{scan_dir}/ does not exist — wrong root? Scanned from {REPO_ROOT}.")
-        elif (REPO_ROOT / marker).is_dir():
+        elif (REPO_ROOT / marker).exists():
             errors.append(
-                f"{scan_dir}/ is missing, but {marker}/ is present — so this is the repo that\n"
+                f"{scan_dir}/ is missing, but {marker} is present — so this is the repo that\n"
                 f"      SHIPS the workflow templates, and the directory this guard must cover has\n"
                 f"      been deleted or renamed. Every downstream project inherits those templates;\n"
                 f"      #238's defect lived ONLY in them while the live workflows were fine. Restore\n"

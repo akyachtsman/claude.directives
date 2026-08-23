@@ -121,6 +121,18 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **Match by SHA, not by clock.** Reviews and clean comments both name the commit
     — compare it to HEAD. Only the bare 👍 carries no SHA: accept it alone only when
     its triggering review request postdates the latest push.
+  - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
+    current head.** Its `head_sha` is whatever the suite ran against, and on a PR
+    under active push that is routinely a commit you have already replaced.
+    Measured in `claude.prop`, 2026-08-23: **five** such events across two PRs,
+    every one naming a superseded head, and four would have merged a stale commit
+    if read as clearance — including one Codex had just shown was still racing.
+    Read the run's own `head_sha` against the PR's current head before acting;
+    the event tells you to check, not what the answer is. This is the specific
+    delivery mechanism that most often tempts you past the rule above, and the
+    general case is in `global.md` → *Async Operations*: **any recorded SHA is
+    stale from the moment it is written**, and a stale one does not error — it
+    resolves perfectly and answers about the wrong commit.
   - **Read the inline comments** (`pull_request_read` → `get_review_comments`).
     `get_reviews` cannot tell a clean `COMMENTED` review from an actionable one.
   - **Check EVERY unresolved thread, not just this round's.** An all-clear

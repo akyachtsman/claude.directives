@@ -74,6 +74,7 @@ timeout-minutes at all, and their ceiling is the calling job's. They ARE read,
 transitively, to see whether a caller reaches ui-suite through a local wrapper.
 """
 
+import posixpath
 import re
 import shlex
 import sys
@@ -248,25 +249,37 @@ def _lines_of_tokens(script):
         yield tokens
 
 
-def _normalise_local(ref):
-    """Collapse `.` segments in a local action path.
+def _action_ref(uses):
+    """The path/name part of a `uses:` value, with a remote @ref stripped.
 
-    `./.github/actions/./ui-suite` resolves to the shipped composite on the
-    filesystem, so a raw string compare missed it — then opened it as a WRAPPER,
-    found it did not reference itself, and let a caller under 60 pass.
+    `@` separates a REMOTE action from its version. A LOCAL action takes no ref
+    at all, so `@` in `./.github/actions/ui@wrapper` is an ordinary path
+    character — splitting on it unconditionally truncated the path, the wrapper
+    was never opened, and a caller under 60 passed. Parse remote syntax only
+    where remote syntax applies.
     """
-    ref = ref.rstrip("/")
+    uses = uses.strip()
+    return uses if uses.startswith("./") else uses.split("@", 1)[0]
+
+
+def _normalise_local(ref):
+    """Collapse `.` and `..` segments in a local action path.
+
+    `./.github/actions/./ui-suite` and `./.github/actions/w/../ui-suite` both
+    resolve to the shipped composite on disk, so a raw string compare missed
+    them — then opened the target as a WRAPPER, found it did not reference
+    itself, and let a caller under 60 pass.
+
+    Delegated to posixpath.normpath rather than hand-rolled. The hand-rolled
+    loop took three review rounds (`./`, then `..`, then this), each fixing the
+    segment type in front of it, and normpath has known the whole rule since
+    before any of them. A workflow path is POSIX regardless of the runner, so
+    posixpath — not os.path, which would answer differently on Windows.
+    """
     if not ref.startswith("./"):
         return ref
-    parts = []
-    for part in ref.split("/"):
-        if part in ("", "."):
-            continue
-        if part == ".." and parts:
-            parts.pop()          # wrapper/../ui-suite resolves to ui-suite
-            continue
-        parts.append(part)
-    return "./" + "/".join(parts)
+    collapsed = posixpath.normpath(ref)
+    return collapsed if collapsed.startswith("./") else "./" + collapsed.lstrip("/")
 
 
 def _heredoc_delims(tokens):
@@ -363,6 +376,26 @@ class GitHubIntLoader(yaml.SafeLoader):
 _GITHUB_INT = re.compile(r"[-+]?(?:0o[0-7]+|0x[0-9a-fA-F]+|[0-9]+)$")
 
 
+def _ungroup(text):
+    """Strip balanced enclosing `()` — GitHub permits them for grouping.
+
+    Only a pair wrapping the WHOLE expression; `(a)+(b)` is not a literal and
+    must stay unparseable. Its own function because BOTH the falsy-literal test
+    and the numeric-bound parser need it: the first version lived inside the
+    numeric parser, so `${{ ((0)) }}` was handled while `${{ (false) }}` was not
+    — the same fix-in-one-place-used-in-two bug this file keeps producing, caught
+    here by testing both paths instead of the one I had changed.
+    """
+    while len(text) > 1 and text[0] == "(" and text[-1] == ")":
+        depth = 0
+        for i, ch in enumerate(text):
+            depth += (ch == "(") - (ch == ")")
+            if depth == 0 and i < len(text) - 1:
+                return text            # the opener closes early: not enclosing
+        text = text[1:-1].strip()
+    return text
+
+
 def _expr_literal(text):
     """A GitHub EXPRESSION that is a bare numeric literal, as a float, else None.
 
@@ -373,7 +406,7 @@ def _expr_literal(text):
     is how `${{ 0x0 }}` survived a round: the loader learned hex and the condition
     test, two functions below, was still calling float().
     """
-    text = text.strip()
+    text = _ungroup(text.strip())
     # An expression is NOT YAML. YAML 1.2 spells its radix prefixes in lower case
     # and _github_int is strict about that on purpose; GitHub's expression
     # language is JS-shaped and takes `0X0` as readily as `0x0`. Normalising here
@@ -498,7 +531,7 @@ def _statically_disabled(step):
         return False
     text = cond.strip()
     wrapped = re.fullmatch(r"\$\{\{(.*)\}\}", text, re.S)
-    inner = wrapped.group(1).strip() if wrapped else text
+    inner = _ungroup(wrapped.group(1).strip() if wrapped else text)
     if wrapped and not inner:
         return False                      # `${{ }}` is malformed; do not guess
     if not inner or inner in ("''", '""'):
@@ -531,7 +564,7 @@ def _uses_ui_suite(node, seen):
     """
     for step in _steps(node):
         uses = str(step.get("uses", "")).strip()
-        ref = _normalise_local(uses.split("@", 1)[0])
+        ref = _normalise_local(_action_ref(uses))
         if ref == UI_SUITE_LOCAL:
             return True
         # Follow LOCAL composites only. A remote action's definition is not on

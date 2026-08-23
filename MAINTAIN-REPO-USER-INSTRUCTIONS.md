@@ -33,6 +33,20 @@ Corollaries worth memorizing:
 - One upstream PR often spans modes (a directive + a template + a plugin
   command). Walk the PR's file list against this table and do the union of
   the actions.
+- **Some copied files are extended locally, and "approve the dispositions" is
+  not "accept them all".** `qa.yml` is the standing case: projects add their own
+  steps to it — `claude.prop` carries a unit-test step and a path guard — so a
+  verbatim refresh deletes local work. Both `claude.prop` and `claude.insurance`
+  independently declined to take it verbatim (2026-08-23), which is `/refresh-repo`
+  Phase 1.5 working as written, not two sessions being cautious. Expect that file
+  to be merged rather than overwritten, and expect the merge to need a human
+  reading of the diff.
+- **The flip side is that a locally extended copy never gets refreshed, so it
+  drifts silently.** Nothing overwrites it, and the drift surfaces only when
+  someone looks. Where the drift is a coverage gap the suite cannot report,
+  add a targeted assertion upstream instead of relying on the diff — see
+  `/refresh-repo` Phase 1.5's viewport-class check, which exists because
+  `claude.prop`'s Playwright config had lost its laptop and tablet profiles.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).

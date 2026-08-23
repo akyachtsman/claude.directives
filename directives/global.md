@@ -108,11 +108,9 @@ fenced code block**, so the copy button takes it in one click.
   Four backticks for content holding ordinary triple-backtick blocks; five when
   the content itself uses four.
 - **The first line INSIDE the fence names the recipient**, as
-  `→ SEND TO: <session or repo>`. Outside it, the line is left behind by the
-  copy button and the paste arrives unaddressed. A block whose own fixed format
-  already opens by naming its destination satisfies this and adds nothing —
-  `/handoff-session`'s `SESSION HANDOFF — <repo-name>` header is the standing
-  case, including its one-line empty form.
+  `→ SEND TO: <session or repo>`. A block whose own fixed format opens by naming
+  its destination already satisfies this — `/handoff-session`'s
+  `SESSION HANDOFF — <repo-name>` header. Its one-line empty form is exempt.
 - **A file is still right when the artifact IS a file** — something to commit,
   run, or open in another tool. This governs messages, not deliverables.
 

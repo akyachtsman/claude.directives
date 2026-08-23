@@ -137,18 +137,39 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     data is missing from *that view*, not from GitHub. `GET /repos/{owner}/{repo}/
     issues/{number}/reactions` — the reaction LIST, not the embedded summary —
     returns `user` and `created_at` per reaction. Where a session can reach it,
-    that is a real clean-round path — but **"created after the push" is not the
-    test.** A review of the PREVIOUS head can still be in flight when a new commit
-    lands, and its clean reaction is then created *after* that push while
-    describing the old SHA; the same out-of-order landing this file already warns
-    about for reviews. The test is an ORDERING of three events: **push → review
-    request → Codex-authored reaction**, each strictly after the last. A reaction
-    that predates the request answers a question nobody asked about this head.
-    Verify
-    reachability rather than assuming it; from a Claude Code remote session on
-    2026-08-23 it was not reachable — direct REST to `api.github.com` returned
-    *"GitHub access is not enabled for this session"*, WebFetch returned 403, and
-    the MCP surface exposes only the summary.
+    that is a real clean-round path — with two preconditions, because timestamps
+    establish ORDER and order is not attribution.
+
+    **First, the ordering.** "Created after the push" is not enough: a review of
+    the PREVIOUS head can still be in flight when a new commit lands, and its
+    clean reaction is then created *after* that push while describing the old SHA
+    — the same out-of-order landing this file already warns about for reviews. So
+    require **push → review request → Codex-authored reaction**, each strictly
+    after the last.
+
+    **Second, and this is the one that actually bites: no earlier request may be
+    outstanding.** The ordering above is *necessary and not sufficient*. If
+    request A (on the old head) is still running when you push and send request
+    B, A's reaction lands after B and satisfies every timestamp comparison while
+    describing A's commit. A reaction carries no SHA, so nothing in it
+    distinguishes the two. Rung 1 is therefore available **only when every earlier
+    request already has a SHA-bearing response on record** — then a reaction after
+    the current request can only belong to the current request. If any earlier
+    request is unanswered, you cannot tell, and this rung does not apply.
+
+    Note what that implies: an unanswered earlier request is *exactly* what a
+    previous clean round looks like, so on a PR that has already run clean once,
+    rung 1 is usually unavailable and rungs 2–3 are the real path. Compounding
+    it, a GitHub user holds at most one reaction of a given type per subject, so a
+    second clean verdict from Codex adds **no new reaction at all** — the only 👍
+    present is the first one, with its original timestamp. (That follows from the
+    documented reaction model rather than from measurement here; treat it as the
+    conservative reading until someone observes otherwise.)
+
+    Verify reachability rather than assuming it; from a Claude Code remote session
+    on 2026-08-23 the list was not reachable — direct REST to `api.github.com`
+    returned *"GitHub access is not enabled for this session"*, WebFetch returned
+    403, and the MCP surface exposes only the summary.
 
   - **The clean-round escape hatch — a gate with no reachable exit is not a
     gate.** Codex comments only when it has suggestions; a clean verdict is a
@@ -156,8 +177,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     satisfied on a clean PR, and each retry spends the shared weekly allowance to
     produce another reaction. Work down this ladder and stop at the first rung
     that is available:
-    1. **Reaction list** (verifiable) — author + `created_at` as above, and the
-       push → request → reaction ordering, not merely a reaction after the push.
+    1. **Reaction list** (verifiable, and often unavailable) — author +
+       `created_at`, the push → request → reaction ordering, AND no earlier
+       request left unanswered. All three, per the paragraph above.
     2. **Ask, don't re-review** (verifiable where Codex answers) — a direct
        `@codex` question naming the SHA is answered as a *comment*, which carries
        an author and a timestamp. Cheaper than a review round. **Untested as of

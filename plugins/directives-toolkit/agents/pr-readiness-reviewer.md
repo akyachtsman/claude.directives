@@ -66,7 +66,9 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      as impossible: the reaction LIST endpoint carries `user` and `created_at`, and
      `git.md` → *PR Lifecycle* defines the clean-round ladder over it (the test is the
      ORDERING push → request → reaction, since a review of an older commit can land
-     after a newer push). This agent has no tool for that endpoint, so the judgement
+     after a newer push — and ordering alone is not enough: it clears only when no
+     earlier review request is still unanswered, since that one's reaction would
+     satisfy the same timestamps while describing the old commit). This agent has no tool for that endpoint, so the judgement
      belongs to the merger, who has the ladder. That case, a missing PR number, or unreadable reviews/comments are all
      **Pending**, with the merger applying `git.md`'s gate. Pending is a correct output of
      this item, not a failure of it — but it **caps Final Status at Conditional**: never

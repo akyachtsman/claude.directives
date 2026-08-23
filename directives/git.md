@@ -128,12 +128,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging. The `codex-monitor`
   workflow adds the label on a flagged round and clears it itself on a Codex
-  all-clear **comment** that names the current head SHA — and an ordinary clean
-  rerun is a reaction, which fires neither monitor trigger, so expect to remove
-  the label by hand with a rationale. A label still present means
-  concerns not yet re-reviewed, a reaction-only clean round the monitor cannot
-  see, or an all-clear that failed the SHA
-  match; read the PR before overriding by hand.
+  all-clear **comment** that names the current head SHA — which is the ordinary
+  path and is what cleared #293. A clean rerun can instead be a 👍 reaction, or an
+  inline review-thread reply; the monitor sees neither, and only then is manual
+  removal with a rationale expected. A label still present means concerns not yet
+  re-reviewed, a clean round delivered in a form the monitor cannot see, or an
+  all-clear that failed the SHA match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head:
   - **Wait for a Codex response** — a review with inline comments, or a plain

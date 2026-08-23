@@ -94,23 +94,6 @@ that hardening and re-broken the trigger it also fixed (raised by apfp.claude,
 2026-08-19). So there is no list: a diff is self-maintaining, and every
 `DRIFT` file is resolved by looking at it.
 
-**Show the UI-test viewport list (delta-independent, no verdict).** Phase 1.5's
-loop does not walk `.github/scripts/ui-tests/**`, and on an empty delta Phase 2
-classifies the run without ever presenting those files — so a local edit to a
-template that has not moved is compared against nothing, by anything, ever. That
-is how `claude.prop` lost its laptop and tablet profiles with CI green
-(2026-08-23). Print the list and read it; do NOT try to classify it, which is
-`#282`:
-
-```bash
-cfg=.github/scripts/ui-tests/playwright.config.js
-[ -f "$cfg" ] && sed -n '/projects:/,/^  \]/p' "$cfg"
-```
-
-`global.md` requires laptop, tablet AND phone (`test.md` → *UI coverage gates*).
-Two phone profiles read as coverage and are not. A viewport never instantiated
-produces no failing test, so nothing here fails — you are reading, not checking.
-
 **Hook repair (runs before the loop, delta-independent).** Three broken states,
 not one: the script absent, present but unregistered, and present but not
 executable. `/env-chk` now reports all three and names `/refresh-repo` as the

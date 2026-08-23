@@ -53,8 +53,12 @@ Corollaries worth memorizing:
   loop does not walk those paths, so when the template stands still and the local
   copy moves, nothing compares them. `claude.prop`'s Playwright config lost its
   laptop and tablet profiles exactly that way, and green CI said nothing — a
-  viewport never instantiated produces no failing test. Read that file during a
-  refresh even when the delta is empty; no tooling checks it.
+  viewport never instantiated produces no failing test. Nothing in `/refresh-repo`
+  looks at it — not Phase 1.5, which does not walk those paths, and not the
+  session, which never reads this runbook — so this one is YOURS: open the config
+  yourself after a refresh, empty delta included, and check it declares a laptop,
+  a tablet and a phone (`test.md` → *UI coverage gates*). Automating it is #282;
+  until that lands, an unread config is an unchecked one.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).

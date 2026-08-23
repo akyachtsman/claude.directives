@@ -250,6 +250,7 @@ repo, so its second rule is configured here rather than edited into the file:
 ```
 
 Add to the static-checks job: `python3 .github/scripts/workflow-ref-guard.py`.
+
 It reads the workflows with PyYAML, which ships on GitHub's runner images and is
 already what `qa.yml` parses workflow YAML with — no install step. The guard was
 a dependency-free line scanner first; that version had to re-implement YAML and
@@ -261,6 +262,62 @@ fine.
 ⚠️ Its green run means "no dangling reference and no missing required watcher";
 it does **not** prove a trigger still fires. That needs run history. See the
 file's own header.
+
+### 9c-ter — Job bounds guard
+
+An unbounded job runs to GitHub's 6-hour default showing neither pass nor fail,
+and a bound set BELOW the work it bounds is worse: it cancels healthy runs, and
+a cancelled run reads as inconclusive rather than red, so nobody chases it.
+Install the guard:
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-job-bounds.py \
+  -o .github/scripts/check-job-bounds.py
+```
+
+`qa.yml` already invokes it. It needs no config file — the three rules are the
+same in every repo:
+
+1. Every job declares `timeout-minutes` (except jobs that `uses:` a reusable
+   workflow, where GitHub does not accept it).
+2. No bound `>= 360` — GitHub's default IS 360, so declaring it changes nothing
+   while reading as protection.
+3. Two browser floors, because the shapes cost differently — but only one of
+   them is a gate:
+   - **ENFORCED** — a job using the **ui-suite** composite needs `>= 60`, since
+     that composite is install + every project in `playwright.config.js` +
+     retries + upload in one sum it cannot subdivide. The composite is read from
+     `uses:`, structured data with one correct answer.
+   - **ADVISORY** — a job running `playwright install` directly wants `>= 30`.
+     This prints and never fails the build. Deciding whether a `run:` block
+     invokes playwright means parsing bash, and successive attempts produced
+     roughly as many false positives as findings; an unsound hard gate gets
+     deleted and takes rules 1–2 with it. **A green run is not evidence this
+     floor was met** — read the advisory lines.
+
+Rule 3 is the one worth installing for. It exists because rule 1 passed the
+exact defect it was written for: every broken job DECLARED a bound, and the
+value was the fault. Until this guard shipped downstream, the 60 in the qa
+workflows was a number in a comment — three callers had already drifted to 40.
+
+The guard scans `.github/workflows`. Nothing else, unless you pass
+`--include-templates` — a flag only claude.directives uses, to also cover the
+workflow templates it ships. Run it plain and it will never look at any directory
+of yours. Same file both sides, nothing to configure, no forked copy to keep in
+sync.
+
+It is also deliberately conservative about rule 3: where it cannot identify a job
+with certainty it does **not** apply a floor. A job that merely mentions
+`playwright install` in a grep, a remote action whose path ends in the same
+segments as the shipped composite, or a bound derived from a `${{ }}` expression
+are all left alone. The reasoning is in the file's header — a guard that
+red-builds a healthy repo gets deleted, taking the real rules with it.
+
+Install it **with** the `qa.yml` update, not after: the workflow names the script
+by path, so an updated `qa.yml` without it fails every run at step resolution.
+
+Like `workflow-ref-guard.py` it parses with PyYAML (present on GitHub's runner
+images) and fails loudly if that import is missing, rather than skipping.
 
 ### 9d — Pages Retry
 

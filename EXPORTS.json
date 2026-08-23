@@ -107,7 +107,8 @@
       "static-ci": [
         "templates/workflows/qa.yml",
         "templates/workflows/qa-response.yml",
-        "templates/scripts/workflow-ref-guard.py"
+        "templates/scripts/workflow-ref-guard.py",
+        "templates/scripts/check-job-bounds.py"
       ],
       "ui-kit": [
         "templates/actions/ui-suite/",
@@ -284,7 +285,8 @@
         "plugins/directives-toolkit/hooks/",
         "plugins/directives-toolkit/scripts/",
         "templates/claude-hooks/session-start.sh",
-        "templates/scripts/workflow-ref-guard.py"
+        "templates/scripts/workflow-ref-guard.py",
+        "templates/scripts/check-job-bounds.py"
       ]
     },
     "artifact": {

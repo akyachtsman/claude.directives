@@ -75,13 +75,18 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     this**: the setting also offers "On every push", under which every commit
     does spend a review, and it is account-level — invisible from the repo.
   - **Request a review after pushing a fix**; Codex responds on open,
-    ready-for-review and `@codex review`, not on a push. Ready-for-review is
-    UNRELIABLE — measured 2026-08-20, un-drafting drew no review at all on two
-    consecutive PRs, while an explicit `@codex review` naming the head answered
-    within two minutes each time. Un-drafting leaves no comment to carry a 👀,
-    so silence is indistinguishable from a missed trigger: after ~10 minutes
-    with no response, request explicitly. Once only — re-asking spends the
-    shared weekly pool.
+    ready-for-review and `@codex review`, not on a push. Un-drafting leaves no
+    comment to carry a 👀, so silence is indistinguishable from a missed trigger.
+  - **Whether ready-for-review fires is PER-REPO — learn yours, don't assume.**
+    Measured 2026-08-22, same account, same day: `claude.directives` 5 of 7
+    un-drafts drew a review in ~3–4 minutes; `claude.insurance` 0 of 4, while an
+    explicit `@codex review` answered within ~2.5 minutes every time. Default to
+    waiting ~10 minutes, then request explicitly, **once only**. But after **two
+    consecutive un-drafts draw nothing in a repo, stop waiting there** and
+    request explicitly as soon as CI is green. Do not generalise either way: in a
+    repo where the trigger works, a reflex explicit request is a duplicate, and
+    reviews are metered per request from a pool that is weekly and
+    account-wide — the waste lands on every other repo.
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or

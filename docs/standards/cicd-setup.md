@@ -292,10 +292,10 @@ exact defect it was written for: every broken job DECLARED a bound, and the
 value was the fault. Until this guard shipped downstream, the 60 in the qa
 workflows was a number in a comment — three callers had already drifted to 40.
 
-The guard scans `.github/workflows`. It also scans `templates/workflows` where
-that exists, which is claude.directives only; downstream it says so on the pass
-line rather than scanning half the tree silently — a scan directory that drops
-out quietly is the same defect the guard is built to catch.
+The guard scans `.github/workflows`, and also `templates/workflows` in the repo
+that ships the templates. Your repo has no `templates/` directory, so that second
+scan is skipped — silently and correctly, and the same file decides it, so there
+is nothing to configure and no forked copy to keep in sync.
 
 Like `workflow-ref-guard.py` it parses with PyYAML (present on GitHub's runner
 images) and fails loudly if that import is missing, rather than skipping.

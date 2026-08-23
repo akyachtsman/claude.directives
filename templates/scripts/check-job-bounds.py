@@ -36,7 +36,8 @@ workflows alone reports health precisely when the shipped ones are broken.
 
 This file is EXPORTED (templates/scripts/check-job-bounds.py, byte-paired with
 this one) and runs downstream too, where templates/workflows does not exist. So
-the scan list carries a required flag rather than a fork: see SCAN_DIRS.
+the scan list decides absence from a sibling marker rather than forking the
+file or trusting a printed skip: see SCAN_DIRS.
 
 Composite actions (templates/actions/*/action.yml) are not scanned: composite
 steps cannot carry timeout-minutes at all; their ceiling is the calling job's,
@@ -58,18 +59,29 @@ except ModuleNotFoundError:
 # Optional root override so the check can be exercised against synthetic trees;
 # defaults to the repo this file lives in.
 REPO_ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
-# (directory, required). `.github/workflows` is required: this guard is invoked
-# BY a workflow, so a run that cannot find that directory is reading the wrong
-# root — not looking at a repo that happens to have no workflows.
+# (directory, marker). A missing directory is AMBIGUOUS on its own, and that is
+# the whole problem this pairing solves. `templates/workflows` SHOULD be absent
+# downstream; here, its absence means the guard has stopped covering the tree
+# where #238's defect actually lived. Same input, opposite significance.
 #
-# `templates/workflows` exists only in claude.directives. A downstream project
-# inherits this guard and ships no templates, so absent is normal there and a
-# defect here — and nothing on the filesystem distinguishes the two. Rather than
-# guess, the check does not treat absence as either: it skips the directory and
-# NAMES the skip in the success line. That matters more than it looks. A scan
-# directory that silently drops out is the exact shape this whole file exists to
-# catch: a check that cannot fail, reporting success. Printed, it is not silent.
-SCAN_DIRS = [(".github/workflows", True), ("templates/workflows", False)]
+# An earlier version of this file resolved that by skipping and PRINTING the skip
+# on the pass line. claude.trading rejected the mitigation using the argument
+# this repo had just made to them: a printed line on a green run is neutral
+# informational text that reads identically whether the situation is fine or
+# gutted — the same shape as Playwright announcing two phone projects as though
+# that were a matrix. A printed skip is not a scanned directory, and relying on a
+# human to read green output adversarially is not enforcement.
+#
+# So absence is no longer interpreted. It is DECIDED, by a sibling that exists
+# only where the scan is mandatory:
+#
+#   templates/ absent   -> a downstream repo. Skip: correct, expected, silent.
+#   templates/ present  -> this repo, with the scanned directory deleted or
+#                          renamed. FAIL.
+#
+# One code path, byte-identical upstream and downstream, no fork. marker=None
+# means required unconditionally.
+SCAN_DIRS = [(".github/workflows", None), ("templates/workflows", "templates")]
 
 GITHUB_DEFAULT = 360
 # TWO floors, because the two shapes cost different amounts and a single floor
@@ -112,11 +124,19 @@ errors = []
 checked = 0
 skipped = []
 
-for scan_dir, required in SCAN_DIRS:
+for scan_dir, marker in SCAN_DIRS:
     directory = REPO_ROOT / scan_dir
     if not directory.is_dir():
-        if required:
+        if marker is None:
             errors.append(f"{scan_dir}/ does not exist — wrong root? Scanned from {REPO_ROOT}.")
+        elif (REPO_ROOT / marker).is_dir():
+            errors.append(
+                f"{scan_dir}/ is missing, but {marker}/ is present — so this is the repo that\n"
+                f"      SHIPS the workflow templates, and the directory this guard must cover has\n"
+                f"      been deleted or renamed. Every downstream project inherits those templates;\n"
+                f"      #238's defect lived ONLY in them while the live workflows were fine. Restore\n"
+                f"      the path or update SCAN_DIRS deliberately — do not let it drop out quietly."
+            )
         else:
             skipped.append(scan_dir)
         continue
@@ -192,8 +212,8 @@ if errors:
         sys.stderr.write("  • " + err + "\n\n")
     raise SystemExit(1)
 
-# Name what was NOT scanned. A reader who sees only the pass line would other-
-# wise have no way to tell a full scan from a scan of half the tree.
+# Name what was NOT scanned. This is INFORMATIONAL only — it is not what makes
+# the skip safe. The marker check above is; see SCAN_DIRS.
 note = f" (not present, not scanned: {', '.join(skipped)})" if skipped else ""
 print(
     f"✅ check-job-bounds: {checked} job(s) bounded, none >= {GITHUB_DEFAULT}, "

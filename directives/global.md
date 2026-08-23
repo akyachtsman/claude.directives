@@ -444,10 +444,12 @@ naming what remains open, or "nothing open" — never absent.
      and act on the event. **Exception, and it is not rare:** a wake only covers
      what something actually emits. A dispatched run on a PR branch has seven
      verified ways to emit nothing (`git.md` → *PR Lifecycle*), and a cancelled run
-     emits no PR WAKE, since `ci-notify` fires only on success. (It is not
-     unmonitored — `ci-monitor.yml` classifies an unsuperseded cancellation and
-     files the `ci-failure` issue — but that issue does not reach the session
-     waiting on the PR, so the check-in is still the only observer *you* have.)
+     emits no PR WAKE, since `ci-notify` fires only on success. (`ci-monitor.yml`
+     classifies an unsuperseded cancellation and files the `ci-failure` issue —
+     but **only for workflows its own list names**, and that issue never reaches
+     the session waiting on the PR anyway. For anything outside that list the
+     cancellation is tracked nowhere at all. Either way the check-in is the only
+     observer *you* have.)
      Where nothing will wake you, a check-in is the only observer — arming one
      there is not the polling `git.md` bans.
   2. **Self-pace with `send_later`** (pre-approved per *Scheduling Tools Never

@@ -127,9 +127,13 @@ especially under auto-merge.
   flagged rounds arrive as reviews, and an all-clear ("Didn't find any major
   issues") arrives as a plain issue comment — a monitor listening only for
   reviews hears the complaint and never the all-clear.
-  ⚠️ **There is a THIRD delivery mode the monitor cannot see.** A clean rerun can
-  leave only a 👍 reaction on the PR body, which fires neither trigger and so
-  cannot clear the label. It can also arrive as a SHA-bearing comment, which
+  ⚠️ **Two more delivery modes exist and the monitor sees NEITHER.** A clean rerun
+  can leave only a 👍 reaction on the PR body, which fires neither trigger. And a
+  substantive verdict can arrive as an **inline review comment** — Codex replying
+  in a review thread with "no additional changes were necessary", naming the head
+  — which fires `pull_request_review_comment`, an event this workflow does not
+  watch at all (verified against its `on:` block, 2026-08-23). Neither can clear
+  the label. It can also arrive as a SHA-bearing comment, which
   does. Both were observed in this repo on 2026-08-23 — the comment form cleared
   #293 automatically — so **treat neither as the default and check the PR's
   comments before concluding the monitor has failed.** When the clear really is

@@ -275,8 +275,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     natural escalation is to spend an `@codex review` from the weekly pool, which
     buys nothing because Codex already ran. `claude.trading` lost ~30 minutes to
     exactly this.
-    ⚠️ **A reaction-only clean round cannot clear `codex-flagged`, so the label
-    will sit there looking like an open concern.** `codex-monitor.yml` triggers
+    ⚠️ **Codex has FOUR delivery modes and `codex-monitor` watches two.** It fires
+    on `pull_request_review` and `issue_comment` only, so a 👍 reaction clears
+    nothing — and neither does an **inline review comment**, which is how Codex
+    replies inside a review thread (`pull_request_review_comment`, an event the
+    workflow does not watch; verified against its `on:` block 2026-08-23). Both
+    leave the label sitting there looking like an open concern.** `codex-monitor.yml` triggers
     only on `pull_request_review` and `issue_comment`, and its clear path
     requires an all-clear **comment** matching `"Codex Review: Didn't find any
     major issues"`. A reaction fires neither trigger. So after a flagged round,

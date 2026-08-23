@@ -3,12 +3,17 @@
 #
 # Caveats baked into this design:
 # - Composite steps cannot carry per-step `timeout-minutes` — bound the run with
-#   the CALLING job's `timeout-minutes`. The qa workflows set 40, and that number
-#   is not arbitrary: the cold-cache install below was measured at 21m25s, so the
-#   20 they used to carry killed every cold run before a single test executed.
-#   If you lower it, measure the cold path first — the browser install is the
-#   whole cost, and a kill during it also skips the cache save that would have
-#   made the next run cheap.
+#   the CALLING job's `timeout-minutes`. The qa workflows set 60, sized from two
+#   measured numbers: a cold-cache install at 21m25s, plus a complete warm job at
+#   16.6min (apfp.claude, 4 projects / 204 specs, checkout + npm ci + suite) —
+#   ~38min for a healthy cold run, and 60 leaves headroom.
+#   The browser install is NOT the whole cost, whatever an earlier version of
+#   this note said: that 16.6min is the suite's own share, and it scales with the
+#   number of projects in playwright.config.js. Raise the CALLERS before adding
+#   projects, never after.
+#   If you lower it, measure the cold path first — and note a kill during install
+#   also skips the cache save that would have made the next run cheap, so too
+#   tight costs a streak rather than a run.
 # - `advisory-run` flips ONLY the Playwright run step to continue-on-error;
 #   setup/install/server/upload always stay blocking, so a broken install can
 #   never pass green.

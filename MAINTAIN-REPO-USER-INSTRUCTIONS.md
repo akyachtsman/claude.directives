@@ -47,11 +47,14 @@ Corollaries worth memorizing:
   refresh, and Phase 2 still classifies the upstream delta and offers the patch.
   Only the automatic verbatim overwrite is off — treat an upstream change to it
   as ordinary disposition work, not as undetectable. The genuinely silent class
-  is the paths Phase 1.5's loop does not walk, `.github/scripts/ui-tests/**`
-  above all: nothing diffs them, so drift there surfaces only when a person
-  looks. `claude.prop`'s Playwright config had lost its laptop and tablet
-  profiles and green CI said nothing — a viewport never instantiated produces no
-  failing test. Read that file yourself during a refresh; no tooling checks it.
+  is narrower, and it is LOCAL drift against an unchanged template. An upstream
+  change to `templates/ui-tests/**` is dispositioned normally — Phase 2 maps it
+  to `.github/scripts/ui-tests/**` and requires per-file diffs. But Phase 1.5's
+  loop does not walk those paths, so when the template stands still and the local
+  copy moves, nothing compares them. `claude.prop`'s Playwright config lost its
+  laptop and tablet profiles exactly that way, and green CI said nothing — a
+  viewport never instantiated produces no failing test. Read that file during a
+  refresh even when the delta is empty; no tooling checks it.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).

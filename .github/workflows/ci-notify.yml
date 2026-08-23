@@ -25,11 +25,18 @@
 # triggers are read from this file ON THE DEFAULT BRANCH, so this workflow can
 # NEVER wake the PR that installs it (verified on claude.prop, 2026-07-18: two
 # post-merge runs, zero PR wakes — the mechanism was fine, the install PR just
-# predated it on main). For that one PR only, arm a scheduled verification
-# check-in and confirm the FIRST post-install PR gets its green comment; from
-# then on the webhook covers completion (heartbeats per global.md → Status
-# Line on Every Stop still apply to waits over five minutes). Do not conclude
+# predated it on main). For that PR, arm a scheduled verification check-in and
+# confirm the FIRST post-install PR gets its green comment. Do not conclude
 # "dud" from the install PR's silence.
+#
+# ⚠️ "From then on the webhook covers completion" USED TO FOLLOW HERE, and it is
+# wrong — the install PR is not the only gap. This job is gated on
+# `conclusion == 'success'` and watches this repo's workflow BY NAME, so a
+# cancelled run and a dispatched run outside that list both emit nothing.
+# git.md → *PR Lifecycle* carries the full list and the rule: arm a check-in for
+# any outcome that can end without emitting a wake, and drop it when THAT
+# OUTCOME is terminal, not when any wake arrives. Heartbeats per global.md →
+# Status Line on Every Stop still apply to waits over five minutes.
 on:
   workflow_run:
     workflows:

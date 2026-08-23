@@ -23,17 +23,23 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   indefinitely with nothing able to say so.
 
   **The exception is any awaited outcome that can end WITHOUT emitting a wake,
-  and the rule for it is: arm the check-in, then drop it the moment a wake
-  arrives.** This is not a licence to ignore wakes — `ci-notify` usually does
+  and the rule for it is: arm the check-in, then drop it when THAT OUTCOME is
+  observed terminal — not when any wake arrives.** A session subscribed to a PR
+  is woken by unrelated activity on it constantly; treating those as the signal
+  drops the fallback while the run is still going, and if it is then cancelled
+  nothing reports it. Re-check and re-arm until terminal
+  (`global.md` → *Async Operations*, item 2). This is not a licence to ignore wakes — `ci-notify` usually does
   comment. It is a refusal to *depend* on one where the outcome may produce none.
 
   Two instances, and the second is not specific to dispatched runs at all:
   - **a dispatched run on a PR branch** — seven ways below;
   - **any run that is CANCELLED**, ordinary `pull_request` CI included.
     `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
-    nothing; and a cancelled run is not a red one, so nothing else chases it
-    either. A manual cancel with no superseding run leaves a PR wait with no
-    terminating signal of any kind.
+    **no PR wake**. Be precise about what that does and does not mean:
+    `ci-monitor.yml` DOES classify an unsuperseded cancellation
+    (`cancelled_unsuperseded`) and opens or updates the `ci-failure` issue, so
+    the outcome is tracked — it just is not delivered to the session waiting on
+    the PR. The check-in is still required; "unmonitored" would be wrong.
 
   That refusal is earned, not cautious. Seven ways the dispatched-run wake fails
   to arrive, each verified in the workflow's own source:

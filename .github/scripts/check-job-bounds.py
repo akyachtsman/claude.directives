@@ -118,9 +118,16 @@ def _manifest_declares(root, manifest_name, prefix):
     except (OSError, ValueError):
         return False
 
+    # Match the DIRECTORY, not the string. A bare startswith() also matches
+    # "templates/workflows-archive/old.yml" and "templates/workflows.bak" — a
+    # third instance of this PR's recurring bug, treating a name-shape as the
+    # fact. Require the path to BE the directory or lie under it.
+    def declares(path):
+        return path == prefix or path.startswith(prefix + "/")
+
     def walk(node):
         if isinstance(node, str):
-            return node.startswith(prefix)
+            return declares(node)
         if isinstance(node, dict):
             return any(walk(v) for v in node.values())
         if isinstance(node, list):

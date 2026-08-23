@@ -121,6 +121,23 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **Match by SHA, not by clock.** Reviews and clean comments both name the commit
     — compare it to HEAD. Only the bare 👍 carries no SHA: accept it alone only when
     its triggering review request postdates the latest push.
+  - **A CLEAN verdict leaves NO review — and the reaction is on a different
+    endpoint.** Codex's own comment says it: *"If Codex has suggestions, it will
+    comment; otherwise it will react with 👍."* So an empty review list means
+    either "has not run" or "ran and was clean", and those need opposite actions.
+    The discriminator is the reaction on the PR body, and it is readable only via
+    `issue_read` → `get` — **`pull_request_read` → `get` returns no `reactions`
+    field at all** (verified 2026-08-23). A session watching the review list on a
+    clean PR waits forever, and the natural escalation is to spend an
+    `@codex review` from the weekly pool to unstick it, which buys nothing
+    because Codex already ran. `claude.trading` lost ~30 minutes to exactly this
+    and came within one check-in of spending the request.
+    ⚠️ **This signal is weaker than the rest of this list and must not be folded
+    in as equivalent.** The reactions payload gives counts only
+    (`{"total_count":1,"+1":1}`), not authors, and no tool here lists reaction
+    authors — so a human 👍 is indistinguishable from Codex's. It reads as
+    "someone reacted", not "Codex cleared this". Treat a lone 👍 as the weakest
+    admissible evidence, and prefer any response that names a SHA.
   - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
     current head.** Its `head_sha` is whatever the suite ran against, and on a PR
     under active push that is routinely a commit you have already replaced.

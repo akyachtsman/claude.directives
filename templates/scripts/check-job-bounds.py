@@ -340,22 +340,58 @@ def _runs_playwright_install(script):
 class GitHubIntLoader(yaml.SafeLoader):
     """SafeLoader that resolves integers the way GitHub does.
 
-    PyYAML speaks YAML 1.1, where a leading zero means OCTAL: `timeout-minutes:
-    070` loads as 56. GitHub speaks YAML 1.2, where it is 70. So a workflow
-    bounded at 70 was read as 56 and rejected as below the ui-suite floor — a
-    red build on a healthy repo, and in the NUMERIC rules rather than the shell
-    classifier.
+    PyYAML applies YAML 1.1 tag-resolution rules; GitHub applies YAML 1.2. The
+    disagreement runs in TWO directions, and the first fix here caught only one:
+
+        070   1.1 -> octal 56          1.2 -> decimal 70    tagged int, wrong VALUE
+        080   1.1 -> not an int at all 1.2 -> decimal 80    tagged STRING
+
+    Replacing the int constructor fixed row one and could never fix row two: a
+    constructor cannot run for a scalar the RESOLVER never tagged as an integer,
+    so `timeout-minutes: 080` reached the check as the string '080' and a valid
+    GitHub bound was rejected as "not an integer minute count" — the same red
+    build on a healthy repo, one value-class over. (The `./` -> `..` path bug was
+    this exact shape: a fix aimed at the instance instead of the class.)
+
+    So the pattern below is registered BOTH as an implicit resolver and as the
+    constructor's parser. One definition of "integer", used by both halves.
     """
 
 
+# YAML 1.2's core-schema integer forms — decimal (leading zeros and all), 0o
+# octal, 0x hex. Anchored because PyYAML calls .match() on implicit resolvers.
+_GITHUB_INT = re.compile(r"[-+]?(?:0o[0-7]+|0x[0-9a-fA-F]+|[0-9]+)$")
+
+
+def _github_int(text):
+    """Parse a scalar as GitHub's YAML 1.2 parser would, or None if it is not an int."""
+    text = text.strip()
+    if not _GITHUB_INT.fullmatch(text):
+        return None
+    sign = -1 if text.startswith("-") else 1
+    body = text.lstrip("+-")
+    base = 8 if body.startswith("0o") else 16 if body.startswith("0x") else 10
+    return sign * int(body[2:] if base != 10 else body, base)
+
+
 def _int_yaml_1_2(loader, node):
-    text = loader.construct_scalar(node).replace("_", "")
-    if re.fullmatch(r"[-+]?0[0-9]+", text):
-        return int(text, 10)
+    value = _github_int(loader.construct_scalar(node))
+    if value is not None:
+        return value
+    # A form only YAML 1.1 calls an integer: underscore separators, `0b`,
+    # sexagesimal `1:30`. GitHub may well reject these, but this guard has no
+    # evidence either way, and inventing a rejection would red-build a repo over
+    # a spelling nobody has observed. Keep PyYAML's reading; the two forms above
+    # are the ones with measured disagreement.
     return yaml.SafeLoader.construct_yaml_int(loader, node)
 
 
 GitHubIntLoader.add_constructor("tag:yaml.org,2002:int", _int_yaml_1_2)
+# The resolver half. Without it the constructor above is unreachable for every
+# form YAML 1.1 does not already call an integer.
+GitHubIntLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:int", _GITHUB_INT, list("-+0123456789")
+)
 
 
 def load_jobs(path):
@@ -393,9 +429,33 @@ def load_jobs(path):
     return {k: yaml.load(v, Loader=GitHubIntLoader) for k, v in jobs.items()}
 
 
+def _statically_disabled(step):
+    """True only for a step GitHub can see is off without evaluating anything.
+
+    A step guarded by `if: false` never runs, so it incurs neither the composite's
+    cost nor the install's — charging its job the corresponding floor is a false
+    positive in the still-ENFORCED ui-suite rule.
+
+    Deliberately literal-only. Any condition referencing context (`github.event`,
+    a job output, an input) is unevaluatable here, and the two mistakes are not
+    symmetric: counting a step that will be skipped costs a red build on a repo
+    that is fine, while EXCLUDING one that will run lets a 40-minute ui-suite
+    caller through — the drift this file exists to stop. So the unevaluatable
+    case counts, and only a literal false is excused. That asymmetry is why this
+    is not the bash-parsing trap that made the browser floor advisory: the domain
+    here is a closed set of spellings, not free-form shell.
+    """
+    cond = step.get("if", True)
+    if cond is False:
+        return True
+    if not isinstance(cond, str):
+        return False
+    return re.fullmatch(r"(?:false|\$\{\{\s*false\s*\}\})", cond.strip(), re.I) is not None
+
+
 def _steps(node):
     for step in (node or {}).get("steps") or []:
-        if isinstance(step, dict):
+        if isinstance(step, dict) and not _statically_disabled(step):
             yield step
 
 
@@ -526,7 +586,8 @@ for scan_dir in SCAN_DIRS:
                     f"{rel} → job '{name}' installs Playwright browsers under timeout-minutes: {bound}.\n"
                     f"      A cold-cache install has been measured as high as 21m25s upstream; a bound of\n"
                     f"      {bound} risks killing a cold run before a test executes AND skipping the cache\n"
-                    f"      save that would warm the next one (#238). Browser jobs need >= {BROWSER_FLOOR}."
+                    f"      save that would warm the next one (#238). Browser jobs want >= {BROWSER_FLOOR}\n"
+                    f"      — ADVISORY: this does not fail the build."
                 )
 
 for warning in warnings:
@@ -540,7 +601,18 @@ if errors:
 
 scope = ", ".join(SCAN_DIRS)
 note = f" {len(unevaluatable)} expression-bounded job(s) not range-checked." if unevaluatable else ""
+# Report only what was ENFORCED. Naming the advisory browser floor here said the
+# run had passed a rule it no longer checks — and said it loudest in the one
+# scenario the advisory exists for, a sub-30 browser job, which warns and then
+# exits green under a line claiming `direct browser jobs >= 30`. A pass line that
+# credits an unenforced rule is the same defect as a bound that is a number in a
+# comment: assurance with nothing behind it.
+advisory = (
+    f" {len(warnings)} browser-floor advisory notice(s) printed above — ADVISORY, not enforced."
+    if warnings
+    else f" Browser floor (>= {BROWSER_FLOOR}) is ADVISORY and had nothing to report."
+)
 print(
     f"✅ check-job-bounds: {checked} job(s) in {scope} bounded, none >= {GITHUB_DEFAULT}, "
-    f"direct browser jobs >= {BROWSER_FLOOR}, ui-suite callers >= {UI_SUITE_FLOOR}.{note}"
+    f"ui-suite callers >= {UI_SUITE_FLOOR}.{note}{advisory}"
 )

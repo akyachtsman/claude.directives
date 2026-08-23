@@ -282,10 +282,18 @@ same in every repo:
    workflow, where GitHub does not accept it).
 2. No bound `>= 360` — GitHub's default IS 360, so declaring it changes nothing
    while reading as protection.
-3. Two browser floors, because the shapes cost differently: a job running
-   `playwright install` directly needs `>= 30`; a job using the **ui-suite**
-   composite needs `>= 60`, since that composite is install + every project in
-   `playwright.config.js` + retries + upload in one sum it cannot subdivide.
+3. Two browser floors, because the shapes cost differently — but only one of
+   them is a gate:
+   - **ENFORCED** — a job using the **ui-suite** composite needs `>= 60`, since
+     that composite is install + every project in `playwright.config.js` +
+     retries + upload in one sum it cannot subdivide. The composite is read from
+     `uses:`, structured data with one correct answer.
+   - **ADVISORY** — a job running `playwright install` directly wants `>= 30`.
+     This prints and never fails the build. Deciding whether a `run:` block
+     invokes playwright means parsing bash, and successive attempts produced
+     roughly as many false positives as findings; an unsound hard gate gets
+     deleted and takes rules 1–2 with it. **A green run is not evidence this
+     floor was met** — read the advisory lines.
 
 Rule 3 is the one worth installing for. It exists because rule 1 passed the
 exact defect it was written for: every broken job DECLARED a bound, and the

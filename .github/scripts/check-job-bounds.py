@@ -139,6 +139,8 @@ HEREDOC_OPERATORS = {"<<", "<<-"}
 # position. Matched by BASENAME, so /usr/bin/sudo counts.
 LAUNCHERS = {"npx", "sudo", "yarn", "pnpm", "bunx", "dlx", "exec", "command", "time", "env"}
 
+OPTIONS_TAKING_OPERAND = {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}
+
 SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "{", "}", ";;", "|&"}
 
 
@@ -151,13 +153,44 @@ def _logical_lines(script):
     """
     buffer = ""
     for raw in script.splitlines():
-        if raw.endswith("\\"):
+        if _continues(raw):
             buffer += raw[:-1] + " "
             continue
         yield buffer + raw
         buffer = ""
     if buffer:
         yield buffer
+
+
+def _continues(line):
+    """True when a trailing backslash is a SYNTACTICALLY ACTIVE continuation.
+
+    `echo ok # \` does not continue: bash ends the comment at the newline and
+    runs the next line. Joining them anyway made shlex discard the next line as
+    part of the comment, hiding a real install behind a docs line. A backslash
+    inside quotes is not a continuation either.
+    """
+    if not line.endswith("\\"):
+        return False
+    quote = None
+    index = 0
+    while index < len(line) - 1:      # the trailing backslash itself is excluded
+        char = line[index]
+        if quote:
+            if char == "\\" and quote == '"':
+                index += 2
+                continue
+            if char == quote:
+                quote = None
+        elif char in ("'", '"'):
+            quote = char
+        elif char == "\\":
+            index += 2
+            continue
+        elif char == "#" and (index == 0 or line[index - 1].isspace()):
+            return False              # the backslash is inside a comment
+        index += 1
+    return quote is None
 
 
 def _tokens(line):
@@ -182,19 +215,52 @@ def _tokens(line):
 def _lines_of_tokens(script):
     """Tokenize each logical line, dropping comments and heredoc BODIES."""
     delim = None
+    pending = []
     for line in _logical_lines(script):
         if delim is not None:
+            # `<<-` strips leading TABS from the body and the terminator.
             if line.strip() == delim:
-                delim = None
+                delim = pending.pop(0) if pending else None
             continue
         tokens = _tokens(line)
         if tokens is None:
             continue
-        for index, token in enumerate(tokens):
-            if token in HEREDOC_OPERATORS and index + 1 < len(tokens):
-                delim = tokens[index + 1]
-                break
+        pending.extend(_heredoc_delims(tokens))
+        if pending:
+            delim = pending.pop(0)
         yield tokens
+
+
+def _normalise_local(ref):
+    """Collapse `.` segments in a local action path.
+
+    `./.github/actions/./ui-suite` resolves to the shipped composite on the
+    filesystem, so a raw string compare missed it — then opened it as a WRAPPER,
+    found it did not reference itself, and let a caller under 60 pass.
+    """
+    ref = ref.rstrip("/")
+    if not ref.startswith("./"):
+        return ref
+    parts = [p for p in ref.split("/") if p not in ("", ".")]
+    return "./" + "/".join(parts)
+
+
+def _heredoc_delims(tokens):
+    """Every heredoc delimiter opened on this line, in order.
+
+    Two shapes were missed. `cat <<-EOF` tokenizes as ['cat', '<<', '-EOF'] once
+    punctuation is split, so the delimiter arrives with the operator's dash stuck
+    to it. And `cat <<A <<B` opens TWO bodies — stopping at the first left B's
+    body read as executable text.
+    """
+    found = []
+    for index, token in enumerate(tokens):
+        if token in HEREDOC_OPERATORS and index + 1 < len(tokens):
+            delim = tokens[index + 1]
+            if token == "<<" and delim.startswith("-"):
+                delim = delim[1:]      # `<<-EOF` split as `<<` + `-EOF`
+            found.append(delim)
+    return found
 
 
 def _segments(tokens):
@@ -224,6 +290,14 @@ def _segment_installs(segment):
         token = segment[index]
         if ENV_ASSIGN.fullmatch(token) or PurePosixPath(token).name in LAUNCHERS:
             index += 1
+            continue
+        # Launcher OPTIONS and their operands. `env -u CI playwright install` is
+        # valid and stopped the scan at `-u`, so the install went unclassified
+        # and any bound passed. A bare `-` is not an option.
+        if token.startswith("-") and len(token) > 1:
+            index += 1
+            if token in OPTIONS_TAKING_OPERAND:
+                index += 1
             continue
         break
     if index >= len(segment) or PurePosixPath(segment[index]).name != "playwright":
@@ -289,7 +363,7 @@ def _uses_ui_suite(node, seen):
     """
     for step in _steps(node):
         uses = str(step.get("uses", "")).strip()
-        ref = uses.split("@", 1)[0].rstrip("/")
+        ref = _normalise_local(uses.split("@", 1)[0])
         if ref == UI_SUITE_LOCAL:
             return True
         # Follow LOCAL composites only. A remote action's definition is not on

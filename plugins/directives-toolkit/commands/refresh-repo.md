@@ -94,28 +94,58 @@ that hardening and re-broken the trigger it also fixed (raised by apfp.claude,
 2026-08-19). So there is no list: a diff is self-maintaining, and every
 `DRIFT` file is resolved by looking at it.
 
-**Viewport-class assertion — `.github/scripts/ui-tests/playwright.config.js`.**
-The one customized path this pass does inspect, and NOT by diff: every project
-edits `baseURL`, so a byte-compare against the template flags DRIFT on every
-refresh forever, and a check that always fires is a check nobody reads. Assert
-the property `test.md` → *UI coverage gates* actually requires instead:
+**Viewport-class check — `.github/scripts/ui-tests/playwright.config.js`.**
+The one customized path this pass inspects, and NOT by diff: every project edits
+`baseURL`, so a byte-compare flags DRIFT on every refresh forever, and a check
+that always fires is a check nobody reads.
+
+It classifies rather than greps, because a text match answers the wrong question.
+A spelling is not a class: `devices["iPad …"]` and an explicit `width: 1024` are
+both tablets, a commented-out project is not coverage at all, and a four-digit
+width is not automatically a laptop — `1024x768` is a landscape tablet. So strip
+comments, read each project's own viewport, and let an explicit `viewport` beat
+the descriptor it spreads over, as Playwright itself does:
 
 ```bash
 cfg=.github/scripts/ui-tests/playwright.config.js
-if [ -f "$cfg" ]; then
-  grep -qE "viewport: *\{ *width: *1[0-9]{3}" "$cfg" \
-    || echo "GAP: $cfg declares no laptop project"
-  grep -qE "devices\['iPad" "$cfg" \
-    || echo "GAP: $cfg declares no tablet project"
-  grep -qE "devices\['(Pixel|iPhone|Galaxy)" "$cfg" \
-    || echo "GAP: $cfg declares no phone project"
-fi
+[ -f "$cfg" ] && python3 - "$cfg" <<'EOF'
+import re, sys
+
+src = open(sys.argv[1]).read()
+src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)   # a commented-out project
+src = re.sub(r'(?m)//.*$', '', src)               # is not coverage
+
+FAMILY = [(r'Desktop', 'laptop'),
+          (r'iPad|Galaxy Tab|Nexus 10|Tablet', 'tablet'),
+          (r'Pixel|iPhone|Galaxy [SN]|Moto|Nexus [456]', 'phone')]
+
+def klass(w): return 'laptop' if w >= 1280 else 'tablet' if w >= 768 else 'phone'
+
+found, unknown = set(), []
+for chunk in re.split(r'\bname:', src.split('projects', 1)[-1])[1:]:
+    w = re.search(r'width:\s*(\d+)', chunk)          # explicit viewport beats the
+    if w:                                            # descriptor it spreads over
+        found.add(klass(int(w.group(1)))); continue
+    d = re.search(r"devices\[\s*['\"]([^'\"]+)", chunk)
+    if not d: continue
+    for pat, k in FAMILY:
+        if re.search(pat, d.group(1)): found.add(k); break
+    else: unknown.append(d.group(1))
+
+for k in ('laptop', 'tablet', 'phone'):
+    if k not in found: print(f"UNCONFIRMED: no {k}-class project found")
+for d in unknown: print(f"UNCONFIRMED: could not classify devices['{d}']")
+EOF
 ```
 
-A `GAP` is a verdict, not a question — unlike `DRIFT` above. A missing class is
-never a local improvement: it is coverage `global.md` requires and the suite
-cannot report, because a viewport that is never instantiated produces no failing
-test. Repair it from the template's `projects` list in this refresh.
+**`UNCONFIRMED` is a question, like `DRIFT` — it just has a different answer.**
+This check can prove a class is PRESENT; it cannot prove one is absent, because
+the config is read by pattern and a project may declare a viewport in a shape the
+classifier has not learned (which is why an unrecognised descriptor is reported
+rather than ignored). So `UNCONFIRMED` means look, not repair. But once looking
+shows the class really is missing, that is settled: a missing viewport class is
+never a local improvement the way a `DRIFT` diff often is. Restore it from the
+template's `projects` list in this refresh.
 (claude.prop shipped with two phone profiles and neither a laptop nor a tablet,
 found 2026-08-23 by review rather than by CI — that is the detection gap this
 closes, and sibling projects likely share it.)

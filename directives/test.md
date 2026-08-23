@@ -242,7 +242,7 @@ page you came from, tracked via a nav stack — not the last page visited).
 ## UI coverage gates (blocking)
 Five gates every project's UI suite must satisfy. The kit enforces the first
 four with a scenario (named in parentheses); the fifth is a property of the
-runner's config, not of any test, so it is asserted at refresh time instead.
+runner's config, not of any test, so it is checked at refresh time instead.
 Project-specific suites must keep all five:
 - **Console-error gate.** Every UI test run attaches `page.on('pageerror')` and
   `page.on('console')` (type `error`) and **fails if either fires** during load
@@ -264,10 +264,13 @@ Project-specific suites must keep all five:
 - **Three viewport classes, declared in the runner's project list.**
   `global.md` requires laptop, tablet AND phone, so `playwright.config.js` must
   declare a project in each class. Two phone profiles read as coverage and are
-  not: a phone-only list also leaves an in-test `setViewportSize(390)` narrowing
-  nothing, so the responsive assertion it was written for silently never runs.
-  This gate lives in the config rather than a scenario, so no test failure
-  surfaces it — `/refresh-repo` Phase 1.5 asserts it instead.
+  not — and what a phone-only list costs is every OTHER scenario, which runs at
+  whatever widths the list declares: S1, S3, DISMISS and ENTRY simply never
+  execute at laptop or tablet width, so a breakpoint regression there is
+  untested. (S4 is the exception and not the evidence: it sets 390 explicitly,
+  so it runs the same in every project — a phone-only list makes it redundant,
+  not skipped.) This gate lives in the config rather than in any scenario, so no
+  test failure surfaces it; `/refresh-repo` Phase 1.5 checks it instead.
 
 These are **completion gates, not sequencing gates**: everything must pass before
 the work is called done, but a task never waits for the previous task's suite to

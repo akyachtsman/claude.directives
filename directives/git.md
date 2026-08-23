@@ -88,8 +88,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   5. **both** lookups fetch at most 100 and refuse a full page, since uniqueness
      cannot be proven from a truncated set — but they are scoped differently and
      the boundary is **per query, not repo-wide**. The SHA lookup lists open PRs
-     unfiltered, so >100 open PRs silences *it*; the branch fallback filters by
-     `--head`, so its boundary is ~100 PRs **sharing that branch name**. A repo
+     unfiltered, so **100 or more** open PRs silences *it* — the guard is
+     `length >= 100`, and a full page is refused even when it happens to be
+     exhaustive, because a full page cannot prove it was not truncated. The
+     branch fallback filters by `--head`, so its boundary is **100 or more PRs
+     sharing that branch name**. A repo
      with 500 open PRs on distinct branches still gets its wake from the
      fallback. (Until `ba1f7ba` the SHA lookup had no `--limit` at all and saw
      only `gh pr list`'s default 30 — worse than silent, since a truncated page

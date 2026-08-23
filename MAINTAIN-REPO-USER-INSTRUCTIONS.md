@@ -41,12 +41,18 @@ Corollaries worth memorizing:
   Phase 1.5 working as written, not two sessions being cautious. Expect that file
   to be merged rather than overwritten, and expect the merge to need a human
   reading of the diff.
-- **The flip side is that a locally extended copy never gets refreshed, so it
-  drifts silently.** Nothing overwrites it, and the drift surfaces only when
-  someone looks. Where the drift is a coverage gap the suite cannot report,
-  add a targeted assertion upstream instead of relying on the diff — see
-  `/refresh-repo` Phase 1.5's viewport-class check, which exists because
-  `claude.prop`'s Playwright config had lost its laptop and tablet profiles.
+- **What silence actually looks like, and where `qa.yml` is NOT it.** A
+  locally extended `qa.yml` is still loud: Phase 1.5 diffs every
+  `.github/workflows/*.yml` against its template and reports it `DRIFT` on every
+  refresh, and Phase 2 still classifies the upstream delta and offers the patch.
+  Only the automatic verbatim overwrite is off — treat an upstream change to it
+  as ordinary disposition work, not as undetectable. The genuinely silent class
+  is the paths Phase 1.5's loop does not walk, `.github/scripts/ui-tests/**`
+  above all: nothing diffs them, so drift there surfaces only when a person
+  looks. Where such drift is a coverage gap the suite cannot report, the repair
+  is a targeted check upstream — see `/refresh-repo` Phase 1.5's viewport-class
+  check, which exists because `claude.prop`'s Playwright config had lost its
+  laptop and tablet profiles and green CI said nothing.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).

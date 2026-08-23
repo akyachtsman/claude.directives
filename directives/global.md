@@ -445,11 +445,10 @@ naming what remains open, or "nothing open" — never absent.
      what something actually emits. A dispatched run on a PR branch has seven
      verified ways to emit nothing (`git.md` → *PR Lifecycle*), and a cancelled run
      emits no PR WAKE, since `ci-notify` fires only on success. (`ci-monitor.yml`
-     classifies an unsuperseded cancellation and files the `ci-failure` issue —
-     but **only for workflows its own list names**, and that issue never reaches
-     the session waiting on the PR anyway. For anything outside that list the
-     cancellation is tracked nowhere at all. Either way the check-in is the only
-     observer *you* have.)
+     may still surface it as a `ci-failure` issue — coverage depends on its watch
+     list and on whether anyone dispatches its manual scan; read that file rather
+     than trusting a summary. **None of it reaches the session waiting on the
+     PR**, which is the only part that bears on this rule.)
      Where nothing will wake you, a check-in is the only observer — arming one
      there is not the polling `git.md` bans.
   2. **Self-pace with `send_later`** (pre-approved per *Scheduling Tools Never

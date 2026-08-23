@@ -36,14 +36,15 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **any run that is CANCELLED**, ordinary `pull_request` CI included.
     `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
     **no PR wake**. Be precise about what that does and does not mean:
-    `ci-monitor.yml` classifies an unsuperseded cancellation
-    (`cancelled_unsuperseded`) and opens or updates the `ci-failure` issue — but
-    **only for workflows its own `workflow_run:` list names**, read from the
-    default branch. The template watches three; this repo watches one. A
-    cancelled run of any other workflow reaches no monitor at all. So: tracked
-    for watched workflows and not delivered to the waiting session; untracked
-    entirely for the rest. The check-in is required either way, and neither
-    "unmonitored" nor "tracked" is right unqualified.
+    `ci-monitor.yml` may classify it (`cancelled_unsuperseded`) and file the
+    `ci-failure` issue. How much it covers is genuinely intricate — its
+    `workflow_run:` list is read from the default branch and names three
+    workflows in the template and one here, while its `workflow_dispatch` scan
+    ignores that list and sweeps every run in a lookback window. **Read the file
+    before asserting coverage**; four successive attempts to summarise it here
+    were each wrong in a different direction, which is why this text no longer
+    tries. What matters for THIS rule is unchanged either way: **none of it
+    reaches the session waiting on the PR.** Arm the check-in.
 
   That refusal is earned, not cautious. Seven ways the dispatched-run wake fails
   to arrive, each verified in the workflow's own source:
@@ -61,8 +62,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
      unfiltered, but the branch fallback re-queries server-side with
      `--head`, so a unique branch match is still found. It bites only when the
      FILTERED query itself has more than 30 candidates;
-  6. the branch fallback deliberately stays silent when two same-owner PRs share
-     a branch, because commenting green on the wrong PR is worse;
+  6. **both** PR lookups can resolve to the wrong PR or to none. The branch
+     fallback deliberately stays silent when two same-owner PRs share a branch
+     (commenting green on the wrong one is worse), and the exact-SHA lookup takes
+     the FIRST match rather than requiring uniqueness — so when two open PRs
+     share a head commit, one of them is commented and the other gets nothing,
+     on an ordinary successful run;
   7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
      nothing — the case above, which reaches ordinary PR CI too.
 

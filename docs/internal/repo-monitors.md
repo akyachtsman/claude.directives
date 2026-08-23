@@ -23,8 +23,8 @@ check-in. The template counterpart, adapted to this repo's workflow name.
 
 **codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments (the
 an all-clear can travel as a SHA-bearing comment, which the monitor sees and
-acts on — that is what cleared #293 — or as a 👍 reaction, which it cannot see at
-all. Both were observed on 2026-08-23; neither is the default, so check the PR's
+acts on — that is what cleared #293 — or as a 👍 reaction or an inline
+review-thread reply, neither of which it can see at all. Both were observed on 2026-08-23; neither is the default, so check the PR's
 comments before assuming the label needs removing by hand). Adds a `codex-flagged` label when Codex
 raised concerns (changes_requested or COMMENTED with inline comments); clears it
 on an all-clear naming the PR's current head SHA. A stale or SHA-less all-clear

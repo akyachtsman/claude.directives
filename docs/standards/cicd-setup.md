@@ -205,7 +205,9 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 ```
 
 **What it does:** adds a `codex-flagged` label when Codex raises concerns and
-clears it on a Codex all-clear naming the current head SHA.
+clears it on a Codex all-clear **comment** naming the current head SHA. ⚠️ A
+clean rerun usually arrives as a bare 👍 reaction instead, which fires neither
+trigger — plan on removing the label by hand with a rationale.
 Behavior detail: `docs/standards/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor

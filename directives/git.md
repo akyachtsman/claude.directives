@@ -48,18 +48,24 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     `ci-failure` issue. How much it covers is genuinely intricate — its
     `workflow_run:` list is read from the default branch and names three
     workflows in the template and one here, while its `workflow_dispatch` scan
-    ignores that list and sweeps every run in a lookback window. **Read the file
+    ignores that list and sweeps a lookback window — **one `per_page=100` page
+    per status, unpaginated, filtered by time afterwards**, so in a busy repo an
+    older qualifying run falls off the page. A page-bounded backstop, not
+    complete coverage. **Read the file
     before asserting coverage**; four successive attempts to summarise it here
     were each wrong in a different direction, which is why this text no longer
     tries. What matters for THIS rule is unchanged either way: **none of it
     reaches the session waiting on the PR.** Arm the check-in.
   - **an ordinary successful run whose PR cannot be resolved unambiguously.**
-    Neither dispatched nor cancelled: `ci-notify`'s exact-SHA lookup takes the
-    FIRST match, so when two open PRs share a head commit one is commented and
-    the other gets nothing. A `repository_dispatch` run is a live case of this
-    rather than a separate one — it carries the DEFAULT-BRANCH SHA, and if the
-    default branch happens to be the head of an open PR (a `main` → `release`
-    promotion, say) that unrelated PR is commented while the session that
+    Neither dispatched nor cancelled: since `ba1f7ba` both `ci-notify` lookups
+    require **exactly one** match, so when two open PRs share a head commit
+    NEITHER is commented and both sessions wait. (Before that the SHA lookup took
+    the first match and one PR got a wrong-PR green — do not go looking for that
+    comment; the shipped notifier no longer emits it.) A `repository_dispatch`
+    run is a live case of this rather than a separate one — it carries the
+    DEFAULT-BRANCH SHA, and if the default branch is the head of exactly one open
+    PR (a `main` → `release` promotion, say) that unrelated PR is commented while
+    the session that
     triggered the dispatch waits.
 
   That refusal is earned, not cautious. Seven ways the dispatched-run wake fails
@@ -75,11 +81,15 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
      (`docs/standards/automations.md` → *Known limitation*). When the default
      branch IS an open PR's head, it is worse than silent: that unrelated PR is
      commented and the waiting session still gets nothing;
-  5. **both** lookups fetch at most 100 open PRs and refuse a full page, because
-     uniqueness cannot be proven from a truncated set. Beyond ~100 open PRs the
-     run is silent by design. (Until `ba1f7ba` the SHA lookup had no `--limit` at
-     all and saw only `gh pr list`'s default 30 — worse than silent, since a
-     truncated page can make an ambiguous SHA look unique.);
+  5. **both** lookups fetch at most 100 and refuse a full page, since uniqueness
+     cannot be proven from a truncated set — but they are scoped differently and
+     the boundary is **per query, not repo-wide**. The SHA lookup lists open PRs
+     unfiltered, so >100 open PRs silences *it*; the branch fallback filters by
+     `--head`, so its boundary is ~100 PRs **sharing that branch name**. A repo
+     with 500 open PRs on distinct branches still gets its wake from the
+     fallback. (Until `ba1f7ba` the SHA lookup had no `--limit` at all and saw
+     only `gh pr list`'s default 30 — worse than silent, since a truncated page
+     can make an ambiguous SHA look unique.);
   6. **both** lookups require **exactly one** match and stay silent otherwise —
      no PR, or more than one. Two open PRs can share a head commit (the same tip
      proposed against `main` and against a release branch), and two same-owner
@@ -114,8 +124,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging. The `codex-monitor`
   workflow adds the label on a flagged round and clears it itself on a Codex
-  all-clear that names the current head SHA — so a label still present means
-  either concerns not yet re-reviewed, or an all-clear that failed the SHA
+  all-clear **comment** that names the current head SHA — and an ordinary clean
+  rerun is a reaction, which fires neither monitor trigger, so expect to remove
+  the label by hand with a rationale. A label still present means
+  concerns not yet re-reviewed, a reaction-only clean round the monitor cannot
+  see, or an all-clear that failed the SHA
   match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head:

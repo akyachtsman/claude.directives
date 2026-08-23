@@ -20,7 +20,9 @@ prompts). No open PR → exits quietly. The template counterpart, adapted to thi
 repo's workflow name.
 
 **codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments (the
-all-clear travels only as a comment). Adds a `codex-flagged` label when Codex
+all-clear can travel as a comment; a clean rerun usually travels as a 👍
+reaction the monitor cannot see at all, and that label must be removed by hand
+with a rationale). Adds a `codex-flagged` label when Codex
 raised concerns (changes_requested or COMMENTED with inline comments); clears it
 on an all-clear naming the PR's current head SHA. A stale or SHA-less all-clear
 holds the label. Contract detail: `docs/standards/automations.md` → Automation 3.

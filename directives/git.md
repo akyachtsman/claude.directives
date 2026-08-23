@@ -22,14 +22,21 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   PR; do not ban it in both places at once, or a non-PR gate can sit red
   indefinitely with nothing able to say so.
 
-  **A dispatched run on a PR branch is the exception, and the rule for it is: arm
-  the check-in, then drop it the moment the comment arrives.** `ci-notify` often
-  does comment — it falls back to matching by branch, and names dispatched runs
-  as a case that fallback exists for — so this is not a licence to ignore the
-  wake. It is a refusal to *depend* on one.
+  **The exception is any awaited outcome that can end WITHOUT emitting a wake,
+  and the rule for it is: arm the check-in, then drop it the moment a wake
+  arrives.** This is not a licence to ignore wakes — `ci-notify` usually does
+  comment. It is a refusal to *depend* on one where the outcome may produce none.
 
-  That refusal is earned, not cautious. Seven ways the wake fails to arrive, each
-  verified in the workflow's own source:
+  Two instances, and the second is not specific to dispatched runs at all:
+  - **a dispatched run on a PR branch** — seven ways below;
+  - **any run that is CANCELLED**, ordinary `pull_request` CI included.
+    `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
+    nothing; and a cancelled run is not a red one, so nothing else chases it
+    either. A manual cancel with no superseding run leaves a PR wait with no
+    terminating signal of any kind.
+
+  That refusal is earned, not cautious. Seven ways the dispatched-run wake fails
+  to arrive, each verified in the workflow's own source:
   1. the run's workflow is not in `ci-notify.yml`'s `workflows:` list — it watches
      three **by name**;
   2. `ci-notify.yml` is not yet live on the **default branch**, so it cannot wake
@@ -44,7 +51,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   6. the branch fallback deliberately stays silent when two same-owner PRs share
      a branch, because commenting green on the wrong PR is worse;
   7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
-     nothing — and a cancelled run is not a red one, so nothing else chases it.
+     nothing — the case above, which reaches ordinary PR CI too.
 
   Do not attempt to enumerate your way to a "covered" test. That list grew from
   one item to seven under review, and the eighth is not knowable in advance.

@@ -68,6 +68,31 @@ Execute these before any task work:
   the auth-gated scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
+- **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` one is
+  invoked exactly **once**. Playwright adopts the Promise it returns, and whatever
+  that Promise settles to — `false` included — ends the wait. It never polls
+  again. So the condition is evaluated at t≈0 and never actually waited *for*.
+  Poll from Node instead: `expect.poll()`, or a loop over `page.evaluate`, both of
+  which await.
+
+  Measured on `playwright-core` 1.62.1. A page flag flipped to `true` at 300ms,
+  2000ms budget, one character between the two rows — and identical in every
+  polling mode (`raf`, default, and a fixed interval):
+
+  | page function | outcome |
+  |---|---|
+  | `() => window.ok` | resolved at **307ms**, value `true` — polled, correct |
+  | `async () => window.ok` | resolved at **4ms**, value `false` — one shot, wrong |
+
+  **The `timeout` is not the broken part.** An async function awaiting 1500ms
+  under a 1200ms budget does raise `TimeoutError`, at 1202ms — the bound still
+  holds over that single invocation. What is missing is the *waiting*: the call
+  returns a handle to `false` and the spec proceeds as though the condition held.
+
+  That is why it survives review. It reads as a guard, it is a guard everywhere
+  except in the one mode nobody tests, and a green run is exactly what it
+  produces. Found in `claude.prop`'s S28, where a 15-second seed poll had been
+  resolving instantly since the day it was written.
 
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach

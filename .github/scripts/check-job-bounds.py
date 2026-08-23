@@ -128,59 +128,77 @@ UI_SUITE_LOCAL = "./.github/actions/ui-suite"
 # lesson from the same day, applied to the file that kept relearning it: parse,
 # do not grep, when the question is "is this executed" rather than "is this
 # mentioned."
-HEREDOC_TOKEN = re.compile(r"<<-?(.*)")
 ENV_ASSIGN = re.compile(r"[A-Za-z_]\w*=.*")
+
+# Heredoc operators ONLY. `<<<` is a here-string — a different operator that
+# consumes no body — and treating it as a heredoc with delimiter "<" discarded
+# the rest of the run block, hiding real installs after it.
 HEREDOC_OPERATORS = {"<<", "<<-"}
 
 # Words that can precede the real command and still leave it at a command
 # position. Matched by BASENAME, so /usr/bin/sudo counts.
 LAUNCHERS = {"npx", "sudo", "yarn", "pnpm", "bunx", "dlx", "exec", "command", "time", "env"}
 
-# Tokens that END one command and begin another.
-SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "{", "}"}
+SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "{", "}", ";;", "|&"}
+
+
+def _logical_lines(script):
+    """Yield logical shell lines, joining backslash continuations.
+
+    `echo \` + `  playwright install` is ONE command. Tokenizing physical lines
+    made the first raise and be skipped, and the second parse as a standalone
+    install — turning a docs job into a browser job.
+    """
+    buffer = ""
+    for raw in script.splitlines():
+        if raw.endswith("\\"):
+            buffer += raw[:-1] + " "
+            continue
+        yield buffer + raw
+        buffer = ""
+    if buffer:
+        yield buffer
+
+
+def _tokens(line):
+    """Tokenize one logical line, or None when it cannot be parsed as shell.
+
+    `punctuation_chars=True` is what makes separators reliable: shlex splits
+    `ok;playwright` into three tokens while leaving a QUOTED `"a;b"` whole, which
+    no amount of post-hoc string splitting can do. It also normalises `<<'EOF'`
+    and `<< EOF` to the same two tokens, and keeps `<<<` distinct.
+    """
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        return list(lexer)
+    except ValueError:
+        # Unbalanced quotes: not parseable as shell. Claiming a job installs
+        # browsers on text we cannot read is the false positive this file exists
+        # to avoid — see the header's asymmetry.
+        return None
 
 
 def _lines_of_tokens(script):
-    """Tokenize each line, dropping comments and heredoc BODIES."""
+    """Tokenize each logical line, dropping comments and heredoc BODIES."""
     delim = None
-    for raw in script.splitlines():
+    for line in _logical_lines(script):
         if delim is not None:
-            if raw.strip() == delim:
+            if line.strip() == delim:
                 delim = None
             continue
-        try:
-            lexer = shlex.shlex(raw, posix=True)
-            lexer.whitespace_split = True
-            tokens = list(lexer)
-        except ValueError:
-            # Unbalanced quotes: not parseable as shell. Claiming a job installs
-            # browsers on text we cannot read is the false positive this file
-            # exists to avoid — see the header's asymmetry.
+        tokens = _tokens(line)
+        if tokens is None:
             continue
-        delim = _heredoc_delim(tokens)
+        for index, token in enumerate(tokens):
+            if token in HEREDOC_OPERATORS and index + 1 < len(tokens):
+                delim = tokens[index + 1]
+                break
         yield tokens
 
 
-def _heredoc_delim(tokens):
-    """The delimiter a real heredoc opens on this line, or None.
-
-    Both spellings are valid shell and shlex tokenizes them differently:
-    `<<'EOF'` arrives as one token, `<< EOF` as two. Recognising only the
-    attached form left the body of the spaced form treated as executable code.
-    """
-    for index, token in enumerate(tokens):
-        if token in HEREDOC_OPERATORS:
-            if index + 1 < len(tokens):
-                return tokens[index + 1]
-            continue
-        match = HEREDOC_TOKEN.fullmatch(token)
-        if match and match.group(1):
-            return match.group(1)
-    return None
-
-
 def _segments(tokens):
-    """Split a line's tokens into command segments at shell separators."""
+    """Split a logical line's tokens into command segments at separators."""
     current = []
     for token in tokens:
         if token in SEPARATORS:
@@ -189,11 +207,6 @@ def _segments(tokens):
             current = []
             continue
         current.append(token)
-        # shlex keeps a trailing `;` attached: `echo hi; playwright install`
-        # tokenizes as ['echo', 'hi;', 'playwright', 'install'].
-        if token.endswith((";", "&", "|")):
-            yield current
-            current = []
     if current:
         yield current
 
@@ -201,19 +214,18 @@ def _segments(tokens):
 def _segment_installs(segment):
     """True when this ONE command is a playwright install.
 
-    Position within the segment is what makes a launcher meaningful. Checking
-    only the PRECEDING token made `echo npx playwright install` match, because
-    `npx` sits immediately before `playwright` while `echo` is the actual
-    command. And matching the command word exactly rejected
-    `./node_modules/.bin/playwright install`, which certainly installs — a
-    false negative the discarded substring version did not have. Basename
-    comparison from the segment's head fixes both.
+    Launchers and env assignments INTERLEAVE — `env CI=1 playwright install` is
+    valid, and skipping assignments only BEFORE launchers left `CI=1` treated as
+    the command word, so a browser job passed at any bound. Consume both in one
+    loop rather than in two phases.
     """
     index = 0
-    while index < len(segment) and ENV_ASSIGN.fullmatch(segment[index]):
-        index += 1
-    while index < len(segment) and PurePosixPath(segment[index]).name in LAUNCHERS:
-        index += 1
+    while index < len(segment):
+        token = segment[index]
+        if ENV_ASSIGN.fullmatch(token) or PurePosixPath(token).name in LAUNCHERS:
+            index += 1
+            continue
+        break
     if index >= len(segment) or PurePosixPath(segment[index]).name != "playwright":
         return False
     return index + 1 < len(segment) and segment[index + 1].startswith("install")

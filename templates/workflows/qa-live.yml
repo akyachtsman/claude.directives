@@ -69,32 +69,29 @@ jobs:
     # bound below the work it bounds does not protect anything; it fails on a
     # schedule. Warm runs finish in ~5 minutes, so this ceiling only ever applies
     # to the cold path it exists to survive.
-    # 60, NOT 40, and sized against a HEALTHY cold job — not against the worst
-    # number in the record. Those are different, and conflating them breaks the
-    # bound in whichever direction you lean.
+    # 60, NOT 40. This job runs the ui-suite composite: npm ci + playwright
+    # install + EVERY project in playwright.config.js + retries + artifact
+    # upload, in one sum the composite cannot subdivide.
     #
-    # One bound covers npm ci + playwright install + every project + retries +
-    # artifact upload; the ui-suite composite cannot carry per-step bounds (see
-    # the note at the top of this file). Sizing inputs, from
-    # check-job-bounds.py's own header: a cold-cache browser install measures
-    # 21m25s, and a 20-minute bound killed run 32277932813 at 20m21s. Add npm ci,
-    # four projects cold with retries, and the upload, and a healthy cold run
-    # lands around 40. 60 is that plus headroom.
+    # Sized from two MEASURED numbers, not from one anchor:
+    #     cold-cache browser install   21m25s   (check-job-bounds.py, rule 3)
+    #   + complete job, warm cache     16.6min  (apfp.claude, qa-live on
+    #                                            c302827: 4 projects, 204 specs,
+    #                                            checkout + npm ci + suite)
+    #     -------------------------------------
+    #     healthy COLD run            ~38min    → 60 leaves ~58% headroom
     #
-    # The 57-minute figure in that same header is NOT a sizing input. Read it in
-    # context: run 32269445117 "sat 57 minutes on a browser install" and "was only
-    # stopped because a bound had landed by then" — that is a WEDGE, the pathology
-    # bounds exist to kill. Size this to survive 57 and you have built a bound
-    # that cannot trip on the thing it is for.
+    # The 57-minute figure in check-job-bounds.py's header is NOT a sizing input,
+    # however tempting the arithmetic. Read it in context: that run "sat 57
+    # minutes on a browser install", cited under "an unbounded job that WEDGES".
+    # It is the pathology bounds exist to kill. Size to survive it and you have
+    # built a bound that cannot trip on its own purpose.
     #
-    # 40 was wrong in the other direction: it cancels the AUTHORITATIVE live gate
-    # on a healthy cold run, and a cancelled run is not a red one — it reads as
-    # inconclusive rather than as a failure anyone chases. Raise this BEFORE
-    # adding projects, never after. (apfp.claude hit exactly that when they added
-    # laptop and tablet projects, 2026-08-23.)
-    #
-    # To tighten it, measure a complete cold job end to end and size from that.
-    # Nobody has; 60 is headroom over an estimate, and says so.
+    # 40 was wrong in the other direction, and the failure mode is why this
+    # comment is long: a cancelled run is NOT a red one. It reads as
+    # inconclusive, so nobody chases it — the same shape as a viewport never
+    # instantiated and a live gate nobody watched. Raise this BEFORE adding
+    # projects, never after.
     timeout-minutes: 60
 
     steps:

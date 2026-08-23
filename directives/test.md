@@ -68,6 +68,25 @@ Execute these before any task work:
   the auth-gated scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
+- **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` callback
+  returns a Promise, a Promise is always truthy, and the poller tests the returned
+  value for truthiness — so the wait resolves on the first tick and its `timeout`
+  is fiction. It never observes what the function actually returns. Poll from Node
+  instead: `expect.poll()`, or a loop over `page.evaluate`, both of which await.
+
+  Measured on `playwright-core` 1.62.1:
+
+  | predicate | budget | result |
+  |---|---|---|
+  | `async () => false` | 1500ms | **resolved at 75ms** |
+  | `() => false` | 600ms | TimeoutError at 603ms |
+  | `async () => { await sleep(50); return false }` | 1200ms | **resolved at 54ms** |
+
+  The third row is the trap: a real `await` inside does not help, because the
+  Promise is returned — and consumed as truthy — before the body finishes. This
+  passes review by eye, is invisible in a green run, and turns any seed-or-state
+  poll into a race the spec silently loses. Found in `claude.prop`'s S28, where a
+  15-second seed poll had been resolving instantly since it was written.
 
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach

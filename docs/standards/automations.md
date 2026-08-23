@@ -208,9 +208,18 @@ not polling (`git.md` → *PR Lifecycle*, *GitHub API Quota Economy*).
 
 **How it works:**
 - Trigger: `workflow_run` (completed) on the QA workflows shipped in the set.
-- On `conclusion == success`: finds the open PR whose head SHA matches the run
-  and posts a one-line "✅ green" comment — the comment webhook wakes the
-  subscribed session. No open PR → exits quietly.
+- On `conclusion == success`: resolves the run to **exactly one** open PR and
+  posts a one-line "✅ green" comment — the comment webhook wakes the subscribed
+  session. Two steps, each requiring uniqueness: the head SHA first, then the
+  head branch **plus head-repository owner** as a fallback (for a dispatched run
+  or a head that moved mid-flight), which is labelled *matched by branch* because
+  the SHA it names may already be superseded.
+- **Ambiguity exits silent, by design.** Two open PRs can share a head commit —
+  the same tip proposed against `main` and against a release branch is ordinary —
+  and posting to the first of them signals green for a base the run never tested.
+  A reader treating that as a gate signal is reading another PR's result, so the
+  lookup takes a match only when one candidate survives. No PR, or more than one
+  → exits quietly, and the waiting session's check-in is what covers it.
 - Failures are deliberately NOT commented (delivered natively; `ci-monitor.yml`
   tracks them repo-side).
 - Uses `GITHUB_TOKEN` only (`pull-requests: write`).

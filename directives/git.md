@@ -125,16 +125,44 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     bot's own response clears the gate.
   - **Match by SHA, not by clock.** Reviews and clean comments both name the commit
     — compare it to HEAD.
-  - **A bare 👍 never clears the gate on its own.** It carries no SHA, and the
-    reactions payload carries neither an **author** nor a **timestamp** — only
-    counts (`{"total_count":1,"+1":1}`). So a 👍 left by an earlier clean round
+  - **A bare 👍 never clears the gate FROM THE EMBEDDED SUMMARY.** `issue_read` →
+    `get` returns reactions as counts only (`{"total_count":1,"+1":1}`) — no
+    author, no timestamp. Read that way, a 👍 left by an earlier clean round
     survives every later push and is indistinguishable from a fresh one, and a
-    human's 👍 is indistinguishable from Codex's. "Accept it when the review
-    request postdates the push" does not work: the reaction cannot be correlated
-    with the request. Treating it as admissible can merge an **unreviewed head**.
-    Use it only as a hint that Codex may have run clean; to actually clear the
-    gate, request a fresh `@codex review` and wait for a response that names a
-    SHA, or take the *documented-unavailable* path below and say so on the PR.
+    human's is indistinguishable from Codex's. "Accept it when the review request
+    postdates the push" does not work there: there is nothing to correlate with
+    the request, and treating it as admissible merges an **unreviewed head**.
+
+    Be precise about WHY, because the reason is what the next reader reuses: the
+    data is missing from *that view*, not from GitHub. `GET /repos/{owner}/{repo}/
+    issues/{number}/reactions` — the reaction LIST, not the embedded summary —
+    returns `user` and `created_at` per reaction. Where a session can reach it,
+    that is a real clean-round path: a 👍 whose author is the Codex bot identity
+    and whose `created_at` postdates the last push **does** clear the gate. Verify
+    reachability rather than assuming it; from a Claude Code remote session on
+    2026-08-23 it was not reachable — direct REST to `api.github.com` returned
+    *"GitHub access is not enabled for this session"*, WebFetch returned 403, and
+    the MCP surface exposes only the summary.
+
+  - **The clean-round escape hatch — a gate with no reachable exit is not a
+    gate.** Codex comments only when it has suggestions; a clean verdict is a
+    reaction and nothing else. So "wait for a response naming a SHA" can never be
+    satisfied on a clean PR, and each retry spends the shared weekly allowance to
+    produce another reaction. Work down this ladder and stop at the first rung
+    that is available:
+    1. **Reaction list** (verifiable) — author + `created_at` as above.
+    2. **Ask, don't re-review** (verifiable where Codex answers) — a direct
+       `@codex` question naming the SHA is answered as a *comment*, which carries
+       an author and a timestamp. Cheaper than a review round. **Untested as of
+       2026-08-23** — record the outcome the first time it is used.
+    3. **Attest, never infer** (not verifiable) — merge on the reaction only by
+       stating on the PR: the head SHA, when the review was requested, the
+       reaction count before and after, and explicitly that the reaction is
+       unattributable on this tool surface. That is the same shape as the
+       *documented-unavailable* path below: the protection worth keeping is not
+       that a reaction is provable, but that **nobody clears this gate silently**.
+    A gate that cannot be cleared is not stricter than one that can — it just
+    moves the failure from a bad merge to a stalled PR and a drained quota.
   - **A CLEAN verdict leaves NO review — and the reaction is on a different
     endpoint.** Codex's own comment says it: *"If Codex has suggestions, it will
     comment; otherwise it will react with 👍."* So an empty review list means

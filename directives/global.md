@@ -467,16 +467,25 @@ naming what remains open, or "nothing open" — never absent.
        exactly.
      - Settings load at session start, so the allowlist covers the NEXT
        session; a one-time prompt in an already-running session is accepted
-       (→ *Scheduling Tools Never Prompt*). A PR-attached wait whose outcome
-       `ci-notify.yml` actually reports needs no completion polling — webhook
-       wake covers failure and success — but a wait expected to exceed five
+       (→ *Scheduling Tools Never Prompt*). A wait whose outcome `ci-notify.yml`
+       reports needs no completion polling — but a wait expected to exceed five
        minutes still arms the heartbeat (→ *Status Line on Every Stop*).
-       **"PR-attached" is not the test, and "installed" is not either** — see
-       the exception in item 1 above: `ci-notify` fires only on
-       `conclusion == 'success'` and only for workflows it watches by name, so
-       a cancelled run and a dispatched PR-branch run can both end with nothing
-       to wake on. Where the outcome you are waiting for produces no wake, the
-       check-in is required, not optional.
+
+       **Ask the question you can answer while the run is still in flight.**
+       "Does this outcome emit a wake?" is only knowable once the run is
+       terminal, and the decision to arm has to be made before that — a test
+       that needs the answer it is deciding about. So the test is
+       **"could this run end in a way that emits no wake?"**, evaluated over
+       every conclusion still possible. `ci-notify` fires only on
+       `conclusion == 'success'` and only for workflows it watches by name, and
+       **any run can be cancelled** — a superseding push, a manual cancel, a
+       runner loss — which item 1 above establishes emits no PR wake. So the
+       answer for an in-flight CI run is essentially always yes: **arm the
+       check-in, and drop it when the outcome is terminal.** "PR-attached" is
+       not the test, "installed" is not the test, and "I expect this one to
+       pass" is not the test — an anticipated success that gets cancelled is the
+       case that strands the session, and it is indistinguishable in advance
+       from the success that would have woken it.
      - Event wakes stay the primary signal; the heartbeat (→ *Status Line on
        Every Stop*) is the owner-visible liveness line carried by whatever wake
        already happens — never a replacement for event wakes, and never a

@@ -293,11 +293,12 @@ value was the fault. Until this guard shipped downstream, the 60 in the qa
 workflows was a number in a comment — three callers had already drifted to 40.
 
 The guard scans `.github/workflows`, and also `templates/workflows` in the repo
-that ships these templates. It tells the two apart by looking for `EXPORTS.json`,
-which only claude.directives has — so in your repo the second scan is skipped
-silently and correctly, and a top-level `templates/` of your own (email templates,
-app templates, anything) does not trip it. Same file both sides, nothing to
-configure, no forked copy to keep in sync.
+that ships these templates. It tells the two apart by reading `EXPORTS.json` and
+asking whether that manifest actually declares paths under `templates/workflows` —
+not by the filename. So your repo skips the second scan silently and correctly,
+and neither a top-level `templates/` of your own nor an unrelated root
+`EXPORTS.json` can trip it. Same file both sides, nothing to configure, no forked
+copy to keep in sync.
 
 Install it **with** the `qa.yml` update, not after: the workflow names the script
 by path, so an updated `qa.yml` without it fails every run at step resolution.

@@ -44,6 +44,7 @@ steps cannot carry timeout-minutes at all; their ceiling is the calling job's,
 which is exactly what rules 1-3 police.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -72,24 +73,61 @@ REPO_ROOT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__)
 # that were a matrix. A printed skip is not a scanned directory, and relying on a
 # human to read green output adversarially is not enforcement.
 #
-# So absence is no longer interpreted. It is DECIDED, by a marker that exists
-# only where the scan is mandatory:
+# So absence is no longer interpreted. It is DECIDED by asking whether this repo
+# CLAIMS to export the directory — read out of the export manifest, not guessed
+# from a filename.
 #
-#   EXPORTS.json absent   -> a downstream repo. Skip: correct, expected, silent.
-#   EXPORTS.json present  -> this repo, with the scanned directory deleted or
-#                            renamed. FAIL.
+# Two earlier attempts were both false-positive machines, and the pattern in how
+# they failed is the point:
 #
-# The marker is EXPORTS.json and NOT `templates/`, which was the first attempt.
-# `templates/` is an ordinary directory name — a downstream project may well have
-# one for email or application templates while having no templates/workflows, and
-# the generic marker would then fail every QA run in a repo that is behaving
-# correctly. A guard that red-builds healthy repos gets deleted, taking the real
-# rule with it. EXPORTS.json is this repo's export manifest: never installed into
-# a project, and the very file that DECLARES templates/workflows as exported.
+#   `templates/` present      -> a downstream project may have a top-level
+#                                templates/ for email or app templates. Red build
+#                                in a repo doing nothing wrong.
+#   `EXPORTS.json` present    -> a downstream project may have its own root
+#                                EXPORTS.json for unrelated reasons. Same failure,
+#                                rarer, therefore worse: it survives longer.
+#
+# Both treated a NAME as proof of a FACT. The fact wanted here is narrow and
+# checkable: does the manifest declare a path under this scan directory? So read
+# it. A repo that exports templates/workflows says so in EXPORTS.json; a repo that
+# merely happens to have that filename does not.
+#
+# This matters more than tidiness. A guard that red-builds healthy repos gets
+# deleted, and takes the real rule with it — so a false positive here costs more
+# than the false negative it was introduced to fix.
 #
 # One code path, byte-identical upstream and downstream, no fork. marker=None
 # means required unconditionally.
 SCAN_DIRS = [(".github/workflows", None), ("templates/workflows", "EXPORTS.json")]
+
+
+def _manifest_declares(root, manifest_name, prefix):
+    """True only if manifest_name parses AND declares some path under prefix.
+
+    Presence of the file proves nothing — that was the defect this replaces. An
+    unparseable or unrelated manifest returns False, so a downstream repo that
+    happens to own this filename is left alone. Upstream that same file failing to
+    parse is not silent either: check-exports.js and build-logical-map.js --check
+    both read it and both run in this workflow's static-checks job.
+    """
+    manifest = root / manifest_name
+    if not manifest.is_file():
+        return False
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+
+    def walk(node):
+        if isinstance(node, str):
+            return node.startswith(prefix)
+        if isinstance(node, dict):
+            return any(walk(v) for v in node.values())
+        if isinstance(node, list):
+            return any(walk(v) for v in node)
+        return False
+
+    return walk(data)
 
 GITHUB_DEFAULT = 360
 # TWO floors, because the two shapes cost different amounts and a single floor
@@ -137,10 +175,10 @@ for scan_dir, marker in SCAN_DIRS:
     if not directory.is_dir():
         if marker is None:
             errors.append(f"{scan_dir}/ does not exist — wrong root? Scanned from {REPO_ROOT}.")
-        elif (REPO_ROOT / marker).exists():
+        elif _manifest_declares(REPO_ROOT, marker, scan_dir):
             errors.append(
-                f"{scan_dir}/ is missing, but {marker} is present — so this is the repo that\n"
-                f"      SHIPS the workflow templates, and the directory this guard must cover has\n"
+                f"{scan_dir}/ is missing, but {marker} still declares paths under it — so this\n"
+                f"      is the repo that SHIPS those templates, and the directory this guard covers has\n"
                 f"      been deleted or renamed. Every downstream project inherits those templates;\n"
                 f"      #238's defect lived ONLY in them while the live workflows were fine. Restore\n"
                 f"      the path or update SCAN_DIRS deliberately — do not let it drop out quietly."

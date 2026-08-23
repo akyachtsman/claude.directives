@@ -100,20 +100,36 @@ The one customized path this pass inspects, and NOT by diff: every project edits
 that always fires is a check nobody reads.
 
 It classifies rather than greps, because a text match answers the wrong question.
-A spelling is not a class: `devices["iPad …"]` and an explicit `width: 1024` are
-both tablets, a commented-out project is not coverage at all, and a four-digit
-width is not automatically a laptop — `1024x768` is a landscape tablet. So strip
-comments, read each project's own viewport, and let an explicit `viewport` beat
-the descriptor it spreads over, as Playwright itself does:
+A spelling is not a class, and neither is a literal: `devices["iPad …"]` and an
+explicit `width: 1024` are both tablets, `1024x768` is not a laptop, a
+commented-out project is not coverage, and `//` inside `http://localhost` is not
+a comment. Nor is source order cosmetic — `{ viewport, ...devices[…] }` runs at
+the DEVICE's width, because the later spread overwrites the earlier key, so the
+last of the two wins and not the explicit one:
 
 ```bash
 cfg=.github/scripts/ui-tests/playwright.config.js
 [ -f "$cfg" ] && python3 - "$cfg" <<'EOF'
 import re, sys
 
-src = open(sys.argv[1]).read()
-src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)   # a commented-out project
-src = re.sub(r'(?m)//.*$', '', src)               # is not coverage
+def strip_comments(s):                      # string-aware: a URL's // is not a comment
+    out, i, n, q = [], 0, len(s), None
+    while i < n:
+        c = s[i]
+        if q:
+            out.append(c)
+            if c == '\\' and i + 1 < n: out.append(s[i+1]); i += 2; continue
+            if c == q: q = None
+            i += 1; continue
+        if c in '\'"`': q = c; out.append(c); i += 1; continue
+        if c == '/' and i + 1 < n and s[i+1] == '/':
+            while i < n and s[i] != '\n': i += 1
+            continue
+        if c == '/' and i + 1 < n and s[i+1] == '*':
+            j = s.find('*/', i + 2); i = n if j < 0 else j + 2
+            continue
+        out.append(c); i += 1
+    return ''.join(out)
 
 FAMILY = [(r'Desktop', 'laptop'),
           (r'iPad|Galaxy Tab|Nexus 10|Tablet', 'tablet'),
@@ -121,31 +137,37 @@ FAMILY = [(r'Desktop', 'laptop'),
 
 def klass(w): return 'laptop' if w >= 1280 else 'tablet' if w >= 768 else 'phone'
 
-found, unknown = set(), []
+src = strip_comments(open(sys.argv[1]).read())
+found, unknown, filtered = set(), [], []
 for chunk in re.split(r'\bname:', src.split('projects', 1)[-1])[1:]:
-    w = re.search(r'width:\s*(\d+)', chunk)          # explicit viewport beats the
-    if w:                                            # descriptor it spreads over
-        found.add(klass(int(w.group(1)))); continue
-    d = re.search(r"devices\[\s*['\"]([^'\"]+)", chunk)
+    if re.search(r'\btest(Match|Ignore)\b', chunk):   # may not run the UI suite
+        filtered.append(chunk); continue
+    w = d = None
+    for m in re.finditer(r'width:\s*(\d+)', chunk): w = (m.start(), int(m.group(1)))
+    for m in re.finditer(r"devices\[\s*['\"]([^'\"]+)", chunk): d = (m.start(), m.group(1))
+    if w and (not d or w[0] > d[0]):                 # LAST one wins, as spread does
+        found.add(klass(w[1])); continue
     if not d: continue
     for pat, k in FAMILY:
-        if re.search(pat, d.group(1)): found.add(k); break
-    else: unknown.append(d.group(1))
+        if re.search(pat, d[1]): found.add(k); break
+    else: unknown.append(d[1])
 
 for k in ('laptop', 'tablet', 'phone'):
     if k not in found: print(f"UNCONFIRMED: no {k}-class project found")
 for d in unknown: print(f"UNCONFIRMED: could not classify devices['{d}']")
+if filtered: print(f"UNCONFIRMED: {len(filtered)} project(s) carry testMatch/testIgnore and prove no class")
 EOF
 ```
 
 **`UNCONFIRMED` is a question, like `DRIFT` — it just has a different answer.**
-This check can prove a class is PRESENT; it cannot prove one is absent, because
-the config is read by pattern and a project may declare a viewport in a shape the
-classifier has not learned (which is why an unrecognised descriptor is reported
-rather than ignored). So `UNCONFIRMED` means look, not repair. But once looking
-shows the class really is missing, that is settled: a missing viewport class is
-never a local improvement the way a `DRIFT` diff often is. Restore it from the
-template's `projects` list in this refresh.
+This check can prove a class PRESENT; it cannot prove one absent, and it reads a
+config it does not execute. A project carrying `testMatch`/`testIgnore` may not
+run the UI scenarios at all, so it proves no class and is reported rather than
+counted — and that is not the only way project selection can exclude a suite, so
+treat a clean result as "nothing visible", not "verified". `UNCONFIRMED` means
+look. But once looking shows the class really is missing, that is settled: a
+missing viewport class is never a local improvement the way a `DRIFT` diff often
+is. Restore it from the template's `projects` list in this refresh.
 (claude.prop shipped with two phone profiles and neither a laptop nor a tablet,
 found 2026-08-23 by review rather than by CI — that is the detection gap this
 closes, and sibling projects likely share it.)

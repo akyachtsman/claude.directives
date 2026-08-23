@@ -240,8 +240,10 @@ Any new client-side navigation or back affordance **requires a back-flow test**
 page you came from, tracked via a nav stack — not the last page visited).
 
 ## UI coverage gates (blocking)
-Four gates every project's UI suite must satisfy — the kit enforces each
-(scenario in parentheses); project-specific suites must keep them:
+Five gates every project's UI suite must satisfy. The kit enforces the first
+four with a scenario (named in parentheses); the fifth is a property of the
+runner's config rather than of any test, and nothing enforces it automatically —
+read it. Project-specific suites must keep all five:
 - **Console-error gate.** Every UI test run attaches `page.on('pageerror')` and
   `page.on('console')` (type `error`) and **fails if either fires** during load
   or interaction (S1, S3, ENTRY). An uncaught error on load is a broken page even
@@ -259,6 +261,16 @@ Four gates every project's UI suite must satisfy — the kit enforces each
   page (an app plus an admin/vendor console, say), declare the extra pages in
   `APP_PAGES` so each gets the load gate (ENTRY), and give rich pages their own
   suite. A page with zero tests is a release blocker.
+- **Three viewport classes, declared in the runner's project list.**
+  `global.md` requires laptop, tablet AND phone, so `playwright.config.js` must
+  declare a project in each class. Two phone profiles read as coverage and are
+  not — and what a phone-only list costs is every OTHER scenario, which runs at
+  whatever widths the list declares: S1, S3, DISMISS and ENTRY simply never
+  execute at laptop or tablet width, so a breakpoint regression there is
+  untested. (S4 is the exception and not the evidence: it sets 390 explicitly,
+  so it runs the same in every project — a phone-only list makes it redundant,
+  not skipped.) Because this gate lives in the config and not in any scenario, a
+  green suite is not evidence for it: read the `projects` list.
 
 These are **completion gates, not sequencing gates**: everything must pass before
 the work is called done, but a task never waits for the previous task's suite to

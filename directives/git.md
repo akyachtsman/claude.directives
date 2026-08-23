@@ -38,7 +38,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **a dispatched run on a PR branch** — seven ways below;
   - **any run that is CANCELLED**, ordinary `pull_request` CI included.
     `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
-    **no PR wake**. Be precise about what that does and does not mean:
+    **no PR wake**. Nor does the `check_suite.completed` wake cover it: that
+    event's own delivery note says *"Cancelled suites, suites with no runs, this
+    App's own suites and legacy commit statuses are not covered"* — so the one
+    mechanism that would otherwise prompt a look at a terminal run is excluded
+    for exactly this conclusion. Do not reason from "a suite completed, so a wake
+    fires"; read what the wake excludes. Be precise about what that does and does not mean:
     `ci-monitor.yml` may classify it (`cancelled_unsuperseded`) and file the
     `ci-failure` issue. How much it covers is genuinely intricate — its
     `workflow_run:` list is read from the default branch and names three
@@ -113,14 +118,23 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head:
-  - **Wait for a Codex response** — a review with inline comments, a plain comment
-    naming the reviewed commit, or a bare 👍. Any one is the signal; the absence of
-    all three is *pending*, never clean.
+  - **Wait for a Codex response** — a review with inline comments, or a plain
+    comment naming the reviewed commit. Absence is *pending*, never clean.
+    A bare 👍 is **not** one of these: see below.
   - **Check the author.** Wording and a current SHA are forgeable; only the Codex
     bot's own response clears the gate.
   - **Match by SHA, not by clock.** Reviews and clean comments both name the commit
-    — compare it to HEAD. Only the bare 👍 carries no SHA: accept it alone only when
-    its triggering review request postdates the latest push.
+    — compare it to HEAD.
+  - **A bare 👍 never clears the gate on its own.** It carries no SHA, and the
+    reactions payload carries neither an **author** nor a **timestamp** — only
+    counts (`{"total_count":1,"+1":1}`). So a 👍 left by an earlier clean round
+    survives every later push and is indistinguishable from a fresh one, and a
+    human's 👍 is indistinguishable from Codex's. "Accept it when the review
+    request postdates the push" does not work: the reaction cannot be correlated
+    with the request. Treating it as admissible can merge an **unreviewed head**.
+    Use it only as a hint that Codex may have run clean; to actually clear the
+    gate, request a fresh `@codex review` and wait for a response that names a
+    SHA, or take the *documented-unavailable* path below and say so on the PR.
   - **A CLEAN verdict leaves NO review — and the reaction is on a different
     endpoint.** Codex's own comment says it: *"If Codex has suggestions, it will
     comment; otherwise it will react with 👍."* So an empty review list means
@@ -132,12 +146,15 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     `@codex review` from the weekly pool to unstick it, which buys nothing
     because Codex already ran. `claude.trading` lost ~30 minutes to exactly this
     and came within one check-in of spending the request.
-    ⚠️ **This signal is weaker than the rest of this list and must not be folded
-    in as equivalent.** The reactions payload gives counts only
-    (`{"total_count":1,"+1":1}`), not authors, and no tool here lists reaction
-    authors — so a human 👍 is indistinguishable from Codex's. It reads as
-    "someone reacted", not "Codex cleared this". Treat a lone 👍 as the weakest
-    admissible evidence, and prefer any response that names a SHA.
+    ⚠️ **A reaction-only clean round cannot clear `codex-flagged`, so the label
+    will sit there looking like an open concern.** `codex-monitor.yml` triggers
+    only on `pull_request_review` and `issue_comment`, and its clear path
+    requires an all-clear **comment** matching `"Codex Review: Didn't find any
+    major issues"`. A reaction fires neither trigger. So after a flagged round,
+    a clean rerun delivered as a 👍 leaves the blocker in place with nothing to
+    remove it automatically — the label must come off by hand, with the one-line
+    dismissal rationale the rule above requires. Do not read the stuck label as
+    unaddressed concerns; read the PR.
   - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
     current head.** Its `head_sha` is whatever the suite ran against, and on a PR
     under active push that is routinely a commit you have already replaced.

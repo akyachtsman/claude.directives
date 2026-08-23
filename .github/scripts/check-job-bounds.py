@@ -58,6 +58,7 @@ transitively, to see whether a caller reaches ui-suite through a local wrapper.
 """
 
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -110,34 +111,72 @@ UI_SUITE_LOCAL = "./.github/actions/ui-suite"
 # An actual invocation at a COMMAND POSITION — not the phrase anywhere in a
 # script. `rg 'playwright install' docs/` mentions it; it does not run it, and a
 # five-minute docs job must not be forced to 30.
-# A heredoc body is DATA the shell writes, not commands it runs. Documentation
-# containing the line `playwright install` would otherwise force a docs job to
-# the 30-minute floor. Stripping bodies before matching keeps command-position
-# matching honest about what "command position" means.
-HEREDOC_RE = re.compile(r"<<-?\s*[\'\"]?([A-Za-z_]\w*)[\'\"]?")
+# Deciding whether a `run:` block INVOKES playwright is a shell-parsing question,
+# and three rounds of regexes proved it is not a regex question. Each pattern was
+# correct and each left a new way for text to look like a command:
+#
+#   rg 'playwright install' docs/        a quoted argument
+#   <<'EOF' ... playwright install       a heredoc BODY
+#   echo "Example; playwright install"   a quoted semicolon read as a separator
+#   # example: cat <<EOF                 a heredoc marker in a COMMENT, which the
+#                                        stripper then honoured, swallowing a REAL
+#                                        install after it — a FALSE NEGATIVE
+#                                        introduced by the fix for the case above
+#
+# So: tokenize. `shlex` in POSIX mode drops comments and respects quoting, which
+# is exactly what every one of those cases turned on. This is the fleet's own
+# lesson from the same day, applied to the file that kept relearning it: parse,
+# do not grep, when the question is "is this executed" rather than "is this
+# mentioned."
+HEREDOC_TOKEN = re.compile(r"<<-?(.+)")
+
+# Words that can precede `playwright` and still leave it at a command position.
+LAUNCHERS = {"npx", "sudo", "yarn", "pnpm", "bunx", "dlx", "exec", "command", "time"}
 
 
-def _strip_heredocs(script):
-    out, delim = [], None
-    for line in script.splitlines():
-        if delim is None:
-            out.append(line)
-            match = HEREDOC_RE.search(line)
+def _lines_of_tokens(script):
+    """Tokenize each line, dropping comments and heredoc BODIES.
+
+    A heredoc opener only counts when it survives tokenization — inside a comment
+    or a quoted string it never reaches the shell, so it must not arm the
+    stripper either. That asymmetry is the whole bug this replaces.
+    """
+    delim = None
+    for raw in script.splitlines():
+        if delim is not None:
+            if raw.strip() == delim:
+                delim = None
+            continue
+        try:
+            lexer = shlex.shlex(raw, posix=True)
+            lexer.whitespace_split = True
+            tokens = list(lexer)
+        except ValueError:
+            # Unbalanced quotes: not parseable as shell. Claiming a job installs
+            # browsers on text we cannot read is the false positive this file
+            # exists to avoid — see the header's asymmetry.
+            continue
+        for token in tokens:
+            match = HEREDOC_TOKEN.fullmatch(token)
             if match:
                 delim = match.group(1)
-        elif line.strip() == delim:
-            delim = None
-    return "\n".join(out)
+                break
+        yield tokens
 
 
-BROWSER_RE = re.compile(
-    r"(?:^|[;&|]|\n)\s*"                       # start of a command
-    r"(?:[A-Za-z_][\w-]*=\S*\s+)*"             # optional VAR=value prefixes
-    r"(?:sudo\s+)?"
-    r"(?:npx\s+|yarn\s+|pnpm\s+(?:dlx\s+)?|bunx\s+)?"
-    r"playwright\s+install\b",
-    re.MULTILINE,
-)
+def _runs_playwright_install(script):
+    for tokens in _lines_of_tokens(script):
+        for i, token in enumerate(tokens):
+            if token != "playwright" or i + 1 >= len(tokens):
+                continue
+            if tokens[i + 1] != "install" and not tokens[i + 1].startswith("install"):
+                continue
+            if i == 0:
+                return True
+            previous = tokens[i - 1]
+            if previous in LAUNCHERS or previous.endswith((";", "&", "|")):
+                return True
+    return False
 
 
 def load_jobs(path):
@@ -212,9 +251,7 @@ def is_ui_suite_job(job):
 
 def is_browser_job(job):
     """True when a step RUNS the install. `uses:` cannot install browsers."""
-    return any(
-        BROWSER_RE.search(_strip_heredocs(str(step.get("run", "")))) for step in _steps(job)
-    )
+    return any(_runs_playwright_install(str(step.get("run", ""))) for step in _steps(job))
 
 
 errors = []

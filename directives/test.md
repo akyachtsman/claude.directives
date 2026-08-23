@@ -255,6 +255,13 @@ Four gates every project's UI suite must satisfy — the kit enforces each
 - **Coverage = controls clicked, not screens visited.** Every interactive control
   is exercised at least once (S3). A screen-level smoke test does not count as
   coverage for that screen's controls.
+- **Three viewport classes, declared in the runner's project list.**
+  `global.md` requires laptop, tablet AND phone, so `playwright.config.js` must
+  declare a project in each class. Two phone profiles read as coverage and are
+  not: a phone-only list also leaves an in-test `setViewportSize(390)` narrowing
+  nothing, so the responsive assertion it was written for silently never runs.
+  This gate lives in the config rather than a scenario, so no test failure
+  surfaces it — `/refresh-repo` Phase 1.5 asserts it instead.
 - **Every deployed HTML entry point is tested.** If a project ships more than one
   page (an app plus an admin/vendor console, say), declare the extra pages in
   `APP_PAGES` so each gets the load gate (ENTRY), and give rich pages their own

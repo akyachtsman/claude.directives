@@ -94,6 +94,32 @@ that hardening and re-broken the trigger it also fixed (raised by apfp.claude,
 2026-08-19). So there is no list: a diff is self-maintaining, and every
 `DRIFT` file is resolved by looking at it.
 
+**Viewport-class assertion — `.github/scripts/ui-tests/playwright.config.js`.**
+The one customized path this pass does inspect, and NOT by diff: every project
+edits `baseURL`, so a byte-compare against the template flags DRIFT on every
+refresh forever, and a check that always fires is a check nobody reads. Assert
+the property `test.md` → *UI coverage gates* actually requires instead:
+
+```bash
+cfg=.github/scripts/ui-tests/playwright.config.js
+if [ -f "$cfg" ]; then
+  grep -qE "viewport: *\{ *width: *1[0-9]{3}" "$cfg" \
+    || echo "GAP: $cfg declares no laptop project"
+  grep -qE "devices\['iPad" "$cfg" \
+    || echo "GAP: $cfg declares no tablet project"
+  grep -qE "devices\['(Pixel|iPhone|Galaxy)" "$cfg" \
+    || echo "GAP: $cfg declares no phone project"
+fi
+```
+
+A `GAP` is a verdict, not a question — unlike `DRIFT` above. A missing class is
+never a local improvement: it is coverage `global.md` requires and the suite
+cannot report, because a viewport that is never instantiated produces no failing
+test. Repair it from the template's `projects` list in this refresh.
+(claude.prop shipped with two phone profiles and neither a laptop nor a tablet,
+found 2026-08-23 by review rather than by CI — that is the detection gap this
+closes, and sibling projects likely share it.)
+
 **Hook repair (runs before the loop, delta-independent).** Three broken states,
 not one: the script absent, present but unregistered, and present but not
 executable. `/env-chk` now reports all three and names `/refresh-repo` as the
@@ -287,10 +313,10 @@ file-level delta. Two distinct failures make an unguarded stamp destructive:
   field `/env-chk`'s staleness alarm reads AND back-dating it as freshly synced.
 - A `$head` obtained by `ls-remote` while the compare call was unavailable
   (`gh` absent — the common case this command documents) advances the stamp past
-  a delta nobody looked at. Phase 1.5 does not inspect customized paths like
-  `.github/scripts/ui-tests/**`, so the next refresh sees the new SHA as already
-  synced and never revisits it: the skipped change is missed permanently, not
-  merely deferred.
+  a delta nobody looked at. Phase 1.5 does not byte-diff customized paths like
+  `.github/scripts/ui-tests/**` (it asserts that config's viewport classes and
+  nothing more), so the next refresh sees the new SHA as already synced and never
+  revisits it: the skipped change is missed permanently, not merely deferred.
 
 Set `classified=yes` in Phase 2 only on the branch where the compare output was
 actually read (including "no files changed"); leave it unset otherwise.

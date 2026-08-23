@@ -219,7 +219,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     403, and the MCP surface exposes only the summary.
 
   - **The clean-round escape hatch — for when the reaction really is all there
-    is.** ⚠️ **Check the COMMENTS first.** A clean verdict often arrives as a
+    is.** ⚠️ **Check the COMMENTS first.** A clean verdict can arrive as a
     plain comment naming the reviewed commit, which clears the gate normally and
     clears `codex-flagged` automatically — that is the form that merged #293.
     This ladder applies **only when no SHA-bearing Codex response

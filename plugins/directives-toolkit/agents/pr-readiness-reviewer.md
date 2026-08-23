@@ -58,7 +58,15 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      for its inline substance, which the envelope hides; and `get_comments` for a clean
      comment naming the reviewed commit. A review with unresolved findings is **Flagged**;
      a clean comment is **Clear** only when it both SHA-matches HEAD **and** was authored
-     by the Codex bot identity — text and SHA alone are forgeable by any commenter. A bare
+     by the Codex bot identity — text and SHA alone are forgeable by any commenter.
+     **A clean INLINE reply counts on the same terms.** Codex also delivers verdicts by
+     replying inside a review thread, and `get_review_comments` — which you already call
+     — returns those. One that SHA-matches HEAD, is authored by the Codex bot, and
+     reports no outstanding issues is **Clear**: the author and SHA checks are identical
+     to the comment case, so the evidence is identical. Do not leave it Pending merely
+     because it arrived on a different endpoint — `codex-monitor` cannot see that form,
+     so the label may still be present, and treating the label as the signal is the
+     error this whole item forbids. A bare
      👍 read from the EMBEDDED SUMMARY cannot be used: `issue_read` → `get` returns
      counts only — no author, no timestamp — so a 👍 from an earlier clean round
      survives every later push indistinguishably, and reporting Clear from it would

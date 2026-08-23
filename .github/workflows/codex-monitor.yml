@@ -2,8 +2,9 @@ name: Codex Monitor
 
 # Watches the Codex automated reviewer and flags PRs where it raised concerns,
 # so they aren't merged blind when no session is active. Codex comments on every
-# PR when it has suggestions — and often on clean passes too, though not always
-# (see the ⚠️ below) — so this acts only on reviews that carry actual
+# PR when it has suggestions, and sometimes on clean passes too — which form a
+# clean verdict takes is not predictable (see the ⚠️ below), so this acts only
+# on reviews that carry actual
 # suggestions: state == changes_requested, or a COMMENTED review that left inline
 # comments. Approving / empty reviews are ignored. Flagged PRs get a
 # `codex-flagged` label (Codex already posted suggestions inline, so no duplicate

@@ -33,6 +33,32 @@ Corollaries worth memorizing:
 - One upstream PR often spans modes (a directive + a template + a plugin
   command). Walk the PR's file list against this table and do the union of
   the actions.
+- **Some copied files are extended locally, and "approve the dispositions" is
+  not "accept them all".** `qa.yml` is the standing case: projects add their own
+  steps to it — `claude.prop` carries a unit-test step and a path guard — so a
+  verbatim refresh deletes local work. Both `claude.prop` and `claude.insurance`
+  independently declined to take it verbatim (2026-08-23), which is `/refresh-repo`
+  Phase 1.5 working as written, not two sessions being cautious. Expect that file
+  to be merged rather than overwritten, and expect the merge to need a human
+  reading of the diff.
+- **What silence actually looks like, and where `qa.yml` is NOT it.** A
+  locally extended `qa.yml` is still loud: Phase 1.5 diffs every
+  `.github/workflows/*.yml` against its template and reports it `DRIFT` on every
+  refresh, and Phase 2 still classifies the upstream delta and offers the patch.
+  Only the automatic verbatim overwrite is off — treat an upstream change to it
+  as ordinary disposition work, not as undetectable. The genuinely silent class
+  is narrower, and it is LOCAL drift against an unchanged template. An upstream
+  change to `templates/ui-tests/**` is dispositioned normally — Phase 2 maps it
+  to `.github/scripts/ui-tests/**` and requires per-file diffs. But Phase 1.5's
+  loop does not walk those paths, so when the template stands still and the local
+  copy moves, nothing compares them. `claude.prop`'s Playwright config lost its
+  laptop and tablet profiles exactly that way, and green CI said nothing — a
+  viewport never instantiated produces no failing test. Nothing in `/refresh-repo`
+  looks at it — not Phase 1.5, which does not walk those paths, and not the
+  session, which never reads this runbook — so this one is YOURS: open the config
+  yourself after a refresh, empty delta included, and check it declares a laptop,
+  a tablet and a phone (`test.md` → *UI coverage gates*). Automating it is #282;
+  until that lands, an unread config is an unchecked one.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).

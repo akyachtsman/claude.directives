@@ -107,6 +107,10 @@ fenced code block**, so the copy button takes it in one click.
 - **The outer fence must be LONGER than the longest backtick run inside it.**
   Four backticks for content holding ordinary triple-backtick blocks; five when
   the content itself uses four.
+- **The first line INSIDE the fence names the recipient**, as
+  `→ SEND TO: <session or repo>`. A block whose own fixed format opens by naming
+  its destination already satisfies this — `/handoff-session`'s
+  `SESSION HANDOFF — <repo-name>` header. Its one-line empty form is exempt.
 - **A file is still right when the artifact IS a file** — something to commit,
   run, or open in another tool. This governs messages, not deliverables.
 

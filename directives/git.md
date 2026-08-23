@@ -101,8 +101,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
      no PR, or more than one. Two open PRs can share a head commit (the same tip
      proposed against `main` and against a release branch), and two same-owner
      PRs can share a branch name; commenting green on the wrong one is worse than
-     no wake, since it names a base the run never tested. So an ordinary
-     successful run on an ambiguous head emits nothing;
+     no wake, since it names a base the run never tested. Silence needs **both
+     steps ambiguous or empty** — a shared head commit alone is not enough, since
+     the branch fallback still runs and resolves PRs on distinct branches;
   7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
      nothing — the case above, which reaches ordinary PR CI too.
 

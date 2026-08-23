@@ -363,6 +363,39 @@ class GitHubIntLoader(yaml.SafeLoader):
 _GITHUB_INT = re.compile(r"[-+]?(?:0o[0-7]+|0x[0-9a-fA-F]+|[0-9]+)$")
 
 
+def _expr_literal(text):
+    """A GitHub EXPRESSION that is a bare numeric literal, as a float, else None.
+
+    GitHub's expression language accepts decimal, hex and float literals and casts
+    them to boolean, so `${{ 0 }}`, `${{ 0x0 }}` and `${{ 0.0 }}` all skip a step.
+    Two callers need exactly this — the statically-disabled test and the
+    constant-bound test — and they must agree, so it is defined once. Splitting it
+    is how `${{ 0x0 }}` survived a round: the loader learned hex and the condition
+    test, two functions below, was still calling float().
+    """
+    text = text.strip()
+    # An expression is NOT YAML. YAML 1.2 spells its radix prefixes in lower case
+    # and _github_int is strict about that on purpose; GitHub's expression
+    # language is JS-shaped and takes `0X0` as readily as `0x0`. Normalising here
+    # rather than loosening _github_int keeps each grammar honest — and a rule
+    # that turned on letter case would be worse than either answer.
+    text = re.sub(r"^([-+]?0)([XOB])", lambda m: m.group(1) + m.group(2).lower(), text)
+    # Binary, which YAML 1.2 has no notion of and _github_int therefore rejects.
+    # Handled here so the answer does not depend on WHICH radix an author picked:
+    # hex disabled, binary counted would be an arbitrary rule, and arbitrary is
+    # the property that gets a guard deleted.
+    binary = re.fullmatch(r"([-+]?)0b([01]+)", text)
+    if binary:
+        return float(int(binary.group(2), 2) * (-1 if binary.group(1) == "-" else 1))
+    value = _github_int(text)
+    if value is not None:
+        return float(value)
+    try:
+        return float(text)          # 0.0, 1e3 — forms int() will not take
+    except ValueError:
+        return None
+
+
 def _github_int(text):
     """Parse a scalar as GitHub's YAML 1.2 parser would, or None if it is not an int."""
     text = text.strip()
@@ -472,10 +505,10 @@ def _statically_disabled(step):
         return True                       # empty string literal -> false
     if inner.lower() == "false":
         return True
-    try:
-        return float(inner) == 0.0        # 0, -0, 00, 0.0, 0e0, ${{ 0 }}
-    except ValueError:
-        return False                      # an expression: unevaluatable, counts
+    # 0, -0, 00, 0.0, 0e0, 0x0, 0o0, ${{ 0 }} — every numeric literal GitHub
+    # casts to false. Anything else is an expression: unevaluatable, so it counts.
+    literal = _expr_literal(inner)
+    return literal == 0.0 if literal is not None else False
 
 
 def _steps(node):
@@ -568,13 +601,22 @@ for scan_dir in SCAN_DIRS:
                 errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer minute count.")
                 continue
             if isinstance(bound, str) and "${{" in bound:
-                # GitHub PERMITS expressions here. Their value is not knowable
-                # without the matrix/inputs/vars context, so the numeric rules
-                # cannot be applied — but the job IS bounded, which is rule 1.
-                # Failing it would red-build a valid workflow, and this file's
-                # header says which way that error runs.
-                unevaluatable.append(f"{rel} → {name}")
-                continue
+                # GitHub PERMITS expressions here, and a CONTEXT-dependent one
+                # (matrix, inputs, vars) genuinely cannot be range-checked — the
+                # job IS bounded, which is rule 1, and failing it would red-build
+                # a valid workflow.
+                #
+                # But a CONSTANT expression is not context-dependent. `${{ 360 }}`
+                # evaluates to 360, and exempting it meant the guard printed "none
+                # >= 360" about a job bounded at exactly the value rule 2 exists to
+                # reject — the pass line asserting the opposite of the truth, which
+                # is this PR's own defect class. Evaluate what is evaluable.
+                literal = _expr_literal(re.fullmatch(r"\$\{\{(.*)\}\}", bound.strip(), re.S).group(1)) \
+                    if re.fullmatch(r"\$\{\{(.*)\}\}", bound.strip(), re.S) else None
+                if literal is None or literal != int(literal):
+                    unevaluatable.append(f"{rel} → {name}")
+                    continue
+                bound = int(literal)
             if not isinstance(bound, int):
                 errors.append(f"{rel} → job '{name}' timeout-minutes is {bound!r}, not an integer minute count.")
                 continue

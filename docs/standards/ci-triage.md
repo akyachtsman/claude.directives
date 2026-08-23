@@ -47,9 +47,11 @@ anyway.
 2. Address each suggestion or explicitly note why it's declined
 3. Request a fresh Codex pass (`@codex review`). The monitor clears the label
    itself only when the all-clear arrives as a **comment** naming the current
-   head. ⚠️ **A clean rerun usually arrives as a bare 👍 reaction instead**,
-   which fires neither monitor trigger — so the label will sit there with nothing
-   to remove it. That is the normal case, not an edge case: remove it **by hand
+   head — which does happen, and is the ordinary happy path. ⚠️ **But a clean rerun
+   can instead arrive as a bare 👍 reaction**, which fires neither monitor trigger,
+   leaving the label with nothing to remove it. Both forms were observed in
+   `claude.directives` on 2026-08-23, so do not assume either: check the PR's
+   comments first, and if the clear is reaction-only remove the label **by hand
    with a rationale**, and read the PR rather than reading the stuck label as
    unaddressed concerns. Never merge while the label is present, and clear the
    Codex gate itself per `git.md` → *PR Lifecycle* (a reaction is not a verdict
@@ -70,8 +72,8 @@ not edit workflows chasing a bug that isn't there.
 - Do not close a `ci-failure` issue without fixing the underlying failure
 - Do not remove `codex-flagged` without addressing the inline comments. Let the
   monitor clear it when it can — but it only sees a **commented** all-clear, and a
-  clean rerun is usually a reaction, so manual removal with a rationale is the
-  expected path rather than a fallback
+  clean rerun may instead be reaction-only, so manual removal with a rationale is
+  a routine path rather than an exception
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

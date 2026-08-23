@@ -226,24 +226,34 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
        that a reaction is provable, but that **nobody clears this gate silently**.
     A gate that cannot be cleared is not stricter than one that can — it just
     moves the failure from a bad merge to a stalled PR and a drained quota.
-  - **A CLEAN verdict leaves NO review — and the reaction is on a different
-    endpoint.** Codex's own comment says it: *"If Codex has suggestions, it will
-    comment; otherwise it will react with 👍."* So an empty review list means
-    either "has not run" or "ran and was clean", and those need opposite actions.
-    The discriminator is the reaction on the PR body, and it is readable only via
-    `issue_read` → `get` — **`pull_request_read` → `get` returns no `reactions`
-    field at all** (verified 2026-08-23). A session watching the review list on a
-    clean PR waits forever, and the natural escalation is to spend an
-    `@codex review` from the weekly pool to unstick it, which buys nothing
-    because Codex already ran. `claude.trading` lost ~30 minutes to exactly this
-    and came within one check-in of spending the request.
+  - **A CLEAN verdict leaves NO REVIEW — but it may still leave a comment.**
+    Codex's boilerplate says *"If Codex has suggestions, it will comment;
+    otherwise it will react with 👍,"* and that reads as *clean ⇒ reaction only*.
+    **Do not rely on it.** Observed in this repo on 2026-08-23, a clean verdict
+    arrived **twice as a plain comment** naming the reviewed commit — *"Codex
+    Review: Didn't find any major issues"* at `ecf9a05` and again at `b64ff09` —
+    and the second cleared `codex-flagged` automatically, exactly as the monitor
+    intends. `claude.trading` separately observed the reaction-only form.
+
+    **Both forms occur, and which one you get is not predictable from here.** So:
+    an empty REVIEW list means nothing on its own — check the comments before
+    concluding anything, because the ordinary happy path is a SHA-bearing comment
+    that clears the gate normally. Only when comments are empty too does the
+    reaction become the discriminator, readable via `issue_read` → `get`
+    (**`pull_request_read` → `get` returns no `reactions` field at all**, verified
+    2026-08-23), and only then does the ladder below apply.
+
+    A session watching only the review list waits forever either way, and the
+    natural escalation is to spend an `@codex review` from the weekly pool, which
+    buys nothing because Codex already ran. `claude.trading` lost ~30 minutes to
+    exactly this.
     ⚠️ **A reaction-only clean round cannot clear `codex-flagged`, so the label
     will sit there looking like an open concern.** `codex-monitor.yml` triggers
     only on `pull_request_review` and `issue_comment`, and its clear path
     requires an all-clear **comment** matching `"Codex Review: Didn't find any
     major issues"`. A reaction fires neither trigger. So after a flagged round,
-    a clean rerun delivered as a 👍 leaves the blocker in place with nothing to
-    remove it automatically — the label must come off by hand, with the one-line
+    a clean rerun delivered as a 👍 — rather than as the comment form above —
+    leaves the blocker in place with nothing to remove it automatically — the label must come off by hand, with the one-line
     dismissal rationale the rule above requires. Do not read the stuck label as
     unaddressed concerns; read the PR.
   - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the

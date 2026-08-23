@@ -163,8 +163,8 @@ A directive repo must pass its own CI before it can be trusted downstream.
   to this repo's workflow name).
 - `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments; adds
   a `codex-flagged` label when Codex raised concerns and clears it on an
-  all-clear **comment** naming the current head SHA. ⚠️ An ordinary clean rerun
-  leaves only a 👍 reaction, which fires neither trigger — so the label must come
+  all-clear **comment** naming the current head SHA — observed working at `b64ff09`. ⚠️ A clean rerun can instead
+  leave only a 👍 reaction, which fires neither trigger — so the label must come
   off by hand with a rationale (`git.md` → *PR Lifecycle*), and a stuck label is
   not evidence of open concerns.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the

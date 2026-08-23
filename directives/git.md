@@ -75,16 +75,17 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
      (`docs/standards/automations.md` → *Known limitation*). When the default
      branch IS an open PR's head, it is worse than silent: that unrelated PR is
      commented and the waiting session still gets nothing;
-  5. the **SHA** lookup is `gh pr list` without `--limit`, so it sees only the
-     first **30** open PRs. (The branch fallback used to share that default and
-     no longer does: it fetches 100 and stays silent when the page comes back
-     full, since uniqueness cannot be proven from a truncated set.);
-  6. **both** PR lookups can resolve to the wrong PR or to none. The branch
-     fallback deliberately stays silent when two same-owner PRs share a branch
-     (commenting green on the wrong one is worse), and the exact-SHA lookup takes
-     the FIRST match rather than requiring uniqueness — so when two open PRs
-     share a head commit, one of them is commented and the other gets nothing,
-     on an ordinary successful run;
+  5. **both** lookups fetch at most 100 open PRs and refuse a full page, because
+     uniqueness cannot be proven from a truncated set. Beyond ~100 open PRs the
+     run is silent by design. (Until `ba1f7ba` the SHA lookup had no `--limit` at
+     all and saw only `gh pr list`'s default 30 — worse than silent, since a
+     truncated page can make an ambiguous SHA look unique.);
+  6. **both** lookups require **exactly one** match and stay silent otherwise —
+     no PR, or more than one. Two open PRs can share a head commit (the same tip
+     proposed against `main` and against a release branch), and two same-owner
+     PRs can share a branch name; commenting green on the wrong one is worse than
+     no wake, since it names a base the run never tested. So an ordinary
+     successful run on an ambiguous head emits nothing;
   7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
      nothing — the case above, which reaches ordinary PR CI too.
 

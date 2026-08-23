@@ -124,9 +124,16 @@ especially under auto-merge.
 **How it works:**
 - Triggers: `pull_request_review` AND `issue_comment`, both filtered to
   `chatgpt-codex-connector[bot]`. Two triggers because Codex splits its verdicts:
-  flagged rounds arrive as reviews, but the all-clear ("Didn't find any major
+  flagged rounds arrive as reviews, and an all-clear ("Didn't find any major
   issues") arrives as a plain issue comment — a monitor listening only for
   reviews hears the complaint and never the all-clear.
+  ⚠️ **There is a THIRD delivery mode the monitor cannot see, and it is the
+  common one.** An ordinary clean rerun leaves no review and no comment — only a
+  👍 reaction on the PR body, which fires neither trigger. So the auto-clear
+  below works for a *commented* all-clear and not for the verdict Codex usually
+  emits. After a flagged round, expect to remove `codex-flagged` **by hand with a
+  rationale**, per `git.md` → *PR Lifecycle*; waiting for the monitor there
+  blocks the PR indefinitely.
 - On a flagged review (`changes_requested`, or `commented` with inline
   comments): adds a `codex-flagged` label to the PR.
 - **The label is two-way.** On an all-clear whose named commit matches the PR's

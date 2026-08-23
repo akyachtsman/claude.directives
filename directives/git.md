@@ -22,13 +22,28 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   PR; do not ban it in both places at once, or a non-PR gate can sit red
   indefinitely with nothing able to say so.
 
-  A dispatched run **on an open PR's branch is covered** — do not arm a check-in
-  for it. `ci-notify.yml` falls back to matching by branch when the run's SHA is
-  not a PR head, and names `workflow_dispatch` as one of the two cases that
-  fallback exists for. Arming a check-in anyway is the redundant PR check-in this
-  same rule bans one sentence earlier. Read the green it produces with the caveat
-  the workflow itself attaches: a branch match can name a **superseded** commit,
-  so verify the SHA is still head before treating it as a gate.
+  A dispatched run on an open PR's branch is covered **only when both hold**, and
+  the check is cheap enough that there is no excuse for assuming either:
+  1. the run's workflow is **named in `ci-notify.yml`'s `workflows:` list** — it
+     watches three by name, and a run outside that list produces no comment at
+     all; and
+  2. `ci-notify.yml` is already live **on the default branch**. `workflow_run`
+     triggers are read from the default branch, so the workflow can never wake
+     the PR that installs it (the file says so in its own header).
+
+  When both hold, do not arm a check-in — `ci-notify` falls back to matching by
+  branch when the run's SHA is not a PR head, and names `workflow_dispatch` as
+  one of the two cases that fallback exists for. Arming one anyway is the
+  redundant PR check-in this rule bans one sentence earlier.
+
+  When **either** fails, no wake can occur and a check-in is the only thing that
+  can observe the outcome — arm one. Getting this backwards is the worse error of
+  the two: a redundant check-in costs a wasted wake, while a forbidden one costs
+  an agent waiting indefinitely for a signal that cannot arrive.
+
+  Read the green it does produce with the caveat the workflow itself attaches: a
+  branch match can name a **superseded** commit, so verify the SHA is still head
+  before treating it as a gate.
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
   applies)

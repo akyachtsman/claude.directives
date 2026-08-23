@@ -262,8 +262,12 @@ results):
     check-in armed for an outcome with NO wake path is not polling, and this ban
     does not reach it — see *PR Lifecycle* on dispatched PR-branch runs, where
     seven verified failure modes mean the comment may never come. The test is not
-    "is this a PR?" but "will anything wake me if I do nothing?" If the honest
-    answer is no, arm the check-in and drop it the moment a wake arrives.
+    "is this a PR?" but **"will THIS outcome produce a wake of its own?"** Ask it
+    per outcome, not per session: a session already subscribed to a PR will be
+    woken by that PR while a Pages deploy it is also waiting on finishes
+    unobserved, so "will anything wake me" answers yes and hides the gap. If any
+    terminal outcome you are waiting on has no wake of its own, arm the check-in
+    for that outcome and drop it the moment it lands.
 - **Reads:** request small pages (`per_page` 5–10, minimal output); reuse
   already-fetched payloads (jq the saved file) instead of re-fetching; when
   throttled, route reads through WebFetch (server-side — does not draw on the

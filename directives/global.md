@@ -463,10 +463,16 @@ naming what remains open, or "nothing open" — never absent.
        exactly.
      - Settings load at session start, so the allowlist covers the NEXT
        session; a one-time prompt in an already-running session is accepted
-       (→ *Scheduling Tools Never Prompt*). A PR-attached wait with
-       `ci-notify.yml` installed needs no completion polling — webhook wake
-       covers failure and success — but a wait expected to exceed five minutes
-       still arms the heartbeat (→ *Status Line on Every Stop*).
+       (→ *Scheduling Tools Never Prompt*). A PR-attached wait whose outcome
+       `ci-notify.yml` actually reports needs no completion polling — webhook
+       wake covers failure and success — but a wait expected to exceed five
+       minutes still arms the heartbeat (→ *Status Line on Every Stop*).
+       **"PR-attached" is not the test, and "installed" is not either** — see
+       the exception in item 1 above: `ci-notify` fires only on
+       `conclusion == 'success'` and only for workflows it watches by name, so
+       a cancelled run and a dispatched PR-branch run can both end with nothing
+       to wake on. Where the outcome you are waiting for produces no wake, the
+       check-in is required, not optional.
      - Event wakes stay the primary signal; the heartbeat (→ *Status Line on
        Every Stop*) is the owner-visible liveness line carried by whatever wake
        already happens — never a replacement for event wakes, and never a

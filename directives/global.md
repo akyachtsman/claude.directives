@@ -242,7 +242,7 @@ styles/          ← the committed design contract (tokens.css + components.css)
   after each squash-merge — recycling branches tangles lineage and can attach
   the wrong diff to a PR
 - PR activity arrives on its own — opening a PR subscribes the session
-  harness-side; keep it for the PR's whole life and unsubscribe only at the merge
+  harness-side; leave it alone — the harness drops it at merge
   (`git.md` → *PR Lifecycle*)
 - Fix CI before marking ready
 - Deploy to **GitHub Pages** — the only target; any other host needs explicit
@@ -307,7 +307,7 @@ and its verification probes are in the toolkit repo's
 
 ## PR Lifecycle
 Lives in `directives/git.md` → *PR Lifecycle*: draft-first, auto-subscribed on
-open, unsubscribe before merging, green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
+open, subscribed until the harness drops it, green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
 never force-push `main`.
 
 ## Conditional Auto-Merge on Green

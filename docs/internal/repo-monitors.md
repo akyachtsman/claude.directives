@@ -40,7 +40,7 @@ See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
 
 ### Activation Checklist for New Sessions
 - Confirm all five exist: `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check
-- Do not subscribe to open PRs as a session-start step — subscription is harness-side on open. KEEP it until the PR merges, then unsubscribe before merging (`CLAUDE.md` → *Notifications*, `git.md` → *PR Lifecycle*). Dropping it early disables `ci-notify.yml`'s wake and leaves a Codex review with no push signal at all
+- Do not subscribe to open PRs as a session-start step — subscription is harness-side on open. Then leave it alone; the harness drops it at merge (`CLAUDE.md` → *Notifications*, `git.md` → *PR Lifecycle*). Unsubscribing yourself disables `ci-notify.yml`'s wake and leaves a Codex review with no push signal at all
 - See *Self-test triage* below for `ci-failure` / `codex-flagged` handling
 - Check for open `ci-failure` issues before starting new work
 

@@ -21,7 +21,8 @@
 #
 # ⚠️ WHICH REVISION THIS TESTS. A repository_dispatch carries no revision, so the
 # checkout below resolves to the DEFAULT BRANCH — never the branch a session
-# dispatched from. The suite that runs is main's; the app it runs against is
+# dispatched from. (A workflow_dispatch is different: it resolves to the branch
+# chosen in the Actions tab, and the summary step below says so.) The suite that runs is main's; the app it runs against is
 # whatever APP_URL currently serves. Dispatching from a feature branch does NOT
 # test that branch's specs, and the run reports green having tested something
 # else. Use the PR's own qa.yml run for branch changes. The job below states the
@@ -99,24 +100,34 @@ jobs:
       # Without APP_URL there is nothing to test against: the suite would run
       # every scenario against the placeholder and fail for a config gap rather
       # than a defect. Say so once and stop.
-      # Silence here is the defect this names: without it a dispatch from a
-      # feature branch reports green while having run main's specs.
-      - name: State which revision was tested
+      # Silence is the defect this names: a dispatch from a feature branch
+      # otherwise reports green while having run main's specs.
+      # Says SELECTED, never "ran" — this step precedes the APP_URL guard and the
+      # suite itself, so on an unset APP_URL nothing executes but the checkout and
+      # a "ran the specs" summary would be false on the failure path.
+      # The default-branch warning is conditional because it is only true for a
+      # repository_dispatch: a workflow_dispatch from a feature branch resolves
+      # github.sha/ref_name to THAT branch, and warning there would contradict the
+      # accurate ref printed one line above and invite discarding a valid run.
+      - name: State which revision was selected
         env:
           TESTED_SHA: ${{ github.sha }}
           TESTED_REF: ${{ github.ref_name }}
+          IS_DISPATCH: ${{ github.event_name == 'repository_dispatch' }}
         run: |
           {
             echo "### Suite revision"
             echo ""
-            echo "Ran the specs at \`$TESTED_SHA\` on \`$TESTED_REF\`."
-            echo ""
-            echo "A \`repository_dispatch\` carries no revision, so this is always the"
-            echo "default branch — **not** the branch any session dispatched from. If you"
-            echo "expected a feature branch's specs, they did not run; use that PR's own"
-            echo "\`qa.yml\` run instead."
+            echo "Selected the specs at \`$TESTED_SHA\` on \`$TESTED_REF\`."
+            if [ "$IS_DISPATCH" = "true" ]; then
+              echo ""
+              echo "A \`repository_dispatch\` carries no revision, so this is the default"
+              echo "branch — **not** the branch any session dispatched from. If you expected"
+              echo "a feature branch's specs, they were not selected; use that PR's own"
+              echo "\`qa.yml\` run instead."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "Suite revision: $TESTED_SHA ($TESTED_REF) — default branch, not the dispatcher's"
+          echo "Suite revision selected: $TESTED_SHA ($TESTED_REF)"
 
       - name: Require APP_URL
         if: ${{ vars.APP_URL == '' }}

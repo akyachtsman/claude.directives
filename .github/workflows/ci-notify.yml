@@ -58,20 +58,12 @@ jobs:
           WR_HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
         run: |
           set -euo pipefail
-          # EVERY PR at this SHA, not the first. Two open PRs can share a head
-          # commit -- one branch targeted at two bases, or a branch and a fork
-          # sitting on the same commit -- and the run genuinely tested that
-          # commit, so the green is valid for all of them. `.[0]` picked one and
-          # left the others waiting on a wake that never came.
-          # This deliberately differs from the branch fallback below: a SHA match
-          # PROVES the result belongs to the PR, so more matches means more
-          # correct comments. A branch-name match proves nothing of the sort,
-          # which is why that path still refuses to guess between candidates.
-          # jq does the filtering rather than `| head -1`: under `set -o pipefail`
+          # jq picks the first match rather than `| head -1`: under `set -o pipefail`
           # head can close the pipe before gh finishes, and gh dies on SIGPIPE (141),
           # failing the step on what is actually a successful lookup.
-          nums=$(gh pr list --repo "$REPO" --state open --json number,headRefOid \
-            --jq "[.[] | select(.headRefOid == \"$WR_SHA\") | .number] | .[]")
+          num=$(gh pr list --repo "$REPO" --state open --json number,headRefOid \
+            --jq "[.[] | select(.headRefOid == \"$WR_SHA\") | .number]
+                  | if length > 0 then .[0] else empty end")
           matched="sha"
           # Fall back to the branch when the SHA is not a PR head. Two real cases:
           # a run dispatched onto a PR branch (repository_dispatch /
@@ -83,14 +75,14 @@ jobs:
           # indistinguishable to it. Match the run's head repository owner as
           # well, and take the result ONLY when exactly one candidate survives:
           # commenting green on the wrong PR is worse than staying silent.
-          if [ -z "$nums" ] && [ -n "${WR_BRANCH:-}" ]; then
-            nums=$(gh pr list --repo "$REPO" --state open --head "$WR_BRANCH" \
+          if [ -z "$num" ] && [ -n "${WR_BRANCH:-}" ]; then
+            num=$(gh pr list --repo "$REPO" --state open --head "$WR_BRANCH" \
               --json number,headRepositoryOwner \
               --jq "[.[] | select(.headRepositoryOwner.login == \"${WR_HEAD_OWNER:-}\")]
                     | if length == 1 then .[0].number else empty end")
-            [ -n "$nums" ] && matched="branch"
+            [ -n "$num" ] && matched="branch"
           fi
-          if [ -z "$nums" ]; then
+          if [ -z "$num" ]; then
             # Correct and expected for a run on the default branch: there is no
             # PR to wake. Silence here is an answer, not a miss.
             echo "No open PR for $WR_SHA (branch ${WR_BRANCH:-unknown}) — nothing to notify."
@@ -100,10 +92,5 @@ jobs:
           # so — git.md requires matching CI to HEAD by SHA before merging.
           note=""
           [ "$matched" = "branch" ] && note=" _(matched by branch — verify this SHA is still HEAD)_"
-          # Unquoted on purpose: $nums is newline-separated PR numbers and must
-          # word-split. One iteration in the branch-fallback case, one or more
-          # in the SHA case.
-          for num in $nums; do
-            gh pr comment "$num" --repo "$REPO" \
-              --body "$(printf '✅ %s green @ %s — [run](%s)%s\n\n_Automated wake signal for the watching session (ci-notify.yml); no action needed._' "$WR_NAME" "${WR_SHA:0:7}" "$WR_URL" "$note")"
-          done
+          gh pr comment "$num" --repo "$REPO" \
+            --body "$(printf '✅ %s green @ %s — [run](%s)%s\n\n_Automated wake signal for the watching session (ci-notify.yml); no action needed._' "$WR_NAME" "${WR_SHA:0:7}" "$WR_URL" "$note")"

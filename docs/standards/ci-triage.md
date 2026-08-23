@@ -48,11 +48,12 @@ anyway.
 3. Request a fresh Codex pass (`@codex review`). The monitor clears the label
    itself only when the all-clear arrives as a **comment** naming the current
    head — which does happen, and clears the label with no action from you.
-   ⚠️ **But a clean rerun can equally arrive as a bare 👍 reaction**, which fires neither monitor trigger,
-   leaving the label with nothing to remove it. Both forms were observed in
-   `claude.directives` on 2026-08-23, so do not assume either: check the PR's
-   comments first, and if the clear is reaction-only remove the label **by hand
-   with a rationale**, and read the PR rather than reading the stuck label as
+   ⚠️ **But a clean rerun can equally arrive as a bare 👍 reaction, or as an
+   inline reply inside a review thread** — the monitor watches neither, so the
+   label sits there with nothing to remove it. All three forms were observed in
+   `claude.directives` on 2026-08-23, so do not assume any of them: check the
+   PR's **comments and its review threads**, and when the clear arrives in
+   either unwatched form remove the label **by hand with a rationale**, and read the PR rather than reading the stuck label as
    unaddressed concerns. Never merge while the label is present, and clear the
    Codex gate itself per `git.md` → *PR Lifecycle* (a reaction is not a verdict
    you can attribute; that section carries the ladder).

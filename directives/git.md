@@ -162,10 +162,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     and those call for opposite actions.
 
     ⚠️ **Check for a SHA-bearing response at the current head FIRST.** A clean
-    verdict delivered as a comment may leave no reaction at all, so `"+1": 0` is
-    equally consistent with *already cleared* — reading it as "keep waiting"
-    without that check can strand a PR whose gate is open. Only once no review
-    and no comment names HEAD does `"+1": 0` mean genuinely pending.
+    verdict delivered as a comment or an inline reply may leave no reaction at
+    all, so `"+1": 0` is equally consistent with *already cleared* — reading it as
+    "keep waiting" without that check can strand a PR whose gate is open. Only
+    once **nothing from Codex names HEAD — no review, no comment, no inline
+    review-thread reply** — does `"+1": 0` mean genuinely pending.
 
     Measured on this repo 2026-08-23 — #293 `{"eyes":1,"+1":0}` and #294
     `{"total_count":0}`, both with no response at their heads, both genuinely
@@ -224,12 +225,14 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     403, and the MCP surface exposes only the summary.
 
   - **The clean-round escape hatch — for when the reaction really is all there
-    is.** ⚠️ **Check the COMMENTS first.** A clean verdict can arrive as a
-    plain comment naming the reviewed commit, which clears the gate normally and
-    clears `codex-flagged` automatically — that is the form that merged #293.
+    is.** ⚠️ **Check the COMMENTS and the REVIEW THREADS first.** A clean verdict
+    can arrive as a plain comment naming the reviewed commit — the form that
+    merged #293, and the only one that also clears `codex-flagged` — or as an
+    inline reply in a review thread, which clears the gate but leaves the label.
     This ladder applies **only when no SHA-bearing Codex response
-    names the CURRENT head** — no review whose reviewed commit matches HEAD, and
-    no Codex comment naming it. Earlier rounds' reviews and comments are
+    names the CURRENT head** — no review whose reviewed commit matches HEAD, no
+    Codex comment naming it, and no Codex inline reply naming it. Earlier rounds'
+    reviews, comments and replies are
     irrelevant — they are history, and history is what made the previous wording
     unsatisfiable. Entering the ladder while a SHA-bearing all-clear names the
     current head means attesting your way past a gate that had already opened.

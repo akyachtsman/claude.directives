@@ -69,7 +69,15 @@ jobs:
     # bound below the work it bounds does not protect anything; it fails on a
     # schedule. Warm runs finish in ~5 minutes, so this ceiling only ever applies
     # to the cold path it exists to survive.
-    timeout-minutes: 40
+    # 60, NOT 40. This bound covers npm ci + playwright install + EVERY project
+    # in one sum, and check-job-bounds.py's own header records a browser install
+    # that sat 57 minutes (run 32269445117). A 40-minute bound therefore cancels
+    # the AUTHORITATIVE live gate on a healthy cold-cache run — and a cancelled
+    # run is not a red one, so it reads as inconclusive rather than as a failure
+    # anyone chases. Raise this before adding projects, never after.
+    # (apfp.claude hit exactly this when they added laptop and tablet projects,
+    # 2026-08-23.)
+    timeout-minutes: 60
 
     steps:
       - name: Checkout

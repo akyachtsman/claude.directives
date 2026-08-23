@@ -159,9 +159,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     verdict delivered as a comment may leave no reaction at all, so `"+1": 0` is
     equally consistent with *already cleared* — reading it as "keep waiting"
     without that check can strand a PR whose gate is open. Only once no review
-    and no comment names HEAD does `"+1": 0` mean genuinely pending. (This
-    paragraph originally stated the inference unconditionally — written before
-    the comment form was observed, and not revisited when it was.)
+    and no comment names HEAD does `"+1": 0` mean genuinely pending.
 
     Measured on this repo 2026-08-23 — #293 `{"eyes":1,"+1":0}` and #294
     `{"total_count":0}`, both with no response at their heads, both genuinely
@@ -235,9 +233,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     review list is permanently non-empty, and the comment list holds your own
     `@codex review` request — so a later reaction-only clean rerun could never
     satisfy it, and the hatch was unreachable in exactly the case it exists for.
-    That is the *third* time this one rule has been written as a condition
-    nothing can meet; the tell each time was a test phrased over a whole history
-    rather than over the current head.
+    A test phrased over a whole history cannot work here: the lists accumulate,
+    the head does not.
 
     In that genuinely reaction-only case the problem is real: no SHA-bearing
     response will arrive, and each retry spends the shared weekly allowance to

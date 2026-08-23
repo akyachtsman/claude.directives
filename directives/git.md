@@ -137,8 +137,14 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     data is missing from *that view*, not from GitHub. `GET /repos/{owner}/{repo}/
     issues/{number}/reactions` — the reaction LIST, not the embedded summary —
     returns `user` and `created_at` per reaction. Where a session can reach it,
-    that is a real clean-round path: a 👍 whose author is the Codex bot identity
-    and whose `created_at` postdates the last push **does** clear the gate. Verify
+    that is a real clean-round path — but **"created after the push" is not the
+    test.** A review of the PREVIOUS head can still be in flight when a new commit
+    lands, and its clean reaction is then created *after* that push while
+    describing the old SHA; the same out-of-order landing this file already warns
+    about for reviews. The test is an ORDERING of three events: **push → review
+    request → Codex-authored reaction**, each strictly after the last. A reaction
+    that predates the request answers a question nobody asked about this head.
+    Verify
     reachability rather than assuming it; from a Claude Code remote session on
     2026-08-23 it was not reachable — direct REST to `api.github.com` returned
     *"GitHub access is not enabled for this session"*, WebFetch returned 403, and
@@ -150,7 +156,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     satisfied on a clean PR, and each retry spends the shared weekly allowance to
     produce another reaction. Work down this ladder and stop at the first rung
     that is available:
-    1. **Reaction list** (verifiable) — author + `created_at` as above.
+    1. **Reaction list** (verifiable) — author + `created_at` as above, and the
+       push → request → reaction ordering, not merely a reaction after the push.
     2. **Ask, don't re-review** (verifiable where Codex answers) — a direct
        `@codex` question naming the SHA is answered as a *comment*, which carries
        an author and a timestamp. Cheaper than a review round. **Untested as of
@@ -372,13 +379,19 @@ results):
   - **Polling is asking for something that would have arrived anyway.** A
     check-in armed for an outcome with NO wake path is not polling, and this ban
     does not reach it — see *PR Lifecycle* on dispatched PR-branch runs, where
-    seven verified failure modes mean the comment may never come. The test is not
-    "is this a PR?" but **"will THIS outcome produce a wake of its own?"** Ask it
-    per outcome, not per session: a session already subscribed to a PR will be
-    woken by that PR while a Pages deploy it is also waiting on finishes
-    unobserved, so "will anything wake me" answers yes and hides the gap. If any
-    terminal outcome you are waiting on has no wake of its own, arm the check-in
-    for that outcome and drop it the moment it lands.
+    seven verified failure modes mean the comment may never come.
+
+    The test is not "is this a PR?", and it is not **"will THIS outcome produce a
+    wake?"** either — that one needs the run to be terminal, which is the thing
+    you are still waiting for. Ask instead **"could this run end in a way that
+    emits no wake?"**, evaluated over every conclusion still possible
+    (`global.md` → *Async Operations*, item 2). Any run can be cancelled and a
+    cancelled run emits no PR wake, so for an in-flight CI run the answer is
+    essentially always yes: arm, and drop it when the outcome is terminal.
+
+    Ask it per outcome, not per session: a session already subscribed to a PR
+    will be woken by that PR while a Pages deploy it is also waiting on finishes
+    unobserved, so "will anything wake me" answers yes and hides the gap.
 - **Reads:** request small pages (`per_page` 5–10, minimal output); reuse
   already-fetched payloads (jq the saved file) instead of re-fetching; when
   throttled, route reads through WebFetch (server-side — does not draw on the

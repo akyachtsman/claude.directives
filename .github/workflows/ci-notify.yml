@@ -76,9 +76,18 @@ jobs:
           # A reader treating that comment as a gate signal is reading a green for
           # a different PR. Silence is the honest answer: the session arms a
           # check-in, which is the documented behaviour when no wake is emitted.
-          num=$(gh pr list --repo "$REPO" --state open --json number,headRefOid \
-            --jq "[.[] | select(.headRefOid == \"$WR_SHA\") | .number]
-                  | if length == 1 then .[0] else empty end")
+          # --limit 100 with a truncation guard, matching the branch query below.
+          # `gh pr list` defaults to 30, and a truncated page turns the uniqueness
+          # check into its opposite: with two SHA-sharing PRs and only one on the
+          # page, `length == 1` reports UNIQUE and posts to an arbitrary PR. A
+          # full page means the answer may be incomplete, so refuse it rather than
+          # trust it -- the ambiguity path is already silence, which is correct
+          # here too.
+          num=$(gh pr list --repo "$REPO" --state open --limit 100 --json number,headRefOid \
+            --jq "if length >= 100 then empty
+                  else [.[] | select(.headRefOid == \"$WR_SHA\") | .number]
+                       | if length == 1 then .[0] else empty end
+                  end")
           matched="sha"
           # Fall back to the branch when the SHA is not a PR head. Two real cases:
           # a run dispatched onto a PR branch (repository_dispatch /

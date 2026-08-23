@@ -205,12 +205,19 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     returned *"GitHub access is not enabled for this session"*, WebFetch returned
     403, and the MCP surface exposes only the summary.
 
-  - **The clean-round escape hatch — a gate with no reachable exit is not a
-    gate.** Codex comments only when it has suggestions; a clean verdict is a
-    reaction and nothing else. So "wait for a response naming a SHA" can never be
-    satisfied on a clean PR, and each retry spends the shared weekly allowance to
-    produce another reaction. Work down this ladder and stop at the first rung
-    that is available:
+  - **The clean-round escape hatch — for when the reaction really is all there
+    is.** ⚠️ **Check the COMMENTS first.** A clean verdict often arrives as a
+    plain comment naming the reviewed commit, which clears the gate normally and
+    clears `codex-flagged` automatically — that is the ordinary path and it is
+    what merged #293. This ladder applies **only when the review list AND the
+    comment list are both empty** and a 👍 is the only signal present. Entering it
+    while a SHA-bearing all-clear is sitting in the comments means attesting your
+    way past a gate that had already opened.
+
+    In that genuinely reaction-only case the problem is real: no SHA-bearing
+    response will arrive, and each retry spends the shared weekly allowance to
+    produce another reaction. A gate with no reachable exit is not a gate — so
+    work down this ladder and stop at the first rung that is available:
     1. **Reaction list** (verifiable, and often unavailable) — author +
        `created_at`, the push → request → reaction ordering, AND no earlier
        request left unanswered. All three, per the paragraph above.

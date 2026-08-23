@@ -127,15 +127,15 @@ especially under auto-merge.
   flagged rounds arrive as reviews, and an all-clear ("Didn't find any major
   issues") arrives as a plain issue comment — a monitor listening only for
   reviews hears the complaint and never the all-clear.
-  ⚠️ **There is a THIRD delivery mode the monitor cannot see, and it is the
-  common one.** A clean rerun CAN leave only a 👍 reaction on the PR body, which
-  fires neither trigger. It can also arrive as a SHA-bearing comment, which does
-  clear the label — both were observed in this repo on 2026-08-23, so treat
-  neither as the default. So the auto-clear
-  below works for a *commented* all-clear and not for the verdict Codex usually
-  emits. After a flagged round, expect to remove `codex-flagged` **by hand with a
-  rationale**, per `git.md` → *PR Lifecycle*; waiting for the monitor there
-  blocks the PR indefinitely.
+  ⚠️ **There is a THIRD delivery mode the monitor cannot see.** A clean rerun can
+  leave only a 👍 reaction on the PR body, which fires neither trigger and so
+  cannot clear the label. It can also arrive as a SHA-bearing comment, which
+  does. Both were observed in this repo on 2026-08-23 — the comment form cleared
+  #293 automatically — so **treat neither as the default and check the PR's
+  comments before concluding the monitor has failed.** When the clear really is
+  reaction-only, remove `codex-flagged` by hand with a rationale, per `git.md` →
+  *PR Lifecycle*; waiting for the monitor in that case blocks the PR
+  indefinitely.
 - On a flagged review (`changes_requested`, or `commented` with inline
   comments): adds a `codex-flagged` label to the PR.
 - **The label is two-way.** On an all-clear whose named commit matches the PR's
@@ -211,9 +211,13 @@ needed. Full detail: `docs/standards/cicd-setup.md` Step 9d.
 **Goal:** Let a watching web session wake on CI **success** without polling —
 GitHub delivers failures natively but never green. **Coverage is partial by
 design:** the wake fires only on `conclusion == 'success'`, only for the
-workflows named in the watch list, and only when the head SHA resolves to exactly
-one open PR. For any awaited outcome outside that set, arm a check-in — that is
-not polling (`git.md` → *PR Lifecycle*, *GitHub API Quota Economy*).
+workflows named in the watch list, and only when **either** lookup resolves the
+run to exactly one open PR — the head SHA first, then head branch plus head-repo
+owner as a fallback. A SHA that no longer matches any PR head is therefore not
+outside coverage on its own; the branch step still catches the common case of a
+head that moved while the run was in flight. For any awaited outcome outside
+that set, arm a check-in — that is not polling (`git.md` → *PR Lifecycle*,
+*GitHub API Quota Economy*).
 
 **How it works:**
 - Trigger: `workflow_run` (completed) on the QA workflows shipped in the set.

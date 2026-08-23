@@ -15,10 +15,27 @@ THREE RULES, because presence alone proves nothing:
      is the absent bound wearing a declared one's clothes — it changes nothing
      and reads as protection.
   3. TWO floors, because the two shapes cost different amounts:
-       - a job running `playwright install*` DIRECTLY pays the install: >= 30
        - a job using the ui-suite composite pays install + EVERY project in
          playwright.config.js + retries + upload, in one sum it cannot
-         subdivide: >= 60
+         subdivide: >= 60. ENFORCED — the composite is identified from `uses:`,
+         a structured field with one correct answer.
+       - a job running `playwright install` DIRECTLY pays the install: >= 30.
+         ADVISORY ONLY — it prints, it never fails the build.
+
+     Why that asymmetry. Deciding whether a `run:` block INVOKES playwright means
+     parsing bash. Four review rounds produced twenty findings against successive
+     attempts — substring, regex, exact-token, shlex — and they did not converge:
+     quoted arguments, heredoc bodies, here-strings, comment-embedded markers,
+     `env` options, redirections, control keywords, `npm exec`, doubled
+     continuation backslashes, quoted separators. Roughly half were FALSE
+     POSITIVES that would red-build a correct repo.
+
+     A heuristic over free-form shell is not sound enough to be a hard gate, and
+     this file's whole thesis is that an unsound gate costs more than a missing
+     one: it gets deleted, taking rules 1-2 with it. So it warns. Rules 1 and 2
+     bound the job either way, and the ui-suite floor — the path that the shipped
+     templates actually use — stays enforced because `uses:` is structured data,
+     not prose.
      Rule 3 exists because rule 1 passed the exact defect #238 fixed: every
      broken template job DECLARED a bound; the value was the fault.
 
@@ -241,7 +258,14 @@ def _normalise_local(ref):
     ref = ref.rstrip("/")
     if not ref.startswith("./"):
         return ref
-    parts = [p for p in ref.split("/") if p not in ("", ".")]
+    parts = []
+    for part in ref.split("/"):
+        if part in ("", "."):
+            continue
+        if part == ".." and parts:
+            parts.pop()          # wrapper/../ui-suite resolves to ui-suite
+            continue
+        parts.append(part)
     return "./" + "/".join(parts)
 
 
@@ -313,6 +337,27 @@ def _runs_playwright_install(script):
     )
 
 
+class GitHubIntLoader(yaml.SafeLoader):
+    """SafeLoader that resolves integers the way GitHub does.
+
+    PyYAML speaks YAML 1.1, where a leading zero means OCTAL: `timeout-minutes:
+    070` loads as 56. GitHub speaks YAML 1.2, where it is 70. So a workflow
+    bounded at 70 was read as 56 and rejected as below the ui-suite floor — a
+    red build on a healthy repo, and in the NUMERIC rules rather than the shell
+    classifier.
+    """
+
+
+def _int_yaml_1_2(loader, node):
+    text = loader.construct_scalar(node).replace("_", "")
+    if re.fullmatch(r"[-+]?0[0-9]+", text):
+        return int(text, 10)
+    return yaml.SafeLoader.construct_yaml_int(loader, node)
+
+
+GitHubIntLoader.add_constructor("tag:yaml.org,2002:int", _int_yaml_1_2)
+
+
 def load_jobs(path):
     """Return {job_id: job_mapping}, preserving YAML 1.1-collapsed key spellings.
 
@@ -345,7 +390,7 @@ def load_jobs(path):
             jobs[jk.value] = yaml.serialize(jv)
     # Re-parse each job body individually: the collision only affects the jobs
     # mapping's own keys, and per-job bodies are ordinary data.
-    return {k: yaml.safe_load(v) for k, v in jobs.items()}
+    return {k: yaml.load(v, Loader=GitHubIntLoader) for k, v in jobs.items()}
 
 
 def _steps(node):
@@ -394,6 +439,7 @@ def is_browser_job(job):
 
 
 errors = []
+warnings = []
 checked = 0
 unevaluatable = []
 
@@ -469,12 +515,22 @@ for scan_dir in SCAN_DIRS:
                     f"      it reads as inconclusive, so nobody chases it. ui-suite callers need >= {UI_SUITE_FLOOR}."
                 )
             elif bound < BROWSER_FLOOR and is_browser_job(job):
-                errors.append(
+                # ADVISORY, not an error — see the header. Deciding whether a
+                # `run:` block invokes playwright means parsing bash, and four
+                # review rounds produced twenty findings against successive
+                # attempts, roughly half of them FALSE POSITIVES that would
+                # red-build a correct repo. A heuristic over free-form shell is
+                # not sound enough to be a hard gate; it is useful enough to
+                # print. Rules 1 and 2 still bound the job either way.
+                warnings.append(
                     f"{rel} → job '{name}' installs Playwright browsers under timeout-minutes: {bound}.\n"
                     f"      A cold-cache install has been measured as high as 21m25s upstream; a bound of\n"
                     f"      {bound} risks killing a cold run before a test executes AND skipping the cache\n"
                     f"      save that would warm the next one (#238). Browser jobs need >= {BROWSER_FLOOR}."
                 )
+
+for warning in warnings:
+    sys.stderr.write("⚠️  check-job-bounds: " + warning + "\n\n")
 
 if errors:
     sys.stderr.write("❌ check-job-bounds: FAILED\n\n")

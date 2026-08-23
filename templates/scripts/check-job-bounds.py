@@ -503,7 +503,12 @@ def _statically_disabled(step):
         return False                      # `${{ }}` is malformed; do not guess
     if not inner or inner in ("''", '""'):
         return True                       # empty string literal -> false
-    if inner.lower() == "false":
+    if inner.lower() in ("false", "null"):
+        # `null` is reached ONLY as a string — either quoted or inside `${{ }}` —
+        # because a bare `if: null` parses to Python None and is handled above as
+        # ambiguous with an empty YAML value. Wrapped or quoted, there is no
+        # ambiguity: it is the literal GitHub casts to false. The distinction is
+        # the one this function already draws; I just hadn't followed it through.
         return True
     # 0, -0, 00, 0.0, 0e0, 0x0, 0o0, ${{ 0 }} — every numeric literal GitHub
     # casts to false. Anything else is an expression: unevaluatable, so it counts.
@@ -633,6 +638,13 @@ for scan_dir in SCAN_DIRS:
                     f"      {GITHUB_DEFAULT} — declaring >= it changes nothing and reads as protection. Pick a\n"
                     f"      bound the job's real worst case fits under."
                 )
+                continue
+            # A job GitHub skips incurs no cost, so the two COST floors below do
+            # not apply to it. Rules 1 and 2 still did, above, and deliberately:
+            # bounding a parked job is free, and an unbounded or 400-minute job
+            # is a live defect the moment someone re-enables it. Cost is
+            # conditional on running; a declaration is not.
+            if _statically_disabled(job):
                 continue
             if bound < UI_SUITE_FLOOR and is_ui_suite_job(job):
                 errors.append(

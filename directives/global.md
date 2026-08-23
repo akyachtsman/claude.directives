@@ -242,7 +242,8 @@ styles/          ← the committed design contract (tokens.css + components.css)
   after each squash-merge — recycling branches tangles lineage and can attach
   the wrong diff to a PR
 - PR activity arrives on its own — opening a PR subscribes the session
-  harness-side; unsubscribe before merging (`git.md` → *PR Lifecycle*)
+  harness-side; keep it for the PR's whole life and unsubscribe only at the merge
+  (`git.md` → *PR Lifecycle*)
 - Fix CI before marking ready
 - Deploy to **GitHub Pages** — the only target; any other host needs explicit
   owner sign-off (→ *Hosting & Deployment*)

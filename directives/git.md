@@ -10,8 +10,16 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
 - PR activity arrives on its own: opening a PR subscribes the session
-  harness-side, with no tool call involved. `subscribe_pr_activity` is for taking
-  over a PR you did not open, or re-subscribing after unsubscribing
+  harness-side, with no tool call involved. **Keep that subscription for the PR's
+  whole life** — never drop it earlier than the merge, and never poll a PR you
+  could have stayed subscribed to. `subscribe_pr_activity` is for taking over a
+  PR you did not open, or re-subscribing after unsubscribing
+- **A subscription covers that PR and nothing else.** A `workflow_dispatch` run,
+  a Pages deploy, a live gate on `main`, a scheduled workflow — none of it is PR
+  activity, and no subscription reports it. For those, arm ONE scheduled check-in
+  naming the specific outcome and drop it when the outcome lands. A check-in is
+  the right tool there and the wrong tool on a PR; do not ban it in both places
+  at once, or a non-PR gate can sit red indefinitely with nothing able to say so.
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
   applies)
@@ -22,8 +30,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   surviving stops. If any gate fails, pause and surface it instead of merging.
   Always report the merge result; reporting is not asking.
 - **Unsubscribe before merging** via `unsubscribe_pr_activity` — past that point
-  every delivered event is a notice about the merge you are performing. If the
-  merge is then blocked, re-subscribe (the call is idempotent).
+  every delivered event is a notice about the merge you are performing. That is
+  the ONLY point at which to unsubscribe. If the merge is then blocked,
+  re-subscribe (the call is idempotent).
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
   apply the fix, or remove the label with a one-line dismissal rationale in the
   PR. Check the PR's labels on GitHub before merging. The `codex-monitor`

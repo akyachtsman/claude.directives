@@ -70,8 +70,25 @@ except ModuleNotFoundError:
     )
     raise SystemExit(1)
 
+KNOWN_FLAGS = {"--include-templates"}
+
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 flags = {a for a in sys.argv[1:] if a.startswith("--")}
+
+# FAIL on an unknown flag. `--include-template` (singular) would otherwise be
+# accepted, silently leave the template scan off, and exit GREEN having checked
+# half the tree — recreating the exact failure the flag was introduced to close.
+# A fix for silent narrowing that is itself silently narrowable is not a fix.
+unknown = sorted(flags - KNOWN_FLAGS)
+if unknown:
+    sys.stderr.write(
+        "❌ check-job-bounds: unknown flag(s): " + ", ".join(unknown) + "\n"
+        "   Known: " + ", ".join(sorted(KNOWN_FLAGS)) + "\n"
+        "   Refusing to run rather than silently narrowing the scan — a typo here\n"
+        "   would drop templates/workflows from the scan and still exit 0.\n"
+    )
+    raise SystemExit(1)
+
 INCLUDE_TEMPLATES = "--include-templates" in flags
 
 REPO_ROOT = Path(args[0]).resolve() if args else Path(__file__).resolve().parents[2]
@@ -93,6 +110,26 @@ UI_SUITE_LOCAL = "./.github/actions/ui-suite"
 # An actual invocation at a COMMAND POSITION — not the phrase anywhere in a
 # script. `rg 'playwright install' docs/` mentions it; it does not run it, and a
 # five-minute docs job must not be forced to 30.
+# A heredoc body is DATA the shell writes, not commands it runs. Documentation
+# containing the line `playwright install` would otherwise force a docs job to
+# the 30-minute floor. Stripping bodies before matching keeps command-position
+# matching honest about what "command position" means.
+HEREDOC_RE = re.compile(r"<<-?\s*[\'\"]?([A-Za-z_]\w*)[\'\"]?")
+
+
+def _strip_heredocs(script):
+    out, delim = [], None
+    for line in script.splitlines():
+        if delim is None:
+            out.append(line)
+            match = HEREDOC_RE.search(line)
+            if match:
+                delim = match.group(1)
+        elif line.strip() == delim:
+            delim = None
+    return "\n".join(out)
+
+
 BROWSER_RE = re.compile(
     r"(?:^|[;&|]|\n)\s*"                       # start of a command
     r"(?:[A-Za-z_][\w-]*=\S*\s+)*"             # optional VAR=value prefixes
@@ -175,7 +212,9 @@ def is_ui_suite_job(job):
 
 def is_browser_job(job):
     """True when a step RUNS the install. `uses:` cannot install browsers."""
-    return any(BROWSER_RE.search(str(step.get("run", ""))) for step in _steps(job))
+    return any(
+        BROWSER_RE.search(_strip_heredocs(str(step.get("run", "")))) for step in _steps(job)
+    )
 
 
 errors = []

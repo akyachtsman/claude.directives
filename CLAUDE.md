@@ -84,8 +84,9 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 squash-merge on green — no approval is sought — once `git.md` → *Conditional
 Auto-Merge on Green* holds: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
-its documented unavailable outcome, no `codex-flagged` label, no unresolved
-review threads, diff limited to the intended files). Repo-specific deltas:
+one of that gate's two documented exits stated on the PR (the reaction ladder's
+attestation, or an *unavailable* usage-limit reply), no `codex-flagged` label,
+no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
 - Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
   next from updated `main` rather than reusing/force-pushing one long-lived branch.
 - Before merging, verify the PR's file list against GitHub's own diff, not the

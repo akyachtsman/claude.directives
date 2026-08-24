@@ -140,9 +140,19 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   re-reviewed, a clean round delivered in a form the monitor cannot see, or an
   all-clear that failed the SHA match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
-  clear the gate against the current head. **Every check below is NECESSARY and
-  only the clean-verdict test is sufficient** — a check that passes narrows what
-  you are looking at; it never opens the gate on its own:
+  clear the gate against the current head. **On the normal path — some
+  SHA-bearing Codex response names HEAD — every check below is NECESSARY and
+  only the clean-verdict test is sufficient**: a check that passes narrows what
+  you are looking at; it never opens the gate on its own.
+  ⚠️ **Two documented exits sit OUTSIDE that framing and it must not be read as
+  closing them** — a gate that cannot be cleared is not stricter than one that
+  can, it just moves the failure from a bad merge to a stalled PR:
+  the **reaction ladder** below, which applies precisely when NOTHING from Codex
+  names HEAD, so a current-head response is not required on it; and
+  **_unavailable_**, a usage-limit reply that is never clean and still unblocks
+  the merge once stated on the PR. Neither is a way past a verdict that EXISTS —
+  both require that no clean verdict is obtainable, and both forbid clearing the
+  gate silently. The checks:
   - **Wait for a Codex response naming the current head** — a review, a plain
     comment naming the reviewed commit, or an inline reply inside a review thread
     (`pull_request_review_comment`), which Codex also uses. All three count as a
@@ -404,11 +414,12 @@ and waiting has a real cost.
 
 **Auto-merge on green is the RULE, not a class (owner ruling, 2026-08-18: "all
 sessions auto-merge — don't ask me permission to merge each time").** When the
-gates hold — CI green on the head SHA, a **clean** current-head Codex verdict per
-the gate above (or its documented unavailable outcome, noted on the PR) — a
-response naming the head is not a verdict, since a review with live findings
-names it too — no `codex-flagged` label, no unresolved review threads, diff
-limited to the intended files — squash-merge WITHOUT
+gates hold — CI green on the head SHA; a **clean** current-head Codex verdict per
+the gate above (a response naming the head is not a verdict, since a review with
+live findings names it too), or one of that gate's two documented exits noted on
+the PR: the reaction ladder's attestation, or an *unavailable* usage-limit reply;
+no `codex-flagged` label; no unresolved review threads; diff limited to the
+intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged
 SHA to a terminal state and confirm the live site serves it). This covers every
 diff class, including Supabase record files and workflow config: the prior

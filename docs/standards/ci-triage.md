@@ -17,8 +17,13 @@ notified without polling. A watching session is woken by the PR-comment webhook
 ⚠️ **"Woken on green" is not universal, and the exceptions need a check-in, not
 a poll.** `ci-notify` fires only on `conclusion == 'success'`, only for workflows
 it watches by name, and only when one of its two lookups resolves the run to
-exactly one open PR — otherwise it stays silent rather than commenting on the
-wrong one. So a **cancelled** run always ends with no wake, and a dispatched run
+exactly one open PR — otherwise it stays silent. ⚠️ **Unique is not the same as
+correct.** Uniqueness stops it picking arbitrarily among duplicate matches; it
+does not prove the one match is related to the run. A `repository_dispatch` run
+carries the DEFAULT-BRANCH SHA, so if the default branch is the head of exactly
+one open PR (a `main` → `release` promotion), that unrelated PR is commented
+while the session that dispatched waits — see `git.md` → *PR Lifecycle*. So a
+**cancelled** run always ends with no wake, and a dispatched run
 or an ordinary success ends with none when both lookups come back ambiguous or
 empty. Neither of the latter two is silent by category: the branch-plus-owner
 fallback exists precisely to catch dispatched PR-branch runs. `git.md` →

@@ -439,18 +439,23 @@ naming what remains open, or "nothing open" — never absent.
 - **How to wait, in order of preference:**
   1. **Let the event wake you.** CI failures, PR reviews, and merges arrive as
      webhooks that resume the session — and with `ci-notify.yml` installed
-     (standard scaffold), CI SUCCESS arrives too, as a PR comment. A PR-attached
-     wait therefore needs NO scheduler: end the turn saying you'll report back,
-     and act on the event. **Exception, and it is not rare:** a wake only covers
-     what something actually emits. A dispatched run on a PR branch has seven
-     verified ways to emit nothing (`git.md` → *PR Lifecycle*), and a cancelled run
-     emits no PR WAKE, since `ci-notify` fires only on success. (`ci-monitor.yml`
+     (standard scaffold), CI SUCCESS arrives too, as a PR comment. Event wakes
+     are the PRIMARY signal for a PR-attached wait: end the turn saying you'll
+     report back, and act on the event rather than asking for it.
+     ⚠️ **Primary is not sole — event-driven does not mean "no scheduler."** A
+     wake only covers what something actually emits. A dispatched run on a PR
+     branch has seven verified ways to emit nothing (`git.md` → *PR Lifecycle*),
+     and a cancelled run emits no PR WAKE, since `ci-notify` fires only on
+     success. (`ci-monitor.yml`
      may still surface it as a `ci-failure` issue — coverage depends on its watch
      list and on whether anyone dispatches its manual scan; read that file rather
      than trusting a summary. **None of it reaches the session waiting on the
      PR**, which is the only part that bears on this rule.)
-     Where nothing will wake you, a check-in is the only observer — arming one
-     there is not the polling `git.md` bans.
+     Since ANY run can be cancelled, item 2's in-flight test resolves to *yes*
+     for essentially every CI run you wait on — so arm the check-in **alongside**
+     the event wake, never instead of it, and drop it when THAT outcome is
+     terminal. Where nothing wakes you the check-in is the only observer, and
+     arming one there is not the polling `git.md` bans.
   2. **Self-pace with `send_later`** (pre-approved per *Scheduling Tools Never
      Prompt*; `ScheduleWakeup` where a session has it instead — verify per
      `/env-chk`, never assume either). Schedule a check-in sized to the
@@ -468,8 +473,10 @@ naming what remains open, or "nothing open" — never absent.
      - Settings load at session start, so the allowlist covers the NEXT
        session; a one-time prompt in an already-running session is accepted
        (→ *Scheduling Tools Never Prompt*). A wait whose outcome `ci-notify.yml`
-       reports needs no completion polling — but a wait expected to exceed five
-       minutes still arms the heartbeat (→ *Status Line on Every Stop*).
+       reports needs no completion POLLING — the wake carries it — but that is
+       not a reason to skip the check-in, which covers the conclusions it does
+       NOT report. A wait expected to exceed five minutes also arms the
+       heartbeat (→ *Status Line on Every Stop*).
 
        **Ask the question you can answer while the run is still in flight.**
        "Does this outcome emit a wake?" is only knowable once the run is

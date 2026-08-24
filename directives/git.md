@@ -140,7 +140,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   re-reviewed, a clean round delivered in a form the monitor cannot see, or an
   all-clear that failed the SHA match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
-  clear the gate against the current head:
+  clear the gate against the current head. **Every check below is NECESSARY and
+  only the clean-verdict test is sufficient** — a check that passes narrows what
+  you are looking at; it never opens the gate on its own:
   - **Wait for a Codex response naming the current head** — a review, a plain
     comment naming the reviewed commit, or an inline reply inside a review thread
     (`pull_request_review_comment`), which Codex also uses. All three count as a
@@ -158,8 +160,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
     does not watch that event — so expect to remove `codex-flagged` by hand with
     a rationale in that case.
-  - **Check the author.** Wording and a current SHA are forgeable; only the Codex
-    bot's own response clears the gate.
+  - **Check the author — it validates the SOURCE, not the outcome.** Wording and
+    a current SHA are both forgeable, so a response that is not the Codex bot's
+    own cannot clear the gate. Authorship is necessary and never sufficient: a
+    Codex-authored review carrying live findings passes this check and still
+    leaves the gate shut, per the rung above.
   - **Match by SHA, not by clock.** Reviews, clean comments and inline replies all
     name the commit — compare it to HEAD.
   - **A bare 👍 never clears the gate FROM THE EMBEDDED SUMMARY.** `issue_read` →
@@ -498,9 +503,11 @@ results):
   (`global.md` → *Async Operations*). A watching session is woken by success; it
   does not ask for it.
   - **Polling is asking for something that would have arrived anyway.** A
-    check-in armed for an outcome with NO wake path is not polling, and this ban
-    does not reach it — see *PR Lifecycle* on dispatched PR-branch runs, where
-    seven verified failure modes mean the comment may never come.
+    check-in armed for an outcome that COULD end with no wake path is not
+    polling, and this ban does not reach it. Phrased that way on purpose:
+    whether a run actually emits one is knowable only once it is terminal. See
+    *PR Lifecycle* on dispatched PR-branch runs, where seven verified failure
+    modes mean the comment may never come.
 
     The test is not "is this a PR?", and it is not **"will THIS outcome produce a
     wake?"** either — that one needs the run to be terminal, which is the thing

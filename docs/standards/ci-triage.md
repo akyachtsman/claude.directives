@@ -15,11 +15,14 @@ notified without polling. A watching session is woken by the PR-comment webhook
 *GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
 ⚠️ **"Woken on green" is not universal, and the exceptions need a check-in, not
-a poll.** `ci-notify` fires only on `conclusion == 'success'` and only for
-workflows it watches by name, and its PR lookup can resolve to the wrong PR or to
-none. A cancelled run, a dispatched run, and an ordinary success whose PR is
-ambiguous can all end with no wake at all. `git.md` → *PR Lifecycle* carries the
-list and the rule: **arm a check-in for any awaited outcome that can end without
+a poll.** `ci-notify` fires only on `conclusion == 'success'`, only for workflows
+it watches by name, and only when one of its two lookups resolves the run to
+exactly one open PR — otherwise it stays silent rather than commenting on the
+wrong one. So a **cancelled** run always ends with no wake, and a dispatched run
+or an ordinary success ends with none when both lookups come back ambiguous or
+empty. Neither of the latter two is silent by category: the branch-plus-owner
+fallback exists precisely to catch dispatched PR-branch runs. `git.md` →
+*PR Lifecycle* carries the list and the rule: **arm a check-in for any awaited outcome that can end without
 emitting a wake, and drop it when THAT outcome is terminal.** That is not the
 polling this line bans — polling is asking for something that would have arrived
 anyway.

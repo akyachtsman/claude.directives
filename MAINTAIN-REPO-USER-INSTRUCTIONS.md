@@ -276,11 +276,13 @@ Hard-won; each cost a real debugging session:
   already-running session is accepted. ci-notify's webhook wake covers a
   PR-attached completion **only when that completion emits one** — success
   conclusion, watched workflow, and one of its two lookups resolving exactly one
-  open PR. It is not a blanket no-scheduling guarantee: a cancelled run, a
-  dispatched PR-branch run, and a lookup ambiguous at **both** steps all end with
-  nothing to wake on. An ambiguous SHA alone is not one of those cases — the
-  branch fallback still runs and resolves PRs on distinct branches. Where nothing
-  will wake you a check-in is
+  open PR. It is not a blanket no-scheduling guarantee, but the exceptions are
+  narrower than they look: a **cancelled** run always ends silent (the job is
+  gated on success), and so does any run whose lookups are ambiguous or empty at
+  **both** steps. Neither an ambiguous SHA nor a dispatched PR-branch run is by
+  itself one of those cases — the branch fallback still runs, and dispatched
+  PR-branch runs are precisely what it was added to catch. Where nothing will
+  wake you a check-in is
   the only observer (`git.md` → *PR Lifecycle*; `global.md` → *Async
   Operations*, item 1's exception).
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,

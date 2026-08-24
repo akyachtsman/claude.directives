@@ -150,9 +150,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   the **reaction ladder** below, which applies precisely when NOTHING from Codex
   names HEAD, so a current-head response is not required on it; and
   **_unavailable_**, a usage-limit reply that is never clean and still unblocks
-  the merge once stated on the PR. Neither is a way past a verdict that EXISTS —
-  both require that no clean verdict is obtainable, and both forbid clearing the
-  gate silently. The checks:
+  the merge once stated on the PR. Neither is a way past a verdict you can READ:
+  the ladder requires that nothing from Codex **names** the current head — a bare
+  👍 names nothing, which is why it is the ladder's TRIGGER and never its bar —
+  and *unavailable* requires that no review can be obtained at all. Neither ever
+  bypasses an adverse verdict that exists, and neither clears the gate silently.
+  The checks:
   - **Wait for a Codex response naming the current head** — a review, a plain
     comment naming the reviewed commit, or an inline reply inside a review thread
     (`pull_request_review_comment`), which Codex also uses. All three count as a
@@ -283,10 +286,17 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
        2026-08-23** — record the outcome the first time it is used.
     3. **Attest, never infer** (not verifiable) — merge on the reaction only by
        stating on the PR: the head SHA, when the review was requested, the
-       reaction count before and after, and explicitly that the reaction is
-       unattributable on this tool surface. That is the same shape as the
-       *documented-unavailable* path below: the protection worth keeping is not
-       that a reaction is provable, but that **nobody clears this gate silently**.
+       reaction count NOW, and explicitly that the reaction is unattributable on
+       this tool surface. **State the count from before the request only if you
+       captured one, and say plainly that you did not if you didn't.** A missing
+       baseline weakens the record; it never blocks this rung. Requiring a
+       snapshot nothing told you to take would make the last reachable rung
+       unreachable in exactly the case it exists for — the failure this ladder
+       was written to prevent. Cheap prevention: read `issue_read` → `get` once
+       BEFORE each `@codex review`, so the before-count exists when you need it.
+       This is the same shape as the *documented-unavailable* path below: the
+       protection worth keeping is not that a reaction is provable, but that
+       **nobody clears this gate silently**.
     A gate that cannot be cleared is not stricter than one that can — it just
     moves the failure from a bad merge to a stalled PR and a drained quota.
   - **A CLEAN verdict leaves NO REVIEW — but it may still leave a comment.**

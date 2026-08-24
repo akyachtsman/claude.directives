@@ -141,11 +141,20 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   all-clear that failed the SHA match; read the PR before overriding by hand.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head:
-  - **Wait for a Codex response** — a review with inline comments, a plain comment
-    naming the reviewed commit, or a **clean inline reply inside a review thread**
-    (`pull_request_review_comment`), which Codex also uses. All three clear the
-    gate on the same terms: Codex-authored, naming the current head. Absence is
-    *pending*, never clean. A bare 👍 is **not** one of these: see below.
+  - **Wait for a Codex response naming the current head** — a review, a plain
+    comment naming the reviewed commit, or an inline reply inside a review thread
+    (`pull_request_review_comment`), which Codex also uses. All three count as a
+    RESPONSE on the same terms: Codex-authored, naming the current head. Absence
+    is *pending*, never clean. A bare 👍 is **not** one of these: see below.
+  - ⚠️ **A response is not a verdict.** Codex-authored and naming HEAD proves the
+    head was REVIEWED — not that it PASSED. A review carrying live inline findings
+    satisfies both tests while saying the opposite, so treating "a response at the
+    current head" as the gate authorises merging straight over Codex's own open
+    findings, and contradicts the *no unresolved review threads* gate below.
+    The gate clears only on a **clean** response: a comment or inline reply
+    reporting no issues, or a review whose every inline finding has been fixed or
+    explicitly dismissed on its thread. A response ends *pending* — it is the
+    start of the check, not the end of it.
     ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
     does not watch that event — so expect to remove `codex-flagged` by hand with
     a rationale in that case.
@@ -277,7 +286,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     **Three forms occur — a comment, an inline reply, a reaction — and which one
     you get is not predictable from here.** So: an empty REVIEW list means nothing
     on its own. Check the comments AND the review threads before concluding
-    anything, since a SHA-bearing response in either clears the gate normally. Only when **nothing from Codex names the
+    anything, since a SHA-bearing CLEAN verdict in either clears the gate normally;
+    a review carrying live findings is a response, not a clearance.
+    Only when **nothing from Codex names the
     current head** — not "when the comment list is empty", which after one round
     it never is — does the reaction become the discriminator, readable via
     `issue_read` → `get`
@@ -388,10 +399,11 @@ and waiting has a real cost.
 
 **Auto-merge on green is the RULE, not a class (owner ruling, 2026-08-18: "all
 sessions auto-merge — don't ask me permission to merge each time").** When the
-gates hold — CI green on the head SHA, a current-head Codex response per the
-gate above (or its documented unavailable outcome, noted on the PR), no
-`codex-flagged` label, no unresolved review threads, diff limited to the
-intended files — squash-merge WITHOUT
+gates hold — CI green on the head SHA, a **clean** current-head Codex verdict per
+the gate above (or its documented unavailable outcome, noted on the PR) — a
+response naming the head is not a verdict, since a review with live findings
+names it too — no `codex-flagged` label, no unresolved review threads, diff
+limited to the intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged
 SHA to a terminal state and confirm the live site serves it). This covers every
 diff class, including Supabase record files and workflow config: the prior

@@ -76,7 +76,9 @@ silently.
 
 ### Known limitation — `ci-notify` and `repository_dispatch`
 
-`ci-notify` comments on the open PR whose head SHA matches the run's. A
+`ci-notify` comments on the open PR its lookups resolve the run to — head SHA
+first, then head branch plus head-repo owner — and only when exactly one
+candidate survives. A
 `qa-response.yml` run triggered by `repository_dispatch` carries the default
 branch SHA, which normally matches no open PR, so it exits "No open PR" and
 emits no wake. Watching it in `ci-monitor` (failure tracking) works; the success
@@ -124,9 +126,26 @@ especially under auto-merge.
 **How it works:**
 - Triggers: `pull_request_review` AND `issue_comment`, both filtered to
   `chatgpt-codex-connector[bot]`. Two triggers because Codex splits its verdicts:
-  flagged rounds arrive as reviews, but the all-clear ("Didn't find any major
+  flagged rounds arrive as reviews, and an all-clear ("Didn't find any major
   issues") arrives as a plain issue comment — a monitor listening only for
   reviews hears the complaint and never the all-clear.
+  ⚠️ **Two more delivery modes exist and the monitor sees NEITHER.** A clean rerun
+  can leave only a 👍 reaction on the PR body, which fires neither trigger. And a
+  substantive verdict can arrive as an **inline review comment** — Codex replying
+  in a review thread with "no additional changes were necessary", naming the head
+  — which fires `pull_request_review_comment`, an event this workflow does not
+  watch at all (verified against its `on:` block, 2026-08-23). Neither can clear
+  the label. It can also arrive as a SHA-bearing comment, which
+  does. All three were observed in this repo on 2026-08-23 — the comment form
+  cleared #293 automatically — and **which one arrives is not predictable, so
+  check the PR's comments AND its review threads before concluding the monitor
+  has failed.** Checking only the comments misses the inline-reply form entirely:
+  that verdict never enters the comment list, so the search comes back empty and
+  reads as "still pending" on a head Codex has in fact cleared. When the clear
+  really does arrive in an unwatched form, remove `codex-flagged` by hand with a
+  rationale, per `git.md` →
+  *PR Lifecycle*; waiting for the monitor in that case blocks the PR
+  indefinitely.
 - On a flagged review (`changes_requested`, or `commented` with inline
   comments): adds a `codex-flagged` label to the PR.
 - **The label is two-way.** On an all-clear whose named commit matches the PR's
@@ -200,13 +219,40 @@ needed. Full detail: `docs/standards/cicd-setup.md` Step 9d.
 ## Automation 4c — CI-Success Wake Signal (infra-resident, event-driven)
 
 **Goal:** Let a watching web session wake on CI **success** without polling —
-GitHub delivers failures natively but never green.
+GitHub delivers failures natively but never green. **Coverage is partial by
+design:** the wake fires only on `conclusion == 'success'`, only for the
+workflows named in the watch list, and only when **either** lookup resolves the
+run to exactly one open PR — the head SHA first, then head branch plus head-repo
+owner as a fallback. A SHA that no longer matches any PR head is therefore not
+outside coverage on its own; the branch step still catches the common case of a
+head that moved while the run was in flight. For any awaited outcome outside
+that set, arm a check-in — that is not polling (`git.md` → *PR Lifecycle*,
+*GitHub API Quota Economy*).
 
 **How it works:**
 - Trigger: `workflow_run` (completed) on the QA workflows shipped in the set.
-- On `conclusion == success`: finds the open PR whose head SHA matches the run
-  and posts a one-line "✅ green" comment — the comment webhook wakes the
-  subscribed session. No open PR → exits quietly.
+- On `conclusion == success`: resolves the run to **exactly one** open PR and
+  posts a one-line "✅ green" comment — the comment webhook wakes the subscribed
+  session. Two steps, each requiring uniqueness: the head SHA first, then the
+  head branch **plus head-repository owner** as a fallback (for a dispatched run
+  or a head that moved mid-flight), which is labelled *matched by branch* because
+  the SHA it names may already be superseded.
+- **Ambiguity exits silent, by design.** Two open PRs can share a head commit —
+  the same tip proposed against `main` and against a release branch is ordinary —
+  and posting to the first of them signals green for a base the run never tested.
+  A reader treating that as a gate signal is reading another PR's result, so each
+  lookup takes a match only when one candidate survives. Note that an ambiguous
+  SHA is not itself silence: the branch fallback still runs and resolves PRs on
+  distinct branches. Silence needs **both steps ambiguous or empty**, and then
+  the waiting session's check-in is what covers it.
+- ⚠️ **Unique is not the same as correct, so a unique match is not a guaranteed
+  wake for YOUR session.** Uniqueness only stops it choosing arbitrarily among
+  duplicates. A `repository_dispatch` run carries the DEFAULT-BRANCH SHA, so when
+  that branch is the head of exactly one open PR (a `main` → `release`
+  promotion), the comment lands on that unrelated PR — the coverage condition
+  above is satisfied and the dispatching session still gets nothing. Arm the
+  check-in whenever the run's SHA is not your PR's head (`git.md` →
+  *PR Lifecycle*).
 - Failures are deliberately NOT commented (delivered natively; `ci-monitor.yml`
   tracks them repo-side).
 - Uses `GITHUB_TOKEN` only (`pull-requests: write`).
@@ -239,7 +285,7 @@ feedback. The subscription is **harness-side and automatic** — no tool call:
 - [ ] Confirm `codex-monitor.yml` is present
 - [ ] Confirm `pages-monitor.yml` is present (any project with a GitHub Pages site)
 - [ ] Confirm `pages-retry.yml` is present (branch-source Pages projects)
-- [ ] Confirm `ci-notify.yml` is present (wakes web sessions on CI green)
+- [ ] Confirm `ci-notify.yml` is present (wakes web sessions on CI green — success only, watched workflows only, unambiguous PR only; Automation 4c)
 - [ ] Check for any open `ci-failure` tracking issues before starting work
 - [ ] Do **not** subscribe to open PRs as a blanket session-start step — subscription is harness-side on open. The one exception stands: a session TAKING OVER a PR it did not open subscribes explicitly (Automation 5)
 - [ ] Read `CLAUDE.md` for full project context
@@ -269,15 +315,41 @@ Generated by [Claude Code](https://claude.ai/code)
   set `advisory-run: 'true'` temporarily and must flip it back.
 - The `codex-flagged` label is **asymmetric**: a label still present blocks the merge
   until triaged, but its absence proves nothing — it is written asynchronously. The
-  monitor clears it itself on a Codex all-clear that names the current head (Automation 3
-  above), so a label still present means concerns not yet re-reviewed, an all-clear that
+  monitor clears it itself on a Codex all-clear **comment** that names the current head
+  (Automation 3 above) — never on a 👍 and never on an inline review-thread reply,
+  since it watches neither event — so a label still present means concerns not yet
+  re-reviewed, a clean round delivered in either unwatched form and so needing
+  manual removal, an all-clear that
   failed the SHA match, or a monitor run that has not landed yet — read the PR before
   removing it by hand, and remove with a rationale when you do. Apply `git.md` →
-  *PR Lifecycle*'s source-review gate: match a Codex review — or its clean comment, which
-  names the commit too — to HEAD by commit SHA, confirm the Codex bot authored it, read
-  the review's inline comments, and treat unreadable reviews as uncleared. Only a bare 👍
-  lacks a SHA; accept that alone only when the review request that triggered it postdates
-  the last push
+  *PR Lifecycle*'s source-review gate: match a Codex **review, comment, or inline
+  review-thread reply** — all three name the commit — to HEAD by commit SHA and confirm
+  the Codex bot authored it. ⚠️ That establishes a RESPONSE, not a verdict: a review
+  carrying live inline findings passes both checks while reporting that the head
+  FAILED, so read the review's inline comments and clear the gate only on a clean
+  comment or reply, or on a review whose findings are all fixed or explicitly
+  dismissed. Treat unreadable responses as uncleared. The inline-reply form clears the
+  GATE but not the LABEL. **A bare 👍
+  never clears the gate from the EMBEDDED SUMMARY.** `issue_read` → `get` returns
+  reactions as counts only — no author, no timestamp — so read that way a 👍 cannot be
+  attributed to Codex or correlated with a request, and "accept it when the request
+  postdates the push" (the rule here until 2026-08-23) has nothing to compare against
+  and would merge an **unreviewed head**. But the data is missing from that VIEW, not
+  from GitHub: the reaction LIST endpoint (`GET /repos/{owner}/{repo}/issues/{number}/
+  reactions`) returns `user` and `created_at`. A clean round is therefore reachable —
+  `git.md` → *PR Lifecycle* carries the ladder. Its test is an ORDERING (push →
+  review request → Codex-authored reaction), not merely a reaction after the push,
+  since a review of the previous head can land after a newer commit — **and the
+  ordering alone is not sufficient**: a request still in flight when you push will
+  produce a reaction that satisfies every timestamp comparison while describing the
+  old commit. That rung applies only when no earlier request is left unanswered,
+  which on a PR that has already run clean is usually false. Where that
+  endpoint is out of reach, ask Codex a direct question or attest on the PR; what is
+  forbidden is clearing the gate **silently**. A clean round delivered as a reaction
+  OR as an inline review-thread reply also cannot clear `codex-flagged` — the
+  monitor triggers on reviews and comments, and watches neither reactions nor
+  `pull_request_review_comment` — so the label must come off by hand with a
+  rationale
 - After merge, trigger `qa-live.yml` manually if Pages hasn't redeployed within ~2 minutes
 - Do not unsubscribe at all on a PR you are driving — the harness drops it at merge (`git.md` → *PR Lifecycle*)
 

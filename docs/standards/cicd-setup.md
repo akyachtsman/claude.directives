@@ -205,7 +205,12 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 ```
 
 **What it does:** adds a `codex-flagged` label when Codex raises concerns and
-clears it on a Codex all-clear naming the current head SHA.
+clears it on a Codex all-clear **comment** naming the current head SHA. ⚠️ A
+clean rerun can instead arrive as a bare 👍 reaction **or as an inline
+review-thread reply**, and the monitor watches neither event — so check the PR's
+comments AND its review threads for a verdict naming the current head, then
+remove the label by hand with a rationale. All three forms were observed on
+2026-08-23 and which one arrives is not predictable.
 Behavior detail: `docs/standards/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor
@@ -355,7 +360,13 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 **What it does:** comments on the open PR for a head SHA when a watched QA
 workflow completes **green**, so a watching session wakes on success — GitHub
 delivers failures natively but never green. Without it, a PR-attached wait has
-no success signal at all. Behavior detail: `docs/standards/automations.md` →
+no success signal at all. With it the coverage is still partial: one of its two
+lookups (head SHA, else branch + head-repo owner) must resolve exactly one open
+PR, and it exits silently otherwise. ⚠️ A unique match is not proof of coverage
+either: a `repository_dispatch` run carries the default-branch SHA, so if that
+branch heads exactly one open PR the comment lands on that unrelated PR while
+your session waits. Arm a check-in rather than treating a green run — or a
+unique match — as a guaranteed wake. Behavior detail: `docs/standards/automations.md` →
 Automation 4c.
 
 ⚠️ `workflow_run` triggers are read from the DEFAULT branch, so this workflow can

@@ -178,7 +178,8 @@ never by cross-repo edits** (`global.md` → One Session, One Repo):
    or `plugins/`, AND is applied to this repo itself in the same PR when it
    applies here (`CLAUDE.md` → Self-application).
 4. **Merge on green** — normal PR flow; `git.md` gates; ci-notify wakes the
-   session to merge.
+   session to merge **when the run emits a wake at all** (see *ci-notify
+   bootstrap gap* and the scheduling bullet below); otherwise arm a check-in.
 5. **Propagate** — run HUMAN STEPS above for the modes the PR touched.
 6. **Close the loop** — paste the prepared reply back to the reporting
    session so it can proceed with corrected instructions.
@@ -272,8 +273,21 @@ Hard-won; each cost a real debugging session:
 - **Scheduling tools are pre-approved via committed settings** (`global.md` →
   *Scheduling Tools Never Prompt*, 2026-08-18): the six-tool allowlist in
   `.claude/settings.json` loads at session start; a one-time prompt in an
-  already-running session is accepted. ci-notify's webhook wake still covers
-  PR-attached completion without any scheduling call.
+  already-running session is accepted. ci-notify's webhook wake covers a
+  PR-attached completion **only when that completion emits one** — success
+  conclusion, watched workflow, and one of its two lookups resolving exactly one
+  open PR. It is not a blanket no-scheduling guarantee, but the exceptions are
+  narrower than they look: a **cancelled** run always ends silent (the job is
+  gated on success), and so does any run whose lookups are ambiguous or empty at
+  **both** steps. Neither an ambiguous SHA nor a dispatched PR-branch run is by
+  itself one of those cases — the branch fallback still runs, and dispatched
+  PR-branch runs are precisely what it was added to catch. And a unique match is
+  not a guaranteed wake for YOUR session: a `repository_dispatch` run whose
+  default-branch SHA uniquely matches an unrelated promotion PR gets commented
+  there, satisfying every condition above while the dispatching session waits.
+  Where nothing will wake you a check-in is
+  the only observer (`git.md` → *PR Lifecycle*; `global.md` → *Async
+  Operations*, item 1's exception).
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,
   not the UI prose title.
 - **Mid-session staleness** — `CLAUDE.md` → *Mid-session change semantics*:

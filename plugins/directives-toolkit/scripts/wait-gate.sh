@@ -6,9 +6,11 @@
 # async pattern in a long-lived session. When the container suspends and
 # resumes, the sleep process is reaped but the harness keeps showing it as a
 # **phantom "running" task** that never clears — and it was watching nothing.
-# The sanctioned alternatives wake the session on the real event (PR/CI
-# webhooks) or self-pace with send_later (or ScheduleWakeup where a session has
-# that instead); see global.md -> Async Operations.
+# The sanctioned alternative wakes the session on the real event (PR/CI
+# webhooks) AND arms a check-in alongside it with send_later (or ScheduleWakeup
+# where a session has that instead) — not one or the other: any run can be
+# cancelled and a cancelled run emits no PR wake, so an in-flight CI wait needs
+# both. See global.md -> Async Operations.
 #
 # Fail-open by design: any parse problem exits 0 (allow) — this gate must never
 # break unrelated Bash calls. Exit 2 = block, stderr fed to Claude.
@@ -54,5 +56,5 @@ if [ -n "$dur" ]; then
   [ "$dur" -ge 15 ] 2>/dev/null || exit 0
 fi
 
-echo 'BLOCKED by directives wait-gate: do not background a `sleep` to wait. A backgrounded sleep orphans into a phantom "running" task when the session suspends/resumes, and it watches nothing. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) or just re-check on your next turn; (2) to self-pace a re-check, use `send_later` (the pre-approved primary) or `ScheduleWakeup` where a session has that instead — verify which exists rather than assuming; (3) for a genuine condition-wait, use Monitor with an exit condition. See global.md -> Async Operations.' >&2
+echo 'BLOCKED by directives wait-gate: do not background a `sleep` to wait. A backgrounded sleep orphans into a phantom "running" task when the session suspends/resumes, and it watches nothing. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) — and ARM A CHECK-IN ALONGSIDE IT, not instead of it: any run can be cancelled and a cancelled run emits no PR wake, so essentially every in-flight CI wait needs both, and you drop the check-in when THAT outcome is terminal; (2) that check-in is `send_later` (the pre-approved primary) or `ScheduleWakeup` where a session has that instead — verify which exists rather than assuming; (3) for a genuine condition-wait, use Monitor with an exit condition. See global.md -> Async Operations.' >&2
 exit 2

@@ -16,14 +16,28 @@ opens or updates a deduplicated `ci-failure` tracking issue. Uses only GITHUB_TO
 **ci-notify.yml** — fires when `QA — Directive Validation` completes **green**.
 Comments on the open PR for that head SHA so a watching web session wakes on
 success via the comment webhook (no scheduling-tool polling, no permission
-prompts). No open PR → exits quietly. The template counterpart, adapted to this
-repo's workflow name.
+prompts). Needs **one** lookup — head SHA, else branch + head-repo owner — to
+resolve exactly one open PR; no PR, or more than one, → exits quietly, so a
+green run does not guarantee a wake and the waiting session still arms a
+check-in. ⚠️ Nor does a unique match guarantee one: a `repository_dispatch` run
+carries the default-branch SHA, so if that branch heads exactly one open PR the
+comment goes there and the dispatching session gets nothing. Arm the check-in
+whenever the run's SHA is not the PR's head. The template counterpart, adapted
+to this repo's workflow name.
 
-**codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments (the
-all-clear travels only as a comment). Adds a `codex-flagged` label when Codex
-raised concerns (changes_requested or COMMENTED with inline comments); clears it
-on an all-clear naming the PR's current head SHA. A stale or SHA-less all-clear
-holds the label. Contract detail: `docs/standards/automations.md` → Automation 3.
+**codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments. Adds
+a `codex-flagged` label when Codex raised concerns (changes_requested or
+COMMENTED with inline comments); clears it on an all-clear naming the PR's
+current head SHA. A stale or SHA-less all-clear holds the label.
+
+An all-clear can travel as a SHA-bearing **comment**, which the monitor sees and
+acts on — that is what cleared #293 — or as a 👍 **reaction** or an inline
+**review-thread reply**, neither of which it can see at all. All three were
+observed on 2026-08-23 and **which one arrives is not predictable**, so check the
+PR's **comments AND its review threads** before assuming the label needs removing
+by hand: a clean inline reply leaves the comment list empty, so a comments-only
+search comes back reading as "still pending" on a head Codex has cleared.
+Contract detail: `docs/standards/automations.md` → Automation 3.
 
 **pages-monitor.yml** — fires on every GitHub Pages build (`page_build`). Reads the
 build status from the event, verifies the live URL (`https://<owner>.github.io/<repo>/`)

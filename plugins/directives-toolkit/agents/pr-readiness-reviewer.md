@@ -58,18 +58,41 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      for its inline substance, which the envelope hides; and `get_comments` for a clean
      comment naming the reviewed commit. A review with unresolved findings is **Flagged**;
      a clean comment is **Clear** only when it both SHA-matches HEAD **and** was authored
-     by the Codex bot identity — text and SHA alone are forgeable by any commenter. A bare
-     👍 cannot be used at all: no granted tool enumerates who reacted, so it cannot be
-     attributed. That case, a missing PR number, or unreadable reviews/comments are all
+     by the Codex bot identity — text and SHA alone are forgeable by any commenter.
+     **A clean INLINE reply counts on the same terms.** Codex also delivers verdicts by
+     replying inside a review thread, and `get_review_comments` — which you already call
+     — returns those. One that SHA-matches HEAD, is authored by the Codex bot, and
+     reports no outstanding issues is **Clear**: the author and SHA checks are identical
+     to the comment case, so the evidence is identical. Do not leave it Pending merely
+     because it arrived on a different endpoint — `codex-monitor` cannot see that form,
+     so the label may still be present, and treating the label as the signal is the
+     error this whole item forbids. A bare
+     👍 read from the EMBEDDED SUMMARY cannot be used: `issue_read` → `get` returns
+     counts only — no author, no timestamp — so a 👍 from an earlier clean round
+     survives every later push indistinguishably, and reporting Clear from it would
+     pass an **unreviewed head**. Report **Pending**, not Clear — and do not report it
+     as impossible: the reaction LIST endpoint carries `user` and `created_at`, and
+     `git.md` → *PR Lifecycle* defines the clean-round ladder over it (the test is the
+     ORDERING push → request → reaction, since a review of an older commit can land
+     after a newer push — and ordering alone is not enough: it clears only when no
+     earlier review request is still unanswered, since that one's reaction would
+     satisfy the same timestamps while describing the old commit). This agent has no tool for that endpoint, so the judgement
+     belongs to the merger, who has the ladder. That case, a missing PR number, or unreadable reviews/comments are all
      **Pending**, with the merger applying `git.md`'s gate. Pending is a correct output of
      this item, not a failure of it — but it **caps Final Status at Conditional**: never
      report Ready while the Codex row is Pending, since Ready aggregates every row and
      would otherwise carry an unverified one.
    - The label is **asymmetric**: its absence proves nothing, but a `codex-flagged` label
      that is still present IS a blocker (`git.md` → *PR Lifecycle*). `codex-monitor`
-     clears it itself on a Codex all-clear naming the current head, so a label still
-     present means concerns not yet re-reviewed, an all-clear that failed the SHA match,
-     or a monitor run that has not landed yet — never treat it as leftover noise. While
+     clears it itself on a Codex all-clear **comment** naming the current head — the only
+     form it can act on — but never on a 👍, nor on an inline review-thread reply, since
+     neither fires a trigger it watches, and which form arrives is not predictable. So a label still
+     present means concerns not yet re-reviewed, a clean round delivered in a form the
+     monitor cannot see, an all-clear that failed the SHA match,
+     or a monitor run that has not landed yet — never treat it as leftover noise.
+     Look for the verdict in the PR's comments **and its review threads**: an inline
+     reply never enters the comment list, so a comments-only check reports Pending on
+     a head Codex has cleared. While
      it is present, report the PR **Conditional** at best; the next step is either
      waiting for the monitor's clear on a genuine all-clear, or removal-with-rationale
      where a human judges the concerns addressed.

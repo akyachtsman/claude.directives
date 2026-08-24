@@ -82,9 +82,11 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 `global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
 (`claude/<name>` branches, never commit to `main`, draft PR on first push,
 squash-merge on green — no approval is sought — once `git.md` → *Conditional
-Auto-Merge on Green* holds: a current-head Codex response or its documented
-unavailable outcome, no `codex-flagged` label, no unresolved review threads,
-diff limited to the intended files). Repo-specific deltas:
+Auto-Merge on Green* holds: a **clean** current-head Codex verdict — a response
+naming the head is not one, since a review with live findings names it too — or
+one of that gate's two documented exits stated on the PR (the reaction ladder's
+attestation, or an *unavailable* usage-limit reply), no `codex-flagged` label,
+no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
 - Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
   next from updated `main` rather than reusing/force-pushing one long-lived branch.
 - Before merging, verify the PR's file list against GitHub's own diff, not the
@@ -160,10 +162,21 @@ A directive repo must pass its own CI before it can be trusted downstream.
 - `ci-notify.yml` — fires when `QA — Directive Validation` completes **green**;
   comments on the open PR for that head SHA so a watching web session wakes on
   success without scheduling-tool polling (the template's counterpart, adapted
-  to this repo's workflow name).
-- `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments (the
-  all-clear travels only as a comment); adds a `codex-flagged` label when Codex
-  raised concerns and clears it on an all-clear naming the current head SHA.
+  to this repo's workflow name). Coverage is partial: it needs **one** lookup —
+  head SHA, else branch + head-repo owner — to resolve exactly one open PR, and
+  exits silently otherwise. ⚠️ A unique match is not a guaranteed wake for YOUR
+  session either — a `repository_dispatch` run's default-branch SHA can uniquely
+  match an unrelated promotion PR, which gets the comment instead. Arm the
+  check-in whenever the run's SHA is not your PR's head (`git.md` → *PR
+  Lifecycle*).
+- `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments; adds
+  a `codex-flagged` label when Codex raised concerns and clears it on an
+  all-clear **comment** naming the current head SHA — observed working at `b64ff09`. ⚠️ A clean rerun can instead
+  arrive as a 👍 reaction **or as an inline review-thread reply**, and the
+  monitor watches neither event — so check the PR's comments AND its review
+  threads for a verdict naming the head (an inline reply never enters the comment
+  list), then take the label off by hand with a rationale (`git.md` → *PR
+  Lifecycle*). A stuck label is not evidence of open concerns.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
   deploy is live and on a problem opens/updates a deduplicated
   `pages-deploy-failure` issue (success → job summary only). The zero-model

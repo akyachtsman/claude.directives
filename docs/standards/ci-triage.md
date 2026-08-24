@@ -14,6 +14,24 @@ notified without polling. A watching session is woken by the PR-comment webhook
 (`ci-notify.yml`) on green and natively on failure — never poll (`git.md` →
 *GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
+⚠️ **"Woken on green" is not universal, and the exceptions need a check-in, not
+a poll.** `ci-notify` fires only on `conclusion == 'success'`, only for workflows
+it watches by name, and only when one of its two lookups resolves the run to
+exactly one open PR — otherwise it stays silent. ⚠️ **Unique is not the same as
+correct.** Uniqueness stops it picking arbitrarily among duplicate matches; it
+does not prove the one match is related to the run. A `repository_dispatch` run
+carries the DEFAULT-BRANCH SHA, so if the default branch is the head of exactly
+one open PR (a `main` → `release` promotion), that unrelated PR is commented
+while the session that dispatched waits — see `git.md` → *PR Lifecycle*. So a
+**cancelled** run always ends with no wake, and a dispatched run
+or an ordinary success ends with none when both lookups come back ambiguous or
+empty. Neither of the latter two is silent by category: the branch-plus-owner
+fallback exists precisely to catch dispatched PR-branch runs. `git.md` →
+*PR Lifecycle* carries the list and the rule: **arm a check-in for any awaited outcome that can end without
+emitting a wake, and drop it when THAT outcome is terminal.** That is not the
+polling this line bans — polling is asking for something that would have arrived
+anyway.
+
 > This repo's own `ci-failure` issues come from its **directive-validation**
 > checks (link / section / path); a downstream project's come from its build /
 > Playwright suite. The triage steps below are the same either way — see
@@ -35,10 +53,18 @@ notified without polling. A watching session is woken by the PR-comment webhook
 
 1. Open the PR and read Codex's inline comments
 2. Address each suggestion or explicitly note why it's declined
-3. Request a fresh Codex pass (`@codex review`) — on an all-clear naming the
-   current head, `codex-monitor` clears the label itself. Remove it by hand
-   (with a rationale) only when a clean verdict will not come — e.g. concerns
-   declined with reasons — and never merge while the label is present.
+3. Request a fresh Codex pass (`@codex review`). The monitor clears the label
+   itself only when the all-clear arrives as a **comment** naming the current
+   head — which does happen, and clears the label with no action from you.
+   ⚠️ **But a clean rerun can equally arrive as a bare 👍 reaction, or as an
+   inline reply inside a review thread** — the monitor watches neither, so the
+   label sits there with nothing to remove it. All three forms were observed in
+   `claude.directives` on 2026-08-23, so do not assume any of them: check the
+   PR's **comments and its review threads**, and when the clear arrives in
+   either unwatched form remove the label **by hand with a rationale**, and read the PR rather than reading the stuck label as
+   unaddressed concerns. Never merge while the label is present, and clear the
+   Codex gate itself per `git.md` → *PR Lifecycle* (a reaction is not a verdict
+   you can attribute; that section carries the ladder).
 
 ## CI never registered on a PR
 
@@ -53,8 +79,11 @@ not edit workflows chasing a bug that isn't there.
 ## What not to do
 
 - Do not close a `ci-failure` issue without fixing the underlying failure
-- Do not remove `codex-flagged` without addressing the inline comments — and
-  prefer letting the monitor clear it on a fresh all-clear over removing by hand
+- Do not remove `codex-flagged` without addressing the inline comments. Let the
+  monitor clear it when it can — but it only sees a **commented** all-clear, and a
+  clean rerun may instead arrive as a 👍 reaction or as an inline review-thread
+  reply — so check the comments AND the review threads, and treat manual removal
+  with a rationale as a routine path rather than an exception
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

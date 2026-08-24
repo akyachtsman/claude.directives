@@ -14,7 +14,19 @@
 # PR -- head SHA first, else head branch + head-repo owner -- and comments there,
 # and the comment webhook wakes the watching session. No polling, no prompts.
 # It exits SILENTLY when neither lookup yields a unique candidate, so a green run
-# is not a guaranteed wake and a waiting session still arms a check-in. Failures are deliberately NOT commented (delivered natively;
+# is not a guaranteed wake and a waiting session still arms a check-in.
+#
+# ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN, EITHER. Uniqueness only
+# stops this picking arbitrarily among duplicates; it does not prove the one
+# match is RELATED to the run. A repository_dispatch run carries the
+# DEFAULT-BRANCH SHA, so when that branch is the head of exactly one open PR (a
+# main -> release promotion), the comment lands on that unrelated PR: every
+# condition above holds, this workflow behaves exactly as designed, and the
+# dispatching session still gets nothing. So a unique result is not proof of
+# coverage -- arm the check-in whenever the run's SHA is not your PR's head
+# (git.md -> PR Lifecycle).
+#
+# Failures are deliberately NOT commented (delivered natively;
 # ci-monitor tracks them repo-side).
 #
 # Uses only GITHUB_TOKEN.

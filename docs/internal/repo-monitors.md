@@ -19,7 +19,11 @@ success via the comment webhook (no scheduling-tool polling, no permission
 prompts). Needs **one** lookup — head SHA, else branch + head-repo owner — to
 resolve exactly one open PR; no PR, or more than one, → exits quietly, so a
 green run does not guarantee a wake and the waiting session still arms a
-check-in. The template counterpart, adapted to this repo's workflow name.
+check-in. ⚠️ Nor does a unique match guarantee one: a `repository_dispatch` run
+carries the default-branch SHA, so if that branch heads exactly one open PR the
+comment goes there and the dispatching session gets nothing. Arm the check-in
+whenever the run's SHA is not the PR's head. The template counterpart, adapted
+to this repo's workflow name.
 
 **codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments (the
 an all-clear can travel as a SHA-bearing comment, which the monitor sees and

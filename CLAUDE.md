@@ -162,7 +162,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   success without scheduling-tool polling (the template's counterpart, adapted
   to this repo's workflow name). Coverage is partial: it needs **one** lookup —
   head SHA, else branch + head-repo owner — to resolve exactly one open PR, and
-  exits silently otherwise, so a wait still arms a check-in (`git.md` → *PR
+  exits silently otherwise. ⚠️ A unique match is not a guaranteed wake for YOUR
+  session either — a `repository_dispatch` run's default-branch SHA can uniquely
+  match an unrelated promotion PR, which gets the comment instead. Arm the
+  check-in whenever the run's SHA is not your PR's head (`git.md` → *PR
   Lifecycle*).
 - `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments; adds
   a `codex-flagged` label when Codex raised concerns and clears it on an

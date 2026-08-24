@@ -361,8 +361,11 @@ workflow completes **green**, so a watching session wakes on success — GitHub
 delivers failures natively but never green. Without it, a PR-attached wait has
 no success signal at all. With it the coverage is still partial: one of its two
 lookups (head SHA, else branch + head-repo owner) must resolve exactly one open
-PR, and it exits silently otherwise — so arm a check-in rather than treating a
-green run as a guaranteed wake. Behavior detail: `docs/standards/automations.md` →
+PR, and it exits silently otherwise. ⚠️ A unique match is not proof of coverage
+either: a `repository_dispatch` run carries the default-branch SHA, so if that
+branch heads exactly one open PR the comment lands on that unrelated PR while
+your session waits. Arm a check-in rather than treating a green run — or a
+unique match — as a guaranteed wake. Behavior detail: `docs/standards/automations.md` →
 Automation 4c.
 
 ⚠️ `workflow_run` triggers are read from the DEFAULT branch, so this workflow can

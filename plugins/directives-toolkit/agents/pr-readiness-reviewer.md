@@ -89,7 +89,10 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      neither fires a trigger it watches, and which form arrives is not predictable. So a label still
      present means concerns not yet re-reviewed, a clean round delivered in a form the
      monitor cannot see, an all-clear that failed the SHA match,
-     or a monitor run that has not landed yet — never treat it as leftover noise. While
+     or a monitor run that has not landed yet — never treat it as leftover noise.
+     Look for the verdict in the PR's comments **and its review threads**: an inline
+     reply never enters the comment list, so a comments-only check reports Pending on
+     a head Codex has cleared. While
      it is present, report the PR **Conditional** at best; the next step is either
      waiting for the monitor's clear on a genuine all-clear, or removal-with-rationale
      where a human judges the concerns addressed.

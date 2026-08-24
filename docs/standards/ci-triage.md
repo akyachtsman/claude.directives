@@ -81,8 +81,9 @@ not edit workflows chasing a bug that isn't there.
 - Do not close a `ci-failure` issue without fixing the underlying failure
 - Do not remove `codex-flagged` without addressing the inline comments. Let the
   monitor clear it when it can — but it only sees a **commented** all-clear, and a
-  clean rerun may instead be reaction-only, so manual removal with a rationale is
-  a routine path rather than an exception
+  clean rerun may instead arrive as a 👍 reaction or as an inline review-thread
+  reply — so check the comments AND the review threads, and treat manual removal
+  with a rationale as a routine path rather than an exception
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

@@ -171,9 +171,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   a `codex-flagged` label when Codex raised concerns and clears it on an
   all-clear **comment** naming the current head SHA — observed working at `b64ff09`. ⚠️ A clean rerun can instead
   arrive as a 👍 reaction **or as an inline review-thread reply**, and the
-  monitor watches neither event — so the label must come
-  off by hand with a rationale (`git.md` → *PR Lifecycle*), and a stuck label is
-  not evidence of open concerns.
+  monitor watches neither event — so check the PR's comments AND its review
+  threads for a verdict naming the head (an inline reply never enters the comment
+  list), then take the label off by hand with a rationale (`git.md` → *PR
+  Lifecycle*). A stuck label is not evidence of open concerns.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
   deploy is live and on a problem opens/updates a deduplicated
   `pages-deploy-failure` issue (success → job summary only). The zero-model

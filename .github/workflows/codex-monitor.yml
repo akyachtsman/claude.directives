@@ -27,7 +27,10 @@ name: Codex Monitor
 # (pull_request_review_comment) when Codex replies inside a review thread. Both
 # observed on #294, 2026-08-23. When a clean round arrives either way the label
 # cannot clear itself and must be removed by hand with a rationale — see
-# git.md -> PR Lifecycle. Do not read a stuck label as unaddressed concerns.
+# git.md -> PR Lifecycle. Look for the verdict in the PR's comments AND its
+# review threads: an inline reply never enters the comment list, so a
+# comments-only check reads as "still pending" on a head Codex has cleared.
+# Do not read a stuck label as unaddressed concerns.
 on:
   pull_request_review:
     types: [submitted]

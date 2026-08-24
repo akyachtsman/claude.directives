@@ -241,6 +241,14 @@ that set, arm a check-in — that is not polling (`git.md` → *PR Lifecycle*,
   SHA is not itself silence: the branch fallback still runs and resolves PRs on
   distinct branches. Silence needs **both steps ambiguous or empty**, and then
   the waiting session's check-in is what covers it.
+- ⚠️ **Unique is not the same as correct, so a unique match is not a guaranteed
+  wake for YOUR session.** Uniqueness only stops it choosing arbitrarily among
+  duplicates. A `repository_dispatch` run carries the DEFAULT-BRANCH SHA, so when
+  that branch is the head of exactly one open PR (a `main` → `release`
+  promotion), the comment lands on that unrelated PR — the coverage condition
+  above is satisfied and the dispatching session still gets nothing. Arm the
+  check-in whenever the run's SHA is not your PR's head (`git.md` →
+  *PR Lifecycle*).
 - Failures are deliberately NOT commented (delivered natively; `ci-monitor.yml`
   tracks them repo-side).
 - Uses `GITHUB_TOKEN` only (`pull-requests: write`).

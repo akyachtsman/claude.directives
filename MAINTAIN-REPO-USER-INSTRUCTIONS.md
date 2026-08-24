@@ -281,8 +281,11 @@ Hard-won; each cost a real debugging session:
   gated on success), and so does any run whose lookups are ambiguous or empty at
   **both** steps. Neither an ambiguous SHA nor a dispatched PR-branch run is by
   itself one of those cases — the branch fallback still runs, and dispatched
-  PR-branch runs are precisely what it was added to catch. Where nothing will
-  wake you a check-in is
+  PR-branch runs are precisely what it was added to catch. And a unique match is
+  not a guaranteed wake for YOUR session: a `repository_dispatch` run whose
+  default-branch SHA uniquely matches an unrelated promotion PR gets commented
+  there, satisfying every condition above while the dispatching session waits.
+  Where nothing will wake you a check-in is
   the only observer (`git.md` → *PR Lifecycle*; `global.md` → *Async
   Operations*, item 1's exception).
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,

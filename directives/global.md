@@ -706,18 +706,37 @@ something he cannot do, however politely it is phrased.
   session can hold the remote ref while its checkout sits on `main`.
 
   ```
+  git stash -u                                    # local changes? park them. NOT commit.
   git fetch origin <branch>
-  git switch <branch>                      # creates a tracking branch if absent
-  git branch --show-current                # MUST print <branch> before continuing
-  git merge --ff-only origin/<branch>      # refuses rather than clobbering
+  git switch -c <branch> --track origin/<branch>  # local branch ABSENT
+  git switch <branch>                             #   ...or PRESENT: just switch
+  git branch --show-current                       # MUST print <branch> to continue
+  git merge --ff-only origin/<branch>             # refuses rather than clobbering
+  git stash pop                                   # only if you stashed
   ```
 
-  `--ff-only` means "abort if a fast-forward is impossible" — it does **not**
-  select the branch, and it is no protection against being on the wrong one.
+  Three things in that sequence are load-bearing and none is obvious:
+
+  - **`git stash -u`, never `git commit`, to park local work.** `git commit` has
+    no destination-branch option — it records on the branch you are *on*. In the
+    state this whole warning is about, that commits feature work to `main`, and
+    switching afterwards leaves it sitting there: `main` contaminated, the work
+    still not on the feature branch. `-u` is what carries untracked files along;
+    without it they stay behind. If `stash pop` conflicts after the merge,
+    resolve it — a failed pop leaves the stash intact.
+  - **`--track origin/<branch>` is not decoration.** A bare `git switch <branch>`
+    uses `--guess`, and in a checkout where more than one remote carries that
+    branch and `checkout.defaultRemote` names another one, it creates the local
+    branch tracking **that** remote. The `--ff-only` merge from `origin` still
+    succeeds, so nothing looks wrong — and every later default pull or push goes
+    to the wrong remote.
+  - **`--ff-only` selects nothing.** It means "abort if a fast-forward is
+    impossible". It is not protection against being on the wrong branch, which is
+    why the `git branch --show-current` line above it is a gate and not a comment.
+
   `git reset --hard origin/<branch>` is the right tool only when discarding the
   current branch's tracked changes is what you actually intend, and only after
-  the switch is verified. Commit or stash local work before switching, or the
-  switch itself will fail or carry changes you did not mean to move.
+  the switch is verified.
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation
   about your own actions is a claim one tool call from being checked, and it

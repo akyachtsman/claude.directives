@@ -768,23 +768,37 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // The nav-reset path is the expensive one and an earlier version of this
   // comment left it out. A trigger that NAVIGATES costs a full gotoAndAuth().
   //
-  // ⚠️ AND THE TERMS ONLY BOUND THE SUM NOW. An earlier version of this
-  // arithmetic said "30s default" for the navigation waits. There is no such
-  // default: Playwright Test ships navigationTimeout = 0, so goto() and
-  // waitForLoadState() were capped only by this test's own timeout, and a
-  // single reset could exhaust the budget before NAV_RESET_CAP ever applied.
-  // A cap on the NUMBER of resets bounds nothing while the COST of one is
-  // unbounded. Now bounded at both ends — navigationTimeout in
-  // playwright.config.js, IDLE_MS at the top of this file:
+  // ⚠️ AND EVERY TERM IS ACTUALLY BOUNDED NOW. Two earlier versions of this
+  // arithmetic were fiction, both the same way: Playwright Test defaults EVERY
+  // timeout knob to 0, and I bounded them one at a time as each was found.
+  // First navigationTimeout (goto, networkidle), then actionTimeout (the
+  // click/fill/press inside detectAndAuth). A cap on the NUMBER of resets
+  // bounds nothing while the COST of one is unbounded — and the sum looked more
+  // rigorous each time precisely because it had more numbers in it. The knobs
+  // are now set as a SET in playwright.config.js, not one per discovery.
   //
-  //     goto 30s + networkidle 5s + auth probe 5s = ~40s per reset
+  //     goto 30s + networkidle 5s (IDLE_MS) + auth probe 5s   = ~40s per reset
   //
-  //     10 nav resets       x ~40s   = ~400s
-  //   + 20 overlay-path     x ~13.8s = ~276s
-  //     ------------------------------------
-  //     bounded worst case            ~676s
+  // Plus, when the gate re-presents, detectAndAuth(): a 10s visible-wait, then
+  // ~10s per credential digit at actionTimeout, then a 3s settle — ~53s for a
+  // 4-digit PIN, and it scales with credential length. Normally this is paid
+  // ONCE, on the first reset, because auth persists across a same-context
+  // goto(); a project whose gate re-presents on every navigation pays it every
+  // time, which is why the cap is sized against THAT case:
   //
-  // 900_000 is ~1.33x that. DERIVED FROM THE CONSTANTS IN THIS FILE, not
+  //     5 resets, gate re-presenting  x ~93s   = ~465s
+  //   + 25 overlay-path               x ~13.8s = ~345s
+  //     ---------------------------------------------
+  //     worst case                              ~810s
+  //
+  //     5 resets, auth persisting     x ~40s   = ~200s
+  //   + 25 overlay-path               x ~13.8s = ~345s
+  //     ---------------------------------------------
+  //     ordinary case                           ~545s
+  //
+  // 900_000 covers both. NAV_RESET_CAP came down from 10 to 5 to make the
+  // pathological case fit rather than raising the budget again — the resets buy
+  // this scenario nothing, so spending less on them is free. DERIVED FROM THE CONSTANTS IN THIS FILE, not
   // measured — no downstream repo has reported S9 at the wall, unlike S3. If you
   // measure it, replace this arithmetic with the number.
   test.setTimeout(900_000);
@@ -807,7 +821,7 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // the reset it forces is pure cost. Capping resets therefore loses no S9
   // coverage, where capping triggerCount would. Not silent: hitting the cap is
   // recorded as a finding, so a suite that stops early says so.
-  const NAV_RESET_CAP = 10;
+  const NAV_RESET_CAP = 5;
   let navResets = 0;
 
   for (let i = 0; i < triggerCount; i++) {

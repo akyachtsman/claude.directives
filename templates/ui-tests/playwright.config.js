@@ -16,16 +16,30 @@ export default defineConfig({
     // load-gates each one (test.md → UI coverage gates).
     baseURL: (process.env.APP_URL || 'REPLACE_WITH_YOUR_APP_URL').replace(/\/?$/, '/'),
     headless: true,
-    // ⚠️ Playwright Test defaults this to 0 = NO TIMEOUT. Left unset, page.goto()
-    // is bounded only by the enclosing test timeout, so one hung navigation
-    // consumes a whole scenario's budget — and every per-scenario budget in
-    // app.spec.js is derived by summing terms that were, until this line, not
-    // actually bounded. 30s: a page that cannot load in thirty seconds is a
-    // failure worth reporting as one, not worth waiting out.
-    // The matching cap for waitForLoadState('networkidle') is IDLE_MS in
-    // tests/app.spec.js — those calls pass an explicit, much shorter timeout,
-    // so this value governs goto() and nothing else.
+    // ⚠️ BOTH OF THESE DEFAULT TO 0 = NO TIMEOUT IN PLAYWRIGHT TEST, and that is
+    // the whole reason they are here. Left unset, an action or a navigation is
+    // bounded only by the enclosing test timeout, so ONE hung call consumes a
+    // scenario's entire budget — which made every per-scenario sum in
+    // tests/app.spec.js a fiction, since each was built from terms that were not
+    // themselves bounded.
+    //
+    // Set the whole surface at once, deliberately. These two plus `timeout`
+    // above and expect's own default (5s) are the complete set of waits
+    // Playwright Test can leave open; bounding them one at a time as each is
+    // discovered leaves the next one unbounded, which is exactly how this got
+    // shipped twice.
+    //
+    // navigationTimeout — a page that cannot load in 30s is a failure worth
+    // reporting as one, not worth waiting out. Governs goto(); the matching cap
+    // for waitForLoadState('networkidle') is IDLE_MS in tests/app.spec.js, which
+    // passes an explicit and much shorter timeout at every call site.
     navigationTimeout: 30_000,
+    // actionTimeout — the floor for click()/fill()/press()/selectOption() calls
+    // that pass no timeout of their own. Most call sites in app.spec.js DO pass
+    // one (2-3s) and those still win; this exists for the ones that cannot
+    // reasonably guess, notably detectAndAuth()'s keypad and form interactions.
+    // 10s is generous for a control that is going to become actionable at all.
+    actionTimeout: 10_000,
     screenshot: 'only-on-failure',
     video: 'off',
     trace: 'on-first-retry',

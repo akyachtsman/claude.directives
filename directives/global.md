@@ -637,20 +637,46 @@ something he cannot do, however politely it is phrased.
 
 - **A refused shell command is a refused command, not a refused capability.**
   (`claude.insurance`, 2026-08-25.) A `git add` the sandbox declined does not
-  mean the repo is unwritable — it means *that invocation* was declined. Before
-  concluding you are blocked, find the other route.
-- **Nearly every git operation has a GitHub MCP equivalent that needs no shell:**
+  mean the repo is unwritable — it means *that invocation* was declined.
+- ⚠️ **First ask WHY it was refused. Only one answer licenses another route.**
+
+  | refusal | what it means | what you may do |
+  |---|---|---|
+  | no shell / no terminal / tool unavailable | the **mechanism** is missing | use the API path below |
+  | the user denied approval | a **person decided** | do NOT re-run it through another tool; ask, or stop |
+  | a hook blocked it | a **guard decided** | the guard's reason still applies through every tool; fix the cause |
+  | branch protection, policy, permissions | a **rule decided** | the rule is the point; routing around it is the violation |
+
+  **An alternate tool is legitimate only when it preserves the reason for the
+  refusal.** A blocked direct push to `main` stays blocked — `push_files` must
+  not become the way to do it anyway. When you cannot tell which row you are in,
+  treat it as a decision, not a missing mechanism.
+- **Where the mechanism really is missing, these operations have API equivalents
+  that need no shell, no working tree and no credential helper:**
 
   | you wanted | use instead |
   |---|---|
   | `git add` + `commit` + `push` | `create_or_update_file` (one file), `push_files` (several, one commit) |
-  | `git checkout -b` | `create_branch` |
   | `git rm` | `delete_file` |
-  | `git merge` / PR merge | `merge_pull_request` |
   | reading a file at a ref | `get_file_contents` |
 
-  These commit through the API. They need no working tree, no shell, and no
-  credential helper.
+  Two mappings that look obvious and are **wrong**, both stated because a table
+  invites the substitution:
+  - **`git checkout -b` is NOT `create_branch`.** `create_branch` creates the
+    remote ref and nothing else — it does not move local `HEAD`. A session that
+    substitutes it stays on its previous branch, usually `main`, and every later
+    local commit, diff and status check reads the wrong branch. Either stay
+    API-only and pass the branch explicitly on every call, or fetch and switch
+    the local checkout before continuing.
+  - **`git merge` is NOT `merge_pull_request`.** `git merge` usually means
+    *bring the base branch into my working branch*. `merge_pull_request` does
+    the opposite and it **publishes**: it merges a PR into its base and closes
+    it. Use it only when you actually mean to merge that PR, and only after its
+    gates pass. There is no API equivalent for a local branch merge.
+
+  These write to the **remote**. Your local checkout is not updated by them, so
+  fetch before you resume working locally, or you will diff against a tree that
+  is already behind.
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation
   about your own actions is a claim one tool call from being checked, and it

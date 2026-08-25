@@ -654,14 +654,30 @@ something he cannot do, however politely it is phrased.
 - **Where the mechanism really is missing, these operations have API equivalents
   that need no shell, no working tree and no credential helper:**
 
+  Each row is a WHOLE TRANSACTION — edit *and* commit *and* push. There is no
+  API analogue of staging, so nothing here maps to a bare `git add` or `git rm`.
+
   | you wanted | use instead |
   |---|---|
-  | `git add` + `commit` + `push` | `create_or_update_file` (one file), `push_files` (several, one commit) |
-  | `git rm` | `delete_file` |
+  | edit + `commit` + `push`, one file | `create_or_update_file` |
+  | edit + `commit` + `push`, several files, ONE commit | `push_files` |
+  | delete + `commit` + `push`, one file, on its own | `delete_file` |
   | reading a file at a ref | `get_file_contents` |
 
-  Two mappings that look obvious and are **wrong**, both stated because a table
+  ⚠️ **A commit that both edits and deletes has NO equivalent.** `push_files`
+  requires `content` on every entry, so it cannot express a deletion; `delete_file`
+  handles one path and commits by itself. A change mixing the two therefore lands
+  as **several commits**, and CI runs against each incomplete intermediate tree.
+  When that matters — a build that breaks unless the edit and the deletion land
+  together — do it in a real checkout, or sequence it so no intermediate commit
+  is broken. Do not assume the API can be atomic across a mixed change.
+
+  Three mappings that look obvious and are **wrong**, all stated because a table
   invites the substitution:
+  - **`git rm` is NOT `delete_file`.** `git rm` stages a deletion for a commit
+    you have not written yet, alongside whatever else is in it. `delete_file`
+    commits and pushes immediately, by itself. Substituting it splits an
+    intended atomic change (→ the warning above).
   - **`git checkout -b` is NOT `create_branch`.** `create_branch` creates the
     remote ref and nothing else — it does not move local `HEAD`. A session that
     substitutes it stays on its previous branch, usually `main`, and every later
@@ -674,9 +690,15 @@ something he cannot do, however politely it is phrased.
     it. Use it only when you actually mean to merge that PR, and only after its
     gates pass. There is no API equivalent for a local branch merge.
 
-  These write to the **remote**. Your local checkout is not updated by them, so
-  fetch before you resume working locally, or you will diff against a tree that
-  is already behind.
+  These write to the **remote**, and your local checkout does not follow. ⚠️ **A
+  `git fetch` is not enough to catch it up**: fetch updates remote-tracking refs
+  and downloads objects, but it does not move local `HEAD` and does not touch the
+  working tree (`--update-head-ok` permits moving HEAD and still checks nothing
+  out). To resume local work on a branch you wrote to through the API you must
+  INTEGRATE the new commit — `git pull --ff-only origin <branch>`, or `git fetch`
+  followed by `git reset --hard origin/<branch>` when discarding local state is
+  what you actually intend. Skip it and every later diff, status and gate script
+  reads a tree that is already behind.
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation
   about your own actions is a claim one tool call from being checked, and it

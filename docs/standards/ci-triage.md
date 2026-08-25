@@ -117,6 +117,27 @@ Every project using these agents runs two Playwright workflows:
 - **Page-load scenario** failure (upstream kit: S1) in local runner → app fails to load entirely, investigate immediately
 - **Responsive-layout scenario** failure (upstream kit: S4) in local runner → layout-only, no backend dependency, should always pass
 - Any failure in `qa-live.yml` → real failure against the live app, must fix before done
+- **A scenario TIMEOUT** (`Test timeout of Ns exceeded`) → a real failure, and the
+  one most often waved through. It reads as infra noise, so nobody chases it —
+  the same shape as *"a cancelled run is not a red one"*, one layer down at the
+  test level. It means the budget sits below the work the scenario actually does.
+  ⚠️ **Check the OTHER profiles before concluding anything**: the interaction
+  sweep is uncapped and costs (element count × project count), and a WIDER
+  viewport clips fewer controls, so it sweeps MORE of them. In `claude.trading`
+  the phones passed at 97.5% of budget and tablet crossed first — a healthy-
+  looking pass at the wall is the same finding as the timeout beside it.
+  ⚠️ **Then establish the work is EXPECTED and FINITE before touching the
+  budget.** Raising a timeout is the right fix only when the scenario is doing
+  work it is supposed to do and simply needs longer. A hung app, an infinite
+  render loop, a request that never settles or a genuine performance regression
+  ALSO present as a timeout — and there, re-sizing masks a product defect and
+  buys a slower red later. The discriminator is whether the cost scales with
+  something you can name (elements, projects, depth) and lands where that
+  arithmetic predicts. If it does not, the defect is in the app, not the bound.
+  Only once it does: re-size from the measured worst case with real headroom,
+  never to just-above-observed, and re-check the ENCLOSING job bound — a
+  per-test ceiling raised past its job converts a test failure into a job
+  cancellation
 
 ### Checking for a post-event workflow run
 

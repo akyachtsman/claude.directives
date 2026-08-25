@@ -24,6 +24,72 @@ import { test, expect } from '@playwright/test';
 const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// IDLE CAP — every networkidle wait is bounded, because NOTHING ELSE BOUNDS IT
+// ─────────────────────────────────────────────────────────────────────────────
+// Playwright Test defaults `use.navigationTimeout` to 0 = NO TIMEOUT, and
+// waitForLoadState() inherits that default. So an un-timed
+// waitForLoadState('networkidle', { timeout: IDLE_MS }) on a page that polls, holds a websocket open,
+// or streams is bounded ONLY by the enclosing test timeout — one call can eat a
+// whole scenario's budget. The `.catch(() => {})` at each call site does not
+// help: with no timeout the promise never rejects, it just never settles.
+//
+// That made every per-scenario budget in this file a fiction, since each was
+// derived by adding up terms that were themselves unbounded. Cap it here, and
+// see playwright.config.js for the matching navigationTimeout that bounds goto().
+//
+// 5s, not 30: these calls are "let it settle, then continue", never assertions.
+// Every one already swallows failure, so a timeout means "settled enough".
+// networkidle is unreliable on any app with background activity — Playwright
+// says so itself — which is exactly why it must never be waited on unbounded.
+const IDLE_MS = 5_000;
+
+// ⚠️ AND NOT EVERY networkidle WAIT IS A SETTLE. Capping all of them at IDLE_MS
+// was wrong wherever the wait IS the observation window: the sampling right after
+// it sees only what has arrived by then, so at 5s a script or API call failing at
+// 8s is never seen and the gate PASSES a broken app — strictly worse than the
+// unbounded wait it replaced, because it fails silently instead of loudly.
+//
+// The test is NOT "is something read after this wait". Plenty of reads follow a
+// settle harmlessly. It is:
+//
+//     CAN A LATE ARRIVAL TURN A FAIL INTO A PASS?
+//
+// ⚠️ APPLY IT TO EVERY SITE, NOT THE ONE BEING DISCUSSED. This question has now
+// been answered four separate times, each time for only the call site in front
+// of me: S1/ENTRY (round 6), S3's per-element window (round 7), S2's auth probe
+// (round 10), and the load-and-authenticate preamble (round 12). The rule was
+// written HERE after round 7 and the last two sites still shipped wrong. The
+// classification below is therefore exhaustive by construction — every
+// networkidle wait in this file appears in exactly one of the two lists.
+//
+// LOAD_SETTLE_MS — a late arrival turns a FAIL into a PASS (9 sites):
+//   S1, ENTRY          a late error is never counted and the gate is green
+//   S2                 detectAuthGate's answer becomes mechanism 'none', so S2
+//                      passes without ever trying the credential
+//   S3 preamble (x2)   feeds discoverElements(); an element that renders late is
+//                      never swept, so a broken control leaves S3 green
+//   S4 (x2)            scrollWidth is read as a verdict; late content that
+//                      overflows arrives after the settle and S4 passes
+//   gotoAndAuth (x2)   every caller MEASURES the view it returns — CTRL counts
+//                      primary controls, DISMISS computes triggerCount, NAV
+//                      fingerprints the view
+//
+// IDLE_MS — a late arrival cannot produce a green (3 sites):
+//   NAV candidate loop  a late view change reads as "no change", ends the drill
+//                       and produces a SKIP — reported and investigable
+//   NAV back loop       the mirror case: a late arrival turns a PASS into a
+//                       FAIL, which is loud
+//   S3 per-element      THE ONE EXCEPTION, and it is a real one: a late arrival
+//                       here DOES cost correctness, but widening inside an
+//                       uncapped sweep costs (elements x projects). Keeps
+//                       IDLE_MS and states the residual at the call site rather
+//                       than pretending to have closed it.
+//
+// So IDLE_MS where a late arrival costs precision, LOAD_SETTLE_MS where it costs
+// correctness — with S3's loop the single documented place those two pull apart.
+const LOAD_SETTLE_MS = 25_000;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
 // ─────────────────────────────────────────────────────────────────────────────
 // A JS error is ALWAYS blocking: one throw silently kills every handler bound
@@ -172,6 +238,28 @@ async function domSnapshot(page) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH DISCOVERY & ATTEMPT
+//
+// ⚠️ COST, because five scenarios pay it and four of them once sized as if it
+// were free. Bounded worst case for ONE detectAndAuth() call:
+//
+//     waitFor visible (explicit, below)                        10s
+//   + PIN path: N digits x (actionTimeout 10s + 80ms) + 3s
+//       N=4                                                    43.3s
+//       N=8                                                    83.6s
+//     (password/text paths are CHEAPER: fill 10 + submit 10 + 3 = 23s,
+//      so the PIN keypad is the sizing case)
+//     ----------------------------------------------------------
+//     ~53s at N=4        ~94s at N=8
+//
+// N is the CREDENTIAL LENGTH — supplied per project, so like S3's element count
+// it is not bounded by any constant in this file. Every budget below that
+// includes this term states which N it assumed. If a scenario times out with a
+// long credential, THAT is the term to look at first.
+//
+// And the whole preamble — goto + settle + detectAuthGate + detectAndAuth +
+// settle — is the ~98s figure NAV's budget already used. It was derived there in
+// round 5 and then not applied to S2, S4 or CTRL, which is how three scenarios
+// came to be sized for two of their five terms.
 // ─────────────────────────────────────────────────────────────────────────────
 async function detectAndAuth(page, credential) {
   // Wait for auth UI to be fully active before interacting — prevents CI timing failures
@@ -291,9 +379,26 @@ function testValueFor(el) {
 // SCENARIO 1 — Page Load
 // ─────────────────────────────────────────────────────────────────────────────
 test('S1: page loads without JS errors', async ({ page }) => {
+  // Sized for what this scenario can actually spend, which the 30s config
+  // default is not: goto() may take navigationTimeout (30s) and the load-gate
+  // wait below may take LOAD_SETTLE_MS (25s) before either assertion runs. On a
+  // page that polls or streams — where networkidle is EXPECTED to time out
+  // harmlessly — S1 was killed as a test timeout before it read the watcher at
+  // all, turning a deliberate observation window into a failure to observe.
+  // ENTRY got this when its gate widened; S1 did not, in the same edit.
+  //
+  //   goto (navigationTimeout)   30s
+  // + LOAD_SETTLE_MS             25s
+  // + evaluate + assertions      the THIRD term — 60_000 left it exactly 5s,
+  //                              which is an implicit zero dressed as slack
+  //   -------------------------------
+  //   90_000, so a busy main thread cannot eat the observation itself
+  test.setTimeout(90_000);
   const errors = watchPageErrors(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // LOAD_SETTLE_MS, not IDLE_MS: the assertion below reads the error watcher the
+  // instant this returns, so this wait is the observation window, not overhead.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   const bodyText = await page.evaluate(() => document.body.innerText?.trim());
   expect(bodyText?.length, 'Page body is empty').toBeGreaterThan(0);
   expect(errors.all(), `Errors on load: ${errors.all().join('; ')}`).toHaveLength(0);
@@ -306,9 +411,36 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential found in CLAUDE.md or TEST_AUTH_CREDENTIAL env var — skipping auth test');
   const pageErrors = watchPageErrors(page);
 
+  // BUDGET — the 60_000 here was sized from the first TWO terms and stopped:
+  // goto 30 + settle 25 = 55, leaving 5s, which is exactly detectAuthGate()'s
+  // own timeout and nothing at all for the authentication it exists to perform.
+  // A healthy public app with persistent network activity would time out while
+  // CONCLUDING no gate exists, and a late gate would time out mid-login.
+  //
+  //   goto (navigationTimeout)              30s
+  // + LOAD_SETTLE_MS settle                 25s
+  // + detectAuthGate() waitFor               5s
+  // + detectAndAuth() (see its header)     ~53s at N=4    ~94s at N=8
+  // + snapshots, error read, assertions      ~few s
+  //   ------------------------------------------
+  //   ~113s at N=4                          ~154s at N=8
+  //
+  // 180_000 covers an 8-digit PIN with ~26s spare. SIZING ESTIMATE under a
+  // stated assumption, not a proof: N is the project's credential length.
+  test.setTimeout(180_000);
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // LOAD_SETTLE_MS, not IDLE_MS: what follows this wait is detectAuthGate(), and
+  // its answer is read as a CONCLUSION — "no gate" becomes mechanism 'none' and
+  // S2 passes without ever trying the credential. A gate that renders after the
+  // settle is therefore a silent pass on an app whose auth was never exercised.
+  // The wait is the measurement here, not overhead.
+  // ⚠️ RESIDUAL: this WIDENS the observation window (25s here + the 5s waitFor
+  // inside detectAuthGate) — it does not make "no gate" a proof. An app whose
+  // gate-determining request is still pending at 30s still reads as mechanism
+  // 'none'. Closing that needs an explicit auth-readiness condition (a named
+  // request settling, or a gate/app-shell selector), not a larger number.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
 
   const beforeSnap = await domSnapshot(page);
   // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
@@ -371,10 +503,33 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 // SCENARIO 3 — Element Mapping & Interaction Sweep
 // ─────────────────────────────────────────────────────────────────────────────
 test('S3: interactive elements discovered and exercised without errors', async ({ page }) => {
-  // The sweep scales with element count (~1.5s settle per element plus
-  // navigation waits) and cannot fit the 30s global timeout on element-rich
-  // apps or mobile-emulated projects.
-  test.setTimeout(240_000);
+  // BUDGET — sized from the MATRIX, not from one profile. This sweep is
+  // UNCAPPED: it visits every element discoverElements() returns, at ~1.5s
+  // settle plus a networkidle wait (now bounded by IDLE_MS, 5s — it was bounded
+  // by nothing at all, see the note at the top of this file), so its cost is
+  // (element count x project count). playwright.config.js ships FOUR projects;
+  // the 240_000 this replaces was written when the matrix was phones only, and
+  // desktop and tablet arrived later without anyone re-reading the number.
+  //
+  // This budget is sized from MEASUREMENT, not from a worst case — with the
+  // element count unbounded, no fixed number can be a true ceiling. ~14.5s per
+  // element in the worst case means ~62 elements fills 900s, while the real
+  // apps measured below sweep far more than that far faster. If your app is
+  // control-dense enough to approach it, re-measure rather than assume.
+  //
+  // ⚠️ WIDER IS SLOWER, which is the counter-intuitive part. Clipped controls
+  // inside overflow:hidden boxes are skipped, and a wide viewport clips FEWER
+  // of them — so more get swept. Measured in claude.trading (run 32655955615,
+  // head 607ab63): mobile-chrome and iphone 468s PASS, tablet >480s TIMEOUT.
+  // Every profile was at the wall; the phones "passed" with a twelve-second
+  // margin, and the wider one crossed first.
+  //
+  // 900_000 is ~1.9x that measured worst case, deliberately NOT ~1.03x. A bound
+  // tuned to just-above-observed reports as flakiness rather than as signal,
+  // which is how 240 survived: a test TIMEOUT reads as infra noise, so nobody
+  // investigates it. Raise this BEFORE adding projects, never after — and see
+  // the calling job's timeout-minutes, which this number pushes against.
+  test.setTimeout(900_000);
   // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
   // only auth-gated apps with no credential are skipped (decided after page load below).
   const pageErrors = watchPageErrors(page);
@@ -382,14 +537,17 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // LOAD_SETTLE_MS: what follows this preamble is discoverElements(). An element
+  // that renders late is never swept, so a broken control can leave S3 green by
+  // arriving after the settle. Measurement, not overhead.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   // Authenticate if we have a credential; if there's a real auth gate but no credential,
   // skip — sweeping the login screen would fire spurious PIN/password attempts and 401/403s
   // don't block, so the job could "pass" without reaching app content. A public app with
   // no gate falls through and is swept normally.
   if (AUTH_CREDENTIAL) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   } else if (await detectAuthGate(page)) {
     test.skip(true, 'Auth gate present but no credential — skipping sweep (would only exercise the login screen)');
   }
@@ -427,7 +585,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
       if (['button', 'a'].includes(el.tag) || el.type === 'submit' || el.selector.includes('role=button')) {
         await locator.click({ timeout: 3000 });
         await page.waitForTimeout(1500);
-        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
       } else if (el.tag === 'textarea' ||
                  (el.tag === 'input' &&
                   [null, 'text', 'email', 'password', 'search', 'tel', 'url', 'number'].includes(el.type))) {
@@ -484,6 +642,33 @@ test('S3: interactive elements discovered and exercised without errors', async (
     }
   }
 
+  // ⚠️ KNOWN LIMIT, stated rather than half-closed. Each element's diagnostics
+  // are sampled right after its IDLE_MS settle, so a failure arriving LATER than
+  // that is attributed to the NEXT element — and for the LAST element there is no
+  // next iteration, so it is not seen at all. A control whose request 500s after
+  // five seconds can therefore pass here.
+  //
+  // A post-sweep "late arrival" window was tried and REMOVED (#301, rounds 7-9).
+  // It did not work: waitForLoadState('networkidle') RESOLVES IMMEDIATELY when the
+  // page is already idle — the timeout is a maximum, not a delay — so the window
+  // was a no-op in exactly the common case, while looking like coverage. Two
+  // further rounds of fixes on top of it found a blind interval between the last
+  // per-element sample and the window's baseline, and a stale API baseline across
+  // a late navigation. Reverted rather than repaired.
+  //
+  // Closing this properly needs an explicit COMPLETION CONDITION, not a delay:
+  // track the requests captureApiCalls() sees start during an interaction and
+  // wait for those specific ones to settle, bounded. That is a design change and
+  // belongs in its own diff, with the design settled before the code.
+  //
+  // Until then: widening IDLE_MS localises late failures at (elements x projects)
+  // cost. THERE IS NO BACKSTOP — an earlier version of this comment claimed
+  // qa-live was one, and that was wrong: Playwright isolates each test's page and
+  // context, so this scenario's watchPageErrors listener is torn down when S3
+  // ends and no later scenario can receive its delayed failure. The gap is the
+  // gap, in both workflows. Said plainly because the false reassurance was
+  // written INTO the commit that admitted the limit.
+
   test.info().attach('interaction-findings', {
     body: JSON.stringify(findings, null, 2),
     contentType: 'application/json',
@@ -497,16 +682,30 @@ test('S3: interactive elements discovered and exercised without errors', async (
 // SCENARIO 4 — Responsive Layout
 // ─────────────────────────────────────────────────────────────────────────────
 test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => {
+  // BUDGET — S4 had NONE and inherited the 30s config default, while running the
+  // same load-and-authenticate preamble NAV prices at ~98s. Once this PR set
+  // navigationTimeout: 30_000, goto() ALONE could consume the whole test.
+  //
+  //   goto 30 + settle 25 + detectAuthGate 5 + detectAndAuth ~53 + settle 25
+  //   = ~138s at N=4       ~179s at N=8
+  //
+  // Both settles are LOAD_SETTLE_MS as of round 12 (they feed the scrollWidth
+  // verdict), which cost +40s and pushed ~179s against the previous 180_000.
+  // 240_000, same as CTRL — one number for one shared preamble.
+  test.setTimeout(240_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // LOAD_SETTLE_MS: scrollWidth is read below as a VERDICT. Content that renders
+  // late and introduces horizontal overflow arrives after an IDLE_MS settle and
+  // S4 passes green on a layout that is broken.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   // Authenticate only when a real auth gate (PIN/password) is detected, so overflow is
   // measured against the real app rather than the login screen. Gate on detectAuthGate()
   // — NOT just "a credential exists" — so a public-first app with a stray text input
   // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
   if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   }
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   const viewWidth = await page.evaluate(() => window.innerWidth);
@@ -520,13 +719,17 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
 // ─────────────────────────────────────────────────────────────────────────────
 async function gotoAndAuth(page) {
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // LOAD_SETTLE_MS at BOTH settles here, because every caller measures the view
+  // this function returns: CTRL counts primary controls (a late duplicate = a
+  // green on a duplicated CTA), DISMISS computes triggerCount (a late trigger is
+  // never swept), NAV fingerprints the view. Overhead for none of them.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   // Detect once and branch — each detectAuthGate() call burns a 5s waitFor timeout when
   // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
   const gated = await detectAuthGate(page);
   if (AUTH_CREDENTIAL && gated) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   } else if (gated) {
     test.skip(true, 'Auth gate present but no credential — skipping navigation/control invariants');
   }
@@ -594,10 +797,51 @@ function backControl(page) {
 // the app has no multi-level drill-down or no in-app back control (invariant N/A).
 // ─────────────────────────────────────────────────────────────────────────────
 test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
-  test.setTimeout(120_000);
+  // BUDGET — SIZING ESTIMATE, and the previous version of this comment was
+  // simply wrong. It said "bounded by DEPTH_CAP, not by element count". DEPTH_CAP
+  // bounds SUCCESSFUL drill levels only; the candidate loop below tries every
+  // visible button/link until one changes the view, and each failed attempt costs
+  // a 3s click + 800ms + IDLE_MS. On a control-dense page that is element-
+  // dependent work with no relation to depth, and 120_000 could not cover it.
+  //
+  // Bounded now by ATTEMPT_CAP across ALL levels, so the element-dependent term
+  // has a ceiling:
+  //
+  //   initial gotoAndAuth(), gate re-presenting                ~138s
+  // + 12 candidate attempts x (3s click + 0.8s + 5s idle)      = ~106s
+  // + DEPTH_CAP backs       x ~8.8s                            =  ~44s
+  //   -------------------------------------------------------------
+  //   worst assumed mix                                         ~288s
+  //
+  // The preamble term went ~98s -> ~138s in round 12 (both gotoAndAuth settles
+  // became LOAD_SETTLE_MS), which put ~288s against the previous 300_000.
+  // 360_000 covers it. Same caveat as S9: this is a sum over the CAPPED path
+  // under stated assumptions, not a proof — how many candidates a view offers is
+  // a property of the app, not of this file.
+  //
+  // The two IDLE_MS settles INSIDE the loops below stay at 5s deliberately: they
+  // precede viewSignature() reads, where a late view change reads as "no change"
+  // and ends the drill — a SKIP, not a green. The back-loop read is the mirror
+  // case: a late arrival there turns a PASS into a FAIL, which is loud. Neither
+  // can be turned green by arriving late, which is the test that decides this.
+  test.setTimeout(360_000);
   await gotoAndAuth(page);
 
   const DEPTH_CAP = 5;
+  // Bounds the element-dependent work DEPTH_CAP does not: a view whose visible
+  // controls never change the signature would otherwise be walked in full, at
+  // every level. Total across all levels, not per level. Not silent — running
+  // out is reported distinctly from "this app has no drill-down" below, because
+  // those need opposite responses.
+  const ATTEMPT_CAP = 12;
+  let attempts = 0;
+  // Tracked separately from the skip branch below, which only runs when the
+  // traversal found NOTHING. If an earlier level drilled in successfully and a
+  // later one exhausts the cap, that branch is bypassed entirely — the test
+  // unwinds the prefix it did find and passes, silently having stopped early.
+  // A budget outcome that only reports when it is also a coverage outcome is
+  // not reported at all in the case that matters most.
+  let capExhausted = false;
   const forward = [await viewSignature(page)]; // forward[0] = starting level
 
   // Drill down: at each level click the first "drill-in" candidate that BOTH changes
@@ -609,12 +853,14 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     for (const el of await discoverElements(page)) {
       if (!['a', 'button'].includes(el.tag) && !el.selector.includes('role=button')) continue;
       if (/back|←|‹|◀|return|home/i.test(el.label)) continue; // never drill via a back/home control
+      if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);
         if (!await loc.isVisible().catch(() => false)) continue;
+        attempts++;
         await loc.click({ timeout: 3000 });
         await page.waitForTimeout(800);
-        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
       } catch { continue; }
       const after = await viewSignature(page);
       const hasBack = await backControl(page).isVisible().catch(() => false);
@@ -626,9 +872,25 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     if (!advanced) break;
   }
 
+  // Report the budget outcome UNCONDITIONALLY — before the skip check, and
+  // whether or not the traversal found enough to assert on.
+  if (capExhausted) {
+    test.info().attach('nav-budget', {
+      body: JSON.stringify({
+        attemptCap: ATTEMPT_CAP,
+        attempts,
+        levelsFound: forward.length - 1,
+        note: `Stopped after ${ATTEMPT_CAP} candidate attempts. Traversal was TRUNCATED: levels deeper than those found were never reached, so a passing result here covers only the prefix listed. Raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`,
+      }, null, 2),
+      contentType: 'application/json',
+    });
+  }
+
   // Need at least two levels AND a back control on screen to assert anything.
   if (forward.length < 2 || !(await backControl(page).isVisible().catch(() => false))) {
-    test.skip(true, 'No multi-level drill-down with an in-app back control found — back-flow invariant N/A');
+    test.skip(true, capExhausted
+      ? `Stopped after ${ATTEMPT_CAP} candidate attempts without finding a drill-in — the back-flow invariant was NOT evaluated. This is a budget outcome, not evidence the app lacks drill-down: raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`
+      : 'No multi-level drill-down with an in-app back control found — back-flow invariant N/A');
   }
 
   // Unwind: one back press per descended level. Each result must equal the expected
@@ -641,7 +903,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     if (!await back.isVisible().catch(() => false)) break;
     await back.click({ timeout: 3000 });
     await page.waitForTimeout(800);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
     const now = await viewSignature(page);
     trail.push({ stepFromDeepest: forward.length - i, expected, left, got: now });
     test.info().attach('back-flow-trail', { body: JSON.stringify(trail, null, 2), contentType: 'application/json' });
@@ -660,6 +922,14 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
 // visible add/new/create controls, groups by accessible name, flags any with >1.
 // ─────────────────────────────────────────────────────────────────────────────
 test('CTRL: no duplicated primary action control', async ({ page }) => {
+  // BUDGET — CTRL had NONE and inherited the 30s config default, while its first
+  // statement is the gotoAndAuth() preamble. NAV and DISMISS budget for that call
+  // explicitly; CTRL called the same function and was sized as if it were free.
+  // That preamble went ~98s -> ~138s (N=4) / ~179s (N=8) in round 12 when both of
+  // its settles became LOAD_SETTLE_MS — CTRL is one of the callers that made them
+  // measurements, since a duplicate CTA rendering late is exactly what this scans
+  // for. 240_000, same as S4.
+  test.setTimeout(240_000);
   await gotoAndAuth(page);
   const dupes = await page.evaluate(() => {
     const norm = s => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -690,13 +960,41 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
 test('ENTRY: every deployed entry point renders without JS errors', async ({ page }) => {
   const pages = (process.env.APP_PAGES || '').split(',').map(s => s.trim()).filter(Boolean);
   test.skip(pages.length === 0, 'No extra entry points declared (APP_PAGES) — the baseURL is covered by S1');
+  // This loop had NO budget of its own and inherited the 30s config default,
+  // which one page could exhaust on its own once the load-gate wait became a
+  // real observation window. Scale with what the project actually declared:
+  // goto (<=30s, navigationTimeout) + LOAD_SETTLE_MS + assertions per page —
+  // and 60_000 counted the first two (55s) with 5s left for the third, the same
+  // implicit zero S1 carried. 90_000 per page names the assertions instead.
+  //
+  // CAPPED, because `90_000 * pages.length` is unbounded in a value the PROJECT
+  // supplies and this scenario runs once per Playwright project. 20 declared
+  // pages at the full per-page allowance is ~18min x 4 serial projects = ~73min,
+  // which on top of the ~59.6min slow-end cold baseline in qa.yml EXCEEDS the
+  // 120-minute caller bound — so healthy ENTRY work could get the whole job
+  // CANCELLED. That is the exact failure the job-bound comment exists to
+  // prevent, reached from inside a per-test budget.
+  //
+  // The cap is on the BUDGET, not on the page list. Capping the list would drop
+  // entry points from coverage, and "a page with zero tests is a release
+  // blocker" is the rule this scenario enforces — same objection that rejected
+  // capping S3's sweep. Capping the budget instead means a project that declares
+  // more slow pages than 5 minutes covers gets a REPORTED ENTRY timeout naming
+  // the scenario, rather than a silent job cancellation that reads inconclusive.
+  //
+  // If you hit it: split the entry points into their own suite (the note above
+  // already recommends this for pages with richer flows), or raise this cap and
+  // the caller's timeout-minutes TOGETHER — never this one alone.
+  const ENTRY_CAP_MS = 300_000;
+  test.setTimeout(Math.min(90_000 * pages.length, ENTRY_CAP_MS));
   const watcher = watchPageErrors(page);
   for (const path of pages) {
     // One watcher for the whole loop; each page is judged on the errors that
     // arrived after the previous one, so a failure names the page that caused it.
     const before = watcher.all().length;
     await page.goto('./' + path.replace(/^\//, ''));
-    await page.waitForLoadState('networkidle').catch(() => {});
+    // LOAD_SETTLE_MS: same reasoning as S1 — this wait is the gate, not overhead.
+    await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
     const bodyText = await page.evaluate(() => document.body.innerText?.trim());
     expect(bodyText?.length, `${path}: page body is empty`).toBeGreaterThan(0);
     const fresh = watcher.all().slice(before);
@@ -713,7 +1011,59 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
 // only when a backdrop element exists (some designs omit it deliberately).
 // ─────────────────────────────────────────────────────────────────────────────
 test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page }) => {
-  test.setTimeout(180_000);
+  // BUDGET — bounded by TWO caps below, and the 180_000 it replaces sat under
+  // its own. Per trigger the explicit waits total ~3.8s and there are five
+  // click({ timeout: 2000 }) paths: ~13.8s worst case, x30 = ~414s against 180s.
+  //
+  // The nav-reset path is the expensive one and an earlier version of this
+  // comment left it out. A trigger that NAVIGATES costs a full gotoAndAuth().
+  //
+  // ⚠️ SIZING ESTIMATE, NOT A PROVEN CEILING — and the wording matters, because
+  // FIVE successive versions of this arithmetic were published and wrong. Each
+  // omitted a different term: the nav-reset path, then a "30s default" that does
+  // not exist (Playwright Test ships every timeout knob at 0), then the actions
+  // inside detectAndAuth(), then the unconditional gotoAndAuth() below and its
+  // post-auth idle wait. Every correction made the sum LOOK more rigorous while
+  // leaving it just as unenforced.
+  //
+  // So this is what it actually is: a sum over the CAPPED path under the
+  // assumptions listed, sized to fit with margin. It is not a proof. The mix of
+  // trigger outcomes — navigate vs open-an-overlay vs neither — is a property of
+  // the app under test, not of this file, and no constant here bounds it.
+  //
+  // Terms, each traceable: goto -> navigationTimeout (playwright.config.js),
+  // networkidle -> IDLE_MS, gate probe -> the explicit 5s in detectAuthGate(),
+  // digit clicks -> actionTimeout, per-trigger overlay path -> the five
+  // click({ timeout: 2000 }) calls plus ~3.8s of explicit waits below.
+  //
+  //   gotoAndAuth(), gate re-presenting:
+  //     goto 30 + settle 25 + probe 5 + detectAndAuth ~53 + post-auth settle 25
+  //       = ~138s   (both settles became LOAD_SETTLE_MS in round 12: this
+  //                  scenario's triggerCount is read straight off that view, so
+  //                  a trigger rendering late is never swept at all)
+  //     (detectAndAuth is a 10s visible-wait + ~10s per credential digit +
+  //      3s settle — ~53s for a 4-digit PIN, scaling with credential length)
+  //   gotoAndAuth(), auth persisting:                                      ~60s
+  //
+  //     initial call, gate re-presenting         ~138s
+  //   + 3 nav resets    x ~138s                  = ~414s
+  //   + 27 overlay-path x ~13.8s                 = ~373s
+  //     ------------------------------------------------
+  //     worst assumed mix                         ~925s
+  //
+  //     initial ~138s + 3 resets x ~60s + 27 x ~13.8s = ~691s  (auth persists)
+  //
+  // ~925s exceeded the previous 900_000. 1_200_000 covers both. NAV_RESET_CAP went 10 -> 5 -> 3 as the omitted terms
+  // surfaced; the resets buy this scenario nothing (a navigating trigger is not
+  // an overlay trigger), so spending fewer of them is the cheap side of the
+  // trade every time.
+  //
+  // ⚠️ IF THIS TIMES OUT ANYWAY, do not revise this sum a sixth time. Read the
+  // run's `dismiss-budget` ATTACHMENT (not the findings list — the cap is a
+  // coverage outcome, not a defect): its presence tells you the app is nav-heavy
+  // and the assumed mix was wrong. That is a measurement, and it beats another
+  // derivation.
+  test.setTimeout(1_200_000);
   await gotoAndAuth(page);
 
   const OVERLAY = 'dialog[open], [role="dialog"], [aria-modal="true"], .modal, .drawer, .popover, .overlay';
@@ -728,6 +1078,14 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
 
   const findings = [];
   const triggerCount = Math.min(await page.locator(TRIGGERS).count(), 30);
+  // Cap the WASTED work, not the useful work. A navigating trigger is not an
+  // overlay trigger, so it contributes nothing to this scenario's assertions —
+  // the reset it forces is pure cost. Capping resets therefore loses no S9
+  // coverage, where capping triggerCount would. Not silent: hitting the cap
+  // writes a `dismiss-budget` attachment, so a suite that stops early says so
+  // WITHOUT failing the scenario for triggers it never reached.
+  const NAV_RESET_CAP = 3;
+  let navResets = 0;
 
   for (let i = 0; i < triggerCount; i++) {
     // Re-resolve per round — the DOM may have re-rendered since discovery.
@@ -739,7 +1097,26 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
     await trigger.click({ timeout: 2000 }).catch(() => {});
     await page.waitForTimeout(600);
     if (page.url() !== urlBefore && !(await overlayVisible())) {
-      await gotoAndAuth(page);           // trigger navigated — not an overlay
+      // Trigger navigated — not an overlay, so it is S3's territory.
+      if (++navResets > NAV_RESET_CAP) {
+        // ATTACHED, not pushed to findings[] — that array is asserted on at the
+        // end, so recording a BUDGET outcome there failed the scenario for a
+        // navigation-heavy app whose overlays are fine and were simply never
+        // reached. "Not silent" must not mean "counted as a defect": S6 already
+        // makes this distinction and S9 did not.
+        test.info().attach('dismiss-budget', {
+          body: JSON.stringify({
+            navResetCap: NAV_RESET_CAP,
+            stoppedAtTrigger: name,
+            triggersConsidered: i + 1,
+            of: triggerCount,
+            note: `Stopped after ${NAV_RESET_CAP} navigation resets. Triggers beyond this point were NOT checked for overlay dismissal — a coverage gap, not a dismisser defect. Raise NAV_RESET_CAP and this scenario's timeout together if the app is navigation-heavy.`,
+          }, null, 2),
+          contentType: 'application/json',
+        });
+        break;
+      }
+      await gotoAndAuth(page);
       continue;
     }
     if (!(await overlayVisible())) continue;  // opens no overlay — S3's territory

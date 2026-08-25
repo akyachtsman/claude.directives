@@ -93,7 +93,7 @@ Execute in order:
    `claude.directives/templates/scripts/workflow-ref-guard.py` and
    `check-job-bounds.py` into `.github/scripts/` — `qa.yml` runs both, so the job
    fails at step resolution without them. `check-job-bounds.py` needs no config;
-   it is what keeps the ui-suite callers' 60-minute bound from drifting back to a
+   it is what keeps the ui-suite callers' 120-minute bound from drifting back to a
    value that cancels healthy runs. Populate `.github/workflow-ref-required.json` with any watcher the
    project must not lose (absent file = none, which is the right default at
    bootstrap). Rules: `docs/standards/automations.md` → *Watcher Rules*.

@@ -72,8 +72,8 @@ jobs:
         run: python3 .github/scripts/workflow-ref-guard.py
 
       - name: Job bounds guard
-        # ENFORCED: every job bounded, none >= 360, ui-suite callers >= 60.
-        # Without this step the 60 below is a NUMBER IN A COMMENT: an edit back
+        # ENFORCED: every job bounded, none >= 360, ui-suite callers >= 120.
+        # Without this step the 120 below is a NUMBER IN A COMMENT: an edit back
         # to 40 passes CI and then cancels healthy cold runs, which read as
         # inconclusive rather than red, so nobody chases them.
         # ADVISORY: the direct-`playwright install` floor of 30 prints and never
@@ -149,13 +149,15 @@ jobs:
     needs: [static-checks, ui-changes]
     if: needs.ui-changes.outputs.ui == 'true'
     runs-on: ubuntu-latest
-    # 90, NOT 60 (and never 40). This job runs the ui-suite composite: dependency install + playwright
+    # 120, NOT 90 or 60 (and never 40). This job runs the ui-suite composite: dependency install + playwright
     # install + EVERY project in playwright.config.js + retries + artifact
     # upload, in one sum the composite cannot subdivide.
     #
     # Sized from MEASURED numbers — and the warm figure is a RANGE, not one
     # anchor. An earlier version of this block cited apfp.claude's 16.6min as
-    # though it were typical. Four repos have now measured this path:
+    # though it were typical. THREE repos have measured the warm whole-job path
+    # (a fourth number, the 21m25s cold install below, comes from
+    # claude.directives and measures a different thing — do not count it here):
     #
     #     WARM, whole job, 4-project suites
     #       claude.prop         8m00s    208 tests   cache hit, zero downloads
@@ -184,7 +186,7 @@ jobs:
     # an average would suggest. A repo at that end should treat adding a project
     # as a bound change, not a config change.
     #
-    # ⚠️ 90, NOT 60 — and the raise is not cosmetic. When app.spec.js took S3's
+    # ⚠️ 120, NOT 60 — and the raise is not cosmetic. When app.spec.js took S3's
     # per-test budget from 240s to 900s this arithmetic STOPPED FITTING. Projects
     # run SERIALLY (playwright.config.js sets no `workers`; a 2-core runner gives
     # one), so a per-test ceiling is paid once per project — and `retries: 1`
@@ -198,19 +200,39 @@ jobs:
     #                                                  from its peer phone profile
     #     -------------------------------------
     #     healthy cold, slow end              ~59.6min  → against 60: no headroom
-    #   + ONE S3 retry at the new ceiling      +15min   → ~75min
     #
-    # So 60 did not merely get tight: a healthy slow-end cold run now sits AT it,
-    # and any S3 failure pushes past. The failure mode is the one this comment
-    # exists to prevent, arriving from the other side — GitHub CANCELS the job at
-    # the bound, so Playwright never reports the definitive failure and the run
-    # reads as inconclusive rather than red. **Raising a per-test budget without
-    # raising its enclosing job converts a test failure into a job cancellation.**
+    # A FAILING S3 does not merely ADD a retry — it REPLACES a healthy run. That
+    # ~38min test phase already contains a SUCCESSFUL S3 (~7.8min on the profiles
+    # claude.trading measured), so when S3 times out that share is first replaced
+    # by the full 900s ceiling and THEN retried at the ceiling:
     #
-    # 90 leaves ~15min over that ~75. Capping S3's sweep instead was considered and
-    # rejected: it is uncapped BY DESIGN (test.md → "Coverage = controls clicked,
-    # not screens visited"), so a cap would cut mandated coverage to fit a bound —
-    # the wrong direction, and the same move as loosening a test to get green.
+    #     replace healthy S3 with the ceiling   +7.2min
+    #   + retry at the ceiling                  +15min
+    #     -------------------------------------
+    #     ONE profile failing S3                ~82min
+    #     TWO profiles failing S3               ~104min
+    #
+    # 120 covers both with ~16min spare. THREE or more profiles failing S3 is NOT
+    # covered, deliberately: that is not a bound problem, it is S3's budget being
+    # wrong for that app — re-size the budget, do not grow the job.
+    #
+    # The failure mode all of this exists to prevent, arriving from the other
+    # side: GitHub CANCELS the job at the bound, so Playwright never reports the
+    # definitive failure and the run reads as inconclusive rather than red.
+    # **Raising a per-test budget without raising its enclosing job converts a
+    # test failure into a job cancellation.**
+    #
+    # Capping S3's sweep instead was considered and rejected: it is uncapped BY
+    # DESIGN (test.md → "Coverage = controls clicked, not screens visited"), so a
+    # cap would cut mandated coverage to fit a bound — the wrong direction, and
+    # the same move as loosening a test to get green.
+    #
+    # COST OF THE FLOOR, stated because it is real: this is a fleet-wide MINIMUM
+    # sized for the slow end, so a fast repo (claude.prop, 8min warm) must also
+    # allow 120 and will burn that long on a genuine wedge. A repo may set HIGHER,
+    # never lower. The trade is deliberate — a bound too tight kills healthy runs
+    # and yields an inconclusive signal, which this file treats as the worse
+    # failure.
     #
     # The 57-minute figure in claude.directives' check-job-bounds.py header is NOT a sizing input,
     # however tempting the arithmetic. Read it in context: that run "sat 57
@@ -223,7 +245,7 @@ jobs:
     # inconclusive, so nobody chases it — the same shape as a viewport never
     # instantiated and a live gate nobody watched. Raise this BEFORE adding
     # projects, never after.
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout

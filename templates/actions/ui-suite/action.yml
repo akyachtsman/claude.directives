@@ -3,22 +3,23 @@
 #
 # Caveats baked into this design:
 # - Composite steps cannot carry per-step `timeout-minutes` — bound the run with
-#   the CALLING job's `timeout-minutes`. The qa workflows set 90, sized from a
+#   the CALLING job's `timeout-minutes`. The qa workflows set 120, sized from a
 #   cold-cache install at 21m25s plus a warm whole job — and the warm figure is a
 #   RANGE, not the single 16.6min this note used to cite: claude.prop 8m00s,
 #   apfp.claude 16.2-17.0min, claude.trading 30m35s, a 3.8x spread on nominally
 #   similar 4-project suites. Size from the SLOW end, and include a RETRY: with
-#   S3's per-test budget now 900s and `retries: 1`, a failing scenario pays that
-#   ceiling twice, so the slow end runs ~21m install + ~38m tests + ~15m retry =
-#   ~75min. That is what took this from 60 to 90 — at 60 a healthy slow-end cold
-#   run had NO headroom left. The callers carry the full table and the
-#   arithmetic. These measure THIS composite's `npm install` path below, not a
-#   stricter `npm ci`.
-#   That 90 is ENFORCED, not merely documented: check-job-bounds.py rejects any
+#   S3's per-test budget now 900s and `retries: 1`, a failing scenario REPLACES
+#   its healthy S3 with the ceiling and then retries at it — ~+22min for one
+#   profile, ~+44min for two — so the slow end runs ~82min with one failing
+#   profile and ~104min with two. That is what took this from 60 to 120; at 60 a
+#   healthy slow-end cold run had NO headroom at all. The callers carry the full
+#   table, the arithmetic, and what 120 deliberately does not cover. These
+#   measure THIS composite's `npm install` path below, not a stricter `npm ci`.
+#   That 120 is ENFORCED, not merely documented: check-job-bounds.py rejects any
 #   ui-suite caller below it, and templates/workflows/qa.yml invokes the guard in
 #   its static-checks job. If you copied this composite, copy
 #   templates/scripts/check-job-bounds.py to .github/scripts/ and keep that step,
-#   or the 90 reverts to being a number in a comment — which is what it was until
+#   or the 120 reverts to being a number in a comment — which is what it was until
 #   #291, and what let three callers sit at 40.
 #   The browser install is NOT the whole cost, whatever an earlier version of
 #   this note said: those warm figures are the suite's own share, and each scales

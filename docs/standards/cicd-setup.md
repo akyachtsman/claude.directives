@@ -289,7 +289,7 @@ same in every repo:
    while reading as protection.
 3. Two browser floors, because the shapes cost differently — but only one of
    them is a gate:
-   - **ENFORCED** — a job using the **ui-suite** composite needs `>= 90`, since
+   - **ENFORCED** — a job using the **ui-suite** composite needs `>= 120`, since
      that composite is install + every project in `playwright.config.js` +
      retries + upload in one sum it cannot subdivide. The composite is read from
      `uses:`, structured data with one correct answer.

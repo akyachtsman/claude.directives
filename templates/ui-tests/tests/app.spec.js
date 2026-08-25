@@ -734,16 +734,26 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
 // only when a backdrop element exists (some designs omit it deliberately).
 // ─────────────────────────────────────────────────────────────────────────────
 test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page }) => {
-  // BUDGET — capped at 30 triggers below, so this is bounded; the 180_000 it
-  // replaces sat UNDER its own cap's worst case. Per trigger the explicit waits
-  // total ~3.8s and there are five click({ timeout: 2000 }) paths, giving
-  // ~13.8s worst case: 30 x 13.8 = ~414s against a 180s bound. A trigger that
-  // NAVIGATES also costs a full gotoAndAuth(), which is unbounded here.
+  // BUDGET — bounded by TWO caps below, and the 180_000 it replaces sat under
+  // its own. Per trigger the explicit waits total ~3.8s and there are five
+  // click({ timeout: 2000 }) paths: ~13.8s worst case, x30 = ~414s against 180s.
   //
-  // 600_000 is ~1.45x that derived worst case. DERIVED FROM THE CONSTANTS IN
-  // THIS FILE, not measured — no downstream repo has reported S9 at the wall,
-  // unlike S3. If you measure it, replace this arithmetic with the number.
-  test.setTimeout(600_000);
+  // The nav-reset path is the expensive one and an earlier version of this
+  // comment left it out. A trigger that NAVIGATES costs a full gotoAndAuth() —
+  // page load + a networkidle wait (30s default, and a page holding a socket
+  // open really does burn it) + a 5s auth-gate probe, so ~35s each. Uncapped,
+  // 30 navigating triggers is ~1128s on its own: no budget this test can afford
+  // inside the job bound would cover it. Hence NAV_RESET_CAP below.
+  //
+  //     10 nav resets       x ~37.6s = ~376s
+  //   + 20 overlay-path     x ~13.8s = ~276s
+  //     ------------------------------------
+  //     bounded worst case            ~652s
+  //
+  // 900_000 is ~1.4x that. DERIVED FROM THE CONSTANTS IN THIS FILE, not
+  // measured — no downstream repo has reported S9 at the wall, unlike S3. If you
+  // measure it, replace this arithmetic with the number.
+  test.setTimeout(900_000);
   await gotoAndAuth(page);
 
   const OVERLAY = 'dialog[open], [role="dialog"], [aria-modal="true"], .modal, .drawer, .popover, .overlay';
@@ -758,6 +768,13 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
 
   const findings = [];
   const triggerCount = Math.min(await page.locator(TRIGGERS).count(), 30);
+  // Cap the WASTED work, not the useful work. A navigating trigger is not an
+  // overlay trigger, so it contributes nothing to this scenario's assertions —
+  // the reset it forces is pure cost. Capping resets therefore loses no S9
+  // coverage, where capping triggerCount would. Not silent: hitting the cap is
+  // recorded as a finding, so a suite that stops early says so.
+  const NAV_RESET_CAP = 10;
+  let navResets = 0;
 
   for (let i = 0; i < triggerCount; i++) {
     // Re-resolve per round — the DOM may have re-rendered since discovery.
@@ -769,7 +786,16 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
     await trigger.click({ timeout: 2000 }).catch(() => {});
     await page.waitForTimeout(600);
     if (page.url() !== urlBefore && !(await overlayVisible())) {
-      await gotoAndAuth(page);           // trigger navigated — not an overlay
+      // Trigger navigated — not an overlay, so it is S3's territory.
+      if (++navResets > NAV_RESET_CAP) {
+        findings.push({
+          trigger: name,
+          dismisser: 'n/a',
+          problem: `stopped after ${NAV_RESET_CAP} navigation resets — remaining triggers were NOT checked for overlay dismissal`,
+        });
+        break;
+      }
+      await gotoAndAuth(page);
       continue;
     }
     if (!(await overlayVisible())) continue;  // opens no overlay — S3's territory

@@ -17,13 +17,14 @@ THREE RULES, because presence alone proves nothing:
   3. TWO floors, because the two shapes cost different amounts:
        - a job using the ui-suite composite pays install + EVERY project in
          playwright.config.js + retries + upload, in one sum it cannot
-         subdivide: >= 90. ENFORCED — the composite is identified from `uses:`,
-         Was 60 until S3's per-test budget went 240s -> 900s: projects run
-         serially and `retries: 1` makes a FAILING scenario pay the ceiling
-         twice, which put a healthy slow-end cold run AT 60 with any failure
-         past it. A bound reached is a job CANCELLED, i.e. a definite test
-         failure downgraded to an inconclusive run — see the callers' comment
-         for the arithmetic.
+         subdivide: >= 120. ENFORCED — the composite is identified from `uses:`,
+         Was 60 until S3's per-test budget went 240s -> 900s. Projects run
+         serially, and a FAILING scenario does not merely add a retry: it
+         REPLACES its healthy run with the ceiling and THEN retries at the
+         ceiling, so one failing profile costs ~+22min, two cost ~+44min. A
+         bound reached is a job CANCELLED, i.e. a definite test failure
+         downgraded to an inconclusive run — see the callers' comment for the
+         full arithmetic and for what 120 deliberately does NOT cover.
          a structured field with one correct answer.
        - a job running `playwright install` DIRECTLY pays the install: >= 30.
          ADVISORY ONLY — it prints, it never fails the build.
@@ -124,7 +125,7 @@ if INCLUDE_TEMPLATES:
 
 GITHUB_DEFAULT = 360
 BROWSER_FLOOR = 30
-UI_SUITE_FLOOR = 90
+UI_SUITE_FLOOR = 120
 
 # The shipped composite, as a LOCAL reference. `./` is load-bearing: a remote
 # `acme/tools/.github/actions/ui-suite@v1` is a different action that merely ends

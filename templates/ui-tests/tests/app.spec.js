@@ -362,9 +362,17 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential found in CLAUDE.md or TEST_AUTH_CREDENTIAL env var — skipping auth test');
   const pageErrors = watchPageErrors(page);
 
+  // Sized like S1: goto() may take navigationTimeout and the settle below may
+  // take LOAD_SETTLE_MS before the gate decision is made.
+  test.setTimeout(60_000);
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
+  // LOAD_SETTLE_MS, not IDLE_MS: what follows this wait is detectAuthGate(), and
+  // its answer is read as a CONCLUSION — "no gate" becomes mechanism 'none' and
+  // S2 passes without ever trying the credential. A gate that renders after the
+  // settle is therefore a silent pass on an app whose auth was never exercised.
+  // The wait is the measurement here, not overhead.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
 
   const beforeSnap = await domSnapshot(page);
   // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
@@ -583,8 +591,12 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // belongs in its own diff, with the design settled before the code.
   //
   // Until then: widening IDLE_MS localises late failures at (elements x projects)
-  // cost, and qa-live is the backstop — the same interaction on the deployed app,
-  // where a 500 that arrives late still fails the next scenario's error watcher.
+  // cost. THERE IS NO BACKSTOP — an earlier version of this comment claimed
+  // qa-live was one, and that was wrong: Playwright isolates each test's page and
+  // context, so this scenario's watchPageErrors listener is torn down when S3
+  // ends and no later scenario can receive its delayed failure. The gap is the
+  // gap, in both workflows. Said plainly because the false reassurance was
+  // written INTO the commit that admitted the limit.
 
   test.info().attach('interaction-findings', {
     body: JSON.stringify(findings, null, 2),
@@ -955,10 +967,20 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
     if (page.url() !== urlBefore && !(await overlayVisible())) {
       // Trigger navigated — not an overlay, so it is S3's territory.
       if (++navResets > NAV_RESET_CAP) {
-        findings.push({
-          trigger: name,
-          dismisser: 'n/a',
-          problem: `stopped after ${NAV_RESET_CAP} navigation resets — remaining triggers were NOT checked for overlay dismissal`,
+        // ATTACHED, not pushed to findings[] — that array is asserted on at the
+        // end, so recording a BUDGET outcome there failed the scenario for a
+        // navigation-heavy app whose overlays are fine and were simply never
+        // reached. "Not silent" must not mean "counted as a defect": S6 already
+        // makes this distinction and S9 did not.
+        test.info().attach('dismiss-budget', {
+          body: JSON.stringify({
+            navResetCap: NAV_RESET_CAP,
+            stoppedAtTrigger: name,
+            triggersConsidered: i + 1,
+            of: triggerCount,
+            note: `Stopped after ${NAV_RESET_CAP} navigation resets. Triggers beyond this point were NOT checked for overlay dismissal — a coverage gap, not a dismisser defect. Raise NAV_RESET_CAP and this scenario's timeout together if the app is navigation-heavy.`,
+          }, null, 2),
+          contentType: 'application/json',
         });
         break;
       }

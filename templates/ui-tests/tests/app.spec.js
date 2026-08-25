@@ -471,6 +471,15 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
   const findings = [];
 
+  // Baselines for the post-sweep window, CARRIED FORWARD from the last
+  // diagnostic read rather than re-captured after the loop. Re-capturing left a
+  // blind interval: the final element's newErrors/apiCalls are sampled inside
+  // the loop, and anything arriving between that sample and a post-loop capture
+  // landed in the baseline itself — sliced away by the late sweep and already
+  // past the per-element check. Lost by both.
+  let lateErrorBaseline = pageErrors.all().length;
+  let lateCallBaseline  = ((await getApiCalls()) ?? []).length;
+
   for (const el of elements) {
     // .all(), not .js: a click that triggers a failed dynamic import, route
     // chunk or lazily-loaded stylesheet breaks the interaction without adding a
@@ -525,6 +534,14 @@ test('S3: interactive elements discovered and exercised without errors', async (
       const recentBadCalls = (navigated ? apiCalls : apiCalls.slice(callsBefore))
         .filter(c => c.status >= 400);
 
+      // Advance the late-sweep baselines to exactly this sample point, so the
+      // window below starts where the last per-element check ended and nothing
+      // falls between them. Deliberately NOT updated on the catch path: leaving
+      // it stale can re-report something already attributed to an element, and
+      // duplicate noise is the right side to err on against a missed failure.
+      lateErrorBaseline = errorsBefore + newErrors.length;
+      lateCallBaseline  = apiCalls.length;
+
       if (newErrors.length > 0 || recentBadCalls.length > 0) {
         findings.push({
           element: el.label || el.id || `${el.tag}[${el.index}]`,
@@ -559,11 +576,9 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // and the LAST element has no next iteration to catch it. So pay ONE window for
   // the whole scenario instead of one per element, and attribute what shows up
   // honestly: it belongs to the sweep, not to a control we can still name.
-  const lateErrorsBefore = pageErrors.all().length;
-  const lateCallsBefore  = ((await getApiCalls()) ?? []).length;
   await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-  const lateErrors   = pageErrors.all().slice(lateErrorsBefore);
-  const lateBadCalls = ((await getApiCalls()) ?? []).slice(lateCallsBefore).filter(c => c.status >= 400);
+  const lateErrors   = pageErrors.all().slice(lateErrorBaseline);
+  const lateBadCalls = ((await getApiCalls()) ?? []).slice(lateCallBaseline).filter(c => c.status >= 400);
   if (lateErrors.length > 0 || lateBadCalls.length > 0) {
     findings.push({
       element: '(late arrival — after the sweep completed)',

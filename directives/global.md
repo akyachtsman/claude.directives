@@ -690,53 +690,44 @@ something he cannot do, however politely it is phrased.
     it. Use it only when you actually mean to merge that PR, and only after its
     gates pass. There is no API equivalent for a local branch merge.
 
-  These write to the **remote**, and your local checkout does not follow. ⚠️ **A
-  `git fetch` is not enough to catch it up**: fetch updates remote-tracking refs
-  and downloads objects, but it does not move local `HEAD` and does not touch the
-  working tree (`--update-head-ok` permits moving HEAD and still checks nothing
-  out). Skip the catch-up and every later diff, status and gate script reads a
-  tree that is already behind.
+  These write to the **remote**, and your local checkout does not follow. If you
+  are going to resume working locally after an API write, **five things must be
+  true** — and a `git fetch` alone establishes none of them:
 
-  ⚠️⚠️ **Switch to the branch FIRST, and verify it.** Every integration command
-  acts on the branch you are *currently on*, not on the one you name in the
-  argument — `git pull --ff-only origin feature` run from `main` fast-forwards
-  **`main`** to the feature commit, and `git reset --hard origin/feature` moves
-  `main` there and discards its tracked changes. That is the likely state, not a
-  contrived one: the `create_branch` warning above exists precisely because a
-  session can hold the remote ref while its checkout sits on `main`.
+  1. **You are ON the branch.** Every integrating command acts on the branch you
+     are *currently on*, not the one named in the argument: `git pull --ff-only
+     origin feature` run from `main` fast-forwards **`main`**. Verify with
+     `git branch --show-current` and treat it as a gate, not a comment. The
+     `create_branch` warning above is exactly why this is the likely state — the
+     remote ref can exist while your checkout sits on `main`.
+  2. **Uncommitted work is parked with a STASH, never a commit.** `git commit`
+     has no destination-branch option; it records on the branch you are on. So
+     "saving" work before the switch puts it on `main`, permanently, and
+     switching leaves it there.
+  3. **The stash covers everything you care about.** `-u` includes *untracked*
+     files; only `-a` includes *ignored* ones — and `git switch` overwrites
+     ignored files by default (`--overwrite-ignore`). A local-only `.env` at a
+     path the target branch tracks is destroyed silently, by a sequence that has
+     just told you your work was parked.
+  4. **The remote-tracking ref exists.** A source-only `git fetch origin
+     <branch>` writes to `FETCH_HEAD` only — in a `--single-branch` clone, or
+     anywhere `remote.origin.fetch` does not map that branch,
+     `refs/remotes/origin/<branch>` is never created and anything relying on
+     `origin/<branch>` then fails.
+  5. **Tracking is pinned to `origin`.** A bare `git switch <branch>` guesses;
+     with several remotes carrying the branch and `checkout.defaultRemote` set it
+     can track the wrong one — and a later merge from `origin` still succeeds, so
+     nothing looks wrong until a push goes somewhere nobody chose.
 
-  ```
-  git stash -u                                    # local changes? park them. NOT commit.
-  git fetch origin <branch>
-  git switch -c <branch> --track origin/<branch>  # local branch ABSENT
-  git switch <branch>                             #   ...or PRESENT: just switch
-  git branch --show-current                       # MUST print <branch> to continue
-  git merge --ff-only origin/<branch>             # refuses rather than clobbering
-  git stash pop                                   # only if you stashed
-  ```
+  ⚠️ **This directive deliberately stops short of giving you the commands.**
+  Five rounds of review found a defect in five successive versions of a
+  seven-line recipe here, because *which* commands are correct depends on
+  configuration a directive cannot see: single-branch clone or not, how many
+  remotes carry the branch, `checkout.defaultRemote`, what is gitignored. Check
+  these five conditions in YOUR checkout and compose accordingly. Pasting a
+  sequence from a file that cannot see your remotes is how you find out about
+  condition 3 by losing a file.
 
-  Three things in that sequence are load-bearing and none is obvious:
-
-  - **`git stash -u`, never `git commit`, to park local work.** `git commit` has
-    no destination-branch option — it records on the branch you are *on*. In the
-    state this whole warning is about, that commits feature work to `main`, and
-    switching afterwards leaves it sitting there: `main` contaminated, the work
-    still not on the feature branch. `-u` is what carries untracked files along;
-    without it they stay behind. If `stash pop` conflicts after the merge,
-    resolve it — a failed pop leaves the stash intact.
-  - **`--track origin/<branch>` is not decoration.** A bare `git switch <branch>`
-    uses `--guess`, and in a checkout where more than one remote carries that
-    branch and `checkout.defaultRemote` names another one, it creates the local
-    branch tracking **that** remote. The `--ff-only` merge from `origin` still
-    succeeds, so nothing looks wrong — and every later default pull or push goes
-    to the wrong remote.
-  - **`--ff-only` selects nothing.** It means "abort if a fast-forward is
-    impossible". It is not protection against being on the wrong branch, which is
-    why the `git branch --show-current` line above it is a gate and not a comment.
-
-  `git reset --hard origin/<branch>` is the right tool only when discarding the
-  current branch's tracked changes is what you actually intend, and only after
-  the switch is verified.
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation
   about your own actions is a claim one tool call from being checked, and it

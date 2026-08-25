@@ -63,8 +63,10 @@ const IDLE_MS = 5_000;
 // investigable; a false pass is not. That asymmetry is the whole distinction.
 //
 // So IDLE_MS where a late arrival costs precision, LOAD_SETTLE_MS where it costs
-// correctness — and see S3's post-sweep window for the case where per-iteration
-// widening is unaffordable but the exposure is real anyway.
+// correctness. S3 is the case where those two pull apart: a late arrival there
+// DOES cost correctness, but widening per element costs (elements x projects) on
+// an uncapped sweep, so it keeps IDLE_MS and states the residual exposure at the
+// call site instead of pretending to have closed it.
 const LOAD_SETTLE_MS = 25_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -479,15 +481,6 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
   const findings = [];
 
-  // Baselines for the post-sweep window, CARRIED FORWARD from the last
-  // diagnostic read rather than re-captured after the loop. Re-capturing left a
-  // blind interval: the final element's newErrors/apiCalls are sampled inside
-  // the loop, and anything arriving between that sample and a post-loop capture
-  // landed in the baseline itself — sliced away by the late sweep and already
-  // past the per-element check. Lost by both.
-  let lateErrorBaseline = pageErrors.all().length;
-  let lateCallBaseline  = ((await getApiCalls()) ?? []).length;
-
   for (const el of elements) {
     // .all(), not .js: a click that triggers a failed dynamic import, route
     // chunk or lazily-loaded stylesheet breaks the interaction without adding a
@@ -542,14 +535,6 @@ test('S3: interactive elements discovered and exercised without errors', async (
       const recentBadCalls = (navigated ? apiCalls : apiCalls.slice(callsBefore))
         .filter(c => c.status >= 400);
 
-      // Advance the late-sweep baselines to exactly this sample point, so the
-      // window below starts where the last per-element check ended and nothing
-      // falls between them. Deliberately NOT updated on the catch path: leaving
-      // it stale can re-report something already attributed to an element, and
-      // duplicate noise is the right side to err on against a missed failure.
-      lateErrorBaseline = errorsBefore + newErrors.length;
-      lateCallBaseline  = apiCalls.length;
-
       if (newErrors.length > 0 || recentBadCalls.length > 0) {
         findings.push({
           element: el.label || el.id || `${el.tag}[${el.index}]`,
@@ -578,25 +563,28 @@ test('S3: interactive elements discovered and exercised without errors', async (
     }
   }
 
-  // LATE-ARRIVAL SWEEP. The per-element wait is IDLE_MS because widening it costs
-  // (elements x projects) and this scenario is uncapped — but the exposure it
-  // leaves is real: a click whose request 500s after 5s misses its own element,
-  // and the LAST element has no next iteration to catch it. So pay ONE window for
-  // the whole scenario instead of one per element, and attribute what shows up
-  // honestly: it belongs to the sweep, not to a control we can still name.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-  const lateErrors   = pageErrors.all().slice(lateErrorBaseline);
-  const lateBadCalls = ((await getApiCalls()) ?? []).slice(lateCallBaseline).filter(c => c.status >= 400);
-  if (lateErrors.length > 0 || lateBadCalls.length > 0) {
-    findings.push({
-      element: '(late arrival — after the sweep completed)',
-      action: 'none',
-      consoleErrors: lateErrors,
-      apiErrors: lateBadCalls,
-      domTransition: false,
-      note: 'Arrived after the last interaction was sampled, so it cannot be attributed to one control. Re-run with a wider per-element wait to localise it.',
-    });
-  }
+  // ⚠️ KNOWN LIMIT, stated rather than half-closed. Each element's diagnostics
+  // are sampled right after its IDLE_MS settle, so a failure arriving LATER than
+  // that is attributed to the NEXT element — and for the LAST element there is no
+  // next iteration, so it is not seen at all. A control whose request 500s after
+  // five seconds can therefore pass here.
+  //
+  // A post-sweep "late arrival" window was tried and REMOVED (#301, rounds 7-9).
+  // It did not work: waitForLoadState('networkidle') RESOLVES IMMEDIATELY when the
+  // page is already idle — the timeout is a maximum, not a delay — so the window
+  // was a no-op in exactly the common case, while looking like coverage. Two
+  // further rounds of fixes on top of it found a blind interval between the last
+  // per-element sample and the window's baseline, and a stale API baseline across
+  // a late navigation. Reverted rather than repaired.
+  //
+  // Closing this properly needs an explicit COMPLETION CONDITION, not a delay:
+  // track the requests captureApiCalls() sees start during an interaction and
+  // wait for those specific ones to settle, bounded. That is a design change and
+  // belongs in its own diff, with the design settled before the code.
+  //
+  // Until then: widening IDLE_MS localises late failures at (elements x projects)
+  // cost, and qa-live is the backstop — the same interaction on the deployed app,
+  // where a 500 that arrives late still fails the next scenario's error watcher.
 
   test.info().attach('interaction-findings', {
     body: JSON.stringify(findings, null, 2),

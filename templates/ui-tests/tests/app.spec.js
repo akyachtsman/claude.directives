@@ -44,15 +44,27 @@ const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 const IDLE_MS = 5_000;
 
 // ⚠️ AND NOT EVERY networkidle WAIT IS A SETTLE. Capping all of them at IDLE_MS
-// was wrong for the LOAD GATES: S1 and ENTRY assert on the error watcher
-// immediately after the wait, so the wait IS their observation window. At 5s a
-// script or API call that fails at 8s is never seen, and the authoritative load
-// gate passes a broken app — a strictly worse outcome than the unbounded wait it
-// replaced, since it fails silently instead of loudly.
+// was wrong wherever the wait IS the observation window: the sampling right after
+// it sees only what has arrived by then, so at 5s a script or API call failing at
+// 8s is never seen and the gate PASSES a broken app — strictly worse than the
+// unbounded wait it replaced, because it fails silently instead of loudly.
 //
-// So: IDLE_MS for "settle, then continue" (the wait is overhead), LOAD_SETTLE_MS
-// where the wait is the measurement. Ask which one a call site is before
-// bounding it; they are not interchangeable just because they are the same call.
+// The test is NOT "is something read after this wait". Plenty of reads follow a
+// settle harmlessly. It is:
+//
+//     CAN A LATE ARRIVAL TURN A FAIL INTO A PASS?
+//
+// S1 and ENTRY: yes — a late error is simply never counted, and the gate is green.
+// S3's per-element diagnostics: yes — the watcher and captured API calls are
+// sampled immediately after, so a request that 500s at 8s misses its own element,
+// and on the LAST element there is no next iteration to catch it at all.
+// S6's viewSignature reads: NO — a late view change yields "no change", which
+// ends the drill and produces a SKIP, not a green. A skip is reported and
+// investigable; a false pass is not. That asymmetry is the whole distinction.
+//
+// So IDLE_MS where a late arrival costs precision, LOAD_SETTLE_MS where it costs
+// correctness — and see S3's post-sweep window for the case where per-iteration
+// widening is unaffordable but the exposure is real anyway.
 const LOAD_SETTLE_MS = 25_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -541,6 +553,28 @@ test('S3: interactive elements discovered and exercised without errors', async (
     }
   }
 
+  // LATE-ARRIVAL SWEEP. The per-element wait is IDLE_MS because widening it costs
+  // (elements x projects) and this scenario is uncapped — but the exposure it
+  // leaves is real: a click whose request 500s after 5s misses its own element,
+  // and the LAST element has no next iteration to catch it. So pay ONE window for
+  // the whole scenario instead of one per element, and attribute what shows up
+  // honestly: it belongs to the sweep, not to a control we can still name.
+  const lateErrorsBefore = pageErrors.all().length;
+  const lateCallsBefore  = ((await getApiCalls()) ?? []).length;
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  const lateErrors   = pageErrors.all().slice(lateErrorsBefore);
+  const lateBadCalls = ((await getApiCalls()) ?? []).slice(lateCallsBefore).filter(c => c.status >= 400);
+  if (lateErrors.length > 0 || lateBadCalls.length > 0) {
+    findings.push({
+      element: '(late arrival — after the sweep completed)',
+      action: 'none',
+      consoleErrors: lateErrors,
+      apiErrors: lateBadCalls,
+      domTransition: false,
+      note: 'Arrived after the last interaction was sampled, so it cannot be attributed to one control. Re-run with a wider per-element wait to localise it.',
+    });
+  }
+
   test.info().attach('interaction-findings', {
     body: JSON.stringify(findings, null, 2),
     contentType: 'application/json',
@@ -681,6 +715,13 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   // those need opposite responses.
   const ATTEMPT_CAP = 12;
   let attempts = 0;
+  // Tracked separately from the skip branch below, which only runs when the
+  // traversal found NOTHING. If an earlier level drilled in successfully and a
+  // later one exhausts the cap, that branch is bypassed entirely — the test
+  // unwinds the prefix it did find and passes, silently having stopped early.
+  // A budget outcome that only reports when it is also a coverage outcome is
+  // not reported at all in the case that matters most.
+  let capExhausted = false;
   const forward = [await viewSignature(page)]; // forward[0] = starting level
 
   // Drill down: at each level click the first "drill-in" candidate that BOTH changes
@@ -692,7 +733,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     for (const el of await discoverElements(page)) {
       if (!['a', 'button'].includes(el.tag) && !el.selector.includes('role=button')) continue;
       if (/back|←|‹|◀|return|home/i.test(el.label)) continue; // never drill via a back/home control
-      if (attempts >= ATTEMPT_CAP) break;
+      if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);
         if (!await loc.isVisible().catch(() => false)) continue;
@@ -711,9 +752,23 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     if (!advanced) break;
   }
 
+  // Report the budget outcome UNCONDITIONALLY — before the skip check, and
+  // whether or not the traversal found enough to assert on.
+  if (capExhausted) {
+    test.info().attach('nav-budget', {
+      body: JSON.stringify({
+        attemptCap: ATTEMPT_CAP,
+        attempts,
+        levelsFound: forward.length - 1,
+        note: `Stopped after ${ATTEMPT_CAP} candidate attempts. Traversal was TRUNCATED: levels deeper than those found were never reached, so a passing result here covers only the prefix listed. Raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`,
+      }, null, 2),
+      contentType: 'application/json',
+    });
+  }
+
   // Need at least two levels AND a back control on screen to assert anything.
   if (forward.length < 2 || !(await backControl(page).isVisible().catch(() => false))) {
-    test.skip(true, attempts >= ATTEMPT_CAP
+    test.skip(true, capExhausted
       ? `Stopped after ${ATTEMPT_CAP} candidate attempts without finding a drill-in — the back-flow invariant was NOT evaluated. This is a budget outcome, not evidence the app lacks drill-down: raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`
       : 'No multi-level drill-down with an in-app back control found — back-flow invariant N/A');
   }

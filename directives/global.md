@@ -18,6 +18,9 @@ explicitly overrides it.
 - Default stack: plain HTML + CSS + vanilla JS with **no *local* build**.
   Development is browser-only (no terminal), so nothing may require a build on
   your machine. This is a **dev-environment** rule, not a deployment ceiling.
+  Browser-only is also a fact about the OWNER, not only about the stack — see
+  → *A Blocked Command Is Not a Blocked Capability* for what that means for
+  what you may ask him to do.
 - **No framework tier.** Don't add a framework or a build step; a static site
   doesn't need one, and adopting one was evaluated and rejected
   (→ *Hosting & Deployment*).
@@ -539,6 +542,9 @@ naming what remains open, or "nothing open" — never absent.
 - Stop and ask if CI has failed 3+ times on the same issue without progress
 - Stop and ask before deleting any file that exists on `main`
 - Stop and ask before modifying any workflow file's trigger conditions
+- **Never escalate a shell command to the owner.** He has no terminal, so it is
+  not a smaller ask than doing it yourself — it is an impossible one
+  (→ *A Blocked Command Is Not a Blocked Capability*).
 
 ## Standing Authorization (owner ruling, 2026-07-22)
 Escalation Rules define when to STOP; this defines the default everywhere else,
@@ -623,6 +629,93 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
+
+## A Blocked Command Is Not a Blocked Capability (owner ruling, 2026-08-25)
+The owner works in a **browser chat only**. No terminal, no CLI, no local
+checkout. So a message ending "run `git commit && git push`" asks him for
+something he cannot do, however politely it is phrased.
+
+- **A refused shell command is a refused command, not a refused capability.**
+  (`claude.insurance`, 2026-08-25.) A `git add` the sandbox declined does not
+  mean the repo is unwritable — it means *that invocation* was declined.
+- ⚠️ **First ask WHY it was refused. Only one answer licenses another route.**
+
+  | refusal | what it means | what you may do |
+  |---|---|---|
+  | no shell / no terminal / tool unavailable | the **mechanism** is missing | use the API path below |
+  | the user denied approval | a **person decided** | do NOT re-run it through another tool; ask, or stop |
+  | a hook blocked it | a **guard decided** | the guard's reason still applies through every tool; fix the cause |
+  | branch protection, policy, permissions | a **rule decided** | the rule is the point; routing around it is the violation |
+
+  **An alternate tool is legitimate only when it preserves the reason for the
+  refusal.** A blocked direct push to `main` stays blocked — `push_files` must
+  not become the way to do it anyway. When you cannot tell which row you are in,
+  treat it as a decision, not a missing mechanism.
+- **Where the mechanism really is missing, these operations have API equivalents
+  that need no shell, no working tree and no credential helper:**
+
+  Each WRITE row is a WHOLE TRANSACTION — edit *and* commit *and* push. There is
+  no API analogue of staging, so nothing here maps to a bare `git add` or
+  `git rm`.
+
+  | you wanted | use instead |
+  |---|---|
+  | edit + `commit` + `push`, one file | `create_or_update_file` |
+  | edit + `commit` + `push`, several files, ONE commit | `push_files` |
+  | delete + `commit` + `push`, one file, on its own | `delete_file` |
+  | reading a file at a ref (a READ — no commit, nothing below applies to it) | `get_file_contents` |
+
+  ⚠️ **A commit that both edits and deletes has NO equivalent.** `push_files`
+  requires `content` on every entry, so it cannot express a deletion; `delete_file`
+  handles one path and commits by itself. A change mixing the two therefore lands
+  as **several commits**, and CI runs against each incomplete intermediate tree.
+  When that matters — a build that breaks unless the edit and the deletion land
+  together — do it in a real checkout, or sequence it so no intermediate commit
+  is broken. Do not assume the API can be atomic across a mixed change.
+
+  Three mappings that look obvious and are **wrong**, all stated because a table
+  invites the substitution:
+  - **`git rm` is NOT `delete_file`.** `git rm` stages a deletion for a commit
+    you have not written yet, alongside whatever else is in it. `delete_file`
+    commits and pushes immediately, by itself. Substituting it splits an
+    intended atomic change (→ the warning above).
+  - **`git checkout -b` is NOT `create_branch`.** `create_branch` creates the
+    remote ref and nothing else — it does not move local `HEAD`. A session that
+    substitutes it stays on its previous branch, usually `main`, and every later
+    local commit, diff and status check reads the wrong branch. Either stay
+    API-only and pass the branch explicitly on every call, or fetch and switch
+    the local checkout before continuing.
+  - **`git merge` is NOT `merge_pull_request`.** `git merge` usually means
+    *bring the base branch into my working branch*. `merge_pull_request` does
+    the opposite and it **publishes**: it merges a PR into its base and closes
+    it. Use it only when you actually mean to merge that PR, and only after its
+    gates pass. There is no API equivalent for a local branch merge.
+
+  The three write rows commit to the **remote**, and your local checkout does
+  not follow.
+
+  ⚠️ **Your local checkout does not carry the change, and nothing tells you so.**
+  A `git fetch` will not fix it: it advances `refs/remotes/origin/<branch>` while
+  local `HEAD` and the working tree stay on the pre-API commit. Before resuming
+  local work — any diff, any edit, any gate script — make the checkout actually
+  carry that commit, and treat the API's returned SHA as the reference rather
+  than anything git has cached locally.
+
+  **How to establish that is not written here, deliberately.** It depends on your
+  checkout in ways this file cannot see — whether the branch has unpushed
+  commits, what the index flags and sparse-checkout state are, which refspec the
+  clone maps, what is gitignored. Each of those silently breaks a different
+  plausible check. Work it out against the repository in front of you; a
+  procedure copied from a directive that cannot see your remotes is how you find
+  out by running a gate against the wrong bytes.
+
+- **Report what you tried, not what you inferred.** Never say a command was
+  refused unless you ran it and it was. Reporting an inference as an observation
+  about your own actions is a claim one tool call from being checked, and it
+  sends the owner to fix something that is not broken.
+- **Escalate a DECISION, never a KEYSTROKE.** "Which of these two do you want"
+  is his. "Someone needs to type this" is never his: it is yours through MCP, or
+  it is a genuine blocker to be named as one.
 
 ## Network Access Playbook (cloud sessions)
 All projects share one environment ("fleet"); its egress allowlist applies to

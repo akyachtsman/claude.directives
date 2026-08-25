@@ -699,15 +699,21 @@ something he cannot do, however politely it is phrased.
   commit (`--update-head-ok` permits moving `HEAD` and still checks nothing out).
   Being on the right branch, tracking the right remote, changes nothing here.
 
-  **Verify, do not assume — and verify TWO things, because the refs agreeing is
-  not the tree agreeing:**
-  - the refs are level: `git rev-parse HEAD` equals `git rev-parse
-    origin/<branch>` (equivalently, `git status -sb` shows no `[behind N]`), and
-  - the tracked tree matches that commit: `git diff --quiet HEAD` exits 0.
+  **Verify against the commit SHA the API RETURNED, not against a local ref.**
+  `create_or_update_file` and `push_files` hand back the commit they created;
+  that value is ground truth. `origin/<branch>` is not — it is a fetch-managed
+  *local cache*, so if no fetch ran, one failed, or the refmap did not cover that
+  branch, it still holds the pre-API commit and every comparison against it
+  passes on stale state.
 
-  The ref check alone passes on a stale tree — a locally modified tracked file
-  leaves `HEAD == origin/<branch>` true and `[behind N]` absent while the file
-  still holds its old contents, so a gate script runs against the wrong bytes.
+  Two checks, both against that returned SHA:
+  - `git rev-parse HEAD` equals it, and
+  - `git diff --quiet HEAD` exits 0 — the tracked tree matches that commit.
+
+  Neither alone is enough. The first passes while a locally modified tracked file
+  holds old contents; the second passes on a clean checkout of the *wrong*
+  commit. And both pass together against a stale `origin/<branch>`, which is why
+  the comparison is to the API's answer rather than to anything git cached.
 
   **Five conditions must hold for that integration to be safe**, and a `git fetch`
   alone establishes none of them either:

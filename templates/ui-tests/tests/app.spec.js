@@ -43,6 +43,18 @@ const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 // says so itself — which is exactly why it must never be waited on unbounded.
 const IDLE_MS = 5_000;
 
+// ⚠️ AND NOT EVERY networkidle WAIT IS A SETTLE. Capping all of them at IDLE_MS
+// was wrong for the LOAD GATES: S1 and ENTRY assert on the error watcher
+// immediately after the wait, so the wait IS their observation window. At 5s a
+// script or API call that fails at 8s is never seen, and the authoritative load
+// gate passes a broken app — a strictly worse outcome than the unbounded wait it
+// replaced, since it fails silently instead of loudly.
+//
+// So: IDLE_MS for "settle, then continue" (the wait is overhead), LOAD_SETTLE_MS
+// where the wait is the measurement. Ask which one a call site is before
+// bounding it; they are not interchangeable just because they are the same call.
+const LOAD_SETTLE_MS = 25_000;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -313,7 +325,9 @@ function testValueFor(el) {
 test('S1: page loads without JS errors', async ({ page }) => {
   const errors = watchPageErrors(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
+  // LOAD_SETTLE_MS, not IDLE_MS: the assertion below reads the error watcher the
+  // instant this returns, so this wait is the observation window, not overhead.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   const bodyText = await page.evaluate(() => document.body.innerText?.trim());
   expect(bodyText?.length, 'Page body is empty').toBeGreaterThan(0);
   expect(errors.all(), `Errors on load: ${errors.all().join('; ')}`).toHaveLength(0);
@@ -637,15 +651,36 @@ function backControl(page) {
 // the app has no multi-level drill-down or no in-app back control (invariant N/A).
 // ─────────────────────────────────────────────────────────────────────────────
 test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
-  // BUDGET — bounded by DEPTH_CAP below, not by element count, so unlike S3
-  // this does NOT scale with the matrix: at most DEPTH_CAP drills plus
-  // DEPTH_CAP backs, ~10 navigations, whatever the viewport. Checked against
-  // S3's failure rather than assumed fine; 120_000 stands on that arithmetic.
-  // If DEPTH_CAP rises, re-derive this instead of scaling it by eye.
-  test.setTimeout(120_000);
+  // BUDGET — SIZING ESTIMATE, and the previous version of this comment was
+  // simply wrong. It said "bounded by DEPTH_CAP, not by element count". DEPTH_CAP
+  // bounds SUCCESSFUL drill levels only; the candidate loop below tries every
+  // visible button/link until one changes the view, and each failed attempt costs
+  // a 3s click + 800ms + IDLE_MS. On a control-dense page that is element-
+  // dependent work with no relation to depth, and 120_000 could not cover it.
+  //
+  // Bounded now by ATTEMPT_CAP across ALL levels, so the element-dependent term
+  // has a ceiling:
+  //
+  //   initial gotoAndAuth(), gate re-presenting                 ~98s
+  // + 12 candidate attempts x (3s click + 0.8s + 5s idle)      = ~106s
+  // + DEPTH_CAP backs       x ~8.8s                            =  ~44s
+  //   -------------------------------------------------------------
+  //   worst assumed mix                                         ~248s
+  //
+  // 300_000 covers it. Same caveat as S9: this is a sum over the CAPPED path
+  // under stated assumptions, not a proof — how many candidates a view offers is
+  // a property of the app, not of this file.
+  test.setTimeout(300_000);
   await gotoAndAuth(page);
 
   const DEPTH_CAP = 5;
+  // Bounds the element-dependent work DEPTH_CAP does not: a view whose visible
+  // controls never change the signature would otherwise be walked in full, at
+  // every level. Total across all levels, not per level. Not silent — running
+  // out is reported distinctly from "this app has no drill-down" below, because
+  // those need opposite responses.
+  const ATTEMPT_CAP = 12;
+  let attempts = 0;
   const forward = [await viewSignature(page)]; // forward[0] = starting level
 
   // Drill down: at each level click the first "drill-in" candidate that BOTH changes
@@ -657,9 +692,11 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     for (const el of await discoverElements(page)) {
       if (!['a', 'button'].includes(el.tag) && !el.selector.includes('role=button')) continue;
       if (/back|←|‹|◀|return|home/i.test(el.label)) continue; // never drill via a back/home control
+      if (attempts >= ATTEMPT_CAP) break;
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);
         if (!await loc.isVisible().catch(() => false)) continue;
+        attempts++;
         await loc.click({ timeout: 3000 });
         await page.waitForTimeout(800);
         await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
@@ -676,7 +713,9 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
 
   // Need at least two levels AND a back control on screen to assert anything.
   if (forward.length < 2 || !(await backControl(page).isVisible().catch(() => false))) {
-    test.skip(true, 'No multi-level drill-down with an in-app back control found — back-flow invariant N/A');
+    test.skip(true, attempts >= ATTEMPT_CAP
+      ? `Stopped after ${ATTEMPT_CAP} candidate attempts without finding a drill-in — the back-flow invariant was NOT evaluated. This is a budget outcome, not evidence the app lacks drill-down: raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`
+      : 'No multi-level drill-down with an in-app back control found — back-flow invariant N/A');
   }
 
   // Unwind: one back press per descended level. Each result must equal the expected
@@ -738,13 +777,19 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
 test('ENTRY: every deployed entry point renders without JS errors', async ({ page }) => {
   const pages = (process.env.APP_PAGES || '').split(',').map(s => s.trim()).filter(Boolean);
   test.skip(pages.length === 0, 'No extra entry points declared (APP_PAGES) — the baseURL is covered by S1');
+  // This loop had NO budget of its own and inherited the 30s config default,
+  // which one page could exhaust on its own once the load-gate wait became a
+  // real observation window. Scale with what the project actually declared:
+  // goto (<=30s, navigationTimeout) + LOAD_SETTLE_MS + assertions per page.
+  test.setTimeout(60_000 * pages.length);
   const watcher = watchPageErrors(page);
   for (const path of pages) {
     // One watcher for the whole loop; each page is judged on the errors that
     // arrived after the previous one, so a failure names the page that caused it.
     const before = watcher.all().length;
     await page.goto('./' + path.replace(/^\//, ''));
-    await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
+    // LOAD_SETTLE_MS: same reasoning as S1 — this wait is the gate, not overhead.
+    await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
     const bodyText = await page.evaluate(() => document.body.innerText?.trim());
     expect(bodyText?.length, `${path}: page body is empty`).toBeGreaterThan(0);
     const fresh = watcher.all().slice(before);

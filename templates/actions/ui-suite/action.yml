@@ -3,11 +3,14 @@
 #
 # Caveats baked into this design:
 # - Composite steps cannot carry per-step `timeout-minutes` — bound the run with
-#   the CALLING job's `timeout-minutes`. The qa workflows set 60, sized from two
-#   measured numbers: a cold-cache install at 21m25s, plus a complete warm job at
-#   16.6min (apfp.claude, 4 projects / 204 specs, checkout + dependency install +
-#   suite) — ~38min for a healthy cold run, and 60 leaves headroom. That 16.6
-#   measures THIS composite's `npm install` path below, not a stricter `npm ci`.
+#   the CALLING job's `timeout-minutes`. The qa workflows set 60, sized from a
+#   cold-cache install at 21m25s plus a warm whole job — and the warm figure is a
+#   RANGE, not the single 16.6min this note used to cite: claude.prop 8m00s,
+#   apfp.claude 16.2-17.0min, claude.trading 30m35s, a 3.8x spread on nominally
+#   similar 4-project suites. Size from the SLOW end: ~52min against 60, roughly
+#   8 minutes of headroom, not the ~58% an average implies. The callers carry the
+#   full table and the arithmetic. These measure THIS composite's `npm install`
+#   path below, not a stricter `npm ci`.
 #   That 60 is ENFORCED, not merely documented: check-job-bounds.py rejects any
 #   ui-suite caller below it, and templates/workflows/qa.yml invokes the guard in
 #   its static-checks job. If you copied this composite, copy
@@ -15,9 +18,11 @@
 #   or the 60 reverts to being a number in a comment — which is what it was until
 #   #291, and what let three callers sit at 40.
 #   The browser install is NOT the whole cost, whatever an earlier version of
-#   this note said: that 16.6min is the suite's own share, and it scales with the
-#   number of projects in playwright.config.js. Raise the CALLERS before adding
-#   projects, never after.
+#   this note said: those warm figures are the suite's own share, and each scales
+#   with the number of projects in playwright.config.js. That is also the best
+#   available explanation of the 3.8x spread — same project count, very different
+#   apps — so read the range as "your repo sits somewhere in here", not as noise
+#   around a mean. Raise the CALLERS before adding projects, never after.
 #   If you lower it, measure the cold path first — and note a kill during install
 #   also skips the cache save that would have made the next run cheap, so too
 #   tight costs a streak rather than a run.
@@ -109,11 +114,23 @@ runs:
       # are largely preinstalled on the runner image, so `install-deps chromium`
       # finishes in ~30s and invites the conclusion that the step is incidental.
       # Webkit's are not: gstreamer, wayland, hyphen, enchant and flite come to
-      # roughly sixty packages and minutes, not seconds (apfp.claude, 2026-08-19).
-      # Do NOT bound this step on the chromium figure, and do NOT make it
-      # warn-and-continue — a partial install does not fail here, it fails later
-      # as every webkit test dying on a missing `libwayland-server.so.0`, which
-      # turns one clear message into fifty confusing ones.
+      # roughly sixty packages.
+      #
+      # THE MAGNITUDE IS DISPUTED AND BOTH MEASUREMENTS ARE DATED, because runner
+      # images change and an undated figure gets read as current:
+      #   2026-08-19  apfp.claude     "minutes, not seconds" for webkit's deps
+      #   2026-08-23  claude.trading  ~52s and ~56s for Node + npm install +
+      #                               cache restore + install-deps BOTH browsers
+      #                               + server start, i.e. this step was well
+      #                               under a minute on that image, warm path
+      # Both may be true of their own day. Treat neither as the current cost.
+      #
+      # THE SAFETY ADVICE BELOW SURVIVES EITHER FIGURE — only the magnitude is in
+      # question, so do not delete it while correcting a number. Do NOT bound this
+      # step on the chromium figure, and do NOT make it warn-and-continue — a
+      # partial install does not fail here, it fails later as every webkit test
+      # dying on a missing `libwayland-server.so.0`, which turns one clear
+      # message into fifty confusing ones.
       shell: bash
       run: |
         if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then

@@ -65,19 +65,43 @@ jobs:
     # install + EVERY project in playwright.config.js + retries + artifact
     # upload, in one sum the composite cannot subdivide.
     #
-    # Sized from two MEASURED numbers, not from one anchor:
+    # Sized from MEASURED numbers — and the warm figure is a RANGE, not one
+    # anchor. An earlier version of this block cited apfp.claude's 16.6min as
+    # though it were typical. Four repos have now measured this path:
+    #
+    #     WARM, whole job, 4-project suites
+    #       claude.prop         8m00s    208 tests   cache hit, zero downloads
+    #       apfp.claude        16.2-17.0min ~204 specs   three qa-live runs
+    #       claude.trading     30m35s    128 tests   run 97234645851
+    #
+    # That is a 3.8x spread whole-job to whole-job, on nominally similar suites,
+    # and test COUNT does not predict it — the slowest repo runs the fewest
+    # tests. (#296 quotes 3.7x; that compares claude.trading's 29m34s TEST PHASE
+    # against claude.prop's WHOLE JOB. Like for like it is 3.8x.)
+    #
     #     cold-cache browser install   21m25s   (claude.directives
     #                                            check-job-bounds.py, rule 3)
-    #   + complete job, warm cache     16.6min  (apfp.claude, qa-live on
-    #                                            c302827: 4 projects, 204 specs,
-    #                                            checkout + dependency install
-    #                                            + suite)
     #
     # NOTE the composite installs with `npm install`, not `npm ci` — an earlier
     # version of this block said ci. They differ in resolution and speed, so
-    # treat the 16.6 as measuring THIS path, not a stricter one.
+    # treat these as measuring THIS path, not a stricter one.
     #     -------------------------------------
-    #     healthy COLD run            ~38min    → 60 leaves ~58% headroom
+    # SIZE FROM THE SLOW END, which is the whole point of carrying a range:
+    #     fast end   21m25s + 8m00s   = ~29min  → 60 leaves ~52% headroom
+    #     slow end   21m25s + 30m35s  = ~52min  → 60 leaves ~13% headroom
+    #
+    # claude.trading's cold path is UNMEASURED — they were explicit about not
+    # presenting that ~52 as an observation, and it is arithmetic here too. 60
+    # still holds, but on the slow end it holds by ~8 minutes, not by the ~58%
+    # an average would suggest. A repo at that end should treat adding a project
+    # as a bound change, not a config change.
+    #
+    # ⚠️ This arithmetic MOVED when app.spec.js raised S3's per-test budget from
+    # 240s to 900s. Projects run serially (playwright.config.js sets no
+    # `workers`, and a 2-core runner gives one), so a per-test ceiling is paid
+    # once per project. The raise does not make a healthy run slower — it stops
+    # a healthy run being KILLED — but it does mean the worst case now reaches
+    # further into this 60. Re-measure before assuming the headroom above.
     #
     # The 57-minute figure in claude.directives' check-job-bounds.py header is NOT a sizing input,
     # however tempting the arithmetic. Read it in context: that run "sat 57

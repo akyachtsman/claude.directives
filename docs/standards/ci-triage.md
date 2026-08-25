@@ -117,6 +117,16 @@ Every project using these agents runs two Playwright workflows:
 - **Page-load scenario** failure (upstream kit: S1) in local runner → app fails to load entirely, investigate immediately
 - **Responsive-layout scenario** failure (upstream kit: S4) in local runner → layout-only, no backend dependency, should always pass
 - Any failure in `qa-live.yml` → real failure against the live app, must fix before done
+- **A scenario TIMEOUT** (`Test timeout of Ns exceeded`) → a real failure, and the
+  one most often waved through. It reads as infra noise, so nobody chases it —
+  the same shape as *"a cancelled run is not a red one"*, one layer down at the
+  test level. It means the budget sits below the work the scenario actually does.
+  ⚠️ **Check the OTHER profiles before concluding anything**: the interaction
+  sweep is uncapped and costs (element count × project count), and a WIDER
+  viewport clips fewer controls, so it sweeps MORE of them. In `claude.trading`
+  the phones passed at 97.5% of budget and tablet crossed first — a healthy-
+  looking pass at the wall is the same finding as the timeout beside it. Re-size
+  from the measured worst case with real headroom, never to just-above-observed
 
 ### Checking for a post-event workflow run
 

@@ -371,10 +371,26 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 // SCENARIO 3 — Element Mapping & Interaction Sweep
 // ─────────────────────────────────────────────────────────────────────────────
 test('S3: interactive elements discovered and exercised without errors', async ({ page }) => {
-  // The sweep scales with element count (~1.5s settle per element plus
-  // navigation waits) and cannot fit the 30s global timeout on element-rich
-  // apps or mobile-emulated projects.
-  test.setTimeout(240_000);
+  // BUDGET — sized from the MATRIX, not from one profile. This sweep is
+  // UNCAPPED: it visits every element discoverElements() returns, at ~1.5s
+  // settle plus a networkidle wait each, so its cost is (element count x
+  // project count). playwright.config.js ships FOUR projects; the 240_000 this
+  // replaces was written when the matrix was phones only, and desktop and
+  // tablet arrived later without anyone re-reading the number.
+  //
+  // ⚠️ WIDER IS SLOWER, which is the counter-intuitive part. Clipped controls
+  // inside overflow:hidden boxes are skipped, and a wide viewport clips FEWER
+  // of them — so more get swept. Measured in claude.trading (run 32655955615,
+  // head 607ab63): mobile-chrome and iphone 468s PASS, tablet >480s TIMEOUT.
+  // Every profile was at the wall; the phones "passed" with a twelve-second
+  // margin, and the wider one crossed first.
+  //
+  // 900_000 is ~1.9x that measured worst case, deliberately NOT ~1.03x. A bound
+  // tuned to just-above-observed reports as flakiness rather than as signal,
+  // which is how 240 survived: a test TIMEOUT reads as infra noise, so nobody
+  // investigates it. Raise this BEFORE adding projects, never after — and see
+  // the calling job's timeout-minutes, which this number pushes against.
+  test.setTimeout(900_000);
   // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
   // only auth-gated apps with no credential are skipped (decided after page load below).
   const pageErrors = watchPageErrors(page);
@@ -594,6 +610,11 @@ function backControl(page) {
 // the app has no multi-level drill-down or no in-app back control (invariant N/A).
 // ─────────────────────────────────────────────────────────────────────────────
 test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
+  // BUDGET — bounded by DEPTH_CAP below, not by element count, so unlike S3
+  // this does NOT scale with the matrix: at most DEPTH_CAP drills plus
+  // DEPTH_CAP backs, ~10 navigations, whatever the viewport. Checked against
+  // S3's failure rather than assumed fine; 120_000 stands on that arithmetic.
+  // If DEPTH_CAP rises, re-derive this instead of scaling it by eye.
   test.setTimeout(120_000);
   await gotoAndAuth(page);
 
@@ -713,7 +734,16 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
 // only when a backdrop element exists (some designs omit it deliberately).
 // ─────────────────────────────────────────────────────────────────────────────
 test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page }) => {
-  test.setTimeout(180_000);
+  // BUDGET — capped at 30 triggers below, so this is bounded; the 180_000 it
+  // replaces sat UNDER its own cap's worst case. Per trigger the explicit waits
+  // total ~3.8s and there are five click({ timeout: 2000 }) paths, giving
+  // ~13.8s worst case: 30 x 13.8 = ~414s against a 180s bound. A trigger that
+  // NAVIGATES also costs a full gotoAndAuth(), which is unbounded here.
+  //
+  // 600_000 is ~1.45x that derived worst case. DERIVED FROM THE CONSTANTS IN
+  // THIS FILE, not measured — no downstream repo has reported S9 at the wall,
+  // unlike S3. If you measure it, replace this arithmetic with the number.
+  test.setTimeout(600_000);
   await gotoAndAuth(page);
 
   const OVERLAY = 'dialog[open], [role="dialog"], [aria-modal="true"], .modal, .drawer, .popover, .overlay';

@@ -3,19 +3,22 @@
 #
 # Caveats baked into this design:
 # - Composite steps cannot carry per-step `timeout-minutes` — bound the run with
-#   the CALLING job's `timeout-minutes`. The qa workflows set 60, sized from a
+#   the CALLING job's `timeout-minutes`. The qa workflows set 90, sized from a
 #   cold-cache install at 21m25s plus a warm whole job — and the warm figure is a
 #   RANGE, not the single 16.6min this note used to cite: claude.prop 8m00s,
 #   apfp.claude 16.2-17.0min, claude.trading 30m35s, a 3.8x spread on nominally
-#   similar 4-project suites. Size from the SLOW end: ~52min against 60, roughly
-#   8 minutes of headroom, not the ~58% an average implies. The callers carry the
-#   full table and the arithmetic. These measure THIS composite's `npm install`
-#   path below, not a stricter `npm ci`.
-#   That 60 is ENFORCED, not merely documented: check-job-bounds.py rejects any
+#   similar 4-project suites. Size from the SLOW end, and include a RETRY: with
+#   S3's per-test budget now 900s and `retries: 1`, a failing scenario pays that
+#   ceiling twice, so the slow end runs ~21m install + ~38m tests + ~15m retry =
+#   ~75min. That is what took this from 60 to 90 — at 60 a healthy slow-end cold
+#   run had NO headroom left. The callers carry the full table and the
+#   arithmetic. These measure THIS composite's `npm install` path below, not a
+#   stricter `npm ci`.
+#   That 90 is ENFORCED, not merely documented: check-job-bounds.py rejects any
 #   ui-suite caller below it, and templates/workflows/qa.yml invokes the guard in
 #   its static-checks job. If you copied this composite, copy
 #   templates/scripts/check-job-bounds.py to .github/scripts/ and keep that step,
-#   or the 60 reverts to being a number in a comment — which is what it was until
+#   or the 90 reverts to being a number in a comment — which is what it was until
 #   #291, and what let three callers sit at 40.
 #   The browser install is NOT the whole cost, whatever an earlier version of
 #   this note said: those warm figures are the suite's own share, and each scales

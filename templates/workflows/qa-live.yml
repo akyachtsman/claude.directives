@@ -61,7 +61,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    # 60, NOT 40. This job runs the ui-suite composite: dependency install + playwright
+    # 90, NOT 60 (and never 40). This job runs the ui-suite composite: dependency install + playwright
     # install + EVERY project in playwright.config.js + retries + artifact
     # upload, in one sum the composite cannot subdivide.
     #
@@ -96,12 +96,33 @@ jobs:
     # an average would suggest. A repo at that end should treat adding a project
     # as a bound change, not a config change.
     #
-    # ⚠️ This arithmetic MOVED when app.spec.js raised S3's per-test budget from
-    # 240s to 900s. Projects run serially (playwright.config.js sets no
-    # `workers`, and a 2-core runner gives one), so a per-test ceiling is paid
-    # once per project. The raise does not make a healthy run slower — it stops
-    # a healthy run being KILLED — but it does mean the worst case now reaches
-    # further into this 60. Re-measure before assuming the headroom above.
+    # ⚠️ 90, NOT 60 — and the raise is not cosmetic. When app.spec.js took S3's
+    # per-test budget from 240s to 900s this arithmetic STOPPED FITTING. Projects
+    # run SERIALLY (playwright.config.js sets no `workers`; a 2-core runner gives
+    # one), so a per-test ceiling is paid once per project — and `retries: 1`
+    # means a FAILING scenario pays it twice:
+    #
+    #     cold install                       21m25s   measured
+    #   + test phase, slow end, post-raise    ~38min   claude.trading measured
+    #                                                  10.7 + 9.3 + 9.1 for three
+    #                                                  profiles; iphone is
+    #                                                  unmeasured, inferred ~9.1
+    #                                                  from its peer phone profile
+    #     -------------------------------------
+    #     healthy cold, slow end              ~59.6min  → against 60: no headroom
+    #   + ONE S3 retry at the new ceiling      +15min   → ~75min
+    #
+    # So 60 did not merely get tight: a healthy slow-end cold run now sits AT it,
+    # and any S3 failure pushes past. The failure mode is the one this comment
+    # exists to prevent, arriving from the other side — GitHub CANCELS the job at
+    # the bound, so Playwright never reports the definitive failure and the run
+    # reads as inconclusive rather than red. **Raising a per-test budget without
+    # raising its enclosing job converts a test failure into a job cancellation.**
+    #
+    # 90 leaves ~15min over that ~75. Capping S3's sweep instead was considered and
+    # rejected: it is uncapped BY DESIGN (test.md → "Coverage = controls clicked,
+    # not screens visited"), so a cap would cut mandated coverage to fit a bound —
+    # the wrong direction, and the same move as loosening a test to get green.
     #
     # The 57-minute figure in claude.directives' check-job-bounds.py header is NOT a sizing input,
     # however tempting the arithmetic. Read it in context: that run "sat 57
@@ -118,7 +139,7 @@ jobs:
     # And a kill here COMPOUNDS: `actions/cache` saves at job END, so a run
     # cancelled during the install also skips the save, leaving the next run
     # equally cold. Too tight does not cost one run, it costs a streak.
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout

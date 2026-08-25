@@ -335,6 +335,14 @@ function testValueFor(el) {
 // SCENARIO 1 — Page Load
 // ─────────────────────────────────────────────────────────────────────────────
 test('S1: page loads without JS errors', async ({ page }) => {
+  // Sized for what this scenario can actually spend, which the 30s config
+  // default is not: goto() may take navigationTimeout (30s) and the load-gate
+  // wait below may take LOAD_SETTLE_MS (25s) before either assertion runs. On a
+  // page that polls or streams — where networkidle is EXPECTED to time out
+  // harmlessly — S1 was killed as a test timeout before it read the watcher at
+  // all, turning a deliberate observation window into a failure to observe.
+  // ENTRY got this when its gate widened; S1 did not, in the same edit.
+  test.setTimeout(60_000);
   const errors = watchPageErrors(page);
   await page.goto('./');
   // LOAD_SETTLE_MS, not IDLE_MS: the assertion below reads the error watcher the

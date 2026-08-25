@@ -694,11 +694,30 @@ something he cannot do, however politely it is phrased.
   `git fetch` is not enough to catch it up**: fetch updates remote-tracking refs
   and downloads objects, but it does not move local `HEAD` and does not touch the
   working tree (`--update-head-ok` permits moving HEAD and still checks nothing
-  out). To resume local work on a branch you wrote to through the API you must
-  INTEGRATE the new commit — `git pull --ff-only origin <branch>`, or `git fetch`
-  followed by `git reset --hard origin/<branch>` when discarding local state is
-  what you actually intend. Skip it and every later diff, status and gate script
-  reads a tree that is already behind.
+  out). Skip the catch-up and every later diff, status and gate script reads a
+  tree that is already behind.
+
+  ⚠️⚠️ **Switch to the branch FIRST, and verify it.** Every integration command
+  acts on the branch you are *currently on*, not on the one you name in the
+  argument — `git pull --ff-only origin feature` run from `main` fast-forwards
+  **`main`** to the feature commit, and `git reset --hard origin/feature` moves
+  `main` there and discards its tracked changes. That is the likely state, not a
+  contrived one: the `create_branch` warning above exists precisely because a
+  session can hold the remote ref while its checkout sits on `main`.
+
+  ```
+  git fetch origin <branch>
+  git switch <branch>                      # creates a tracking branch if absent
+  git branch --show-current                # MUST print <branch> before continuing
+  git merge --ff-only origin/<branch>      # refuses rather than clobbering
+  ```
+
+  `--ff-only` means "abort if a fast-forward is impossible" — it does **not**
+  select the branch, and it is no protection against being on the wrong one.
+  `git reset --hard origin/<branch>` is the right tool only when discarding the
+  current branch's tracked changes is what you actually intend, and only after
+  the switch is verified. Commit or stash local work before switching, or the
+  switch itself will fail or carry changes you did not mean to move.
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation
   about your own actions is a claim one tool call from being checked, and it

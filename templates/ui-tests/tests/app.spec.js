@@ -218,6 +218,28 @@ async function domSnapshot(page) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH DISCOVERY & ATTEMPT
+//
+// ⚠️ COST, because five scenarios pay it and four of them once sized as if it
+// were free. Bounded worst case for ONE detectAndAuth() call:
+//
+//     waitFor visible (explicit, below)                        10s
+//   + PIN path: N digits x (actionTimeout 10s + 80ms) + 3s
+//       N=4                                                    43.3s
+//       N=8                                                    83.6s
+//     (password/text paths are CHEAPER: fill 10 + submit 10 + 3 = 23s,
+//      so the PIN keypad is the sizing case)
+//     ----------------------------------------------------------
+//     ~53s at N=4        ~94s at N=8
+//
+// N is the CREDENTIAL LENGTH — supplied per project, so like S3's element count
+// it is not bounded by any constant in this file. Every budget below that
+// includes this term states which N it assumed. If a scenario times out with a
+// long credential, THAT is the term to look at first.
+//
+// And the whole preamble — goto + settle + detectAuthGate + detectAndAuth +
+// settle — is the ~98s figure NAV's budget already used. It was derived there in
+// round 5 and then not applied to S2, S4 or CTRL, which is how three scenarios
+// came to be sized for two of their five terms.
 // ─────────────────────────────────────────────────────────────────────────────
 async function detectAndAuth(page, credential) {
   // Wait for auth UI to be fully active before interacting — prevents CI timing failures
@@ -344,7 +366,14 @@ test('S1: page loads without JS errors', async ({ page }) => {
   // harmlessly — S1 was killed as a test timeout before it read the watcher at
   // all, turning a deliberate observation window into a failure to observe.
   // ENTRY got this when its gate widened; S1 did not, in the same edit.
-  test.setTimeout(60_000);
+  //
+  //   goto (navigationTimeout)   30s
+  // + LOAD_SETTLE_MS             25s
+  // + evaluate + assertions      the THIRD term — 60_000 left it exactly 5s,
+  //                              which is an implicit zero dressed as slack
+  //   -------------------------------
+  //   90_000, so a busy main thread cannot eat the observation itself
+  test.setTimeout(90_000);
   const errors = watchPageErrors(page);
   await page.goto('./');
   // LOAD_SETTLE_MS, not IDLE_MS: the assertion below reads the error watcher the
@@ -362,9 +391,23 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential found in CLAUDE.md or TEST_AUTH_CREDENTIAL env var — skipping auth test');
   const pageErrors = watchPageErrors(page);
 
-  // Sized like S1: goto() may take navigationTimeout and the settle below may
-  // take LOAD_SETTLE_MS before the gate decision is made.
-  test.setTimeout(60_000);
+  // BUDGET — the 60_000 here was sized from the first TWO terms and stopped:
+  // goto 30 + settle 25 = 55, leaving 5s, which is exactly detectAuthGate()'s
+  // own timeout and nothing at all for the authentication it exists to perform.
+  // A healthy public app with persistent network activity would time out while
+  // CONCLUDING no gate exists, and a late gate would time out mid-login.
+  //
+  //   goto (navigationTimeout)              30s
+  // + LOAD_SETTLE_MS settle                 25s
+  // + detectAuthGate() waitFor               5s
+  // + detectAndAuth() (see its header)     ~53s at N=4    ~94s at N=8
+  // + snapshots, error read, assertions      ~few s
+  //   ------------------------------------------
+  //   ~113s at N=4                          ~154s at N=8
+  //
+  // 180_000 covers an 8-digit PIN with ~26s spare. SIZING ESTIMATE under a
+  // stated assumption, not a proof: N is the project's credential length.
+  test.setTimeout(180_000);
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
   // LOAD_SETTLE_MS, not IDLE_MS: what follows this wait is detectAuthGate(), and
@@ -616,6 +659,15 @@ test('S3: interactive elements discovered and exercised without errors', async (
 // SCENARIO 4 — Responsive Layout
 // ─────────────────────────────────────────────────────────────────────────────
 test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => {
+  // BUDGET — S4 had NONE and inherited the 30s config default, while running the
+  // same load-and-authenticate preamble NAV prices at ~98s. Once this PR set
+  // navigationTimeout: 30_000, goto() ALONE could consume the whole test.
+  //
+  //   goto 30 + IDLE_MS 5 + detectAuthGate 5 + detectAndAuth ~53 + IDLE_MS 5
+  //   = ~98s at N=4        ~139s at N=8
+  //
+  // 180_000, same as S2 and CTRL — one number for one shared preamble.
+  test.setTimeout(180_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
   await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
@@ -830,6 +882,11 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
 // visible add/new/create controls, groups by accessible name, flags any with >1.
 // ─────────────────────────────────────────────────────────────────────────────
 test('CTRL: no duplicated primary action control', async ({ page }) => {
+  // BUDGET — CTRL had NONE and inherited the 30s config default, while its first
+  // statement is the ~98s gotoAndAuth() preamble. NAV and DISMISS budget for that
+  // call explicitly; CTRL called the same function and was sized as if it were
+  // free. 180_000, same as S2 and S4.
+  test.setTimeout(180_000);
   await gotoAndAuth(page);
   const dupes = await page.evaluate(() => {
     const norm = s => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -863,8 +920,10 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
   // This loop had NO budget of its own and inherited the 30s config default,
   // which one page could exhaust on its own once the load-gate wait became a
   // real observation window. Scale with what the project actually declared:
-  // goto (<=30s, navigationTimeout) + LOAD_SETTLE_MS + assertions per page.
-  test.setTimeout(60_000 * pages.length);
+  // goto (<=30s, navigationTimeout) + LOAD_SETTLE_MS + assertions per page —
+  // and 60_000 counted the first two (55s) with 5s left for the third, the same
+  // implicit zero S1 carried. 90_000 per page names the assertions instead.
+  test.setTimeout(90_000 * pages.length);
   const watcher = watchPageErrors(page);
   for (const path of pages) {
     // One watcher for the whole loop; each page is judged on the errors that

@@ -216,6 +216,18 @@ jobs:
     # covered, deliberately: that is not a bound problem, it is S3's budget being
     # wrong for that app — re-size the budget, do not grow the job.
     #
+    # WHAT THE ~16min OF SPARE IS FOR, checked rather than assumed. The same
+    # round that produced this figure also raised the ceilings on the scenarios
+    # that load and authenticate (S2 60s -> 180s, S4 and CTRL 30s -> 180s, S1
+    # 60s -> 90s, ENTRY 60s -> 90s per page), because each had been sized for
+    # two of its five terms. A HEALTHY run is unchanged — a ceiling only costs
+    # anything when a test hits it. A failing one is not: an S4 or CTRL failure
+    # now costs ~6min (replace + retry at 180s) instead of ~1min. So the spare
+    # absorbs ONE such failure alongside a failing S3, not two. Raising a
+    # per-test budget without re-checking its enclosing job is exactly the
+    # defect this comment block was written for; it applies to the block's own
+    # author.
+    #
     # The failure mode all of this exists to prevent, arriving from the other
     # side: GitHub CANCELS the job at the bound, so Playwright never reports the
     # definitive failure and the run reads as inconclusive rather than red.

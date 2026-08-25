@@ -23,11 +23,24 @@ export default defineConfig({
     // tests/app.spec.js a fiction, since each was built from terms that were not
     // themselves bounded.
     //
-    // Set the whole surface at once, deliberately. These two plus `timeout`
-    // above and expect's own default (5s) are the complete set of waits
-    // Playwright Test can leave open; bounding them one at a time as each is
-    // discovered leaves the next one unbounded, which is exactly how this got
-    // shipped twice.
+    // Set the whole surface at once, deliberately: bounding these one at a time
+    // as each is discovered leaves the next one unbounded, which is exactly how
+    // this shipped twice.
+    //
+    // Scope of that claim, narrowed after it was over-stated once: these two
+    // plus `timeout` above and expect's own default (5s) are the complete
+    // PER-TEST and PER-OPERATION surface. They are not the whole of Playwright.
+    //
+    // `globalTimeout` (run-level, also defaulting to 0) is deliberately NOT set
+    // here. The aggregate bound for this suite is the CALLING JOB's
+    // timeout-minutes — the ui-suite composite cannot carry per-step timeouts,
+    // so the job already owns that role, and check-job-bounds.py enforces its
+    // floor. A template-level globalTimeout would have to be sized for the
+    // slowest repo in the fleet (the same problem the job floor already solves),
+    // and it ABORTS THE RUN rather than failing a test — which is strictly less
+    // diagnosable than the per-test timeouts above, and the opposite of what the
+    // rest of this change is for. A direct `npx playwright test` outside CI has
+    // no such wrapper: bound it with --global-timeout if you need one there.
     //
     // navigationTimeout — a page that cannot load in 30s is a failure worth
     // reporting as one, not worth waiting out. Governs goto(); the matching cap

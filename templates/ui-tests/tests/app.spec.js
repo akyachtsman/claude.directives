@@ -372,6 +372,11 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // S2 passes without ever trying the credential. A gate that renders after the
   // settle is therefore a silent pass on an app whose auth was never exercised.
   // The wait is the measurement here, not overhead.
+  // ⚠️ RESIDUAL: this WIDENS the observation window (25s here + the 5s waitFor
+  // inside detectAuthGate) — it does not make "no gate" a proof. An app whose
+  // gate-determining request is still pending at 30s still reads as mechanism
+  // 'none'. Closing that needs an explicit auth-readiness condition (a named
+  // request settling, or a gate/app-shell selector), not a larger number.
   await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
 
   const beforeSnap = await domSnapshot(page);
@@ -929,9 +934,10 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // trade every time.
   //
   // ⚠️ IF THIS TIMES OUT ANYWAY, do not revise this sum a sixth time. Read the
-  // findings list: hitting NAV_RESET_CAP reports itself, which tells you the app
-  // is nav-heavy and the assumed mix was wrong. That is a measurement, and it
-  // beats another derivation.
+  // run's `dismiss-budget` ATTACHMENT (not the findings list — the cap is a
+  // coverage outcome, not a defect): its presence tells you the app is nav-heavy
+  // and the assumed mix was wrong. That is a measurement, and it beats another
+  // derivation.
   test.setTimeout(900_000);
   await gotoAndAuth(page);
 
@@ -950,8 +956,9 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // Cap the WASTED work, not the useful work. A navigating trigger is not an
   // overlay trigger, so it contributes nothing to this scenario's assertions —
   // the reset it forces is pure cost. Capping resets therefore loses no S9
-  // coverage, where capping triggerCount would. Not silent: hitting the cap is
-  // recorded as a finding, so a suite that stops early says so.
+  // coverage, where capping triggerCount would. Not silent: hitting the cap
+  // writes a `dismiss-budget` attachment, so a suite that stops early says so
+  // WITHOUT failing the scenario for triggers it never reached.
   const NAV_RESET_CAP = 3;
   let navResets = 0;
 

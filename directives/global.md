@@ -697,11 +697,17 @@ something he cannot do, however politely it is phrased.
   A `git fetch` does not do this — it advances `refs/remotes/origin/<branch>` and
   downloads objects while local `HEAD` and the working tree stay on the pre-API
   commit (`--update-head-ok` permits moving `HEAD` and still checks nothing out).
-  Being on the right branch, tracking the right remote, changes nothing here:
-  measured on a tracked branch after a plain fetch, `HEAD` and `origin/<branch>`
-  differed and the file contents were the old ones. **Verify, do not assume** —
-  `git status -sb` must show no `[behind N]`, or `git rev-parse HEAD` must equal
-  `git rev-parse origin/<branch>`.
+  Being on the right branch, tracking the right remote, changes nothing here.
+
+  **Verify, do not assume — and verify TWO things, because the refs agreeing is
+  not the tree agreeing:**
+  - the refs are level: `git rev-parse HEAD` equals `git rev-parse
+    origin/<branch>` (equivalently, `git status -sb` shows no `[behind N]`), and
+  - the tracked tree matches that commit: `git diff --quiet HEAD` exits 0.
+
+  The ref check alone passes on a stale tree — a locally modified tracked file
+  leaves `HEAD == origin/<branch>` true and `[behind N]` absent while the file
+  still holds its old contents, so a gate script runs against the wrong bytes.
 
   **Five conditions must hold for that integration to be safe**, and a `git fetch`
   alone establishes none of them either:
@@ -731,14 +737,12 @@ something he cannot do, however politely it is phrased.
      can track the wrong one — and a later merge from `origin` still succeeds, so
      nothing looks wrong until a push goes somewhere nobody chose.
 
-  ⚠️ **This directive deliberately stops short of giving you the commands.**
-  Five rounds of review found a defect in five successive versions of a
-  seven-line recipe here, because *which* commands are correct depends on
-  configuration a directive cannot see: single-branch clone or not, how many
-  remotes carry the branch, `checkout.defaultRemote`, what is gitignored. Check
-  these five conditions in YOUR checkout and compose accordingly. Pasting a
-  sequence from a file that cannot see your remotes is how you find out about
-  condition 3 by losing a file.
+  ⚠️ **The commands are deliberately not given here.** Which ones are correct
+  depends on configuration this file cannot see: single-branch clone or not, how
+  many remotes carry the branch, `checkout.defaultRemote`, what is gitignored.
+  Check these conditions in YOUR checkout and compose against it — a sequence
+  pasted from a file that cannot see your remotes is how condition 3 gets found
+  by losing a file.
 
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation

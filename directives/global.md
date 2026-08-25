@@ -18,6 +18,9 @@ explicitly overrides it.
 - Default stack: plain HTML + CSS + vanilla JS with **no *local* build**.
   Development is browser-only (no terminal), so nothing may require a build on
   your machine. This is a **dev-environment** rule, not a deployment ceiling.
+  Browser-only is also a fact about the OWNER, not only about the stack — see
+  → *A Blocked Command Is Not a Blocked Capability* for what that means for
+  what you may ask him to do.
 - **No framework tier.** Don't add a framework or a build step; a static site
   doesn't need one, and adopting one was evaluated and rejected
   (→ *Hosting & Deployment*).
@@ -539,6 +542,9 @@ naming what remains open, or "nothing open" — never absent.
 - Stop and ask if CI has failed 3+ times on the same issue without progress
 - Stop and ask before deleting any file that exists on `main`
 - Stop and ask before modifying any workflow file's trigger conditions
+- **Never escalate a shell command to the owner.** He has no terminal, so it is
+  not a smaller ask than doing it yourself — it is an impossible one
+  (→ *A Blocked Command Is Not a Blocked Capability*).
 
 ## Standing Authorization (owner ruling, 2026-07-22)
 Escalation Rules define when to STOP; this defines the default everywhere else,
@@ -623,6 +629,35 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
+
+## A Blocked Command Is Not a Blocked Capability (owner ruling, 2026-08-25)
+The owner works in a **browser chat only**. No terminal, no CLI, no local
+checkout. So a message ending "run `git commit && git push`" asks him for
+something he cannot do, however politely it is phrased.
+
+- **A refused shell command is a refused command, not a refused capability.**
+  (`claude.insurance`, 2026-08-25.) A `git add` the sandbox declined does not
+  mean the repo is unwritable — it means *that invocation* was declined. Before
+  concluding you are blocked, find the other route.
+- **Nearly every git operation has a GitHub MCP equivalent that needs no shell:**
+
+  | you wanted | use instead |
+  |---|---|
+  | `git add` + `commit` + `push` | `create_or_update_file` (one file), `push_files` (several, one commit) |
+  | `git checkout -b` | `create_branch` |
+  | `git rm` | `delete_file` |
+  | `git merge` / PR merge | `merge_pull_request` |
+  | reading a file at a ref | `get_file_contents` |
+
+  These commit through the API. They need no working tree, no shell, and no
+  credential helper.
+- **Report what you tried, not what you inferred.** Never say a command was
+  refused unless you ran it and it was. Reporting an inference as an observation
+  about your own actions is a claim one tool call from being checked, and it
+  sends the owner to fix something that is not broken.
+- **Escalate a DECISION, never a KEYSTROKE.** "Which of these two do you want"
+  is his. "Someone needs to type this" is never his: it is yours through MCP, or
+  it is a genuine blocker to be named as one.
 
 ## Network Access Playbook (cloud sessions)
 All projects share one environment ("fleet"); its egress allowlist applies to

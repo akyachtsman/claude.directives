@@ -692,63 +692,20 @@ something he cannot do, however politely it is phrased.
 
   These write to the **remote**, and your local checkout does not follow.
 
-  ⚠️ **THE REQUIREMENT: the checked-out branch AND the working tree must actually
-  carry the API-written commit** before any local diff, edit or gate script runs.
-  A `git fetch` does not do this — it advances `refs/remotes/origin/<branch>` and
-  downloads objects while local `HEAD` and the working tree stay on the pre-API
-  commit (`--update-head-ok` permits moving `HEAD` and still checks nothing out).
-  Being on the right branch, tracking the right remote, changes nothing here.
+  ⚠️ **Your local checkout does not carry the change, and nothing tells you so.**
+  A `git fetch` will not fix it: it advances `refs/remotes/origin/<branch>` while
+  local `HEAD` and the working tree stay on the pre-API commit. Before resuming
+  local work — any diff, any edit, any gate script — make the checkout actually
+  carry that commit, and treat the API's returned SHA as the reference rather
+  than anything git has cached locally.
 
-  **Verify against the commit SHA the API RETURNED, not against a local ref.**
-  `create_or_update_file` and `push_files` hand back the commit they created;
-  that value is ground truth. `origin/<branch>` is not — it is a fetch-managed
-  *local cache*, so if no fetch ran, one failed, or the refmap did not cover that
-  branch, it still holds the pre-API commit and every comparison against it
-  passes on stale state.
-
-  Two checks, both against that returned SHA:
-  - `git rev-parse HEAD` equals it, and
-  - `git diff --quiet HEAD` exits 0 — the tracked tree matches that commit.
-
-  Neither alone is enough. The first passes while a locally modified tracked file
-  holds old contents; the second passes on a clean checkout of the *wrong*
-  commit. And both pass together against a stale `origin/<branch>`, which is why
-  the comparison is to the API's answer rather than to anything git cached.
-
-  **Five conditions must hold for that integration to be safe**, and a `git fetch`
-  alone establishes none of them either:
-
-  1. **You are ON the branch.** Every integrating command acts on the branch you
-     are *currently on*, not the one named in the argument: `git pull --ff-only
-     origin feature` run from `main` fast-forwards **`main`**. Verify with
-     `git branch --show-current` and treat it as a gate, not a comment. The
-     `create_branch` warning above is exactly why this is the likely state — the
-     remote ref can exist while your checkout sits on `main`.
-  2. **Uncommitted work is parked with a STASH, never a commit.** `git commit`
-     has no destination-branch option; it records on the branch you are on. So
-     "saving" work before the switch puts it on `main`, permanently, and
-     switching leaves it there.
-  3. **The stash covers everything you care about.** `-u` includes *untracked*
-     files; only `-a` includes *ignored* ones — and `git switch` overwrites
-     ignored files by default (`--overwrite-ignore`). A local-only `.env` at a
-     path the target branch tracks is destroyed silently, by a sequence that has
-     just told you your work was parked.
-  4. **The remote-tracking ref exists.** A source-only `git fetch origin
-     <branch>` writes to `FETCH_HEAD` only — in a `--single-branch` clone, or
-     anywhere `remote.origin.fetch` does not map that branch,
-     `refs/remotes/origin/<branch>` is never created and anything relying on
-     `origin/<branch>` then fails.
-  5. **Tracking is pinned to `origin`.** A bare `git switch <branch>` guesses;
-     with several remotes carrying the branch and `checkout.defaultRemote` set it
-     can track the wrong one — and a later merge from `origin` still succeeds, so
-     nothing looks wrong until a push goes somewhere nobody chose.
-
-  ⚠️ **The commands are deliberately not given here.** Which ones are correct
-  depends on configuration this file cannot see: single-branch clone or not, how
-  many remotes carry the branch, `checkout.defaultRemote`, what is gitignored.
-  Check these conditions in YOUR checkout and compose against it — a sequence
-  pasted from a file that cannot see your remotes is how condition 3 gets found
-  by losing a file.
+  **How to establish that is not written here, deliberately.** It depends on your
+  checkout in ways this file cannot see — whether the branch has unpushed
+  commits, what the index flags and sparse-checkout state are, which refspec the
+  clone maps, what is gitignored. Each of those silently breaks a different
+  plausible check. Work it out against the repository in front of you; a
+  procedure copied from a directive that cannot see your remotes is how you find
+  out by running a gate against the wrong bytes.
 
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation

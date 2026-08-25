@@ -24,6 +24,26 @@ import { test, expect } from '@playwright/test';
 const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// IDLE CAP — every networkidle wait is bounded, because NOTHING ELSE BOUNDS IT
+// ─────────────────────────────────────────────────────────────────────────────
+// Playwright Test defaults `use.navigationTimeout` to 0 = NO TIMEOUT, and
+// waitForLoadState() inherits that default. So an un-timed
+// waitForLoadState('networkidle', { timeout: IDLE_MS }) on a page that polls, holds a websocket open,
+// or streams is bounded ONLY by the enclosing test timeout — one call can eat a
+// whole scenario's budget. The `.catch(() => {})` at each call site does not
+// help: with no timeout the promise never rejects, it just never settles.
+//
+// That made every per-scenario budget in this file a fiction, since each was
+// derived by adding up terms that were themselves unbounded. Cap it here, and
+// see playwright.config.js for the matching navigationTimeout that bounds goto().
+//
+// 5s, not 30: these calls are "let it settle, then continue", never assertions.
+// Every one already swallows failure, so a timeout means "settled enough".
+// networkidle is unreliable on any app with background activity — Playwright
+// says so itself — which is exactly why it must never be waited on unbounded.
+const IDLE_MS = 5_000;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
 // ─────────────────────────────────────────────────────────────────────────────
 // A JS error is ALWAYS blocking: one throw silently kills every handler bound
@@ -293,7 +313,7 @@ function testValueFor(el) {
 test('S1: page loads without JS errors', async ({ page }) => {
   const errors = watchPageErrors(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
   const bodyText = await page.evaluate(() => document.body.innerText?.trim());
   expect(bodyText?.length, 'Page body is empty').toBeGreaterThan(0);
   expect(errors.all(), `Errors on load: ${errors.all().join('; ')}`).toHaveLength(0);
@@ -308,7 +328,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
 
   const beforeSnap = await domSnapshot(page);
   // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
@@ -373,10 +393,17 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 test('S3: interactive elements discovered and exercised without errors', async ({ page }) => {
   // BUDGET — sized from the MATRIX, not from one profile. This sweep is
   // UNCAPPED: it visits every element discoverElements() returns, at ~1.5s
-  // settle plus a networkidle wait each, so its cost is (element count x
-  // project count). playwright.config.js ships FOUR projects; the 240_000 this
-  // replaces was written when the matrix was phones only, and desktop and
-  // tablet arrived later without anyone re-reading the number.
+  // settle plus a networkidle wait (now bounded by IDLE_MS, 5s — it was bounded
+  // by nothing at all, see the note at the top of this file), so its cost is
+  // (element count x project count). playwright.config.js ships FOUR projects;
+  // the 240_000 this replaces was written when the matrix was phones only, and
+  // desktop and tablet arrived later without anyone re-reading the number.
+  //
+  // This budget is sized from MEASUREMENT, not from a worst case — with the
+  // element count unbounded, no fixed number can be a true ceiling. ~14.5s per
+  // element in the worst case means ~62 elements fills 900s, while the real
+  // apps measured below sweep far more than that far faster. If your app is
+  // control-dense enough to approach it, re-measure rather than assume.
   //
   // ⚠️ WIDER IS SLOWER, which is the counter-intuitive part. Clipped controls
   // inside overflow:hidden boxes are skipped, and a wide viewport clips FEWER
@@ -398,14 +425,14 @@ test('S3: interactive elements discovered and exercised without errors', async (
 
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
   // Authenticate if we have a credential; if there's a real auth gate but no credential,
   // skip — sweeping the login screen would fire spurious PIN/password attempts and 401/403s
   // don't block, so the job could "pass" without reaching app content. A public app with
   // no gate falls through and is swept normally.
   if (AUTH_CREDENTIAL) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
   } else if (await detectAuthGate(page)) {
     test.skip(true, 'Auth gate present but no credential — skipping sweep (would only exercise the login screen)');
   }
@@ -443,7 +470,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
       if (['button', 'a'].includes(el.tag) || el.type === 'submit' || el.selector.includes('role=button')) {
         await locator.click({ timeout: 3000 });
         await page.waitForTimeout(1500);
-        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
       } else if (el.tag === 'textarea' ||
                  (el.tag === 'input' &&
                   [null, 'text', 'email', 'password', 'search', 'tel', 'url', 'number'].includes(el.type))) {
@@ -515,14 +542,14 @@ test('S3: interactive elements discovered and exercised without errors', async (
 test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
   // Authenticate only when a real auth gate (PIN/password) is detected, so overflow is
   // measured against the real app rather than the login screen. Gate on detectAuthGate()
   // — NOT just "a credential exists" — so a public-first app with a stray text input
   // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
   if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
   }
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   const viewWidth = await page.evaluate(() => window.innerWidth);
@@ -536,13 +563,13 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
 // ─────────────────────────────────────────────────────────────────────────────
 async function gotoAndAuth(page) {
   await page.goto('./');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
   // Detect once and branch — each detectAuthGate() call burns a 5s waitFor timeout when
   // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
   const gated = await detectAuthGate(page);
   if (AUTH_CREDENTIAL && gated) {
     await detectAndAuth(page, AUTH_CREDENTIAL);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
   } else if (gated) {
     test.skip(true, 'Auth gate present but no credential — skipping navigation/control invariants');
   }
@@ -635,7 +662,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
         if (!await loc.isVisible().catch(() => false)) continue;
         await loc.click({ timeout: 3000 });
         await page.waitForTimeout(800);
-        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
       } catch { continue; }
       const after = await viewSignature(page);
       const hasBack = await backControl(page).isVisible().catch(() => false);
@@ -662,7 +689,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     if (!await back.isVisible().catch(() => false)) break;
     await back.click({ timeout: 3000 });
     await page.waitForTimeout(800);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
     const now = await viewSignature(page);
     trail.push({ stepFromDeepest: forward.length - i, expected, left, got: now });
     test.info().attach('back-flow-trail', { body: JSON.stringify(trail, null, 2), contentType: 'application/json' });
@@ -717,7 +744,7 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
     // arrived after the previous one, so a failure names the page that caused it.
     const before = watcher.all().length;
     await page.goto('./' + path.replace(/^\//, ''));
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
     const bodyText = await page.evaluate(() => document.body.innerText?.trim());
     expect(bodyText?.length, `${path}: page body is empty`).toBeGreaterThan(0);
     const fresh = watcher.all().slice(before);
@@ -739,18 +766,25 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // click({ timeout: 2000 }) paths: ~13.8s worst case, x30 = ~414s against 180s.
   //
   // The nav-reset path is the expensive one and an earlier version of this
-  // comment left it out. A trigger that NAVIGATES costs a full gotoAndAuth() —
-  // page load + a networkidle wait (30s default, and a page holding a socket
-  // open really does burn it) + a 5s auth-gate probe, so ~35s each. Uncapped,
-  // 30 navigating triggers is ~1128s on its own: no budget this test can afford
-  // inside the job bound would cover it. Hence NAV_RESET_CAP below.
+  // comment left it out. A trigger that NAVIGATES costs a full gotoAndAuth().
   //
-  //     10 nav resets       x ~37.6s = ~376s
+  // ⚠️ AND THE TERMS ONLY BOUND THE SUM NOW. An earlier version of this
+  // arithmetic said "30s default" for the navigation waits. There is no such
+  // default: Playwright Test ships navigationTimeout = 0, so goto() and
+  // waitForLoadState() were capped only by this test's own timeout, and a
+  // single reset could exhaust the budget before NAV_RESET_CAP ever applied.
+  // A cap on the NUMBER of resets bounds nothing while the COST of one is
+  // unbounded. Now bounded at both ends — navigationTimeout in
+  // playwright.config.js, IDLE_MS at the top of this file:
+  //
+  //     goto 30s + networkidle 5s + auth probe 5s = ~40s per reset
+  //
+  //     10 nav resets       x ~40s   = ~400s
   //   + 20 overlay-path     x ~13.8s = ~276s
   //     ------------------------------------
-  //     bounded worst case            ~652s
+  //     bounded worst case            ~676s
   //
-  // 900_000 is ~1.4x that. DERIVED FROM THE CONSTANTS IN THIS FILE, not
+  // 900_000 is ~1.33x that. DERIVED FROM THE CONSTANTS IN THIS FILE, not
   // measured — no downstream repo has reported S9 at the wall, unlike S3. If you
   // measure it, replace this arithmetic with the number.
   test.setTimeout(900_000);

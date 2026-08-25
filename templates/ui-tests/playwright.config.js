@@ -16,6 +16,16 @@ export default defineConfig({
     // load-gates each one (test.md → UI coverage gates).
     baseURL: (process.env.APP_URL || 'REPLACE_WITH_YOUR_APP_URL').replace(/\/?$/, '/'),
     headless: true,
+    // ⚠️ Playwright Test defaults this to 0 = NO TIMEOUT. Left unset, page.goto()
+    // is bounded only by the enclosing test timeout, so one hung navigation
+    // consumes a whole scenario's budget — and every per-scenario budget in
+    // app.spec.js is derived by summing terms that were, until this line, not
+    // actually bounded. 30s: a page that cannot load in thirty seconds is a
+    // failure worth reporting as one, not worth waiting out.
+    // The matching cap for waitForLoadState('networkidle') is IDLE_MS in
+    // tests/app.spec.js — those calls pass an explicit, much shorter timeout,
+    // so this value governs goto() and nothing else.
+    navigationTimeout: 30_000,
     screenshot: 'only-on-failure',
     video: 'off',
     trace: 'on-first-retry',

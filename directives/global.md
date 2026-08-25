@@ -654,15 +654,16 @@ something he cannot do, however politely it is phrased.
 - **Where the mechanism really is missing, these operations have API equivalents
   that need no shell, no working tree and no credential helper:**
 
-  Each row is a WHOLE TRANSACTION — edit *and* commit *and* push. There is no
-  API analogue of staging, so nothing here maps to a bare `git add` or `git rm`.
+  Each WRITE row is a WHOLE TRANSACTION — edit *and* commit *and* push. There is
+  no API analogue of staging, so nothing here maps to a bare `git add` or
+  `git rm`.
 
   | you wanted | use instead |
   |---|---|
   | edit + `commit` + `push`, one file | `create_or_update_file` |
   | edit + `commit` + `push`, several files, ONE commit | `push_files` |
   | delete + `commit` + `push`, one file, on its own | `delete_file` |
-  | reading a file at a ref | `get_file_contents` |
+  | reading a file at a ref (a READ — no commit, nothing below applies to it) | `get_file_contents` |
 
   ⚠️ **A commit that both edits and deletes has NO equivalent.** `push_files`
   requires `content` on every entry, so it cannot express a deletion; `delete_file`
@@ -690,7 +691,8 @@ something he cannot do, however politely it is phrased.
     it. Use it only when you actually mean to merge that PR, and only after its
     gates pass. There is no API equivalent for a local branch merge.
 
-  These write to the **remote**, and your local checkout does not follow.
+  The three write rows commit to the **remote**, and your local checkout does
+  not follow.
 
   ⚠️ **Your local checkout does not carry the change, and nothing tells you so.**
   A `git fetch` will not fix it: it advances `refs/remotes/origin/<branch>` while

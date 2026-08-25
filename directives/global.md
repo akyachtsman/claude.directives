@@ -690,9 +690,21 @@ something he cannot do, however politely it is phrased.
     it. Use it only when you actually mean to merge that PR, and only after its
     gates pass. There is no API equivalent for a local branch merge.
 
-  These write to the **remote**, and your local checkout does not follow. If you
-  are going to resume working locally after an API write, **five things must be
-  true** — and a `git fetch` alone establishes none of them:
+  These write to the **remote**, and your local checkout does not follow.
+
+  ⚠️ **THE REQUIREMENT: the checked-out branch AND the working tree must actually
+  carry the API-written commit** before any local diff, edit or gate script runs.
+  A `git fetch` does not do this — it advances `refs/remotes/origin/<branch>` and
+  downloads objects while local `HEAD` and the working tree stay on the pre-API
+  commit (`--update-head-ok` permits moving `HEAD` and still checks nothing out).
+  Being on the right branch, tracking the right remote, changes nothing here:
+  measured on a tracked branch after a plain fetch, `HEAD` and `origin/<branch>`
+  differed and the file contents were the old ones. **Verify, do not assume** —
+  `git status -sb` must show no `[behind N]`, or `git rev-parse HEAD` must equal
+  `git rev-parse origin/<branch>`.
+
+  **Five conditions must hold for that integration to be safe**, and a `git fetch`
+  alone establishes none of them either:
 
   1. **You are ON the branch.** Every integrating command acts on the branch you
      are *currently on*, not the one named in the argument: `git pull --ff-only

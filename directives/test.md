@@ -391,6 +391,14 @@ failed**, and this repo reproducing the causes directly.
   added retry, no skipped case. That converts an environment limit into a
   permanently blinded check: the suite goes green and nothing reports that it
   stopped looking.
+- **SUPPLY the missing thing instead of lowering the bar** (`claude.prop`). The
+  answer to an unreachable external host is a reachable equivalent — start a
+  local static server and point `APP_URL` at it, every assertion intact against
+  the same built tree — not a relaxed assertion. Same shape as the kit's
+  `PW_EXECUTABLE` hatch for a missing browser binary: provide what is absent, do
+  not skip the check. A config that keeps both the real `baseURL` and an
+  `APP_URL` override has this escape built in; one that hardcodes a remote
+  `baseURL` does not, and should gain one.
 - **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
   workaround, it is removing the check.
 
@@ -413,10 +421,33 @@ symptom list is one entry short of reality and reads as complete (the same
 enumerate-vs-derive failure as `refresh-repo.md`'s script exemptions). Check:
 browser binaries present, module/CDN sources reachable, backend reachable — and
 treat the known causes as a growing set. Observed so far: absent browser binary;
-blocked runtime CDN; proxy MITM CA untrusted by the bundled browser; unreachable
-backend. Note the block is **selective** — `raw.githubusercontent.com` answers
-from the same shell that cannot reach `esm.sh`, so "the sandbox has no network"
-is the wrong model.
+blocked runtime CDN; the bundled browser unable to complete HTTPS through the
+agent proxy; unreachable backend. Note the CDN block is **selective** —
+`raw.githubusercontent.com` answers from the same shell that cannot reach
+`esm.sh`, so "the sandbox has no network" is the wrong model.
+
+⚠️ **The one-line discriminator: `curl` the same URL from the same sandbox**
+(`claude.prop`). A 200 from `curl` beside a browser failure is proof of
+environment, not proof of a bug, and it costs one command instead of an
+afternoon — the host is up, DNS resolves, the network path works and TLS
+terminates for a non-browser client, so everything the failure superficially
+implicates is exonerated at once.
+
+Measured here 2026-08-26, and the control is the part that generalises it:
+
+| target | `curl` | bundled chromium |
+|--------|--------|------------------|
+| a GitHub Pages app | 200 | `net::ERR_CONNECTION_RESET` |
+| `raw.githubusercontent.com` | 200 | `net::ERR_CONNECTION_RESET` |
+
+**The browser fails identically on a host `curl` reaches fine, so this is not
+about the target at all** — the bundled browser has no working HTTPS path to
+*any* external host through the proxy. Two consequences: any browser-side
+network failure to an external host in a sandbox is environmental until proven
+otherwise, and **a UI suite in an agent sandbox can only run against a LOCAL
+server.** Symptoms differ across repos (a certificate/CA complaint in one, a
+connection reset in another) and may be one root or two — do not match on the
+string; the `curl` pair is what decides.
 
 **Classify by DURATION before opening a log** (`claude.insurance`):
 

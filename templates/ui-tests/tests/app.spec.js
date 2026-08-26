@@ -512,8 +512,16 @@ async function discoverElements(page) {
           // icon button whose glyph text is not a recognizable word
           // (<button aria-label="Back">chevron_left</button>) records only the
           // glyph — consumers that classify by meaning need the accessible
-          // name too, not just the first non-empty string.
-          ariaLabel: (el.getAttribute('aria-label') || '').slice(0, 60),
+          // name too, not just the first non-empty string. aria-labelledby
+          // wins over aria-label (accname computation order), and it is
+          // resolved here because backControl()'s getByLabel() resolves it
+          // too — an element only one side recognizes as "Back" is exactly
+          // the asymmetry that lets NAV click Back while drilling.
+          ariaLabel: ((el.getAttribute('aria-labelledby') || '')
+                        .split(/\s+/).filter(Boolean)
+                        .map(ref => document.getElementById(ref)?.textContent?.trim() || '')
+                        .join(' ').trim()
+                      || el.getAttribute('aria-label') || '').slice(0, 60),
           id: el.id || null,
         }))
     );
@@ -609,6 +617,18 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   const mechanism  = (await detectAuthGate(page))
     ? await detectAndAuth(page, AUTH_CREDENTIAL ?? '')
     : 'none';
+
+  // LOAD_SETTLE_MS, not IDLE_MS: a successful login often lands with the app
+  // shell still loading — verifying while the auth request or the post-auth
+  // navigation is in flight reads the not-yet-dismissed gate as retained and
+  // fails a login that succeeded. Same wait the other callers get by settling
+  // before their gate checks; S2 authenticates mid-test, so it settles here.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  // afterSnap is captured AFTER the settle, so the acceptance check below and
+  // the retained-gate verifier observe the same state. Captured pre-settle, a
+  // login that completes during the settle without an intermediate DOM change
+  // would clear the gate yet leave domChanged false — and S2 would throw
+  // "credential rejected" on a credential that was accepted.
   const afterSnap  = await domSnapshot(page);
 
   // The SHARED retained-gate verdict, same as S3/S4/gotoAndAuth — S2 was the
@@ -619,12 +639,6 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // credential as accepted with the gate still on screen. The verifier the
   // rest of the suite trusts must not be bypassable by the scenario whose
   // whole job is the auth verdict.
-  // LOAD_SETTLE_MS, not IDLE_MS: a successful login often lands with the app
-  // shell still loading — verifying while the auth request or the post-auth
-  // navigation is in flight reads the not-yet-dismissed gate as retained and
-  // fails a login that succeeded. Same wait the other callers get by settling
-  // before their gate checks; S2 authenticates mid-test, so it settles here.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   await expectGateCleared(page, mechanism, gateViewBefore);
 
   const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);

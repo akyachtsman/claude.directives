@@ -313,7 +313,8 @@ anything about what is live.
 ⚠️ **Switching to Actions-source SILENTLY DISABLES this repo's Pages monitoring,
 and that is not optional to handle.** `pages-monitor.yml` and `pages-retry.yml`
 both trigger on `page_build`, which fires only for **branch-source** builds
-(`docs/standards/automations.md` → *Automation 4 / 4b*). An Actions-source repo
+(`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
+*Automation 4b — Pages Deploy Retry*). An Actions-source repo
 keeps the workflow files and gets no runs from them — monitoring that looks
 present and reports nothing, which is worse than none. The post-publish
 verification above is the replacement, not an extra: put the 200/404 assertions

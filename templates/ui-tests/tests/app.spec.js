@@ -1149,18 +1149,19 @@ function backControlAll(page) {
     '[data-back], ' +
     'button:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), a:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), ' +
     'button:has-text("←"), a:has-text("←")'
-  ).or(
-    // The accname arm is INTERSECTED with navigation-control kinds: getByLabel
-    // matches ANY labeled element, so a checkbox or text input labeled "Back"
-    // would otherwise read as — and be pressed as — the back control. The
-    // kinds include the IMPLICIT button roles (input type=button/submit/
-    // reset/image carry role button without saying so) and role=link — kind
-    // is judged by role, not by tag name. The CSS arm already names its
-    // element kinds clause by clause.
-    page.getByLabel(/\bback\b(?![\s-]*up\b)/i).and(page.locator(
-      'button, a, [role=button], [role=link], input:is([type=button], [type=submit], [type=reset], [type=image])'))
-  );
+  ).or(page.getByRole('button', { name: BACK_NAME }))
+   .or(page.getByRole('link', { name: BACK_NAME }));
 }
+
+// ROLE + ACCESSIBLE NAME are the two semantics every earlier form of the
+// accname arm approximated — tag lists for kind, label/text matchers for
+// name — and each approximation lagged the spec by one case (checkbox
+// labeled "Back", input type=button, div role=button with text "Back",
+// input value="Back"). getByRole computes both in full: implicit roles and
+// text- or value-derived names included, non-control roles excluded by the
+// role filter itself. The CSS arms above remain for [data-back], arrow
+// glyphs, and href-less anchors that carry no link role.
+const BACK_NAME = /\bback\b(?![\s-]*up\b)/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO — NAV: in-app back navigation strictly unwinds (no circular loop)

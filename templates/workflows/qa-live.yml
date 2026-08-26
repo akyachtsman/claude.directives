@@ -16,6 +16,7 @@
 #
 # Required setup:
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project has
+#     (email+password gates need TEST_AUTH_EMAIL as well — directives#304)
 #     no auth; the empty secret makes auth tests self-skip
 #   - Add APP_URL as a repository variable: Settings → Secrets and variables → Variables
 #     e.g. https://<your-username>.github.io/<your-repo>/
@@ -130,7 +131,7 @@ jobs:
     #
     # WHAT THE ~16min OF SPARE IS FOR, checked rather than assumed. Two rounds
     # raised per-test ceilings: the scenarios that load and authenticate had each
-    # been sized for two of their five terms (S2 60s -> 180s, S4 and CTRL 30s ->
+    # been sized for two of their five terms (S2 60s -> 180s -> 240s, S4 and CTRL 30s ->
     # 240s, S1 60s -> 90s, ENTRY 60s -> 90s per page, capped at 5min total), and
     # then the shared preamble's settles became real observation windows, which
     # cost every budget containing them (+40s: NAV 300s -> 360s, DISMISS 900s ->
@@ -139,7 +140,7 @@ jobs:
     #
     # A FAILING run is where the spare goes, and the scenarios split in two:
     #
-    #   SHORT ceilings   S1 90s, S2 180s, S4 240s, CTRL 240s, ENTRY <=300s
+    #   SHORT ceilings   S1 90s, S2 240s, S4 240s, CTRL 240s, ENTRY <=300s
     #                    a failure costs <=10min (replace + retry). ONE of these
     #                    fits alongside two profiles failing S3.
     #   LONG ceilings    NAV 360s, S3 900s, DISMISS 1200s
@@ -205,5 +206,6 @@ jobs:
           # workflow_dispatch input overrides repo variable if provided
           app-url: ${{ github.event.inputs.app_url || vars.APP_URL }}
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          test-auth-email: ${{ secrets.TEST_AUTH_EMAIL }}
           artifact-name: playwright-results-live
           app-pages: ${{ vars.APP_PAGES }}

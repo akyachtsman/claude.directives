@@ -15,7 +15,9 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 ### Operating Rules
 
 1. Read `CLAUDE.md` first for the app URL, test directory and project scenarios. Take the
-   credential from the `TEST_AUTH_CREDENTIAL` environment variable ONLY — never from
+   credential from the `TEST_AUTH_CREDENTIAL` environment variable ONLY (plus
+   `TEST_AUTH_EMAIL` for email+password gates — without it the identifier is
+   submitted blank and the rejection reads as a bad credential) — never from
    `CLAUDE.md`, which must not contain it (global.md → Security). If the variable is
    empty, there is no authenticated run: skip the auth phase and say so in the report,
    rather than guessing a value or asking for one to be written into the repo

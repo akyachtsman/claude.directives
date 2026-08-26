@@ -30,6 +30,7 @@
 //   7  reached exit 0 without a verdict — the backstop (a config that calls
 //      process.exit(0) at import time would otherwise pass silently)
 //   8  usage error (nonsensical band bounds)
+//   9  a TOP-LEVEL test-selection filter narrows the run (CANNOT CHECK)
 // node_modules is environment-provided, not repo-guaranteed: in CI it exists
 // because the ui-suite composite ran `npm install` first. Its absence is 4 — a
 // loud "cannot check", never a pass.
@@ -186,6 +187,32 @@ console.log(`config:    ${configPath}`);
   if (projects.length === 0) {
     die(6, ['FAIL: the config declares an EMPTY `projects` array — zero projects resolved.',
       '  test.md -> UI coverage gates, fifth gate.']);
+  }
+
+  // TOP-LEVEL test selection defeats per-project coverage entirely. Playwright
+  // INTERSECTS `grep`/`grepInvert`/`testMatch`/`testIgnore` declared at the config
+  // root with each project's own selection, so three perfectly-banded projects can
+  // schedule ZERO scenarios and this gate would otherwise print a confident OK.
+  // Reported by claude.trading from a Codex finding on their #283 and reproduced
+  // here 2026-08-26: a config with laptop+tablet+phone projects plus a root
+  // `grep: /__NEVER_MATCHES_ANY_TEST__/` exited 0 with all three classes named.
+  //
+  // Whether the suite survives a root filter is not statically decidable here —
+  // `grep` matches test TITLES, which live inside the spec files. So this is a
+  // CANNOT CHECK, not a FAIL and emphatically not a pass: per this file's own
+  // anti-silence rule, "could not look" gets its own loud exit code.
+  const TOP_LEVEL_FILTERS = ['grep', 'grepInvert', 'testMatch', 'testIgnore'];
+  const rootFilters = TOP_LEVEL_FILTERS.filter(k => cfg[k] !== undefined);
+  if (rootFilters.length) {
+    die(9, [
+      `FAIL: the config declares TOP-LEVEL ${rootFilters.join(', ')} — CANNOT CHECK.`,
+      '  Playwright intersects a root-level filter with every project, so the widths',
+      '  below say nothing about what would actually run: all three classes can be',
+      '  declared while zero scenarios are scheduled.',
+      '  Fix by moving the filter onto the projects that are NOT providing viewport',
+      '  coverage, so each banded project selects the UI suite unconditionally.',
+      '  test.md -> UI coverage gates, fifth gate.',
+    ]);
   }
 
   // Playwright merges top-level `use` into each project at RUNTIME, but

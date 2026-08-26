@@ -80,6 +80,24 @@ const CASES = [
     { 'playwright.config.js': withProjects(`  //${LAPTOP.trimEnd()}\n` + TABLET + PHONE) },
     1, 'no unrestricted project covers laptop'],
 
+  // The fix for claude.trading's finding: a root-level filter INTERSECTS with every
+  // project, so all three bands can be perfectly declared while zero scenarios are
+  // scheduled. Before exit 9 existed, each of these printed a confident
+  // "check-ui-viewports: OK" naming all three classes. Both the per-project case
+  // below and these must stay: they are different code paths (`p[k]` vs `cfg[k]`),
+  // and it was the project one being covered that made the root one look covered.
+  ['top-level grep excludes the suite (all three bands correct)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  grep: /__NEVER_MATCHES_ANY_TEST__/,\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    9, 'TOP-LEVEL grep'],
+
+  ['top-level testIgnore excludes the suite (all three bands correct)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  testIgnore: /app\\.spec\\.js/,\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    9, 'TOP-LEVEL testIgnore'],
+
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"

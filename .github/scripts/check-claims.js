@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'fs';
+import { resolve, relative } from 'path';
 import { execFileSync } from 'child_process';
 
 // CANONICAL-PHRASE GUARD (#300). Fails when a claim listed in claims.json stops
@@ -85,10 +86,21 @@ const fail = (msg) => { console.error(`FAIL: ${msg}`); failed = true; };
 // uses is the only version that cannot drift from it: there is one definition
 // of "states this claim", and both the check and the derivation read it.
 const DERIVE = process.argv.includes('--derive');
+// EVERY tracked file, minus binaries detected BY CONTENT. An extension
+// allowlist here would recreate the exact blindness --derive exists to end:
+// this repo carries claims in .py guards, .json manifests, .html and
+// extensionless files, and a scan that cannot read them reports full coverage
+// over a subset. Binary detection is a NUL byte in the first 8KB — the same
+// heuristic git itself uses — so a new text format needs no allowlist edit.
 const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'utf8' })
   .split('\n').filter(Boolean)
-  .filter((f) => /\.(md|ya?ml|sh|js|txt)$/.test(f))
-  .filter((f) => !f.includes('node_modules/') && f !== MANIFEST);
+  .filter((f) => !f.includes('node_modules/') && f !== MANIFEST)
+  .filter((f) => {
+    try {
+      const head = readFileSync(f).subarray(0, 8192);
+      return !head.includes(0);
+    } catch { return false; }
+  });
 
 const seenIds = new Set();
 
@@ -113,12 +125,18 @@ for (const claim of claims) {
   const consumerList = (Array.isArray(consumers) ? consumers : [])
     .map((c) => (typeof c === 'string' ? { file: c } : c));
 
-  const consumerFiles = consumerList.map((c) => c.file);
+  // Compare NORMALIZED paths: './directives/git.md' and
+  // 'directives/../directives/git.md' name the same file, and raw-string
+  // comparison lets either alias its way past both the source check and the
+  // duplicate check — restoring the vacuous pass those rules exist to stop.
+  const norm = (f) => relative('.', resolve(f)) || f;
+  const consumerFiles = consumerList.map((c) => norm(c.file));
+  const sourceNorm = norm(source);
   for (const f of consumerFiles) {
     // Both of these produce a non-empty consumer list that verifies nothing
     // beyond what the source check already did — a vacuous pass wearing the
     // shape of coverage.
-    if (f === source) fail(`${id}: consumer is the source itself (${f}) — that verifies nothing the source check does not`);
+    if (f === sourceNorm) fail(`${id}: consumer is the source itself (${f}) — that verifies nothing the source check does not`);
   }
   const dupes = consumerFiles.filter((f, i) => consumerFiles.indexOf(f) !== i);
   if (dupes.length) fail(`${id}: duplicate consumer path(s): ${[...new Set(dupes)].join(', ')}`);
@@ -156,9 +174,21 @@ for (const claim of claims) {
   for (const { file, role, override } of targets) {
     if (!existsSync(file)) { fail(`${id}: ${role} file does not exist: ${file}`); continue; }
     let useRe = re;
-    if (override) {
+    if (override !== undefined) {
+      // A stricter override that does not actually constrain anything is worse
+      // than none: an empty string falls back to the claim-level pattern (so
+      // the loose match this override existed to replace silently returns),
+      // and an empty-matching one certifies any file at all.
+      if (typeof override !== 'string' || override === '') {
+        fail(`${id}: per-consumer pattern for ${file} is empty — an override that does not constrain anything silently restores the claim-level match it was added to replace`);
+        continue;
+      }
       try { useRe = new RegExp(override, 'i'); }
       catch (err) { fail(`${id}: invalid per-consumer pattern for ${file} — ${err.message}`); continue; }
+      if (useRe.test('')) {
+        fail(`${id}: per-consumer pattern for ${file} matches the empty string — it would certify anything`);
+        continue;
+      }
     }
     if (useRe.test(normalize(readFileSync(file, 'utf8')))) {
       console.log(`OK:   ${id} → ${file}${override ? ' (strict)' : ''}`);

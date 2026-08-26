@@ -29,9 +29,9 @@
     },
     {
       "id": "ci-notify-unique-match-is-not-proof",
-      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. The pattern deliberately requires the unique-match wording: an earlier draft matched only 'not a guaranteed wake', which is the weak sentence, so deleting the entire unique-match warning would have left this guard green.",
+      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. The pattern deliberately requires the unique-match wording: an earlier draft matched only 'not a guaranteed wake', which is the weak sentence, so deleting the entire unique-match warning would have left this guard green. The lookbehind is the second half of the same lesson: 'unique' unanchored is a SUBSTRING of 'non-unique', so a carrier that regressed to warning about NON-unique matches — the weak case again, now wearing the strong case's words — satisfied the tightened pattern too. Requiring no word character or hyphen before it is what makes the tightening real.",
       "source": "docs/standards/automations.md",
-      "pattern": "unique match is not (?:a guaranteed wake|proof)",
+      "pattern": "(?<![\\w-])unique match is not (?:a guaranteed wake|proof)",
       "consumers": [
         "CLAUDE.md",
         "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
@@ -43,9 +43,9 @@
     },
     {
       "id": "arm-the-check-in",
-      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites.",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites. The leading word boundary matters more here than in most patterns because this claim's exact INVERSION contains it: 'disarm a check-in' is the opposite instruction and the unanchored form certified it. A pattern that accepts the negation of its own claim is worse than no pattern, since it reports the regression as coverage — so the boundary is required in the per-consumer variant below as well.",
       "source": "directives/git.md",
-      "pattern": "arms? (?:a|the) check-?in",
+      "pattern": "\\barms? (?:a|the) check-?in",
       "consumers": [
         "CLAUDE.md",
         "directives/global.md",
@@ -60,7 +60,7 @@
         {
           "file": "plugins/directives-toolkit/scripts/wait-gate.sh",
           "why": "This file states the rule TWICE — once in its explanatory header comment, once inside the echo the PreToolUse hook actually delivers. The claim-level pattern matched the header, so deleting the instruction from the DELIVERED message left the guard green on the copy that carries the most authority (it reaches a session unprompted, at the decision point). The pattern below requires the delivered message's own opening text, so only the emitted form satisfies it.",
-          "pattern": "blocked by directives wait-gate.{0,600}?arms? (?:a|the) check-?in"
+          "pattern": "blocked by directives wait-gate.{0,600}?\\barms? (?:a|the) check-?in"
         }
       ]
     }

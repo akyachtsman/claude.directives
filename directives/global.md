@@ -509,11 +509,21 @@ naming what remains open, or "nothing open" — never absent.
        prompt fatigue by **batching deploys**, not by removing the gate.
      - **Projects bootstrapped before this template inherit nothing
        automatically.** The FIRST time a session hits a scheduling-tool prompt
-       in an older repo, PR the current template's `permissions.allow` block
-       (both spellings, all six scheduling tools) into that repo's own
-       `.claude/settings.json` — no need to ask; it's the session's own repo and
-       merges on green like every other change. Note in the PR that the
+       in an older repo, PR the current template's WHOLE `permissions` block
+       (`allow` + `ask`, both spellings on the remote entries) into that repo's
+       own `.claude/settings.json` — no need to ask; it's the session's own repo
+       and merges on green like every other change. Note in the PR that the
        pre-approval activates from the NEXT session.
+       ⚠️ **This instruction was ignored for a month and nobody noticed**, because
+       its trigger is a prompt the owner clicks rather than anything a session
+       sees. claude.insurance had NO `.claude/settings.json` at all through
+       2026-08-26 while claude.prop and claude.directives both carried the block,
+       so every scheduling call from that repo prompted, indefinitely, and the
+       cost landed on the owner instead of on any session's error log. A rule
+       whose violation is invisible to the only party who can fix it does not
+       get followed. So: check for the file at Session Start — its ABSENCE, not
+       just its staleness, is the finding — and do not wait for a prompt you will
+       never observe.
   3. **Condition-wait with `Monitor`** only when you must block on a specific
      state — always with an exit condition and a hard timeout.
 - **Any recorded SHA is stale from the moment it is written — and a stale one
@@ -630,16 +640,41 @@ permission prompt the owner must click defeats the point. It is NOT how a
 session heartbeats: a wake is scheduled to perform a real check, and the
 heartbeat rides the wake that check already needed (→ *Status Line on Every
 Stop*). Never schedule one for liveness alone. Every
-project repo's committed `.claude/settings.json` carries the scheduling
-allowlist verbatim from `templates/claude-settings.json` → `permissions.allow`:
-exactly six tools (`send_later`, `create_trigger`, `update_trigger`,
-`delete_trigger`, `fire_trigger`, `list_triggers`) under BOTH server-name
-spellings, since the prefix differs between session surfaces and permission
-rules match names exactly. Riskier remote tools — attaching repos, creating or
-archiving sessions — must keep prompting. Settings load at session start; a
-one-time prompt in an already-running session is accepted. The security
-trade-offs the owner accepted when approving this are recorded in
-`docs/internal/accepted-residuals.md`.
+project repo's committed `.claude/settings.json` carries the allowlist verbatim
+from `templates/claude-settings.json` → `permissions.allow`. It covers two
+classes and no others:
+- **The six scheduling tools** (`send_later`, `create_trigger`,
+  `update_trigger`, `delete_trigger`, `fire_trigger`, `list_triggers`).
+- **Read-only tools** that answer a question and change nothing:
+  `list_sessions`, `get_session`, `list_repos`, `list_environments`, and the
+  GitHub MCP read surface (`pull_request_read`, `list_issues`, `issue_read`,
+  `get_file_contents`, the `search_*` family, …). Added 2026-08-26 on the
+  owner's instruction, after prompt fatigue reached four figures. The test for
+  admission is not "is it safe" but **"can it change anything a person would
+  want to be asked about"** — if no, it belongs here; if yes or unclear, it does
+  not.
+
+Remote-server entries carry BOTH server-name spellings, since the prefix differs
+between session surfaces and permission rules match names exactly. GitHub tools
+have one spelling and take one entry.
+
+**What must keep prompting, and is listed under `permissions.ask` where a rule
+is needed:** deployment tools reaching a live backend
+(`mcp__Supabase__deploy_edge_function` above all — see the 2026-07-12 ruling;
+batch deploys, never remove the gate), and the remote tools that mutate or widen
+a session's reach — `add_repo`, `create_session`, `archive_session`,
+`unarchive_session`, `interrupt_session`. Anything absent from `allow` prompts by
+default, so the `ask` entry is belt-and-braces for the one tool whose gate the
+owner has twice affirmed.
+
+Settings load at session start, so a widened allowlist reaches a session only on
+its NEXT start — every session already running keeps prompting until restarted,
+which is the single largest source of repeat prompts and is not a
+misconfiguration. **A repo with no `.claude/settings.json` at all pre-approves
+nothing**: claude.insurance was in that state on 2026-08-26 while its sibling
+repos were not, so every scheduling call from that session prompted. Check for
+the file's existence before diagnosing anything subtler. The security trade-offs
+the owner accepted are recorded in `docs/internal/accepted-residuals.md`.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.

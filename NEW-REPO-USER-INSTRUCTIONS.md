@@ -40,12 +40,28 @@ Or set network to **Full** if you'd rather not maintain a list. *(Optional: add
 each container once `cdn.playwright.dev` is allowed.)* Reload — now the commands appear,
 and **every repo you open in this environment** has them from then on.
 
-**Scheduling-tools pre-approval is template-only.** Projects bootstrapped
-before the current `templates/claude-settings.json` inherit nothing
-automatically — each existing repo needs the same `permissions.allow` block
-(both connector spellings, all six scheduling tools) PR'd into its
+**Pre-approval is template-only, and its absence is silent.** Projects
+bootstrapped before the current `templates/claude-settings.json` inherit nothing
+automatically — each existing repo needs that file's whole `permissions` block
+(`allow` + `ask`, both connector spellings on the remote entries) PR'd into its
 `.claude/settings.json` manually. One small PR per repo; a session scoped to
-that repo can do it on request.
+that repo can do it on request, and `/env-chk` now reports the gap unprompted.
+
+Worth knowing before you go looking for a subtler cause: **a repo with no
+`.claude/settings.json` at all pre-approves nothing**, and that is the usual
+answer. On 2026-08-26 claude.insurance was in exactly that state while
+claude.prop and claude.directives both carried the block, so every scheduling
+call from that one repo prompted — for a month, into four figures. Nothing
+reported it, because the only party who sees the prompt is you, and the rule
+telling a session to fix it triggers on a prompt no session observes.
+
+Two things follow that will save you clicking. **Settings load at session
+start**, so merging the block does nothing for sessions already running — they
+keep prompting until restarted, and that is not a misconfiguration. And the
+allowlist deliberately stops short: deployment tools reaching a live backend
+(`mcp__Supabase__deploy_edge_function`) and remote tools that widen a session's
+reach (`add_repo`, `create_session`, `archive_session`) keep prompting by
+design. Reduce those by batching the work, not by widening the grant.
 
 **Force a toolkit update (skip the ~weekly wait).** Only needed for a project
 without `.claude/hooks/session-start.sh`; with the hook, the next session updates

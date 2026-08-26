@@ -346,12 +346,20 @@ async function detectAndAuth(page, credential) {
         SEMANTIC,
         ...(hasForm ? ['input[type=text], input:not([type])'] : []),
       ];
-      // WITHIN a rung, the pick is ANCHORED TO THE PASSWORD INPUT: the nearest
-      // candidate in document order, preferring those that PRECEDE it — never
-      // `.first()`, which hands the fill to whatever matches earliest on the
-      // page (a newsletter box above a formless login panel, a tenant field at
-      // the top of a form) while the identifier sits beside its password
-      // field. Visibility uses the file's evaluate-side definition (geometry +
+      // Selection is ANCHORED TO THE PASSWORD INPUT — never `.first()`, which
+      // hands the fill to whatever matches earliest in the DOM. Two regimes:
+      //   - WITH a form, rungs run in rank order scoped to that form, and the
+      //     pick within a rung is the candidate nearest the password
+      //     (preferring those that precede it) — the form declares the
+      //     association, rank disambiguates inside it.
+      //   - FORMLESS, proximity comes BEFORE rank: the rungs are unioned and
+      //     the nearest-preceding candidate wins outright. Rung rank across a
+      //     whole document inverts the intent — a newsletter input[type=email]
+      //     elsewhere on the page outranked the semantic username sitting
+      //     beside the password. With no form to declare the association,
+      //     adjacency to the password IS the association; the rungs still
+      //     bound WHAT may be picked (semantically-named fields only).
+      // Visibility uses the file's evaluate-side definition (geometry +
       // computed visibility, same as textGateSignals), so a hidden responsive
       // copy is passed over in favour of the visible candidate rather than
       // silently skipping the fill. The pick is marked, filled through
@@ -375,15 +383,23 @@ async function detectAndAuth(page, credential) {
         // the password inside it. getRootNode() is the shadow root there and
         // document everywhere else — the non-shadow case is unchanged.
         const scope = root || pw.getRootNode();
-        for (const sel of sels) {
-          const cands = [...scope.querySelectorAll(sel)].filter(el => vis(el) && editable(el));
-          if (!cands.length) continue;
+        const candsOf = sel => [...scope.querySelectorAll(sel)].filter(el => vis(el) && editable(el));
+        const nearest = cands => {
+          if (!cands.length) return null;
           const preceding = cands.filter(el => el.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
-          const pick = preceding.length ? preceding[preceding.length - 1] : cands[0];
-          pick.setAttribute('data-uitests-identifier', '');
-          return true;
+          return preceding.length ? preceding[preceding.length - 1] : cands[0];
+        };
+        let pick = null;
+        if (root) {
+          for (const sel of sels) { pick = nearest(candsOf(sel)); if (pick) break; }
+        } else {
+          // querySelectorAll on the joined union returns document order, so
+          // nearest() sees one proximity-sorted candidate pool.
+          pick = nearest(candsOf(sels.join(', ')));
         }
-        return false;
+        if (!pick) return false;
+        pick.setAttribute('data-uitests-identifier', '');
+        return true;
       }, [pwHandle, scopeHandle, rungs]);
       if (marked) {
         const cand = page.locator('[data-uitests-identifier]').first();
@@ -1117,7 +1133,13 @@ function backControlAll(page) {
     '[data-back], ' +
     'button:text-matches("\\bback\\b", "i"), a:text-matches("\\bback\\b", "i"), ' +
     'button:has-text("←"), a:has-text("←")'
-  ).or(page.getByLabel(/\bback\b/i));
+  ).or(
+    // The accname arm is INTERSECTED with navigation-control kinds: getByLabel
+    // matches ANY labeled element, so a checkbox or input labeled "Back up
+    // data" would otherwise read as — and be pressed as — the back control.
+    // The CSS arm already names its element kinds clause by clause.
+    page.getByLabel(/\bback\b/i).and(page.locator('button, a, [role=button]'))
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

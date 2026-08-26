@@ -13,23 +13,24 @@
         "docs/standards/ci-triage.md",
         "docs/standards/cicd-setup.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md"
+        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        ".github/workflows/codex-monitor.yml",
+        "templates/workflows/codex-monitor.yml"
       ]
     },
     {
       "id": "response-is-not-a-verdict",
-      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. The claim travels in two shapes (a response is not a verdict; a reaction is not a verdict) and the pattern accepts both, because both are the same rule about what clears the gate.",
+      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. SOURCE-ONLY, deliberately: this rule is currently stated in git.md alone. It is pinned anyway because the #299 split is precisely the change that would drop it, and because an earlier draft of this entry accepted 'a reaction is not a verdict' as a match — a DIFFERENT rule about attribution — and thereby certified a consumer that never stated this claim at all. A pattern loose enough to match a neighbouring rule is worse than no entry: it reports coverage that does not exist.",
       "source": "directives/git.md",
-      "pattern": "(?:response|reaction)[^.]{0,40}? is not a verdict",
-      "consumers": [
-        "docs/standards/ci-triage.md"
-      ]
+      "pattern": "\\bresponse\\b[^.]{0,30}?is not a verdict",
+      "sourceOnly": true,
+      "consumers": []
     },
     {
-      "id": "ci-notify-not-a-guaranteed-wake",
-      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner, and exits silently otherwise — and a repository_dispatch run's default-branch SHA can uniquely match an unrelated promotion PR, which gets the comment instead. A unique match is therefore not proof that YOUR session will be woken, and any file that implies otherwise sends a session to wait on a signal that will not arrive.",
+      "id": "ci-notify-unique-match-is-not-proof",
+      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. The pattern deliberately requires the unique-match wording: an earlier draft matched only 'not a guaranteed wake', which is the weak sentence, so deleting the entire unique-match warning would have left this guard green.",
       "source": "docs/standards/automations.md",
-      "pattern": "not a guaranteed wake",
+      "pattern": "unique match is not (?:a guaranteed wake|proof)",
       "consumers": [
         "CLAUDE.md",
         "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
@@ -39,16 +40,17 @@
     },
     {
       "id": "arm-the-check-in",
-      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in a shell script whose PreToolUse message is the highest-authority copy of the rule, and every .md-only sweep missed it. Consumers here deliberately include both .yml carriers for the same reason.",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites.",
       "source": "directives/git.md",
-      "pattern": "arm the check-?in",
+      "pattern": "arms? (?:a|the) check-?in",
       "consumers": [
         "CLAUDE.md",
         "directives/global.md",
         "docs/internal/repo-monitors.md",
         "docs/standards/automations.md",
         ".github/workflows/ci-notify.yml",
-        "templates/workflows/ci-notify.yml"
+        "templates/workflows/ci-notify.yml",
+        "plugins/directives-toolkit/scripts/wait-gate.sh"
       ]
     }
   ]

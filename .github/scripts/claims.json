@@ -20,11 +20,12 @@
     },
     {
       "id": "response-is-not-a-verdict",
-      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. SOURCE-ONLY, deliberately: this rule is currently stated in git.md alone. It is pinned anyway because the #299 split is precisely the change that would drop it, and because an earlier draft of this entry accepted 'a reaction is not a verdict' as a match — a DIFFERENT rule about attribution — and thereby certified a consumer that never stated this claim at all. A pattern loose enough to match a neighbouring rule is worse than no entry: it reports coverage that does not exist.",
+      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. Two drafts of this entry were wrong in opposite directions and both are instructive: the first accepted 'a reaction is not a verdict' — a DIFFERENT rule, about attribution — and so certified a consumer that never stated this claim; the second over-corrected to a pattern so narrow it could not see automations.md's 'establishes a RESPONSE, not a verdict', and declared the claim source-only on that basis. A pattern that matches a neighbouring rule reports coverage that does not exist; a pattern that misses a real carrier hides a consumer that can drift.",
       "source": "directives/git.md",
-      "pattern": "\\bresponse\\b[^.]{0,30}?is not a verdict",
-      "sourceOnly": true,
-      "consumers": []
+      "pattern": "\\bresponse\\b[^.]{0,30}?(?:is not a verdict|, not a verdict)",
+      "consumers": [
+        "docs/standards/automations.md"
+      ]
     },
     {
       "id": "ci-notify-unique-match-is-not-proof",
@@ -35,7 +36,9 @@
         "CLAUDE.md",
         "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
         ".github/workflows/ci-notify.yml",
-        "templates/workflows/ci-notify.yml"
+        "templates/workflows/ci-notify.yml",
+        "docs/standards/cicd-setup.md",
+        "plugins/directives-toolkit/commands/new-repo.md"
       ]
     },
     {
@@ -50,7 +53,15 @@
         "docs/standards/automations.md",
         ".github/workflows/ci-notify.yml",
         "templates/workflows/ci-notify.yml",
-        "plugins/directives-toolkit/scripts/wait-gate.sh"
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        "docs/standards/ci-triage.md",
+        "docs/standards/cicd-setup.md",
+        "plugins/directives-toolkit/commands/new-repo.md",
+        {
+          "file": "plugins/directives-toolkit/scripts/wait-gate.sh",
+          "why": "This file states the rule TWICE — once in its explanatory header comment, once inside the echo the PreToolUse hook actually delivers. The claim-level pattern matched the header, so deleting the instruction from the DELIVERED message left the guard green on the copy that carries the most authority (it reaches a session unprompted, at the decision point). The pattern below requires the delivered message's own opening text, so only the emitted form satisfies it.",
+          "pattern": "blocked by directives wait-gate.{0,600}?arms? (?:a|the) check-?in"
+        }
       ]
     }
   ]

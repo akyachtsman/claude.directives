@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'fs';
+import { execFileSync } from 'child_process';
 
 // CANONICAL-PHRASE GUARD (#300). Fails when a claim listed in claims.json stops
 // being stated by a file that is required to state it.
@@ -70,6 +71,25 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 let failed = false;
 const fail = (msg) => { console.error(`FAIL: ${msg}`); failed = true; };
 
+// --derive: report every tracked file that ALREADY states each claim, marking
+// the ones the manifest does not list. Advisory, not a CI gate — a file may
+// mention a phrase without being a file that MUST keep stating it, and only a
+// human can tell those apart.
+//
+// It exists because of how this manifest's first two rounds went wrong. The
+// consumer lists were built by a throwaway scan whose normalizer did not strip
+// line-leading comment markers, so it was blind to every .yml/.sh carrier with
+// a wrapped claim. Round 1 fixed the normalizer in THIS file and did not
+// re-derive the lists, so the manifest stayed under-covered and review found
+// the carriers one at a time. Deriving THROUGH the same normalizer the guard
+// uses is the only version that cannot drift from it: there is one definition
+// of "states this claim", and both the check and the derivation read it.
+const DERIVE = process.argv.includes('--derive');
+const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'utf8' })
+  .split('\n').filter(Boolean)
+  .filter((f) => /\.(md|ya?ml|sh|js|txt)$/.test(f))
+  .filter((f) => !f.includes('node_modules/') && f !== MANIFEST);
+
 const seenIds = new Set();
 
 for (const claim of claims) {
@@ -83,7 +103,26 @@ for (const claim of claims) {
   seenIds.add(id);
   if (!why) fail(`${id}: no "why" — an entry nobody can interpret cannot be maintained`);
   if (!source) fail(`${id}: no "source"`);
-  const consumerList = Array.isArray(consumers) ? consumers : [];
+  // A consumer is either a path, or { file, pattern, why } when that carrier
+  // needs a STRICTER match than the claim's own. wait-gate.sh is why: the
+  // claim-level pattern matched its explanatory header comment, so deleting
+  // the instruction from the message the hook actually DELIVERS left the guard
+  // green on the highest-authority copy of the rule. A carrier whose file
+  // states a rule twice — once as prose, once as the thing users receive —
+  // needs the delivered form pinned, not the prose.
+  const consumerList = (Array.isArray(consumers) ? consumers : [])
+    .map((c) => (typeof c === 'string' ? { file: c } : c));
+
+  const consumerFiles = consumerList.map((c) => c.file);
+  for (const f of consumerFiles) {
+    // Both of these produce a non-empty consumer list that verifies nothing
+    // beyond what the source check already did — a vacuous pass wearing the
+    // shape of coverage.
+    if (f === source) fail(`${id}: consumer is the source itself (${f}) — that verifies nothing the source check does not`);
+  }
+  const dupes = consumerFiles.filter((f, i) => consumerFiles.indexOf(f) !== i);
+  if (dupes.length) fail(`${id}: duplicate consumer path(s): ${[...new Set(dupes)].join(', ')}`);
+
   if (consumerList.length === 0 && !claim.sourceOnly) {
     // A claim can legitimately live in ONE file today and still be worth
     // pinning — the git.md split (#299) is exactly the event that would drop
@@ -112,14 +151,30 @@ for (const claim of claims) {
   // the git.md split (#299) makes reachable, which is why that split waits on
   // this guard.
   const targets = [{ file: source, role: 'source' },
-                   ...consumerList.map((file) => ({ file, role: 'consumer' }))];
+                   ...consumerList.map((c) => ({ file: c.file, role: 'consumer', override: c.pattern }))];
 
-  for (const { file, role } of targets) {
+  for (const { file, role, override } of targets) {
     if (!existsSync(file)) { fail(`${id}: ${role} file does not exist: ${file}`); continue; }
-    if (re.test(normalize(readFileSync(file, 'utf8')))) {
-      console.log(`OK:   ${id} → ${file}`);
+    let useRe = re;
+    if (override) {
+      try { useRe = new RegExp(override, 'i'); }
+      catch (err) { fail(`${id}: invalid per-consumer pattern for ${file} — ${err.message}`); continue; }
+    }
+    if (useRe.test(normalize(readFileSync(file, 'utf8')))) {
+      console.log(`OK:   ${id} → ${file}${override ? ' (strict)' : ''}`);
     } else {
-      fail(`${id}: ${role} no longer states the claim: ${file}\n      pattern: ${re.source}\n      why:     ${why}`);
+      fail(`${id}: ${role} no longer states the claim: ${file}\n      pattern: ${useRe.source}\n      why:     ${why}`);
+    }
+  }
+
+  if (DERIVE) {
+    const listed = new Set([source, ...consumerFiles]);
+    const alsoStates = trackedTextFiles()
+      .filter((f) => !listed.has(f))
+      .filter((f) => { try { return re.test(normalize(readFileSync(f, 'utf8'))); } catch { return false; } });
+    if (alsoStates.length) {
+      console.log(`      ↳ DERIVE: ${alsoStates.length} unlisted file(s) also state ${id}:`);
+      for (const f of alsoStates) console.log(`         ${f}`);
     }
   }
 }

@@ -3,9 +3,9 @@
   "claims": [
     {
       "id": "verdict-lookup",
-      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both.",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both. The pattern requires a positive lookup VERB because the nouns alone certified the exact inversion — 'ignore the PR's comments and its review threads' — and the negator lookbehind is there because 'do not read' supplied the verb while reversing the instruction. Both alternations are \\b-anchored after an unanchored 'read' was found matching the tail of 'review-thread', letting an already-inverted sentence supply its own verb.",
       "source": "directives/git.md",
-      "pattern": "comments and (?:the |its |their )?review threads",
+      "pattern": "(?<!\\b(?:never|not|dont|avoid|skip)\\s)\\b(?:check|read|look for)\\b[^.]{0,60}?comments and (?:the |its |their )?review threads",
       "consumers": [
         "CLAUDE.md",
         "docs/internal/repo-monitors.md",
@@ -16,6 +16,13 @@
         "plugins/directives-toolkit/agents/qa-pipeline.md",
         ".github/workflows/codex-monitor.yml",
         "templates/workflows/codex-monitor.yml"
+      ],
+      "mustNotMatch": [
+        "ignore the PR's comments and its review threads",
+        "do not read the comments and the review threads",
+        "as an inline review-thread reply — so ignore the comments AND the review threads",
+        "check the PR's comments",
+        "read the review threads"
       ]
     },
     {
@@ -24,7 +31,17 @@
       "source": "directives/git.md",
       "pattern": "\\bresponse\\b[^.]{0,30}?(?:is not a verdict|, not a verdict)",
       "consumers": [
-        "docs/standards/automations.md"
+        "docs/standards/automations.md",
+        {
+          "file": "CLAUDE.md",
+          "why": "Found by review, NOT by --derive, and the reason is the entry's own recorded limit made concrete: this carrier states the claim ANAPHORICALLY — 'a clean current-head Codex verdict — a response naming the head is not one, since a review with live findings names it too'. The claim-level pattern needs the words 'is not a verdict' adjacent to 'response'; here the predicate is the pronoun 'one', pointing back to 'verdict' a clause earlier. No widening of the claim-level pattern reaches that without also matching sentences that are not this claim, which is why it gets its own pattern instead. This is the repo's PRIMARY instruction file and the merge gate it describes is the one that authorises merging over live findings, so it is the last carrier that should have been unlisted.",
+          "pattern": "response naming the head is not one"
+        }
+      ],
+      "mustNotMatch": [
+        "a reaction is not a verdict you can attribute",
+        "a response naming the head is a clean verdict",
+        "a Codex response is a verdict"
       ]
     },
     {
@@ -39,13 +56,18 @@
         "templates/workflows/ci-notify.yml",
         "docs/standards/cicd-setup.md",
         "plugins/directives-toolkit/commands/new-repo.md"
+      ],
+      "mustNotMatch": [
+        "a non-unique match is not proof of coverage",
+        "a green run is not a guaranteed wake",
+        "a unique match is proof of coverage"
       ]
     },
     {
       "id": "arm-the-check-in",
-      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites. The leading word boundary matters more here than in most patterns because this claim's exact INVERSION contains it: 'disarm a check-in' is the opposite instruction and the unanchored form certified it. A pattern that accepts the negation of its own claim is worse than no pattern, since it reports the regression as coverage — so the boundary is required in the per-consumer variant below as well.",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites. The leading word boundary matters more here than in most patterns because this claim's exact INVERSION contains it: 'disarm a check-in' is the opposite instruction and the unanchored form certified it. A pattern that accepts the negation of its own claim is worse than no pattern, since it reports the regression as coverage — so the boundary is required in the per-consumer variant below as well. The negator lookbehind rejects 'never arm a check-in'. It deliberately checks only the word IMMEDIATELY before the verb: a clause-level negation scan was designed, measured and rejected, because ci-notify.yml legitimately reads 'a green run is not a guaranteed wake and a waiting session still arms a check-in', where the negator belongs to a different proposition in the same clause. 'never explicitly arm a check-in' therefore still passes; narrowing that needs the claim's CONDITION pinned, not just its verb.",
       "source": "directives/git.md",
-      "pattern": "\\barms? (?:a|the) check-?in",
+      "pattern": "(?<!\\b(?:never|not|dont|avoid|skip|un)\\s)\\barms? (?:a|the) check-?in",
       "consumers": [
         "CLAUDE.md",
         "directives/global.md",
@@ -60,8 +82,15 @@
         {
           "file": "plugins/directives-toolkit/scripts/wait-gate.sh",
           "why": "This file states the rule TWICE — once in its explanatory header comment, once inside the echo the PreToolUse hook actually delivers. The claim-level pattern matched the header, so deleting the instruction from the DELIVERED message left the guard green on the copy that carries the most authority (it reaches a session unprompted, at the decision point). The pattern below requires the delivered message's own opening text, so only the emitted form satisfies it.",
-          "pattern": "blocked by directives wait-gate.{0,600}?\\barms? (?:a|the) check-?in"
+          "pattern": "blocked by directives wait-gate.{0,600}?(?<!\\b(?:never|not|dont|avoid|skip|un)\\s)\\barms? (?:a|the) check-?in"
         }
+      ],
+      "mustNotMatch": [
+        "disarm a check-in",
+        "never arm a check-in whenever the run's SHA is not your PR's head",
+        "do not arm the check-in",
+        "dont arm a check-in",
+        "the harness disarms a check-in for you"
       ]
     }
   ]

@@ -25,8 +25,51 @@ import { execFileSync } from 'child_process';
 //      authorises merging over live findings
 //   ❌ THE FIX OVER-REACHES (38, 39) — both were caused by a fix whose wording
 //      was fine and whose SCOPE silently closed a documented exit
+//   ❌ A CARRIER THAT STATES A CLAIM TWICE is pinned only as strongly as its
+//      most permissive occurrence. docs/standards/ci-triage.md states the
+//      verdict-lookup claim in two different sentences; inverting either one
+//      alone leaves this guard green, correctly — the file DOES still state the
+//      claim, from the other sentence. But the two are not equal in authority,
+//      and the guard cannot tell which one a reader will act on. wait-gate.sh
+//      was the first instance (explanatory header vs. delivered message) and is
+//      why the per-consumer `pattern` escape hatch exists; reach for it whenever
+//      one occurrence in a file carries more weight than the others.
 // So: a green check-claims does NOT mean the directives are correct. It means
 // nobody dropped a pinned sentence. Anything citing this guard must say so too.
+//
+// ⚠️ NEGATION — the limit that took four review rounds to bound, so that the
+// next person does not re-derive it. A pattern matching a claim's WORDS also
+// matches its INVERSION, and reports the inversion as coverage:
+//   `disarm a check-in`               (fixed: \b before the verb)
+//   `non-unique match is not proof`   (fixed: lookbehind before `unique`)
+//   `ignore the PR's comments AND its review threads`
+//                                     (fixed: require a lookup verb — check /
+//                                      read / look for — which all ten real
+//                                      carriers happen to have)
+//   `never arm a check-in`            (fixed: reject a negator immediately
+//                                      before the verb)
+//   `inline review-th{READ} reply — so ignore the comments AND the review
+//    threads`                         (fixed: \b around the verb alternation.
+//                                      This one appeared INSIDE the fix for the
+//                                      line above: an unanchored `read` matched
+//                                      the tail of `thread`, so the sentence
+//                                      that had just been inverted supplied its
+//                                      own positive verb. Fourth instance of
+//                                      one class, third of them inside a fix
+//                                      for the previous. That is why every
+//                                      claim now carries `mustNotMatch`.)
+// A GENERAL negation guard — scan the clause before any match for a negator —
+// was designed, MEASURED, and rejected. It false-positives on a real carrier:
+// ci-notify.yml says "a green run is NOT a guaranteed wake and a waiting
+// session still arms a check-in", where the negator belongs to a different
+// proposition in the same clause and the carrier is entirely correct. Failing
+// that file would be worse than the gap, so the per-claim fixes above stand and
+// no clause-level negation check exists. Do not add one without re-measuring.
+// WHAT REMAINS UNCAUGHT, precisely: a negator separated from the verb by any
+// other word. `never explicitly arm a check-in` still passes. Narrowing that
+// needs the claim's CONDITION pinned too, not just its verb, and the eleven
+// carriers word that condition eleven different ways — which is what the
+// per-consumer `pattern` escape hatch is for when one of them matters enough.
 //
 // MATCHING. Two normalisations, both earned by measurement, applied before any
 // pattern is tested:
@@ -141,7 +184,17 @@ for (const claim of claims) {
   const dupes = consumerFiles.filter((f, i) => consumerFiles.indexOf(f) !== i);
   if (dupes.length) fail(`${id}: duplicate consumer path(s): ${[...new Set(dupes)].join(', ')}`);
 
-  if (consumerList.length === 0 && !claim.sourceOnly) {
+  // `sourceOnly` waives the consumer requirement, so it is the one key in this
+  // manifest whose mere PRESENCE can silence a check. A truthy non-boolean
+  // therefore restores the vacuous pass: the string "false" is truthy in JS, so
+  // `"sourceOnly": "false"` — which reads to a human as OFF — switched the
+  // waiver ON. Only the literal boolean counts, and any other supplied type is
+  // an error rather than a silent coercion.
+  if (claim.sourceOnly !== undefined && typeof claim.sourceOnly !== 'boolean') {
+    fail(`${id}: "sourceOnly" must be a boolean, got ${JSON.stringify(claim.sourceOnly)} — a truthy non-boolean silently waives the consumer requirement it appears to decline`);
+    continue;
+  }
+  if (consumerList.length === 0 && claim.sourceOnly !== true) {
     // A claim can legitimately live in ONE file today and still be worth
     // pinning — the git.md split (#299) is exactly the event that would drop
     // it. But an ACCIDENTALLY empty consumer list looks identical, so the
@@ -162,6 +215,45 @@ for (const claim of claims) {
   // A pattern that matches the empty string matches every file, so every
   // consumer would pass no matter what it says.
   if (re.test('')) { fail(`${id}: pattern matches the empty string — it would certify anything`); continue; }
+
+  // ── mustNotMatch: the patterns' own test suite ────────────────────────────
+  // Every entry is a string this claim's pattern MUST reject. Required, not
+  // optional, because one class of defect appeared FOUR times in this guard's
+  // own review and three of those were inside a fix for the previous one:
+  //   `disarm a check-in`     — `arms?` unanchored, matched inside `disarms`
+  //   `non-unique match …`    — `unique` unanchored, matched inside `non-unique`
+  //   `never arm a check-in`  — negation before the verb
+  //   `review-thread reply …` — `read` unanchored, matched inside `thread`,
+  //                             in the very alternation added to fix #3
+  // Each was found by a human reading a diff. That is not a process; it is luck
+  // with a good reviewer, and it does not survive the reviewer's absence. This
+  // repo's answer to a defect a person must remember to avoid is a checker
+  // (check-exports, check-landing-cards, check-workflow-ref-guard — the last
+  // exists for exactly this reason: a guard trusted when QUIET must test itself,
+  // or a regression in it is silent by construction).
+  //
+  // NOTE what this does and does not buy. It pins the inversions someone
+  // THOUGHT OF. It cannot invent the fifth one. Its real value is that a future
+  // widening of a pattern — which is how three of the four arrived — now has to
+  // pass every inversion an earlier round paid to discover, so a fix can no
+  // longer reopen a defect that a previous fix closed.
+  const mustNot = claim.mustNotMatch;
+  if (!Array.isArray(mustNot) || mustNot.length === 0) {
+    fail(`${id}: no "mustNotMatch" — every pattern must carry the inversions it is required to reject. See this guard's header for the four that got through without it.`);
+    continue;
+  }
+  for (const bad of mustNot) {
+    if (typeof bad !== 'string' || bad === '') {
+      fail(`${id}: mustNotMatch entries must be non-empty strings, got ${JSON.stringify(bad)}`);
+      continue;
+    }
+    // Tested through the SAME normalizer the check uses. A case written the way
+    // a file actually reads — wrapped, emphasised — must be judged the way a
+    // file is judged, or the suite proves something about a string nobody has.
+    if (re.test(normalize(bad))) {
+      fail(`${id}: pattern MATCHES a string it must reject: ${JSON.stringify(bad)}\n      pattern: ${re.source}\n      This wording does not state the claim — certifying it reports a regression as coverage.`);
+    }
+  }
 
   // The SOURCE must state the claim too. A claim whose source has lost it is
   // worse than one a consumer dropped: every consumer is then quoting a rule

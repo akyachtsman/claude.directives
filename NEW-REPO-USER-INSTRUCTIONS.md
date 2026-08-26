@@ -101,8 +101,11 @@ once locally — it persists.
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):
    - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests
    - `TEST_AUTH_EMAIL` — the matching identifier, required when the app's gate is
-     email+password (directives#304). Use a throwaway test-account address: it is
-     typed into a visible input, so failure screenshots record it
+     email+password (directives#304) or identifier-first — an email step shown
+     before any password field (directives#310); without it that gate is not
+     detected and the authenticated tests run against the identifier screen. Use
+     a throwaway test-account address: it is typed into a visible input, so
+     failure screenshots record it
    - `DB_SERVICE_KEY` — backend service-role key (required before the project's scheduled data workflow, if any, can run)
    - `SMTP_PASS` — SMTP app password / API key for the standard email-notification job (`cron-notify.yml`)
    - Any project-specific secrets the app requires

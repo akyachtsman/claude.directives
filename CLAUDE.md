@@ -161,7 +161,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   is a guard that stops running on a future interpreter), and
   a paired-file diff check, plus a warn-only external-link job. It also runs
   `build-logical-map.js --check`, so a committed map that no longer matches
-  `EXPORTS.json` fails the build.
+  `EXPORTS.json` fails the build, and `node --check` over the exported JS
+  templates — `Repo Map UI` exercises this repo's own map suite, not
+  `templates/ui-tests/`, so without that step a syntax error in the largest
+  file we ship would be found by a downstream project's CI rather than ours.
   It also runs a **Playwright UI test** (`Repo Map UI`) — this repo dogfooding
   its own exported UI-testing standard (`test.md` / `templates/ui-tests`) on its
   interactive Pages artifact, `docs/site/logical-map.html`. It asserts rendering
@@ -263,6 +266,7 @@ python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name reso
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
+node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json
@@ -276,6 +280,10 @@ test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)
+#   the UI-suite ceilings comment is byte-identical across the three qa carriers and NOTHING ENFORCES IT —
+#   whole-file diff cannot be used (they legitimately differ elsewhere), so diff the block:
+diff <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa.yml) <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa-live.yml)
+diff <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa.yml) <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa-response.yml)
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed

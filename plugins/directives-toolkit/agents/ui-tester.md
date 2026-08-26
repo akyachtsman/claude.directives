@@ -17,7 +17,10 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 1. Read `CLAUDE.md` first for the app URL, test directory and project scenarios. Take the
    credential from the `TEST_AUTH_CREDENTIAL` environment variable ONLY (plus
    `TEST_AUTH_EMAIL` for email+password gates — without it the identifier is
-   submitted blank and the rejection reads as a bad credential) — never from
+   submitted blank and the rejection reads as a bad credential — and for
+   identifier-first (split-step) gates, where without it the gate is not
+   DETECTED at all and the authenticated phases run against the identifier
+   screen (directives#310)) — never from
    `CLAUDE.md`, which must not contain it (global.md → Security). If the variable is
    empty, there is no authenticated run: skip the auth phase and say so in the report,
    rather than guessing a value or asking for one to be written into the repo
@@ -38,8 +41,12 @@ On load, the agent inspects the DOM to identify the auth mechanism:
 |---|---|---|
 | Numeric button grid + dot indicators | PIN keypad | Click each digit of credential in sequence |
 | `input[type=password]` + submit button | Password form | Type credential into input, submit |
+| Visible email/identifier input, NO password field | Identifier-first (split-step) | Fill `TEST_AUTH_EMAIL`, submit, settle, re-detect, then run the credential step's mechanism |
 | `input[type=text]` accepting 4-digit pattern | Text PIN | Type credential as string (do not cast to int) |
 | No auth detected | Public app | Skip auth phase, proceed to mapping |
+
+An identifier step that produces no credential step is REPORTED, not asserted: the scenario
+skips rather than certifying auth, because no credential was ever entered (directives#310).
 
 The credential comes from `TEST_AUTH_CREDENTIAL` in the environment — never from a file in
 the repo, and never hardcoded. After an auth attempt, check for any visible DOM transition

@@ -110,6 +110,18 @@ jobs:
       - name: Check the logical map is regenerated
         run: node .github/scripts/build-logical-map.js --check
 
+      # NOTHING ELSE IN THIS REPO PARSES THE EXPORTED JS TEMPLATES. `Repo Map UI`
+      # exercises this repo's own map suite, not templates/ui-tests/, so a syntax
+      # error in the largest and most-edited file we ship would reach every
+      # downstream project and be found by THEIR CI, not ours. --check is a parse,
+      # not a run: no browser, no deps, milliseconds. The kit's package.json sets
+      # "type": "module", which Node honours for these paths.
+      - name: Check exported JS templates parse
+        run: |
+          for f in templates/ui-tests/tests/*.js templates/ui-tests/*.js; do
+            node --check "$f" && echo "OK: $f"
+          done
+
       - name: Validate workflow YAML
         run: |
           python3 -c "

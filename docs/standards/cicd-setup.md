@@ -151,7 +151,7 @@ In the target repo on GitHub:
 | Name | Value |
 |---|---|
 | `TEST_AUTH_CREDENTIAL` | Auth credential from `CLAUDE.md` (PIN, password, or token) |
-| `TEST_AUTH_EMAIL` | The matching identifier — REQUIRED when the gate is email+password (directives#304); omit for PIN/password-only gates. Not truly secret: failure screenshots record it, so use a throwaway test-account address |
+| `TEST_AUTH_EMAIL` | The matching identifier — REQUIRED when the gate is email+password (directives#304) OR identifier-first/split-step, i.e. an email step before any password field (directives#310) — without it a split-step gate is not detected at all; omit for PIN/password-only gates. Not truly secret: failure screenshots record it, so use a throwaway test-account address |
 
 Add any additional backend API secrets the app requires (e.g. read-only API tokens for test accounts).
 
@@ -454,7 +454,7 @@ Required repository secrets:
 | Secret | Purpose |
 |---|---|
 | `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test |
-| `TEST_AUTH_EMAIL` | Matching identifier for email+password gates (directives#304); omit otherwise. Recorded in failure screenshots — throwaway address only |
+| `TEST_AUTH_EMAIL` | Matching identifier for email+password gates (directives#304) and for identifier-first/split-step gates, which are not detected without it (directives#310); omit otherwise. Recorded in failure screenshots — throwaway address only |
 | `DB_SERVICE_KEY` | Backend service-role key — server-side only (required by the project's scheduled data workflow, if any) |
 
 Required repository variables:
@@ -482,7 +482,7 @@ Required repository variables:
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret
-- [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304)
+- [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)
 - [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions
 - [ ] At least one successful run of each workflow confirmed
 

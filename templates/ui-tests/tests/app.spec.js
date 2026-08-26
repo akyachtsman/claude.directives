@@ -312,7 +312,14 @@ async function detectAndAuth(page, credential) {
     // a bare text input is more likely a search box than a login field.
     // Without TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
     if (AUTH_EMAIL) {
-      const authForm = passwordInput.locator('xpath=ancestor::form[1]');
+      // The password's ASSOCIATED form via the DOM's own .form property — it
+      // resolves both an ancestor <form> and external association
+      // (<input form="login"> outside the form tag), where an ancestor-only
+      // xpath lookup reports no form and wrongly restricts the search to the
+      // formless rungs.
+      const pwHandle = await passwordInput.elementHandle();
+      const scopeHandle = (await passwordInput.evaluateHandle(el => el.form)).asElement();
+      const hasForm = !!scopeHandle;
       // PREFERENCE LADDER, most-semantic first — never one union, because a
       // selector union preserves DOM order and a tenant/org field ahead of the
       // identifier would receive the email. Rungs: (1) the typed email input;
@@ -329,7 +336,6 @@ async function detectAndAuth(page, credential) {
       // <input name="username"> matches nothing without it); only the
       // UNRESTRICTED last resort stays form-only, because off-form a bare
       // text input is more likely a search box than a login field.
-      const hasForm = await authForm.count().catch(() => 0);
       // GENERATED, not hand-listed: the hand-written version required an
       // explicit type=text on every clause, so a form of type-less inputs
       // (<input name="tenant">, <input name="username">) matched NO semantic
@@ -364,8 +370,6 @@ async function detectAndAuth(page, credential) {
       // copy is passed over in favour of the visible candidate rather than
       // silently skipping the fill. The pick is marked, filled through
       // Playwright (real input events), and unmarked.
-      const pwHandle = await passwordInput.elementHandle();
-      const scopeHandle = hasForm ? await authForm.elementHandle() : null;
       const marked = await page.evaluate(([pw, root, sels]) => {
         if (!pw) return false;
         const vis = el => {
@@ -1147,10 +1151,14 @@ function backControlAll(page) {
     'button:has-text("←"), a:has-text("←")'
   ).or(
     // The accname arm is INTERSECTED with navigation-control kinds: getByLabel
-    // matches ANY labeled element, so a checkbox or input labeled "Back up
-    // data" would otherwise read as — and be pressed as — the back control.
-    // The CSS arm already names its element kinds clause by clause.
-    page.getByLabel(/\bback\b(?![\s-]*up\b)/i).and(page.locator('button, a, [role=button]'))
+    // matches ANY labeled element, so a checkbox or text input labeled "Back"
+    // would otherwise read as — and be pressed as — the back control. The
+    // kinds include the IMPLICIT button roles (input type=button/submit/
+    // reset/image carry role button without saying so) and role=link — kind
+    // is judged by role, not by tag name. The CSS arm already names its
+    // element kinds clause by clause.
+    page.getByLabel(/\bback\b(?![\s-]*up\b)/i).and(page.locator(
+      'button, a, [role=button], [role=link], input:is([type=button], [type=submit], [type=reset], [type=image])'))
   );
 }
 

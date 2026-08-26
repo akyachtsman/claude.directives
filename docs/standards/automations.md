@@ -74,6 +74,26 @@ reasoning in its own CLAUDE.md, which routes the difference through
 `/refresh-repo`'s documented-customization path rather than being preserved
 silently.
 
+⚠️ **That record must name a REVISIT TRIGGER — the condition that ends the
+exception — not just the reasoning that opened it.** The reasoning is a
+statement about the deploy *today*; the exception survives the change that
+invalidates it unless something says what that change is. A worked example, from
+`apfp.claude`, which runs this exception deliberately: *"if `pages.yml` ever
+gains a build or test stage, move the retry INSIDE it and drop `Pages` from
+`pages-retry.yml` and its REQUIRED entry."* That sentence is the load-bearing
+half — an exception with no stated end condition is indistinguishable from one
+nobody thought about, which is the failure this rule is actually guarding
+against.
+
+⚠️ **After a source switch, an unrepointed `pages-retry.yml` is DEAD, not
+dormant — remove it or repoint it under the exception above, and do not leave
+it sitting there.** The template watches `pages-build-deployment` by name. That
+name still *resolves* after the switch (GitHub manages it, so W1 and
+`workflow-ref-guard` both stay green) and simply stops *firing* — a retry that
+looks present, passes every static check, and covers nothing. This is the same
+looks-present-reports-nothing failure W2 describes for the monitor; it reaches
+the retry too, and the guard cannot see it, by its own documented limitation.
+
 ### Known limitation — `ci-notify` and `repository_dispatch`
 
 `ci-notify` comments on the open PR its lookups resolve the run to — head SHA

@@ -325,10 +325,18 @@ snippet), while `pages-retry.yml` must not **by default**, because it re-runs th
 project builds retry into its own deploy workflow instead (*Automation 4b*). W3
 carries one narrow exception and this rule does not override it: a project MAY
 extend the retry anyway **if its deploy is genuinely idempotent** — no build, no
-compile, no tests, same commit in and same tree out — provided it records that
-reasoning in its own `CLAUDE.md`, which routes the difference through
-`/refresh-repo`'s documented-customization path instead of preserving it
-silently.
+compile, no tests, same commit in and same tree out — provided it records in its
+own `CLAUDE.md` both that reasoning **and a revisit trigger**, the condition that
+ends the exception (*"if the deploy ever gains a build or test stage, move the
+retry inside it"*). The reasoning describes the deploy today; without a stated
+end condition the exception outlives the change that invalidates it.
+
+⚠️ **And whichever way you go, do not leave an unrepointed `pages-retry.yml` in
+place — it is dead, not dormant.** It watches `pages-build-deployment` by name;
+after the switch that name still **resolves** (GitHub manages it, so the
+workflow-ref guard stays green) and simply stops **firing**. Remove it, or
+repoint it under the exception above. A retry that passes every static check and
+covers nothing is the same failure as the monitor case, one file over.
 
 ⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
 monitor — they catch different failures, and swapping one for the other loses

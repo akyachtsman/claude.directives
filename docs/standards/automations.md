@@ -393,9 +393,24 @@ to avoid; `learnings.jsonl` scores only the second, deliberately.
 
 **A fired trigger can silently fail to deliver, and the return value says so.**
 `fire_trigger` returns `session_id`. Delivered into the persistent target ⇒ that
-value is `cse_` + the TARGET's session id **verbatim**. Anything else ⇒ a fresh
-session ran the prompt and nobody read it. **Compare it against your target
-before assuming delivery**, and re-send on a mismatch.
+value carries the target's id with its prefix **SWAPPED**, not appended:
+`session_<id>` → `cse_<id>`. Anything else ⇒ a fresh session ran the prompt and
+nobody read it.
+
+⚠️ **Compare the id AFTER the prefix — never the whole string.** A target
+`session_01ABC` returns `cse_01ABC`, **not** `cse_session_01ABC`. This line
+previously said *"`cse_` + the target's id verbatim"*, which describes an append;
+a session applying that literally reads every SUCCESSFUL delivery as a mismatch,
+and the remedy below for a mismatch is to re-send — so following it exactly
+produces an unbounded loop of duplicate pokes at a target that received the
+message the first time. **That is worse than the fault the check exists to
+catch**: a lost send costs one message, this costs as many as the loop runs.
+Found by `claude.trading` on 2026-08-26 by following the line as written, and
+confirmed against three sends whose delivery had already been established
+independently.
+
+Then **re-send on a genuine mismatch** — a fresh session cannot coincidentally
+carry the target's id, so a matching suffix is conclusive.
 
 Measured across six sends between three sessions, with independent confirmation
 from both peers: every matching id was received, every non-matching one was lost

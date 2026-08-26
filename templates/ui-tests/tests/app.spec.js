@@ -383,7 +383,14 @@ async function detectAndAuth(page, credential) {
         // the password inside it. getRootNode() is the shadow root there and
         // document everywhere else — the non-shadow case is unchanged.
         const scope = root || pw.getRootNode();
-        const candsOf = sel => [...scope.querySelectorAll(sel)].filter(el => vis(el) && editable(el));
+        // Form-scoped collection reads the form's `elements` collection, not a
+        // descendant query: a control outside the form tag but associated via
+        // the `form` attribute (<input form="login">) is submitted with the
+        // form yet never matched by a descendant querySelectorAll.
+        const candsOf = sel => (root
+          ? [...root.elements].filter(el => el.matches(sel))
+          : [...scope.querySelectorAll(sel)]
+        ).filter(el => vis(el) && editable(el));
         const nearest = cands => {
           if (!cands.length) return null;
           const preceding = cands.filter(el => el.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -1129,16 +1136,21 @@ function backControl(page) {
 // reimplementation always lags it by one case. One definition, two consumers —
 // the filter and the presser cannot disagree about what "back" is.
 function backControlAll(page) {
+  // \bback\b(?![\s-]*up\b) in BOTH text arms: "back" followed by "up" is the
+  // backup verb ("Back up data", "back-up now"), not a navigation affordance —
+  // element kind cannot distinguish those (a backup BUTTON is an allowed
+  // kind), only the phrase can. "Backup" was already rejected by the word
+  // bound; "Back", "Go back", "Back ›" still match.
   return page.locator(
     '[data-back], ' +
-    'button:text-matches("\\bback\\b", "i"), a:text-matches("\\bback\\b", "i"), ' +
+    'button:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), a:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), ' +
     'button:has-text("←"), a:has-text("←")'
   ).or(
     // The accname arm is INTERSECTED with navigation-control kinds: getByLabel
     // matches ANY labeled element, so a checkbox or input labeled "Back up
     // data" would otherwise read as — and be pressed as — the back control.
     // The CSS arm already names its element kinds clause by clause.
-    page.getByLabel(/\bback\b/i).and(page.locator('button, a, [role=button]'))
+    page.getByLabel(/\bback\b(?![\s-]*up\b)/i).and(page.locator('button, a, [role=button]'))
   );
 }
 
@@ -1230,7 +1242,10 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // textContent, so <button aria-label="Back">chevron_left</button> records
       // "chevron_left" — a glyph name this list can't enumerate — while its
       // aria-label says exactly what the control is.
-      if (/\b(back|return|home)\b|[←‹◀]/i.test(`${el.label} ${el.ariaLabel}`.replace(/_/g, ' '))) { excludedAsBack++; continue; }
+      // "back" carries the same not-followed-by-"up" lookahead as
+      // backControlAll(): "Back up data" is a backup action, not navigation —
+      // it stays a drill candidate, and the unwind will not press it either.
+      if (/\bback\b(?![\s-]*up\b)|\b(return|home)\b|[←‹◀]/i.test(`${el.label} ${el.ariaLabel}`.replace(/_/g, ' '))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);

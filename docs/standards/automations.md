@@ -60,6 +60,23 @@ never fired at all, with no "it used to work" phase to notice.
 | `pages-monitor.yml` | **add** a `workflow_run` trigger naming it (header has the snippet) |
 | `pages-retry.yml` | **do not add it** — see W3 |
 
+⚠️ **"Add" is literal, and the existing arm is the load-bearing one.** Keep
+`page_build:` on the monitor and `pages-build-deployment` on `qa-live`; the new
+name goes alongside. Those arms watch the **legacy managed build**, which
+`global.md` → *Hosting & Deployment* documents as still firing on a **repo
+visibility flip even while Actions-source is configured** — unfiltered, and able
+to finish later and republish the whole tree over a filtered copy. A reader who
+*replaces* rather than adds keeps a green-looking watcher and deletes the only
+thing that observes that republish live. This is why the row says "add" rather
+than "point it at your deploy": the wording is doing work.
+
+⚠️ **The monitor/retry split is about RE-RUNNING, not about Pages** — state it
+this way and the table stops needing to be memorised. A watcher that only
+**observes** (monitor, live gate) may name both sources at no cost, because a
+second name is only a second thing it looks at. A watcher that **re-runs** what
+it watches may not, because a second name is a second thing it may replay. Apply
+that test to any watcher added later, rather than copying this table's rows.
+
 ### W3 — Retry is source-specific; monitoring is not
 
 Verifying a deploy is not re-running one. `pages-monitor` and `qa-live` may

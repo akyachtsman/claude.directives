@@ -316,8 +316,8 @@ both trigger on `page_build`, which fires only for **branch-source** builds
 (`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
 *Automation 4b — Pages Deploy Retry*). An Actions-source repo
 keeps the workflow files and gets no runs from them — monitoring that looks
-present and reports nothing, which is worse than none. **Repoint the monitor;
-do NOT repoint the retry.** `docs/standards/automations.md` → *Watcher Rules*
+present and reports nothing, which is worse than none. **ADD to the monitor; do
+NOT repoint the retry.** `docs/standards/automations.md` → *Watcher Rules*
 (W2, W3) carries the table and the reasoning: `pages-monitor.yml` takes a
 `workflow_run` trigger naming your own deploy workflow (its file header ships the
 snippet), while `pages-retry.yml` must not **by default**, because it re-runs the
@@ -330,6 +330,24 @@ own `CLAUDE.md` both that reasoning **and a revisit trigger**, the condition tha
 ends the exception (*"if the deploy ever gains a build or test stage, move the
 retry inside it"*). The reasoning describes the deploy today; without a stated
 end condition the exception outlives the change that invalidates it.
+
+⚠️ **ADD that trigger — do NOT replace the existing arm — and the reason is the
+visibility flip above.** `pages-monitor.yml` keeps `page_build:` and `qa-live.yml`
+keeps `pages-build-deployment`; the new name goes **alongside**. Those arms are
+what see the **legacy managed build**, which a visibility flip can fire *even
+while Actions-source is configured*, unfiltered, and which can finish later and
+republish the whole tree. Drop them and that rogue build publishes internal
+content with **nothing observing it** — no gate runs, no issue opens — leaving
+only the after-the-fact forensics above. The templates are written additively for
+exactly this reason (`qa-live.yml`: *"+ your Actions deploy workflow's `name:`"*);
+a reader who "repoints" instead of adding silently removes the 2026-08-18
+detection.
+
+⚠️ **The asymmetry between the monitor and the retry is about RE-RUNNING, not
+about Pages.** A watcher that only **observes** — a monitor, a live gate — can
+name both sources at no cost, and should. A watcher that **re-runs** what it
+watches can not: a second name is a second thing it may replay. That is the whole
+of W2 vs W3, and it generalises to any watcher you add later.
 
 ⚠️ **And whichever way you go, do not leave an unrepointed `pages-retry.yml` in
 place — it is dead, not dormant.** It watches `pages-build-deployment` by name;

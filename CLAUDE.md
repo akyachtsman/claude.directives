@@ -319,12 +319,19 @@ so the next session does not re-derive it; ours is that there isn't one, and the
 reason is worth keeping. `docs/site/logical-map.html` loads **no external
 resource of any kind**, so the blocked-runtime-CDN cause that dominates the
 fleet's app repos cannot reach it, and the suite drives chromium, which the
-sandbox image ships (it ships **no webkit and no firefox** — a config declaring
-either could not launch them here). Measured 2026-08-26: `check-repo-map-ui.js`
+sandbox image ships. (It ships **no webkit and no firefox** preinstalled — which
+per `test.md` → *Sandboxed local runs* is **not** the same as unavailable: a
+config declaring either must attempt the install and check whether the browser
+launches, never infer from the image inventory. Our suite is chromium-only, so
+the question does not arise today.) Measured 2026-08-26: `check-repo-map-ui.js`
 PASS, all cases, exit 0. So a local failure here is evidence about the map, not
 about the environment — the opposite of the default assumption downstream.
-**What would make this wrong:** the sandbox image dropping chromium, or the map
-gaining any external resource. Re-derive on either rather than trusting this line
+**What would make this wrong:** chromium ceasing to LAUNCH here — whether the
+image drops it, or it stays present and stops starting because host libraries,
+sandbox policy, permissions or the browser/runtime pairing changed — or the map
+gaining any external resource. The launch condition is the load-bearing one:
+checking only whether the binary is still present would miss every case where it
+is there and unusable. Re-derive on any of these rather than trusting this line
 — per `test.md` → *Sandboxed local runs*, a ceiling is a dated observation, not a
 standing fact.
 

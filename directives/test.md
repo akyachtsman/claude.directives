@@ -385,9 +385,12 @@ three sandboxes on 2026-08-26 — `claude.trading` 5 local failures / CI all gre
 `claude.insurance` **26 of 36** local failures / CI 24 passed 12 skipped **0
 failed**, and this repo reproducing the causes directly.
 
-- **A local failure in a sandboxed session is not evidence about the suite until
-  CI has *executed that scenario* on the same commit.** A green aggregate run is
-  not arbitration: `claude.insurance`'s CI read 24 passed **12 skipped** 0 failed,
+- **A local failure that the environment BLOCKED is not evidence about the suite
+  until CI has *executed that scenario* on the same commit.** This applies only
+  to executions the environment prevented. A scenario whose browser launched,
+  whose page rendered real DOM, and whose specific assertion failed **is already
+  evidence** — that is a defect, fix it locally, and do not hand it to CI. A
+  green aggregate run is not arbitration either: `claude.insurance`'s CI read 24 passed **12 skipped** 0 failed,
   so had their four failing scenarios been among the skips, the green would have
   proven nothing about them. Confirm each locally-failed scenario **ran** in CI
   under a comparable project/browser — conditional skips and a narrower CI matrix
@@ -492,10 +495,15 @@ Measured here 2026-08-26, and the control is the part that generalises it:
 The second row IS that control, and it is why the conclusion holds here rather
 than being assumed: **the browser fails identically on a host `curl` reaches
 fine, so this is not about the target at all** — the bundled browser has no working HTTPS path to
-*any* external host through the proxy. Two consequences: any browser-side
-network failure to an external host in a sandbox is environmental until proven
-otherwise, and **a UI suite in an agent sandbox can only run against a LOCAL
-server.** Symptoms differ across repos (a certificate/CA complaint in one, a
+*any* external host through the proxy — **in this measured environment, on this
+date.** Two consequences, and both inherit the two conditions above rather than
+replacing them: a browser-side network failure to an external host is
+environmental **once it is connection-level and a known-good control fails with
+it** — never on the mismatch alone, since a CORS, CSP, redirect or
+browser-specific server defect in the target produces the same pair and is a real
+bug; and where those conditions do hold, **a UI suite in that sandbox can only
+run against a LOCAL server.** Re-measure rather than inheriting this conclusion:
+another sandbox may reach some external hosts. Symptoms differ across repos (a certificate/CA complaint in one, a
 connection reset in another) and may be one root or two — do not match on the
 string; the `curl` pair is what decides.
 

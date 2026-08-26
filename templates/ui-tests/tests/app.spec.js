@@ -1292,6 +1292,54 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // Consulted only when there is no env credential, and only behind a real
   // gate, so a public app's behaviour is untouched.
   const s2Prefilled = !AUTH_CREDENTIAL && s2Gated && await gateShipsCredential(page);
+
+  // ── 'none' IS NOT A PASS FOR THE SCENARIO THAT CLAIMS DISCOVERY ───────────
+  // This test is named "auth gate discovered and credential accepted". Finding
+  // no gate means it discovered nothing, so reporting green is a lie of exactly
+  // the kind #309's verifier was built to stop — and the verifier could not stop
+  // it, because expectGateCleared() returns immediately on 'none' and the S2
+  // failure check below is itself guarded by `mechanism !== 'none'`. Every
+  // assertion under this line was therefore vacuous whenever the gate was
+  // missed, and nothing said so.
+  //
+  // MEASURED DOWNSTREAM, not theorised (claude.insurance, 2026-08-26). This
+  // kit's own default navigation is `./`, which in that app is public marketing
+  // with no gate at all, while the login lives on a sub-route. S2 had been
+  // vacuous SINCE IT WAS WRITTEN — including a green live run cited as evidence
+  // that auth was covered. Grafting #309's verifier on top changed nothing: it
+  // was verifying an attempt that was never made. An app with a public surface
+  // and an authenticated portal is the normal shape, not an exotic one, so this
+  // is a hole in the kit rather than a mistake in one project.
+  //
+  // The two cases must be told apart, and the discriminator is the CONFIG:
+  // supplying TEST_AUTH_CREDENTIAL / TEST_AUTH_EMAIL is the project asserting
+  // it has a gate. Config plus no gate here is a contradiction between what the
+  // project declared and where this scenario landed — a defect, and loud. No
+  // config and no gate is an app without auth — legitimate, but a SKIP so it is
+  // visible in the report, never a silent green that reads as coverage.
+  //
+  // Deliberately NOT applied to S3/S9: sweeping an unauthenticated surface is a
+  // real thing to do, and only this scenario's name promises discovery.
+  if (!s2Gated) {
+    const authConfigured = !!(AUTH_CREDENTIAL || AUTH_EMAIL);
+    const where = page.url();
+    if (authConfigured) {
+      throw new Error(
+        `S2 FAIL | no auth gate found at ${where}, but this project supplied auth credentials.\n` +
+        `  A credential env var is the project asserting it HAS a gate, so finding none here means ` +
+        `this scenario did not reach it — the usual cause is that the gate lives on a sub-route while ` +
+        `the suite navigates to the baseURL (set APP_URL, or point this scenario at the login route).\n` +
+        `  Failing rather than passing: every auth assertion below this line is vacuous without a gate, ` +
+        `and a green "auth gate discovered and credential accepted" on a page with no gate is the exact ` +
+        `false coverage this check exists to end (directives#309 follow-up, found by claude.insurance).`
+      );
+    }
+    test.skip(true,
+      `No auth gate found at ${where} and no credentials configured — this app appears to have no auth. ` +
+      `Skipping rather than passing: S2 asserts a gate was discovered and a credential accepted, and ` +
+      `neither happened, so a green result here would read as auth coverage that does not exist.`);
+  }
+
   if (!AUTH_CREDENTIAL && !s2Prefilled) {
     test.skip(true, 'No auth credential available — set the TEST_AUTH_CREDENTIAL env var (and TEST_AUTH_EMAIL for email+password or identifier-first gates), or, if this app\'s login ships a working credential of its own, check that it lands in a visible editable input[type=password] (directives#312); skipping auth test');
   }

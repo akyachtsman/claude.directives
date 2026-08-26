@@ -86,6 +86,14 @@ jobs:
         # floor was met. Scans .github/workflows; it skips templates/workflows,
         # which only claude.directives has, and says so.
         run: python3 .github/scripts/check-job-bounds.py
+
+      - name: Tracked Python compiles without warnings
+        # A `\` in a plain (non-raw) docstring is invisible on 3.11, a
+        # SyntaxWarning on 3.12, and a SyntaxError on 3.15 — at which point the
+        # guard carrying it stops running and stops checking. This compiles every
+        # tracked .py with warnings promoted to errors, so the class cannot come
+        # back silently on a future interpreter. Cheap: no imports, no execution.
+        run: python3 .github/scripts/check-py-warnings.py
   ui-changes:
     name: Detect UI-relevant changes
     runs-on: ubuntu-latest

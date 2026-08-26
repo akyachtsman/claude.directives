@@ -66,7 +66,13 @@ Execute in order:
      every branch-source `page_build`)
    - `pages-retry.yml` — auto-re-runs the managed Pages deploy on a transient
      failure (bounded to `run_attempt < 4`); pairs with `pages-monitor.yml`.
-     Applies to **branch-source** Pages projects; it only arms once it's on the
+     **BRANCH-SOURCE ONLY — do NOT install it on an Actions-source project, and
+     delete it if the project switches later.** It watches
+     `pages-build-deployment`, which a **visibility flip** fires even under
+     Actions-source, publishing the unfiltered tree — so a retry left installed
+     will re-run that rogue deploy (`global.md` → *Hosting & Deployment*).
+     Skipping it also means dropping its `REQUIRED` entry in the workflow-ref
+     guard, in the same edit. It only arms once it's on the
      default branch, so it covers the *next* deploy, not the one that adds it
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
@@ -85,7 +91,8 @@ Execute in order:
    exact `name:` of the project's own deploy workflow added before they do
    anything: **`qa-live.yml`** (add it to `workflow_run.workflows`) and
    **`pages-monitor.yml`** (add a `workflow_run` trigger — its header has the
-   snippet). `pages-retry.yml` must NOT get it. Omitting this step leaves the
+   snippet). `pages-retry.yml` must NOT get it — and on an **Actions-source**
+   project must not be installed at all (above). Omitting this step leaves the
    live QA gate and the deploy monitor silently inert, which reads as healthy.
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 

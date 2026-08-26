@@ -265,7 +265,9 @@ on the previous version until someone re-runs the deploy by hand.
   retry into that workflow instead — this template covers the branch source by
   default. One narrow exception, per *Watcher Rules* → W3: a project MAY point it
   at its own deploy if that deploy is provably idempotent (no build, no compile,
-  no tests) and records the reasoning in its own CLAUDE.md.
+  no tests) and records in its own CLAUDE.md both the reasoning **and a revisit
+  trigger** ending the exception. When that trigger fires the watcher is
+  **deleted, not narrowed** (*Watcher Rules* → W3).
 - Uses `GITHUB_TOKEN` only (`actions: write`).
 
 **Template:** `templates/workflows/pages-retry.yml` — drop-in, no customization

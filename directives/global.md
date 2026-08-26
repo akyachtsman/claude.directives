@@ -336,12 +336,24 @@ visibility flip above.** `pages-monitor.yml` keeps `page_build:` and `qa-live.ym
 keeps `pages-build-deployment`; the new name goes **alongside**. Those arms are
 what see the **legacy managed build**, which a visibility flip can fire *even
 while Actions-source is configured*, unfiltered, and which can finish later and
-republish the whole tree. Drop them and that rogue build publishes internal
-content with **nothing observing it** — no gate runs, no issue opens — leaving
-only the after-the-fact forensics above. The templates are written additively for
-exactly this reason (`qa-live.yml`: *"+ your Actions deploy workflow's `name:`"*);
-a reader who "repoints" instead of adding silently removes the 2026-08-18
-detection.
+republish the whole tree. Drop them and that rogue build runs with **nothing
+watching it at all** — no gate, no monitor, only the after-the-fact forensics
+above. The templates are written additively for exactly this reason
+(`qa-live.yml`: *"+ your Actions deploy workflow's `name:`"*); a reader who
+"repoints" instead of adding silently removes the only thing that runs when the
+legacy build does.
+
+⚠️ **BUT KEEPING THE ARM IS NOT THE SAME AS DETECTING THE EXPOSURE, AND DO NOT
+READ IT THAT WAY.** `pages-monitor.yml` asserts exactly two things — the build
+did not error, and the live URL returns **200** — and `qa-live.yml` runs the
+ordinary UI suite. **A rogue build that republishes the unfiltered tree serves
+the app as 200 and passes both.** The internal paths are exposed and every
+watcher is green. So the arm buys you a run at the right moment and nothing
+more; **what turns that run into detection is a forbidden-path assertion** — the
+same 200/404 deny-list check the deploy workflow carries, evaluated by the
+watcher, against paths the template cannot know and the project must declare.
+Until a project adds that, a visibility-flip exposure is still caught only by
+someone looking. Tracked as #319.
 
 ⚠️ **The asymmetry between the monitor and the retry is about RE-RUNNING, not
 about Pages.** A watcher that only **observes** — a monitor, a live gate — can
@@ -349,12 +361,16 @@ name both sources at no cost, and should. A watcher that **re-runs** what it
 watches can not: a second name is a second thing it may replay. That is the whole
 of W2 vs W3, and it generalises to any watcher you add later.
 
-⚠️ **And whichever way you go, do not leave an unrepointed `pages-retry.yml` in
-place — it is dead, not dormant.** It watches `pages-build-deployment` by name;
-after the switch that name still **resolves** (GitHub manages it, so the
-workflow-ref guard stays green) and simply stops **firing**. Remove it, or
-repoint it under the exception above. A retry that passes every static check and
-covers nothing is the same failure as the monitor case, one file over.
+⚠️ **And whichever way you go, DELETE an unrepointed `pages-retry.yml` — the
+reason is worse than dead coverage.** In ordinary operation it is inert: it
+watches `pages-build-deployment`, a GitHub-managed name that still **resolves**
+after the switch (so the workflow-ref guard stays green) while nothing triggers
+it. **But on the visibility-flip path above, that name is exactly what fires** —
+and a retry left installed will faithfully **re-run the rogue unfiltered
+deployment** it was never meant to see, turning a one-off exposure into a
+retried one. So this is not the monitor case one file over: an unrepointed
+monitor merely fails to notice, while an unrepointed retry participates. Delete
+it and its `REQUIRED` entry, or repoint it under the exception above.
 
 ⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
 monitor — they catch different failures, and swapping one for the other loses

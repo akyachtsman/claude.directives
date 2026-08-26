@@ -22,12 +22,19 @@ on:
     # retry into their own deploy workflow instead (Automation 4b).
     #
     # ⚠️ ACTION ON AN ACTIONS-SOURCE SWITCH — DELETE THIS FILE (or repoint it
-    # under W3's idempotent exception). It is DEAD, not dormant, and nothing
-    # will tell you: 'pages-build-deployment' is GitHub-managed, so the name
-    # still RESOLVES after the switch — W1 passes, workflow-ref-guard passes,
-    # every static check stays green — and it simply stops FIRING. Left in
-    # place it is retry coverage that exists on disk and nowhere else, which is
-    # worse than none. Drop its REQUIRED entry in the same edit.
+    # under W3's idempotent exception), and drop its REQUIRED entry in the same
+    # edit. Nothing will tell you to: 'pages-build-deployment' is
+    # GitHub-managed, so the name still RESOLVES after the switch and W1,
+    # workflow-ref-guard and every other static check stay green.
+    #
+    # The reason is NOT that it goes quiet. Day to day it is inert, and that
+    # alone would only be dead weight. The reason is the VISIBILITY FLIP
+    # (global.md -> Hosting & Deployment): flipping repo visibility fires the
+    # legacy managed build even while Actions-source is configured, publishing
+    # the UNFILTERED tree. That build is precisely what this file watches — so
+    # a retry left installed will faithfully RE-RUN a rogue unfiltered deploy
+    # on failure, turning a one-off exposure into a retried one. An unrepointed
+    # monitor fails to notice; an unrepointed retry participates.
     #
     # Why, and the narrow exception for a provably idempotent deploy (which
     # also requires a written REVISIT TRIGGER, not just the reasoning):

@@ -183,8 +183,13 @@ preserves tampering. Both are the same mistake.
    because re-running a project-owned deploy replays that workflow's whole
    build. A watch-list diff there is therefore never auto-kept — it needs the
    project's CLAUDE.md to record why its deploy is safe to replay (idempotent,
-   no build or test steps), which routes it through the documented-customization
-   path above instead of being preserved silently.
+   no build or test steps) **and a revisit trigger** naming the condition that
+   ends the exception — the reasoning describes the deploy today, so without an
+   end condition the customization outlives its own justification. Both are
+   required; the pair routes it through the documented-customization path above
+   instead of being preserved silently. ⚠️ When that trigger fires, the watcher
+   is **deleted, not narrowed** — narrowing leaves a file that passes every
+   check and watches a name that can no longer fire (W3).
 2. **Anything else** — show the full diff and ask. An unexplained workflow drift
    can be an accidental session edit or tampering (git.md requires eyes-on-the-
    diff for every workflow PR precisely so this class stays rare), and it can

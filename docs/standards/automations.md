@@ -289,15 +289,24 @@ ran the fleet for a day while existing only inside chat messages, and the versio
 in circulation had the defect below.
 
 **Send POKE-ONLY. Never give the trigger a `cron_expression` or a `run_once_at`.**
-A poke-only trigger reports `next_run_at: 0001-01-01T00:00:00Z` and never fires
-on its own, so a missed `delete_trigger` is inert. Give it a `run_once_at` and a
-missed delete becomes a **time bomb**: the scheduled copy lands hours later
-carrying nothing that distinguishes it from a live instruction. Measured
-2026-08-26 — a correction was delivered to a peer *before* the message it
-corrected, and the peer's reasonable worry was that the retracted original would
-still arrive. Under poke-only it cannot. This makes the delete tidiness rather
-than load-bearing, which is the only version of the recipe that is safe by
+This one is **contractual, not observed** — the `create_trigger` schema says so
+on `cron_expression`: *"Mutually exclusive with `run_once_at`. Omit both for a
+poke-only Routine that never fires on its own."* And `run_once_at`'s own text
+confirms the other half: *"After the one-shot **fires** the Routine disables
+itself"* — it fires first, then disables. So a poke-only trigger cannot deliver
+late by construction, and a missed `delete_trigger` is inert.
+
+Give it a `run_once_at` and a missed delete becomes a **time bomb**: the
+scheduled copy lands hours later carrying nothing that distinguishes it from a
+live instruction. Under poke-only it cannot, which makes the delete tidiness
+rather than load-bearing — the only version of the recipe that is safe by
 construction instead of by discipline.
+
+⚠️ **Note the two rules in this section carry DIFFERENT epistemic weight, and
+filing them alike would misstate both.** Poke-only is a documented guarantee: it
+will not quietly stop being true. The delivery correlation below is six samples
+with no mechanism. Understating the first or overstating the second is the error
+to avoid; `learnings.jsonl` scores only the second, deliberately.
 
 **A fired trigger can silently fail to deliver, and the return value says so.**
 `fire_trigger` returns `session_id`. Delivered into the persistent target ⇒ that
@@ -318,6 +327,17 @@ Two consequences worth stating because both were learned the hard way:
 - The receiving session runs that turn possibly **without MCP connector tools**.
   Write the prompt so local work is still possible, and do not put the caveat in
   `text` — that is what loses the message.
+
+**Why this section exists at all, which is the part worth carrying elsewhere.**
+This procedure coordinated four sessions for a day while living only inside chat
+messages. No checker could see it, no refresh could deliver it — and the only
+copy in circulation was the defective one. So **every recipient followed it
+correctly, and correct compliance is what propagated the defect.** That is a
+sharper argument for pointer-not-value than the usual staleness one: the failure
+mode is not that a copy drifts, it is that a wrong copy is obeyed faithfully and
+its wrongness has no way to reach anyone. Any operating procedure two sessions
+depend on belongs in a file under `docs/standards/`, not in the message that
+first explained it.
 
 ---
 

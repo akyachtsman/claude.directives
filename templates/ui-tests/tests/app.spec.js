@@ -444,8 +444,13 @@ async function detectAndAuth(page, credential) {
           pick = nearest(pool);
         }
         if (!pick) return false;
+        // The candidate's ORIGINAL attribute value (null when absent) rides
+        // back so cleanup restores rather than deletes — if the app itself
+        // owns this attribute on the picked input, its styling/submit logic
+        // must see the markup it shipped.
+        const prev = pick.getAttribute('data-uitests-identifier');
         pick.setAttribute('data-uitests-identifier', mark);
-        return true;
+        return { prev };
       }, [pwHandle, scopeHandle, rungs, marker]);
       if (marked) {
         // Located by the run-unique VALUE, not attribute presence — an app
@@ -453,7 +458,10 @@ async function detectAndAuth(page, credential) {
         // candidate the evaluate actually picked.
         const cand = page.locator(`[data-uitests-identifier="${marker}"]`).first();
         await cand.fill(String(AUTH_EMAIL));
-        await cand.evaluate(el => el.removeAttribute('data-uitests-identifier'));
+        await cand.evaluate((el, prev) => {
+          if (prev === null) el.removeAttribute('data-uitests-identifier');
+          else el.setAttribute('data-uitests-identifier', prev);
+        }, marked.prev);
       }
     }
     await passwordInput.fill(String(credential));
@@ -1195,8 +1203,8 @@ function backControlAll(page) {
   // only the phrase can. "Backup" was already rejected by the word bound.
   return page.locator(
     '[data-back], ' +
-    'button:text-matches("\\bback\\b(?=\\s*$|\\s+to\\b|\\s*[:;.!›>»)\\]…])", "i"), ' +
-    'a:text-matches("\\bback\\b(?=\\s*$|\\s+to\\b|\\s*[:;.!›>»)\\]…])", "i"), ' +
+    'button:text-matches("\\bback\\b(?=[\\s:;.!›>»)\\]…]*$|\\s+to\\b)", "i"), ' +
+    'a:text-matches("\\bback\\b(?=[\\s:;.!›>»)\\]…]*$|\\s+to\\b)", "i"), ' +
     'button:has-text("←"), a:has-text("←")'
   ).or(page.getByRole('button', { name: BACK_NAME }))
    .or(page.getByRole('link', { name: BACK_NAME }))
@@ -1216,10 +1224,11 @@ function backControlAll(page) {
 // glyphs, and href-less anchors that carry no link role.
 // Affordance forms only: "back" at the end of the name (which covers "Back",
 // "Go back", "arrow back" ligatures, "← Back"), "back to <place>", or "back"
-// trailed by pure decoration. The positive lookahead subsumes the old
-// backup-verb exclusion: "Back up data" and "back-up now" simply never reach
-// a matching form.
-const BACK_NAME = /\bback\b(?=\s*$|\s+to\b|\s*[:;.!›>»)\]…])/i;
+// trailed by decoration THAT RUNS TO THE END of the name — anchored, so
+// "Back: office settings" cannot match by consuming only the colon. The
+// positive lookahead subsumes the old backup-verb exclusion: "Back up data"
+// and "back-up now" simply never reach a matching form.
+const BACK_NAME = /\bback\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO — NAV: in-app back navigation strictly unwinds (no circular loop)
@@ -1337,7 +1346,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // end-anchored, and concatenating the two fields would bury one name's
       // ending in the middle of the joined string.
       if ([el.label, el.ariaLabel].some(s =>
-            /\bback\b(?=\s*$|\s+to\b|\s*[:;.!›>»)\]…])|\breturn(\s+to\b|\s*$)|\bhome\s*$|[←‹◀]/i
+            /\bback\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)|\breturn(\s+to\b|\s*$)|\bhome\s*$|[←‹◀]/i
               .test((s || '').replace(/_/g, ' ').trim()))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {

@@ -175,6 +175,19 @@ for (const claim of claims) {
   const norm = (f) => relative('.', resolve(f)) || f;
   const consumerFiles = consumerList.map((c) => norm(c.file));
   const sourceNorm = norm(source);
+  // THE GUARD'S OWN FIXTURES ARE NOT EVIDENCE. This manifest quotes every claim
+  // in its `why` and encodes it in a `pattern`; check-claims.js quotes them in
+  // its header as worked examples. Both therefore MATCH, and neither is an
+  // operational carrier — nothing downstream reads a rule out of them. Listing
+  // either as source or consumer produces a green run that proves only that the
+  // guard still contains its own test data. Codex reproduced it: swap
+  // arm-the-check-in's consumers for claims.json, or for check-claims.js, and
+  // the guard reports OK while checking no consumer at all. It is the same
+  // vacuous pass as an empty list, wearing a filename.
+  const SELF = new Set([norm(MANIFEST), norm('.github/scripts/check-claims.js')]);
+  for (const f of [sourceNorm, ...consumerFiles]) {
+    if (SELF.has(f)) fail(`${id}: ${f} is this guard's own artifact — it states the claim only as rationale, pattern or test data, so it can never evidence that the claim reached an operational consumer`);
+  }
   for (const f of consumerFiles) {
     // Both of these produce a non-empty consumer list that verifies nothing
     // beyond what the source check already did — a vacuous pass wearing the
@@ -280,6 +293,28 @@ for (const claim of claims) {
       if (useRe.test('')) {
         fail(`${id}: per-consumer pattern for ${file} matches the empty string — it would certify anything`);
         continue;
+      }
+      // AN OVERRIDE IS AN ESCAPE HATCH FROM THE CLAIM-LEVEL SUITE, so it needs
+      // its own. `mustNotMatch` above tests only `re`; a strict consumer is
+      // checked with `useRe`, which that suite never sees. Codex reproduced the
+      // consequence: widen this override back to an unbounded `arms?`, invert
+      // the delivered message to DISARM, and every claim-level inversion still
+      // passed while the strict consumer reported OK — the regression protection
+      // bought in round 4 simply did not reach the pattern doing the work.
+      // Required, not optional, for the same reason the claim-level suite is.
+      const ovNot = consumerList.find((c) => norm(c.file) === norm(file))?.mustNotMatch;
+      if (!Array.isArray(ovNot) || ovNot.length === 0) {
+        fail(`${id}: per-consumer pattern for ${file} has no "mustNotMatch" — an override escapes the claim-level suite, so it must carry its own inversions or it can silently reopen every defect that suite closed`);
+        continue;
+      }
+      for (const bad of ovNot) {
+        if (typeof bad !== 'string' || bad === '') {
+          fail(`${id}: per-consumer mustNotMatch entries for ${file} must be non-empty strings, got ${JSON.stringify(bad)}`);
+          continue;
+        }
+        if (useRe.test(normalize(bad))) {
+          fail(`${id}: per-consumer pattern for ${file} MATCHES a string it must reject: ${JSON.stringify(bad.slice(0, 90))}…\n      pattern: ${useRe.source}`);
+        }
       }
     }
     if (useRe.test(normalize(readFileSync(file, 'utf8')))) {

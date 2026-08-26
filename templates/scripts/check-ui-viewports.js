@@ -201,8 +201,23 @@ console.log(`config:    ${configPath}`);
   // `grep` matches test TITLES, which live inside the spec files. So this is a
   // CANNOT CHECK, not a FAIL and emphatically not a pass: per this file's own
   // anti-silence rule, "could not look" gets its own loud exit code.
-  const TOP_LEVEL_FILTERS = ['grep', 'grepInvert', 'testMatch', 'testIgnore'];
-  const rootFilters = TOP_LEVEL_FILTERS.filter(k => cfg[k] !== undefined);
+  // POSITIVE filters (`grep`, `testMatch`) select what runs; NEGATIVE ones
+  // (`grepInvert`, `testIgnore`) subtract from it. That asymmetry decides how an
+  // EMPTY array is read, and getting it backwards fails in opposite directions:
+  //   testIgnore: []   subtracts nothing  -> harmless, flagging it is a false alarm
+  //   testMatch: []    selects nothing    -> maximally narrowing, MUST still flag
+  // So emptiness exempts a negative filter and never a positive one. A non-array
+  // value (a bare RegExp or string) is a real filter whatever its side.
+  const POSITIVE_FILTERS = ['grep', 'testMatch'];
+  const NEGATIVE_FILTERS = ['grepInvert', 'testIgnore'];
+  const narrows = k => {
+    const v = cfg[k];
+    if (v === undefined) return false;
+    // Only a negative filter can be emptied into a no-op.
+    if (NEGATIVE_FILTERS.includes(k) && Array.isArray(v) && v.length === 0) return false;
+    return true;
+  };
+  const rootFilters = [...POSITIVE_FILTERS, ...NEGATIVE_FILTERS].filter(narrows);
   if (rootFilters.length) {
     die(9, [
       `FAIL: the config declares TOP-LEVEL ${rootFilters.join(', ')} — CANNOT CHECK.`,

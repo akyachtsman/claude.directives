@@ -98,6 +98,29 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL testIgnore'],
 
+  // Codex round 1 on #333: an empty NEGATIVE filter subtracts nothing, so exit 9
+  // on it is a false alarm — and a guard that cries wolf gets muted, which is
+  // fail-open by another road. The third case is the one that keeps the fix from
+  // being "simplified" into `any empty array is fine`: an empty POSITIVE filter
+  // selects NOTHING and is maximally narrowing.
+  ['top-level testIgnore: [] subtracts nothing (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  testIgnore: [],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['top-level grepInvert: [] subtracts nothing (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  grepInvert: [],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['top-level testMatch: [] selects NOTHING (empty positive is still fatal)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  testMatch: [],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    9, 'TOP-LEVEL testMatch'],
+
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"

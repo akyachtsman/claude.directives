@@ -273,7 +273,7 @@ project** — map each to its installed location before dispositioning:
 | `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ **EXCEPT `pages-retry.yml`, whose ABSENCE can be deliberate — never batch-install it.** An Actions-source project is required to delete it (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered deploy on a visibility flip. Decide it in both branches rather than as a single condition: **branch-source** → install it and restore its `REQUIRED` entry in the same edit; **Actions-source** → leave it absent, **unless** the project has taken W3's idempotent exception, in which case it carries a repointed copy whose `REQUIRED` entry names the project's own deploy — never overwrite that with the template or drop that entry. This row is the reason that deletion needs a rule at all: without it, the first refresh that touches the retry template undoes the fix silently. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
 | `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: `claude.insurance` was told exactly that on 2026-08-26 and diffing first is the only reason their `LIVE_TARGET` reachability split survived — a locally-defined guard, absent upstream, without which three scenarios would have run against a backend-less server on a blocking job. A kit file a project extended is invisible to whoever wrote the instruction |
-| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except the scripts `qa.yml` invokes** (`check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`), which install WITH any qa workflow update **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: `qa.yml` names them by path, so an absent one fails every `static-checks` run at step resolution. A refresh that takes the workflow and skips the script it calls installs a red build |
+| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow or composite action you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. A hand-list here has now fallen behind its own general form twice: `check-ui-viewports.js` was missing when `claude.insurance` refreshed, and every UI job there would have died at step resolution had they applied this row literally (directives#321) |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
@@ -284,8 +284,140 @@ Skip rows whose local path doesn't exist (the project never installed that piece
 names by path is not optional, and skipping it ships a broken reference.
 - the `claude-hooks` row, whose whole purpose is first installation and whose
   absence breaks the settings row that references it;
-- the qa-invoked entries of the `templates/scripts/*` row, whose absence fails
-  every `static-checks` run at step resolution once the workflow is updated.
+- the **workflow- OR composite-referenced** entries of the `templates/scripts/*`
+  row, whose absence fails at step resolution once the caller is updated —
+  `static-checks` for a script `qa.yml` names directly, and **every UI job** for
+  one only the `ui-suite` composite names (`check-ui-viewports.js` is that case,
+  and reading this list as "qa-invoked" is what let it be skipped: directives#321).
+
+⚠️ **And one absence that must be RESPECTED rather than filled — the inverse
+case, which the rows above and this rule read oppositely.** The
+`templates/workflows/<wf>.yml` row batch-installs files "absent locally"; this
+rule skips paths that do not exist. For most workflows those agree, because
+installing a watcher that was merely never installed restores coverage. For a
+workflow carrying a **`schedule:`** trigger they do not: installing it does not
+restore coverage, it **creates recurring work**, and there is no dormant option
+because `schedule:` fires.
+
+So: **an absent SCHEDULED workflow is skipped unless the project has a task for
+it.** `cron-notify.yml` is the worked case — `claude.trading` correctly declined
+it on 2026-08-26, because its `notify-task.js` is still the bootstrap stub that
+prints a placeholder and exits, no SMTP vars are set, and its real scheduled work
+runs as `pg_cron` inside Supabase. Installing it would have bought a daily
+checkout, a daily `npm install`, and a no-op, forever. They verified it was not
+load-bearing first: no `workflow_run` names it, and `workflow-ref-guard` reports
+all required watchers intact without it.
+
+This is the same principle as `pages-retry.yml`'s carve-out above and belongs
+beside it: **"absent locally" is not a fact about the project's intent.** Ask
+what installing it *starts*, not only what it restores.
+
+### Deriving the referenced-script set
+
+⚠️ **Derive from the UPSTREAM files you are installing — fetched, not local.**
+`/refresh-repo` runs inside a *project*, where `templates/workflows/` and
+`templates/actions/` do not exist; those are upstream paths. And scanning the
+project's own `.github/` copies is worse than useless here: it would miss
+precisely the case this exists for — **a script newly referenced by the caller
+you are about to install**, which by definition the installed copy does not yet
+mention.
+
+So the input is the fetched upstream text, using the same `$raw` this command
+already establishes, over **every caller this refresh INSTALLS** — not a fixed
+list (that is the mistake one level up), and **not only the changed ones**:
+
+⚠️ **The installed set is WIDER than the delta, and the gap is exactly where
+#321 lives.** The composites row above installs `templates/actions/*/action.yml`
+**with any qa workflow update**, so a refresh whose delta touches only `qa.yml`
+still installs an *unchanged* `ui-suite/action.yml` — and `ui-suite` is the only
+caller that names `check-ui-viewports.js`. Scope the derivation to the delta and
+that script is never derived, on a project where it is absent, and every UI job
+dies at step resolution. **That is #321 again, reproduced by the command written
+to prevent it.**
+
+**This PR's own delta is the worked case**, which is how it was caught: it
+changes `templates/workflows/qa.yml` and does not touch
+`templates/actions/ui-suite/action.yml`.
+
+So: **changed callers ∪ callers co-installed unchanged by the rules above.**
+
+```bash
+repo="akyachtsman/claude.directives"
+head="…the SHA Phase 2 classified…"   # NOT main — that ref moves under you
+raw="https://raw.githubusercontent.com/$repo/$head"
+callers="…EVERY templates/workflows/*.yml and templates/actions/*/action.yml
+         path this refresh INSTALLS — the changed ones AND the ones
+         co-installed unchanged by the rules above…"
+
+buf=$(mktemp)
+for c in $callers; do
+  curl -fsSL "$raw/$c" >>"$buf" \
+    || { echo "FETCH FAILED: $c — derivation INVALID, do not use it" >&2
+         rm -f "$buf"; exit 1; }
+done
+refs=$(grep -oE '(node|python3) \.github/scripts/[A-Za-z0-9_.-]+\.(js|py)' "$buf" \
+       | awk '{print $2}' | sort -u)
+rm -f "$buf"
+printf '%s\n' "$refs"
+```
+
+Three things about that shape, each of which a shorter version got wrong:
+
+- **Every fetch is checked individually, and a failure exits before the
+  pipeline.** Putting the loop *inside* `refs=$(…)` does not work: the `exit 1`
+  leaves only the subshell, `sort` still succeeds, and `refs` comes back
+  **non-empty from the callers that did fetch** — so a 404 on
+  `ui-suite/action.yml` after `qa.yml` succeeded yields a partial set that passes
+  any emptiness check, silently omitting `check-ui-viewports.js`. That is the
+  precise failure this block exists to prevent.
+- **An empty result is not automatically wrong.** If the only changed caller
+  invokes no script — `pages-monitor.yml` and `secret-scan/action.yml` are both
+  like this today — then the correct derivation *is* empty. Asserting non-empty
+  makes the procedure fail closed on a legitimate delta. **Emptiness is only
+  suspicious when a fetch failed**, which is why the check belongs on the fetch
+  and not on the result.
+- **Pin the fetch to the SHA Phase 2 classified, never `main`.** `main` can
+  advance mid-refresh, or between two caller requests, so the derived set can
+  come from a newer or mixed revision than the callers you are installing — and
+  Phase 3's head check only refuses the *stamp* afterwards; it does not un-install
+  anything.
+
+Match on the INVOCATION, not the bare path, or it also emits directories,
+`package-lock.json`, and paths that appear only in comments.
+
+**The output is the answer for THAT refresh, and it moves.** Run against
+`main` on 2026-08-26 with `qa.yml` + `ui-suite/action.yml` as the callers it
+yields four — `check-contrast.js`, `workflow-ref-guard.py`,
+`check-job-bounds.py`, `check-ui-viewports.js` — and five once directives#325
+lands, which adds `check-py-warnings.py` to `qa.yml`. That is the derivation
+working: it reports what the callers you are installing actually reference, not
+what a list-writer remembered. **The output is never the rule.**
+
+⚠️ **This command has now failed FIVE ways, every one silent, and the history
+is the argument for the shape above.** None were hypothetical:
+
+1. Written in the table cell with its pipes escaped for markdown — `\|` in
+   `grep -E` matches a **literal pipe character**, so it matched nothing and
+   exited 0.
+2. Pointed at `templates/workflows/` and `templates/actions/`, which **do not
+   exist in a project** — *No such file or directory*, and `sort` exited 0
+   regardless.
+3. Ran the fetch loop *inside* `refs=$(…)`, so a mid-loop `exit 1` left only the
+   subshell: a failed caller yielded a **partial** set that passed an emptiness
+   check and silently dropped the scripts only that caller names.
+4. Asserted the result must be non-empty — which **fails closed** on a
+   legitimate delta whose only changed caller invokes no script.
+5. Scoped the input to the refresh's **delta** rather than to everything it
+   **installs** — so a delta touching only `qa.yml` never derives
+   `check-ui-viewports.js`, because the caller that names it
+   (`ui-suite/action.yml`) is co-installed *unchanged*. #321 exactly, by the
+   command written to prevent it. Caught on this PR's own delta.
+
+Four of the five came from *fixing* the one before it. A derivation that fails
+open is strictly worse than the hand-list it replaced, because a hand-list at
+least tells you what somebody once believed; and one that fails closed gets
+muted, which returns it to failing open by another route. **Check the fetch,
+report the result, and let an honestly-empty answer be empty.**
 
 The general form, worth applying to any row added later: **if the thing being
 installed REFERENCES a path, that path installs with it, present or not.** The

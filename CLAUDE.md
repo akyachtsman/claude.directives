@@ -45,7 +45,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
-| `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `check-ui-viewports.js`) projects copy into `.github/scripts/`. `check-ui-viewports.js` is run here straight from this path by `qa.yml`, so unlike `workflow-ref-guard.py` / `check-job-bounds.py` it has NO byte-identical `.github/scripts/` twin |
+| `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `check-ui-viewports.js`, `check-py-warnings.py`) projects copy into `.github/scripts/`. `check-ui-viewports.js` is run here straight from this path by `qa.yml`, so unlike `workflow-ref-guard.py` / `check-job-bounds.py` it has NO byte-identical `.github/scripts/` twin |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
@@ -282,6 +282,7 @@ diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
 diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
 diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
 diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
+diff .github/scripts/check-py-warnings.py templates/scripts/check-py-warnings.py
 diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
 test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
@@ -297,6 +298,16 @@ node .github/scripts/check-repo-map-ui.js                    # when the map chan
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json or the map, regenerate first: node .github/scripts/build-logical-map.js
 ```
+⚠️ **RUN THE GATE AFTER `git add`, NOT BEFORE — a NEW file is invisible to it
+until staged.** `check-exports`, `check-py-warnings` and `check-claims --derive`
+all enumerate via `git ls-files`, which does not list untracked paths. So a gate
+run on a working tree containing a brand-new file **checks everything except the
+thing you just added**, and reports OK. Measured 2026-08-26 on #325: the gate
+passed 14 checks with `templates/scripts/check-py-warnings.py` untracked, and
+`check-exports` failed on that exact file in CI one minute later. This is the
+fail-open family (#323) inside the gate itself — a pass and a did-not-look are
+the same output. Stage first, then gate.
+
 Confirm `git status` shows no unintended changes. If any check fails, fix it
 before pushing rather than pushing and fixing on the PR. The Playwright UI
 check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a

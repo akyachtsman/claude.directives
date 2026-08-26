@@ -325,6 +325,8 @@ Install the guard:
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-job-bounds.py \
   -o .github/scripts/check-job-bounds.py
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-py-warnings.py \
+  -o .github/scripts/check-py-warnings.py
 ```
 
 `qa.yml` already invokes it. It needs no config file — the three rules are the

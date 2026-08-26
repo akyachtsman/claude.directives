@@ -107,7 +107,8 @@ Execute in order:
 
    **Static-check scripts (required by qa.yml).** Copy BOTH
    `claude.directives/templates/scripts/workflow-ref-guard.py` and
-   `check-job-bounds.py` into `.github/scripts/` — `qa.yml` runs both, so the job
+   `check-job-bounds.py` and `check-py-warnings.py` into `.github/scripts/` —
+   `qa.yml` runs all three, so the job
    fails at step resolution without them. `check-job-bounds.py` needs no config;
    it is what keeps the ui-suite callers' 120-minute bound from drifting back to a
    value that cancels healthy runs. Populate `.github/workflow-ref-required.json` with any watcher the

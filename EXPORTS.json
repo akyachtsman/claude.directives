@@ -108,7 +108,8 @@
         "templates/workflows/qa.yml",
         "templates/workflows/qa-response.yml",
         "templates/scripts/workflow-ref-guard.py",
-        "templates/scripts/check-job-bounds.py"
+        "templates/scripts/check-job-bounds.py",
+        "templates/scripts/check-py-warnings.py"
       ],
       "ui-kit": [
         "templates/actions/ui-suite/",
@@ -288,6 +289,7 @@
         "templates/claude-hooks/session-start.sh",
         "templates/scripts/workflow-ref-guard.py",
         "templates/scripts/check-job-bounds.py",
+        "templates/scripts/check-py-warnings.py",
         "templates/scripts/check-ui-viewports.js"
       ]
     },

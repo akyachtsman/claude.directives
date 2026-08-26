@@ -3,9 +3,9 @@
   "claims": [
     {
       "id": "verdict-lookup",
-      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both. The pattern requires a positive lookup VERB because the nouns alone certified the exact inversion — 'ignore the PR's comments and its review threads' — and the negator lookbehind is there because 'do not read' supplied the verb while reversing the instruction. Both alternations are \\b-anchored after an unanchored 'read' was found matching the tail of 'review-thread', letting an already-inverted sentence supply its own verb. Round 5 closed a subtler inversion than round 4's: requiring a positive verb is not enough if the gap between it and the channels can hold a NEGATIVE one. 'check the PR status, but ignore its comments AND its review threads' satisfied a bare gap, because 'check' supplied the verb while 'ignore' governed the nouns. The gap is now a tempered token admitting no negation word, so the verb it requires is the verb that actually governs.",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both. The pattern requires a positive lookup VERB because the nouns alone certified the exact inversion — 'ignore the PR's comments and its review threads' — and the negator lookbehind is there because 'do not read' supplied the verb while reversing the instruction. Both alternations are \\b-anchored after an unanchored 'read' was found matching the tail of 'review-thread', letting an already-inverted sentence supply its own verb. Round 5 closed a subtler inversion than round 4's: requiring a positive verb is not enough if the gap between it and the channels can hold a NEGATIVE one. 'check the PR status, but ignore its comments AND its review threads' satisfied a bare gap, because 'check' supplied the verb while 'ignore' governed the nouns. The gap is now a tempered token admitting no negation word, so the verb it requires is the verb that actually governs. Round 6 found the same defect one level down and it is the most instructive instance: the fix itself introduced a SECOND negator list. The lookbehind already rejected never/not/dont/avoid/skip; the tempered gap I added rejected a different, overlapping set, so 'but avoid its comments AND its review threads' passed while 'but ignore ...' failed. Two lists expressing one idea drift silently. There is now one alternation used in both positions, and mustNotMatch carries a case per negator so the SUITE is what keeps them synchronised rather than a maintainer's memory.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:never|not|dont|avoid|skip)\\s)\\b(?:check|read|look for)\\b(?:(?!\\b(?:ignore|ignores|ignoring|disregard|disregards|skips?|never|not|except|without|instead)\\b)[^.]){0,60}?comments and (?:the |its |their )?review threads",
+      "pattern": "(?<!\\b(?:never|not|dont|avoid|skips?|ignores?|ignoring|disregards?|except|without|instead)\\s)\\b(?:check|read|look for)\\b(?:(?!\\b(?:never|not|dont|avoid|skips?|ignores?|ignoring|disregards?|except|without|instead)\\b)[^.]){0,60}?comments and (?:the |its |their )?review threads",
       "consumers": [
         "CLAUDE.md",
         "docs/internal/repo-monitors.md",
@@ -25,7 +25,11 @@
         "read the review threads",
         "check the PR status, but ignore its comments AND its review threads",
         "read the run log, then disregard the comments and the review threads",
-        "check the label; never look for the comments and its review threads"
+        "check the label; never look for the comments and its review threads",
+        "check the PR status, but avoid its comments AND its review threads",
+        "check the PR status, but dont check its comments AND its review threads",
+        "check the label, then skip the comments AND the review threads",
+        "check the run, without reading the comments AND its review threads"
       ]
     },
     {
@@ -40,11 +44,12 @@
           "why": "Found by review, NOT by --derive, and the reason is the entry's own recorded limit made concrete: this carrier states the claim ANAPHORICALLY — 'a clean current-head Codex verdict — a response naming the head is not one, since a review with live findings names it too'. The claim-level pattern needs the words 'is not a verdict' adjacent to 'response'; here the predicate is the pronoun 'one', pointing back to 'verdict' a clause earlier. No widening of the claim-level pattern reaches that without also matching sentences that are not this claim, which is why it gets its own pattern instead. This is the repo's PRIMARY instruction file and the merge gate it describes is the one that authorises merging over live findings, so it is the last carrier that should have been unlisted.",
           "pattern": "response naming the head is not one",
           "mustNotMatch": [
-            "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) - and DISARM A CHECK-IN ALONGSIDE IT, not instead of it; (2) that check-in is `send_later`.",
-            "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks); (2) use `send_later` (the pre-approved primary).",
-            "# The hook arms a check-in alongside it, but the delivered message below says nothing about one."
+            "a response naming the head is one",
+            "a response naming the head is a clean verdict",
+            "a Codex response is not a verdict",
+            "a reaction is not a verdict you can attribute"
           ],
-          "whyMustNotMatch": "An override exists to be STRICTER than the claim pattern, so it needs its own inversions or the escape hatch reopens every defect the claim-level suite closed. Codex reproduced exactly that: widen this override back to an unbounded arms?, invert the delivered message to DISARM, and every claim-level case still passed while this strict consumer reported OK. The third case is the original round-2 defect restated - the file's HEADER COMMENT satisfying the pattern while the DELIVERED echo has lost the instruction - so the override must reject it even though it plainly states the rule."
+          "whyMustNotMatch": "The first two are this override's own inversion: a carrier that flipped 'is not one' to 'is one' states the OPPOSITE rule and must not certify. The third is the case that proves these cases exercise the OVERRIDE rather than the claim pattern -- the claim-level regex MATCHES it, this override rejects it, so it can only pass by the override doing work. Round 6 caught the absence of exactly that: every case here was a copied wait-gate string, rejected by both patterns, proving nothing. The fourth pins the neighbouring-rule confusion this entry already made once."
         }
       ],
       "mustNotMatch": [
@@ -97,7 +102,7 @@
             "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks); (2) use `send_later` (the pre-approved primary).",
             "# The hook arms a check-in alongside it, but the delivered message below says nothing about one."
           ],
-          "whyMustNotMatch": "An override exists to be STRICTER than the claim pattern, so it needs its own inversions or the escape hatch reopens every defect the claim-level suite closed. Codex reproduced exactly that: widen this override back to an unbounded arms?, invert the delivered message to DISARM, and every claim-level case still passed while this strict consumer reported OK. The third case is the original round-2 defect restated - the file's HEADER COMMENT satisfying the pattern while the DELIVERED echo has lost the instruction - so the override must reject it even though it plainly states the rule."
+          "whyMustNotMatch": "An override exists to be STRICTER than the claim pattern, so it needs its own inversions or the escape hatch reopens every defect the claim-level suite closed. Codex reproduced exactly that: widen this override back to an unbounded arms?, invert the delivered message to DISARM, and every claim-level case still passed while this strict consumer reported OK. The third case is the original round-2 defect restated - the file's HEADER COMMENT satisfying the pattern while the DELIVERED echo has lost the instruction - so the override must reject it even though it plainly states the rule. The third case is also the override-exercising one: the claim-level pattern MATCHES it (it plainly says 'arms a check-in') while this override rejects it for lacking the delivered message's own opening text -- so it can only pass by the override doing work, which is the property the guard now requires of every override suite."
         }
       ],
       "mustNotMatch": [

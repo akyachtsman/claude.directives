@@ -316,6 +316,27 @@ for (const claim of claims) {
           fail(`${id}: per-consumer pattern for ${file} MATCHES a string it must reject: ${JSON.stringify(bad.slice(0, 90))}…\n      pattern: ${useRe.source}`);
         }
       }
+      // AT LEAST ONE CASE MUST EXERCISE THE OVERRIDE ITSELF. A suite whose every
+      // entry is rejected by the claim-level pattern too proves nothing about the
+      // strictness the override was added for: remove the override entirely and
+      // every case still passes. Round 6 found exactly that — the CLAUDE.md
+      // response override carried three COPIED wait-gate strings, which no
+      // pattern in this manifest matches, so its suite was decorative while the
+      // one regex doing the work went untested.
+      //
+      // The property that distinguishes a real case: the CLAIM-LEVEL pattern
+      // accepts it and the OVERRIDE rejects it. Only the override's added
+      // constraint can produce that gap, so such a case cannot pass unless the
+      // override is doing work. This is the same shape as the `--ablation`
+      // arm in a skill eval: a test that passes with and without the thing it
+      // tests has measured nothing.
+      const exercises = ovNot.some((bad) => {
+        const n = normalize(bad);
+        return re.test(n) && !useRe.test(n);
+      });
+      if (!exercises) {
+        fail(`${id}: per-consumer mustNotMatch for ${file} never exercises the override — every case is rejected by the claim-level pattern too, so deleting the override entirely would not fail any of them.\n      Add a case the CLAIM pattern accepts and this override must reject; that gap is the only proof the override constrains anything.`);
+      }
     }
     if (useRe.test(normalize(readFileSync(file, 'utf8')))) {
       console.log(`OK:   ${id} → ${file}${override ? ' (strict)' : ''}`);

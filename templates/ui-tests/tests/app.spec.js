@@ -308,9 +308,14 @@ async function detectAndAuth(page, credential) {
     // Without TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
     if (AUTH_EMAIL) {
       const authForm = passwordInput.locator('xpath=ancestor::form[1]');
+      // `.locator('visible=true')` BEFORE `.first()` — the same idiom (and the
+      // same reason) as backControl(): a hidden responsive copy of the field
+      // earlier in the DOM would otherwise be selected, the visibility check
+      // would then SKIP the fill instead of trying the visible candidate, and
+      // the form submits a blank identifier.
       const emailInput = (await authForm.count().catch(() => 0))
-        ? authForm.locator('input[type=email], input[type=text], input:not([type])').first()
-        : page.locator('input[type=email]').first();
+        ? authForm.locator('input[type=email], input[type=text], input:not([type])').locator('visible=true').first()
+        : page.locator('input[type=email]').locator('visible=true').first();
       if (await emailInput.isVisible().catch(() => false)) {
         await emailInput.fill(String(AUTH_EMAIL));
       }
@@ -375,43 +380,34 @@ async function detectAuthGate(page) {
 async function expectGateCleared(page, mechanism, gateViewBefore) {
   if (mechanism === 'none') return; // nothing was attempted — nothing to verify
   if (!(await detectAuthGate(page))) return; // cleared — a WINDOW (#302), as stated above
-  // A password field on the LANDED page is not necessarily the login gate: an
-  // app whose successful landing view carries one (account settings, a
-  // change-password form) must not read as a rejected login. But a CHANGED view
-  // is not proof of progress either — a rejected login that renders an inline
-  // error or flips a keypad dot changes viewSignature() while the gate stands.
-  // So the default is FAIL, and only a POSITIVE identification of a different,
-  // post-login form passes:
-  //   1. view unchanged                          -> the gate did not clear -> FAIL
-  //   2. view changed, page still LOGIN-SHAPED   -> same gate + feedback   -> FAIL
-  //   3. view changed, page RICH in controls     -> a password field inside an
-  //      authenticated shell (settings, change-password) -> attach + continue
-  // "Login-shaped" = few non-keypad interactive controls. A login/PIN view
-  // offers a handful (submit, forgot-password, keypad digits excluded); an
-  // authenticated shell offers many. Threshold 6 — a heuristic, stated as one.
+  // THREE versions of a "did login actually succeed" heuristic died in review
+  // before this one: (1) any remaining gate fails — false red on an app whose
+  // post-login view carries a password field; (2) changed view passes — a
+  // rejection's inline error changes the view; (3) changed view + control-rich
+  // page passes — login pages with social buttons and footer nav are rich. The
+  // counterexamples were not exotic. CONCLUSION, not another heuristic: no DOM
+  // shape generically proves a login succeeded. So this check does the one
+  // thing it can do honestly — a page that still matches the gate heuristics
+  // after an attempt FAILS, loudly, every time.
+  //
+  // KNOWN LIMIT, accepted: an app whose post-login landing view legitimately
+  // shows a visible password field (an in-page change-password form) false-reds
+  // here. That failure is LOUD and its message names this paragraph; the
+  // alternative — any escape hatch keyed on view change or page richness —
+  // passed rejected logins in review, and that failure is SILENT. Loud beats
+  // silent. The real fix is per-project post-login evidence (a selector or a
+  // request that only exists signed in) — directives#302's condition, which a
+  // template cannot invent. When that lands, it replaces this paragraph.
   const viewNow = await viewSignature(page);
-  const looksLikeLoginStill = viewNow === gateViewBefore || (await page.evaluate(() => {
-    const els = [...document.querySelectorAll('button, [role=button], a[href], select, textarea')]
-      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
-      .filter(el => !/^[0-9]$/.test(el.textContent?.trim() || ''));
-    return els.length <= 6;
-  }));
-  if (looksLikeLoginStill) {
-    throw new Error(
-      `Auth gate still present after a '${mechanism}' attempt` +
-      (viewNow === gateViewBefore ? ' (view unchanged)' : ' (view changed but the page is still login-shaped — likely a rejection message on the same gate)') +
-      ` — refusing to run this scenario against the login screen. Check TEST_AUTH_CREDENTIAL` +
-      (mechanism === 'password-form' ? ' and TEST_AUTH_EMAIL (email+password gates need both, directives#304)' : '') +
-      `; a rejected credential and a never-filled field look identical from here.`
-    );
-  }
-  test.info().attach('auth-ambiguous', {
-    body: JSON.stringify({
-      mechanism,
-      note: 'After the auth attempt the view changed AND the page is control-rich, yet still matches the gate heuristics (a visible password field or PIN-like controls). Read as a password field inside an authenticated shell (settings / change-password) and proceeding — but if this scenario then measures a page that is not the app, start here.',
-    }, null, 2),
-    contentType: 'application/json',
-  });
+  throw new Error(
+    `Auth gate still present after a '${mechanism}' attempt` +
+    (viewNow === gateViewBefore ? ' (view unchanged)' : ' (view changed — likely a rejection message or reloaded gate)') +
+    ` — refusing to run this scenario against the login screen. Check TEST_AUTH_CREDENTIAL` +
+    (mechanism === 'password-form' ? ' and TEST_AUTH_EMAIL (email+password gates need both, directives#304)' : '') +
+    `. A rejected credential and a never-filled field look identical from here. If your app's ` +
+    `POST-LOGIN view legitimately shows a password field, this is the known limit documented ` +
+    `above this throw — the per-project condition in directives#302 is the fix, not a wider heuristic.`
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

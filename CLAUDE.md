@@ -313,6 +313,17 @@ before pushing rather than pushing and fixing on the PR. The Playwright UI
 check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
 local skip is fine for non-map changes.
 
+**This repo's agent-sandbox ceiling: NONE — the whole map suite runs here.**
+`test.md` → *Sandboxed local runs* asks every project to record its own ceiling
+so the next session does not re-derive it; ours is that there isn't one, and the
+reason is worth keeping. `docs/site/logical-map.html` loads **no external
+resource of any kind**, so the blocked-runtime-CDN cause that dominates the
+fleet's app repos cannot reach it, and the suite drives chromium, which the
+sandbox image ships (it ships **no webkit and no firefox** — a config declaring
+either could not launch them here). Measured 2026-08-26: `check-repo-map-ui.js`
+PASS, all cases, exit 0. So a local failure here is evidence about the map, not
+about the environment — the opposite of the default assumption downstream.
+
 ## Escalation rules
 `global.md` → *Escalation Rules* apply here unchanged — all four gates, not a
 subset. No repo-specific additions.

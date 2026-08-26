@@ -379,6 +379,67 @@ finish before starting (`global.md` → *Pipelined Execution*). Verification run
 concurrently with the next task; batching independent tasks into one suite run is
 the norm, not a shortcut.
 
+## Sandboxed local runs (agent sessions)
+A test run inside an agent sandbox is **not** a run of your suite. Measured in
+three sandboxes on 2026-08-26 — `claude.trading` 5 local failures / CI all green,
+`claude.insurance` **26 of 36** local failures / CI 24 passed 12 skipped **0
+failed**, and this repo reproducing the causes directly.
+
+- **A local failure in a sandboxed session is not evidence about the suite until
+  CI has ruled on the same commit.** Push and let CI arbitrate.
+- **Never weaken a test to make a sandbox run green** — no relaxed assertion, no
+  added retry, no skipped case. That converts an environment limit into a
+  permanently blinded check: the suite goes green and nothing reports that it
+  stopped looking.
+- **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
+  workaround, it is removing the check.
+
+⚠️ **A reachable backend does NOT clear the environment**, and this is the trap
+worth the section. `claude.insurance` saw four scenarios fail to find their own
+UI with Supabase answering `401` in 0.63s — host up, auth simply not supplied.
+The cause was one layer up: the page imports its client at runtime from
+`https://esm.sh/…`, and **esm.sh is blocked in the sandbox**, so the ES module
+graph never resolves, `main.js` never executes, and the router never renders
+while the page itself serves 200.
+
+So the cheapest, most obvious diagnostic — *is the backend reachable?* —
+**returns YES precisely when the environment is at fault**, pointing you at your
+own code. For any app loading a dependency from a CDN at runtime, backend
+reachability says nothing about whether the app can boot; that is the default
+shape of a no-build static app.
+
+**Rule out the environment as a CLASS, not by matching a symptom list.** A
+symptom list is one entry short of reality and reads as complete (the same
+enumerate-vs-derive failure as `refresh-repo.md`'s script exemptions). Check:
+browser binaries present, module/CDN sources reachable, backend reachable — and
+treat the known causes as a growing set. Observed so far: absent browser binary;
+blocked runtime CDN; proxy MITM CA untrusted by the bundled browser; unreachable
+backend. Note the block is **selective** — `raw.githubusercontent.com` answers
+from the same shell that cannot reach `esm.sh`, so "the sandbox has no network"
+is the wrong model.
+
+**Classify by DURATION before opening a log** (`claude.insurance`):
+
+| duration | meaning |
+|----------|---------|
+| ~3ms, uniform | browser never launched — binary absent |
+| times out at the action budget, page 200, no app DOM | module graph blocked — CDN, not backend |
+| real elapsed time, real DOM, specific assertion | an actual defect — treat it as one |
+
+Three milliseconds is not a test failing, it is a test never starting.
+
+**Falsify a newly-added bound before suspecting the code.** A timeout or limit
+introduced in the same change is the first thing to suspect and the cheapest
+thing to rule out: disable it, re-run one failing scenario, and see whether the
+failure survives. `claude.insurance` did exactly this with a new `actionTimeout`
+and proved the failures pre-existed it — which turned "let CI arbitrate" from an
+act of faith into the obvious move.
+
+**Record the per-app ceiling in the PROJECT's `CLAUDE.md`, not here.** Which
+scenarios can pass in an agent sandbox is a property of that app's dependencies,
+so this directive ships the method and each project states its own limit with the
+causes named, so the next session does not rediscover it.
+
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are
   covered by the PR trigger — listing `claude/**` under push would run everything

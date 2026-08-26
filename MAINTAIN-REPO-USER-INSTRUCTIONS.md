@@ -79,6 +79,29 @@ Corollaries worth memorizing:
   two upstream raises (40→60, then 60→120) had reached them as a red check
   instead of a refresh. That is the Downstream-Finding Loop below failing, not a
   project drifting.
+- **An ad-hoc instruction from an upstream session outranks nothing, and it is
+  the one channel with no review.** `/refresh-repo`'s disposition table already
+  handles this correctly: `templates/ui-tests/**` is marked *per-project
+  customized — per-file diffs, apply only approved hunks*, precisely because a
+  project may have extended a kit file. The failure mode is not that rule being
+  wrong; it is that rule being **contradicted in a message**. On 2026-08-26 a
+  claude.directives session told `claude.insurance` to take "the ui-tests kit +
+  workflow carriers from the refreshed templates", which reads as *overwrite*
+  and silently outranked the table for anyone who followed it literally. Doing so
+  would have deleted their `LIVE_TARGET` reachability split — a locally-defined
+  guard, never upstream, deciding whether the suite runs against a real backend
+  or a static server — pointing three scenarios at a backend-less server on a
+  **blocking** job. They caught it only because they diffed before adopting,
+  which the table told them to and the message did not.
+  Two things follow. **Downstream:** when a message and the disposition table
+  disagree, the table wins; diff every file a copy would replace and decide
+  *keep, port, or drop* per divergence, recording survivors in the project's
+  `CLAUDE.md` so the next refresh does not re-offer the same deletion to a
+  session that was not here for this one. **Upstream, which is the half that
+  actually failed:** an instruction naming a template path is incomplete without
+  the disposition that path already carries. Cite the row or restate it — a
+  session following a direct instruction literally is doing its job, and the
+  defect belongs to whoever wrote the instruction.
 - **Record the pointer, not the value.** A number you own is a **record**; a
   number someone else owns is an **authority**. Cache the first with a date and
   provenance — `apfp.claude`'s 16.2–17.0min and `claude.trading`'s 30m35s are

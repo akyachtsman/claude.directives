@@ -370,7 +370,8 @@ async function detectAndAuth(page, credential) {
       // copy is passed over in favour of the visible candidate rather than
       // silently skipping the fill. The pick is marked, filled through
       // Playwright (real input events), and unmarked.
-      const marked = await page.evaluate(([pw, root, sels]) => {
+      const marker = `uit-${Math.random().toString(36).slice(2)}`;
+      const marked = await page.evaluate(([pw, root, sels, mark]) => {
         if (!pw) return false;
         const vis = el => {
           const r = el.getBoundingClientRect();
@@ -443,11 +444,14 @@ async function detectAndAuth(page, credential) {
           pick = nearest(pool);
         }
         if (!pick) return false;
-        pick.setAttribute('data-uitests-identifier', '');
+        pick.setAttribute('data-uitests-identifier', mark);
         return true;
-      }, [pwHandle, scopeHandle, rungs]);
+      }, [pwHandle, scopeHandle, rungs, marker]);
       if (marked) {
-        const cand = page.locator('[data-uitests-identifier]').first();
+        // Located by the run-unique VALUE, not attribute presence — an app
+        // element that happens to carry the bare attribute cannot shadow the
+        // candidate the evaluate actually picked.
+        const cand = page.locator(`[data-uitests-identifier="${marker}"]`).first();
         await cand.fill(String(AUTH_EMAIL));
         await cand.evaluate(el => el.removeAttribute('data-uitests-identifier'));
       }
@@ -1182,14 +1186,17 @@ function backControl(page) {
 // reimplementation always lags it by one case. One definition, two consumers —
 // the filter and the presser cannot disagree about what "back" is.
 function backControlAll(page) {
-  // \bback\b(?![\s-]*up\b) in BOTH text arms: "back" followed by "up" is the
-  // backup verb ("Back up data", "back-up now"), not a navigation affordance —
-  // element kind cannot distinguish those (a backup BUTTON is an allowed
-  // kind), only the phrase can. "Backup" was already rejected by the word
-  // bound; "Back", "Go back", "Back ›" still match.
+  // The SAME affordance-phrase regex in every arm (BACK_NAME below): "back"
+  // counts as navigation only in affordance FORMS — alone, "Go back",
+  // "Back to <place>", or trailed by decoration ("Back ›", "Back:"). A
+  // forward action that merely starts with the word ("Back up data",
+  // "Back office settings", "Back pain assessment") never matches: element
+  // kind cannot distinguish a backup/back-office BUTTON from a back button,
+  // only the phrase can. "Backup" was already rejected by the word bound.
   return page.locator(
     '[data-back], ' +
-    'button:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), a:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), ' +
+    'button:text-matches("\\bback\\b(?=\\s*$|\\s+to\\b|\\s*[:;.!›>»)\\]…])", "i"), ' +
+    'a:text-matches("\\bback\\b(?=\\s*$|\\s+to\\b|\\s*[:;.!›>»)\\]…])", "i"), ' +
     'button:has-text("←"), a:has-text("←")'
   ).or(page.getByRole('button', { name: BACK_NAME }))
    .or(page.getByRole('link', { name: BACK_NAME }))
@@ -1207,7 +1214,12 @@ function backControlAll(page) {
 // text- or value-derived names included, non-control roles excluded by the
 // role filter itself. The CSS arms above remain for [data-back], arrow
 // glyphs, and href-less anchors that carry no link role.
-const BACK_NAME = /\bback\b(?![\s-]*up\b)/i;
+// Affordance forms only: "back" at the end of the name (which covers "Back",
+// "Go back", "arrow back" ligatures, "← Back"), "back to <place>", or "back"
+// trailed by pure decoration. The positive lookahead subsumes the old
+// backup-verb exclusion: "Back up data" and "back-up now" simply never reach
+// a matching form.
+const BACK_NAME = /\bback\b(?=\s*$|\s+to\b|\s*[:;.!›>»)\]…])/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO — NAV: in-app back navigation strictly unwinds (no circular loop)
@@ -1303,9 +1315,10 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // textContent, so <button aria-label="Back">chevron_left</button> records
       // "chevron_left" — a glyph name this list can't enumerate — while its
       // aria-label says exactly what the control is.
-      // "back" carries the same not-followed-by-"up" lookahead as
-      // backControlAll(): "Back up data" is a backup action, not navigation —
-      // it stays a drill candidate, and the unwind will not press it either.
+      // "back" uses the same affordance-form regex as backControlAll()
+      // (BACK_NAME): forward actions that start with the word — "Back up
+      // data", "Back office settings" — stay drill candidates, and the
+      // unwind will not press them either; the filter and the presser agree.
       // KNOWN LIMIT, deliberate: home/return classification is string-based
       // (recorded label + ariaLabel, which resolves aria-labelledby TEXT but
       // not img alt inside a reference), so an icon-only Home button named
@@ -1320,7 +1333,12 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // ("Go home", the icon ligatures "keyboard return" / "home") navigate;
       // "Return item" and "Home delivery" are forward actions into workflows
       // and stay drill candidates.
-      if (/\bback\b(?![\s-]*up\b)|\breturn(\s+to\b|\s*$)|\bhome\s*$|[←‹◀]/i.test(`${el.label} ${el.ariaLabel}`.replace(/_/g, ' ').trim())) { excludedAsBack++; continue; }
+      // label and ariaLabel are tested SEPARATELY — the affordance forms are
+      // end-anchored, and concatenating the two fields would bury one name's
+      // ending in the middle of the joined string.
+      if ([el.label, el.ariaLabel].some(s =>
+            /\bback\b(?=\s*$|\s+to\b|\s*[:;.!›>»)\]…])|\breturn(\s+to\b|\s*$)|\bhome\s*$|[←‹◀]/i
+              .test((s || '').replace(/_/g, ' ').trim()))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);

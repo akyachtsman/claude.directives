@@ -36,9 +36,15 @@ CATEGORIES = (SyntaxWarning, DeprecationWarning)
 
 
 def tracked_python_files():
-    out = subprocess.run(['git', 'ls-files', '*.py'],
-                         capture_output=True, text=True, check=True).stdout
-    return [f for f in out.split('\n') if f]
+    # -z / NUL-split, NOT the default newline output. `git ls-files` C-QUOTES a
+    # path containing non-ASCII or control bytes -- `cafe\u0301.py` comes back as
+    # `"caf\\303\\251.py"`, quotes and octal escapes included -- and passing that
+    # display form to open() raises FileNotFoundError for a file that exists.
+    # The guard would go red on a valid repo, which is the failure mode a guard
+    # must never invent. -z emits paths verbatim.
+    out = subprocess.run(['git', 'ls-files', '-z', '*.py'],
+                         capture_output=True, check=True).stdout
+    return [f for f in out.decode('utf-8', 'surrogateescape').split('\0') if f]
 
 
 def main():
@@ -51,7 +57,12 @@ def main():
 
     findings = 0
     for path in files:
-        with open(path, encoding='utf-8') as fh:
+        # Read BYTES and let compile() decode. A hard-coded utf-8 read raises
+        # UnicodeDecodeError on a file carrying a PEP 263 declaration such as
+        # `# coding: latin-1` -- which Python itself compiles happily. compile()
+        # honours the declaration when handed bytes, so this reports what the
+        # interpreter would actually say rather than a false failure of its own.
+        with open(path, 'rb') as fh:
             source = fh.read()
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')

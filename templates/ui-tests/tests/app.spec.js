@@ -319,7 +319,11 @@ async function detectAndAuth(page, credential) {
       // text input — kept because identifier fields on login forms are often
       // plain unlabeled type=text, and a login form rarely holds a competing
       // one (the tenant-field case is exactly what rungs 2-3 exist to win
-      // first). Page scope (formless gate) uses rungs 1-2 only.
+      // first). Formless gates use rungs 1-3: the semantic rung names its
+      // field explicitly, so it is safe anywhere (a div-based login with
+      // <input name="username"> matches nothing without it); only the
+      // UNRESTRICTED last resort stays form-only, because off-form a bare
+      // text input is more likely a search box than a login field.
       const hasForm = await authForm.count().catch(() => 0);
       // GENERATED, not hand-listed: the hand-written version required an
       // explicit type=text on every clause, so a form of type-less inputs
@@ -334,7 +338,8 @@ async function detectAndAuth(page, credential) {
       const rungs = [
         'input[type=email]',
         'input[autocomplete~="username" i], input[autocomplete~="email" i]',
-        ...(hasForm ? [SEMANTIC, 'input[type=text], input:not([type])'] : []),
+        SEMANTIC,
+        ...(hasForm ? ['input[type=text], input:not([type])'] : []),
       ];
       // WITHIN a rung, the pick is ANCHORED TO THE PASSWORD INPUT: the nearest
       // candidate in document order, preferring those that PRECEDE it — never
@@ -429,7 +434,12 @@ async function pinGateVisible(page) {
   return numericButtons >= 9 && dotIndicator > 0;
 }
 async function passwordGateVisible(page) {
-  return page.locator('input[type=password]').first().isVisible().catch(() => false);
+  // Visible-filtered COUNT, the same idiom as the PIN signal above — never
+  // `.first().isVisible()`: in the common SPA pattern a hidden responsive
+  // copy sits earlier in the DOM, `.first()` selects it, and a genuinely
+  // visible password field behind it reads as "no gate".
+  const n = await page.locator('input[type=password]').locator('visible=true').count().catch(() => 0);
+  return n > 0;
 }
 
 // Shared by detectAuthGate (pre-attempt DISCOVERY, where the `controls <= 4`
@@ -492,22 +502,37 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
     });
     return;
   }
-  // BOTH robust signals are checked — what stays excluded is ONLY the demoted
-  // text heuristic, never the other element-kind gate. Checking just the
-  // attempted mechanism's signal certified exactly the flow it should refuse:
-  // a password step that advances to a PIN/second-factor keypad clears
-  // passwordGateVisible while a robust gate stands on screen. And rerunning
-  // the FULL discovery detector is wrong in the other direction: the text
-  // heuristic (demoted above as proof-grade for its own mechanism) would
-  // throw on a password login whose landing page is sparse and auth-worded —
-  // one search field plus "Last login" reads as a text gate. The two
-  // element-kind signals are proof-grade in either position — first factor
-  // or newly revealed second factor.
+  // What a signal may DO here depends on what it can PROVE, per position:
+  //   - input[type=password] is a semantic element — proof-grade ANYWHERE, as
+  //     the retained first factor or a newly revealed second one. Throws.
+  //   - The PIN signal (digit-button count + dot/pin class names) is
+  //     proof-grade only as SAME-KIND retention: post-attempt, the same
+  //     signals that identified the gate we attempted. As a NEW-gate detector
+  //     after a password login it reads a calculator or dial pad — or any
+  //     visible class containing "pin" ("spinner", "pinned") — as a second
+  //     factor, so in that position it gets what this file gives every
+  //     non-proof signal: a loud diagnostic, never a throw. directives#302's
+  //     per-project post-login condition is the real 2FA answer.
+  //   - The text heuristic stays fully demoted (above).
+  // Rerunning the FULL discovery detector is the wrong shape in both
+  // directions: it let the text heuristic throw on a sparse auth-worded
+  // landing page, and checking only the attempted signal certified a
+  // password→PIN second-factor flow. This matrix is the residue that survives
+  // both counterexample families.
   const pinNow = await pinGateVisible(page);
   const pwNow  = await passwordGateVisible(page);
-  if (!pinNow && !pwNow) return; // cleared — a WINDOW (#302), as stated above
-  const attemptedKindGone =
-    (mechanism === 'pin-keypad' && !pinNow) || (mechanism === 'password-form' && !pwNow);
+  if (mechanism === 'password-form' && !pwNow && pinNow) {
+    test.info().attach('auth-second-factor-suspected', {
+      body: JSON.stringify({
+        mechanism,
+        note: 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. directives#302 tracks the per-project post-login condition that verifies this properly.',
+      }, null, 2),
+      contentType: 'application/json',
+    });
+    return;
+  }
+  if (!pwNow && !(mechanism === 'pin-keypad' && pinNow)) return; // cleared — a WINDOW (#302), as stated above
+  const attemptedKindGone = mechanism === 'pin-keypad' && !pinNow;
   // THREE versions of a "did login actually succeed" heuristic died in review
   // before this one: (1) any remaining gate fails — false red on an app whose
   // post-login view carries a password field; (2) changed view passes — a

@@ -266,9 +266,64 @@ Two different scopes — never conflate them:
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
   the same verification at session start.
 
-## Hosting & Deployment (owner ruling, 2026-08-21)
-**GitHub Pages, branch-source, is the deployment target.** Plain HTML/CSS/JS,
-dynamic via client-side Supabase + RLS. No build; the push *is* the deploy.
+## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26)
+**GitHub Pages is the deployment target.** Plain HTML/CSS/JS, dynamic via
+client-side Supabase + RLS. No build step.
+
+⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one, and
+this line read "branch-source … the push *is* the deploy" until 2026-08-26.**
+Branch-source publishes the **whole repository** at the public URL. Choose by
+this test, in order:
+
+1. **Is the repository private, or does it hold any file that must not be
+   public** — a real secret, unreleased material, anything whose exposure is a
+   problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
+   rather than the tree: rsync the repo minus a deny-list, upload that artifact,
+   deploy it.
+2. **Otherwise** → branch-source is fine and the push is the deploy.
+
+⚠️ **The test is "must not be public", NOT "is internal-facing".** A file can be
+internal in purpose and harmless in public. `claude.directives` is the worked
+example: it is a public repo, its `CLAUDE.md`, `learnings.jsonl`, `EXPORTS.json`
+and `docs/internal/` all serve 200 from its Pages URL (verified 2026-08-26), and
+that exposes nothing `github.com` does not already serve to anyone. It stays on
+branch-source, correctly. Reading the trigger as "has internal-looking files"
+would send every repo with a `CLAUDE.md` to do pointless work and make the rule
+read as wrong to the first person who checks.
+
+⚠️ **Deny-list, never allow-list.** An allow-list means every new app file needs a
+manifest edit to ship, and its failure mode is a missing file — annoying but
+visible. A deny-list fails the other way only when someone adds a new *internal*
+path and forgets it, which is why the deploy must **verify the live URL after
+publishing**: assert the app serves 200, each named internal path serves 404, and
+any internal-looking-but-public asset still serves 200. Fail the run otherwise.
+Verify with `curl`, not by reading the config.
+
+⚠️ **Flipping repo visibility fires the LEGACY managed branch build** ("pages
+build and deployment", event `dynamic`) even when an Actions workflow also runs —
+and it can finish *later* and republish the whole tree over the filtered copy.
+Set Settings → Pages → Source = **GitHub Actions** and confirm it. If internal
+paths reappear on the live URL, look for a `pages build and deployment` run first.
+
+⚠️ **A plain `curl` of a Pages URL can return a CACHED edge copy** (`max-age=600`),
+so it may show the old file minutes after a good deploy. Use
+`-H "Cache-Control: no-cache"` and a cache-busting query param before concluding
+anything about what is live.
+
+⚠️ **Switching to Actions-source SILENTLY DISABLES this repo's Pages monitoring,
+and that is not optional to handle.** `pages-monitor.yml` and `pages-retry.yml`
+both trigger on `page_build`, which fires only for **branch-source** builds
+(`docs/standards/automations.md` → *Automation 4 / 4b*). An Actions-source repo
+keeps the workflow files and gets no runs from them — monitoring that looks
+present and reports nothing, which is worse than none. The post-publish
+verification above is the replacement, not an extra: put the 200/404 assertions
+**inside the deploy workflow** so a bad filter fails the run that produced it,
+and do not rely on the monitors to notice.
+
+*Written from an incident: on 2026-08-18 a repo's internal docs were public for
+~18 minutes on exactly this path. The rule as it stood would have sent a session
+doing routine directive alignment to reproduce it — which is the worst property a
+rule can have, since following it correctly was the failure.*
 
 **A React / Next.js-on-Vercel "production tier" was evaluated and REJECTED** —
 a different development platform, changing a lot of code for a need no project

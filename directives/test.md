@@ -413,13 +413,21 @@ failed**, and this repo reproducing the causes directly.
   fetched from the blocked host and the app still cannot boot. That case is
   fixed by vendoring, rewriting, or proxying the import — not by moving the
   origin. For a missing browser binary, **try the standard install before
-  concluding anything** — `npx playwright install <browser>`, which is exactly
-  what `ui-suite/action.yml` already runs. An image that omits a browser has not
-  necessarily blocked fetching one: measured 2026-08-26, `cdn.playwright.dev`
-  answers from the sandbox (a 400 to a bare GET is a response, not a refusal),
-  while the deprecated `playwright.azureedge.net` mirror does not resolve. Record
-  a ceiling only when the install itself also fails, and say so — "absent from
-  the image" is not "unavailable".
+  concluding anything** — `npx playwright install --with-deps <browser>`, the
+  same command `ui-suite/action.yml` runs. `--with-deps` is not optional here: a
+  plain `install` can fetch the binary and leave it unlaunchable when the host
+  libraries are absent. An image that omits a browser has not necessarily blocked
+  fetching one — measured 2026-08-26, `cdn.playwright.dev` answers from the
+  sandbox (a 400 to a bare GET is a response, not a refusal), while the
+  deprecated `playwright.azureedge.net` mirror does not resolve.
+
+  **The test is whether the browser LAUNCHES, not whether the install exited 0.**
+  A download that succeeds and then cannot start is the same ceiling as a download
+  that never happened, and grading on the install's exit code would refuse to let
+  you record it. So: install with `--with-deps`, launch it, and record a ceiling
+  when the launch fails — quoting the launch error, since that is what the next
+  session needs. "Absent from the image" is not "unavailable", and "installed" is
+  not "runnable".
 - **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
   workaround, it is removing the check.
 

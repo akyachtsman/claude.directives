@@ -292,15 +292,19 @@ async function detectAndAuth(page, credential) {
   const passwordInput = page.locator('input[type=password]').first();
   if (await passwordInput.isVisible().catch(() => false)) {
     // Email+password gate: fill the identifier BEFORE the password when one was
-    // supplied. Scoped to input[type=email] or a text input INSIDE the form that
-    // holds the password — never an arbitrary page text input, which is the
-    // search-box hazard detectAuthGate already guards against. Without
-    // TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
+    // supplied. ANCHORED TO THE PASSWORD'S OWN FORM — a page-scoped
+    // input[type=email] with .first() would hand the identifier to whatever
+    // email field happens to come first in the DOM (a newsletter box, a hidden
+    // responsive copy), the login then submits a blank identifier, and the
+    // gate-cleared check below fails every authenticated scenario. A gate with
+    // no <form> element falls back to page scope with type=email ONLY: off-form,
+    // a bare text input is more likely a search box than a login field.
+    // Without TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
     if (AUTH_EMAIL) {
-      const emailInput = page.locator(
-        'input[type=email], form:has(input[type=password]) input[type=text], ' +
-        'form:has(input[type=password]) input:not([type])'
-      ).first();
+      const authForm = passwordInput.locator('xpath=ancestor::form[1]');
+      const emailInput = (await authForm.count().catch(() => 0))
+        ? authForm.locator('input[type=email], input[type=text], input:not([type])').first()
+        : page.locator('input[type=email]').first();
       if (await emailInput.isVisible().catch(() => false)) {
         await emailInput.fill(String(AUTH_EMAIL));
       }
@@ -362,16 +366,33 @@ async function detectAuthGate(page) {
 // GONE, so this adds ~5s to every SUCCESSFUL auth preamble. Absorbed by the
 // existing budgets (worst headroom after +5s: S4/CTRL ~184s of 240, NAV ~293s
 // of 360, DISMISS ~950s of 1200) — re-derived, not assumed.
-async function expectGateCleared(page, mechanism) {
+async function expectGateCleared(page, mechanism, gateViewBefore) {
   if (mechanism === 'none') return; // nothing was attempted — nothing to verify
-  if (await detectAuthGate(page)) {
+  if (!(await detectAuthGate(page))) return; // cleared — a WINDOW (#302), as stated above
+  // A password field on the LANDED page is not the login gate: an app whose
+  // successful landing view carries one (account settings, a change-password
+  // form) would read as a rejected login and fail every authenticated scenario.
+  // Discriminate on the VIEW: same signature as before the attempt -> the gate
+  // did not clear -> fail loudly. Different view but still gate-like ->
+  // ambiguous -> attach a diagnostic and continue, because a false red here
+  // blocks the whole suite while a wrongly-passed ambiguity is caught by the
+  // scenarios themselves measuring a page that is not the app.
+  const viewNow = await viewSignature(page);
+  if (viewNow === gateViewBefore) {
     throw new Error(
-      `Auth gate still present after a '${mechanism}' attempt — refusing to run this scenario ` +
-      `against the login screen. Check TEST_AUTH_CREDENTIAL` +
+      `Auth gate still present after a '${mechanism}' attempt (view unchanged) — refusing to run ` +
+      `this scenario against the login screen. Check TEST_AUTH_CREDENTIAL` +
       (mechanism === 'password-form' ? ' and TEST_AUTH_EMAIL (email+password gates need both, directives#304)' : '') +
       `; a rejected credential and a never-filled field look identical from here.`
     );
   }
+  test.info().attach('auth-ambiguous', {
+    body: JSON.stringify({
+      mechanism,
+      note: 'The view changed after the auth attempt but the landed page still matches the gate heuristics (a visible password field or PIN-like controls). Proceeding — but if this scenario then measures a page that is not the app, start here.',
+    }, null, 2),
+    contentType: 'application/json',
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -590,9 +611,10 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // don't block, so the job could "pass" without reaching app content. A public app with
   // no gate falls through and is swept normally.
   if (AUTH_CREDENTIAL) {
+    const gateViewBefore = await viewSignature(page);
     const mechanism = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-    await expectGateCleared(page, mechanism);
+    await expectGateCleared(page, mechanism, gateViewBefore);
   } else if (await detectAuthGate(page)) {
     test.skip(true, 'Auth gate present but no credential — skipping sweep (would only exercise the login screen)');
   }
@@ -749,9 +771,10 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   // — NOT just "a credential exists" — so a public-first app with a stray text input
   // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
   if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
+    const gateViewBefore = await viewSignature(page);
     const mechanism = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-    await expectGateCleared(page, mechanism);
+    await expectGateCleared(page, mechanism, gateViewBefore);
   }
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   const viewWidth = await page.evaluate(() => window.innerWidth);
@@ -774,9 +797,10 @@ async function gotoAndAuth(page) {
   // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
   const gated = await detectAuthGate(page);
   if (AUTH_CREDENTIAL && gated) {
+    const gateViewBefore = await viewSignature(page);
     const mechanism = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-    await expectGateCleared(page, mechanism);
+    await expectGateCleared(page, mechanism, gateViewBefore);
   } else if (gated) {
     test.skip(true, 'Auth gate present but no credential — skipping navigation/control invariants');
   }
@@ -828,20 +852,24 @@ function backControl(page) {
   // Word-bound matching throughout (#308): :has-text and [aria-label*=] are
   // SUBSTRING matches, so both selected "Backup" — claude.prop's JSON-export
   // button — as a back control, and the unwind below would have pressed it.
-  // :text-matches gives \b for element text; CSS cannot regex an attribute, so
-  // the aria-label word boundary is emulated as exact / "back ..." / "... back"
-  // / "... back ...". The arrow glyphs stay as plain has-text — they are not
-  // word characters, so \b around them would not behave.
+  // :text-matches takes a real JS regex, so \b is available directly — a
+  // whitespace emulation like (^|\s)back(\s|$) would reject the legitimate
+  // "Go-back" / "Back:" / "Back ›" that the drill filter's \b ACCEPTS as back
+  // controls, and NAV would then self-skip for want of a control it had just
+  // classified. CSS cannot regex an attribute, so aria-label word-bounding goes
+  // through getByLabel with the same regex, unioned in via .or(). The arrow
+  // glyphs stay as plain has-text — they are not word characters, so \b around
+  // them matches nothing.
   return page.locator(
     '[data-back], ' +
-    '[aria-label="back" i], [aria-label^="back " i], [aria-label$=" back" i], [aria-label*=" back " i], ' +
-    'button:text-matches("(^|\\s)back(\\s|$)", "i"), a:text-matches("(^|\\s)back(\\s|$)", "i"), ' +
+    'button:text-matches("\\bback\\b", "i"), a:text-matches("\\bback\\b", "i"), ' +
     'button:has-text("←"), a:has-text("←")'
+  ).or(page.getByLabel(/\bback\b/i))
   // `.first()` alone grabs the FIRST IN THE DOM, which in the common SPA pattern
   // (prior views kept mounted under display:none) is the hidden control from the
   // level above — so the back-flow test drove a dead element and self-skipped as
   // "invariant N/A" on an app that fully exercises the invariant.
-  ).locator('visible=true').first();
+  .locator('visible=true').first();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -896,6 +924,11 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   // has no drill-down" unless the exclusions are reported.
   let candidatesSeen = 0;
   let excludedAsBack = 0;
+  // A click that DID change the view but revealed no back control ends the
+  // level with advanced=false and can reach the skip below — where a message
+  // claiming every attempt produced "no view change" would point the reader at
+  // fixture data or excluded labels instead of the navigation that happened.
+  let viewChangedNoBack = 0;
   // Tracked separately from the skip branch below, which only runs when the
   // traversal found NOTHING. If an earlier level drilled in successfully and a
   // later one exhausts the cap, that branch is bypassed entirely — the test
@@ -933,7 +966,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // Any view change ends this level's search: a drill-in (has a back control →
       // descend and keep going) or an unexpected move (no back control → stop, rather
       // than keep clicking a now-stale element list from the page we just left).
-      if (after !== before) { if (hasBack) { forward.push(after); advanced = true; } break; }
+      if (after !== before) { if (hasBack) { forward.push(after); advanced = true; } else { viewChangedNoBack++; } break; }
     }
     if (!advanced) break;
   }
@@ -963,9 +996,11 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     test.skip(true, capExhausted
       ? `Stopped after ${ATTEMPT_CAP} candidate attempts without finding a drill-in — the back-flow invariant was NOT evaluated. This is a budget outcome, not evidence the app lacks drill-down: raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`
       : `No multi-level drill-down with an in-app back control found — back-flow invariant N/A. ` +
-        `(${candidatesSeen} candidates seen, ${excludedAsBack} excluded as back/home controls, ${attempts} tried without a view change.) ` +
-        `If exclusions are nonzero, check those labels before trusting the N/A; if the signed-in fixture seeds no rows, ` +
-        `there may be nothing to drill into — that is a coverage gap, not an exercised invariant.`);
+        `(${candidatesSeen} candidates seen, ${excludedAsBack} excluded as back/home controls, ${attempts} tried: ` +
+        `${viewChangedNoBack} changed the view without revealing a back control, the rest produced no view change.) ` +
+        `If exclusions are nonzero, check those labels before trusting the N/A; if view changes without a back control ` +
+        `are nonzero, the app navigates but backControl() did not recognise its back affordance; if the signed-in ` +
+        `fixture seeds no rows, there may be nothing to drill into — a coverage gap, not an exercised invariant.`);
   }
 
   // Unwind: one back press per descended level. Each result must equal the expected

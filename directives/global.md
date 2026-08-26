@@ -211,10 +211,17 @@ index.html       ← the app's entry page (additional pages are fine — every
                    page matches the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
-  workflows/     ← the standard template set from templates/workflows/ (9 files):
+  workflows/     ← the standard template set from templates/workflows/ —
+                   8 unconditional:
     qa.yml, qa-live.yml, qa-response.yml,
     ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml,
-    pages-retry.yml, cron-notify.yml
+    cron-notify.yml
+                 ← + pages-retry.yml ONLY on a BRANCH-SOURCE project. On an
+                   Actions-source one it must not be installed (or must be
+                   repointed under W3's idempotent exception) — it watches the
+                   managed build a visibility flip can fire, so installed there
+                   it arms a retry of a rogue unfiltered deploy
+                   (→ *Hosting & Deployment*)
                  ← keepalive.yml is NOT standard: it pushes to main weekly, which
                    the required default-branch ruleset refuses, and a repo where
                    PRs land never hits the 60-day inactivity limit it exists for
@@ -316,10 +323,84 @@ both trigger on `page_build`, which fires only for **branch-source** builds
 (`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
 *Automation 4b — Pages Deploy Retry*). An Actions-source repo
 keeps the workflow files and gets no runs from them — monitoring that looks
-present and reports nothing, which is worse than none. The post-publish
-verification above is the replacement, not an extra: put the 200/404 assertions
-**inside the deploy workflow** so a bad filter fails the run that produced it,
-and do not rely on the monitors to notice.
+present and reports nothing, which is worse than none. **ADD to the monitor; do
+NOT repoint the retry.** `docs/standards/automations.md` → *Watcher Rules*
+(W2, W3) carries the table and the reasoning: `pages-monitor.yml` takes a
+`workflow_run` trigger naming your own deploy workflow (its file header ships the
+snippet), while `pages-retry.yml` must not **by default**, because it re-runs the
+**whole** watched run and would replay your entire build — an Actions-source
+project builds retry into its own deploy workflow instead (*Automation 4b*). W3
+carries one narrow exception and this rule does not override it: a project MAY
+extend the retry anyway **if its deploy is genuinely idempotent** — no build, no
+compile, no tests, same commit in and same tree out — provided it records in its
+own `CLAUDE.md` both that reasoning **and a revisit trigger**, the condition that
+ends the exception (*"if the deploy ever gains a build or test stage, move the
+retry inside it"*). The reasoning describes the deploy today; without a stated
+end condition the exception outlives the change that invalidates it.
+
+⚠️ **ADD that trigger — do NOT replace the existing arm — and the reason is the
+visibility flip above.** `pages-monitor.yml` keeps `page_build:` and `qa-live.yml`
+keeps `pages-build-deployment`; the new name goes **alongside**. Those arms are
+what see the **legacy managed build**, which a visibility flip can fire *even
+while Actions-source is configured*, unfiltered, and which can finish later and
+republish the whole tree. Drop them and that rogue build runs with **nothing
+watching it at all** — no gate, no monitor, only the after-the-fact forensics
+above. The templates are written additively for exactly this reason
+(`qa-live.yml`: *"+ your Actions deploy workflow's `name:`"*); a reader who
+"repoints" instead of adding silently removes the only thing that runs when the
+legacy build does.
+
+⚠️ **BUT KEEPING THE ARM IS NOT THE SAME AS DETECTING THE EXPOSURE, AND DO NOT
+READ IT THAT WAY.** `pages-monitor.yml` asserts exactly two things — the build
+did not error, and the live URL returns **200** — and `qa-live.yml` runs the
+ordinary UI suite. **A rogue build that republishes the unfiltered tree serves
+the app as 200 and passes both.** The internal paths are exposed and every
+watcher is green. So the arm buys you a run at the right moment and nothing
+more; **what turns that run into detection is a forbidden-path assertion** — the
+same 200/404 deny-list check the deploy workflow carries, evaluated by the
+watcher, against paths the template cannot know and the project must declare.
+Until a project adds that, a visibility-flip exposure is still caught only by
+someone looking. Tracked as #319.
+
+⚠️ **The asymmetry between the monitor and the retry is about RE-RUNNING, not
+about Pages.** A watcher that only **observes** — a monitor, a live gate — can
+name both sources at no cost, and should. A watcher that **re-runs** what it
+watches can not: a second name is a second thing it may replay. That is the whole
+of W2 vs W3, and it generalises to any watcher you add later.
+
+⚠️ **And whichever way you go, DELETE an unrepointed `pages-retry.yml` — the
+reason is worse than dead coverage.** In ordinary operation it is inert: it
+watches `pages-build-deployment`, a GitHub-managed name that still **resolves**
+after the switch (so the workflow-ref guard stays green) while nothing triggers
+it. **But on the visibility-flip path above, that name is exactly what fires** —
+and a retry left installed will faithfully **re-run the rogue unfiltered
+deployment** it was never meant to see, turning a one-off exposure into a
+retried one. So this is not the monitor case one file over: an unrepointed
+monitor merely fails to notice, while an unrepointed retry participates. Delete
+it and its `REQUIRED` entry, or repoint it under the exception above.
+
+⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
+monitor — they catch different failures, and swapping one for the other loses
+coverage silently.** Put the 200/404 assertions **inside the deploy workflow**, where
+a bad filter fails the run that produced it. But a deploy that **fails before
+reaching its own assertions** reports nothing about the live site: the steps that
+would have checked it never ran, so as far as verification is concerned the
+failure is **silent** — and only an external watcher turns that silence into a
+tracking issue. A `workflow_run` watcher on `types: [completed]` fires on a
+**failed** run as well as a successful one and reads the conclusion, which is why
+**adding** that trigger restores precisely the coverage the source switch
+removed. (Adding — never repointing; see below.)
+
+⚠️ **Know the bound on that, and do not overclaim it.** `types: [completed]`
+means the watcher sees runs that reach a **terminal state**. A deploy that hangs
+and never completes emits no `workflow_run` event either, so it is covered by
+**neither** the in-run assertions nor the watcher — catching that needs timeout
+or staleness monitoring, which is a third thing and not what either of these is.
+*(Raised by `apfp.claude`, whose Pages incident prompted this whole section: the
+earlier wording here made the verification the monitor's replacement, which would
+have retired the only watcher that can see a deploy that **failed before
+reaching its own assertions**. A deploy that literally never finishes is covered
+by neither instrument — see the bound stated above.)*
 
 *Written from an incident: on 2026-08-18 a repo's internal docs were public for
 ~18 minutes on exactly this path. The rule as it stood would have sent a session

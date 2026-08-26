@@ -264,9 +264,12 @@ repo). ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, `page_bu
 never fires and this monitor is inert until you add a `workflow_run` trigger
 naming your own deploy workflow — the template header carries the snippet, and
 the same name must be added to `qa-live.yml`'s watch list. Do NOT add it to
-`pages-retry.yml` — unless that deploy is provably idempotent and you record why
-in the project's CLAUDE.md, which is the one exception W3 grants (Step 9d spells
-it out). Rules: `docs/standards/automations.md` → *Watcher Rules*
+`pages-retry.yml` — unless that deploy is provably idempotent and you record, in
+the project's CLAUDE.md, **both** why *and* a **revisit trigger** naming the
+condition that ends the exception ("if the deploy ever gains a build or test
+stage, delete this watcher"). That is the one exception W3 grants (Step 9d spells
+it out); the reasoning alone describes the deploy today and outlives the change
+that invalidates it. Rules: `docs/standards/automations.md` → *Watcher Rules*
 (W2, W3).
 
 ```bash
@@ -397,7 +400,18 @@ images) and fails loudly if that import is missing, rather than skipping.
 
 ### 9d — Pages Retry
 
-Drop-in, portable as-is:
+⚠️ **BRANCH-SOURCE ONLY — check the project's Pages source before running this.**
+On an **Actions-source** project do NOT install this file, and omit its
+`REQUIRED` entry in `workflow-ref-guard`. It watches `pages-build-deployment`,
+which a **repo visibility flip fires even under Actions-source**, publishing the
+unfiltered tree — so installing it there arms a **retry of a rogue unfiltered
+deploy** (`directives/global.md` → *Hosting & Deployment*). The one exception is
+W3's: an Actions-source project whose deploy is genuinely idempotent may repoint
+it at that deploy, recording the reasoning **and a revisit trigger** in its
+`CLAUDE.md` and **updating** — not dropping — its `REQUIRED` entry
+(`automations.md` → *Watcher Rules* W3).
+
+On a branch-source project, drop-in, portable as-is:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-retry.yml \
@@ -413,8 +427,12 @@ broken deploy can't loop — at the ceiling `pages-monitor.yml` opens the tracki
 issue. **Two prerequisites:** (1) it targets the **branch-source** Pages workflow
 (`pages-build-deployment`) — projects on the **GitHub Actions** Pages source
 should instead build retry into their own deploy workflow, unless that deploy is
-provably idempotent and the reasoning is recorded in the project's CLAUDE.md
-(`docs/standards/automations.md` → *Watcher Rules*, W3); (2) it only arms once
+provably idempotent and the project's CLAUDE.md records both the reasoning **and
+a revisit trigger** ending the exception (`docs/standards/automations.md` →
+*Watcher Rules*, W3). ⚠️ An Actions-source project that keeps this watcher
+un-repointed must **delete** it, not narrow it — a visibility flip fires
+`pages-build-deployment` even under Actions-source, and the retry would re-run
+that rogue unfiltered deploy; (2) it only arms once
 it's on the default branch, so it covers the *next* deploy, not the one that adds
 it.
 

@@ -60,6 +60,23 @@ never fired at all, with no "it used to work" phase to notice.
 | `pages-monitor.yml` | **add** a `workflow_run` trigger naming it (header has the snippet) |
 | `pages-retry.yml` | **do not add it** — see W3 |
 
+⚠️ **"Add" is literal, and the existing arm is the load-bearing one.** Keep
+`page_build:` on the monitor and `pages-build-deployment` on `qa-live`; the new
+name goes alongside. Those arms watch the **legacy managed build**, which
+`global.md` → *Hosting & Deployment* documents as still firing on a **repo
+visibility flip even while Actions-source is configured** — unfiltered, and able
+to finish later and republish the whole tree over a filtered copy. A reader who
+*replaces* rather than adds keeps a green-looking watcher and deletes the only
+thing that observes that republish live. This is why the row says "add" rather
+than "point it at your deploy": the wording is doing work.
+
+⚠️ **The monitor/retry split is about RE-RUNNING, not about Pages** — state it
+this way and the table stops needing to be memorised. A watcher that only
+**observes** (monitor, live gate) may name both sources at no cost, because a
+second name is only a second thing it looks at. A watcher that **re-runs** what
+it watches may not, because a second name is a second thing it may replay. Apply
+that test to any watcher added later, rather than copying this table's rows.
+
 ### W3 — Retry is source-specific; monitoring is not
 
 Verifying a deploy is not re-running one. `pages-monitor` and `qa-live` may
@@ -73,6 +90,70 @@ no compile, no tests, same commit in and same tree out — but must record that
 reasoning in its own CLAUDE.md, which routes the difference through
 `/refresh-repo`'s documented-customization path rather than being preserved
 silently.
+
+⚠️ **That record must name a REVISIT TRIGGER — the condition that ends the
+exception — not just the reasoning that opened it.** The reasoning is a
+statement about the deploy *today*; the exception survives the change that
+invalidates it unless something says what that change is. An exception with no
+stated end condition is indistinguishable from one nobody thought about, which
+is the failure this rule is actually guarding against.
+
+⚠️ **AND WHEN THE TRIGGER FIRES, DELETE THE WATCHER — DO NOT NARROW IT.**
+Narrowing leaves a file that passes every check and watches a name that can no
+longer fire.
+
+⚠️ **STATE THIS RULE IN BOTH BRANCHES, EVERYWHERE IT APPEARS. "Branch-source
+only" is a one-sided sentence and the exception lives in the half it drops.**
+Every surface that installs, describes or inventories `pages-retry.yml` must
+carry both arms:
+
+> **branch-source** → install it, with its `REQUIRED` entry.
+> **Actions-source** → delete it and drop the `REQUIRED` entry; **or** repoint it
+> under the exception above, **updating** the `REQUIRED` entry to the project's
+> own deploy name rather than dropping it.
+
+This shape is not a style preference. Writing the default and trailing the
+exception as a clause failed **three times inside one pull request** (#317) —
+`global.md`, `new-repo.md`, then `dev-pipeline.md` and this refresh row — each
+time producing an absolute prohibition that overrode a documented exception, and
+each time caught by review rather than by the author. A two-branch statement
+makes an omitted exception a **visibly empty branch** instead of a missing
+sentence nobody can see.
+
+The worked example is a near-miss, kept in that form because the clean version
+teaches less. `apfp.claude` runs this exception deliberately and wrote the
+revisit trigger this rule asked for — *"if `pages.yml` ever gains a build or
+test stage, move the retry INSIDE it and drop `Pages` from `pages-retry.yml` and
+its REQUIRED entry."* Followed literally, that leaves `pages-retry.yml` watching
+**only `pages-build-deployment`**: a GitHub-managed name that still resolves, is
+allow-listed with a justification, passes every static check, and under
+Actions-source never fires again. **The exemplary revisit trigger manufactured
+the exact artifact the rule above forbids.** It should say *delete
+`pages-retry.yml` and its REQUIRED entry*, not *drop a name from it*.
+
+Note what that shares with the defect in `global.md` that occasioned this
+section — "repoint" where the scaffolding said "add". Neither verb is careless;
+both are locally sensible, and both leave a watcher that satisfies its guard and
+observes nothing. The common cause is that **our tooling can check whether a
+name RESOLVES and nothing checks whether a workflow can still FIRE** — the
+limitation `workflow-ref-guard`'s own scope warning states. Any rule written in
+the language of names inherits that blind spot, so a rule about watchers must
+say what happens to the FILE, not only to the names inside it.
+
+⚠️ **After a source switch, an unrepointed `pages-retry.yml` is DEAD, not
+dormant — DELETE it, or repoint it under the exception above.** The template
+watches `pages-build-deployment` by name. That name still *resolves* after the
+switch (GitHub manages it, so W1 and `workflow-ref-guard` both stay green),
+which is why nothing warns you.
+
+⚠️ **The reason is NOT that it goes quiet — that would only be dead weight.**
+Day to day it is inert. But a **repo visibility flip fires the legacy managed
+build even while Actions-source is configured** (`global.md` → *Hosting &
+Deployment*), publishing the **unfiltered tree** — and that build is exactly what
+this watcher names. A retry left installed will faithfully **re-run a rogue
+unfiltered deploy** on failure, turning a one-off exposure into a retried one.
+So this is **not** the monitor case one file over: an unrepointed monitor fails
+to notice, an unrepointed retry **participates**.
 
 ### Known limitation — `ci-notify` and `repository_dispatch`
 
@@ -208,7 +289,9 @@ on the previous version until someone re-runs the deploy by hand.
   retry into that workflow instead — this template covers the branch source by
   default. One narrow exception, per *Watcher Rules* → W3: a project MAY point it
   at its own deploy if that deploy is provably idempotent (no build, no compile,
-  no tests) and records the reasoning in its own CLAUDE.md.
+  no tests) and records in its own CLAUDE.md both the reasoning **and a revisit
+  trigger** ending the exception. When that trigger fires the watcher is
+  **deleted, not narrowed** (*Watcher Rules* → W3).
 - Uses `GITHUB_TOKEN` only (`actions: write`).
 
 **Template:** `templates/workflows/pages-retry.yml` — drop-in, no customization

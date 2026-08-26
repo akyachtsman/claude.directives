@@ -99,7 +99,12 @@ once locally — it persists.
 3. Enable GitHub Pages: **Settings → Pages → Source: `main` / `root`**
 4. Set repo Watch: **Watch → All Activity**
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):
-   - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests
+   - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests. Set
+     NEITHER this nor `TEST_AUTH_EMAIL` if the app's login ships a working
+     credential of its own (both fields prefilled, a human just clicks Log in):
+     the suite submits the form as it stands and records
+     `credentialSource: prefilled`, where supplying a secret would overwrite a
+     value that works (directives#312)
    - `TEST_AUTH_EMAIL` — the matching identifier, required when the app's gate is
      email+password (directives#304) or identifier-first — an email step shown
      before any password field (directives#310); without it that gate is not

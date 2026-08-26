@@ -384,6 +384,60 @@ const AUTH_CONTEXT_SRC =
 // step this suite knows how to answer.
 const AUTH_STEP_CAP = 2;
 
+// Mechanisms that mean THIS SUITE DID NOT COMPLETE AN AUTHENTICATION ATTEMPT.
+// Neither is a verdict about the app — both are facts about what the suite did,
+// which is why expectGateCleared stays silent on them and every scenario that
+// needs an authenticated view SKIPS rather than measuring the login screen. A
+// set, not two `||`s, because the last three mechanisms added to this file each
+// had to be carried to four call sites by hand and one of them was missed.
+const AUTH_INCOMPLETE = new Set(['identifier-step-unresolved', 'no-credential']);
+const authIncompleteNote = (mechanism) => mechanism === 'no-credential'
+  ? 'An auth gate is on screen, TEST_AUTH_CREDENTIAL is unset, and the form ships no credential of its own — there was nothing to submit.'
+  : 'Identifier step submitted but no credential step appeared — no credential was entered.';
+
+// A form that SHIPS a working credential is a legitimate credential source.
+// claude.insurance's login prefills username+password and a human signs in by
+// clicking Log in; before this, supplying TEST_AUTH_CREDENTIAL overwrote a
+// working value (turning a green login into a loud, correctly-reported but
+// wrongly-caused "gate retained"), and NOT supplying it skipped every auth
+// scenario — so the HONEST configuration, declining to invent a secret the app
+// does not need, bought zero auth coverage. Neither reports the truth about
+// that app. directives#312.
+//
+// The env value WINS when present: it is an explicit instruction, and reading
+// the field first would only spend a DOM round-trip to reach the same answer.
+// A prefilled value is used by NOT overwriting it — `value` is null on that
+// branch precisely so a caller cannot accidentally re-type what is already
+// there. Whitespace is not a credential, hence the trim.
+//
+// DEPENDS ON HYDRATION HAVING FINISHED, and that is not assumed: every caller
+// settles on networkidle before detectAndAuth runs, so an app that populates
+// its form from JS has done so by the time this reads.
+async function credentialFor(input, envValue) {
+  if (envValue) return { value: envValue, source: 'env' };
+  const existing = ((await input.inputValue().catch(() => '')) || '').trim();
+  if (existing) return { value: null, source: 'prefilled' };
+  return { value: null, source: null };
+}
+
+// Does the gate on screen carry a credential of its own? PASSWORD FIELDS ONLY,
+// and that narrowing is the same proof-grading rule the rest of this file runs
+// on: input[type=password] is the one field kind whose non-empty value is
+// necessarily a credential. A non-empty TEXT input is indistinguishable from a
+// search box with a default query, so a prefilled TEXT/PIN gate still skips —
+// a stated residue, not an oversight.
+// ⚠️ RESIDUE, browser autofill: a profile-backed browser could populate this
+// field, and the suite would then submit a real person's saved credential. CI
+// browsers are fresh contexts with no profile, which is why this is safe HERE;
+// it is not safe in a headed local run against your own profile.
+async function gateShipsCredential(page) {
+  return page.evaluate(() => [...document.querySelectorAll('input[type=password]')].some(el => {
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0) || getComputedStyle(el).visibility === 'hidden') return false;
+    return !el.readOnly && !el.disabled && (el.value || '').trim() !== '';
+  }));
+}
+
 // THE IDENTIFIER LADDER, with its anchor as a parameter. Two callers with
 // opposite anchor semantics (#310): the email+password path anchors on the
 // PASSWORD and picks the field beside it; the identifier-first path anchors on
@@ -566,7 +620,12 @@ async function identifierFill(page, marked, value) {
   // playwright.config.js's actionTimeout, and caught: losing the cleanup
   // must never cost the fill.
   const candHandle = await cand.elementHandle().catch(() => null);
-  await cand.fill(String(value));
+  // ALREADY CORRECT — leave it alone (#312). Beyond saving a fill, this removes
+  // the #311 hazard outright for the commonest prefilled case: no fill means no
+  // input events, so no controlled component can swap the node out from under
+  // the cleanup below.
+  const current = ((await cand.inputValue().catch(() => '')) || '').trim();
+  if (current !== String(value)) await cand.fill(String(value));
   // elementHandle.evaluate() does NOT re-query — it runs against the node
   // the pick returned, attached or not. If the app replaced that node the
   // write lands on the orphan and live markup is untouched, which is the
@@ -586,10 +645,15 @@ async function detectAndAuth(page, credential) {
   // Each step's pre-attempt state, and the trail of steps already taken.
   const steps = [];
   let viewBefore = null, snapBefore = null;
+  // WHERE THE CREDENTIAL CAME FROM, reported rather than inferred (#312).
+  // "prefilled credential accepted" and "supplied credential accepted" are
+  // different facts and were indistinguishable — the same complaint #302 makes
+  // about a windowed result dressed as a proven one.
+  let credentialSource = null;
   const done = (mechanism) => {
     if (steps.length) test.info().attach('auth-steps', {
       body: JSON.stringify({ mechanism, steps }, null, 2), contentType: 'application/json' });
-    return { mechanism, viewBefore, snapBefore, steps };
+    return { mechanism, credentialSource, viewBefore, snapBefore, steps };
   };
   for (let step = 0; step < AUTH_STEP_CAP; step++) {
     // Wait for auth UI to be fully active before interacting — prevents CI timing failures
@@ -612,6 +676,11 @@ async function detectAndAuth(page, credential) {
     const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').count();
 
     if (hasNumericButtons >= 9 && hasDotIndicator > 0) {
+      // A keypad ships no value to read, so gateShipsCredential() can never
+      // unlock this branch and only an env credential reaches it. Guarded
+      // anyway: without this, String(null) types the digits of "null".
+      if (!credential) return done('no-credential');
+      credentialSource = 'env';
       // PIN keypad — click each digit as a string (preserve leading zeros)
       for (const digit of String(credential).split('')) {
         await page.locator('button').filter({ hasText: new RegExp(`^${digit}$`) }).first().click();
@@ -638,7 +707,18 @@ async function detectAndAuth(page, credential) {
       // no <form> element falls back to page scope with type=email ONLY: off-form,
       // a bare text input is more likely a search box than a login field.
       // Without TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
-      if (AUTH_EMAIL) {
+      //
+      // RESOLVED BEFORE THE IDENTIFIER IS TOUCHED, because the answer decides
+      // whether the identifier may be touched at all (#312). A prefilled form is
+      // a MATCHED PAIR: overwriting its identifier with TEST_AUTH_EMAIL while
+      // leaving its shipped password in place submits a mismatched pair and
+      // fails a login that works. So the ladder runs only on the 'env' branch —
+      // which is every configuration that reaches here today, since before #312
+      // the callers refused to call this function without TEST_AUTH_CREDENTIAL.
+      // Existing behaviour is therefore unchanged; only the new path is bounded.
+      const cred = await credentialFor(passwordInput, credential || null);
+      credentialSource = cred.source;
+      if (AUTH_EMAIL && cred.source === 'env') {
         // The password's ASSOCIATED form via the DOM's own .form property — it
         // resolves both an ancestor <form> and external association
         // (<input form="login"> outside the form tag), where an ancestor-only
@@ -655,7 +735,17 @@ async function detectAndAuth(page, credential) {
         });
         if (marked.pick) await identifierFill(page, marked, AUTH_EMAIL);
       }
-      await passwordInput.fill(String(credential));
+      // FILL ONLY WHAT WE BROUGHT. On the 'prefilled' branch the field already
+      // holds a working value and the form is submitted as it stands — the
+      // whole point of #312, since the alternative was to replace a credential
+      // that works with one that may not and then report the resulting "gate
+      // retained" as if the app were at fault.
+      if (cred.source === 'env') await passwordInput.fill(String(cred.value));
+      // Nothing to submit is not an auth attempt. It must NOT report 'none',
+      // which every caller reads as "no gate, carry on" and which would send
+      // them to measure the login screen — the exact silent failure #309 exists
+      // to prevent. AUTH_INCOMPLETE is what the callers skip on instead.
+      if (!cred.source) return done('no-credential');
       const submitBtn = page.locator('button[type=submit], input[type=submit], button').filter({ hasText: /sign.?in|log.?in|submit|enter/i }).first();
       if (await submitBtn.isVisible().catch(() => false)) await submitBtn.click();
       else await passwordInput.press('Enter');
@@ -723,7 +813,17 @@ async function detectAndAuth(page, credential) {
     // the DOM would silently return 'none' here too.
     const textInput = page.locator('input[type=text], input:not([type])').locator('visible=true').first();
     if (await textInput.isVisible().catch(() => false)) {
-      await textInput.fill(String(credential));
+      // Same rule as the password branch (#312), carried here deliberately
+      // rather than left for the next reader to notice. NOTE the asymmetry with
+      // gateShipsCredential(), which refuses to READ a prefilled text input as a
+      // credential: a non-empty text field cannot be told from a search box with
+      // a default query, so this branch is only ever reached with an env value
+      // today. The arm is written for the day #302's per-project condition can
+      // tell the two apart.
+      const cred = await credentialFor(textInput, credential || null);
+      credentialSource = cred.source;
+      if (cred.source === 'env') await textInput.fill(String(cred.value));
+      if (!cred.source) return done('no-credential');
       await textInput.press('Enter');
       await page.waitForTimeout(3000);
       return done('text-input');
@@ -928,11 +1028,17 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   // SATISFIED, this mechanism is not a failure at all (an identifier-only SSO
   // that lands signed in), and the callers' skip below must not fire. That is
   // the seam; it is written here so #302's author finds it.
-  if (mechanism === 'identifier-step-unresolved') {
+  // 'no-credential' (#312) joins it on the same grounds and by the same route:
+  // a gate stood, nothing was submitted, and that is a fact about the SUITE.
+  // The set is the carrier so the next mechanism of this kind cannot be added
+  // to detectAndAuth and forgotten here.
+  if (AUTH_INCOMPLETE.has(mechanism)) {
     test.info().attach('auth-unverified', {
       body: JSON.stringify({
         mechanism,
-        note: 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. directives#302 tracks the per-project post-login condition that turns this into a verdict.',
+        note: mechanism === 'no-credential'
+          ? 'An auth gate was on screen, TEST_AUTH_CREDENTIAL is unset, and the form shipped no credential of its own — so nothing was submitted. NO CREDENTIAL WAS ENTERED and nothing is claimed about the app. Set TEST_AUTH_CREDENTIAL, or — if this app\'s login legitimately ships a working credential and a human signs in by clicking the button — check that the prefilled field is a visible, editable input[type=password]: a prefilled TEXT or PIN gate is deliberately NOT read as a credential source, because a non-empty text input cannot be told from a search box with a default query (directives#312).'
+          : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. directives#302 tracks the per-project post-login condition that turns this into a verdict.',
       }, null, 2),
       contentType: 'application/json',
     });
@@ -1122,7 +1228,12 @@ test('S1: page loads without JS errors', async ({ page }) => {
 // SCENARIO 2 — Auth Discovery & Login (with API diagnostics)
 // ─────────────────────────────────────────────────────────────────────────────
 test('S2: auth gate discovered and credential accepted', async ({ page }) => {
-  if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential provided — set the TEST_AUTH_CREDENTIAL env var (and TEST_AUTH_EMAIL for email+password gates); skipping auth test');
+  // THE SKIP MOVED BELOW THE PAGE LOAD (#312), and it had to: the second
+  // credential source is the form itself, which cannot be read before the app
+  // renders. The condition is now "no credential ANYWHERE", not "no env var".
+  // COST, stated because #306's rule demands it: a repo with no credential now
+  // pays goto + settle (up to ~55s) before skipping, where it used to skip in
+  // ~0ms. That is the price of being able to see a prefilled form at all.
   const pageErrors = watchPageErrors(page);
 
   // BUDGET — the 60_000 here was sized from the first TWO terms and stopped:
@@ -1152,9 +1263,12 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // <=10min" claim is UNCHANGED — S2 joins the ceiling, it does not raise it.
   //
   // SKIPPABLE — unlocked by TEST_AUTH_CREDENTIAL (plus TEST_AUTH_EMAIL on an
-  // email+password gate). Until that secret is set this scenario records ~0ms
-  // every run, so nothing in its history sized the number above; the arithmetic
-  // is what it costs the DAY THE SECRET ARRIVES. This is the scenario #306 was
+  // email+password or identifier-first gate), OR by a login form that ships a
+  // working credential of its own (#312). Until one of those exists this
+  // scenario records ~0ms every run, so nothing in its history sized the number
+  // above; the arithmetic is what it costs the DAY A CREDENTIAL ARRIVES — and
+  // #312 moved that day earlier for every prefilled-login project, which had no
+  // way to reach this scenario at all before. This is the scenario #306 was
   // measured on — see BUDGET SIZING at the top of this file.
   test.setTimeout(300_000);
   const getApiCalls = await captureApiCalls(page);
@@ -1171,6 +1285,17 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // request settling, or a gate/app-shell selector), not a larger number.
   await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
 
+  // Resolve the gate ONCE — each detectAuthGate() call burns its 5s waitFor
+  // when no gate is present, the same reason S3 and gotoAndAuth detect once.
+  const s2Gated = await detectAuthGate(page);
+  // A login form that SHIPS a working credential is the second source (#312).
+  // Consulted only when there is no env credential, and only behind a real
+  // gate, so a public app's behaviour is untouched.
+  const s2Prefilled = !AUTH_CREDENTIAL && s2Gated && await gateShipsCredential(page);
+  if (!AUTH_CREDENTIAL && !s2Prefilled) {
+    test.skip(true, 'No auth credential available — set the TEST_AUTH_CREDENTIAL env var (and TEST_AUTH_EMAIL for email+password or identifier-first gates), or, if this app\'s login ships a working credential of its own, check that it lands in a visible editable input[type=password] (directives#312); skipping auth test');
+  }
+
   const beforeSnap = await domSnapshot(page);
   const gateViewBefore = await viewSignature(page);
   // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
@@ -1178,10 +1303,10 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // text input (e.g. a public app's search box) and then falsely report auth failure.
   // Defaults FALL BACK to S2's own captures: when no attempt was made,
   // detectAndAuth never ran and there is no per-step state to grade against.
-  const { mechanism, viewBefore = gateViewBefore, snapBefore = beforeSnap } =
-    (await detectAuthGate(page))
+  const { mechanism, credentialSource, viewBefore = gateViewBefore, snapBefore = beforeSnap } =
+    s2Gated
       ? await detectAndAuth(page, AUTH_CREDENTIAL ?? '')
-      : { mechanism: 'none' };
+      : { mechanism: 'none', credentialSource: null };
 
   // LOAD_SETTLE_MS, not IDLE_MS: a successful login often lands with the app
   // shell still loading — verifying while the auth request or the post-auth
@@ -1219,7 +1344,13 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
     const firstKey = apiCalls[0]?.firstFieldKey ?? null;
     const diag = {
       mechanism,
-      credentialProvided: AUTH_CREDENTIAL ? 'yes' : 'none — set TEST_AUTH_CREDENTIAL',
+      // WHICH source, not just whether one existed (#312): "prefilled
+      // credential accepted" and "supplied credential accepted" are different
+      // facts, and a run that submitted the form's own value must say so.
+      credentialSource: credentialSource ?? 'none',
+      credentialProvided: AUTH_CREDENTIAL ? 'yes (TEST_AUTH_CREDENTIAL)'
+        : (credentialSource === 'prefilled' ? 'yes (shipped by the login form)'
+                                            : 'none — set TEST_AUTH_CREDENTIAL'),
       onscreenError,
       consoleErrors: pageErrors.all(),
       apiCalls,
@@ -1249,9 +1380,9 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
     throw gateErr;
   }
 
-  if (mechanism === 'identifier-step-unresolved') {
+  if (AUTH_INCOMPLETE.has(mechanism)) {
     await attachAuthDiagnostics().catch(() => {});
-    test.skip(true, 'Identifier step submitted but no credential step appeared — no credential was entered, so "credential accepted" cannot be asserted. See the auth-steps and auth-unverified attachments; check TEST_AUTH_EMAIL and whether this app is passwordless. A SKIP, not a failure: the identifier signal is discovery-grade and false-reddening a healthy app on it is the trade this file refuses (directives#302 is the verdict).');
+    test.skip(true, `${authIncompleteNote(mechanism)} "Credential accepted" cannot be asserted, so this is a SKIP rather than a failure — false-reddening a healthy app on a discovery-grade signal is the trade this file refuses (directives#302 is the verdict). See the auth-steps and auth-unverified attachments.`);
   }
 
   // snapBefore, not beforeSnap: with the per-step capture this compares the
@@ -1272,7 +1403,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 
   // Auth passed or no auth required — record mechanism
   test.info().attach('auth-result', {
-    body: JSON.stringify({ mechanism, domChanged }),
+    body: JSON.stringify({ mechanism, credentialSource: credentialSource ?? 'none', domChanged }),
     contentType: 'application/json',
   });
 });
@@ -1308,8 +1439,8 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // investigates it. Raise this BEFORE adding projects, never after — and see
   // the calling job's timeout-minutes, which this number pushes against.
   //
-  // SKIPPABLE ON A GATED APP — unlocked by TEST_AUTH_CREDENTIAL (a public app
-  // never skips here). The skip is the expensive kind of zero: what it declined
+  // SKIPPABLE ON A GATED APP — unlocked by TEST_AUTH_CREDENTIAL or by a login
+  // form that ships its own credential (#312); a public app never skips here. The skip is the expensive kind of zero: what it declined
   // to sweep was the LOGIN SCREEN, so a repo where S3 has been skipping has
   // measured a handful of controls, and the first credentialed run sweeps the
   // whole authenticated app — the profile the 900_000 above was measured on, and
@@ -1342,17 +1473,22 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // as a retained gate, failing S3 on an app with no login screen at all. The
   // old comment PROMISED the fall-through; the guard is what delivers it.
   const s3Gated = await detectAuthGate(page);
-  if (AUTH_CREDENTIAL && s3Gated) {
+  // "A credential exists" is not "TEST_AUTH_CREDENTIAL is set" (#312): a login
+  // form that ships a working credential is the other source, and a project
+  // that correctly declined to invent a secret it does not need used to buy
+  // zero auth coverage here. Consulted only behind a real gate and only when
+  // the env value is absent, so nothing else changes.
+  if (s3Gated && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
     const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
     await expectGateCleared(page, mechanism, viewBefore);
     // Same position as "gated, no credential": a gate stands and this suite
     // cannot pass it, so sweeping would only exercise the login screen. #310.
-    if (mechanism === 'identifier-step-unresolved') {
-      test.skip(true, 'Identifier step submitted but no credential step appeared — skipping sweep (would only exercise the login screen). See the auth-steps attachment.');
+    if (AUTH_INCOMPLETE.has(mechanism)) {
+      test.skip(true, `${authIncompleteNote(mechanism)} Skipping sweep (it would only exercise the login screen). See the auth-steps and auth-unverified attachments.`);
     }
   } else if (s3Gated) {
-    test.skip(true, 'Auth gate present but no credential — skipping sweep (would only exercise the login screen)');
+    test.skip(true, 'Auth gate present and no credential available from either source — skipping sweep (would only exercise the login screen)');
   }
 
   const elements = await discoverElements(page);
@@ -1508,7 +1644,9 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   // measured against the real app rather than the login screen. Gate on detectAuthGate()
   // — NOT just "a credential exists" — so a public-first app with a stray text input
   // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
-  if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
+  // Same two-source rule as S3 and gotoAndAuth (#312). S4 still does not skip
+  // when the gate stands — see the paragraph below the branch.
+  if (await detectAuthGate(page) && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
     const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
     await expectGateCleared(page, mechanism, viewBefore);
@@ -1539,7 +1677,10 @@ async function gotoAndAuth(page) {
   // Detect once and branch — each detectAuthGate() call burns a 5s waitFor timeout when
   // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
   const gated = await detectAuthGate(page);
-  if (AUTH_CREDENTIAL && gated) {
+  // Same two-source rule as S2/S3/S4 (#312): a form that ships a working
+  // credential unlocks the navigation and control invariants for a project
+  // that has no secret to set.
+  if (gated && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
     const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
     await expectGateCleared(page, mechanism, viewBefore);
@@ -1547,11 +1688,11 @@ async function gotoAndAuth(page) {
     // again on every nav reset, so a skip from here aborts that sweep
     // mid-flight — correct (the app has returned to a gate this suite cannot
     // pass) and identical to the no-credential behaviour at that call site.
-    if (mechanism === 'identifier-step-unresolved') {
-      test.skip(true, 'Identifier step submitted but no credential step appeared — skipping navigation/control invariants (they would only exercise the login screen). See the auth-steps attachment.');
+    if (AUTH_INCOMPLETE.has(mechanism)) {
+      test.skip(true, `${authIncompleteNote(mechanism)} Skipping the navigation/control invariants (they would only exercise the login screen). See the auth-steps and auth-unverified attachments.`);
     }
   } else if (gated) {
-    test.skip(true, 'Auth gate present but no credential — skipping navigation/control invariants');
+    test.skip(true, 'Auth gate present and no credential available from either source — skipping navigation/control invariants');
   }
 }
 
@@ -1742,8 +1883,9 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   // can be turned green by arriving late, which is the test that decides this.
   //
   // SKIPPABLE THREE WAYS, and all three have to clear before this number is ever
-  // tested: a credential must exist (gotoAndAuth() skips a gated app without
-  // one), the app must offer a multi-level drill-in, and backControlAll() must
+  // tested: a credential must exist from EITHER source — the env secret or a
+  // login form that ships one (#312) — since gotoAndAuth() skips a gated app
+  // with neither; the app must offer a multi-level drill-in, and backControlAll() must
   // recognise its back affordance. Until then NAV records the preamble and a
   // skip. ⚠️ THIS PR MOVES THAT LINE: directives#311's drill-dedup fix admits
   // <input role="button"> drill controls that used to self-skip the scenario,
@@ -1962,8 +2104,8 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
   // identifier-first step landed (#310): a split-step gate costs a second
   // settle+attempt cycle. 300_000, same as S2 and S4.
   //
-  // SKIPPABLE — via gotoAndAuth(), on a gated app with no TEST_AUTH_CREDENTIAL.
-  // The preamble is nearly the whole budget, so a skipping CTRL has measured the
+  // SKIPPABLE — via gotoAndAuth(), on a gated app with no credential from
+  // either source (#312). The preamble is nearly the whole budget, so a skipping CTRL has measured the
   // cheap half and none of the scan. See BUDGET SIZING at the top of this file.
   test.setTimeout(300_000);
   await gotoAndAuth(page);
@@ -2112,8 +2254,8 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // and the assumed mix was wrong. That is a measurement, and it beats another
   // derivation.
   //
-  // SKIPPABLE — via gotoAndAuth(), on a gated app with no TEST_AUTH_CREDENTIAL;
-  // and effectively a no-op on an app with no overlays, since every trigger
+  // SKIPPABLE — via gotoAndAuth(), on a gated app with no credential from
+  // either source (#312); and effectively a no-op on an app with no overlays, since every trigger
   // falls through the two `continue`s below. Either state records a fraction of
   // the sum above. The day a credential lands OR the first modal ships, the
   // per-trigger path runs for the first time — re-read the assumed mix then

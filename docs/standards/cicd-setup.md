@@ -153,6 +153,17 @@ In the target repo on GitHub:
 | `TEST_AUTH_CREDENTIAL` | Auth credential from `CLAUDE.md` (PIN, password, or token) |
 | `TEST_AUTH_EMAIL` | The matching identifier — REQUIRED when the gate is email+password (directives#304) OR identifier-first/split-step, i.e. an email step before any password field (directives#310) — without it a split-step gate is not detected at all; omit for PIN/password-only gates. Not truly secret: failure screenshots record it, so use a throwaway test-account address |
 
+**Exception — a login that already holds a working credential.** Some apps ship a
+demo login with both fields prefilled, where a human signs in by clicking the
+button. Set **NEITHER** secret for those: the suite submits the form as it stands
+and records `credentialSource: prefilled` in the `auth-result` attachment.
+Setting `TEST_AUTH_CREDENTIAL` there REPLACES a working value with a different
+one, and the resulting "gate retained" failure is correctly reported for an
+incorrect reason (directives#312). The field must be a visible, editable
+`input[type=password]` — a prefilled text or PIN gate is deliberately not read
+as a credential source, because a non-empty text input cannot be told apart from
+a search box with a default query.
+
 Add any additional backend API secrets the app requires (e.g. read-only API tokens for test accounts).
 
 ---
@@ -453,7 +464,7 @@ Required repository secrets:
 
 | Secret | Purpose |
 |---|---|
-| `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test |
+| `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test — OMIT when the app's login ships a working one of its own, which the suite then submits as-is and reports as `credentialSource: prefilled` (directives#312) |
 | `TEST_AUTH_EMAIL` | Matching identifier for email+password gates (directives#304) and for identifier-first/split-step gates, which are not detected without it (directives#310); omit otherwise. Recorded in failure screenshots — throwaway address only |
 | `DB_SERVICE_KEY` | Backend service-role key — server-side only (required by the project's scheduled data workflow, if any) |
 
@@ -481,7 +492,7 @@ Required repository variables:
 - [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `APP_URL` set as repository variable
-- [ ] `TEST_AUTH_CREDENTIAL` set as repository secret
+- [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app's login ships a working credential and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)
 - [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions
 - [ ] At least one successful run of each workflow confirmed

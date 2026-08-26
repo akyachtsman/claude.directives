@@ -49,7 +49,11 @@ An identifier step that produces no credential step is REPORTED, not asserted: t
 skips rather than certifying auth, because no credential was ever entered (directives#310).
 
 The credential comes from `TEST_AUTH_CREDENTIAL` in the environment — never from a file in
-the repo, and never hardcoded. After an auth attempt, check for any visible DOM transition
+the repo, and never hardcoded — with ONE other legitimate source: a login form that already
+holds a working credential. Where the app prefills both fields and a human signs in by
+clicking the button, set neither secret; the suite submits what the form holds and reports
+`credentialSource: prefilled`, because supplying a secret there overwrites a value that
+works and reports the resulting failure against the app (directives#312). After an auth attempt, check for any visible DOM transition
 (new elements, removed elements, URL hash change) to confirm success.
 
 ### Phase 2 — Element Mapping

@@ -412,22 +412,24 @@ failed**, and this repo reproducing the causes directly.
   serves the same built tree, so an absolute CDN module URL in it is still
   fetched from the blocked host and the app still cannot boot. That case is
   fixed by vendoring, rewriting, or proxying the import — not by moving the
-  origin. For a missing browser binary, **try the standard install before
-  concluding anything** — `npx playwright install --with-deps <browser>`, the
-  same command `ui-suite/action.yml` runs. `--with-deps` is not optional here: a
-  plain `install` can fetch the binary and leave it unlaunchable when the host
-  libraries are absent. An image that omits a browser has not necessarily blocked
-  fetching one — measured 2026-08-26, `cdn.playwright.dev` answers from the
-  sandbox (a 400 to a bare GET is a response, not a refusal), while the
-  deprecated `playwright.azureedge.net` mirror does not resolve.
+  origin. A browser absent from the image is **not** automatically a ceiling —
+  it may be installable, and `ui-suite/action.yml` already installs browsers this
+  way. Measured 2026-08-26, `cdn.playwright.dev` answers from the sandbox (a 400
+  to a bare GET is a response, not a refusal), while the deprecated
+  `playwright.azureedge.net` mirror does not resolve. So do not conclude
+  "unavailable" from "absent".
 
-  **The test is whether the browser LAUNCHES, not whether the install exited 0.**
-  A download that succeeds and then cannot start is the same ceiling as a download
-  that never happened, and grading on the install's exit code would refuse to let
-  you record it. So: install with `--with-deps`, launch it, and record a ceiling
-  when the launch fails — quoting the launch error, since that is what the next
-  session needs. "Absent from the image" is not "unavailable", and "installed" is
-  not "runnable".
+  **Grade on whether the browser LAUNCHES, never on an install's exit code.**
+  A download that succeeds and cannot start is a ceiling; a dependency step that
+  aborts before downloading is not evidence of one. Record a ceiling only on an
+  observed launch failure, and quote the launch error — that error is what the
+  next session needs, and it is the only thing here that is self-verifying.
+
+  The install ladder itself — which command, in which order, and what to fall
+  back to when dependency setup needs privileges the sandbox lacks — is
+  deliberately **not** specified in prose. Four attempts to state it here
+  produced four different defects, each introduced by the fix for the one before;
+  it is specified with a script and a test in #332.
 - **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
   workaround, it is removing the check.
 

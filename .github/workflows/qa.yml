@@ -76,6 +76,12 @@ jobs:
       # over-reaches — see the header of check-claims.js before trusting a green.
       - name: Check canonical claims reached their consumers
         run: node .github/scripts/check-claims.js
+      # A compile warning in a GUARD is a scheduled outage, not a lint nit: the
+      # same defect is invisible on 3.11, shown on 3.12, and fatal on 3.15, at
+      # which point the guard stops running and stops checking. Script header
+      # carries the full reasoning.
+      - name: Check the Python guards compile without warnings
+        run: python3 .github/scripts/check-py-warnings.py
 
       - name: Workflow cross-reference guard
         run: python3 .github/scripts/workflow-ref-guard.py

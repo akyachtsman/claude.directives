@@ -325,10 +325,16 @@ async function detectAndAuth(page, credential) {
       // Page scope (formless gate) uses rungs 1-2 only.
       const hasForm = await authForm.count().catch(() => 0);
       const scope = hasForm ? authForm : page;
-      const SEMANTIC = 'input[type=text][name*="email" i], input[type=text][name*="user" i], input[type=text][name*="login" i], ' +
-        'input[type=text][id*="email" i], input[type=text][id*="user" i], input[type=text][id*="login" i], ' +
-        'input[type=text][placeholder*="email" i], input[type=text][placeholder*="user" i], ' +
-        'input[type=text][aria-label*="email" i], input[type=text][aria-label*="user" i]';
+      // GENERATED, not hand-listed: the hand-written version required an
+      // explicit type=text on every clause, so a form of type-less inputs
+      // (<input name="tenant">, <input name="username">) matched NO semantic
+      // rung and fell to the DOM-order last resort — tenant filled, username
+      // blank. It had also drifted internally (login missing from two of the
+      // four attributes). The cross-product cannot omit a cell.
+      const T = ':is(input[type=text], input:not([type]))';
+      const SEMANTIC = ['name', 'id', 'placeholder', 'aria-label']
+        .flatMap(a => ['email', 'user', 'login'].map(v => `${T}[${a}*="${v}" i]`))
+        .join(', ');
       const rungs = [
         scope.locator('input[type=email]'),
         scope.locator('input[autocomplete="username" i], input[autocomplete="email" i]'),
@@ -586,6 +592,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
 
   const beforeSnap = await domSnapshot(page);
+  const gateViewBefore = await viewSignature(page);
   // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
   // detectAndAuth's text-input fallback would type the credential into the first visible
   // text input (e.g. a public app's search box) and then falsely report auth failure.
@@ -593,6 +600,16 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
     ? await detectAndAuth(page, AUTH_CREDENTIAL ?? '')
     : 'none';
   const afterSnap  = await domSnapshot(page);
+
+  // The SHARED retained-gate verdict, same as S3/S4/gotoAndAuth — S2 was the
+  // one auth path without it. S2's own checks miss a plain [role=alert]
+  // rejection: the alert text changes domSnapshot's bodyText prefix (so
+  // domChanged reads as progress) while the error selector below only matches
+  // id/class substrings containing "err" — and S2 then CERTIFIED the
+  // credential as accepted with the gate still on screen. The verifier the
+  // rest of the suite trusts must not be bypassable by the scenario whose
+  // whole job is the auth verdict.
+  await expectGateCleared(page, mechanism, gateViewBefore);
 
   const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
   // A wrong credential often renders an inline error, which itself changes the DOM —

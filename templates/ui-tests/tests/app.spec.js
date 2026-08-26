@@ -400,26 +400,43 @@ async function detectAndAuth(page, credential) {
           const preceding = cands.filter(el => el.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
           return preceding.length ? preceding[preceding.length - 1] : cands[0];
         };
+        // ACCESSIBLE-NAME matcher, both branches: <label for> / wrapping
+        // labels (el.labels) and aria-labelledby text against the same
+        // email/user/login vocabulary as the SEMANTIC rung — a gate labeling
+        // its identifier with generated attributes carries the word "Email"
+        // only in its accessible name, where no attribute selector can see
+        // it. KNOWN LIMIT, deliberate: this reads TEXT, not the full
+        // accessibility-name algorithm — a label whose only content is
+        // <img alt="Email"> is not seen. Reimplementing accname inside an
+        // evaluate is the staircase the back-control locator climbed and
+        // abandoned for getByRole; no role locator can express "text input
+        // whose NAME says email", so the residue is documented instead — an
+        // app that exotic needs directives#302's per-project condition.
+        const nameMatches = el => {
+          const rootNode = el.getRootNode();
+          const byId = id => (rootNode.getElementById ? rootNode : document).getElementById(id)?.textContent || '';
+          const labelledby = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(byId).join(' ');
+          const labels = el.labels ? [...el.labels].map(l => l.textContent || '').join(' ') : '';
+          return /email|user|login/i.test(`${labelledby} ${labels}`);
+        };
+        const TEXTish = ':is(input[type=text], input:not([type]))';
         let pick = null;
         if (root) {
-          for (const sel of sels) { pick = nearest(candsOf(sel)); if (pick) break; }
+          // The accessible-name rung sits BETWEEN the semantic attribute rung
+          // and the unrestricted last resort: an input labeled "Email" with
+          // generated attributes must win before the final rung's proximity
+          // hands the fill to a nearer tenant field.
+          const rungPools = [
+            ...sels.slice(0, -1).map(sel => () => candsOf(sel)),
+            () => candsOf(TEXTish).filter(nameMatches),
+            () => candsOf(sels[sels.length - 1]),
+          ];
+          for (const pool of rungPools) { pick = nearest(pool()); if (pick) break; }
         } else {
           // querySelectorAll on the joined union returns document order, so
-          // nearest() sees one proximity-sorted candidate pool.
-          // ACCESSIBLE-NAME candidates join the union: a formless gate may
-          // label its identifier via <label for> or aria-labelledby while its
-          // raw attributes carry generated ids — the accessible name is then
-          // the only place "Email" appears, and no attribute selector can see
-          // it. Same email/user/login vocabulary as the SEMANTIC rung.
-          const named = [...scope.querySelectorAll(':is(input[type=text], input:not([type]))')]
-            .filter(el => vis(el) && editable(el))
-            .filter(el => {
-              const rootNode = el.getRootNode();
-              const byId = id => (rootNode.getElementById ? rootNode : document).getElementById(id)?.textContent || '';
-              const labelledby = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(byId).join(' ');
-              const labels = el.labels ? [...el.labels].map(l => l.textContent || '').join(' ') : '';
-              return /email|user|login/i.test(`${labelledby} ${labels}`);
-            });
+          // nearest() sees one proximity-sorted candidate pool; accessible-
+          // name candidates are unioned in and the pool re-sorted.
+          const named = candsOf(TEXTish).filter(nameMatches);
           const pool = [...new Set([...candsOf(sels.join(', ')), ...named])];
           pool.sort((a, b) => a === b ? 0
             : (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
@@ -553,36 +570,37 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
     });
     return;
   }
-  // What a signal may DO here depends on what it can PROVE, per position:
-  //   - input[type=password] is a semantic element — proof-grade ANYWHERE, as
-  //     the retained first factor or a newly revealed second one. Throws.
-  //   - The PIN signal (digit-button count + dot/pin class names) is
-  //     proof-grade only as SAME-KIND retention: post-attempt, the same
-  //     signals that identified the gate we attempted. As a NEW-gate detector
-  //     after a password login it reads a calculator or dial pad — or any
-  //     visible class containing "pin" ("spinner", "pinned") — as a second
-  //     factor, so in that position it gets what this file gives every
-  //     non-proof signal: a loud diagnostic, never a throw. directives#302's
-  //     per-project post-login condition is the real 2FA answer.
-  //   - The text heuristic stays fully demoted (above).
-  // Rerunning the FULL discovery detector is the wrong shape in both
-  // directions: it let the text heuristic throw on a sparse auth-worded
-  // landing page, and checking only the attempted signal certified a
-  // password→PIN second-factor flow. This matrix is the residue that survives
-  // both counterexample families.
+  // What a signal may DO here depends on what it can PROVE — and the ONLY
+  // signal that proves anything post-attempt is input[type=password]: a
+  // semantic element, meaningful anywhere it appears (retained first factor
+  // or newly revealed second one). It throws. The PIN signal (page-wide
+  // digit-button count + dot/pin class names) proves nothing in EITHER
+  // position: as a new-gate detector after a password login it reads a
+  // calculator or dial pad — or any visible class containing "pin"
+  // ("spinner", "pinned") — as a second factor, and even as SAME-KIND
+  // retention it cannot tell a rejected PIN's standing gate from the
+  // post-login view of a PIN-gated calculator app, whose own keypad
+  // satisfies the identical page-wide signals. The count cannot associate
+  // itself with the gate that was attempted. So the PIN signal gets what
+  // this file gives every non-proof signal (the text-gate rule above): a
+  // loud diagnostic, never a throw — directives#302's per-project
+  // post-login condition is the real verdict for PIN gates and 2FA alike.
   const pinNow = await pinGateVisible(page);
   const pwNow  = await passwordGateVisible(page);
-  if (mechanism === 'password-form' && !pwNow && pinNow) {
-    test.info().attach('auth-second-factor-suspected', {
-      body: JSON.stringify({
-        mechanism,
-        note: 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. directives#302 tracks the per-project post-login condition that verifies this properly.',
-      }, null, 2),
-      contentType: 'application/json',
-    });
-    return;
+  if (!pwNow) {
+    if (pinNow) {
+      test.info().attach(mechanism === 'pin-keypad' ? 'auth-unverified' : 'auth-second-factor-suspected', {
+        body: JSON.stringify({
+          mechanism,
+          note: mechanism === 'pin-keypad'
+            ? 'PIN-keypad-like signals (>=9 digit buttons plus a dot/pin-class element) are still visible after the PIN attempt. This is EITHER the retained gate (rejected PIN) OR the app\'s own post-login numeric UI — a PIN-gated calculator or dial pad satisfies the same page-wide signals — and the signal cannot associate itself with the attempted gate, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. directives#302 tracks the per-project post-login condition that verifies this properly.'
+            : 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. directives#302 tracks the per-project post-login condition that verifies this properly.',
+        }, null, 2),
+        contentType: 'application/json',
+      });
+    }
+    return; // no password gate on screen — cleared, still the WINDOW (#302) stated above
   }
-  if (!pwNow && !(mechanism === 'pin-keypad' && pinNow)) return; // cleared — a WINDOW (#302), as stated above
   const attemptedKindGone = mechanism === 'pin-keypad' && !pinNow;
   // THREE versions of a "did login actually succeed" heuristic died in review
   // before this one: (1) any remaining gate fails — false red on an app whose
@@ -625,6 +643,12 @@ async function discoverElements(page) {
   return page.evaluate(() => {
     const selectors = ['button', 'a[href]', 'input:not([type=hidden])', 'select', 'textarea',
                        '[role=button]', '[onclick]'];
+    // One ELEMENT can match several selectors (<button onclick> matches
+    // 'button' and '[onclick]'; add role=button and it matches three).
+    // Records after the first carry duplicate:true so capped consumers (NAV's
+    // ATTEMPT_CAP) can skip re-charges for the same control — four inert
+    // triple-matching buttons must not spend twelve attempts.
+    const seenEls = new Set();
     return selectors.flatMap(sel =>
       [...document.querySelectorAll(sel)]
         // Index BEFORE filtering: page.locator(sel).nth(i) counts every DOM match,
@@ -635,6 +659,7 @@ async function discoverElements(page) {
           return r.width > 0 && r.height > 0;
         })
         .map(({ el, index }) => ({
+          duplicate: seenEls.has(el) || (seenEls.add(el), false),
           selector: sel,
           index,
           tag: el.tagName.toLowerCase(),
@@ -1260,6 +1285,10 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
     let advanced = false;
     for (const el of await discoverElements(page)) {
       if (!['a', 'button'].includes(el.tag) && !el.selector.includes('role=button')) continue;
+      // A record for an element already emitted under an earlier selector is
+      // the SAME control — skip before counting, so duplicates neither
+      // inflate candidatesSeen nor spend ATTEMPT_CAP on repeat clicks.
+      if (el.duplicate) continue;
       candidatesSeen++;
       // Word-bound (#308): the unanchored version matched Backup, Feedback,
       // Background, Returns and Homepage, silently excluding legitimate
@@ -1277,6 +1306,15 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // "back" carries the same not-followed-by-"up" lookahead as
       // backControlAll(): "Back up data" is a backup action, not navigation —
       // it stays a drill candidate, and the unwind will not press it either.
+      // KNOWN LIMIT, deliberate: home/return classification is string-based
+      // (recorded label + ariaLabel, which resolves aria-labelledby TEXT but
+      // not img alt inside a reference), so an icon-only Home button named
+      // through an image's alt can slip this filter and be clicked while
+      // drilling. Back — the case that corrupts the unwind — is covered by
+      // construction via the backControlAll() membership check below; home/
+      // return misclassification costs one wasted navigation, not a false
+      // verdict, and chasing the full accname algorithm here is the
+      // staircase this file already abandoned for locator-side matching.
       if (/\bback\b(?![\s-]*up\b)|\b(return|home)\b|[←‹◀]/i.test(`${el.label} ${el.ariaLabel}`.replace(/_/g, ' '))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {

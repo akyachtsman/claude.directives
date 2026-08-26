@@ -354,8 +354,19 @@ async function detectAndAuth(page, credential) {
           const r = el.getBoundingClientRect();
           return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
         };
+        // EDITABLE candidates only: a two-step login shows the already-chosen
+        // email in a readonly input beside the password — fill() on it burns
+        // its timeout and fails, while leaving it alone submits fine. A
+        // readonly prefilled identifier is accepted by NOT overwriting it.
+        const editable = el => !el.readOnly && !el.disabled;
+        // Formless scope is the PASSWORD'S OWN ROOT, not document: a login
+        // component in an open shadow root keeps its inputs behind a boundary
+        // querySelectorAll cannot cross from document, while Playwright found
+        // the password inside it. getRootNode() is the shadow root there and
+        // document everywhere else — the non-shadow case is unchanged.
+        const scope = root || pw.getRootNode();
         for (const sel of sels) {
-          const cands = [...(root || document).querySelectorAll(sel)].filter(vis);
+          const cands = [...scope.querySelectorAll(sel)].filter(el => vis(el) && editable(el));
           if (!cands.length) continue;
           const preceding = cands.filter(el => el.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
           const pick = preceding.length ? preceding[preceding.length - 1] : cands[0];
@@ -481,18 +492,22 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
     });
     return;
   }
-  // ONLY the attempted mechanism's signal is checked — never a rerun of the
-  // full discovery detector. Discovery answers "is there ANY gate here?", and
-  // rerunning it as the verdict let the text-gate heuristic (demoted above as
-  // proof-grade for its OWN mechanism) throw on a password login whose landing
-  // page is sparse and auth-worded — one search field plus "Last login" reads
-  // as a text gate, and every authenticated scenario false-reds on a login
-  // that succeeded. The question here is narrower and answerable: is the gate
-  // kind we just attempted still on screen?
-  const retained = mechanism === 'pin-keypad'
-    ? await pinGateVisible(page)
-    : await passwordGateVisible(page); // 'password-form' — the only other mechanism that reaches here
-  if (!retained) return; // cleared — a WINDOW (#302), as stated above
+  // BOTH robust signals are checked — what stays excluded is ONLY the demoted
+  // text heuristic, never the other element-kind gate. Checking just the
+  // attempted mechanism's signal certified exactly the flow it should refuse:
+  // a password step that advances to a PIN/second-factor keypad clears
+  // passwordGateVisible while a robust gate stands on screen. And rerunning
+  // the FULL discovery detector is wrong in the other direction: the text
+  // heuristic (demoted above as proof-grade for its own mechanism) would
+  // throw on a password login whose landing page is sparse and auth-worded —
+  // one search field plus "Last login" reads as a text gate. The two
+  // element-kind signals are proof-grade in either position — first factor
+  // or newly revealed second factor.
+  const pinNow = await pinGateVisible(page);
+  const pwNow  = await passwordGateVisible(page);
+  if (!pinNow && !pwNow) return; // cleared — a WINDOW (#302), as stated above
+  const attemptedKindGone =
+    (mechanism === 'pin-keypad' && !pinNow) || (mechanism === 'password-form' && !pwNow);
   // THREE versions of a "did login actually succeed" heuristic died in review
   // before this one: (1) any remaining gate fails — false red on an app whose
   // post-login view carries a password field; (2) changed view passes — a
@@ -515,6 +530,10 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   throw new Error(
     `Auth gate still present after a '${mechanism}' attempt` +
     (viewNow === gateViewBefore ? ' (view unchanged)' : ' (view changed — likely a rejection message or reloaded gate)') +
+    (attemptedKindGone
+      ? ` — the attempted gate cleared but a ${pinNow ? 'PIN/keypad' : 'password'} view is now on screen: ` +
+        `a second auth factor, which this suite cannot pass with a single credential`
+      : '') +
     ` — refusing to run this scenario against the login screen. Check TEST_AUTH_CREDENTIAL` +
     (mechanism === 'password-form' ? ' and TEST_AUTH_EMAIL (email+password gates need both, directives#304)' : '') +
     `. A rejected credential and a never-filled field look identical from here. If your app's ` +
@@ -672,23 +691,13 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // "credential rejected" on a credential that was accepted.
   const afterSnap  = await domSnapshot(page);
 
-  // The SHARED retained-gate verdict, same as S3/S4/gotoAndAuth — S2 was the
-  // one auth path without it. S2's own checks miss a plain [role=alert]
-  // rejection: the alert text changes domSnapshot's bodyText prefix (so
-  // domChanged reads as progress) while the error selector below only matches
-  // id/class substrings containing "err" — and S2 then CERTIFIED the
-  // credential as accepted with the gate still on screen. The verifier the
-  // rest of the suite trusts must not be bypassable by the scenario whose
-  // whole job is the auth verdict.
-  await expectGateCleared(page, mechanism, gateViewBefore);
-
-  const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
   // A wrong credential often renders an inline error, which itself changes the DOM —
   // so domChanged alone is not proof of success. Treat a non-empty on-screen error as a
   // failure even when the DOM changed. Read the first VISIBLE, non-empty error element:
   // apps often keep hidden/empty `.error` placeholders, so `.first().textContent()` could
   // read the wrong node. Synchronous evaluate — no locator waiting, so it can't burn the
-  // test timeout either.
+  // test timeout either. Read BEFORE the verifier below, so a retained-gate
+  // failure still reports the rejection text.
   const onscreenError = await page.evaluate(() => {
     const els = [...document.querySelectorAll('[id*="err"], [class*="err"], [class*="error"]')]
       .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
@@ -696,14 +705,17 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
     return '';
   });
 
-  if (mechanism !== 'none' && (!domChanged || onscreenError.length > 0)) {
+  // Attached by BOTH failure paths — the shared verifier's throw and S2's own
+  // softer checks below. The retained gate IS the common rejection case, and
+  // throwing before this attach lost exactly the API status, response shape,
+  // console errors, and rejection text this scenario promises on failure.
+  const attachAuthDiagnostics = async () => {
     const apiCalls = await getApiCalls();
-    const errText  = onscreenError;
     const firstKey = apiCalls[0]?.firstFieldKey ?? null;
     const diag = {
       mechanism,
       credentialProvided: AUTH_CREDENTIAL ? 'yes' : 'none — set TEST_AUTH_CREDENTIAL',
-      onscreenError: errText,
+      onscreenError,
       consoleErrors: pageErrors.all(),
       apiCalls,
       responseShape: firstKey
@@ -714,10 +726,31 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       body: JSON.stringify(diag, null, 2),
       contentType: 'application/json',
     });
+    return diag;
+  };
+
+  // The SHARED retained-gate verdict, same as S3/S4/gotoAndAuth — S2 was the
+  // one auth path without it. S2's own checks miss a plain [role=alert]
+  // rejection: the alert text changes domSnapshot's bodyText prefix (so
+  // domChanged reads as progress) while the error selector below only matches
+  // id/class substrings containing "err" — and S2 then CERTIFIED the
+  // credential as accepted with the gate still on screen. The verifier the
+  // rest of the suite trusts must not be bypassable by the scenario whose
+  // whole job is the auth verdict.
+  try {
+    await expectGateCleared(page, mechanism, gateViewBefore);
+  } catch (gateErr) {
+    await attachAuthDiagnostics().catch(() => {});
+    throw gateErr;
+  }
+
+  const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
+  if (mechanism !== 'none' && (!domChanged || onscreenError.length > 0)) {
+    const diag = await attachAuthDiagnostics();
     throw new Error(
-      `S2 FAIL | mechanism: ${mechanism} | onscreenError: "${errText}" | ` +
-      `API status: ${apiCalls[0]?.status ?? 'no call'} | ` +
-      `recordCount: ${apiCalls[0]?.recordCount ?? 'n/a'} | ` +
+      `S2 FAIL | mechanism: ${mechanism} | onscreenError: "${onscreenError}" | ` +
+      `API status: ${diag.apiCalls[0]?.status ?? 'no call'} | ` +
+      `recordCount: ${diag.apiCalls[0]?.recordCount ?? 'n/a'} | ` +
       `responseShape: ${diag.responseShape} | ` +
       `consoleErrors: ${pageErrors.all().join('; ') || 'none'}`
     );

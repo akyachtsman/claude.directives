@@ -153,7 +153,13 @@ const DERIVE = process.argv.includes('--derive');
 // heuristic git itself uses — so a new text format needs no allowlist edit.
 const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'utf8' })
   .split('\n').filter(Boolean)
-  .filter((f) => !f.includes('node_modules/') && f !== MANIFEST)
+  .filter((f) => !f.includes('node_modules/'))
+  // BOTH guard artifacts, for the same reason the target validation rejects
+  // them: they quote every claim as rationale, pattern and worked example, so
+  // they match by construction and are permanent false candidates in advisory
+  // output. Excluding only the manifest reported the checker as an unlisted
+  // carrier on every single run, which is how a advisory list gets ignored.
+  .filter((f) => f !== MANIFEST && f !== '.github/scripts/check-claims.js')
   .filter((f) => {
     try {
       const head = readFileSync(f).subarray(0, 8192);
@@ -278,6 +284,13 @@ for (const claim of claims) {
   // Each claim using {{NEG}} declares its sentence shapes once; every negator is
   // then probed in every position, and adding one to the definition
   // automatically adds its tests. There is no list left to forget to update.
+  // OPTIONAL IS NOT A GUARD. Deleting a claim's negatorProbe silently skipped
+  // every derived test while the pattern still used {{NEG}} — reproduced in
+  // round 8, all 32 pairs green — restoring precisely the drift round 7 closed.
+  // A placeholder in the pattern is what makes the probe mandatory.
+  if (pattern && pattern.includes('{{NEG}}') && !claim.negatorProbe) {
+    fail(`${id}: pattern uses {{NEG}} but declares no "negatorProbe" — the derived position tests would be skipped entirely, which is the drift this placeholder exists to prevent`);
+  }
   if (claim.negatorProbe) {
     if (!pattern || !pattern.includes('{{NEG}}')) {
       fail(`${id}: declares negatorProbe but its pattern has no {{NEG}} — the probes would test nothing`);
@@ -287,7 +300,15 @@ for (const claim of claims) {
           fail(`${id}: negatorProbe.${position} must be a string containing %s (where the negator goes)`);
           continue;
         }
-        for (const neg of NEGATORS.split('|')) {
+        // The floor is checked alongside the definition, not instead of it:
+        // derivation covers what `negators` currently says, the floor covers
+        // what it must never stop saying. Narrowing the definition removes a
+        // derived probe and its value in one edit — only the floor survives it.
+        const FLOOR = MANIFEST_DOC.negatorFloor;
+        if (!Array.isArray(FLOOR) || FLOOR.length === 0) {
+          fail(`${id}: the manifest declares no "negatorFloor" — without a definition-independent baseline, narrowing "negators" deletes a negator and its derived probe in the same edit and nothing fails`);
+        }
+        for (const neg of [...NEGATORS.split('|'), ...(Array.isArray(FLOOR) ? FLOOR : [])]) {
           // The definition holds regex fragments; render a literal a carrier
           // could actually contain, so the probe tests prose, not a pattern.
           const word = neg.replace(/\['’\]\?/g, "'").replace(/[?]/g, '');

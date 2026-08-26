@@ -400,7 +400,18 @@ images) and fails loudly if that import is missing, rather than skipping.
 
 ### 9d — Pages Retry
 
-Drop-in, portable as-is:
+⚠️ **BRANCH-SOURCE ONLY — check the project's Pages source before running this.**
+On an **Actions-source** project do NOT install this file, and omit its
+`REQUIRED` entry in `workflow-ref-guard`. It watches `pages-build-deployment`,
+which a **repo visibility flip fires even under Actions-source**, publishing the
+unfiltered tree — so installing it there arms a **retry of a rogue unfiltered
+deploy** (`directives/global.md` → *Hosting & Deployment*). The one exception is
+W3's: an Actions-source project whose deploy is genuinely idempotent may repoint
+it at that deploy, recording the reasoning **and a revisit trigger** in its
+`CLAUDE.md` and **updating** — not dropping — its `REQUIRED` entry
+(`automations.md` → *Watcher Rules* W3).
+
+On a branch-source project, drop-in, portable as-is:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-retry.yml \

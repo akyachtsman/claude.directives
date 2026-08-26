@@ -211,10 +211,17 @@ index.html       ← the app's entry page (additional pages are fine — every
                    page matches the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
-  workflows/     ← the standard template set from templates/workflows/ (9 files):
+  workflows/     ← the standard template set from templates/workflows/ —
+                   8 unconditional:
     qa.yml, qa-live.yml, qa-response.yml,
     ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml,
-    pages-retry.yml, cron-notify.yml
+    cron-notify.yml
+                 ← + pages-retry.yml ONLY on a BRANCH-SOURCE project. On an
+                   Actions-source one it must not be installed (or must be
+                   repointed under W3's idempotent exception) — it watches the
+                   managed build a visibility flip can fire, so installed there
+                   it arms a retry of a rogue unfiltered deploy
+                   (→ *Hosting & Deployment*)
                  ← keepalive.yml is NOT standard: it pushes to main weekly, which
                    the required default-branch ruleset refuses, and a repo where
                    PRs land never hits the 60-day inactivity limit it exists for
@@ -391,7 +398,9 @@ and never completes emits no `workflow_run` event either, so it is covered by
 or staleness monitoring, which is a third thing and not what either of these is.
 *(Raised by `apfp.claude`, whose Pages incident prompted this whole section: the
 earlier wording here made the verification the monitor's replacement, which would
-have retired the only watcher that can see a deploy that never finished.)*
+have retired the only watcher that can see a deploy that **failed before
+reaching its own assertions**. A deploy that literally never finishes is covered
+by neither instrument — see the bound stated above.)*
 
 *Written from an incident: on 2026-08-18 a repo's internal docs were public for
 ~18 minutes on exactly this path. The rule as it stood would have sent a session

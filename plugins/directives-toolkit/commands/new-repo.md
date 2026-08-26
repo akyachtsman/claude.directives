@@ -98,7 +98,10 @@ Execute in order:
    anything: **`qa-live.yml`** (add it to `workflow_run.workflows`) and
    **`pages-monitor.yml`** (add a `workflow_run` trigger — its header has the
    snippet). `pages-retry.yml` must NOT get it — and on an **Actions-source**
-   project must not be installed at all (above). Omitting this step leaves the
+   project is not installed **by default** (above), the one exception being W3's:
+   a genuinely idempotent deploy may repoint it, with the reasoning **and a
+   revisit trigger** recorded in the project's `CLAUDE.md` and its `REQUIRED`
+   entry **updated** to that deploy's name rather than dropped. Omitting this step leaves the
    live QA gate and the deploy monitor silently inert, which reads as healthy.
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 

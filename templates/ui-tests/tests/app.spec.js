@@ -308,23 +308,19 @@ async function detectAndAuth(page, credential) {
     // Without TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
     if (AUTH_EMAIL) {
       const authForm = passwordInput.locator('xpath=ancestor::form[1]');
-      // `.locator('visible=true')` BEFORE `.first()` — the same idiom (and the
-      // same reason) as backControl(): a hidden responsive copy of the field
-      // earlier in the DOM would otherwise be selected, the visibility check
-      // would then SKIP the fill instead of trying the visible candidate, and
-      // the form submits a blank identifier.
       // PREFERENCE LADDER, most-semantic first — never one union, because a
       // selector union preserves DOM order and a tenant/org field ahead of the
       // identifier would receive the email. Rungs: (1) the typed email input;
-      // (2) autocomplete=username/email — the spec-defined identifier marker;
-      // (3) a text input whose name/id/placeholder/aria-label SAYS it is an
-      // email/user/login field; (4) form-scoped last resort, any visible text
-      // input — kept because identifier fields on login forms are often plain
-      // unlabeled type=text, and a login form rarely holds a competing one
-      // (the tenant-field case is exactly what rungs 2-3 exist to win first).
-      // Page scope (formless gate) uses rungs 1-2 only.
+      // (2) autocomplete=username/email — the spec-defined identifier marker,
+      // matched with ~= because the attribute is a space-separated token list
+      // ("section-login username") and exact equality misses every multi-token
+      // value; (3) a text input whose name/id/placeholder/aria-label SAYS it
+      // is an email/user/login field; (4) form-scoped last resort, any visible
+      // text input — kept because identifier fields on login forms are often
+      // plain unlabeled type=text, and a login form rarely holds a competing
+      // one (the tenant-field case is exactly what rungs 2-3 exist to win
+      // first). Page scope (formless gate) uses rungs 1-2 only.
       const hasForm = await authForm.count().catch(() => 0);
-      const scope = hasForm ? authForm : page;
       // GENERATED, not hand-listed: the hand-written version required an
       // explicit type=text on every clause, so a form of type-less inputs
       // (<input name="tenant">, <input name="username">) matched NO semantic
@@ -336,16 +332,42 @@ async function detectAndAuth(page, credential) {
         .flatMap(a => ['email', 'user', 'login'].map(v => `${T}[${a}*="${v}" i]`))
         .join(', ');
       const rungs = [
-        scope.locator('input[type=email]'),
-        // ~= (token match), not = : autocomplete takes a space-separated token
-        // list ("section-login username"), and exact equality misses every
-        // multi-token value.
-        scope.locator('input[autocomplete~="username" i], input[autocomplete~="email" i]'),
-        ...(hasForm ? [authForm.locator(SEMANTIC), authForm.locator('input[type=text], input:not([type])')] : []),
+        'input[type=email]',
+        'input[autocomplete~="username" i], input[autocomplete~="email" i]',
+        ...(hasForm ? [SEMANTIC, 'input[type=text], input:not([type])'] : []),
       ];
-      for (const rung of rungs) {
-        const cand = rung.locator('visible=true').first();
-        if (await cand.isVisible().catch(() => false)) { await cand.fill(String(AUTH_EMAIL)); break; }
+      // WITHIN a rung, the pick is ANCHORED TO THE PASSWORD INPUT: the nearest
+      // candidate in document order, preferring those that PRECEDE it — never
+      // `.first()`, which hands the fill to whatever matches earliest on the
+      // page (a newsletter box above a formless login panel, a tenant field at
+      // the top of a form) while the identifier sits beside its password
+      // field. Visibility uses the file's evaluate-side definition (geometry +
+      // computed visibility, same as textGateSignals), so a hidden responsive
+      // copy is passed over in favour of the visible candidate rather than
+      // silently skipping the fill. The pick is marked, filled through
+      // Playwright (real input events), and unmarked.
+      const pwHandle = await passwordInput.elementHandle();
+      const scopeHandle = hasForm ? await authForm.elementHandle() : null;
+      const marked = await page.evaluate(([pw, root, sels]) => {
+        if (!pw) return false;
+        const vis = el => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+        };
+        for (const sel of sels) {
+          const cands = [...(root || document).querySelectorAll(sel)].filter(vis);
+          if (!cands.length) continue;
+          const preceding = cands.filter(el => el.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
+          const pick = preceding.length ? preceding[preceding.length - 1] : cands[0];
+          pick.setAttribute('data-uitests-identifier', '');
+          return true;
+        }
+        return false;
+      }, [pwHandle, scopeHandle, rungs]);
+      if (marked) {
+        const cand = page.locator('[data-uitests-identifier]').first();
+        await cand.fill(String(AUTH_EMAIL));
+        await cand.evaluate(el => el.removeAttribute('data-uitests-identifier'));
       }
     }
     await passwordInput.fill(String(credential));
@@ -374,20 +396,29 @@ async function detectAndAuth(page, credential) {
 async function detectAuthGate(page) {
   await page.locator('[class*="keypad"], [class*="pin"], input[type="password"]')
     .first().waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-  // VISIBLE elements only — an SPA that hides its PIN view after login (rather
-  // than unmounting it) still has 10 numeric buttons in the DOM, and counting
-  // them made this detector return true post-login, which turned
-  // expectGateCleared() into a throw on every SUCCESSFUL sign-in. A gate the
-  // user cannot see is not a gate.
-  const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).locator('visible=true').count();
-  const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').locator('visible=true').count();
-  if (hasNumericButtons >= 9 && hasDotIndicator > 0) return true;
-  if (await page.locator('input[type=password]').first().isVisible().catch(() => false)) return true;
+  if (await pinGateVisible(page)) return true;
+  if (await passwordGateVisible(page)) return true;
   // Text/access-code gate (detectAndAuth's text-input path): a SINGLE visible text input
   // on a sparse, login-like page — gated on auth-ish context so an arbitrary search/filter
   // box on a content-rich page is NOT treated as auth.
   const t = await textGateSignals(page);
   return t.single && t.looksAuth && t.controls <= 4;
+}
+
+// The two mechanism signals, factored so DISCOVERY (detectAuthGate) and the
+// post-attempt VERDICT (expectGateCleared) read the same definition and cannot
+// drift. VISIBLE elements only — an SPA that hides its PIN view after login
+// (rather than unmounting it) still has 10 numeric buttons in the DOM, and
+// counting them made the detector return true post-login, which turned
+// expectGateCleared() into a throw on every SUCCESSFUL sign-in. A gate the
+// user cannot see is not a gate.
+async function pinGateVisible(page) {
+  const numericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).locator('visible=true').count();
+  const dotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').locator('visible=true').count();
+  return numericButtons >= 9 && dotIndicator > 0;
+}
+async function passwordGateVisible(page) {
+  return page.locator('input[type=password]').first().isVisible().catch(() => false);
 }
 
 // Shared by detectAuthGate (pre-attempt DISCOVERY, where the `controls <= 4`
@@ -425,10 +456,9 @@ async function textGateSignals(page) {
 // check existed, S3/S4/CTRL/NAV/DISMISS discarded detectAndAuth's result: a
 // wrong credential, a rotated secret, or the blank-email defect (#304) left
 // every one of them measuring the LOGIN SCREEN and passing green.
-// COST: detectAuthGate burns its full 5s waitFor precisely when the gate is
-// GONE, so this adds ~5s to every SUCCESSFUL auth preamble. Absorbed by the
-// existing budgets (worst headroom after +5s: S4/CTRL ~184s of 240, NAV ~293s
-// of 360, DISMISS ~950s of 1200) — re-derived, not assumed.
+// COST: two visible-element counts (~ms) — the verdict no longer reruns
+// detectAuthGate, whose 5s waitFor used to burn precisely when the gate was
+// gone; the budgets sized for that +5s keep it as headroom.
 async function expectGateCleared(page, mechanism, gateViewBefore) {
   if (mechanism === 'none') return; // nothing was attempted — nothing to verify
   // The TEXT-gate detector is DISCOVERY-grade, not proof-grade, in BOTH
@@ -451,7 +481,18 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
     });
     return;
   }
-  if (!(await detectAuthGate(page))) return; // cleared — a WINDOW (#302), as stated above
+  // ONLY the attempted mechanism's signal is checked — never a rerun of the
+  // full discovery detector. Discovery answers "is there ANY gate here?", and
+  // rerunning it as the verdict let the text-gate heuristic (demoted above as
+  // proof-grade for its OWN mechanism) throw on a password login whose landing
+  // page is sparse and auth-worded — one search field plus "Last login" reads
+  // as a text gate, and every authenticated scenario false-reds on a login
+  // that succeeded. The question here is narrower and answerable: is the gate
+  // kind we just attempted still on screen?
+  const retained = mechanism === 'pin-keypad'
+    ? await pinGateVisible(page)
+    : await passwordGateVisible(page); // 'password-form' — the only other mechanism that reaches here
+  if (!retained) return; // cleared — a WINDOW (#302), as stated above
   // THREE versions of a "did login actually succeed" heuristic died in review
   // before this one: (1) any remaining gate fails — false red on an app whose
   // post-login view carries a password field; (2) changed view passes — a
@@ -992,16 +1033,26 @@ function backControl(page) {
   // through getByLabel with the same regex, unioned in via .or(). The arrow
   // glyphs stay as plain has-text — they are not word characters, so \b around
   // them matches nothing.
-  return page.locator(
-    '[data-back], ' +
-    'button:text-matches("\\bback\\b", "i"), a:text-matches("\\bback\\b", "i"), ' +
-    'button:has-text("←"), a:has-text("←")'
-  ).or(page.getByLabel(/\bback\b/i))
   // `.first()` alone grabs the FIRST IN THE DOM, which in the common SPA pattern
   // (prior views kept mounted under display:none) is the hidden control from the
   // level above — so the back-flow test drove a dead element and self-skipped as
   // "invariant N/A" on an app that fully exercises the invariant.
-  .locator('visible=true').first();
+  return backControlAll(page).locator('visible=true').first();
+}
+
+// EVERY element backControl() could recognize, un-narrowed. Factored out so the
+// NAV drill filter can exclude candidates by MEMBERSHIP IN THIS LOCATOR rather
+// than by re-deriving "looks like back" from recorded strings: getByLabel
+// computes the real accessible name (aria-labelledby chains, img alt — the
+// whole accname algorithm), and three review rounds showed a string-side
+// reimplementation always lags it by one case. One definition, two consumers —
+// the filter and the presser cannot disagree about what "back" is.
+function backControlAll(page) {
+  return page.locator(
+    '[data-back], ' +
+    'button:text-matches("\\bback\\b", "i"), a:text-matches("\\bback\\b", "i"), ' +
+    'button:has-text("←"), a:has-text("←")'
+  ).or(page.getByLabel(/\bback\b/i));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1097,6 +1148,15 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);
         if (!await loc.isVisible().catch(() => false)) continue;
+        // BY CONSTRUCTION, not by string: a candidate that backControlAll()
+        // itself matches is a back control, whatever discoverElements recorded
+        // for it. The regex above stays for return/home (which backControl
+        // does not press) and as a zero-roundtrip fast path; this membership
+        // check is what guarantees NAV never drills through the exact element
+        // the unwind below will press — accname resolution included, because
+        // getByLabel computes it (aria-labelledby → img alt was the case a
+        // string-side reimplementation missed).
+        if (await loc.and(backControlAll(page)).count().catch(() => 0) > 0) { excludedAsBack++; continue; }
         attempts++;
         await loc.click({ timeout: 3000 });
         await page.waitForTimeout(800);

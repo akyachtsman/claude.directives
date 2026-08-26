@@ -313,20 +313,30 @@ async function detectAndAuth(page, credential) {
       // earlier in the DOM would otherwise be selected, the visibility check
       // would then SKIP the fill instead of trying the visible candidate, and
       // the form submits a blank identifier.
-      // TWO-STEP preference, not one union: a selector union preserves DOM
-      // order, so a form whose tenant/org text field precedes its email field
-      // would receive the identifier while the email stayed blank. Try the
-      // typed email input first; only when the form has none fall back to a
-      // generic text input (identifier fields on login forms are often plain
-      // type=text). Page scope (formless gate) stays email-typed ONLY.
+      // PREFERENCE LADDER, most-semantic first — never one union, because a
+      // selector union preserves DOM order and a tenant/org field ahead of the
+      // identifier would receive the email. Rungs: (1) the typed email input;
+      // (2) autocomplete=username/email — the spec-defined identifier marker;
+      // (3) a text input whose name/id/placeholder/aria-label SAYS it is an
+      // email/user/login field; (4) form-scoped last resort, any visible text
+      // input — kept because identifier fields on login forms are often plain
+      // unlabeled type=text, and a login form rarely holds a competing one
+      // (the tenant-field case is exactly what rungs 2-3 exist to win first).
+      // Page scope (formless gate) uses rungs 1-2 only.
       const hasForm = await authForm.count().catch(() => 0);
-      let emailInput = (hasForm ? authForm : page)
-        .locator('input[type=email]').locator('visible=true').first();
-      if (hasForm && !(await emailInput.isVisible().catch(() => false))) {
-        emailInput = authForm.locator('input[type=text], input:not([type])').locator('visible=true').first();
-      }
-      if (await emailInput.isVisible().catch(() => false)) {
-        await emailInput.fill(String(AUTH_EMAIL));
+      const scope = hasForm ? authForm : page;
+      const SEMANTIC = 'input[type=text][name*="email" i], input[type=text][name*="user" i], input[type=text][name*="login" i], ' +
+        'input[type=text][id*="email" i], input[type=text][id*="user" i], input[type=text][id*="login" i], ' +
+        'input[type=text][placeholder*="email" i], input[type=text][placeholder*="user" i], ' +
+        'input[type=text][aria-label*="email" i], input[type=text][aria-label*="user" i]';
+      const rungs = [
+        scope.locator('input[type=email]'),
+        scope.locator('input[autocomplete="username" i], input[autocomplete="email" i]'),
+        ...(hasForm ? [authForm.locator(SEMANTIC), authForm.locator('input[type=text], input:not([type])')] : []),
+      ];
+      for (const rung of rungs) {
+        const cand = rung.locator('visible=true').first();
+        if (await cand.isVisible().catch(() => false)) { await cand.fill(String(AUTH_EMAIL)); break; }
       }
     }
     await passwordInput.fill(String(credential));
@@ -367,16 +377,28 @@ async function detectAuthGate(page) {
   // Text/access-code gate (detectAndAuth's text-input path): a SINGLE visible text input
   // on a sparse, login-like page — gated on auth-ish context so an arbitrary search/filter
   // box on a content-rich page is NOT treated as auth.
-  return await page.evaluate(() => {
+  const t = await textGateSignals(page);
+  return t.single && t.looksAuth && t.controls <= 4;
+}
+
+// Shared by detectAuthGate (pre-attempt DISCOVERY, where the `controls <= 4`
+// sparsity cutoff belongs — it exists to keep a search box on a content-rich
+// page from reading as auth) and expectGateCleared (post-attempt VERDICT,
+// where that cutoff must NOT apply: a rejected attempt that reveals a Retry
+// button or help link pushes the count past 4 while the same gate stands, and
+// re-running the discovery heuristic would read the rejection as a cleared
+// gate). One evaluate, two thresholds — factored so the two cannot drift.
+async function textGateSignals(page) {
+  return page.evaluate(() => {
     const inputs = [...document.querySelectorAll('input[type=text], input:not([type])')]
       .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
-    if (inputs.length !== 1) return false;
+    if (inputs.length !== 1) return { single: false, looksAuth: false, controls: 0 };
     const el = inputs[0];
     const ctx = [el.placeholder, el.getAttribute('aria-label'), el.name, el.id,
                  document.body.innerText?.slice(0, 300)].join(' ').toLowerCase();
     const looksAuth = /\b(pin|passcode|access\s*code|access|log\s*in|login|sign\s*in|unlock|enter\s*code|password)\b/.test(ctx);
     const controls = document.querySelectorAll('button, [role=button], a[href], select, textarea').length;
-    return looksAuth && controls <= 4;
+    return { single: true, looksAuth, controls };
   });
 }
 
@@ -393,7 +415,14 @@ async function detectAuthGate(page) {
 // of 360, DISMISS ~950s of 1200) — re-derived, not assumed.
 async function expectGateCleared(page, mechanism, gateViewBefore) {
   if (mechanism === 'none') return; // nothing was attempted — nothing to verify
-  if (!(await detectAuthGate(page))) return; // cleared — a WINDOW (#302), as stated above
+  // For an attempted TEXT gate, judge with the sparsity cutoff REMOVED (see
+  // textGateSignals): a single auth-ish text input still visible after the
+  // attempt is the same gate, however many Retry/help controls the rejection
+  // revealed. For the other mechanisms detectAuthGate's branches carry no
+  // cutoff, so the general detector is the same test.
+  const t = mechanism === 'text-input' ? await textGateSignals(page) : null;
+  const gateRemains = t ? (t.single && t.looksAuth) : await detectAuthGate(page);
+  if (!gateRemains) return; // cleared — a WINDOW (#302), as stated above
   // THREE versions of a "did login actually succeed" heuristic died in review
   // before this one: (1) any remaining gate fails — false red on an app whose
   // post-login view carries a password field; (2) changed view passes — a

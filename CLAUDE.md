@@ -323,6 +323,10 @@ sandbox image ships (it ships **no webkit and no firefox** — a config declarin
 either could not launch them here). Measured 2026-08-26: `check-repo-map-ui.js`
 PASS, all cases, exit 0. So a local failure here is evidence about the map, not
 about the environment — the opposite of the default assumption downstream.
+**What would make this wrong:** the sandbox image dropping chromium, or the map
+gaining any external resource. Re-derive on either rather than trusting this line
+— per `test.md` → *Sandboxed local runs*, a ceiling is a dated observation, not a
+standing fact.
 
 ## Escalation rules
 `global.md` → *Escalation Rules* apply here unchanged — all four gates, not a

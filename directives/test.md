@@ -386,7 +386,18 @@ three sandboxes on 2026-08-26 — `claude.trading` 5 local failures / CI all gre
 failed**, and this repo reproducing the causes directly.
 
 - **A local failure in a sandboxed session is not evidence about the suite until
-  CI has ruled on the same commit.** Push and let CI arbitrate.
+  CI has *executed that scenario* on the same commit.** A green aggregate run is
+  not arbitration: `claude.insurance`'s CI read 24 passed **12 skipped** 0 failed,
+  so had their four failing scenarios been among the skips, the green would have
+  proven nothing about them. Confirm each locally-failed scenario **ran** in CI
+  under a comparable project/browser — conditional skips and a narrower CI matrix
+  both defeat this silently.
+- **This does not suspend the local gate** (`global.md` → *Pre-Push Verification*,
+  which says never rely on CI alone). The exception is narrow and must be stated
+  in the PR: everything that *can* execute in the sandbox still has to pass, and
+  only the scenarios blocked by a **named** environmental cause, with the evidence
+  naming it, are deferred to CI. "Sandbox" is not a blanket exemption from running
+  what runs.
 - **Never weaken a test to make a sandbox run green** — no relaxed assertion, no
   added retry, no skipped case. That converts an environment limit into a
   permanently blinded check: the suite goes green and nothing reports that it
@@ -394,11 +405,16 @@ failed**, and this repo reproducing the causes directly.
 - **SUPPLY the missing thing instead of lowering the bar** (`claude.prop`). The
   answer to an unreachable external host is a reachable equivalent — start a
   local static server and point `APP_URL` at it, every assertion intact against
-  the same built tree — not a relaxed assertion. Same shape as the kit's
-  `PW_EXECUTABLE` hatch for a missing browser binary: provide what is absent, do
-  not skip the check. A config that keeps both the real `baseURL` and an
+  the same built tree — not a relaxed assertion. A config that keeps both the real `baseURL` and an
   `APP_URL` override has this escape built in; one that hardcodes a remote
-  `baseURL` does not, and should gain one.
+  `baseURL` does not, and should gain one. **This solves an unreachable APP
+  HOST, and does not touch a blocked runtime import**: a local server still
+  serves the same built tree, so an absolute CDN module URL in it is still
+  fetched from the blocked host and the app still cannot boot. That case is
+  fixed by vendoring, rewriting, or proxying the import — not by moving the
+  origin. A missing browser binary has **no** shipped override in the kit; when
+  that is the blocker, the scenario is genuinely unrunnable here and belongs in
+  the recorded ceiling below.
 - **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
   workaround, it is removing the check.
 
@@ -429,12 +445,27 @@ agent proxy; unreachable backend. Note the CDN block is **selective** —
 `raw.githubusercontent.com` answers from the same shell that cannot reach
 `esm.sh`, so "the sandbox has no network" is the wrong model.
 
-⚠️ **The one-line discriminator: `curl` the same URL from the same sandbox**
-(`claude.prop`). A 200 from `curl` beside a browser failure is proof of
-environment, not proof of a bug, and it costs one command instead of an
-afternoon — the host is up, DNS resolves, the network path works and TLS
-terminates for a non-browser client, so everything the failure superficially
-implicates is exonerated at once.
+⚠️ **The cheap first probe: `curl` the same URL from the same sandbox**
+(`claude.prop`). A 200 from `curl` beside a browser failure costs one command and
+exonerates a lot at once — the host is up, DNS resolves, the network path works,
+TLS terminates for a non-browser client.
+
+**But a `curl`/browser mismatch on ONE host is not by itself proof of
+environment.** Plenty of real defects produce exactly that pair: a resource that
+returns 200 to `curl` but is refused by the browser for missing CORS headers, a
+server regression that only browser-specific TLS or HTTP handling exposes, a
+redirect or CSP the browser honours and `curl` ignores. Treating every mismatch
+as environmental is how this rule would start dismissing genuine application and
+deployment defects — the same over-generalisation this section warns about two
+paragraphs down, so it does not get an exemption here.
+
+**Two conditions, both required, before calling it environment:**
+
+1. the browser-side failure is **connection-level** (the navigation never
+   completes — a reset, a refused connection, a certificate rejection), not an
+   assertion failing against a page that loaded; **and**
+2. a **known-good control host** fails the same way in the same browser. That is
+   what makes it a property of the browser's path rather than of the target.
 
 Measured here 2026-08-26, and the control is the part that generalises it:
 
@@ -443,8 +474,9 @@ Measured here 2026-08-26, and the control is the part that generalises it:
 | a GitHub Pages app | 200 | `net::ERR_CONNECTION_RESET` |
 | `raw.githubusercontent.com` | 200 | `net::ERR_CONNECTION_RESET` |
 
-**The browser fails identically on a host `curl` reaches fine, so this is not
-about the target at all** — the bundled browser has no working HTTPS path to
+The second row IS that control, and it is why the conclusion holds here rather
+than being assumed: **the browser fails identically on a host `curl` reaches
+fine, so this is not about the target at all** — the bundled browser has no working HTTPS path to
 *any* external host through the proxy. Two consequences: any browser-side
 network failure to an external host in a sandbox is environmental until proven
 otherwise, and **a UI suite in an agent sandbox can only run against a LOCAL
@@ -452,27 +484,46 @@ server.** Symptoms differ across repos (a certificate/CA complaint in one, a
 connection reset in another) and may be one root or two — do not match on the
 string; the `curl` pair is what decides.
 
-**Classify by DURATION before opening a log** (`claude.insurance`):
+**Let DURATION tell you where to look first — then read the error, which is what
+actually diagnoses** (`claude.insurance`). These buckets prioritise; they do not
+classify. Every row has an innocent-looking impostor: a uniformly instant run
+also comes from a config, import, or fixture error, and a 200 page that times out
+without the expected DOM also comes from an application exception, a wrong route,
+or a selector regression. Use the row to decide what to open, never to skip
+opening it:
 
 | duration | meaning |
 |----------|---------|
-| ~3ms, uniform | browser never launched — binary absent |
-| times out at the action budget, page 200, no app DOM | module graph blocked — CDN, not backend |
-| real elapsed time, real DOM, specific assertion | an actual defect — treat it as one |
+| ~3ms, uniform | nothing launched — check the launch error first (absent binary, bad config, import throw) |
+| times out at the action budget, page 200, no app DOM | nothing booted — check the console and network log first (blocked module, app exception, wrong route) |
+| real elapsed time, real DOM, specific assertion | almost certainly an actual defect — treat it as one |
 
-Three milliseconds is not a test failing, it is a test never starting.
+Three milliseconds is not a test failing, it is a test never starting — which
+tells you to go read the launch error, not which launch error it was.
 
 **Falsify a newly-added bound before suspecting the code.** A timeout or limit
 introduced in the same change is the first thing to suspect and the cheapest
 thing to rule out: disable it, re-run one failing scenario, and see whether the
-failure survives. `claude.insurance` did exactly this with a new `actionTimeout`
-and proved the failures pre-existed it — which turned "let CI arbitrate" from an
-act of faith into the obvious move.
+failure survives. `claude.insurance` did exactly this with a new `actionTimeout`.
 
-**Record the per-app ceiling in the PROJECT's `CLAUDE.md`, not here.** Which
-scenarios can pass in an agent sandbox is a property of that app's dependencies,
-so this directive ships the method and each project states its own limit with the
-causes named, so the next session does not rediscover it.
+Be precise about what that proves: **the bound is not required to trigger the
+failure — not that the failure pre-existed the change.** Some other edit in the
+same diff can still be the cause. To claim pre-existence you have to run the
+scenario on the parent commit or another known-good baseline. So the check
+narrows the search; it does not end it, and it is never grounds to stop reading
+the rest of your own diff.
+
+**Record the per-app ceiling in the PROJECT's `CLAUDE.md`, not here** — this
+directive ships the method, each project states its own limit with the causes
+named, so the next session does not rediscover it.
+
+**A ceiling is a dated observation, not a standing fact.** It depends on the
+sandbox's browser inventory and egress policy as much as on the app's
+dependencies, and both move: a host gets allowlisted, an image adds a browser. A
+stale ceiling suppresses coverage that is runnable again, and a stale `NONE`
+misleads in the other direction. So record it with **the date, the causes, and
+what would make it wrong** — and re-derive it rather than trusting it whenever
+the sandbox image or the network policy changes.
 
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are

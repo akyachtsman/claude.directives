@@ -1315,7 +1315,12 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // return misclassification costs one wasted navigation, not a false
       // verdict, and chasing the full accname algorithm here is the
       // staircase this file already abandoned for locator-side matching.
-      if (/\bback\b(?![\s-]*up\b)|\b(return|home)\b|[←‹◀]/i.test(`${el.label} ${el.ariaLabel}`.replace(/_/g, ' '))) { excludedAsBack++; continue; }
+      // Home/Return exclude only NAVIGATION PHRASINGS, not the word anywhere:
+      // "Return" alone, "Return to <place>", and a name ENDING in home/return
+      // ("Go home", the icon ligatures "keyboard return" / "home") navigate;
+      // "Return item" and "Home delivery" are forward actions into workflows
+      // and stay drill candidates.
+      if (/\bback\b(?![\s-]*up\b)|\breturn(\s+to\b|\s*$)|\bhome\s*$|[←‹◀]/i.test(`${el.label} ${el.ariaLabel}`.replace(/_/g, ' ').trim())) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);

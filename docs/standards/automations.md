@@ -102,6 +102,24 @@ is the failure this rule is actually guarding against.
 Narrowing leaves a file that passes every check and watches a name that can no
 longer fire.
 
+⚠️ **STATE THIS RULE IN BOTH BRANCHES, EVERYWHERE IT APPEARS. "Branch-source
+only" is a one-sided sentence and the exception lives in the half it drops.**
+Every surface that installs, describes or inventories `pages-retry.yml` must
+carry both arms:
+
+> **branch-source** → install it, with its `REQUIRED` entry.
+> **Actions-source** → delete it and drop the `REQUIRED` entry; **or** repoint it
+> under the exception above, **updating** the `REQUIRED` entry to the project's
+> own deploy name rather than dropping it.
+
+This shape is not a style preference. Writing the default and trailing the
+exception as a clause failed **three times inside one pull request** (#317) —
+`global.md`, `new-repo.md`, then `dev-pipeline.md` and this refresh row — each
+time producing an absolute prohibition that overrode a documented exception, and
+each time caught by review rather than by the author. A two-branch statement
+makes an omitted exception a **visibly empty branch** instead of a missing
+sentence nobody can see.
+
 The worked example is a near-miss, kept in that form because the clean version
 teaches less. `apfp.claude` runs this exception deliberately and wrote the
 revisit trigger this rule asked for — *"if `pages.yml` ever gains a build or

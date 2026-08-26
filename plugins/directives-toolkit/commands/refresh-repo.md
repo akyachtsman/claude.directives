@@ -328,23 +328,46 @@ fixed list — that is the mistake one level up):
 
 ```bash
 repo="akyachtsman/claude.directives"
-raw="https://raw.githubusercontent.com/$repo/main"
+head="…the SHA Phase 2 classified…"   # NOT main — that ref moves under you
+raw="https://raw.githubusercontent.com/$repo/$head"
 callers="…the templates/workflows/*.yml and templates/actions/*/action.yml
          paths this refresh is installing…"
 
-refs=$(for c in $callers; do
-         curl -fsSL "$raw/$c" || { echo "FETCH FAILED: $c" >&2; exit 1; }
-       done | grep -oE '(node|python3) \.github/scripts/[A-Za-z0-9_.-]+\.(js|py)' \
-            | awk '{print $2}' | sort -u)
-
-[ -n "$refs" ] || { echo "DERIVATION EMPTY — the command is wrong, not the repo" >&2; exit 1; }
+buf=$(mktemp)
+for c in $callers; do
+  curl -fsSL "$raw/$c" >>"$buf" \
+    || { echo "FETCH FAILED: $c — derivation INVALID, do not use it" >&2
+         rm -f "$buf"; exit 1; }
+done
+refs=$(grep -oE '(node|python3) \.github/scripts/[A-Za-z0-9_.-]+\.(js|py)' "$buf" \
+       | awk '{print $2}' | sort -u)
+rm -f "$buf"
 printf '%s\n' "$refs"
 ```
 
+Three things about that shape, each of which a shorter version got wrong:
+
+- **Every fetch is checked individually, and a failure exits before the
+  pipeline.** Putting the loop *inside* `refs=$(…)` does not work: the `exit 1`
+  leaves only the subshell, `sort` still succeeds, and `refs` comes back
+  **non-empty from the callers that did fetch** — so a 404 on
+  `ui-suite/action.yml` after `qa.yml` succeeded yields a partial set that passes
+  any emptiness check, silently omitting `check-ui-viewports.js`. That is the
+  precise failure this block exists to prevent.
+- **An empty result is not automatically wrong.** If the only changed caller
+  invokes no script — `pages-monitor.yml` and `secret-scan/action.yml` are both
+  like this today — then the correct derivation *is* empty. Asserting non-empty
+  makes the procedure fail closed on a legitimate delta. **Emptiness is only
+  suspicious when a fetch failed**, which is why the check belongs on the fetch
+  and not on the result.
+- **Pin the fetch to the SHA Phase 2 classified, never `main`.** `main` can
+  advance mid-refresh, or between two caller requests, so the derived set can
+  come from a newer or mixed revision than the callers you are installing — and
+  Phase 3's head check only refuses the *stamp* afterwards; it does not un-install
+  anything.
+
 Match on the INVOCATION, not the bare path, or it also emits directories,
-`package-lock.json`, and paths that appear only in comments. The `[ -n "$refs" ]`
-guard is not decoration: a failed `curl` or a broken pattern both produce an
-empty set, and `sort` exits 0 either way.
+`package-lock.json`, and paths that appear only in comments.
 
 **The output is the answer for THAT refresh, and it moves.** Run against
 `main` on 2026-08-26 with `qa.yml` + `ui-suite/action.yml` as the callers it
@@ -354,19 +377,26 @@ lands, which adds `check-py-warnings.py` to `qa.yml`. That is the derivation
 working: it reports what the callers you are installing actually reference, not
 what a list-writer remembered. **The output is never the rule.**
 
-⚠️ **Two ways this has already failed open, both silently.** Neither was
-hypothetical and both produced an empty set that looked like a clean answer:
+⚠️ **This command has now failed FOUR ways, every one silent, and the history
+is the argument for the shape above.** None were hypothetical:
 
-1. The first version lived in the table cell above with its pipes escaped for
-   markdown — and `\|` in `grep -E` matches a **literal pipe character**, so it
-   matched nothing and exited 0.
-2. The second pointed at `templates/workflows/` and `templates/actions/`, which
-   **do not exist in a project**, so `grep` printed *No such file or directory*
-   and `sort` exited 0 regardless.
+1. Written in the table cell with its pipes escaped for markdown — `\|` in
+   `grep -E` matches a **literal pipe character**, so it matched nothing and
+   exited 0.
+2. Pointed at `templates/workflows/` and `templates/actions/`, which **do not
+   exist in a project** — *No such file or directory*, and `sort` exited 0
+   regardless.
+3. Ran the fetch loop *inside* `refs=$(…)`, so a mid-loop `exit 1` left only the
+   subshell: a failed caller yielded a **partial** set that passed an emptiness
+   check and silently dropped the scripts only that caller names.
+4. Asserted the result must be non-empty — which **fails closed** on a
+   legitimate delta whose only changed caller invokes no script.
 
-Hence the `[ -n "$refs" ]` guard. A derivation that fails open is strictly worse
-than the hand-list it replaced, because a hand-list at least tells you what
-somebody once believed.
+Three of the four came from *fixing* the one before it. A derivation that fails
+open is strictly worse than the hand-list it replaced, because a hand-list at
+least tells you what somebody once believed; and one that fails closed gets
+muted, which returns it to failing open by another route. **Check the fetch,
+report the result, and let an honestly-empty answer be empty.**
 
 The general form, worth applying to any row added later: **if the thing being
 installed REFERENCES a path, that path installs with it, present or not.** The

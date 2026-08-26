@@ -405,10 +405,13 @@ failed**, and this repo reproducing the causes directly.
 ⚠️ **A reachable backend does NOT clear the environment**, and this is the trap
 worth the section. `claude.insurance` saw four scenarios fail to find their own
 UI with Supabase answering `401` in 0.63s — host up, auth simply not supplied.
-The cause was one layer up: the page imports its client at runtime from
-`https://esm.sh/…`, and **esm.sh is blocked in the sandbox**, so the ES module
-graph never resolves, `main.js` never executes, and the router never renders
-while the page itself serves 200.
+The cause was one layer up: the page imports its client at runtime from a CDN
+module URL on `esm.sh`, and **that host is blocked in the sandbox**, so the ES
+module graph never resolves, `main.js` never executes, and the router never
+renders while the page itself serves 200. (Named host-only on purpose: an illustrative
+scheme-plus-ellipsis placeholder gets extracted by the external-link check and
+fails as a dead URL — measured on this PR, twice, the second time in the fix for
+the first.)
 
 So the cheapest, most obvious diagnostic — *is the backend reachable?* —
 **returns YES precisely when the environment is at fault**, pointing you at your

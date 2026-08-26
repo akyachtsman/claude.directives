@@ -71,6 +71,12 @@ jobs:
       - name: Check learnings.jsonl is well-formed
         run: node .github/scripts/check-learnings.js
 
+      # Confirms pinned claims still TRAVELLED to every consumer that must state
+      # them. It cannot tell whether a claim is TRUE, and cannot see a fix that
+      # over-reaches — see the header of check-claims.js before trusting a green.
+      - name: Check canonical claims reached their consumers
+        run: node .github/scripts/check-claims.js
+
       - name: Workflow cross-reference guard
         run: python3 .github/scripts/workflow-ref-guard.py
 

@@ -1,0 +1,156 @@
+{
+  "_comment": "Canonical-claim manifest for check-claims.js (#300). Each entry pins a rule that MUST keep being stated by every file listed, because #294 proved that a correct claim fixed in one file routinely goes stale, narrowed or absent in the others. Read check-claims.js's header before trusting a green run: this guard confirms a claim TRAVELLED, never that it is TRUE, and it cannot see a fix that says more than intended. Patterns are JS regex sources matched case-insensitively against the file with whitespace collapsed and markdown emphasis markers stripped, so one entry spans the wording variants a claim legitimately has. Consumer lists were derived by measuring the current tree, not by assumption — the issue that proposed this guard listed phrases that did not exist verbatim anywhere.",
+  "negators": "never|not|no|don['’]?t|doesn['’]?t|didn['’]?t|won['’]?t|can['’]?t|cannot|avoid|avoids|skip|skips|ignore|ignores|ignoring|disregard|disregards|except|without|instead|rather than",
+  "_negators_comment": "The ONE definition of a negation word, expanded into every pattern's {{NEG}} placeholder by check-claims.js. Round 7 exists because round 6 claimed to have unified two copies and instead wrote the same alternation twice: deleting `avoid` from only the lookbehind copy left every declared case passing while `avoid read the comments and the review threads` was accepted. Two literals are not one definition no matter what the commit message says. The guard also DERIVES a rejection case for each negator in BOTH positions from this string, so the tests cannot drift from it either -- there is no hand-written list to forget. Apostrophe forms are here because the normalizer deliberately does not strip apostrophes (that would corrupt ordinary prose), so `don't arm a check-in` needs the contraction spelled out.",
+  "negatorFloor": [
+    "never",
+    "not",
+    "no",
+    "don't",
+    "doesn't",
+    "didn't",
+    "won't",
+    "can't",
+    "cannot",
+    "avoid",
+    "avoids",
+    "skip",
+    "skips",
+    "ignore",
+    "ignores",
+    "ignoring",
+    "disregard",
+    "disregards",
+    "except",
+    "without",
+    "instead",
+    "rather than"
+  ],
+  "_negatorFloor_comment": "The definition-independent BASELINE. Round 7 claimed literal cases cover what derived probes cannot -- narrowing the definition -- and then pinned only the four negators review had happened to find. Round 8 deleted `ignores` and the guard stayed green, which is the same carry-it-to-the-siblings defect for the fourth time in this PR: the mechanism was identified correctly and applied to a subset. This list is checked BEHAVIOURALLY -- every entry must still be rejected in every declared position -- so it does not drift into being a second copy of `negators` that agrees by luck. Removing a value from `negators` now fails here, which is exactly the edit derivation cannot see. Adding one to `negators` without adding it here is fine and deliberate: the floor is a MINIMUM, not a mirror.",
+  "claims": [
+    {
+      "id": "verdict-lookup",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both. The pattern requires a positive lookup VERB because the nouns alone certified the exact inversion — 'ignore the PR's comments and its review threads' — and the negator lookbehind is there because 'do not read' supplied the verb while reversing the instruction. Both alternations are \\b-anchored after an unanchored 'read' was found matching the tail of 'review-thread', letting an already-inverted sentence supply its own verb. Round 5 closed a subtler inversion than round 4's: requiring a positive verb is not enough if the gap between it and the channels can hold a NEGATIVE one. 'check the PR status, but ignore its comments AND its review threads' satisfied a bare gap, because 'check' supplied the verb while 'ignore' governed the nouns. The gap is now a tempered token admitting no negation word, so the verb it requires is the verb that actually governs. Round 6 found the same defect one level down and it is the most instructive instance: the fix itself introduced a SECOND negator list. The lookbehind already rejected never/not/dont/avoid/skip; the tempered gap I added rejected a different, overlapping set, so 'but avoid its comments AND its review threads' passed while 'but ignore ...' failed. Two lists expressing one idea drift silently. There is now one alternation used in both positions, and mustNotMatch carries a case per negator so the SUITE is what keeps them synchronised rather than a maintainer's memory. Round 7: round 6 said 'one alternation used in both positions' and wrote the string TWICE. Codex deleted `avoid` from a single copy and every declared case still passed. The alternation now lives once, at the manifest's top level, expanded into {{NEG}}; the guard also DERIVES a rejection case per negator per position from it, so the tests cannot drift from the definition either. The explicit cases below anchor the specific negators review paid to find -- derived probes catch DRIFT between positions, but narrowing the definition would delete a negator and its probe together, and only a literal case catches that.",
+      "source": "directives/git.md",
+      "pattern": "(?<!\\b(?:{{NEG}})\\s)\\b(?:check|read|look for)\\b(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,60}?comments and (?:the |its |their )?review threads",
+      "consumers": [
+        "CLAUDE.md",
+        "docs/internal/repo-monitors.md",
+        "docs/standards/automations.md",
+        "docs/standards/ci-triage.md",
+        "docs/standards/cicd-setup.md",
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        ".github/workflows/codex-monitor.yml",
+        "templates/workflows/codex-monitor.yml"
+      ],
+      "mustNotMatch": [
+        "ignore the PR's comments and its review threads",
+        "do not read the comments and the review threads",
+        "as an inline review-thread reply — so ignore the comments AND the review threads",
+        "check the PR's comments",
+        "read the review threads",
+        "check the PR status, but ignore its comments AND its review threads",
+        "read the run log, then disregard the comments and the review threads",
+        "check the label; never look for the comments and its review threads",
+        "check the PR status, but avoid its comments AND its review threads",
+        "check the PR status, but dont check its comments AND its review threads",
+        "check the label, then skip the comments AND the review threads",
+        "check the run, without reading the comments AND its review threads",
+        "avoid read the comments and the review threads",
+        "don't read the comments and the review threads",
+        "check the PR status, but don't check its comments AND its review threads"
+      ],
+      "negatorProbe": {
+        "lookbehind": "%s read the comments and the review threads",
+        "gap": "check the PR status, but %s its comments and its review threads"
+      }
+    },
+    {
+      "id": "response-is-not-a-verdict",
+      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. Two drafts of this entry were wrong in opposite directions and both are instructive: the first accepted 'a reaction is not a verdict' — a DIFFERENT rule, about attribution — and so certified a consumer that never stated this claim; the second over-corrected to a pattern so narrow it could not see automations.md's 'establishes a RESPONSE, not a verdict', and declared the claim source-only on that basis. A pattern that matches a neighbouring rule reports coverage that does not exist; a pattern that misses a real carrier hides a consumer that can drift.",
+      "source": "directives/git.md",
+      "pattern": "\\bresponse\\b[^.]{0,30}?(?:is not a verdict|, not a verdict)",
+      "consumers": [
+        "docs/standards/automations.md",
+        {
+          "file": "CLAUDE.md",
+          "why": "Found by review, NOT by --derive, and the reason is the entry's own recorded limit made concrete: this carrier states the claim ANAPHORICALLY — 'a clean current-head Codex verdict — a response naming the head is not one, since a review with live findings names it too'. The claim-level pattern needs the words 'is not a verdict' adjacent to 'response'; here the predicate is the pronoun 'one', pointing back to 'verdict' a clause earlier. No widening of the claim-level pattern reaches that without also matching sentences that are not this claim, which is why it gets its own pattern instead. This is the repo's PRIMARY instruction file and the merge gate it describes is the one that authorises merging over live findings, so it is the last carrier that should have been unlisted.",
+          "pattern": "response naming the head is not one",
+          "mustNotMatch": [
+            "a response naming the head is one",
+            "a response naming the head is a clean verdict",
+            "a Codex response is not a verdict",
+            "a reaction is not a verdict you can attribute"
+          ],
+          "whyMustNotMatch": "The first two are this override's own inversion: a carrier that flipped 'is not one' to 'is one' states the OPPOSITE rule and must not certify. The third is the case that proves these cases exercise the OVERRIDE rather than the claim pattern -- the claim-level regex MATCHES it, this override rejects it, so it can only pass by the override doing work. Round 6 caught the absence of exactly that: every case here was a copied wait-gate string, rejected by both patterns, proving nothing. The fourth pins the neighbouring-rule confusion this entry already made once."
+        }
+      ],
+      "mustNotMatch": [
+        "a reaction is not a verdict you can attribute",
+        "a response naming the head is a clean verdict",
+        "a Codex response is a verdict"
+      ]
+    },
+    {
+      "id": "ci-notify-unique-match-is-not-proof",
+      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. The pattern deliberately requires the unique-match wording: an earlier draft matched only 'not a guaranteed wake', which is the weak sentence, so deleting the entire unique-match warning would have left this guard green. The lookbehind is the second half of the same lesson: 'unique' unanchored is a SUBSTRING of 'non-unique', so a carrier that regressed to warning about NON-unique matches — the weak case again, now wearing the strong case's words — satisfied the tightened pattern too. Requiring no word character or hyphen before it is what makes the tightening real.",
+      "source": "docs/standards/automations.md",
+      "pattern": "(?<![\\w-])unique match is not (?:a guaranteed wake|proof)",
+      "consumers": [
+        "CLAUDE.md",
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        ".github/workflows/ci-notify.yml",
+        "templates/workflows/ci-notify.yml",
+        "docs/standards/cicd-setup.md",
+        "plugins/directives-toolkit/commands/new-repo.md"
+      ],
+      "mustNotMatch": [
+        "a non-unique match is not proof of coverage",
+        "a green run is not a guaranteed wake",
+        "a unique match is proof of coverage"
+      ]
+    },
+    {
+      "id": "arm-the-check-in",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites. The leading word boundary matters more here than in most patterns because this claim's exact INVERSION contains it: 'disarm a check-in' is the opposite instruction and the unanchored form certified it. A pattern that accepts the negation of its own claim is worse than no pattern, since it reports the regression as coverage — so the boundary is required in the per-consumer variant below as well. The negator lookbehind rejects 'never arm a check-in'. It deliberately checks only the word IMMEDIATELY before the verb: a clause-level negation scan was designed, measured and rejected, because ci-notify.yml legitimately reads 'a green run is not a guaranteed wake and a waiting session still arms a check-in', where the negator belongs to a different proposition in the same clause. 'never explicitly arm a check-in' therefore still passes; narrowing that needs the claim's CONDITION pinned, not just its verb. Round 7 added the apostrophe forms: the normalizer deliberately does not strip apostrophes -- doing so would corrupt ordinary prose -- so `dont` in the negator list did not cover `don't arm a check-in`, the way a person actually writes the inversion.",
+      "source": "directives/git.md",
+      "pattern": "(?<!\\b(?:{{NEG}})\\s)(?<!\\bun)\\barms? (?:a|the) check-?in",
+      "consumers": [
+        "CLAUDE.md",
+        "directives/global.md",
+        "docs/internal/repo-monitors.md",
+        "docs/standards/automations.md",
+        ".github/workflows/ci-notify.yml",
+        "templates/workflows/ci-notify.yml",
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        "docs/standards/ci-triage.md",
+        "docs/standards/cicd-setup.md",
+        "plugins/directives-toolkit/commands/new-repo.md",
+        {
+          "file": "plugins/directives-toolkit/scripts/wait-gate.sh",
+          "why": "This file states the rule TWICE — once in its explanatory header comment, once inside the echo the PreToolUse hook actually delivers. The claim-level pattern matched the header, so deleting the instruction from the DELIVERED message left the guard green on the copy that carries the most authority (it reaches a session unprompted, at the decision point). The pattern below requires the delivered message's own opening text, so only the emitted form satisfies it.",
+          "pattern": "blocked by directives wait-gate.{0,600}?(?<!\\b(?:{{NEG}})\\s)(?<!\\bun)\\barms? (?:a|the) check-?in",
+          "mustNotMatch": [
+            "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) - and DISARM A CHECK-IN ALONGSIDE IT, not instead of it; (2) that check-in is `send_later`.",
+            "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks); (2) use `send_later` (the pre-approved primary).",
+            "# The hook arms a check-in alongside it, but the delivered message below says nothing about one."
+          ],
+          "whyMustNotMatch": "An override exists to be STRICTER than the claim pattern, so it needs its own inversions or the escape hatch reopens every defect the claim-level suite closed. Codex reproduced exactly that: widen this override back to an unbounded arms?, invert the delivered message to DISARM, and every claim-level case still passed while this strict consumer reported OK. The third case is the original round-2 defect restated - the file's HEADER COMMENT satisfying the pattern while the DELIVERED echo has lost the instruction - so the override must reject it even though it plainly states the rule. The third case is also the override-exercising one: the claim-level pattern MATCHES it (it plainly says 'arms a check-in') while this override rejects it for lacking the delivered message's own opening text -- so it can only pass by the override doing work, which is the property the guard now requires of every override suite."
+        }
+      ],
+      "mustNotMatch": [
+        "disarm a check-in",
+        "never arm a check-in whenever the run's SHA is not your PR's head",
+        "do not arm the check-in",
+        "dont arm a check-in",
+        "the harness disarms a check-in for you",
+        "don't arm a check-in",
+        "doesn't arm a check-in"
+      ],
+      "negatorProbe": {
+        "lookbehind": "%s arm a check-in"
+      }
+    }
+  ]
+}

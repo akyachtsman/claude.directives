@@ -102,6 +102,41 @@ const IDLE_MS = 5_000;
 const LOAD_SETTLE_MS = 25_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BUDGET SIZING — a scenario that CAN SKIP needs a budget sized for the day it
+// stops skipping (directives#306)
+// ─────────────────────────────────────────────────────────────────────────────
+// Every scenario below sets its own test.setTimeout and derives it at the
+// scenario. This is the rule those numbers are derived UNDER, and it inverts the
+// intuition:
+//
+//     A SCENARIO THAT HAS BEEN SKIPPING HAS NO EVIDENCE BEHIND ITS BUDGET.
+//     ITS OBSERVED RUNTIME IS ZERO, WHICH PROVES NOTHING.
+//
+// A skip records ~0ms, every run, which reads exactly like "fast" to anyone
+// sizing from history. The moment the precondition is satisfied — a credential
+// set, APP_PAGES declared, a fixture seeded — the scenario runs for the first
+// time against a number nobody derived.
+//
+// Measured, claude.insurance 2026-08-25: their S2 carried no budget at all and
+// inherited the 30s config default. It had never executed until their owner set
+// TEST_AUTH_CREDENTIAL an hour earlier. First run: 11.0 / 12.1 / 11.4 / 11.6s
+// across four projects — ~2.5x margin, the THINNEST in their suite, on the one
+// scenario that went from never-running to running-every-time that morning.
+// Their S3, which had always run, carried an explicit 240_000.
+//
+// So, three rules:
+//   * Size a skippable scenario for its FIRST REAL RUN, not for its history, and
+//     say IN ITS BUDGET COMMENT which precondition unlocks it. Every scenario
+//     below that can skip names its own.
+//   * "It has always been fast" is INADMISSIBLE when the observed runs are
+//     skips. That is zero data presented as reassurance — the same shape as a
+//     green that verified nothing.
+//   * When a precondition is newly satisfied in a repo, re-read that scenario's
+//     budget BEFORE the first run, not after it times out. A first real run
+//     exercises several never-exercised things at once: the day S2 stops
+//     skipping is also the first day expectGateCleared() has a verdict to reach.
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
 // ─────────────────────────────────────────────────────────────────────────────
 // A JS error is ALWAYS blocking: one throw silently kills every handler bound
@@ -457,11 +492,31 @@ async function detectAndAuth(page, credential) {
         // element that happens to carry the bare attribute cannot shadow the
         // candidate the evaluate actually picked.
         const cand = page.locator(`[data-uitests-identifier="${marker}"]`).first();
+        // RESOLVE THE NODE BEFORE FILLING, and clean up through that handle. A
+        // locator is a QUERY, not a reference: a controlled or masking component
+        // that REPLACES this input in response to the fill's input events leaves
+        // the replacement without the marker, so re-resolving the attribute
+        // afterwards matches nothing, waits out actionTimeout and THROWS — after
+        // a fill that succeeded. That throw aborted detectAndAuth() before the
+        // password was ever typed, so a cosmetic cleanup step failed the whole
+        // authentication and reported it as an attribute-selector timeout
+        // (directives#311). Bounded like every other resolution here by
+        // playwright.config.js's actionTimeout, and caught: losing the cleanup
+        // must never cost the fill.
+        const candHandle = await cand.elementHandle().catch(() => null);
         await cand.fill(String(AUTH_EMAIL));
-        await cand.evaluate((el, prev) => {
-          if (prev === null) el.removeAttribute('data-uitests-identifier');
-          else el.setAttribute('data-uitests-identifier', prev);
-        }, marked.prev);
+        // elementHandle.evaluate() does NOT re-query — it runs against the node
+        // the pick returned, attached or not. If the app replaced that node the
+        // write lands on the orphan and live markup is untouched, which is the
+        // right outcome: the marker left the document with the node it was on.
+        // The catch covers the one thing a handle cannot outlive — its execution
+        // context going away under a navigation.
+        if (candHandle) {
+          await candHandle.evaluate((el, prev) => {
+            if (prev === null) el.removeAttribute('data-uitests-identifier');
+            else el.setAttribute('data-uitests-identifier', prev);
+          }, marked.prev).catch(() => {});
+        }
       }
     }
     await passwordInput.fill(String(credential));
@@ -657,10 +712,29 @@ async function discoverElements(page) {
                        '[role=button]', '[onclick]'];
     // One ELEMENT can match several selectors (<button onclick> matches
     // 'button' and '[onclick]'; add role=button and it matches three).
-    // Records after the first carry duplicate:true so capped consumers (NAV's
-    // ATTEMPT_CAP) can skip re-charges for the same control — four inert
-    // triple-matching buttons must not spend twelve attempts.
-    const seenEls = new Set();
+    // Every record carries `elementKey` — the element's IDENTITY, assigned on
+    // first sight and reused for its later records — so a capped consumer
+    // (NAV's ATTEMPT_CAP) can spend one attempt per CONTROL rather than one per
+    // record: four inert triple-matching buttons must not cost twelve attempts.
+    //
+    // ⚠️ THE PRODUCER MUST NOT DO THAT DEDUP ITSELF, and the `duplicate` flag
+    // this replaces did — it marked the second+ record in DISCOVERY order,
+    // which is the right answer only for a consumer that accepts every
+    // representation. Consumers filter first, so the record a producer-side
+    // flag drops can be the only one the consumer can USE: an
+    // <input role="button"> is recorded under 'input:not([type=hidden])',
+    // which NAV rejects on tag, and again under '[role=button]', which NAV
+    // accepts — and the second record was skipped as a duplicate of a record
+    // NAV never considered, so an app whose only drill entry uses that pattern
+    // self-skipped the whole scenario (directives#311). Duplication is still
+    // visible here — a repeated elementKey in the element-map attachment — but
+    // WHICH representation to keep is the consumer's call, made after its own
+    // eligibility filter.
+    const elementKeys = new Map();
+    const keyOf = (el) => {
+      if (!elementKeys.has(el)) elementKeys.set(el, elementKeys.size);
+      return elementKeys.get(el);
+    };
     return selectors.flatMap(sel =>
       [...document.querySelectorAll(sel)]
         // Index BEFORE filtering: page.locator(sel).nth(i) counts every DOM match,
@@ -671,7 +745,7 @@ async function discoverElements(page) {
           return r.width > 0 && r.height > 0;
         })
         .map(({ el, index }) => ({
-          duplicate: seenEls.has(el) || (seenEls.add(el), false),
+          elementKey: keyOf(el),
           selector: sel,
           index,
           tag: el.tagName.toLowerCase(),
@@ -767,6 +841,12 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   //
   // 240_000 covers an 8-digit PIN with ~61s spare. SIZING ESTIMATE under a
   // stated assumption, not a proof: N is the project's credential length.
+  //
+  // SKIPPABLE — unlocked by TEST_AUTH_CREDENTIAL (plus TEST_AUTH_EMAIL on an
+  // email+password gate). Until that secret is set this scenario records ~0ms
+  // every run, so nothing in its history sized the number above; the arithmetic
+  // is what it costs the DAY THE SECRET ARRIVES. This is the scenario #306 was
+  // measured on — see BUDGET SIZING at the top of this file.
   test.setTimeout(240_000);
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
@@ -906,6 +986,13 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // which is how 240 survived: a test TIMEOUT reads as infra noise, so nobody
   // investigates it. Raise this BEFORE adding projects, never after — and see
   // the calling job's timeout-minutes, which this number pushes against.
+  //
+  // SKIPPABLE ON A GATED APP — unlocked by TEST_AUTH_CREDENTIAL (a public app
+  // never skips here). The skip is the expensive kind of zero: what it declined
+  // to sweep was the LOGIN SCREEN, so a repo where S3 has been skipping has
+  // measured a handful of controls, and the first credentialed run sweeps the
+  // whole authenticated app — the profile the 900_000 above was measured on, and
+  // one that repo has never run. See BUDGET SIZING at the top of this file.
   test.setTimeout(900_000);
   // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
   // only auth-gated apps with no credential are skipped (decided after page load below).
@@ -1164,21 +1251,63 @@ async function viewSignature(page) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BACK AFFORDANCE — one definition, every consumer
+// ─────────────────────────────────────────────────────────────────────────────
+// ROLE + ACCESSIBLE NAME are the two semantics every earlier form of the accname
+// arm approximated — tag lists for kind, label/text matchers for name — and each
+// approximation lagged the spec by one case (checkbox labeled "Back", input
+// type=button, div role=button with text "Back", input value="Back"). getByRole
+// computes both in full: implicit roles and text- or value-derived names
+// included, non-control roles excluded by the role filter itself. The CSS arm
+// below remains for [data-back] and the arrow glyphs.
+//
+// AFFORDANCE FORMS, BOTH ENDS ANCHORED. "back" is navigation only when the name
+// is SHAPED like a back control:
+//   prefix — the name starts at "back", or at motion/icon lead-in tokens (go,
+//            navigate, arrow, chevron, keyboard) and nothing else; leading
+//            decoration ([\W_]*: "← ", "‹ ", "(", stray whitespace) is allowed
+//            wherever a word is not;
+//   suffix — "back" ends the name, is trailed by decoration THAT RUNS TO THE END
+//            ("Back ›", "Back:"), or is followed by " to <place>".
+// Suffix-only anchoring shipped first and was wrong at the other end
+// (directives#311): "Send back to vendor" and "Put it back" end in an affordance
+// form while being forward actions, and the unwind would have PRESSED one —
+// a mutating click plus a false ping-pong failure on a correct app. The lead-in
+// vocabulary is closed and small on purpose, and the asymmetry of cost says why:
+// a name wrongly EXCLUDED costs a reported skip (NAV's counters name it), a name
+// wrongly INCLUDED costs a destructive click. So "Roll back", "Move back" and
+// "Step back" no longer match, while "Go back", "Navigate back" and the icon
+// ligatures do.
+// The prefix also closes the ligature gap the suffix rule left open: the left
+// bound is now STRUCTURAL rather than \b, so "arrow_back" and
+// "keyboard_arrow_back" — whose underscore is a word character and blocked
+// \bback\b — match as themselves, with no normalisation step.
+const BACK_NAME = /^[\W_]*(?:(?:go|navigate|arrow|chevron|keyboard)[\W_]+)*back\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)/i;
+// The NAV drill filter's superset: the same back form plus the return/home
+// phrasings and arrow glyphs that filter also excludes. Built FROM
+// BACK_NAME.source rather than retyped — the filter and the presser cannot
+// disagree about what "back" is, which four hand-kept copies could not
+// guarantee. Only the back branch is anchored; return/home stay as they were.
+const BACK_OR_HOME = new RegExp(
+  `${BACK_NAME.source}|\\breturn(\\s+to\\b|\\s*$)|\\bhome\\s*$|[←‹◀]`, 'i');
+
 // A single visible in-app back control, or an empty locator. Matches an accessible
 // name / aria-label of "back" or a left-arrow glyph, or an explicit [data-back] hook.
 // Deliberately narrow so the browser's Back button is NOT mistaken for an in-app one.
 function backControl(page) {
-  // Word-bound matching throughout (#308): :has-text and [aria-label*=] are
-  // SUBSTRING matches, so both selected "Backup" — claude.prop's JSON-export
-  // button — as a back control, and the unwind below would have pressed it.
-  // :text-matches takes a real JS regex, so \b is available directly — a
-  // whitespace emulation like (^|\s)back(\s|$) would reject the legitimate
-  // "Go-back" / "Back:" / "Back ›" that the drill filter's \b ACCEPTS as back
-  // controls, and NAV would then self-skip for want of a control it had just
-  // classified. CSS cannot regex an attribute, so aria-label word-bounding goes
-  // through getByLabel with the same regex, unioned in via .or(). The arrow
-  // glyphs stay as plain has-text — they are not word characters, so \b around
-  // them matches nothing.
+  // Form-bound matching throughout (#308, #311): :has-text and [aria-label*=]
+  // are SUBSTRING matches, so both selected "Backup" — claude.prop's JSON-export
+  // button — as a back control, and the unwind below would have pressed it. A
+  // whitespace emulation like (^|\s)back(\s|$) would go too far the other way
+  // and reject the legitimate "Go-back" / "Back:" / "Back ›" the drill filter
+  // ACCEPTS as back controls, and NAV would then self-skip for want of a control
+  // it had just classified. So every arm carries the one BACK_NAME object
+  // instead — including the aria-label arm, which CSS cannot regex and which
+  // goes through getByLabel unioned in via .or(). A regex handed to a CSS
+  // selector string does NOT survive the trip; see backControlAll(). The arrow
+  // glyphs stay as plain has-text — they are not word characters, so no bound
+  // around them matches anything.
   // `.first()` alone grabs the FIRST IN THE DOM, which in the common SPA pattern
   // (prior views kept mounted under display:none) is the hidden control from the
   // level above — so the back-flow test drove a dead element and self-skipped as
@@ -1194,41 +1323,33 @@ function backControl(page) {
 // reimplementation always lags it by one case. One definition, two consumers —
 // the filter and the presser cannot disagree about what "back" is.
 function backControlAll(page) {
-  // The SAME affordance-phrase regex in every arm (BACK_NAME below): "back"
-  // counts as navigation only in affordance FORMS — alone, "Go back",
-  // "Back to <place>", or trailed by decoration ("Back ›", "Back:"). A
-  // forward action that merely starts with the word ("Back up data",
-  // "Back office settings", "Back pain assessment") never matches: element
-  // kind cannot distinguish a backup/back-office BUTTON from a back button,
-  // only the phrase can. "Backup" was already rejected by the word bound.
-  return page.locator(
-    '[data-back], ' +
-    'button:text-matches("\\bback\\b(?=[\\s:;.!›>»)\\]…]*$|\\s+to\\b)", "i"), ' +
-    'a:text-matches("\\bback\\b(?=[\\s:;.!›>»)\\]…]*$|\\s+to\\b)", "i"), ' +
-    'button:has-text("←"), a:has-text("←")'
-  ).or(page.getByRole('button', { name: BACK_NAME }))
+  // ONE regex OBJECT in every text arm — never a regex written into a CSS
+  // selector string. `:text-matches("\\bback\\b…")` looks right and is not:
+  // Playwright parses that argument with the CSS string tokenizer, which applies
+  // CSS escape rules, so `\b` was read as the hex escape \bbac, `\s` collapsed
+  // to `s`, and `\]` closed the character class early. Both arms have therefore
+  // been matching the literal text "뮬k\v(?=[s:;.!›>»)]…]*$|s+to\v)" — i.e.
+  // nothing at all — since the word bounds landed in #308. Verified, not
+  // suspected: parseSelector() on the shipped selector returns that mangled
+  // pattern. `filter({ hasText })` takes the RegExp itself and round-trips it
+  // intact (serialised as /source/flags, and Playwright's regex reader preserves
+  // backslashes where its string reader does not); it is the idiom this file
+  // already uses for the digit keypad and the submit button; and its match is
+  // ancestor-inclusive, which is what is wanted here — the BUTTON, not the
+  // innermost span that happens to hold the word.
+  return page.locator('[data-back], button:has-text("←"), a:has-text("←")')
+   .or(page.locator('button').filter({ hasText: BACK_NAME }))
+   // An anchor with no href has no link role and often no aria-label either.
+   // <a onclick>Back</a> is a real back affordance that discoverElements admits
+   // via [onclick], and this text arm is the only one that can see it.
+   .or(page.locator('a').filter({ hasText: BACK_NAME }))
+   .or(page.getByRole('button', { name: BACK_NAME }))
    .or(page.getByRole('link', { name: BACK_NAME }))
    // An anchor WITHOUT href has no link role, so the role arms cannot see
    // <a aria-label="Back" onclick=…> — yet discoverElements admits it via
    // [onclick] and it is a real back affordance. Label∩anchor covers it.
    .or(page.getByLabel(BACK_NAME).and(page.locator('a')));
 }
-
-// ROLE + ACCESSIBLE NAME are the two semantics every earlier form of the
-// accname arm approximated — tag lists for kind, label/text matchers for
-// name — and each approximation lagged the spec by one case (checkbox
-// labeled "Back", input type=button, div role=button with text "Back",
-// input value="Back"). getByRole computes both in full: implicit roles and
-// text- or value-derived names included, non-control roles excluded by the
-// role filter itself. The CSS arms above remain for [data-back], arrow
-// glyphs, and href-less anchors that carry no link role.
-// Affordance forms only: "back" at the end of the name (which covers "Back",
-// "Go back", "arrow back" ligatures, "← Back"), "back to <place>", or "back"
-// trailed by decoration THAT RUNS TO THE END of the name — anchored, so
-// "Back: office settings" cannot match by consuming only the colon. The
-// positive lookahead subsumes the old backup-verb exclusion: "Back up data"
-// and "back-up now" simply never reach a matching form.
-const BACK_NAME = /\bback\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO — NAV: in-app back navigation strictly unwinds (no circular loop)
@@ -1266,6 +1387,17 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   // and ends the drill — a SKIP, not a green. The back-loop read is the mirror
   // case: a late arrival there turns a PASS into a FAIL, which is loud. Neither
   // can be turned green by arriving late, which is the test that decides this.
+  //
+  // SKIPPABLE THREE WAYS, and all three have to clear before this number is ever
+  // tested: a credential must exist (gotoAndAuth() skips a gated app without
+  // one), the app must offer a multi-level drill-in, and backControlAll() must
+  // recognise its back affordance. Until then NAV records the preamble and a
+  // skip. ⚠️ THIS PR MOVES THAT LINE: directives#311's drill-dedup fix admits
+  // <input role="button"> drill controls that used to self-skip the scenario,
+  // and its back-affordance fix revives two locator arms that have matched
+  // nothing since #308. A repo taking this change may see NAV run its full
+  // ATTEMPT_CAP path for the FIRST TIME — which is exactly the #306 case, so
+  // re-read this arithmetic before that run, not after it times out.
   test.setTimeout(360_000);
   await gotoAndAuth(page);
 
@@ -1304,30 +1436,48 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   for (let d = 0; d < DEPTH_CAP; d++) {
     const before = forward[forward.length - 1];
     let advanced = false;
+    // ONE ATTEMPT PER CONTROL, decided AFTER eligibility — never before it.
+    // discoverElements() emits one record per (element, selector) and only some
+    // of an element's representations are eligible here, so marking an element
+    // seen on a record this loop REJECTS discards the representation it could
+    // have used: the <input role="button"> case in directives#311, where the
+    // input-selector record is rejected on tag and the [role=button] record was
+    // then skipped as its duplicate, leaving NAV to report "no drill-down" on an
+    // app that has one. The seen-set therefore lives here, and only the eligible
+    // path adds to it. Skipping still happens BEFORE counting, so duplicates
+    // neither inflate candidatesSeen nor spend ATTEMPT_CAP on repeat clicks.
+    // PER LEVEL, not per test: elementKey is assigned in DOM order within ONE
+    // discoverElements() call, so the same number means a different control once
+    // the view changes — this Set must not outlive the level.
+    const seenKeys = new Set();
     for (const el of await discoverElements(page)) {
       if (!['a', 'button'].includes(el.tag) && !el.selector.includes('role=button')) continue;
-      // A record for an element already emitted under an earlier selector is
-      // the SAME control — skip before counting, so duplicates neither
-      // inflate candidatesSeen nor spend ATTEMPT_CAP on repeat clicks.
-      if (el.duplicate) continue;
+      if (seenKeys.has(el.elementKey)) continue;
+      seenKeys.add(el.elementKey);
       candidatesSeen++;
       // Word-bound (#308): the unanchored version matched Backup, Feedback,
       // Background, Returns and Homepage, silently excluding legitimate
       // drill-down entry points. The arrow glyphs sit OUTSIDE the \b group —
       // they are not word characters, so \b around them matches nothing.
       // Underscores are normalized to spaces FIRST: icon-font ligature text
-      // ("arrow_back", "keyboard_return") is what discoverElements records for
-      // a <span class="material-icons"> back button, and underscore is a word
-      // character, so \bback\b alone would let NAV click Back while drilling
-      // and walk a reversed trail. "Backup" has no underscore and stays allowed.
+      // ("arrow_back", "keyboard_return") is what discoverElements records for a
+      // <span class="material-icons"> back button, and underscore is a word
+      // character, so the \b-bounded return/home branches would miss
+      // "keyboard_return" entirely and NAV would click it while drilling, then
+      // walk a reversed trail. The back branch no longer needs the
+      // normalisation — its left bound is structural, so "arrow_back" matches
+      // raw — but the other branches do, so it stays. "Backup" has no underscore
+      // and is rejected on its own account.
       // The accessible name is tested alongside label: label prefers
       // textContent, so <button aria-label="Back">chevron_left</button> records
       // "chevron_left" — a glyph name this list can't enumerate — while its
       // aria-label says exactly what the control is.
-      // "back" uses the same affordance-form regex as backControlAll()
-      // (BACK_NAME): forward actions that start with the word — "Back up
-      // data", "Back office settings" — stay drill candidates, and the
-      // unwind will not press them either; the filter and the presser agree.
+      // "back" IS backControlAll()'s regex, not a copy of it: BACK_OR_HOME is
+      // built from BACK_NAME.source, so the filter and the presser cannot
+      // disagree. Both ends are anchored (directives#311), so a forward action
+      // that merely starts with the word ("Back up data", "Back office
+      // settings") OR merely ends in the form ("Send back to vendor", "Put it
+      // back") stays a drill candidate, and the unwind will not press it either.
       // KNOWN LIMIT, deliberate: home/return classification is string-based
       // (recorded label + ariaLabel, which resolves aria-labelledby TEXT but
       // not img alt inside a reference), so an icon-only Home button named
@@ -1346,8 +1496,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // end-anchored, and concatenating the two fields would bury one name's
       // ending in the middle of the joined string.
       if ([el.label, el.ariaLabel].some(s =>
-            /\bback\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)|\breturn(\s+to\b|\s*$)|\bhome\s*$|[←‹◀]/i
-              .test((s || '').replace(/_/g, ' ').trim()))) { excludedAsBack++; continue; }
+            BACK_OR_HOME.test((s || '').replace(/_/g, ' ').trim()))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);
@@ -1457,6 +1606,10 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
   // its settles became LOAD_SETTLE_MS — CTRL is one of the callers that made them
   // measurements, since a duplicate CTA rendering late is exactly what this scans
   // for. 240_000, same as S4.
+  //
+  // SKIPPABLE — via gotoAndAuth(), on a gated app with no TEST_AUTH_CREDENTIAL.
+  // The preamble is nearly the whole budget, so a skipping CTRL has measured the
+  // cheap half and none of the scan. See BUDGET SIZING at the top of this file.
   test.setTimeout(240_000);
   await gotoAndAuth(page);
   const dupes = await page.evaluate(() => {
@@ -1513,6 +1666,11 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
   // If you hit it: split the entry points into their own suite (the note above
   // already recommends this for pages with richer flows), or raise this cap and
   // the caller's timeout-minutes TOGETHER — never this one alone.
+  // SKIPPABLE — unlocked by APP_PAGES. Note what that means for the number
+  // below: in a repo that has never declared an extra entry point this scenario
+  // has run ZERO times, so 90_000-per-page is derived and never observed, and
+  // the day someone adds a page is the day both the per-page allowance and the
+  // cap are tested for the first time. See BUDGET SIZING at the top of this file.
   const ENTRY_CAP_MS = 300_000;
   test.setTimeout(Math.min(90_000 * pages.length, ENTRY_CAP_MS));
   const watcher = watchPageErrors(page);
@@ -1591,6 +1749,13 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // coverage outcome, not a defect): its presence tells you the app is nav-heavy
   // and the assumed mix was wrong. That is a measurement, and it beats another
   // derivation.
+  //
+  // SKIPPABLE — via gotoAndAuth(), on a gated app with no TEST_AUTH_CREDENTIAL;
+  // and effectively a no-op on an app with no overlays, since every trigger
+  // falls through the two `continue`s below. Either state records a fraction of
+  // the sum above. The day a credential lands OR the first modal ships, the
+  // per-trigger path runs for the first time — re-read the assumed mix then
+  // rather than after a timeout. See BUDGET SIZING at the top of this file.
   test.setTimeout(1_200_000);
   await gotoAndAuth(page);
 

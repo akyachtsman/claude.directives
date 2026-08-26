@@ -87,7 +87,23 @@ import { execFileSync } from 'child_process';
 // the same normalisation, for claims whose wording is fixed.
 
 const MANIFEST = '.github/scripts/claims.json';
-const claims = JSON.parse(readFileSync(MANIFEST, 'utf8')).claims;
+const MANIFEST_DOC = JSON.parse(readFileSync(MANIFEST, 'utf8'));
+const claims = MANIFEST_DOC.claims;
+
+// ONE NEGATOR DEFINITION, expanded into every pattern's {{NEG}} placeholder.
+// Round 6 claimed to have unified two copies of this alternation and instead
+// wrote the same string twice; round 7 deleted `avoid` from a single copy and
+// every declared case still passed while an inverted carrier was accepted.
+// Two literals are not one definition, however the commit message describes
+// them. A placeholder is, because there is then no second copy to edit.
+const NEGATORS = MANIFEST_DOC.negators;
+const expand = (src) => src.replace(/\{\{NEG\}\}/g, () => {
+  if (typeof NEGATORS !== 'string' || NEGATORS === '') {
+    console.error('FAIL: a pattern uses {{NEG}} but the manifest declares no "negators" string.');
+    process.exit(1);
+  }
+  return NEGATORS;
+});
 
 // An empty or non-array manifest checks NOTHING and would otherwise report
 // "OK — 0 claim(s)". That is the fully vacuous pass every hygiene rule below
@@ -220,7 +236,7 @@ for (const claim of claims) {
 
   let re;
   try {
-    re = new RegExp(pattern ?? esc(normalize(phrase)), 'i');
+    re = new RegExp(pattern ? expand(pattern) : esc(normalize(phrase)), 'i');
   } catch (err) {
     fail(`${id}: invalid pattern — ${err.message}`);
     continue;
@@ -255,6 +271,35 @@ for (const claim of claims) {
     fail(`${id}: no "mustNotMatch" — every pattern must carry the inversions it is required to reject. See this guard's header for the four that got through without it.`);
     continue;
   }
+  // ── negatorProbe: the tests are DERIVED from the negator definition ───────
+  // A hand-written list of inversion cases drifts from the negator list exactly
+  // as two copies of the alternation did — round 6's mustNotMatch covered the
+  // gap position only, so removing a negator from the LOOKBEHIND broke nothing.
+  // Each claim using {{NEG}} declares its sentence shapes once; every negator is
+  // then probed in every position, and adding one to the definition
+  // automatically adds its tests. There is no list left to forget to update.
+  if (claim.negatorProbe) {
+    if (!pattern || !pattern.includes('{{NEG}}')) {
+      fail(`${id}: declares negatorProbe but its pattern has no {{NEG}} — the probes would test nothing`);
+    } else {
+      for (const [position, shape] of Object.entries(claim.negatorProbe)) {
+        if (typeof shape !== 'string' || !shape.includes('%s')) {
+          fail(`${id}: negatorProbe.${position} must be a string containing %s (where the negator goes)`);
+          continue;
+        }
+        for (const neg of NEGATORS.split('|')) {
+          // The definition holds regex fragments; render a literal a carrier
+          // could actually contain, so the probe tests prose, not a pattern.
+          const word = neg.replace(/\['’\]\?/g, "'").replace(/[?]/g, '');
+          const probe = shape.replace('%s', word);
+          if (re.test(normalize(probe))) {
+            fail(`${id}: negator "${word}" is NOT rejected in the ${position} position: ${JSON.stringify(probe)}\n      This negator is in the manifest's definition but the pattern still accepts it there — the two positions have drifted.`);
+          }
+        }
+      }
+    }
+  }
+
   for (const bad of mustNot) {
     if (typeof bad !== 'string' || bad === '') {
       fail(`${id}: mustNotMatch entries must be non-empty strings, got ${JSON.stringify(bad)}`);
@@ -288,7 +333,7 @@ for (const claim of claims) {
         fail(`${id}: per-consumer pattern for ${file} is empty — an override that does not constrain anything silently restores the claim-level match it was added to replace`);
         continue;
       }
-      try { useRe = new RegExp(override, 'i'); }
+      try { useRe = new RegExp(expand(override), 'i'); }
       catch (err) { fail(`${id}: invalid per-consumer pattern for ${file} — ${err.message}`); continue; }
       if (useRe.test('')) {
         fail(`${id}: per-consumer pattern for ${file} matches the empty string — it would certify anything`);

@@ -1,11 +1,13 @@
 {
   "_comment": "Canonical-claim manifest for check-claims.js (#300). Each entry pins a rule that MUST keep being stated by every file listed, because #294 proved that a correct claim fixed in one file routinely goes stale, narrowed or absent in the others. Read check-claims.js's header before trusting a green run: this guard confirms a claim TRAVELLED, never that it is TRUE, and it cannot see a fix that says more than intended. Patterns are JS regex sources matched case-insensitively against the file with whitespace collapsed and markdown emphasis markers stripped, so one entry spans the wording variants a claim legitimately has. Consumer lists were derived by measuring the current tree, not by assumption — the issue that proposed this guard listed phrases that did not exist verbatim anywhere.",
+  "negators": "never|not|no|don['’]?t|doesn['’]?t|didn['’]?t|won['’]?t|can['’]?t|cannot|avoid|avoids|skip|skips|ignore|ignores|ignoring|disregard|disregards|except|without|instead|rather than",
+  "_negators_comment": "The ONE definition of a negation word, expanded into every pattern's {{NEG}} placeholder by check-claims.js. Round 7 exists because round 6 claimed to have unified two copies and instead wrote the same alternation twice: deleting `avoid` from only the lookbehind copy left every declared case passing while `avoid read the comments and the review threads` was accepted. Two literals are not one definition no matter what the commit message says. The guard also DERIVES a rejection case for each negator in BOTH positions from this string, so the tests cannot drift from it either -- there is no hand-written list to forget. Apostrophe forms are here because the normalizer deliberately does not strip apostrophes (that would corrupt ordinary prose), so `don't arm a check-in` needs the contraction spelled out.",
   "claims": [
     {
       "id": "verdict-lookup",
-      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both. The pattern requires a positive lookup VERB because the nouns alone certified the exact inversion — 'ignore the PR's comments and its review threads' — and the negator lookbehind is there because 'do not read' supplied the verb while reversing the instruction. Both alternations are \\b-anchored after an unanchored 'read' was found matching the tail of 'review-thread', letting an already-inverted sentence supply its own verb. Round 5 closed a subtler inversion than round 4's: requiring a positive verb is not enough if the gap between it and the channels can hold a NEGATIVE one. 'check the PR status, but ignore its comments AND its review threads' satisfied a bare gap, because 'check' supplied the verb while 'ignore' governed the nouns. The gap is now a tempered token admitting no negation word, so the verb it requires is the verb that actually governs. Round 6 found the same defect one level down and it is the most instructive instance: the fix itself introduced a SECOND negator list. The lookbehind already rejected never/not/dont/avoid/skip; the tempered gap I added rejected a different, overlapping set, so 'but avoid its comments AND its review threads' passed while 'but ignore ...' failed. Two lists expressing one idea drift silently. There is now one alternation used in both positions, and mustNotMatch carries a case per negator so the SUITE is what keeps them synchronised rather than a maintainer's memory.",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both. The pattern requires a positive lookup VERB because the nouns alone certified the exact inversion — 'ignore the PR's comments and its review threads' — and the negator lookbehind is there because 'do not read' supplied the verb while reversing the instruction. Both alternations are \\b-anchored after an unanchored 'read' was found matching the tail of 'review-thread', letting an already-inverted sentence supply its own verb. Round 5 closed a subtler inversion than round 4's: requiring a positive verb is not enough if the gap between it and the channels can hold a NEGATIVE one. 'check the PR status, but ignore its comments AND its review threads' satisfied a bare gap, because 'check' supplied the verb while 'ignore' governed the nouns. The gap is now a tempered token admitting no negation word, so the verb it requires is the verb that actually governs. Round 6 found the same defect one level down and it is the most instructive instance: the fix itself introduced a SECOND negator list. The lookbehind already rejected never/not/dont/avoid/skip; the tempered gap I added rejected a different, overlapping set, so 'but avoid its comments AND its review threads' passed while 'but ignore ...' failed. Two lists expressing one idea drift silently. There is now one alternation used in both positions, and mustNotMatch carries a case per negator so the SUITE is what keeps them synchronised rather than a maintainer's memory. Round 7: round 6 said 'one alternation used in both positions' and wrote the string TWICE. Codex deleted `avoid` from a single copy and every declared case still passed. The alternation now lives once, at the manifest's top level, expanded into {{NEG}}; the guard also DERIVES a rejection case per negator per position from it, so the tests cannot drift from the definition either. The explicit cases below anchor the specific negators review paid to find -- derived probes catch DRIFT between positions, but narrowing the definition would delete a negator and its probe together, and only a literal case catches that.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:never|not|dont|avoid|skips?|ignores?|ignoring|disregards?|except|without|instead)\\s)\\b(?:check|read|look for)\\b(?:(?!\\b(?:never|not|dont|avoid|skips?|ignores?|ignoring|disregards?|except|without|instead)\\b)[^.]){0,60}?comments and (?:the |its |their )?review threads",
+      "pattern": "(?<!\\b(?:{{NEG}})\\s)\\b(?:check|read|look for)\\b(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,60}?comments and (?:the |its |their )?review threads",
       "consumers": [
         "CLAUDE.md",
         "docs/internal/repo-monitors.md",
@@ -29,8 +31,15 @@
         "check the PR status, but avoid its comments AND its review threads",
         "check the PR status, but dont check its comments AND its review threads",
         "check the label, then skip the comments AND the review threads",
-        "check the run, without reading the comments AND its review threads"
-      ]
+        "check the run, without reading the comments AND its review threads",
+        "avoid read the comments and the review threads",
+        "don't read the comments and the review threads",
+        "check the PR status, but don't check its comments AND its review threads"
+      ],
+      "negatorProbe": {
+        "lookbehind": "%s read the comments and the review threads",
+        "gap": "check the PR status, but %s its comments and its review threads"
+      }
     },
     {
       "id": "response-is-not-a-verdict",
@@ -79,9 +88,9 @@
     },
     {
       "id": "arm-the-check-in",
-      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites. The leading word boundary matters more here than in most patterns because this claim's exact INVERSION contains it: 'disarm a check-in' is the opposite instruction and the unanchored form certified it. A pattern that accepts the negation of its own claim is worse than no pattern, since it reports the regression as coverage — so the boundary is required in the per-consumer variant below as well. The negator lookbehind rejects 'never arm a check-in'. It deliberately checks only the word IMMEDIATELY before the verb: a clause-level negation scan was designed, measured and rejected, because ci-notify.yml legitimately reads 'a green run is not a guaranteed wake and a waiting session still arms a check-in', where the negator belongs to a different proposition in the same clause. 'never explicitly arm a check-in' therefore still passes; narrowing that needs the claim's CONDITION pinned, not just its verb.",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites. The leading word boundary matters more here than in most patterns because this claim's exact INVERSION contains it: 'disarm a check-in' is the opposite instruction and the unanchored form certified it. A pattern that accepts the negation of its own claim is worse than no pattern, since it reports the regression as coverage — so the boundary is required in the per-consumer variant below as well. The negator lookbehind rejects 'never arm a check-in'. It deliberately checks only the word IMMEDIATELY before the verb: a clause-level negation scan was designed, measured and rejected, because ci-notify.yml legitimately reads 'a green run is not a guaranteed wake and a waiting session still arms a check-in', where the negator belongs to a different proposition in the same clause. 'never explicitly arm a check-in' therefore still passes; narrowing that needs the claim's CONDITION pinned, not just its verb. Round 7 added the apostrophe forms: the normalizer deliberately does not strip apostrophes -- doing so would corrupt ordinary prose -- so `dont` in the negator list did not cover `don't arm a check-in`, the way a person actually writes the inversion.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:never|not|dont|avoid|skip|un)\\s)\\barms? (?:a|the) check-?in",
+      "pattern": "(?<!\\b(?:{{NEG}})\\s)(?<!\\bun)\\barms? (?:a|the) check-?in",
       "consumers": [
         "CLAUDE.md",
         "directives/global.md",
@@ -96,7 +105,7 @@
         {
           "file": "plugins/directives-toolkit/scripts/wait-gate.sh",
           "why": "This file states the rule TWICE — once in its explanatory header comment, once inside the echo the PreToolUse hook actually delivers. The claim-level pattern matched the header, so deleting the instruction from the DELIVERED message left the guard green on the copy that carries the most authority (it reaches a session unprompted, at the decision point). The pattern below requires the delivered message's own opening text, so only the emitted form satisfies it.",
-          "pattern": "blocked by directives wait-gate.{0,600}?(?<!\\b(?:never|not|dont|avoid|skip|un)\\s)\\barms? (?:a|the) check-?in",
+          "pattern": "blocked by directives wait-gate.{0,600}?(?<!\\b(?:{{NEG}})\\s)(?<!\\bun)\\barms? (?:a|the) check-?in",
           "mustNotMatch": [
             "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) - and DISARM A CHECK-IN ALONGSIDE IT, not instead of it; (2) that check-in is `send_later`.",
             "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks); (2) use `send_later` (the pre-approved primary).",
@@ -110,8 +119,13 @@
         "never arm a check-in whenever the run's SHA is not your PR's head",
         "do not arm the check-in",
         "dont arm a check-in",
-        "the harness disarms a check-in for you"
-      ]
+        "the harness disarms a check-in for you",
+        "don't arm a check-in",
+        "doesn't arm a check-in"
+      ],
+      "negatorProbe": {
+        "lookbehind": "%s arm a check-in"
+      }
     }
   ]
 }

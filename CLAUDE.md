@@ -45,7 +45,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
-| `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`) projects copy into `.github/scripts/` |
+| `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `check-ui-viewports.js`) projects copy into `.github/scripts/`. `check-ui-viewports.js` is run here straight from this path by `qa.yml`, so unlike `workflow-ref-guard.py` / `check-job-bounds.py` it has NO byte-identical `.github/scripts/` twin |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
@@ -87,6 +87,13 @@ naming the head is not one, since a review with live findings names it too — o
 one of that gate's two documented exits stated on the PR (the reaction ladder's
 attestation, or an *unavailable* usage-limit reply), no `codex-flagged` label,
 no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
+- `main` here enforces **Require conversation resolution before merging**
+  server-side (owner, 2026-08-26), so an unresolved thread refuses the merge
+  rather than depending on a GraphQL read that fails when the quota is out. It
+  backstops exactly one gate: a blocked merge with CI green and no
+  `codex-flagged` label is that rule firing — resolve the threads, do not retry
+  the merge — and everything else in the list above is still checked by the
+  session.
 - Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
   next from updated `main` rather than reusing/force-pushing one long-lived branch.
 - Before merging, verify the PR's file list against GitHub's own diff, not the
@@ -148,9 +155,21 @@ A directive repo must pass its own CI before it can be trusted downstream.
   (`check-claims.js` — pinned rules still stated by every consumer that must
   state them; it proves a claim TRAVELLED, never that it is TRUE), job bounds,
   the workflow-ref guard, and
+  (`check-exports.js`, both directions), job bounds, the workflow-ref guard,
+  a clean-compile check over every tracked `.py`
+  (`.github/scripts/check-py-warnings.py` — a guard that warns at compile time
+  is a guard that stops running on a future interpreter), and
+  (`check-exports.js`, both directions), the viewport gate on the shipped
+  Playwright config (`check-ui-viewports.js`, plus `check-ui-viewports-cases.js`
+  guarding the gate itself — it IMPORTS the config so Node expands the device
+  spreads; a static read was tried three times and failed twelve ways, every
+  failure silent, #282), job bounds, the workflow-ref guard, and
   a paired-file diff check, plus a warn-only external-link job. It also runs
   `build-logical-map.js --check`, so a committed map that no longer matches
-  `EXPORTS.json` fails the build.
+  `EXPORTS.json` fails the build, and `node --check` over the exported JS
+  templates — `Repo Map UI` exercises this repo's own map suite, not
+  `templates/ui-tests/`, so without that step a syntax error in the largest
+  file we ship would be found by a downstream project's CI rather than ours.
   It also runs a **Playwright UI test** (`Repo Map UI`) — this repo dogfooding
   its own exported UI-testing standard (`test.md` / `templates/ui-tests`) on its
   interactive Pages artifact, `docs/site/logical-map.html`. It asserts rendering
@@ -247,10 +266,14 @@ node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
 node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header)
+python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
+node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic
+(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts) && node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone; the install is a one-time ~2.4s network step (node_modules/ is gitignored, no lockfile written)
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
+node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json
@@ -264,6 +287,10 @@ test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)
+#   the UI-suite ceilings comment is byte-identical across the three qa carriers and NOTHING ENFORCES IT —
+#   whole-file diff cannot be used (they legitimately differ elsewhere), so diff the block:
+diff <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa.yml) <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa-live.yml)
+diff <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa.yml) <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa-response.yml)
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed

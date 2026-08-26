@@ -113,6 +113,7 @@
       "ui-kit": [
         "templates/actions/ui-suite/",
         "templates/ui-tests/",
+        "templates/scripts/check-ui-viewports.js",
         "plugins/directives-toolkit/agents/ui-tester.md"
       ],
       "live": [
@@ -286,7 +287,8 @@
         "plugins/directives-toolkit/scripts/",
         "templates/claude-hooks/session-start.sh",
         "templates/scripts/workflow-ref-guard.py",
-        "templates/scripts/check-job-bounds.py"
+        "templates/scripts/check-job-bounds.py",
+        "templates/scripts/check-ui-viewports.js"
       ]
     },
     "artifact": {
@@ -361,6 +363,15 @@
       "serves": "git.lifecycle",
       "sockets": [
         "directives/git.md"
+      ]
+    },
+    "github-conversation-resolution": {
+      "vendor": "GitHub",
+      "serves": "git.lifecycle",
+      "sockets": [
+        "directives/git.md",
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        "NEW-REPO-USER-INSTRUCTIONS.md"
       ]
     },
     "playwright": {

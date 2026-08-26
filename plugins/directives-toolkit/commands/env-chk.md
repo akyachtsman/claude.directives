@@ -106,6 +106,26 @@ verdict. Read-only — do NOT modify files. Execute in order:
      the manual step stops recurring. Name which of the three failed: a present
      but unregistered or non-executable hook is the trap — it looks installed and
      never runs.
+   - **Permission allowlist present?** Report it, because nothing else will.
+     ```bash
+     jq -e '.permissions.allow | index("mcp__Claude_Code_Remote__create_trigger")' \
+       .claude/settings.json >/dev/null 2>&1 \
+       && echo "pre-approved" || echo "PROMPTS ON EVERY SCHEDULING CALL"
+     ```
+     This check exists because the rule it enforces went unfollowed for a month
+     with no signal. `global.md` → *Async Operations* tells a session to PR the
+     allowlist in the FIRST time it hits a scheduling prompt — but a session
+     never observes that prompt. The owner clicks it, silently, in a different
+     window, forever; claude.insurance reached four-figure click counts that way
+     while its sibling repos were fine. The failure is invisible to the only
+     party who can fix it, so it must be reported unprompted rather than waited
+     for. Note the two distinct states: the file MISSING pre-approves nothing at
+     all, while a file present with a stale or partial `permissions` block
+     pre-approves only what it lists. Missing is the more common and the more
+     expensive. Remediation either way is one small PR carrying the current
+     `templates/claude-settings.json` → `permissions` block verbatim; say plainly
+     that it takes effect from the NEXT session, never this one, so the owner is
+     not surprised to keep clicking today.
    - `docs/` only → informational
    Exception: if upstream.sha trails HEAD by exactly the commit(s) that recorded the
    stamp/baselines themselves, report current, not behind. Session Start

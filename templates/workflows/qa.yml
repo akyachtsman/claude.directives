@@ -16,7 +16,9 @@
 #
 # Required setup:
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project has
-#     (email+password gates need TEST_AUTH_EMAIL as well — directives#304)
+#     (email+password AND identifier-first/split-step gates need TEST_AUTH_EMAIL
+#      as well — directives#304, #310; without it a split-step gate is not even
+#      DETECTED and the authenticated scenarios run against the identifier screen)
 #     no auth; the empty secret makes auth tests self-skip
 #   - Set UI_TESTS_DIR below to the path of your Playwright test directory
 #   - Adjust the UI_PATHS regex in the ui-changes job to your project layout
@@ -226,13 +228,29 @@ jobs:
     # 1200s). A HEALTHY run is unchanged throughout — a ceiling costs nothing
     # until a test hits it.
     #
+    # THIRD ROUND, same shape (directives#310): the identifier-first auth step
+    # added a bounded SECOND attempt cycle to that shared preamble — +55s, but
+    # only on a split-step gate with TEST_AUTH_EMAIL set, so a healthy run on
+    # every other app is unchanged again. It cost every budget containing the
+    # preamble: S2/S4/CTRL 240s -> 300s, NAV 360s -> 420s. DISMISS absorbed it
+    # WITHOUT growing, by spending one fewer navigation reset (NAV_RESET_CAP
+    # 3 -> 2) — a navigating trigger is not an overlay trigger, so those resets
+    # were already the cheap side of that trade.
+    #
     # A FAILING run is where the spare goes, and the scenarios split in two:
     #
-    #   SHORT ceilings   S1 90s, S2 240s, S4 240s, CTRL 240s, ENTRY <=300s
+    #   SHORT ceilings   S1 90s, S2 300s, S4 300s, CTRL 300s, ENTRY <=300s
     #                    a failure costs <=10min (replace + retry). ONE of these
-    #                    fits alongside two profiles failing S3.
-    #   LONG ceilings    NAV 360s, S3 900s, DISMISS 1200s
-    #                    a failure costs 12-40min. NOT covered alongside a
+    #                    fits alongside two profiles failing S3 — and that claim
+    #                    is UNCHANGED by the raise above: ENTRY's 300s cap
+    #                    already set this class's maximum, so S2/S4/CTRL joined
+    #                    the ceiling rather than raising it. 104min + 10min =
+    #                    ~114min against 120. What DID change is how often the
+    #                    worst case is realized: most projects declare 0-2 entry
+    #                    points, so the TYPICAL class maximum was 240s and is
+    #                    now 300s.
+    #   LONG ceilings    NAV 420s, S3 900s, DISMISS 1200s
+    #                    a failure costs 14-40min. NOT covered alongside a
     #                    failing S3 — deliberately, on the same reasoning as
     #                    three failing S3 profiles: two long scenarios failing at
     #                    once means the app or those budgets are wrong, not this

@@ -33,7 +33,77 @@ const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 // address that identifies nobody — never a real person's email. (The password
 // renders as dots; the identifier renders as itself. That asymmetry is why
 // this warning exists here and not on TEST_AUTH_CREDENTIAL.)
+// AND IT GATES THE IDENTIFIER-FIRST PATH ENTIRELY (#310). A split-step login
+// shows an email step BEFORE any password field, so detectAuthGate() must be
+// able to call it a gate — but a lone visible email input is ALSO a newsletter
+// box, and treating one as a gate would skip S3/NAV/CTRL/DISMISS on a healthy
+// public app. Requiring TEST_AUTH_EMAIL is what keeps that blast radius at
+// zero for every project that has not opted in: unset, nothing below changes.
+// Without it there is also nothing to type — filling the PASSWORD into an
+// identifier field is worse than not trying.
+// The screenshot hazard above WIDENS here: a split-step gate puts the
+// identifier on a screen of its own, so a failure at the credential step
+// still carries a shot of the identifier step behind it.
 const AUTH_EMAIL = process.env.TEST_AUTH_EMAIL || null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH READINESS — a windowed answer and a proven one must not look alike (#302)
+//
+// THE DEFECT THIS CLOSES IS EPISTEMIC, NOT NUMERIC. detectAuthGate() returning
+// false is read as a CONCLUSION: mechanism becomes 'none' and the supplied
+// credential is never tried. But absence of a gate at time T is not evidence of
+// absence at T+1, so an app whose gate-determining request is still in flight
+// when the settle ends produces a green on auth that was never exercised. #301
+// widened the window 10s -> 30s, which changes how OFTEN that happens and can
+// never change WHETHER it can. No timeout value can.
+//
+// A generic file cannot know the condition, which is why this is a per-project
+// surface rather than a bigger number. Set EITHER:
+//   TEST_AUTH_READY_SELECTOR — a selector matching whichever outcome occurs:
+//                              the gate itself, OR the authenticated app shell.
+//   TEST_AUTH_READY_REQUEST  — a substring of the URL of the request whose
+//                              settling decides the gate (/api/session, /auth/me).
+// Set neither and behaviour is exactly as before — but the report now SAYS the
+// answer was a window. That half matters more than the condition itself: the
+// failure today is not a short window, it is that a windowed answer and a proven
+// one are indistinguishable in the output.
+//
+// A CONFIGURED CONDITION THAT NEVER RESOLVES IS LOUD, not a silent fallback.
+// The project asserted this condition decides its gate; if it does not hold, the
+// app never resolved, and quietly degrading to a settle would rebuild the exact
+// ambiguity this surface exists to remove.
+const AUTH_READY_SELECTOR = process.env.TEST_AUTH_READY_SELECTOR || null;
+const AUTH_READY_REQUEST  = process.env.TEST_AUTH_READY_REQUEST  || null;
+
+async function awaitAuthReady(page) {
+  if (!AUTH_READY_SELECTOR && !AUTH_READY_REQUEST) {
+    await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+    return 'windowed';
+  }
+  try {
+    if (AUTH_READY_SELECTOR) {
+      await page.waitForSelector(AUTH_READY_SELECTOR, { timeout: LOAD_SETTLE_MS, state: 'attached' });
+    } else {
+      await page.waitForResponse((r) => r.url().includes(AUTH_READY_REQUEST), { timeout: LOAD_SETTLE_MS });
+    }
+    return 'proven';
+  } catch {
+    const which = AUTH_READY_SELECTOR
+      ? `TEST_AUTH_READY_SELECTOR (${AUTH_READY_SELECTOR})`
+      : `TEST_AUTH_READY_REQUEST (${AUTH_READY_REQUEST})`;
+    throw new Error(
+      `Auth-readiness condition never resolved within ${LOAD_SETTLE_MS}ms: ${which}.\n` +
+      `  This project declared that condition as the point at which its gate decision is made, ` +
+      `so nothing below it can be trusted — a gate that has not been decided cannot be reported ` +
+      `present or absent.\n` +
+      `  A SELECTOR must match WHICHEVER outcome occurs — the gate itself OR the authenticated ` +
+      `app shell — not only one of them; a selector that names just the gate times out on every ` +
+      `signed-in run. Failing rather than falling back to the settle, because a silent fallback ` +
+      `rebuilds the windowed-vs-proven ambiguity this condition exists to remove (directives#302).`
+    );
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IDLE CAP — every networkidle wait is bounded, because NOTHING ELSE BOUNDS IT
@@ -74,10 +144,21 @@ const IDLE_MS = 5_000;
 // classification below is therefore exhaustive by construction — every
 // networkidle wait in this file appears in exactly one of the two lists.
 //
-// LOAD_SETTLE_MS — a late arrival turns a FAIL into a PASS (9 sites):
+// LOAD_SETTLE_MS — a late arrival turns a FAIL into a PASS (11 sites):
 //   S1, ENTRY          a late error is never counted and the gate is green
-//   S2                 detectAuthGate's answer becomes mechanism 'none', so S2
-//                      passes without ever trying the credential
+//   S2 (x2)            pre-auth: detectAuthGate's answer becomes mechanism
+//                      'none', so S2 passes without ever trying the credential.
+//                      post-auth: verifying mid-flight reads a not-yet-dismissed
+//                      gate as retained and fails a login that SUCCEEDED. This
+//                      second site was in the file and not in this list —
+//                      corrected here, and it is why the count moved by two.
+//   detectAndAuth      the identifier step's settle (#310): the loop re-runs
+//                      DISCOVERY on what this wait returns, and too short reads
+//                      a WORKING split-step login as 'identifier-step-
+//                      unresolved' — the same failure S2's post-auth settle is
+//                      LOAD_SETTLE_MS to avoid. IDLE_MS here would have fit
+//                      inside the OLD 240s ceilings; sizing does not get to
+//                      pick the classification.
 //   S3 preamble (x2)   feeds discoverElements(); an element that renders late is
 //                      never swept, so a broken control leaves S3 green
 //   S4 (x2)            scrollWidth is read as a verdict; late content that
@@ -100,6 +181,41 @@ const IDLE_MS = 5_000;
 // So IDLE_MS where a late arrival costs precision, LOAD_SETTLE_MS where it costs
 // correctness — with S3's loop the single documented place those two pull apart.
 const LOAD_SETTLE_MS = 25_000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUDGET SIZING — a scenario that CAN SKIP needs a budget sized for the day it
+// stops skipping (directives#306)
+// ─────────────────────────────────────────────────────────────────────────────
+// Every scenario below sets its own test.setTimeout and derives it at the
+// scenario. This is the rule those numbers are derived UNDER, and it inverts the
+// intuition:
+//
+//     A SCENARIO THAT HAS BEEN SKIPPING HAS NO EVIDENCE BEHIND ITS BUDGET.
+//     ITS OBSERVED RUNTIME IS ZERO, WHICH PROVES NOTHING.
+//
+// A skip records ~0ms, every run, which reads exactly like "fast" to anyone
+// sizing from history. The moment the precondition is satisfied — a credential
+// set, APP_PAGES declared, a fixture seeded — the scenario runs for the first
+// time against a number nobody derived.
+//
+// Measured, claude.insurance 2026-08-25: their S2 carried no budget at all and
+// inherited the 30s config default. It had never executed until their owner set
+// TEST_AUTH_CREDENTIAL an hour earlier. First run: 11.0 / 12.1 / 11.4 / 11.6s
+// across four projects — ~2.5x margin, the THINNEST in their suite, on the one
+// scenario that went from never-running to running-every-time that morning.
+// Their S3, which had always run, carried an explicit 240_000.
+//
+// So, three rules:
+//   * Size a skippable scenario for its FIRST REAL RUN, not for its history, and
+//     say IN ITS BUDGET COMMENT which precondition unlocks it. Every scenario
+//     below that can skip names its own.
+//   * "It has always been fast" is INADMISSIBLE when the observed runs are
+//     skips. That is zero data presented as reassurance — the same shape as a
+//     green that verified nothing.
+//   * When a precondition is newly satisfied in a repo, re-read that scenario's
+//     budget BEFORE the first run, not after it times out. A first real run
+//     exercises several never-exercised things at once: the day S2 stops
+//     skipping is also the first day expectGateCleared() has a verdict to reach.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAGE-ERROR WATCHER — the console-error gate (test.md → UI coverage gates)
@@ -273,227 +389,531 @@ async function domSnapshot(page) {
 // settle — is the ~98s figure NAV's budget already used. It was derived there in
 // round 5 and then not applied to S2, S4 or CTRL, which is how three scenarios
 // came to be sized for two of their five terms.
+//
+// SPLIT-STEP (#310) — a SECOND pass through the same loop, and the only path
+// that costs more than the sum above. It requires TEST_AUTH_EMAIL to be set AND
+// an identifier-first step to be discovered, so every project on a PIN, a
+// password form, an email+password form or no gate at all pays exactly zero:
+//
+//     identifier step:  waitFor 10 + fill 10 + submit 10 + LOAD_SETTLE_MS 25
+//                                                              = 55s
+//   + credential step:  the single-step sum above
+//                                                       ~53s / ~94s
+//     ----------------------------------------------------------
+//     ~108s at N=4       ~149s at N=8      (delta: +55s, flat in N)
+//
+// The credential step's ladder may fill an identifier AGAIN (a step-2 form that
+// re-shows the email). That is already inside the 33s password figure, and the
+// editable-only rule means a READONLY prefilled email is left alone rather than
+// burning a fill timeout. PIN remains the sizing case at both N.
+//
+// So the shared preamble (goto 30 + settle 25 + detectAuthGate 5 + this + settle
+// 25) goes ~138s -> ~193s at N=4 and ~179s -> ~234s at N=8 on a split-step gate,
+// and is UNCHANGED everywhere else. Every budget below states which it assumed.
 // ─────────────────────────────────────────────────────────────────────────────
-async function detectAndAuth(page, credential) {
-  // Wait for auth UI to be fully active before interacting — prevents CI timing failures
-  // on mobile/WebKit where JS activates slower than desktop Chromium.
-  await page.locator('[class*="keypad"], [class*="pin"], input[type="password"], input[type="text"]')
-    .first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+const T = ':is(input[type=text], input:not([type]))';
+const SEMANTIC = ['name', 'id', 'placeholder', 'aria-label']
+  .flatMap(a => ['email', 'user', 'login'].map(v => `${T}[${a}*="${v}" i]`))
+  .join(', ');
+// Rungs 1-3 only — the UNRESTRICTED 4th rung stays form-only and is appended at
+// the ladder's call site. Hoisted because the identifier-STEP detector (#310)
+// must count candidates from exactly this set: a detector with its own selector
+// list is two definitions that drift, which is what generating SEMANTIC already
+// had to be done to prevent.
+const IDENTIFIER_RUNGS = [
+  'input[type=email]',
+  'input[autocomplete~="username" i], input[autocomplete~="email" i]',
+  SEMANTIC,
+];
+const IDENTIFIER_UNION = IDENTIFIER_RUNGS.join(', ');
+// The identifier step's advance control, and the two shapes it must NOT be.
+// Word-bound: `.filter({ hasText })` is a SUBSTRING match, the same trap #308
+// found in the back-control locator.
+const ADVANCE_NAME = /\b(next|continue|sign\s?in|log\s?in|submit|enter)\b/i;
+// "Continue with Google" sits on real split-step login screens and starts an
+// OAuth redirect. It matches ADVANCE_NAME; it must lose anyway.
+const SOCIAL_NAME  = /\bwith\s+(google|apple|microsoft|github|facebook|okta|sso)\b/i;
+// The auth-context vocabulary, as SOURCE so both evaluates below build the same
+// RegExp — a page.evaluate body cannot close over module scope, and two copies
+// of this list is exactly the drift textGateSignals was factored to prevent.
+const AUTH_CONTEXT_SRC =
+  '\\b(pin|passcode|access\\s*code|access|log\\s*in|login|sign\\s*in|unlock|enter\\s*code|password)\\b';
+// Identifier step + credential step. NOT a knob: raising it re-derives every
+// budget in this file (each step costs a full settle) and there is no third
+// step this suite knows how to answer.
+const AUTH_STEP_CAP = 2;
 
-  // Heuristic 1: numeric keypad (buttons 0-9 + dot indicators)
-  const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).count();
-  const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').count();
+// Mechanisms that mean THIS SUITE DID NOT COMPLETE AN AUTHENTICATION ATTEMPT.
+// Neither is a verdict about the app — both are facts about what the suite did,
+// which is why expectGateCleared stays silent on them and every scenario that
+// needs an authenticated view SKIPS rather than measuring the login screen. A
+// set, not two `||`s, because the last three mechanisms added to this file each
+// had to be carried to four call sites by hand and one of them was missed.
+const AUTH_INCOMPLETE = new Set(['identifier-step-unresolved', 'no-credential']);
+const authIncompleteNote = (mechanism) => mechanism === 'no-credential'
+  ? 'An auth gate is on screen, TEST_AUTH_CREDENTIAL is unset, and the form ships no credential of its own — there was nothing to submit.'
+  : 'Identifier step submitted but no credential step appeared — no credential was entered.';
 
-  if (hasNumericButtons >= 9 && hasDotIndicator > 0) {
-    // PIN keypad — click each digit as a string (preserve leading zeros)
-    for (const digit of String(credential).split('')) {
-      await page.locator('button').filter({ hasText: new RegExp(`^${digit}$`) }).first().click();
-      await page.waitForTimeout(80);
-    }
-    await page.waitForTimeout(3000);
-    return 'pin-keypad';
-  }
-
-  // Heuristic 2: password input — `visible=true` BEFORE `.first()`, the same
-  // idiom as detection (passwordGateVisible) and for the same reason: a hidden
-  // responsive copy first in the DOM would otherwise make the attempt skip
-  // this branch and return mechanism 'none' — which no verifier checks — while
-  // detection correctly reports a gate. Attempt and detection must select from
-  // the same set.
-  const passwordInput = page.locator('input[type=password]').locator('visible=true').first();
-  if (await passwordInput.isVisible().catch(() => false)) {
-    // Email+password gate: fill the identifier BEFORE the password when one was
-    // supplied. ANCHORED TO THE PASSWORD'S OWN FORM — a page-scoped
-    // input[type=email] with .first() would hand the identifier to whatever
-    // email field happens to come first in the DOM (a newsletter box, a hidden
-    // responsive copy), the login then submits a blank identifier, and the
-    // gate-cleared check below fails every authenticated scenario. A gate with
-    // no <form> element falls back to page scope with type=email ONLY: off-form,
-    // a bare text input is more likely a search box than a login field.
-    // Without TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
-    if (AUTH_EMAIL) {
-      // The password's ASSOCIATED form via the DOM's own .form property — it
-      // resolves both an ancestor <form> and external association
-      // (<input form="login"> outside the form tag), where an ancestor-only
-      // xpath lookup reports no form and wrongly restricts the search to the
-      // formless rungs.
-      const pwHandle = await passwordInput.elementHandle();
-      const scopeHandle = (await passwordInput.evaluateHandle(el => el.form)).asElement();
-      const hasForm = !!scopeHandle;
-      // PREFERENCE LADDER, most-semantic first — never one union, because a
-      // selector union preserves DOM order and a tenant/org field ahead of the
-      // identifier would receive the email. Rungs: (1) the typed email input;
-      // (2) autocomplete=username/email — the spec-defined identifier marker,
-      // matched with ~= because the attribute is a space-separated token list
-      // ("section-login username") and exact equality misses every multi-token
-      // value; (3) a text input whose name/id/placeholder/aria-label SAYS it
-      // is an email/user/login field; (4) form-scoped last resort, any visible
-      // text input — kept because identifier fields on login forms are often
-      // plain unlabeled type=text, and a login form rarely holds a competing
-      // one (the tenant-field case is exactly what rungs 2-3 exist to win
-      // first). Formless gates use rungs 1-3: the semantic rung names its
-      // field explicitly, so it is safe anywhere (a div-based login with
-      // <input name="username"> matches nothing without it); only the
-      // UNRESTRICTED last resort stays form-only, because off-form a bare
-      // text input is more likely a search box than a login field.
-      // GENERATED, not hand-listed: the hand-written version required an
-      // explicit type=text on every clause, so a form of type-less inputs
-      // (<input name="tenant">, <input name="username">) matched NO semantic
-      // rung and fell to the DOM-order last resort — tenant filled, username
-      // blank. It had also drifted internally (login missing from two of the
-      // four attributes). The cross-product cannot omit a cell.
-      const T = ':is(input[type=text], input:not([type]))';
-      const SEMANTIC = ['name', 'id', 'placeholder', 'aria-label']
-        .flatMap(a => ['email', 'user', 'login'].map(v => `${T}[${a}*="${v}" i]`))
-        .join(', ');
-      const rungs = [
-        'input[type=email]',
-        'input[autocomplete~="username" i], input[autocomplete~="email" i]',
-        SEMANTIC,
-        ...(hasForm ? ['input[type=text], input:not([type])'] : []),
-      ];
-      // Selection is ANCHORED TO THE PASSWORD INPUT — never `.first()`, which
-      // hands the fill to whatever matches earliest in the DOM. Two regimes:
-      //   - WITH a form, rungs run in rank order scoped to that form, and the
-      //     pick within a rung is the candidate nearest the password
-      //     (preferring those that precede it) — the form declares the
-      //     association, rank disambiguates inside it.
-      //   - FORMLESS, proximity comes BEFORE rank: the rungs are unioned and
-      //     the nearest-preceding candidate wins outright. Rung rank across a
-      //     whole document inverts the intent — a newsletter input[type=email]
-      //     elsewhere on the page outranked the semantic username sitting
-      //     beside the password. With no form to declare the association,
-      //     adjacency to the password IS the association; the rungs still
-      //     bound WHAT may be picked (semantically-named fields only).
-      // Visibility uses the file's evaluate-side definition (geometry +
-      // computed visibility, same as textGateSignals), so a hidden responsive
-      // copy is passed over in favour of the visible candidate rather than
-      // silently skipping the fill. The pick is marked, filled through
-      // Playwright (real input events), and unmarked.
-      const marker = `uit-${Math.random().toString(36).slice(2)}`;
-      const marked = await page.evaluate(([pw, root, sels, mark]) => {
-        if (!pw) return false;
-        const vis = el => {
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-        };
-        // EDITABLE candidates only: a two-step login shows the already-chosen
-        // email in a readonly input beside the password — fill() on it burns
-        // its timeout and fails, while leaving it alone submits fine. A
-        // readonly prefilled identifier is accepted by NOT overwriting it.
-        const editable = el => !el.readOnly && !el.disabled;
-        // Formless scope is the PASSWORD'S OWN ROOT, not document: a login
-        // component in an open shadow root keeps its inputs behind a boundary
-        // querySelectorAll cannot cross from document, while Playwright found
-        // the password inside it. getRootNode() is the shadow root there and
-        // document everywhere else — the non-shadow case is unchanged.
-        const scope = root || pw.getRootNode();
-        // Form-scoped collection reads the form's `elements` collection, not a
-        // descendant query: a control outside the form tag but associated via
-        // the `form` attribute (<input form="login">) is submitted with the
-        // form yet never matched by a descendant querySelectorAll.
-        const candsOf = sel => (root
-          ? [...root.elements].filter(el => el.matches(sel))
-          : [...scope.querySelectorAll(sel)]
-        ).filter(el => vis(el) && editable(el));
-        const nearest = cands => {
-          if (!cands.length) return null;
-          const preceding = cands.filter(el => el.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
-          return preceding.length ? preceding[preceding.length - 1] : cands[0];
-        };
-        // ACCESSIBLE-NAME matcher, both branches: <label for> / wrapping
-        // labels (el.labels) and aria-labelledby text against the same
-        // email/user/login vocabulary as the SEMANTIC rung — a gate labeling
-        // its identifier with generated attributes carries the word "Email"
-        // only in its accessible name, where no attribute selector can see
-        // it. KNOWN LIMIT, deliberate: this reads TEXT, not the full
-        // accessibility-name algorithm — a label whose only content is
-        // <img alt="Email"> is not seen. Reimplementing accname inside an
-        // evaluate is the staircase the back-control locator climbed and
-        // abandoned for getByRole; no role locator can express "text input
-        // whose NAME says email", so the residue is documented instead — an
-        // app that exotic needs directives#302's per-project condition.
-        const nameMatches = el => {
-          const rootNode = el.getRootNode();
-          const byId = id => (rootNode.getElementById ? rootNode : document).getElementById(id)?.textContent || '';
-          const labelledby = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(byId).join(' ');
-          const labels = el.labels ? [...el.labels].map(l => l.textContent || '').join(' ') : '';
-          return /email|user|login/i.test(`${labelledby} ${labels}`);
-        };
-        const TEXTish = ':is(input[type=text], input:not([type]))';
-        let pick = null;
-        if (root) {
-          // The accessible-name rung sits BETWEEN the semantic attribute rung
-          // and the unrestricted last resort: an input labeled "Email" with
-          // generated attributes must win before the final rung's proximity
-          // hands the fill to a nearer tenant field.
-          const rungPools = [
-            ...sels.slice(0, -1).map(sel => () => candsOf(sel)),
-            () => candsOf(TEXTish).filter(nameMatches),
-            () => candsOf(sels[sels.length - 1]),
-          ];
-          for (const pool of rungPools) { pick = nearest(pool()); if (pick) break; }
-        } else {
-          // querySelectorAll on the joined union returns document order, so
-          // nearest() sees one proximity-sorted candidate pool; accessible-
-          // name candidates are unioned in and the pool re-sorted.
-          const named = candsOf(TEXTish).filter(nameMatches);
-          const pool = [...new Set([...candsOf(sels.join(', ')), ...named])];
-          pool.sort((a, b) => a === b ? 0
-            : (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
-          pick = nearest(pool);
-        }
-        if (!pick) return false;
-        // The candidate's ORIGINAL attribute value (null when absent) rides
-        // back so cleanup restores rather than deletes — if the app itself
-        // owns this attribute on the picked input, its styling/submit logic
-        // must see the markup it shipped.
-        const prev = pick.getAttribute('data-uitests-identifier');
-        pick.setAttribute('data-uitests-identifier', mark);
-        return { prev };
-      }, [pwHandle, scopeHandle, rungs, marker]);
-      if (marked) {
-        // Located by the run-unique VALUE, not attribute presence — an app
-        // element that happens to carry the bare attribute cannot shadow the
-        // candidate the evaluate actually picked.
-        const cand = page.locator(`[data-uitests-identifier="${marker}"]`).first();
-        await cand.fill(String(AUTH_EMAIL));
-        await cand.evaluate((el, prev) => {
-          if (prev === null) el.removeAttribute('data-uitests-identifier');
-          else el.setAttribute('data-uitests-identifier', prev);
-        }, marked.prev);
-      }
-    }
-    await passwordInput.fill(String(credential));
-    const submitBtn = page.locator('button[type=submit], input[type=submit], button').filter({ hasText: /sign.?in|log.?in|submit|enter/i }).first();
-    if (await submitBtn.isVisible().catch(() => false)) await submitBtn.click();
-    else await passwordInput.press('Enter');
-    await page.waitForTimeout(3000);
-    return 'password-form';
-  }
-
-  // Heuristic 3: text input accepting short credential — same visible-first
-  // idiom as heuristic 2, carried proactively: a hidden text input first in
-  // the DOM would silently return 'none' here too.
-  const textInput = page.locator('input[type=text], input:not([type])').locator('visible=true').first();
-  if (await textInput.isVisible().catch(() => false)) {
-    await textInput.fill(String(credential));
-    await textInput.press('Enter');
-    await page.waitForTimeout(3000);
-    return 'text-input';
-  }
-
-  return 'none'; // no auth gate detected
+// A form that SHIPS a working credential is a legitimate credential source.
+// claude.insurance's login prefills username+password and a human signs in by
+// clicking Log in; before this, supplying TEST_AUTH_CREDENTIAL overwrote a
+// working value (turning a green login into a loud, correctly-reported but
+// wrongly-caused "gate retained"), and NOT supplying it skipped every auth
+// scenario — so the HONEST configuration, declining to invent a secret the app
+// does not need, bought zero auth coverage. Neither reports the truth about
+// that app. directives#312.
+//
+// The env value WINS when present: it is an explicit instruction, and reading
+// the field first would only spend a DOM round-trip to reach the same answer.
+// A prefilled value is used by NOT overwriting it — `value` is null on that
+// branch precisely so a caller cannot accidentally re-type what is already
+// there. Whitespace is not a credential, hence the trim.
+//
+// DEPENDS ON HYDRATION HAVING FINISHED, and that is not assumed: every caller
+// settles on networkidle before detectAndAuth runs, so an app that populates
+// its form from JS has done so by the time this reads.
+async function credentialFor(input, envValue) {
+  if (envValue) return { value: envValue, source: 'env' };
+  const existing = ((await input.inputValue().catch(() => '')) || '').trim();
+  if (existing) return { value: null, source: 'prefilled' };
+  return { value: null, source: null };
 }
 
-// Detection-only: is there a real auth gate (PIN keypad or password field)? Does NOT
-// interact, and deliberately ignores plain text inputs (a search/filter box is not an
-// auth gate). Used to decide whether to skip/auth without firing spurious login attempts.
+// Does the gate on screen carry a credential of its own? PASSWORD FIELDS ONLY,
+// and that narrowing is the same proof-grading rule the rest of this file runs
+// on: input[type=password] is the one field kind whose non-empty value is
+// necessarily a credential. A non-empty TEXT input is indistinguishable from a
+// search box with a default query, so a prefilled TEXT/PIN gate still skips —
+// a stated residue, not an oversight.
+// ⚠️ RESIDUE, browser autofill: a profile-backed browser could populate this
+// field, and the suite would then submit a real person's saved credential. CI
+// browsers are fresh contexts with no profile, which is why this is safe HERE;
+// it is not safe in a headed local run against your own profile.
+async function gateShipsCredential(page) {
+  return page.evaluate(() => [...document.querySelectorAll('input[type=password]')].some(el => {
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0) || getComputedStyle(el).visibility === 'hidden') return false;
+    return !el.readOnly && !el.disabled && (el.value || '').trim() !== '';
+  }));
+}
+
+// THE IDENTIFIER LADDER, with its anchor as a parameter. Two callers with
+// opposite anchor semantics (#310): the email+password path anchors on the
+// PASSWORD and picks the field beside it; the identifier-first path anchors on
+// the identifier ITSELF, because there is no password on that screen. Extracted
+// rather than reimplemented so the detector's candidate COUNT and the fill's
+// candidate CHOICE come from one evaluate — a detector with its own selector
+// list is two definitions that drift.
+//   mark: true  → the pick is marked with a run-unique attribute and `marker`
+//                 comes back; falsy → probe only, nothing is written.
+// Always returns an object, so a caller reads `.pick` rather than a union type.
+async function identifierPick(page, { anchorHandle, scopeHandle, hasForm, anchorIsCandidate, mark }) {
+  // PREFERENCE LADDER, most-semantic first — never one union, because a
+  // selector union preserves DOM order and a tenant/org field ahead of the
+  // identifier would receive the email. Rungs: (1) the typed email input;
+  // (2) autocomplete=username/email — the spec-defined identifier marker,
+  // matched with ~= because the attribute is a space-separated token list
+  // ("section-login username") and exact equality misses every multi-token
+  // value; (3) a text input whose name/id/placeholder/aria-label SAYS it
+  // is an email/user/login field; (4) form-scoped last resort, any visible
+  // text input — kept because identifier fields on login forms are often
+  // plain unlabeled type=text, and a login form rarely holds a competing
+  // one (the tenant-field case is exactly what rungs 2-3 exist to win
+  // first). Formless gates use rungs 1-3: the semantic rung names its
+  // field explicitly, so it is safe anywhere (a div-based login with
+  // <input name="username"> matches nothing without it); only the
+  // UNRESTRICTED last resort stays form-only, because off-form a bare
+  // text input is more likely a search box than a login field.
+  // GENERATED, not hand-listed (see IDENTIFIER_RUNGS above): the hand-written
+  // version required an explicit type=text on every clause, so a form of
+  // type-less inputs (<input name="tenant">, <input name="username">) matched
+  // NO semantic rung and fell to the DOM-order last resort — tenant filled,
+  // username blank. It had also drifted internally (login missing from two of
+  // the four attributes). The cross-product cannot omit a cell.
+  const rungs = [...IDENTIFIER_RUNGS, ...(hasForm ? ['input[type=text], input:not([type])'] : [])];
+  // Selection is ANCHORED TO THE ANCHOR ELEMENT — never `.first()`, which
+  // hands the fill to whatever matches earliest in the DOM. Two regimes:
+  //   - WITH a form, rungs run in rank order scoped to that form, and the
+  //     pick within a rung is the candidate nearest the anchor
+  //     (preferring those that precede it) — the form declares the
+  //     association, rank disambiguates inside it.
+  //   - FORMLESS, proximity comes BEFORE rank: the rungs are unioned and
+  //     the nearest-preceding candidate wins outright. Rung rank across a
+  //     whole document inverts the intent — a newsletter input[type=email]
+  //     elsewhere on the page outranked the semantic username sitting
+  //     beside the password. With no form to declare the association,
+  //     adjacency to the anchor IS the association; the rungs still
+  //     bound WHAT may be picked (semantically-named fields only).
+  // Visibility uses the file's evaluate-side definition (geometry +
+  // computed visibility, same as textGateSignals), so a hidden responsive
+  // copy is passed over in favour of the visible candidate rather than
+  // silently skipping the fill. The pick is marked, filled through
+  // Playwright (real input events), and unmarked.
+  const marker = mark ? `uit-${Math.random().toString(36).slice(2)}` : null;
+  const marked = await page.evaluate(([pw, root, sels, mrk, anchorIsCandidate]) => {
+    if (!pw) return null;
+    const vis = el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    // EDITABLE candidates only: a two-step login shows the already-chosen
+    // email in a readonly input beside the password — fill() on it burns
+    // its timeout and fails, while leaving it alone submits fine. A
+    // readonly prefilled identifier is accepted by NOT overwriting it.
+    const editable = el => !el.readOnly && !el.disabled;
+    // Formless scope is the ANCHOR'S OWN ROOT, not document: a login
+    // component in an open shadow root keeps its inputs behind a boundary
+    // querySelectorAll cannot cross from document, while Playwright found
+    // the anchor inside it. getRootNode() is the shadow root there and
+    // document everywhere else — the non-shadow case is unchanged.
+    const scope = root || pw.getRootNode();
+    // Form-scoped collection reads the form's `elements` collection, not a
+    // descendant query: a control outside the form tag but associated via
+    // the `form` attribute (<input form="login">) is submitted with the
+    // form yet never matched by a descendant querySelectorAll.
+    const candsOf = sel => (root
+      ? [...root.elements].filter(el => el.matches(sel))
+      : [...scope.querySelectorAll(sel)]
+    ).filter(el => vis(el) && editable(el));
+    const nearest = cands => {
+      if (!cands.length) return null;
+      // anchorIsCandidate: the identifier-step call anchors on the
+      // identifier itself (there is no password to sit after), so
+      // preferring PRECEDING candidates would hand the fill to a
+      // newsletter box earlier in the DOM — the exact inversion the
+      // formless-proximity note above warns about. When the anchor is in
+      // the pool it wins outright. Safe because that call additionally
+      // requires poolSize === 1.
+      if (anchorIsCandidate) { if (cands.includes(pw)) return pw; }
+      // ...and when it is NOT a candidate it must not become one: a
+      // malformed <input type=password autocomplete="username"> matches
+      // rung 2, which has no type restriction.
+      else cands = cands.filter(el => el !== pw);
+      const preceding = cands.filter(el => el.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.length ? preceding[preceding.length - 1] : cands[0];
+    };
+    // ACCESSIBLE-NAME matcher, both branches: <label for> / wrapping
+    // labels (el.labels) and aria-labelledby text against the same
+    // email/user/login vocabulary as the SEMANTIC rung — a gate labeling
+    // its identifier with generated attributes carries the word "Email"
+    // only in its accessible name, where no attribute selector can see
+    // it. KNOWN LIMIT, deliberate: this reads TEXT, not the full
+    // accessibility-name algorithm — a label whose only content is
+    // <img alt="Email"> is not seen. Reimplementing accname inside an
+    // evaluate is the staircase the back-control locator climbed and
+    // abandoned for getByRole; no role locator can express "text input
+    // whose NAME says email", so the residue is documented instead — an
+    // app that exotic needs directives#302's per-project condition.
+    const nameMatches = el => {
+      const rootNode = el.getRootNode();
+      const byId = id => (rootNode.getElementById ? rootNode : document).getElementById(id)?.textContent || '';
+      const labelledby = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(byId).join(' ');
+      const labels = el.labels ? [...el.labels].map(l => l.textContent || '').join(' ') : '';
+      return /email|user|login/i.test(`${labelledby} ${labels}`);
+    };
+    const TEXTish = ':is(input[type=text], input:not([type]))';
+    let pick = null;
+    if (root) {
+      // The accessible-name rung sits BETWEEN the semantic attribute rung
+      // and the unrestricted last resort: an input labeled "Email" with
+      // generated attributes must win before the final rung's proximity
+      // hands the fill to a nearer tenant field.
+      const rungPools = [
+        ...sels.slice(0, -1).map(sel => () => candsOf(sel)),
+        () => candsOf(TEXTish).filter(nameMatches),
+        () => candsOf(sels[sels.length - 1]),
+      ];
+      for (const pool of rungPools) { pick = nearest(pool()); if (pick) break; }
+    } else {
+      // querySelectorAll on the joined union returns document order, so
+      // nearest() sees one proximity-sorted candidate pool; accessible-
+      // name candidates are unioned in and the pool re-sorted.
+      const named = candsOf(TEXTish).filter(nameMatches);
+      const pool = [...new Set([...candsOf(sels.join(', ')), ...named])];
+      pool.sort((a, b) => a === b ? 0
+        : (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+      pick = nearest(pool);
+    }
+    // The de-duplicated union across every rung plus the accessible-name
+    // pool — the SINGLE-candidate precondition the identifier-step
+    // detector applies, computed from the same filtering that chose the
+    // pick so the detector and the fill cannot disagree. The form branch
+    // stops at the first non-empty rung, so this union is built for the
+    // count regardless of which branch produced `pick`.
+    const poolSize = new Set([
+      ...candsOf([...sels].join(', ')),
+      ...candsOf(TEXTish).filter(nameMatches),
+    ]).size;
+    if (!pick) return { pick: false, poolSize };
+    if (!mrk) return { pick: true, poolSize };
+    // The candidate's ORIGINAL attribute value (null when absent) rides
+    // back so cleanup restores rather than deletes — if the app itself
+    // owns this attribute on the picked input, its styling/submit logic
+    // must see the markup it shipped.
+    const prev = pick.getAttribute('data-uitests-identifier');
+    pick.setAttribute('data-uitests-identifier', mrk);
+    return { pick: true, poolSize, prev };
+  }, [anchorHandle, scopeHandle, rungs, marker, anchorIsCandidate]);
+  return { pick: false, poolSize: 0, prev: null, marker, ...(marked || {}) };
+}
+
+// Fill the marked pick and put the markup back, in the ONE order that survives a
+// controlled component. Shared by both ladder callers so the #311 fix cannot
+// exist on one path and not the other. Returns the resolved handle — the
+// identifier step presses Enter through it, because the marker-based locator
+// stops matching the moment the restore runs.
+async function identifierFill(page, marked, value) {
+  // Located by the run-unique VALUE, not attribute presence — an app
+  // element that happens to carry the bare attribute cannot shadow the
+  // candidate the evaluate actually picked.
+  const cand = page.locator(`[data-uitests-identifier="${marked.marker}"]`).first();
+  // RESOLVE THE NODE BEFORE FILLING, and clean up through that handle. A
+  // locator is a QUERY, not a reference: a controlled or masking component
+  // that REPLACES this input in response to the fill's input events leaves
+  // the replacement without the marker, so re-resolving the attribute
+  // afterwards matches nothing, waits out actionTimeout and THROWS — after
+  // a fill that succeeded. That throw aborted detectAndAuth() before the
+  // password was ever typed, so a cosmetic cleanup step failed the whole
+  // authentication and reported it as an attribute-selector timeout
+  // (directives#311). Bounded like every other resolution here by
+  // playwright.config.js's actionTimeout, and caught: losing the cleanup
+  // must never cost the fill.
+  const candHandle = await cand.elementHandle().catch(() => null);
+  // ALREADY CORRECT — leave it alone (#312). Beyond saving a fill, this removes
+  // the #311 hazard outright for the commonest prefilled case: no fill means no
+  // input events, so no controlled component can swap the node out from under
+  // the cleanup below.
+  const current = ((await cand.inputValue().catch(() => '')) || '').trim();
+  if (current !== String(value)) await cand.fill(String(value));
+  // elementHandle.evaluate() does NOT re-query — it runs against the node
+  // the pick returned, attached or not. If the app replaced that node the
+  // write lands on the orphan and live markup is untouched, which is the
+  // right outcome: the marker left the document with the node it was on.
+  // The catch covers the one thing a handle cannot outlive — its execution
+  // context going away under a navigation.
+  if (candHandle) {
+    await candHandle.evaluate((el, prev) => {
+      if (prev === null) el.removeAttribute('data-uitests-identifier');
+      else el.setAttribute('data-uitests-identifier', prev);
+    }, marked.prev).catch(() => {});
+  }
+  return candHandle;
+}
+
+async function detectAndAuth(page, credential) {
+  // Each step's pre-attempt state, and the trail of steps already taken.
+  const steps = [];
+  let viewBefore = null, snapBefore = null;
+  // WHERE THE CREDENTIAL CAME FROM, reported rather than inferred (#312).
+  // "prefilled credential accepted" and "supplied credential accepted" are
+  // different facts and were indistinguishable — the same complaint #302 makes
+  // about a windowed result dressed as a proven one.
+  let credentialSource = null;
+  const done = (mechanism) => {
+    if (steps.length) test.info().attach('auth-steps', {
+      body: JSON.stringify({ mechanism, steps }, null, 2), contentType: 'application/json' });
+    return { mechanism, credentialSource, viewBefore, snapBefore, steps };
+  };
+  for (let step = 0; step < AUTH_STEP_CAP; step++) {
+    // Wait for auth UI to be fully active before interacting — prevents CI timing failures
+    // on mobile/WebKit where JS activates slower than desktop Chromium.
+    // input[type=email] ADDED (#310): on a pure email-first screen neither of
+    // this file's two ready-waits could ever resolve, so both burned their full
+    // timeout (10s here, 5s in detectAuthGate) before concluding. Widening is a
+    // speed-up only — no branch reads whether the wait resolved.
+    await page.locator('[class*="keypad"], [class*="pin"], input[type="password"], input[type="email"], input[type="text"]')
+      .first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+    // PER-STEP pre-attempt state. Captured INSIDE the loop because a split flow
+    // has two pre-attempt states and the verdict grades the LAST one: compared
+    // against the email screen, expectGateCleared's message always reads 'view
+    // changed' and S2's domChanged arm is trivially true.
+    viewBefore = await viewSignature(page);
+    snapBefore = await domSnapshot(page);
+
+    // Heuristic 1: numeric keypad (buttons 0-9 + dot indicators)
+    const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).count();
+    const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').count();
+
+    if (hasNumericButtons >= 9 && hasDotIndicator > 0) {
+      // A keypad ships no value to read, so gateShipsCredential() can never
+      // unlock this branch and only an env credential reaches it. Guarded
+      // anyway: without this, String(null) types the digits of "null".
+      if (!credential) return done('no-credential');
+      credentialSource = 'env';
+      // PIN keypad — click each digit as a string (preserve leading zeros)
+      for (const digit of String(credential).split('')) {
+        await page.locator('button').filter({ hasText: new RegExp(`^${digit}$`) }).first().click();
+        await page.waitForTimeout(80);
+      }
+      await page.waitForTimeout(3000);
+      return done('pin-keypad');
+    }
+
+    // Heuristic 2: password input — `visible=true` BEFORE `.first()`, the same
+    // idiom as detection (passwordGateVisible) and for the same reason: a hidden
+    // responsive copy first in the DOM would otherwise make the attempt skip
+    // this branch and return mechanism 'none' — which no verifier checks — while
+    // detection correctly reports a gate. Attempt and detection must select from
+    // the same set.
+    const passwordInput = page.locator('input[type=password]').locator('visible=true').first();
+    if (await passwordInput.isVisible().catch(() => false)) {
+      // Email+password gate: fill the identifier BEFORE the password when one was
+      // supplied. ANCHORED TO THE PASSWORD'S OWN FORM — a page-scoped
+      // input[type=email] with .first() would hand the identifier to whatever
+      // email field happens to come first in the DOM (a newsletter box, a hidden
+      // responsive copy), the login then submits a blank identifier, and the
+      // gate-cleared check below fails every authenticated scenario. A gate with
+      // no <form> element falls back to page scope with type=email ONLY: off-form,
+      // a bare text input is more likely a search box than a login field.
+      // Without TEST_AUTH_EMAIL the old password-only behaviour is unchanged.
+      //
+      // RESOLVED BEFORE THE IDENTIFIER IS TOUCHED, because the answer decides
+      // whether the identifier may be touched at all (#312). A prefilled form is
+      // a MATCHED PAIR: overwriting its identifier with TEST_AUTH_EMAIL while
+      // leaving its shipped password in place submits a mismatched pair and
+      // fails a login that works. So the ladder runs only on the 'env' branch —
+      // which is every configuration that reaches here today, since before #312
+      // the callers refused to call this function without TEST_AUTH_CREDENTIAL.
+      // Existing behaviour is therefore unchanged; only the new path is bounded.
+      const cred = await credentialFor(passwordInput, credential || null);
+      credentialSource = cred.source;
+      if (AUTH_EMAIL && cred.source === 'env') {
+        // The password's ASSOCIATED form via the DOM's own .form property — it
+        // resolves both an ancestor <form> and external association
+        // (<input form="login"> outside the form tag), where an ancestor-only
+        // xpath lookup reports no form and wrongly restricts the search to the
+        // formless rungs.
+        const pwHandle = await passwordInput.elementHandle();
+        const scopeHandle = (await passwordInput.evaluateHandle(el => el.form)).asElement();
+        // anchorIsCandidate: false — the identifier is the field BESIDE the
+        // password, never the password itself, so selection here is bit-for-bit
+        // what it was before #310. Only the ladder's home moved.
+        const marked = await identifierPick(page, {
+          anchorHandle: pwHandle, scopeHandle, hasForm: !!scopeHandle,
+          anchorIsCandidate: false, mark: true,
+        });
+        if (marked.pick) await identifierFill(page, marked, AUTH_EMAIL);
+      }
+      // FILL ONLY WHAT WE BROUGHT. On the 'prefilled' branch the field already
+      // holds a working value and the form is submitted as it stands — the
+      // whole point of #312, since the alternative was to replace a credential
+      // that works with one that may not and then report the resulting "gate
+      // retained" as if the app were at fault.
+      if (cred.source === 'env') await passwordInput.fill(String(cred.value));
+      // Nothing to submit is not an auth attempt. It must NOT report 'none',
+      // which every caller reads as "no gate, carry on" and which would send
+      // them to measure the login screen — the exact silent failure #309 exists
+      // to prevent. AUTH_INCOMPLETE is what the callers skip on instead.
+      if (!cred.source) return done('no-credential');
+      const submitBtn = page.locator('button[type=submit], input[type=submit], button').filter({ hasText: /sign.?in|log.?in|submit|enter/i }).first();
+      if (await submitBtn.isVisible().catch(() => false)) await submitBtn.click();
+      else await passwordInput.press('Enter');
+      await page.waitForTimeout(3000);
+      return done('password-form');
+    }
+
+    // Heuristic 2.5 — IDENTIFIER-FIRST STEP. Sits between the password and text
+    // heuristics deliberately: after password (an email+password form on one
+    // screen is heuristic 2's, and identifierGateVisible refuses when a password
+    // is visible), before text (a lone email input must not fall through to the
+    // text path, which would type the PASSWORD into it).
+    // `step + 1 < AUTH_STEP_CAP` is what bounds this: the arm cannot fire on the
+    // last permitted iteration, so at most one extra pass exists. There is no
+    // recursion and no re-entry — read the loop, not this comment, to confirm it.
+    if (step + 1 < AUTH_STEP_CAP && await identifierGateVisible(page)) {
+      const anchor = await identifierCandidate(page).elementHandle().catch(() => null);
+      const scope  = anchor ? (await anchor.evaluateHandle(el => el.form)).asElement() : null;
+      const marked = anchor && await identifierPick(page, {
+        anchorHandle: anchor, scopeHandle: scope, hasForm: !!scope,
+        anchorIsCandidate: true, mark: true,
+      });
+      if (marked?.pick) {
+        // SUBMIT, form-scoped first, and RESOLVED WHILE THE MARKER IS STILL ON
+        // THE PAGE — a locator is a query, so one built after the restore would
+        // match nothing. isVisible() does not wait, so an app with no form-scoped
+        // submit costs a lookup rather than an actionTimeout.
+        // Heuristic 2's page-scoped `button[type=submit], input[type=submit],
+        // button` + `.first()` is NOT reused here: a CSS union returns DOM order,
+        // not selector order, so on a split-step screen carrying "Continue with
+        // Google" above "Continue" it would start an OAuth redirect. Left
+        // untouched there (out of scope, noted in the PR), avoided here — and
+        // scoping to the identifier's OWN form rather than any form on the page
+        // is what keeps that union from reintroducing the same DOM-order trap.
+        const inForm = scope
+          ? page.locator(`form:has([data-uitests-identifier="${marked.marker}"]) :is(button[type=submit], input[type=submit])`)
+              .locator('visible=true').first()
+          : null;
+        const inFormHandle = inForm && await inForm.isVisible().catch(() => false)
+          ? await inForm.elementHandle().catch(() => null)
+          : null;
+        const candHandle = await identifierFill(page, marked, AUTH_EMAIL);
+        // Named advance control, second. Word-bound and social-excluded at the
+        // definitions above; `visible=true` before the filters, the same idiom
+        // every other locator in this file uses.
+        const named = page.locator('button, [role=button], input[type=submit]')
+          .locator('visible=true')
+          .filter({ hasText: ADVANCE_NAME })
+          .filter({ hasNotText: SOCIAL_NAME })
+          .first();
+        if (inFormHandle) await inFormHandle.click().catch(() => {});
+        else if (await named.isVisible().catch(() => false)) await named.click().catch(() => {});
+        else if (candHandle) await candHandle.press('Enter').catch(() => {});
+        // LOAD_SETTLE_MS — classified in the header list at the top of this
+        // file. The loop re-runs DISCOVERY on what this returns; too short and
+        // a working split-step login reads as unresolved.
+        await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+        steps.push({ step, mechanism: 'identifier-step', viewBefore, viewAfter: await viewSignature(page) });
+        continue;   // ← the only one
+      }
+    }
+
+    // Heuristic 3: text input accepting short credential — same visible-first
+    // idiom as heuristic 2, carried proactively: a hidden text input first in
+    // the DOM would silently return 'none' here too.
+    const textInput = page.locator('input[type=text], input:not([type])').locator('visible=true').first();
+    if (await textInput.isVisible().catch(() => false)) {
+      // Same rule as the password branch (#312), carried here deliberately
+      // rather than left for the next reader to notice. NOTE the asymmetry with
+      // gateShipsCredential(), which refuses to READ a prefilled text input as a
+      // credential: a non-empty text field cannot be told from a search box with
+      // a default query, so this branch is only ever reached with an env value
+      // today. The arm is written for the day #302's per-project condition can
+      // tell the two apart.
+      const cred = await credentialFor(textInput, credential || null);
+      credentialSource = cred.source;
+      if (cred.source === 'env') await textInput.fill(String(cred.value));
+      if (!cred.source) return done('no-credential');
+      await textInput.press('Enter');
+      await page.waitForTimeout(3000);
+      return done('text-input');
+    }
+    break;
+  }
+  // Fell out. Either nothing matched at all, or the identifier step fired and
+  // the credential step never appeared — a rejected identifier, a passwordless
+  // magic-link flow, a step that rendered after the settle, or a submit that
+  // did nothing. NOT distinguishable from here, which is why this is a
+  // mechanism the callers SKIP on rather than a verdict anything throws.
+  return done(steps.length ? 'identifier-step-unresolved' : 'none');
+}
+
+// Detection-only: is there a real auth gate (PIN keypad, password field, or — only
+// when TEST_AUTH_EMAIL is set — an identifier-first step, i.e. an email screen shown
+// BEFORE any password (#310))? Does NOT interact, and still deliberately ignores plain
+// text inputs (a search/filter box is not an auth gate). Used to decide whether to
+// skip/auth without firing spurious login attempts.
 async function detectAuthGate(page) {
-  await page.locator('[class*="keypad"], [class*="pin"], input[type="password"]')
+  await page.locator('[class*="keypad"], [class*="pin"], input[type="password"], input[type="email"]')
     .first().waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
   if (await pinGateVisible(page)) return true;
   if (await passwordGateVisible(page)) return true;
+  // Identifier-first step (#310). AFTER the password check — with a password on
+  // screen this is an ordinary email+password form and heuristic 2 owns it —
+  // and BEFORE the text gate, so a lone email input is never handed to the
+  // text path, which would type the CREDENTIAL into it. Inert unless
+  // TEST_AUTH_EMAIL is set; see identifierGateVisible for why that gate is the
+  // containment and not a convenience.
+  if (await identifierGateVisible(page)) return true;
   // Text/access-code gate (detectAndAuth's text-input path): a SINGLE visible text input
   // on a sparse, login-like page — gated on auth-ish context so an arbitrary search/filter
   // box on a content-rich page is NOT treated as auth.
@@ -522,6 +942,68 @@ async function passwordGateVisible(page) {
   return n > 0;
 }
 
+// The first VISIBLE identifier candidate, as a Playwright locator — which is
+// what makes the shadow-root case work: the locator pierces open shadow roots,
+// so the handle it yields lets identifierPick's existing `pw.getRootNode()`
+// scope reach a login component document.querySelectorAll cannot see. Same
+// visible-filtered-COUNT-then-first idiom as passwordGateVisible, and for the
+// same reason: `.first()` alone selects a hidden responsive copy.
+function identifierCandidate(page) {
+  return page.locator(IDENTIFIER_UNION).locator('visible=true').first();
+}
+
+// DISCOVERY-GRADE, and it says so where it is defined rather than where it is
+// read. Four conditions, each earning its place:
+//   1. AUTH_EMAIL is set        — nothing to type otherwise, and this is the
+//                                 opt-in that keeps the change inert fleet-wide
+//   2. no visible password      — with one, this is an ordinary email+password
+//                                 form and heuristic 2 already owns it
+//   3. poolSize === 1           — EXACTLY one visible, editable,
+//                                 identifier-semantic candidate page-wide
+//   4. auth-ish page context    — the same vocabulary textGateSignals uses
+// There is deliberately NO `controls <= 4` cutoff here, and the difference from
+// textGateSignals is the reason: that signal's candidate set is ANY text input,
+// so a search box qualifies and only page sparsity separates it from auth.
+// This set is already identifier-semantic by construction, and every real
+// split-step login (Google, Microsoft, Okta) carries far more than four
+// controls — forgot-email, create-account, help, privacy, terms, a language
+// select. Importing that cutoff would make this arm dead on arrival.
+async function identifierGateVisible(page) {
+  if (!AUTH_EMAIL) return false;
+  if (await passwordGateVisible(page)) return false;
+  // PAGE-WIDE FIRST, before the ladder's own count. identifierPick's poolSize is
+  // FORM-SCOPED whenever the anchor has a form, so on a page carrying both a
+  // newsletter <form> and a login <form> it reports 1 for the newsletter box —
+  // and the anchor IS the newsletter box, since identifierCandidate takes the
+  // first in DOM order. That is the exact false positive condition 3 exists to
+  // rule out, so the page-wide count is the one that has to hold: the comment
+  // says "page-wide" and the code must not quietly mean "in this form".
+  // A wrongly-INCLUDED page here costs a destructive fill-and-submit on a
+  // stranger's newsletter box; a wrongly-EXCLUDED one costs exactly the
+  // behaviour this file had yesterday.
+  if (await page.locator(IDENTIFIER_UNION).locator('visible=true').count().catch(() => 0) !== 1) return false;
+  const anchor = await identifierCandidate(page).elementHandle().catch(() => null);
+  if (!anchor) return false;
+  const scope = (await anchor.evaluateHandle(el => el.form)).asElement();
+  const probe = await identifierPick(page, {
+    anchorHandle: anchor, scopeHandle: scope, hasForm: !!scope,
+    anchorIsCandidate: true, mark: null,
+  });
+  if (!probe.pick || probe.poolSize !== 1) return false;
+  return authContextVisible(page);
+}
+
+// The body-text half of textGateSignals' looksAuth, on the SAME regex source.
+// The candidate half is redundant here: a candidate only qualifies via an email
+// type, an autocomplete username/email token, an email/user/login-named
+// attribute, or an accessible name that says so — its own context has already
+// been read by the time this runs.
+async function authContextVisible(page) {
+  return page.evaluate(src =>
+    new RegExp(src, 'i').test((document.body.innerText || '').slice(0, 300).toLowerCase()),
+    AUTH_CONTEXT_SRC);
+}
+
 // Shared by detectAuthGate (pre-attempt DISCOVERY, where the `controls <= 4`
 // sparsity cutoff belongs — it exists to keep a search box on a content-rich
 // page from reading as auth) and expectGateCleared (post-attempt VERDICT,
@@ -530,7 +1012,11 @@ async function passwordGateVisible(page) {
 // re-running the discovery heuristic would read the rejection as a cleared
 // gate). One evaluate, two thresholds — factored so the two cannot drift.
 async function textGateSignals(page) {
-  return page.evaluate(() => {
+  // The vocabulary arrives as SOURCE (AUTH_CONTEXT_SRC) rather than as a literal
+  // here, because authContextVisible() needs the same list and an evaluate body
+  // cannot close over module scope — one definition, two consumers, the same
+  // "factored so the two cannot drift" rule this function was written under.
+  return page.evaluate((src) => {
     // Geometry alone misses visibility:hidden (the box survives), so an SPA
     // hiding its gate that way still counted here. Computed style added;
     // opacity:0 deliberately still counts as visible — that is Playwright's own
@@ -544,10 +1030,10 @@ async function textGateSignals(page) {
     const el = inputs[0];
     const ctx = [el.placeholder, el.getAttribute('aria-label'), el.name, el.id,
                  document.body.innerText?.slice(0, 300)].join(' ').toLowerCase();
-    const looksAuth = /\b(pin|passcode|access\s*code|access|log\s*in|login|sign\s*in|unlock|enter\s*code|password)\b/.test(ctx);
+    const looksAuth = new RegExp(src, 'i').test(ctx);
     const controls = document.querySelectorAll('button, [role=button], a[href], select, textarea').length;
     return { single: true, looksAuth, controls };
-  });
+  }, AUTH_CONTEXT_SRC);
 }
 
 // After an auth ATTEMPT, a still-present gate is PROOF the attempt failed —
@@ -577,6 +1063,41 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
       body: JSON.stringify({
         mechanism,
         note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. directives#302 tracks the per-project condition that verifies this properly.',
+      }, null, 2),
+      contentType: 'application/json',
+    });
+    return;
+  }
+  // Same grading as the text-gate rule above, and by the same method —
+  // counterexample, not judgement. The identifier signal fails as a verdict in
+  // BOTH directions: a passwordless magic-link flow REMOVES the email input and
+  // renders "check your inbox", which reads as a cleared gate while nothing was
+  // authenticated; and a credential step that keeps the chosen email visible
+  // beside the password reads as a RETAINED gate while the flow advanced
+  // correctly. A signal that fails both ways does not get to throw.
+  //
+  // What IS known here is not a heuristic: no credential was entered. That is a
+  // fact about what this suite DID, so the callers skip on it — they must not
+  // measure a login screen — while this function stays silent, because nothing
+  // has been proven about the APP.
+  //
+  // #302 COMPOSITION: when the per-project post-login condition lands, evaluate
+  // it ONCE here, after the final step — never per step, since a split flow's
+  // intermediate step is legitimately not-signed-in. If that condition is
+  // SATISFIED, this mechanism is not a failure at all (an identifier-only SSO
+  // that lands signed in), and the callers' skip below must not fire. That is
+  // the seam; it is written here so #302's author finds it.
+  // 'no-credential' (#312) joins it on the same grounds and by the same route:
+  // a gate stood, nothing was submitted, and that is a fact about the SUITE.
+  // The set is the carrier so the next mechanism of this kind cannot be added
+  // to detectAndAuth and forgotten here.
+  if (AUTH_INCOMPLETE.has(mechanism)) {
+    test.info().attach('auth-unverified', {
+      body: JSON.stringify({
+        mechanism,
+        note: mechanism === 'no-credential'
+          ? 'An auth gate was on screen, TEST_AUTH_CREDENTIAL is unset, and the form shipped no credential of its own — so nothing was submitted. NO CREDENTIAL WAS ENTERED and nothing is claimed about the app. Set TEST_AUTH_CREDENTIAL, or — if this app\'s login legitimately ships a working credential and a human signs in by clicking the button — check that the prefilled field is a visible, editable input[type=password]: a prefilled TEXT or PIN gate is deliberately NOT read as a credential source, because a non-empty text input cannot be told from a search box with a default query (directives#312).'
+          : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. directives#302 tracks the per-project post-login condition that turns this into a verdict.',
       }, null, 2),
       contentType: 'application/json',
     });
@@ -657,10 +1178,29 @@ async function discoverElements(page) {
                        '[role=button]', '[onclick]'];
     // One ELEMENT can match several selectors (<button onclick> matches
     // 'button' and '[onclick]'; add role=button and it matches three).
-    // Records after the first carry duplicate:true so capped consumers (NAV's
-    // ATTEMPT_CAP) can skip re-charges for the same control — four inert
-    // triple-matching buttons must not spend twelve attempts.
-    const seenEls = new Set();
+    // Every record carries `elementKey` — the element's IDENTITY, assigned on
+    // first sight and reused for its later records — so a capped consumer
+    // (NAV's ATTEMPT_CAP) can spend one attempt per CONTROL rather than one per
+    // record: four inert triple-matching buttons must not cost twelve attempts.
+    //
+    // ⚠️ THE PRODUCER MUST NOT DO THAT DEDUP ITSELF, and the `duplicate` flag
+    // this replaces did — it marked the second+ record in DISCOVERY order,
+    // which is the right answer only for a consumer that accepts every
+    // representation. Consumers filter first, so the record a producer-side
+    // flag drops can be the only one the consumer can USE: an
+    // <input role="button"> is recorded under 'input:not([type=hidden])',
+    // which NAV rejects on tag, and again under '[role=button]', which NAV
+    // accepts — and the second record was skipped as a duplicate of a record
+    // NAV never considered, so an app whose only drill entry uses that pattern
+    // self-skipped the whole scenario (directives#311). Duplication is still
+    // visible here — a repeated elementKey in the element-map attachment — but
+    // WHICH representation to keep is the consumer's call, made after its own
+    // eligibility filter.
+    const elementKeys = new Map();
+    const keyOf = (el) => {
+      if (!elementKeys.has(el)) elementKeys.set(el, elementKeys.size);
+      return elementKeys.get(el);
+    };
     return selectors.flatMap(sel =>
       [...document.querySelectorAll(sel)]
         // Index BEFORE filtering: page.locator(sel).nth(i) counts every DOM match,
@@ -671,7 +1211,7 @@ async function discoverElements(page) {
           return r.width > 0 && r.height > 0;
         })
         .map(({ el, index }) => ({
-          duplicate: seenEls.has(el) || (seenEls.add(el), false),
+          elementKey: keyOf(el),
           selector: sel,
           index,
           tag: el.tagName.toLowerCase(),
@@ -747,7 +1287,12 @@ test('S1: page loads without JS errors', async ({ page }) => {
 // SCENARIO 2 — Auth Discovery & Login (with API diagnostics)
 // ─────────────────────────────────────────────────────────────────────────────
 test('S2: auth gate discovered and credential accepted', async ({ page }) => {
-  if (!AUTH_CREDENTIAL) test.skip(true, 'No auth credential provided — set the TEST_AUTH_CREDENTIAL env var (and TEST_AUTH_EMAIL for email+password gates); skipping auth test');
+  // THE SKIP MOVED BELOW THE PAGE LOAD (#312), and it had to: the second
+  // credential source is the form itself, which cannot be read before the app
+  // renders. The condition is now "no credential ANYWHERE", not "no env var".
+  // COST, stated because #306's rule demands it: a repo with no credential now
+  // pays goto + settle (up to ~55s) before skipping, where it used to skip in
+  // ~0ms. That is the price of being able to see a prefilled form at all.
   const pageErrors = watchPageErrors(page);
 
   // BUDGET — the 60_000 here was sized from the first TWO terms and stopped:
@@ -760,14 +1305,31 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // + LOAD_SETTLE_MS settle                 25s
   // + detectAuthGate() waitFor               5s
   // + detectAndAuth() (see its header)     ~53s at N=4    ~94s at N=8
+  //     split-step gate (#310)            ~108s at N=4   ~149s at N=8
   // + LOAD_SETTLE_MS post-auth settle       25s
   // + snapshots, error read, assertions      ~few s
   //   ------------------------------------------
-  //   ~138s at N=4                          ~179s at N=8
+  //   ~138s at N=4                          ~179s at N=8   single-step
+  //   ~193s at N=4                          ~234s at N=8   split-step
   //
-  // 240_000 covers an 8-digit PIN with ~61s spare. SIZING ESTIMATE under a
+  // 240_000 covered an 8-digit PIN with ~61s spare. SIZING ESTIMATE under a
   // stated assumption, not a proof: N is the project's credential length.
-  test.setTimeout(240_000);
+  //
+  // 240_000 left ~6s at N=8 on a split-step gate — an implicit zero dressed as
+  // slack, the same defect S1's budget names. 300_000 covers it with ~66s
+  // spare and keeps S2 inside the SHORT-ceiling class in the three qa carriers:
+  // that class's maximum is 300s already (ENTRY's cap), so its "a failure costs
+  // <=10min" claim is UNCHANGED — S2 joins the ceiling, it does not raise it.
+  //
+  // SKIPPABLE — unlocked by TEST_AUTH_CREDENTIAL (plus TEST_AUTH_EMAIL on an
+  // email+password or identifier-first gate), OR by a login form that ships a
+  // working credential of its own (#312). Until one of those exists this
+  // scenario records ~0ms every run, so nothing in its history sized the number
+  // above; the arithmetic is what it costs the DAY A CREDENTIAL ARRIVES — and
+  // #312 moved that day earlier for every prefilled-login project, which had no
+  // way to reach this scenario at all before. This is the scenario #306 was
+  // measured on — see BUDGET SIZING at the top of this file.
+  test.setTimeout(300_000);
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
   // LOAD_SETTLE_MS, not IDLE_MS: what follows this wait is detectAuthGate(), and
@@ -780,16 +1342,88 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // gate-determining request is still pending at 30s still reads as mechanism
   // 'none'. Closing that needs an explicit auth-readiness condition (a named
   // request settling, or a gate/app-shell selector), not a larger number.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  const s2Evidence = await awaitAuthReady(page);
+
+  // Resolve the gate ONCE — each detectAuthGate() call burns its 5s waitFor
+  // when no gate is present, the same reason S3 and gotoAndAuth detect once.
+  const s2Gated = await detectAuthGate(page);
+  // A login form that SHIPS a working credential is the second source (#312).
+  // Consulted only when there is no env credential, and only behind a real
+  // gate, so a public app's behaviour is untouched.
+  const s2Prefilled = !AUTH_CREDENTIAL && s2Gated && await gateShipsCredential(page);
+
+  // ── 'none' IS NOT A PASS FOR THE SCENARIO THAT CLAIMS DISCOVERY ───────────
+  // This test is named "auth gate discovered and credential accepted". Finding
+  // no gate means it discovered nothing, so reporting green is a lie of exactly
+  // the kind #309's verifier was built to stop — and the verifier could not stop
+  // it, because expectGateCleared() returns immediately on 'none' and the S2
+  // failure check below is itself guarded by `mechanism !== 'none'`. Every
+  // assertion under this line was therefore vacuous whenever the gate was
+  // missed, and nothing said so.
+  //
+  // MEASURED DOWNSTREAM, not theorised (claude.insurance, 2026-08-26). This
+  // kit's own default navigation is `./`, which in that app is public marketing
+  // with no gate at all, while the login lives on a sub-route. S2 had been
+  // vacuous SINCE IT WAS WRITTEN — including a green live run cited as evidence
+  // that auth was covered. Grafting #309's verifier on top changed nothing: it
+  // was verifying an attempt that was never made. An app with a public surface
+  // and an authenticated portal is the normal shape, not an exotic one, so this
+  // is a hole in the kit rather than a mistake in one project.
+  //
+  // The two cases must be told apart, and the discriminator is the CONFIG:
+  // supplying TEST_AUTH_CREDENTIAL / TEST_AUTH_EMAIL is the project asserting
+  // it has a gate. Config plus no gate here is a contradiction between what the
+  // project declared and where this scenario landed — a defect, and loud. No
+  // config and no gate is an app without auth — legitimate, but a SKIP so it is
+  // visible in the report, never a silent green that reads as coverage.
+  //
+  // Deliberately NOT applied to S3/S9: sweeping an unauthenticated surface is a
+  // real thing to do, and only this scenario's name promises discovery.
+  if (!s2Gated) {
+    const authConfigured = !!(AUTH_CREDENTIAL || AUTH_EMAIL);
+    const where = page.url();
+    if (authConfigured) {
+      throw new Error(
+        `S2 FAIL | no auth gate found at ${where} (evidence: ${s2Evidence}), but this project supplied auth credentials.\n` +
+        (s2Evidence === 'windowed'
+          ? `  That answer is a WINDOW, not a proof: nothing was visible before the settle expired, which is ` +
+            `not the same as nothing existing (directives#302). If this app's gate is slow to render, set ` +
+            `TEST_AUTH_READY_SELECTOR or TEST_AUTH_READY_REQUEST and this becomes a decided answer either way.\n`
+          : `  That answer is PROVEN: this project's own readiness condition resolved and there was still no ` +
+            `gate, so the contradiction is real and not a timing artefact.\n`) +
+        `  A credential env var is the project asserting it HAS a gate, so finding none here means ` +
+        `this scenario did not reach it — the usual cause is that the gate lives on a sub-route while ` +
+        `the suite navigates to the baseURL (set APP_URL, or point this scenario at the login route).\n` +
+        `  Failing rather than passing: every auth assertion below this line is vacuous without a gate, ` +
+        `and a green "auth gate discovered and credential accepted" on a page with no gate is the exact ` +
+        `false coverage this check exists to end (directives#309 follow-up, found by claude.insurance).`
+      );
+    }
+    test.skip(true,
+      `No auth gate found at ${where} (evidence: ${s2Evidence}) and no credentials configured — this app appears to have no auth. ` +
+      (s2Evidence === 'windowed'
+        ? `APPEARS is load-bearing: nothing was visible before the settle expired, which is a WINDOW, not a proof. ` +
+          `Set TEST_AUTH_READY_SELECTOR or TEST_AUTH_READY_REQUEST to turn this into a decided answer (directives#302). `
+        : `This is a PROVEN absence: the project's own readiness condition resolved and no gate was there. `) +
+      `Skipping rather than passing: S2 asserts a gate was discovered and a credential accepted, and ` +
+      `neither happened, so a green result here would read as auth coverage that does not exist.`);
+  }
+
+  if (!AUTH_CREDENTIAL && !s2Prefilled) {
+    test.skip(true, 'No auth credential available — set the TEST_AUTH_CREDENTIAL env var (and TEST_AUTH_EMAIL for email+password or identifier-first gates), or, if this app\'s login ships a working credential of its own, check that it lands in a visible editable input[type=password] (directives#312); skipping auth test');
+  }
 
   const beforeSnap = await domSnapshot(page);
   const gateViewBefore = await viewSignature(page);
   // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
   // detectAndAuth's text-input fallback would type the credential into the first visible
   // text input (e.g. a public app's search box) and then falsely report auth failure.
-  const mechanism  = (await detectAuthGate(page))
-    ? await detectAndAuth(page, AUTH_CREDENTIAL ?? '')
-    : 'none';
+  // Defaults FALL BACK to S2's own captures: when no attempt was made,
+  // detectAndAuth never ran and there is no per-step state to grade against.
+  const { mechanism, credentialSource, viewBefore = gateViewBefore, snapBefore = beforeSnap } =
+    s2Gated
+      ? await detectAndAuth(page, AUTH_CREDENTIAL ?? '')
+      : { mechanism: 'none', credentialSource: null };
 
   // LOAD_SETTLE_MS, not IDLE_MS: a successful login often lands with the app
   // shell still loading — verifying while the auth request or the post-auth
@@ -827,7 +1461,13 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
     const firstKey = apiCalls[0]?.firstFieldKey ?? null;
     const diag = {
       mechanism,
-      credentialProvided: AUTH_CREDENTIAL ? 'yes' : 'none — set TEST_AUTH_CREDENTIAL',
+      // WHICH source, not just whether one existed (#312): "prefilled
+      // credential accepted" and "supplied credential accepted" are different
+      // facts, and a run that submitted the form's own value must say so.
+      credentialSource: credentialSource ?? 'none',
+      credentialProvided: AUTH_CREDENTIAL ? 'yes (TEST_AUTH_CREDENTIAL)'
+        : (credentialSource === 'prefilled' ? 'yes (shipped by the login form)'
+                                            : 'none — set TEST_AUTH_CREDENTIAL'),
       onscreenError,
       consoleErrors: pageErrors.all(),
       apiCalls,
@@ -851,13 +1491,22 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // rest of the suite trusts must not be bypassable by the scenario whose
   // whole job is the auth verdict.
   try {
-    await expectGateCleared(page, mechanism, gateViewBefore);
+    await expectGateCleared(page, mechanism, viewBefore);
   } catch (gateErr) {
     await attachAuthDiagnostics().catch(() => {});
     throw gateErr;
   }
 
-  const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
+  if (AUTH_INCOMPLETE.has(mechanism)) {
+    await attachAuthDiagnostics().catch(() => {});
+    test.skip(true, `${authIncompleteNote(mechanism)} "Credential accepted" cannot be asserted, so this is a SKIP rather than a failure — false-reddening a healthy app on a discovery-grade signal is the trade this file refuses (directives#302 is the verdict). See the auth-steps and auth-unverified attachments.`);
+  }
+
+  // snapBefore, not beforeSnap: with the per-step capture this compares the
+  // CREDENTIAL step's pre-attempt state to the post-auth state. Against the
+  // email screen it was trivially true, and the rejection arm below silently
+  // stopped firing on split-step gates (#310).
+  const domChanged = JSON.stringify(snapBefore) !== JSON.stringify(afterSnap);
   if (mechanism !== 'none' && (!domChanged || onscreenError.length > 0)) {
     const diag = await attachAuthDiagnostics();
     throw new Error(
@@ -871,7 +1520,11 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 
   // Auth passed or no auth required — record mechanism
   test.info().attach('auth-result', {
-    body: JSON.stringify({ mechanism, domChanged }),
+    body: JSON.stringify({ mechanism, credentialSource: credentialSource ?? 'none', domChanged,
+      // 'windowed' = no gate was VISIBLE before the settle expired; 'proven' =
+      // this project's own readiness condition resolved first. Recorded because
+      // the two were indistinguishable, which is the whole of #302.
+      gateEvidence: s2Evidence }),
     contentType: 'application/json',
   });
 });
@@ -906,6 +1559,18 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // which is how 240 survived: a test TIMEOUT reads as infra noise, so nobody
   // investigates it. Raise this BEFORE adding projects, never after — and see
   // the calling job's timeout-minutes, which this number pushes against.
+  //
+  // SKIPPABLE ON A GATED APP — unlocked by TEST_AUTH_CREDENTIAL or by a login
+  // form that ships its own credential (#312); a public app never skips here. The skip is the expensive kind of zero: what it declined
+  // to sweep was the LOGIN SCREEN, so a repo where S3 has been skipping has
+  // measured a handful of controls, and the first credentialed run sweeps the
+  // whole authenticated app — the profile the 900_000 above was measured on, and
+  // one that repo has never run. See BUDGET SIZING at the top of this file.
+  //
+  // UNCHANGED by #310, deliberately: this number is sweep-dominated and
+  // measurement-derived (468s measured pass, 900s = ~1.9x). A split-step gate
+  // adds up to 55s to the preamble, taking the margin over the measured worst
+  // case to ~1.7x. The measured apps are single-step, so nothing measured moves.
   test.setTimeout(900_000);
   // Public-first apps (knowledge hub, questionnaire) are swept even with no credential;
   // only auth-gated apps with no credential are skipped (decided after page load below).
@@ -928,14 +1593,24 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // post-attempt verdict then read that same search box plus a "Log in" header
   // as a retained gate, failing S3 on an app with no login screen at all. The
   // old comment PROMISED the fall-through; the guard is what delivers it.
+  await awaitAuthReady(page);
   const s3Gated = await detectAuthGate(page);
-  if (AUTH_CREDENTIAL && s3Gated) {
-    const gateViewBefore = await viewSignature(page);
-    const mechanism = await detectAndAuth(page, AUTH_CREDENTIAL);
+  // "A credential exists" is not "TEST_AUTH_CREDENTIAL is set" (#312): a login
+  // form that ships a working credential is the other source, and a project
+  // that correctly declined to invent a secret it does not need used to buy
+  // zero auth coverage here. Consulted only behind a real gate and only when
+  // the env value is absent, so nothing else changes.
+  if (s3Gated && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
+    const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-    await expectGateCleared(page, mechanism, gateViewBefore);
+    await expectGateCleared(page, mechanism, viewBefore);
+    // Same position as "gated, no credential": a gate stands and this suite
+    // cannot pass it, so sweeping would only exercise the login screen. #310.
+    if (AUTH_INCOMPLETE.has(mechanism)) {
+      test.skip(true, `${authIncompleteNote(mechanism)} Skipping sweep (it would only exercise the login screen). See the auth-steps and auth-unverified attachments.`);
+    }
   } else if (s3Gated) {
-    test.skip(true, 'Auth gate present but no credential — skipping sweep (would only exercise the login screen)');
+    test.skip(true, 'Auth gate present and no credential available from either source — skipping sweep (would only exercise the login screen)');
   }
 
   const elements = await discoverElements(page);
@@ -1074,11 +1749,13 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   //
   //   goto 30 + settle 25 + detectAuthGate 5 + detectAndAuth ~53 + settle 25
   //   = ~138s at N=4       ~179s at N=8
+  //   split-step (#310): detectAndAuth ~108/~149
+  //   = ~193s at N=4       ~234s at N=8
   //
   // Both settles are LOAD_SETTLE_MS as of round 12 (they feed the scrollWidth
   // verdict), which cost +40s and pushed ~179s against the previous 180_000.
-  // 240_000, same as CTRL — one number for one shared preamble.
-  test.setTimeout(240_000);
+  // 300_000, same as S2 and CTRL — one number for one shared preamble.
+  test.setTimeout(300_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
   // LOAD_SETTLE_MS: scrollWidth is read below as a VERDICT. Content that renders
@@ -1089,12 +1766,20 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   // measured against the real app rather than the login screen. Gate on detectAuthGate()
   // — NOT just "a credential exists" — so a public-first app with a stray text input
   // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
-  if (AUTH_CREDENTIAL && await detectAuthGate(page)) {
-    const gateViewBefore = await viewSignature(page);
-    const mechanism = await detectAndAuth(page, AUTH_CREDENTIAL);
+  // Same two-source rule as S3 and gotoAndAuth (#312). S4 still does not skip
+  // when the gate stands — see the paragraph below the branch.
+  await awaitAuthReady(page);
+  if (await detectAuthGate(page) && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
+    const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-    await expectGateCleared(page, mechanism, gateViewBefore);
+    await expectGateCleared(page, mechanism, viewBefore);
   }
+  // S4 does NOT skip when the gate could not be passed — deliberately, and
+  // unchanged from before #310. Every other auth-consuming scenario measures
+  // something that is only meaningful signed in; S4 measures horizontal
+  // overflow, and a login screen is a deployed view that must not overflow
+  // either. The measurement stays valid; only its subject changes, and the
+  // auth-steps attachment says which one it was.
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   const viewWidth = await page.evaluate(() => window.innerWidth);
   expect(bodyWidth).toBeLessThanOrEqual(viewWidth + 1);
@@ -1111,17 +1796,26 @@ async function gotoAndAuth(page) {
   // this function returns: CTRL counts primary controls (a late duplicate = a
   // green on a duplicated CTA), DISMISS computes triggerCount (a late trigger is
   // never swept), NAV fingerprints the view. Overhead for none of them.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  await awaitAuthReady(page);
   // Detect once and branch — each detectAuthGate() call burns a 5s waitFor timeout when
   // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
   const gated = await detectAuthGate(page);
-  if (AUTH_CREDENTIAL && gated) {
-    const gateViewBefore = await viewSignature(page);
-    const mechanism = await detectAndAuth(page, AUTH_CREDENTIAL);
+  // Same two-source rule as S2/S3/S4 (#312): a form that ships a working
+  // credential unlocks the navigation and control invariants for a project
+  // that has no secret to set.
+  if (gated && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
+    const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-    await expectGateCleared(page, mechanism, gateViewBefore);
+    await expectGateCleared(page, mechanism, viewBefore);
+    // Same position as "gated, no credential". ⚠️ DISMISS calls this function
+    // again on every nav reset, so a skip from here aborts that sweep
+    // mid-flight — correct (the app has returned to a gate this suite cannot
+    // pass) and identical to the no-credential behaviour at that call site.
+    if (AUTH_INCOMPLETE.has(mechanism)) {
+      test.skip(true, `${authIncompleteNote(mechanism)} Skipping the navigation/control invariants (they would only exercise the login screen). See the auth-steps and auth-unverified attachments.`);
+    }
   } else if (gated) {
-    test.skip(true, 'Auth gate present but no credential — skipping navigation/control invariants');
+    test.skip(true, 'Auth gate present and no credential available from either source — skipping navigation/control invariants');
   }
 }
 
@@ -1164,21 +1858,63 @@ async function viewSignature(page) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BACK AFFORDANCE — one definition, every consumer
+// ─────────────────────────────────────────────────────────────────────────────
+// ROLE + ACCESSIBLE NAME are the two semantics every earlier form of the accname
+// arm approximated — tag lists for kind, label/text matchers for name — and each
+// approximation lagged the spec by one case (checkbox labeled "Back", input
+// type=button, div role=button with text "Back", input value="Back"). getByRole
+// computes both in full: implicit roles and text- or value-derived names
+// included, non-control roles excluded by the role filter itself. The CSS arm
+// below remains for [data-back] and the arrow glyphs.
+//
+// AFFORDANCE FORMS, BOTH ENDS ANCHORED. "back" is navigation only when the name
+// is SHAPED like a back control:
+//   prefix — the name starts at "back", or at motion/icon lead-in tokens (go,
+//            navigate, arrow, chevron, keyboard) and nothing else; leading
+//            decoration ([\W_]*: "← ", "‹ ", "(", stray whitespace) is allowed
+//            wherever a word is not;
+//   suffix — "back" ends the name, is trailed by decoration THAT RUNS TO THE END
+//            ("Back ›", "Back:"), or is followed by " to <place>".
+// Suffix-only anchoring shipped first and was wrong at the other end
+// (directives#311): "Send back to vendor" and "Put it back" end in an affordance
+// form while being forward actions, and the unwind would have PRESSED one —
+// a mutating click plus a false ping-pong failure on a correct app. The lead-in
+// vocabulary is closed and small on purpose, and the asymmetry of cost says why:
+// a name wrongly EXCLUDED costs a reported skip (NAV's counters name it), a name
+// wrongly INCLUDED costs a destructive click. So "Roll back", "Move back" and
+// "Step back" no longer match, while "Go back", "Navigate back" and the icon
+// ligatures do.
+// The prefix also closes the ligature gap the suffix rule left open: the left
+// bound is now STRUCTURAL rather than \b, so "arrow_back" and
+// "keyboard_arrow_back" — whose underscore is a word character and blocked
+// \bback\b — match as themselves, with no normalisation step.
+const BACK_NAME = /^[\W_]*(?:(?:go|navigate|arrow|chevron|keyboard)[\W_]+)*back\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)/i;
+// The NAV drill filter's superset: the same back form plus the return/home
+// phrasings and arrow glyphs that filter also excludes. Built FROM
+// BACK_NAME.source rather than retyped — the filter and the presser cannot
+// disagree about what "back" is, which four hand-kept copies could not
+// guarantee. Only the back branch is anchored; return/home stay as they were.
+const BACK_OR_HOME = new RegExp(
+  `${BACK_NAME.source}|\\breturn(\\s+to\\b|\\s*$)|\\bhome\\s*$|[←‹◀]`, 'i');
+
 // A single visible in-app back control, or an empty locator. Matches an accessible
 // name / aria-label of "back" or a left-arrow glyph, or an explicit [data-back] hook.
 // Deliberately narrow so the browser's Back button is NOT mistaken for an in-app one.
 function backControl(page) {
-  // Word-bound matching throughout (#308): :has-text and [aria-label*=] are
-  // SUBSTRING matches, so both selected "Backup" — claude.prop's JSON-export
-  // button — as a back control, and the unwind below would have pressed it.
-  // :text-matches takes a real JS regex, so \b is available directly — a
-  // whitespace emulation like (^|\s)back(\s|$) would reject the legitimate
-  // "Go-back" / "Back:" / "Back ›" that the drill filter's \b ACCEPTS as back
-  // controls, and NAV would then self-skip for want of a control it had just
-  // classified. CSS cannot regex an attribute, so aria-label word-bounding goes
-  // through getByLabel with the same regex, unioned in via .or(). The arrow
-  // glyphs stay as plain has-text — they are not word characters, so \b around
-  // them matches nothing.
+  // Form-bound matching throughout (#308, #311): :has-text and [aria-label*=]
+  // are SUBSTRING matches, so both selected "Backup" — claude.prop's JSON-export
+  // button — as a back control, and the unwind below would have pressed it. A
+  // whitespace emulation like (^|\s)back(\s|$) would go too far the other way
+  // and reject the legitimate "Go-back" / "Back:" / "Back ›" the drill filter
+  // ACCEPTS as back controls, and NAV would then self-skip for want of a control
+  // it had just classified. So every arm carries the one BACK_NAME object
+  // instead — including the aria-label arm, which CSS cannot regex and which
+  // goes through getByLabel unioned in via .or(). A regex handed to a CSS
+  // selector string does NOT survive the trip; see backControlAll(). The arrow
+  // glyphs stay as plain has-text — they are not word characters, so no bound
+  // around them matches anything.
   // `.first()` alone grabs the FIRST IN THE DOM, which in the common SPA pattern
   // (prior views kept mounted under display:none) is the hidden control from the
   // level above — so the back-flow test drove a dead element and self-skipped as
@@ -1194,41 +1930,33 @@ function backControl(page) {
 // reimplementation always lags it by one case. One definition, two consumers —
 // the filter and the presser cannot disagree about what "back" is.
 function backControlAll(page) {
-  // The SAME affordance-phrase regex in every arm (BACK_NAME below): "back"
-  // counts as navigation only in affordance FORMS — alone, "Go back",
-  // "Back to <place>", or trailed by decoration ("Back ›", "Back:"). A
-  // forward action that merely starts with the word ("Back up data",
-  // "Back office settings", "Back pain assessment") never matches: element
-  // kind cannot distinguish a backup/back-office BUTTON from a back button,
-  // only the phrase can. "Backup" was already rejected by the word bound.
-  return page.locator(
-    '[data-back], ' +
-    'button:text-matches("\\bback\\b(?=[\\s:;.!›>»)\\]…]*$|\\s+to\\b)", "i"), ' +
-    'a:text-matches("\\bback\\b(?=[\\s:;.!›>»)\\]…]*$|\\s+to\\b)", "i"), ' +
-    'button:has-text("←"), a:has-text("←")'
-  ).or(page.getByRole('button', { name: BACK_NAME }))
+  // ONE regex OBJECT in every text arm — never a regex written into a CSS
+  // selector string. `:text-matches("\\bback\\b…")` looks right and is not:
+  // Playwright parses that argument with the CSS string tokenizer, which applies
+  // CSS escape rules, so `\b` was read as the hex escape \bbac, `\s` collapsed
+  // to `s`, and `\]` closed the character class early. Both arms have therefore
+  // been matching the literal text "뮬k\v(?=[s:;.!›>»)]…]*$|s+to\v)" — i.e.
+  // nothing at all — since the word bounds landed in #308. Verified, not
+  // suspected: parseSelector() on the shipped selector returns that mangled
+  // pattern. `filter({ hasText })` takes the RegExp itself and round-trips it
+  // intact (serialised as /source/flags, and Playwright's regex reader preserves
+  // backslashes where its string reader does not); it is the idiom this file
+  // already uses for the digit keypad and the submit button; and its match is
+  // ancestor-inclusive, which is what is wanted here — the BUTTON, not the
+  // innermost span that happens to hold the word.
+  return page.locator('[data-back], button:has-text("←"), a:has-text("←")')
+   .or(page.locator('button').filter({ hasText: BACK_NAME }))
+   // An anchor with no href has no link role and often no aria-label either.
+   // <a onclick>Back</a> is a real back affordance that discoverElements admits
+   // via [onclick], and this text arm is the only one that can see it.
+   .or(page.locator('a').filter({ hasText: BACK_NAME }))
+   .or(page.getByRole('button', { name: BACK_NAME }))
    .or(page.getByRole('link', { name: BACK_NAME }))
    // An anchor WITHOUT href has no link role, so the role arms cannot see
    // <a aria-label="Back" onclick=…> — yet discoverElements admits it via
    // [onclick] and it is a real back affordance. Label∩anchor covers it.
    .or(page.getByLabel(BACK_NAME).and(page.locator('a')));
 }
-
-// ROLE + ACCESSIBLE NAME are the two semantics every earlier form of the
-// accname arm approximated — tag lists for kind, label/text matchers for
-// name — and each approximation lagged the spec by one case (checkbox
-// labeled "Back", input type=button, div role=button with text "Back",
-// input value="Back"). getByRole computes both in full: implicit roles and
-// text- or value-derived names included, non-control roles excluded by the
-// role filter itself. The CSS arms above remain for [data-back], arrow
-// glyphs, and href-less anchors that carry no link role.
-// Affordance forms only: "back" at the end of the name (which covers "Back",
-// "Go back", "arrow back" ligatures, "← Back"), "back to <place>", or "back"
-// trailed by decoration THAT RUNS TO THE END of the name — anchored, so
-// "Back: office settings" cannot match by consuming only the colon. The
-// positive lookahead subsumes the old backup-verb exclusion: "Back up data"
-// and "back-up now" simply never reach a matching form.
-const BACK_NAME = /\bback\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)/i;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO — NAV: in-app back navigation strictly unwinds (no circular loop)
@@ -1250,23 +1978,45 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   // has a ceiling:
   //
   //   initial gotoAndAuth(), gate re-presenting                ~138s
+  //     split-step gate (#310)                                 ~193s (N=4)
+  //                                                            ~234s (N=8)
   // + 12 candidate attempts x (3s click + 0.8s + 5s idle)      = ~106s
   // + DEPTH_CAP backs       x ~8.8s                            =  ~44s
   //   -------------------------------------------------------------
-  //   worst assumed mix                                         ~288s
+  //   worst assumed mix, single-step                            ~288s (N=4)
+  //                                                             ~329s (N=8)
+  //   worst assumed mix, split-step                             ~343s (N=4)
+  //                                                             ~384s (N=8)
   //
   // The preamble term went ~98s -> ~138s in round 12 (both gotoAndAuth settles
-  // became LOAD_SETTLE_MS), which put ~288s against the previous 300_000.
-  // 360_000 covers it. Same caveat as S9: this is a sum over the CAPPED path
-  // under stated assumptions, not a proof — how many candidates a view offers is
-  // a property of the app, not of this file.
+  // became LOAD_SETTLE_MS), which put ~288s against the previous 300_000, and
+  // 360_000 covered that. It has now moved this budget a SECOND time: ~384s at
+  // N=8 on a split-step gate EXCEEDED 360_000, so 420_000, with ~36s spare.
+  // Cutting ATTEMPT_CAP instead was rejected — unlike DISMISS's nav resets, a
+  // candidate attempt IS the coverage, not the waste, so cutting it would trade
+  // the invariant for the bound. Same caveat as S9: this is a sum over the
+  // CAPPED path under stated assumptions, not a proof — how many candidates a
+  // view offers is a property of the app, not of this file, and N is the
+  // project's credential length.
   //
   // The two IDLE_MS settles INSIDE the loops below stay at 5s deliberately: they
   // precede viewSignature() reads, where a late view change reads as "no change"
   // and ends the drill — a SKIP, not a green. The back-loop read is the mirror
   // case: a late arrival there turns a PASS into a FAIL, which is loud. Neither
   // can be turned green by arriving late, which is the test that decides this.
-  test.setTimeout(360_000);
+  //
+  // SKIPPABLE THREE WAYS, and all three have to clear before this number is ever
+  // tested: a credential must exist from EITHER source — the env secret or a
+  // login form that ships one (#312) — since gotoAndAuth() skips a gated app
+  // with neither; the app must offer a multi-level drill-in, and backControlAll() must
+  // recognise its back affordance. Until then NAV records the preamble and a
+  // skip. ⚠️ THIS PR MOVES THAT LINE: directives#311's drill-dedup fix admits
+  // <input role="button"> drill controls that used to self-skip the scenario,
+  // and its back-affordance fix revives two locator arms that have matched
+  // nothing since #308. A repo taking this change may see NAV run its full
+  // ATTEMPT_CAP path for the FIRST TIME — which is exactly the #306 case, so
+  // re-read this arithmetic before that run, not after it times out.
+  test.setTimeout(420_000);
   await gotoAndAuth(page);
 
   const DEPTH_CAP = 5;
@@ -1304,30 +2054,48 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   for (let d = 0; d < DEPTH_CAP; d++) {
     const before = forward[forward.length - 1];
     let advanced = false;
+    // ONE ATTEMPT PER CONTROL, decided AFTER eligibility — never before it.
+    // discoverElements() emits one record per (element, selector) and only some
+    // of an element's representations are eligible here, so marking an element
+    // seen on a record this loop REJECTS discards the representation it could
+    // have used: the <input role="button"> case in directives#311, where the
+    // input-selector record is rejected on tag and the [role=button] record was
+    // then skipped as its duplicate, leaving NAV to report "no drill-down" on an
+    // app that has one. The seen-set therefore lives here, and only the eligible
+    // path adds to it. Skipping still happens BEFORE counting, so duplicates
+    // neither inflate candidatesSeen nor spend ATTEMPT_CAP on repeat clicks.
+    // PER LEVEL, not per test: elementKey is assigned in DOM order within ONE
+    // discoverElements() call, so the same number means a different control once
+    // the view changes — this Set must not outlive the level.
+    const seenKeys = new Set();
     for (const el of await discoverElements(page)) {
       if (!['a', 'button'].includes(el.tag) && !el.selector.includes('role=button')) continue;
-      // A record for an element already emitted under an earlier selector is
-      // the SAME control — skip before counting, so duplicates neither
-      // inflate candidatesSeen nor spend ATTEMPT_CAP on repeat clicks.
-      if (el.duplicate) continue;
+      if (seenKeys.has(el.elementKey)) continue;
+      seenKeys.add(el.elementKey);
       candidatesSeen++;
       // Word-bound (#308): the unanchored version matched Backup, Feedback,
       // Background, Returns and Homepage, silently excluding legitimate
       // drill-down entry points. The arrow glyphs sit OUTSIDE the \b group —
       // they are not word characters, so \b around them matches nothing.
       // Underscores are normalized to spaces FIRST: icon-font ligature text
-      // ("arrow_back", "keyboard_return") is what discoverElements records for
-      // a <span class="material-icons"> back button, and underscore is a word
-      // character, so \bback\b alone would let NAV click Back while drilling
-      // and walk a reversed trail. "Backup" has no underscore and stays allowed.
+      // ("arrow_back", "keyboard_return") is what discoverElements records for a
+      // <span class="material-icons"> back button, and underscore is a word
+      // character, so the \b-bounded return/home branches would miss
+      // "keyboard_return" entirely and NAV would click it while drilling, then
+      // walk a reversed trail. The back branch no longer needs the
+      // normalisation — its left bound is structural, so "arrow_back" matches
+      // raw — but the other branches do, so it stays. "Backup" has no underscore
+      // and is rejected on its own account.
       // The accessible name is tested alongside label: label prefers
       // textContent, so <button aria-label="Back">chevron_left</button> records
       // "chevron_left" — a glyph name this list can't enumerate — while its
       // aria-label says exactly what the control is.
-      // "back" uses the same affordance-form regex as backControlAll()
-      // (BACK_NAME): forward actions that start with the word — "Back up
-      // data", "Back office settings" — stay drill candidates, and the
-      // unwind will not press them either; the filter and the presser agree.
+      // "back" IS backControlAll()'s regex, not a copy of it: BACK_OR_HOME is
+      // built from BACK_NAME.source, so the filter and the presser cannot
+      // disagree. Both ends are anchored (directives#311), so a forward action
+      // that merely starts with the word ("Back up data", "Back office
+      // settings") OR merely ends in the form ("Send back to vendor", "Put it
+      // back") stays a drill candidate, and the unwind will not press it either.
       // KNOWN LIMIT, deliberate: home/return classification is string-based
       // (recorded label + ariaLabel, which resolves aria-labelledby TEXT but
       // not img alt inside a reference), so an icon-only Home button named
@@ -1346,8 +2114,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // end-anchored, and concatenating the two fields would bury one name's
       // ending in the middle of the joined string.
       if ([el.label, el.ariaLabel].some(s =>
-            /\bback\b(?=[\s:;.!›>»)\]…]*$|\s+to\b)|\breturn(\s+to\b|\s*$)|\bhome\s*$|[←‹◀]/i
-              .test((s || '').replace(/_/g, ' ').trim()))) { excludedAsBack++; continue; }
+            BACK_OR_HOME.test((s || '').replace(/_/g, ' ').trim()))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);
@@ -1456,8 +2223,14 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
   // That preamble went ~98s -> ~138s (N=4) / ~179s (N=8) in round 12 when both of
   // its settles became LOAD_SETTLE_MS — CTRL is one of the callers that made them
   // measurements, since a duplicate CTA rendering late is exactly what this scans
-  // for. 240_000, same as S4.
-  test.setTimeout(240_000);
+  // for — and ~138s -> ~193s (N=4) / ~179s -> ~234s (N=8) again when the
+  // identifier-first step landed (#310): a split-step gate costs a second
+  // settle+attempt cycle. 300_000, same as S2 and S4.
+  //
+  // SKIPPABLE — via gotoAndAuth(), on a gated app with no credential from
+  // either source (#312). The preamble is nearly the whole budget, so a skipping CTRL has measured the
+  // cheap half and none of the scan. See BUDGET SIZING at the top of this file.
+  test.setTimeout(300_000);
   await gotoAndAuth(page);
   const dupes = await page.evaluate(() => {
     const norm = s => (s || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -1513,6 +2286,11 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
   // If you hit it: split the entry points into their own suite (the note above
   // already recommends this for pages with richer flows), or raise this cap and
   // the caller's timeout-minutes TOGETHER — never this one alone.
+  // SKIPPABLE — unlocked by APP_PAGES. Note what that means for the number
+  // below: in a repo that has never declared an extra entry point this scenario
+  // has run ZERO times, so 90_000-per-page is derived and never observed, and
+  // the day someone adds a page is the day both the per-page allowance and the
+  // cap are tested for the first time. See BUDGET SIZING at the top of this file.
   const ENTRY_CAP_MS = 300_000;
   test.setTimeout(Math.min(90_000 * pages.length, ENTRY_CAP_MS));
   const watcher = watchPageErrors(page);
@@ -1573,24 +2351,38 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   //      3s settle — ~53s for a 4-digit PIN, scaling with credential length)
   //   gotoAndAuth(), auth persisting:                                      ~60s
   //
-  //     initial call, gate re-presenting         ~138s
-  //   + 3 nav resets    x ~138s                  = ~414s
+  //     initial call, gate re-presenting         ~193s   split-step (#310)
+  //                                              ~234s   at N=8
+  //   + 2 nav resets    x ~234s                  = ~468s
   //   + 27 overlay-path x ~13.8s                 = ~373s
   //     ------------------------------------------------
-  //     worst assumed mix                         ~925s
+  //     worst assumed mix                        ~1075s
   //
-  //     initial ~138s + 3 resets x ~60s + 27 x ~13.8s = ~691s  (auth persists)
+  //     initial ~138s + 2 resets x ~60s + 27 x ~13.8s = ~631s  (auth persists)
   //
-  // ~925s exceeded the previous 900_000. 1_200_000 covers both. NAV_RESET_CAP went 10 -> 5 -> 3 as the omitted terms
-  // surfaced; the resets buy this scenario nothing (a navigating trigger is not
-  // an overlay trigger), so spending fewer of them is the cheap side of the
-  // trade every time.
+  // ~925s exceeded the previous 900_000, and 1_200_000 covered it.
+  // The identifier-first step (#310) then put the N=8 split-step mix at ~1309s
+  // against 1_200_000 with the cap still at 3. NAV_RESET_CAP 3 -> 2 brings it to
+  // ~1075s and the ceiling does NOT move — which is the trade this paragraph
+  // already recommends, taken a fourth time: 10 -> 5 -> 3 -> 2 as each omitted
+  // term surfaced, because the resets buy this scenario nothing (a navigating
+  // trigger is not an overlay trigger) and spending fewer of them is the cheap
+  // side every time. The cost is real and NOT silent: one less reset means a
+  // nav-heavy app reaches fewer triggers, which writes the `dismiss-budget`
+  // attachment the paragraph below already tells you to read.
   //
   // ⚠️ IF THIS TIMES OUT ANYWAY, do not revise this sum a sixth time. Read the
   // run's `dismiss-budget` ATTACHMENT (not the findings list — the cap is a
   // coverage outcome, not a defect): its presence tells you the app is nav-heavy
   // and the assumed mix was wrong. That is a measurement, and it beats another
   // derivation.
+  //
+  // SKIPPABLE — via gotoAndAuth(), on a gated app with no credential from
+  // either source (#312); and effectively a no-op on an app with no overlays, since every trigger
+  // falls through the two `continue`s below. Either state records a fraction of
+  // the sum above. The day a credential lands OR the first modal ships, the
+  // per-trigger path runs for the first time — re-read the assumed mix then
+  // rather than after a timeout. See BUDGET SIZING at the top of this file.
   test.setTimeout(1_200_000);
   await gotoAndAuth(page);
 
@@ -1612,7 +2404,7 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page 
   // coverage, where capping triggerCount would. Not silent: hitting the cap
   // writes a `dismiss-budget` attachment, so a suite that stops early says so
   // WITHOUT failing the scenario for triggers it never reached.
-  const NAV_RESET_CAP = 3;
+  const NAV_RESET_CAP = 2;
   let navResets = 0;
 
   for (let i = 0; i < triggerCount; i++) {

@@ -266,9 +266,65 @@ Two different scopes — never conflate them:
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
   the same verification at session start.
 
-## Hosting & Deployment (owner ruling, 2026-08-21)
-**GitHub Pages, branch-source, is the deployment target.** Plain HTML/CSS/JS,
-dynamic via client-side Supabase + RLS. No build; the push *is* the deploy.
+## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26)
+**GitHub Pages is the deployment target.** Plain HTML/CSS/JS, dynamic via
+client-side Supabase + RLS. No build step.
+
+⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one, and
+this line read "branch-source … the push *is* the deploy" until 2026-08-26.**
+Branch-source publishes the **whole repository** at the public URL. Choose by
+this test, in order:
+
+1. **Is the repository private, or does it hold any file that must not be
+   public** — a real secret, unreleased material, anything whose exposure is a
+   problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
+   rather than the tree: rsync the repo minus a deny-list, upload that artifact,
+   deploy it.
+2. **Otherwise** → branch-source is fine and the push is the deploy.
+
+⚠️ **The test is "must not be public", NOT "is internal-facing".** A file can be
+internal in purpose and harmless in public. `claude.directives` is the worked
+example: it is a public repo, its `CLAUDE.md`, `learnings.jsonl`, `EXPORTS.json`
+and `docs/internal/` all serve 200 from its Pages URL (verified 2026-08-26), and
+that exposes nothing `github.com` does not already serve to anyone. It stays on
+branch-source, correctly. Reading the trigger as "has internal-looking files"
+would send every repo with a `CLAUDE.md` to do pointless work and make the rule
+read as wrong to the first person who checks.
+
+⚠️ **Deny-list, never allow-list.** An allow-list means every new app file needs a
+manifest edit to ship, and its failure mode is a missing file — annoying but
+visible. A deny-list fails the other way only when someone adds a new *internal*
+path and forgets it, which is why the deploy must **verify the live URL after
+publishing**: assert the app serves 200, each named internal path serves 404, and
+any internal-looking-but-public asset still serves 200. Fail the run otherwise.
+Verify with `curl`, not by reading the config.
+
+⚠️ **Flipping repo visibility fires the LEGACY managed branch build** ("pages
+build and deployment", event `dynamic`) even when an Actions workflow also runs —
+and it can finish *later* and republish the whole tree over the filtered copy.
+Set Settings → Pages → Source = **GitHub Actions** and confirm it. If internal
+paths reappear on the live URL, look for a `pages build and deployment` run first.
+
+⚠️ **A plain `curl` of a Pages URL can return a CACHED edge copy** (`max-age=600`),
+so it may show the old file minutes after a good deploy. Use
+`-H "Cache-Control: no-cache"` and a cache-busting query param before concluding
+anything about what is live.
+
+⚠️ **Switching to Actions-source SILENTLY DISABLES this repo's Pages monitoring,
+and that is not optional to handle.** `pages-monitor.yml` and `pages-retry.yml`
+both trigger on `page_build`, which fires only for **branch-source** builds
+(`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
+*Automation 4b — Pages Deploy Retry*). An Actions-source repo
+keeps the workflow files and gets no runs from them — monitoring that looks
+present and reports nothing, which is worse than none. The post-publish
+verification above is the replacement, not an extra: put the 200/404 assertions
+**inside the deploy workflow** so a bad filter fails the run that produced it,
+and do not rely on the monitors to notice.
+
+*Written from an incident: on 2026-08-18 a repo's internal docs were public for
+~18 minutes on exactly this path. The rule as it stood would have sent a session
+doing routine directive alignment to reproduce it — which is the worst property a
+rule can have, since following it correctly was the failure.*
 
 **A React / Next.js-on-Vercel "production tier" was evaluated and REJECTED** —
 a different development platform, changing a lot of code for a need no project
@@ -509,13 +565,42 @@ naming what remains open, or "nothing open" — never absent.
        prompt fatigue by **batching deploys**, not by removing the gate.
      - **Projects bootstrapped before this template inherit nothing
        automatically.** The FIRST time a session hits a scheduling-tool prompt
-       in an older repo, PR the current template's `permissions.allow` block
-       (both spellings, all six scheduling tools) into that repo's own
-       `.claude/settings.json` — no need to ask; it's the session's own repo and
-       merges on green like every other change. Note in the PR that the
+       in an older repo, PR the current template's WHOLE `permissions` block
+       (`allow` + `ask`, both spellings on the remote entries) into that repo's
+       own `.claude/settings.json` — no need to ask; it's the session's own repo
+       and merges on green like every other change. Note in the PR that the
        pre-approval activates from the NEXT session.
+       ⚠️ **This instruction was ignored for a month and nobody noticed**, because
+       its trigger is a prompt the owner clicks rather than anything a session
+       sees. claude.insurance had NO `.claude/settings.json` at all through
+       2026-08-26 while claude.prop and claude.directives both carried the block,
+       so every scheduling call from that repo prompted, indefinitely, and the
+       cost landed on the owner instead of on any session's error log. A rule
+       whose violation is invisible to the only party who can fix it does not
+       get followed. So: check for the file at Session Start — its ABSENCE, not
+       just its staleness, is the finding — and do not wait for a prompt you will
+       never observe.
   3. **Condition-wait with `Monitor`** only when you must block on a specific
      state — always with an exit condition and a hard timeout.
+- **Any recorded SHA is stale from the moment it is written — and a stale one
+  does not error.** The asymmetry is the whole point. An INVENTED identifier
+  fails loudly: the API has nothing to return, so a fabricated run ID 404s
+  immediately and no harm is done. A SUPERSEDED one does the opposite — it
+  resolves perfectly and returns real, well-formed, entirely valid data about the
+  wrong commit. Not an error: a correct answer to a question you no longer meant
+  to ask. There is no failure to catch, which is why this rule cannot live in
+  error handling and has to live in **where the identifier comes from**:
+  **resolve the head from the API at use time, never from the record.** A
+  recorded SHA tells you to go and check; it never tells you the answer. Every
+  surface that hands you one is an instance of the same thing — an event
+  payload's `head_sha`, a check-in prompt (item 2 above), a PR body, a handoff or
+  relay message (→ *One Session, One Repo*) — and none of them is a BAD record:
+  each was accurate when written, which is exactly why the API agrees with it.
+  Measured in `claude.prop` on 2026-08-23: five `check_suite.completed` events
+  across two PRs, every one naming a superseded head, four of which would have
+  merged a stale commit if read as clearance (`git.md` → *PR Lifecycle*). The
+  same day, `claude.directives`' own check-ins fired twice carrying SHAs three
+  commits behind, and one carried a claim a later round had already disproved.
 - **Never background a bare `sleep` to wait.** On container suspend/resume the
   process is reaped while the harness keeps showing a phantom "running" task
   that never clears — and it was watching nothing. Use options 1–3. (The
@@ -611,16 +696,41 @@ permission prompt the owner must click defeats the point. It is NOT how a
 session heartbeats: a wake is scheduled to perform a real check, and the
 heartbeat rides the wake that check already needed (→ *Status Line on Every
 Stop*). Never schedule one for liveness alone. Every
-project repo's committed `.claude/settings.json` carries the scheduling
-allowlist verbatim from `templates/claude-settings.json` → `permissions.allow`:
-exactly six tools (`send_later`, `create_trigger`, `update_trigger`,
-`delete_trigger`, `fire_trigger`, `list_triggers`) under BOTH server-name
-spellings, since the prefix differs between session surfaces and permission
-rules match names exactly. Riskier remote tools — attaching repos, creating or
-archiving sessions — must keep prompting. Settings load at session start; a
-one-time prompt in an already-running session is accepted. The security
-trade-offs the owner accepted when approving this are recorded in
-`docs/internal/accepted-residuals.md`.
+project repo's committed `.claude/settings.json` carries the allowlist verbatim
+from `templates/claude-settings.json` → `permissions.allow`. It covers two
+classes and no others:
+- **The six scheduling tools** (`send_later`, `create_trigger`,
+  `update_trigger`, `delete_trigger`, `fire_trigger`, `list_triggers`).
+- **Read-only tools** that answer a question and change nothing:
+  `list_sessions`, `get_session`, `list_repos`, `list_environments`, and the
+  GitHub MCP read surface (`pull_request_read`, `list_issues`, `issue_read`,
+  `get_file_contents`, the `search_*` family, …). Added 2026-08-26 on the
+  owner's instruction, after prompt fatigue reached four figures. The test for
+  admission is not "is it safe" but **"can it change anything a person would
+  want to be asked about"** — if no, it belongs here; if yes or unclear, it does
+  not.
+
+Remote-server entries carry BOTH server-name spellings, since the prefix differs
+between session surfaces and permission rules match names exactly. GitHub tools
+have one spelling and take one entry.
+
+**What must keep prompting, and is listed under `permissions.ask` where a rule
+is needed:** deployment tools reaching a live backend
+(`mcp__Supabase__deploy_edge_function` above all — see the 2026-07-12 ruling;
+batch deploys, never remove the gate), and the remote tools that mutate or widen
+a session's reach — `add_repo`, `create_session`, `archive_session`,
+`unarchive_session`, `interrupt_session`. Anything absent from `allow` prompts by
+default, so the `ask` entry is belt-and-braces for the one tool whose gate the
+owner has twice affirmed.
+
+Settings load at session start, so a widened allowlist reaches a session only on
+its NEXT start — every session already running keeps prompting until restarted,
+which is the single largest source of repeat prompts and is not a
+misconfiguration. **A repo with no `.claude/settings.json` at all pre-approves
+nothing**: claude.insurance was in that state on 2026-08-26 while its sibling
+repos were not, so every scheduling call from that session prompted. Check for
+the file's existence before diagnosing anything subtler. The security trade-offs
+the owner accepted are recorded in `docs/internal/accepted-residuals.md`.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.

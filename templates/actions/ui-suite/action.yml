@@ -33,6 +33,11 @@
 # - `advisory-run` flips ONLY the Playwright run step to continue-on-error;
 #   setup/install/server/upload always stay blocking, so a broken install can
 #   never pass green.
+# - The viewport gate below runs on THIS composite's Node, which `setup-node` pins
+#   to 20. A project that has migrated to a TypeScript `playwright.config.ts` must
+#   either raise that pin to 22 (type stripping is on by default from 22.18) or
+#   keep a `.js` config — Node 20 cannot import a TS config, and the gate says so
+#   by name when it hits ERR_UNKNOWN_FILE_EXTENSION rather than passing quiet.
 name: 'UI test suite'
 description: >
   Install deps + Playwright, optionally start a bundled local server, run the
@@ -93,6 +98,31 @@ runs:
       run: npm install
       working-directory: ${{ inputs.tests-dir }}
 
+    # This suite's ENTIRE viewport coverage is playwright.config.js's `projects`
+    # list — one spec set, run at whatever widths that list declares, with exactly
+    # one test setting its own (S4, at 390). A list that drifts to phone-only
+    # leaves nothing anywhere rendering the app at laptop width, and a green run
+    # says nothing about it: a viewport never instantiated produces no failing
+    # test. test.md → UI coverage gates, fifth gate.
+    #
+    # HERE, specifically: this is the first point node_modules exists (the script
+    # IMPORTS the config so Node expands `...devices[…]`, which needs
+    # @playwright/test resolvable), and it is BEFORE the browser install so a
+    # broken config fails in seconds instead of after a ~20-minute download.
+    #
+    # Always blocking — `advisory-run` flips ONLY the run step. There is no silent
+    # exit: config missing, import throwing, node_modules absent and zero projects
+    # each get their own exit code and their own printed line (#282).
+    #
+    # Copy templates/scripts/check-ui-viewports.js to .github/scripts/ WITH this
+    # composite — this step names it by path and fails at resolution without it,
+    # the same coupling check-job-bounds.py has with qa.yml.
+    - name: Check three viewport classes are declared
+      shell: bash
+      env:
+        TESTS_DIR: ${{ inputs.tests-dir }}
+      run: node .github/scripts/check-ui-viewports.js --tests-dir "$TESTS_DIR"
+
     # Browsers are ~400MB and were re-downloaded on EVERY run. This is a BUDGET
     # fix, not a hang fix, and the distinction was measured rather than assumed:
     # downstream the install step SUCCEEDED in 21m25s, and the job then hit its
@@ -101,9 +131,28 @@ runs:
     # Caching removes a 21-minute step from a 30-minute job, which is decisive
     # rather than probabilistic.
     #
-    # ⚠️ Actions caches are scoped to the branch that SAVED them, so the first run
-    # on a new default branch still misses even when a PR branch populated one.
-    # Expect one more slow run after adopting this, then hits.
+    # ⚠️ Cache SAVES are branch-scoped; cache RESTORES are not scoped the same
+    # way, and conflating the two is the mistake to avoid. A save belongs to the
+    # branch that made it, so the first run on a new default branch still misses
+    # even when a PR branch populated one — expect one more slow run after
+    # adopting this, then hits. A RESTORE reaches further: measured in
+    # claude.insurance (2026-08-25, run 32897692210 / job 97964016597, qa-live on
+    # main, event=workflow_run), a workflow_run-triggered job RESTORED the exact
+    # key a manual workflow_dispatch had written — the same key workflow_run had
+    # been DENIED writing three times — two days and three intervening runs
+    # later. So narrow any statement of the limit to SAVES; "workflow_run can't
+    # use the cache" is wrong, and that correction stands whatever anyone does
+    # with it.
+    #
+    # That makes a dispatch-warms / workflow_run-reads path real and durable. It
+    # is deliberately NOT adopted here, and the cost is the reason rather than a
+    # footnote: it bought ~15s (install ~22s warm). The cache-hit branch below
+    # still runs install-deps, and apt dominates — claude.prop measured 114 MB of
+    # apt fetched on two separate runs with BOTH caches hit, i.e. that half is
+    # invariant. A manual warming step would trade a documented human action for
+    # ~15s against a constant nobody has bounded. Recorded as a finding
+    # (claude.directives #303), not as procedure: do not add a warming step
+    # without re-measuring.
     - name: Cache Playwright browsers
       id: pw-cache
       uses: actions/cache@v4

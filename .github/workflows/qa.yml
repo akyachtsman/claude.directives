@@ -76,6 +76,12 @@ jobs:
       # over-reaches — see the header of check-claims.js before trusting a green.
       - name: Check canonical claims reached their consumers
         run: node .github/scripts/check-claims.js
+      # A compile warning in a GUARD is a scheduled outage, not a lint nit: the
+      # same defect is invisible on 3.11, shown on 3.12, and fatal on 3.15, at
+      # which point the guard stops running and stops checking. Script header
+      # carries the full reasoning.
+      - name: Check the Python guards compile without warnings
+        run: python3 .github/scripts/check-py-warnings.py
 
       - name: Workflow cross-reference guard
         run: python3 .github/scripts/workflow-ref-guard.py
@@ -103,6 +109,18 @@ jobs:
       # map quietly describe a repo that has moved on.
       - name: Check the logical map is regenerated
         run: node .github/scripts/build-logical-map.js --check
+
+      # NOTHING ELSE IN THIS REPO PARSES THE EXPORTED JS TEMPLATES. `Repo Map UI`
+      # exercises this repo's own map suite, not templates/ui-tests/, so a syntax
+      # error in the largest and most-edited file we ship would reach every
+      # downstream project and be found by THEIR CI, not ours. --check is a parse,
+      # not a run: no browser, no deps, milliseconds. The kit's package.json sets
+      # "type": "module", which Node honours for these paths.
+      - name: Check exported JS templates parse
+        run: |
+          for f in templates/ui-tests/tests/*.js templates/ui-tests/*.js; do
+            node --check "$f" && echo "OK: $f"
+          done
 
       - name: Validate workflow YAML
         run: |
@@ -163,6 +181,36 @@ jobs:
       # local gate on the old logic).
       - name: Check landing-page demo cards in sync
         run: node .github/scripts/check-landing-cards.js
+
+      # Self-application of test.md's fifth UI coverage gate to the kit we SHIP.
+      # The exported suite's entire viewport coverage is playwright.config.js's
+      # `projects` list, and a list that drifts to phone-only leaves nothing
+      # rendering the app at laptop width — invisible to a green suite, because a
+      # viewport never instantiated produces no failing test.
+      #
+      # The install is what makes the check possible: the script IMPORTS the config
+      # so Node expands `...devices[…]`, which needs @playwright/test resolvable
+      # from where the config lives. Measured 2.4s. --ignore-scripts skips the
+      # browser download (none is launched — the config is imported, not run) and
+      # --no-package-lock writes nothing into the tree. node_modules is gitignored
+      # everywhere and every validator here already skips it (check-paths.js names
+      # templates/ui-tests/node_modules in its own header).
+      - name: Install the UI kit's own test deps (for the viewport gate)
+        run: npm install --no-package-lock --ignore-scripts
+        working-directory: templates/ui-tests
+
+      # Runs the template copy directly, the way the Secret scan step above runs
+      # ./templates/actions/secret-scan — one file, no byte-identical pair to keep
+      # in sync.
+      - name: Check the shipped Playwright config declares three viewport classes
+        run: node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests
+
+      # Same reasoning as "Check the cross-reference guard reads YAML correctly"
+      # above: this gate's value is being trusted when it is QUIET, so a regression
+      # in it is silent by construction. Three static readers already failed here
+      # with twelve findings and every failure mode was silent (#282).
+      - name: Check the viewport gate itself reads configs correctly
+        run: node .github/scripts/check-ui-viewports-cases.js
 
   check-external-links:
     name: Check External Links (warn only)

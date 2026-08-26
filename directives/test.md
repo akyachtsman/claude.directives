@@ -65,9 +65,43 @@ Execute these before any task work:
 - Always use `page.goto('./')`, never `page.goto('/')`
 - Normalize `APP_URL` to end with `/` in `playwright.config.js`
 - `API status: no call` is expected for a local run that cannot reach the backend;
-  the auth-gated scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
+  the auth-gated scenarios self-skip when no credential is available from EITHER
+  source — the env var, or a login form that ships a working one. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
+- **A scenario that can skip needs a budget sized for the day it stops
+  skipping.** Its observed runtime is zero, every run, which reads exactly like
+  "fast" to anyone sizing from history — so the scenario with the least evidence
+  behind its budget is the one that looks safest. Treat "it has always been
+  fast" as **inadmissible** where the observed runs are skips: that is zero data
+  presented as reassurance, the same shape as a green that verified nothing.
+  Where a scenario can `test.skip()` on a missing precondition, give it an
+  explicit budget sized for its FIRST REAL run and name the unlocking
+  precondition in the comment beside it; and when a precondition is newly
+  satisfied in a repo — a credential set, a page declared, a flag flipped —
+  re-read that budget **before** the first run, not after it times out.
+  `claude.insurance`, 2026-08-25: their auth scenario carried no
+  `test.setTimeout` and inherited the 30s config default, ran for the first time
+  ever the hour a credential was set, and measured 11.0–12.1s across four
+  profiles — the thinnest margin in their suite, on the one scenario nobody had
+  ever timed. Note what else lands that day: a scenario's first real run tends to
+  exercise several never-exercised things at once, so an unbudgeted timeout there
+  may be a newly-loud gate check rather than a cost problem.
+- **"No auth gate" is a WINDOW unless the project makes it a proof.** The kit
+  settles, looks, and reports absence — but absence at time T is not evidence of
+  absence at T+1, so an app whose gate-determining request is still in flight
+  produces a green on auth that was never exercised. No timeout value fixes this;
+  a bigger number changes how OFTEN it happens, never WHETHER it can. Set
+  **`TEST_AUTH_READY_SELECTOR`** (a selector matching whichever outcome occurs —
+  the gate itself OR the authenticated app shell) or **`TEST_AUTH_READY_REQUEST`**
+  (a substring of the URL whose settling decides the gate), and the answer becomes
+  a decided one. Both optional: unset, behaviour is unchanged and the report
+  simply says the answer was `windowed` rather than `proven`. **That second half
+  is the point** — the defect was never the window's length, it was that a
+  windowed answer and a proven one were indistinguishable in the output.
+  A configured condition that never resolves FAILS rather than falling back,
+  because a silent fallback rebuilds exactly that ambiguity. A selector naming
+  only the gate times out on every signed-in run — it must match either outcome.
 - **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` one is
   invoked exactly **once**. Playwright adopts the Promise it returns, and whatever
   that Promise settles to — `false` included — ends the wait. It never polls
@@ -288,8 +322,10 @@ page you came from, tracked via a nav stack — not the last page visited).
 ## UI coverage gates (blocking)
 Five gates every project's UI suite must satisfy. The kit enforces the first
 four with a scenario (named in parentheses); the fifth is a property of the
-runner's config rather than of any test, and nothing enforces it automatically —
-read it. Project-specific suites must keep all five:
+runner's config rather than of any test, so no scenario can carry it —
+`check-ui-viewports.js` enforces it from the ui-suite composite instead, and a
+green SUITE still says nothing about it. Project-specific suites must keep all
+five:
 - **Console-error gate.** Every UI test run attaches `page.on('pageerror')` and
   `page.on('console')` (type `error`) and **fails if either fires** during load
   or interaction (S1, S3, ENTRY). An uncaught error on load is a broken page even
@@ -316,7 +352,26 @@ read it. Project-specific suites must keep all five:
   untested. (S4 is the exception and not the evidence: it sets 390 explicitly,
   so it runs the same in every project — a phone-only list makes it redundant,
   not skipped.) Because this gate lives in the config and not in any scenario, a
-  green suite is not evidence for it: read the `projects` list.
+  green suite is not evidence for it: read the `projects` list — or let
+  `check-ui-viewports.js` read it for you. That script imports the config so Node
+  expands `...devices[…]`, and the `ui-suite` composite runs it on every UI job.
+  A static read of the config does NOT work and is not worth retrying: three
+  attempts produced twelve findings, and `npx playwright test --list
+  --reporter=json` reports `viewport: null` for every project even while
+  enumerating all its specs.
+
+  **One spec set, one viewport source.** This kit ships a single suite —
+  `tests/app.spec.js` under `playwright.config.js` — and runs it against two
+  targets: the bundled local server in `qa.yml`, and the live URL in
+  `qa-live.yml` / `qa-response.yml`. Both targets inherit the SAME `projects`
+  list, and exactly one test in the kit sets a viewport of its own. So the
+  `projects` list is the only thing deciding what widths this app is ever
+  rendered at, and there is no second tier to compensate: drift it to phone-only
+  and nothing anywhere renders the app at laptop width. A project that wants a
+  laptop-width safety net independent of that list has to build one — an
+  offline/stubbed harness tier with explicit per-test viewports, which this kit
+  does not provide. `apfp.claude` built exactly that, which is why its own drift
+  stayed catchable; a project running the standard kit alone has no such margin.
 
 These are **completion gates, not sequencing gates**: everything must pass before
 the work is called done, but a task never waits for the previous task's suite to

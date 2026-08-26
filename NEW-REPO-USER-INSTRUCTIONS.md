@@ -40,12 +40,28 @@ Or set network to **Full** if you'd rather not maintain a list. *(Optional: add
 each container once `cdn.playwright.dev` is allowed.)* Reload — now the commands appear,
 and **every repo you open in this environment** has them from then on.
 
-**Scheduling-tools pre-approval is template-only.** Projects bootstrapped
-before the current `templates/claude-settings.json` inherit nothing
-automatically — each existing repo needs the same `permissions.allow` block
-(both connector spellings, all six scheduling tools) PR'd into its
+**Pre-approval is template-only, and its absence is silent.** Projects
+bootstrapped before the current `templates/claude-settings.json` inherit nothing
+automatically — each existing repo needs that file's whole `permissions` block
+(`allow` + `ask`, both connector spellings on the remote entries) PR'd into its
 `.claude/settings.json` manually. One small PR per repo; a session scoped to
-that repo can do it on request.
+that repo can do it on request, and `/env-chk` now reports the gap unprompted.
+
+Worth knowing before you go looking for a subtler cause: **a repo with no
+`.claude/settings.json` at all pre-approves nothing**, and that is the usual
+answer. On 2026-08-26 claude.insurance was in exactly that state while
+claude.prop and claude.directives both carried the block, so every scheduling
+call from that one repo prompted — for a month, into four figures. Nothing
+reported it, because the only party who sees the prompt is you, and the rule
+telling a session to fix it triggers on a prompt no session observes.
+
+Two things follow that will save you clicking. **Settings load at session
+start**, so merging the block does nothing for sessions already running — they
+keep prompting until restarted, and that is not a misconfiguration. And the
+allowlist deliberately stops short: deployment tools reaching a live backend
+(`mcp__Supabase__deploy_edge_function`) and remote tools that widen a session's
+reach (`add_repo`, `create_session`, `archive_session`) keep prompting by
+design. Reduce those by batching the work, not by widening the grant.
 
 **Force a toolkit update (skip the ~weekly wait).** Only needed for a project
 without `.claude/hooks/session-start.sh`; with the hook, the next session updates
@@ -99,10 +115,18 @@ once locally — it persists.
 3. Enable GitHub Pages: **Settings → Pages → Source: `main` / `root`**
 4. Set repo Watch: **Watch → All Activity**
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):
-   - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests
+   - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests. Set
+     NEITHER this nor `TEST_AUTH_EMAIL` if the app's login ships a working
+     credential of its own (both fields prefilled, a human just clicks Log in):
+     the suite submits the form as it stands and records
+     `credentialSource: prefilled`, where supplying a secret would overwrite a
+     value that works (directives#312)
    - `TEST_AUTH_EMAIL` — the matching identifier, required when the app's gate is
-     email+password (directives#304). Use a throwaway test-account address: it is
-     typed into a visible input, so failure screenshots record it
+     email+password (directives#304) or identifier-first — an email step shown
+     before any password field (directives#310); without it that gate is not
+     detected and the authenticated tests run against the identifier screen. Use
+     a throwaway test-account address: it is typed into a visible input, so
+     failure screenshots record it
    - `DB_SERVICE_KEY` — backend service-role key (required before the project's scheduled data workflow, if any, can run)
    - `SMTP_PASS` — SMTP app password / API key for the standard email-notification job (`cron-notify.yml`)
    - Any project-specific secrets the app requires
@@ -117,7 +141,8 @@ once locally — it persists.
    no matter what the hook reports. `/new-repo` cannot set it; only you can.
    Enforcement **Active**, target **Include default branch**, tick **Restrict
    deletions**, **Block force pushes** and **Require a pull request before
-   merging**, set **Required approvals to `0`**, leave **Restrict updates**
+   merging**; inside that last rule tick **Require conversation resolution before
+   merging** and set **Required approvals to `0`**; leave **Restrict updates**
    unchecked, and leave the **bypass list empty**. Then run both probes — a
    direct write to `main` must be refused, and one ordinary PR must still merge.
    Full procedure and the reasoning for each setting:

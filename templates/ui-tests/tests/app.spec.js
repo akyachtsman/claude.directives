@@ -313,9 +313,18 @@ async function detectAndAuth(page, credential) {
       // earlier in the DOM would otherwise be selected, the visibility check
       // would then SKIP the fill instead of trying the visible candidate, and
       // the form submits a blank identifier.
-      const emailInput = (await authForm.count().catch(() => 0))
-        ? authForm.locator('input[type=email], input[type=text], input:not([type])').locator('visible=true').first()
-        : page.locator('input[type=email]').locator('visible=true').first();
+      // TWO-STEP preference, not one union: a selector union preserves DOM
+      // order, so a form whose tenant/org text field precedes its email field
+      // would receive the identifier while the email stayed blank. Try the
+      // typed email input first; only when the form has none fall back to a
+      // generic text input (identifier fields on login forms are often plain
+      // type=text). Page scope (formless gate) stays email-typed ONLY.
+      const hasForm = await authForm.count().catch(() => 0);
+      let emailInput = (hasForm ? authForm : page)
+        .locator('input[type=email]').locator('visible=true').first();
+      if (hasForm && !(await emailInput.isVisible().catch(() => false))) {
+        emailInput = authForm.locator('input[type=text], input:not([type])').locator('visible=true').first();
+      }
       if (await emailInput.isVisible().catch(() => false)) {
         await emailInput.fill(String(AUTH_EMAIL));
       }
@@ -346,8 +355,13 @@ async function detectAndAuth(page, credential) {
 async function detectAuthGate(page) {
   await page.locator('[class*="keypad"], [class*="pin"], input[type="password"]')
     .first().waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-  const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).count();
-  const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').count();
+  // VISIBLE elements only — an SPA that hides its PIN view after login (rather
+  // than unmounting it) still has 10 numeric buttons in the DOM, and counting
+  // them made this detector return true post-login, which turned
+  // expectGateCleared() into a throw on every SUCCESSFUL sign-in. A gate the
+  // user cannot see is not a gate.
+  const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).locator('visible=true').count();
+  const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').locator('visible=true').count();
   if (hasNumericButtons >= 9 && hasDotIndicator > 0) return true;
   if (await page.locator('input[type=password]').first().isVisible().catch(() => false)) return true;
   // Text/access-code gate (detectAndAuth's text-input path): a SINGLE visible text input

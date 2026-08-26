@@ -1,0 +1,55 @@
+{
+  "_comment": "Canonical-claim manifest for check-claims.js (#300). Each entry pins a rule that MUST keep being stated by every file listed, because #294 proved that a correct claim fixed in one file routinely goes stale, narrowed or absent in the others. Read check-claims.js's header before trusting a green run: this guard confirms a claim TRAVELLED, never that it is TRUE, and it cannot see a fix that says more than intended. Patterns are JS regex sources matched case-insensitively against the file with whitespace collapsed and markdown emphasis markers stripped, so one entry spans the wording variants a claim legitimately has. Consumer lists were derived by measuring the current tree, not by assumption — the issue that proposed this guard listed phrases that did not exist verbatim anywhere.",
+  "claims": [
+    {
+      "id": "verdict-lookup",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both.",
+      "source": "directives/git.md",
+      "pattern": "comments and (?:the |its |their )?review threads",
+      "consumers": [
+        "CLAUDE.md",
+        "docs/internal/repo-monitors.md",
+        "docs/standards/automations.md",
+        "docs/standards/ci-triage.md",
+        "docs/standards/cicd-setup.md",
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md"
+      ]
+    },
+    {
+      "id": "response-is-not-a-verdict",
+      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. The claim travels in two shapes (a response is not a verdict; a reaction is not a verdict) and the pattern accepts both, because both are the same rule about what clears the gate.",
+      "source": "directives/git.md",
+      "pattern": "(?:response|reaction)[^.]{0,40}? is not a verdict",
+      "consumers": [
+        "docs/standards/ci-triage.md"
+      ]
+    },
+    {
+      "id": "ci-notify-not-a-guaranteed-wake",
+      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner, and exits silently otherwise — and a repository_dispatch run's default-branch SHA can uniquely match an unrelated promotion PR, which gets the comment instead. A unique match is therefore not proof that YOUR session will be woken, and any file that implies otherwise sends a session to wait on a signal that will not arrive.",
+      "source": "docs/standards/automations.md",
+      "pattern": "not a guaranteed wake",
+      "consumers": [
+        "CLAUDE.md",
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        ".github/workflows/ci-notify.yml",
+        "templates/workflows/ci-notify.yml"
+      ]
+    },
+    {
+      "id": "arm-the-check-in",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in a shell script whose PreToolUse message is the highest-authority copy of the rule, and every .md-only sweep missed it. Consumers here deliberately include both .yml carriers for the same reason.",
+      "source": "directives/git.md",
+      "pattern": "arm the check-?in",
+      "consumers": [
+        "CLAUDE.md",
+        "directives/global.md",
+        "docs/internal/repo-monitors.md",
+        "docs/standards/automations.md",
+        ".github/workflows/ci-notify.yml",
+        "templates/workflows/ci-notify.yml"
+      ]
+    }
+  ]
+}

@@ -144,7 +144,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   verified against the local working tree, including `→ *Section*`
   cross-references), path-existence, required-section headings, workflow YAML
   validation, secret-scan pattern+filter sync, the export boundary
-  (`check-exports.js`, both directions), job bounds, the workflow-ref guard, and
+  (`check-exports.js`, both directions), the canonical-claim guard
+  (`check-claims.js` — pinned rules still stated by every consumer that must
+  state them; it proves a claim TRAVELLED, never that it is TRUE), job bounds,
+  the workflow-ref guard, and
   a paired-file diff check, plus a warn-only external-link job. It also runs
   `build-logical-map.js --check`, so a committed map that no longer matches
   `EXPORTS.json` fails the build.
@@ -243,6 +246,7 @@ node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
 node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence
+node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header)
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it

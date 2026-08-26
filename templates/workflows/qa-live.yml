@@ -16,6 +16,7 @@
 #
 # Required setup:
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project has
+#     (email+password gates need TEST_AUTH_EMAIL as well — directives#304)
 #     no auth; the empty secret makes auth tests self-skip
 #   - Add APP_URL as a repository variable: Settings → Secrets and variables → Variables
 #     e.g. https://<your-username>.github.io/<your-repo>/
@@ -205,5 +206,6 @@ jobs:
           # workflow_dispatch input overrides repo variable if provided
           app-url: ${{ github.event.inputs.app_url || vars.APP_URL }}
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          test-auth-email: ${{ secrets.TEST_AUTH_EMAIL }}
           artifact-name: playwright-results-live
           app-pages: ${{ vars.APP_PAGES }}

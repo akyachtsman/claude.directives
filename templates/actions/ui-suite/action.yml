@@ -49,6 +49,10 @@ inputs:
     description: 'Seeded test credential; empty makes auth tests self-skip'
     required: false
     default: ''
+  test-auth-email:
+    description: 'Identifier for email+password gates (directives#304); empty keeps the password-only path'
+    required: false
+    default: ''
   artifact-name:
     description: 'Name for the uploaded results artifact'
     required: true
@@ -163,6 +167,7 @@ runs:
       env:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
+        TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         APP_PAGES: ${{ inputs.app-pages }}
       # No --reporter flag: a CLI reporter REPLACES the config's list, which
       # would drop the json reporter and leave playwright-results.json unwritten

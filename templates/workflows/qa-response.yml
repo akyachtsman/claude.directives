@@ -15,6 +15,7 @@
 #     'QA — Event-Driven Response' from both lists in the same edit.
 #     Why: docs/standards/automations.md -> Watcher Rules (W1).
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project
+#     (email+password gates need TEST_AUTH_EMAIL as well — directives#304)
 #     has no auth; the empty secret makes auth tests self-skip
 #   - Add APP_URL as a repository variable (live URL)
 #   - Set UI_TESTS_DIR below to the path of your Playwright test directory
@@ -261,6 +262,7 @@ jobs:
           tests-dir: ${{ env.UI_TESTS_DIR }}
           app-url: ${{ vars.APP_URL }}
           test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          test-auth-email: ${{ secrets.TEST_AUTH_EMAIL }}
           artifact-name: playwright-results-response-${{ github.run_id }}
           app-pages: ${{ vars.APP_PAGES }}
 

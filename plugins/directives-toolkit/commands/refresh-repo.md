@@ -290,6 +290,28 @@ names by path is not optional, and skipping it ships a broken reference.
   one only the `ui-suite` composite names (`check-ui-viewports.js` is that case,
   and reading this list as "qa-invoked" is what let it be skipped: directives#321).
 
+⚠️ **And one absence that must be RESPECTED rather than filled — the inverse
+case, which the rows above and this rule read oppositely.** The
+`templates/workflows/<wf>.yml` row batch-installs files "absent locally"; this
+rule skips paths that do not exist. For most workflows those agree, because
+installing a watcher that was merely never installed restores coverage. For a
+workflow carrying a **`schedule:`** trigger they do not: installing it does not
+restore coverage, it **creates recurring work**, and there is no dormant option
+because `schedule:` fires.
+
+So: **an absent SCHEDULED workflow is skipped unless the project has a task for
+it.** `cron-notify.yml` is the worked case — `claude.trading` correctly declined
+it on 2026-08-26, because its `notify-task.js` is still the bootstrap stub that
+prints a placeholder and exits, no SMTP vars are set, and its real scheduled work
+runs as `pg_cron` inside Supabase. Installing it would have bought a daily
+checkout, a daily `npm install`, and a no-op, forever. They verified it was not
+load-bearing first: no `workflow_run` names it, and `workflow-ref-guard` reports
+all required watchers intact without it.
+
+This is the same principle as `pages-retry.yml`'s carve-out above and belongs
+beside it: **"absent locally" is not a fact about the project's intent.** Ask
+what installing it *starts*, not only what it restores.
+
 ### Deriving the referenced-script set
 
 ⚠️ **Derive from the UPSTREAM files you are installing — fetched, not local.**

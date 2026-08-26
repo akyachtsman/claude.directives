@@ -292,27 +292,59 @@ names by path is not optional, and skipping it ships a broken reference.
 
 ### Deriving the referenced-script set
 
-Run this over the files you are **actually installing**. Match on the
-INVOCATION, not the bare path, or it also emits directories,
-`package-lock.json`, and paths that only appear in comments:
+⚠️ **Derive from the UPSTREAM files you are installing — fetched, not local.**
+`/refresh-repo` runs inside a *project*, where `templates/workflows/` and
+`templates/actions/` do not exist; those are upstream paths. And scanning the
+project's own `.github/` copies is worse than useless here: it would miss
+precisely the case this exists for — **a script newly referenced by the caller
+you are about to install**, which by definition the installed copy does not yet
+mention.
+
+So the input is the fetched upstream text, using the same `$raw` this command
+already establishes, over the caller files **in this refresh's delta** (not a
+fixed list — that is the mistake one level up):
 
 ```bash
-grep -rhoE '(node|python3) \.github/scripts/[A-Za-z0-9_.-]+\.(js|py)' \
-  templates/workflows/ templates/actions/ | awk '{print $2}' | sort -u
+repo="akyachtsman/claude.directives"
+raw="https://raw.githubusercontent.com/$repo/main"
+callers="…the templates/workflows/*.yml and templates/actions/*/action.yml
+         paths this refresh is installing…"
+
+refs=$(for c in $callers; do
+         curl -fsSL "$raw/$c" || { echo "FETCH FAILED: $c" >&2; exit 1; }
+       done | grep -oE '(node|python3) \.github/scripts/[A-Za-z0-9_.-]+\.(js|py)' \
+            | awk '{print $2}' | sort -u)
+
+[ -n "$refs" ] || { echo "DERIVATION EMPTY — the command is wrong, not the repo" >&2; exit 1; }
+printf '%s\n' "$refs"
 ```
 
-At the time of writing that yields exactly five — `check-contrast.js`,
-`workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py` (from
-`qa.yml`) and `check-ui-viewports.js` (from `ui-suite/action.yml`, reachable
-only through the composite). **The list is the OUTPUT, never the rule.**
+Match on the INVOCATION, not the bare path, or it also emits directories,
+`package-lock.json`, and paths that appear only in comments. The `[ -n "$refs" ]`
+guard is not decoration: a failed `curl` or a broken pattern both produce an
+empty set, and `sort` exits 0 either way.
 
-⚠️ **Check that it printed something.** An empty result means the command is
-wrong, not that no scripts are referenced — and without `pipefail` it exits 0
-either way, so an empty exception set looks like a successful derivation and
-skips every script. This is not hypothetical: the first version of this command
-was written inside the table cell above with the pipes escaped for markdown, and
-`\|` in `grep -E` matches a **literal pipe character**, so it printed nothing and
-exited 0. A derivation that fails open is worse than the hand-list it replaced.
+**The output is the answer for THAT refresh, and it moves.** Run against
+`main` on 2026-08-26 with `qa.yml` + `ui-suite/action.yml` as the callers it
+yields four — `check-contrast.js`, `workflow-ref-guard.py`,
+`check-job-bounds.py`, `check-ui-viewports.js` — and five once directives#325
+lands, which adds `check-py-warnings.py` to `qa.yml`. That is the derivation
+working: it reports what the callers you are installing actually reference, not
+what a list-writer remembered. **The output is never the rule.**
+
+⚠️ **Two ways this has already failed open, both silently.** Neither was
+hypothetical and both produced an empty set that looked like a clean answer:
+
+1. The first version lived in the table cell above with its pipes escaped for
+   markdown — and `\|` in `grep -E` matches a **literal pipe character**, so it
+   matched nothing and exited 0.
+2. The second pointed at `templates/workflows/` and `templates/actions/`, which
+   **do not exist in a project**, so `grep` printed *No such file or directory*
+   and `sort` exited 0 regardless.
+
+Hence the `[ -n "$refs" ]` guard. A derivation that fails open is strictly worse
+than the hand-list it replaced, because a hand-list at least tells you what
+somebody once believed.
 
 The general form, worth applying to any row added later: **if the thing being
 installed REFERENCES a path, that path installs with it, present or not.** The

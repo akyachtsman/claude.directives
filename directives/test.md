@@ -412,9 +412,14 @@ failed**, and this repo reproducing the causes directly.
   serves the same built tree, so an absolute CDN module URL in it is still
   fetched from the blocked host and the app still cannot boot. That case is
   fixed by vendoring, rewriting, or proxying the import — not by moving the
-  origin. A missing browser binary has **no** shipped override in the kit; when
-  that is the blocker, the scenario is genuinely unrunnable here and belongs in
-  the recorded ceiling below.
+  origin. For a missing browser binary, **try the standard install before
+  concluding anything** — `npx playwright install <browser>`, which is exactly
+  what `ui-suite/action.yml` already runs. An image that omits a browser has not
+  necessarily blocked fetching one: measured 2026-08-26, `cdn.playwright.dev`
+  answers from the sandbox (a 400 to a bare GET is a response, not a refusal),
+  while the deprecated `playwright.azureedge.net` mirror does not resolve. Record
+  a ceiling only when the install itself also fails, and say so — "absent from
+  the image" is not "unavailable".
 - **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
   workaround, it is removing the check.
 

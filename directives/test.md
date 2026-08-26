@@ -379,6 +379,81 @@ finish before starting (`global.md` → *Pipelined Execution*). Verification run
 concurrently with the next task; batching independent tasks into one suite run is
 the norm, not a shortcut.
 
+## Sandboxed local runs (agent sessions)
+A test run inside an agent sandbox can fail for reasons that have nothing to do
+with your suite. Measured 2026-08-26 in three sandboxes: `claude.trading` 5 local
+failures / CI all green; `claude.insurance` **26 of 36** local failures / CI 24
+passed 12 skipped 0 failed; this repo reproducing causes directly.
+
+**Two rules, both absolute:**
+
+- **Never weaken a test to make a sandbox run green** — no relaxed assertion, no
+  added retry, no skipped case. That converts an environment limit into a
+  permanently blinded check: the suite goes green and nothing reports that it
+  stopped looking.
+- **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
+  workaround, it is removing the check.
+
+When a scenario genuinely cannot execute here, **supply the missing thing rather
+than lowering the bar** (`claude.prop`): they answered an unreachable host by
+starting a local static server and pointing `APP_URL` at it, every assertion
+intact against the same built tree. Note it fixes an unreachable app *host* and
+does not touch a blocked runtime import — a local server serves the same built
+tree, so an absolute CDN module URL in it still resolves to the blocked host.
+That case needs vendoring, rewriting or proxying the import.
+
+### The case worth knowing: a reachable backend proves nothing about boot
+
+`claude.insurance` had four scenarios fail to find their own UI while **Supabase
+answered `401` in 0.63s** — host up, auth simply not supplied. The cause was one
+layer up: the page imports its client at runtime from a CDN module URL on
+`esm.sh`, that host is blocked here, so the ES module graph never resolves,
+`main.js` never executes and the router never renders — while the page itself
+serves 200.
+
+So the obvious probe can stay positive while the environment is at fault. It can
+*also* stay positive when the app has a real defect — a JavaScript exception, a
+wrong route, a selector regression. **Backend reachability decides nothing in
+either direction**; for an app that loads a dependency from a CDN at runtime, it
+says nothing about whether the app can boot at all.
+
+Blocking is **selective**, so "the sandbox has no network" is the wrong model:
+
+| target | `curl` |
+|--------|--------|
+| `esm.sh` | `000` — no connection |
+| `raw.githubusercontent.com` | `200` |
+| `cdn.playwright.dev` | `400` — a response, so reachable |
+
+For browser-side network failures, `global.md` → *Network Access Playbook* is the
+governing rule and this directive does not restate it.
+
+### Recording what your project cannot run here
+
+Which scenarios can run in a sandbox depends on the app's dependencies, the
+browser inventory, the egress policy and the runner — all of which move.
+**Record the limit in the PROJECT's `CLAUDE.md`, with the date, the causes, and
+what would make it wrong**, so the next session neither re-derives it nor trusts
+it past its expiry.
+
+Two things that repeatedly get this wrong, both measured on this PR:
+
+- **Grade on whether a thing WORKS, not on a cheaper stand-in.** A browser binary
+  present is not a browser that launches; an install that exits 0 is not a browser
+  that launches; a green aggregate CI run is not the scenario having executed
+  (`claude.insurance`'s green read 24 passed **12 skipped** 0 failed — a skipped
+  case and a passing case produce the same green).
+- **Absent is not unavailable.** A browser missing from the image may be
+  installable — `ui-suite/action.yml` installs browsers as a normal step. The
+  install ladder and its failure branches are specified with a script and a test
+  in #332, deliberately not in prose here: four attempts to state it as prose
+  produced four defects, each introduced by the fix for the one before.
+
+Before blaming the code, **falsify any bound you just added** — a timeout or limit
+introduced in the same change is the likeliest culprit and the cheapest to
+eliminate. It proves only that the bound is not required to trigger the failure;
+claiming the failure pre-existed the change needs a run on the parent commit.
+
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are
   covered by the PR trigger — listing `claude/**` under push would run everything

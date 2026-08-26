@@ -50,7 +50,7 @@ inputs:
     required: false
     default: ''
   test-auth-email:
-    description: 'Identifier for email+password gates (directives#304); empty keeps the password-only path'
+    description: 'Identifier for email+password gates (directives#304); empty keeps the password-only path. NOT truly secret: it is typed into a visible input, so failure screenshots/traces record it — use a throwaway test-account address, never a real person''s'
     required: false
     default: ''
   artifact-name:

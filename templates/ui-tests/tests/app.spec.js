@@ -27,6 +27,12 @@ const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 // BLANK identifier, the backend rejects it, and the failure reads as a bad
 // credential rather than a suite that never filled the username. Same secret
 // plumbing as TEST_AUTH_CREDENTIAL (workflow secret -> ui-suite input -> env).
+// ⚠️ NOT ACTUALLY A SECRET: this value is typed into a VISIBLE input, so
+// failure screenshots and first-retry traces record it in the rendered DOM,
+// where GitHub's log masking cannot reach. Use a throwaway test-account
+// address that identifies nobody — never a real person's email. (The password
+// renders as dots; the identifier renders as itself. That asymmetry is why
+// this warning exists here and not on TEST_AUTH_CREDENTIAL.)
 const AUTH_EMAIL = process.env.TEST_AUTH_EMAIL || null;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -369,19 +375,32 @@ async function detectAuthGate(page) {
 async function expectGateCleared(page, mechanism, gateViewBefore) {
   if (mechanism === 'none') return; // nothing was attempted — nothing to verify
   if (!(await detectAuthGate(page))) return; // cleared — a WINDOW (#302), as stated above
-  // A password field on the LANDED page is not the login gate: an app whose
-  // successful landing view carries one (account settings, a change-password
-  // form) would read as a rejected login and fail every authenticated scenario.
-  // Discriminate on the VIEW: same signature as before the attempt -> the gate
-  // did not clear -> fail loudly. Different view but still gate-like ->
-  // ambiguous -> attach a diagnostic and continue, because a false red here
-  // blocks the whole suite while a wrongly-passed ambiguity is caught by the
-  // scenarios themselves measuring a page that is not the app.
+  // A password field on the LANDED page is not necessarily the login gate: an
+  // app whose successful landing view carries one (account settings, a
+  // change-password form) must not read as a rejected login. But a CHANGED view
+  // is not proof of progress either — a rejected login that renders an inline
+  // error or flips a keypad dot changes viewSignature() while the gate stands.
+  // So the default is FAIL, and only a POSITIVE identification of a different,
+  // post-login form passes:
+  //   1. view unchanged                          -> the gate did not clear -> FAIL
+  //   2. view changed, page still LOGIN-SHAPED   -> same gate + feedback   -> FAIL
+  //   3. view changed, page RICH in controls     -> a password field inside an
+  //      authenticated shell (settings, change-password) -> attach + continue
+  // "Login-shaped" = few non-keypad interactive controls. A login/PIN view
+  // offers a handful (submit, forgot-password, keypad digits excluded); an
+  // authenticated shell offers many. Threshold 6 — a heuristic, stated as one.
   const viewNow = await viewSignature(page);
-  if (viewNow === gateViewBefore) {
+  const looksLikeLoginStill = viewNow === gateViewBefore || (await page.evaluate(() => {
+    const els = [...document.querySelectorAll('button, [role=button], a[href], select, textarea')]
+      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
+      .filter(el => !/^[0-9]$/.test(el.textContent?.trim() || ''));
+    return els.length <= 6;
+  }));
+  if (looksLikeLoginStill) {
     throw new Error(
-      `Auth gate still present after a '${mechanism}' attempt (view unchanged) — refusing to run ` +
-      `this scenario against the login screen. Check TEST_AUTH_CREDENTIAL` +
+      `Auth gate still present after a '${mechanism}' attempt` +
+      (viewNow === gateViewBefore ? ' (view unchanged)' : ' (view changed but the page is still login-shaped — likely a rejection message on the same gate)') +
+      ` — refusing to run this scenario against the login screen. Check TEST_AUTH_CREDENTIAL` +
       (mechanism === 'password-form' ? ' and TEST_AUTH_EMAIL (email+password gates need both, directives#304)' : '') +
       `; a rejected credential and a never-filled field look identical from here.`
     );
@@ -389,7 +408,7 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   test.info().attach('auth-ambiguous', {
     body: JSON.stringify({
       mechanism,
-      note: 'The view changed after the auth attempt but the landed page still matches the gate heuristics (a visible password field or PIN-like controls). Proceeding — but if this scenario then measures a page that is not the app, start here.',
+      note: 'After the auth attempt the view changed AND the page is control-rich, yet still matches the gate heuristics (a visible password field or PIN-like controls). Read as a password field inside an authenticated shell (settings / change-password) and proceeding — but if this scenario then measures a page that is not the app, start here.',
     }, null, 2),
     contentType: 'application/json',
   });

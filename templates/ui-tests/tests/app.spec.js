@@ -337,7 +337,10 @@ async function detectAndAuth(page, credential) {
         .join(', ');
       const rungs = [
         scope.locator('input[type=email]'),
-        scope.locator('input[autocomplete="username" i], input[autocomplete="email" i]'),
+        // ~= (token match), not = : autocomplete takes a space-separated token
+        // list ("section-login username"), and exact equality misses every
+        // multi-token value.
+        scope.locator('input[autocomplete~="username" i], input[autocomplete~="email" i]'),
         ...(hasForm ? [authForm.locator(SEMANTIC), authForm.locator('input[type=text], input:not([type])')] : []),
       ];
       for (const rung of rungs) {
@@ -505,6 +508,12 @@ async function discoverElements(page) {
                   el.getAttribute('placeholder') ||
                   el.getAttribute('name') ||
                   el.id || '').slice(0, 60),
+          // Carried separately from label: label prefers textContent, so an
+          // icon button whose glyph text is not a recognizable word
+          // (<button aria-label="Back">chevron_left</button>) records only the
+          // glyph — consumers that classify by meaning need the accessible
+          // name too, not just the first non-empty string.
+          ariaLabel: (el.getAttribute('aria-label') || '').slice(0, 60),
           id: el.id || null,
         }))
     );
@@ -570,13 +579,14 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // + LOAD_SETTLE_MS settle                 25s
   // + detectAuthGate() waitFor               5s
   // + detectAndAuth() (see its header)     ~53s at N=4    ~94s at N=8
+  // + LOAD_SETTLE_MS post-auth settle       25s
   // + snapshots, error read, assertions      ~few s
   //   ------------------------------------------
-  //   ~113s at N=4                          ~154s at N=8
+  //   ~138s at N=4                          ~179s at N=8
   //
-  // 180_000 covers an 8-digit PIN with ~26s spare. SIZING ESTIMATE under a
+  // 240_000 covers an 8-digit PIN with ~61s spare. SIZING ESTIMATE under a
   // stated assumption, not a proof: N is the project's credential length.
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const getApiCalls = await captureApiCalls(page);
   await page.goto('./');
   // LOAD_SETTLE_MS, not IDLE_MS: what follows this wait is detectAuthGate(), and
@@ -609,6 +619,12 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // credential as accepted with the gate still on screen. The verifier the
   // rest of the suite trusts must not be bypassable by the scenario whose
   // whole job is the auth verdict.
+  // LOAD_SETTLE_MS, not IDLE_MS: a successful login often lands with the app
+  // shell still loading — verifying while the auth request or the post-auth
+  // navigation is in flight reads the not-yet-dismissed gate as retained and
+  // fails a login that succeeded. Same wait the other callers get by settling
+  // before their gate checks; S2 authenticates mid-test, so it settles here.
+  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
   await expectGateCleared(page, mechanism, gateViewBefore);
 
   const domChanged = JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap);
@@ -1058,7 +1074,11 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // a <span class="material-icons"> back button, and underscore is a word
       // character, so \bback\b alone would let NAV click Back while drilling
       // and walk a reversed trail. "Backup" has no underscore and stays allowed.
-      if (/\b(back|return|home)\b|[←‹◀]/i.test(el.label.replace(/_/g, ' '))) { excludedAsBack++; continue; }
+      // The accessible name is tested alongside label: label prefers
+      // textContent, so <button aria-label="Back">chevron_left</button> records
+      // "chevron_left" — a glyph name this list can't enumerate — while its
+      // aria-label says exactly what the control is.
+      if (/\b(back|return|home)\b|[←‹◀]/i.test(`${el.label} ${el.ariaLabel}`.replace(/_/g, ' '))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);

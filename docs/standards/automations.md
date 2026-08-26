@@ -94,13 +94,33 @@ silently.
 ⚠️ **That record must name a REVISIT TRIGGER — the condition that ends the
 exception — not just the reasoning that opened it.** The reasoning is a
 statement about the deploy *today*; the exception survives the change that
-invalidates it unless something says what that change is. A worked example, from
-`apfp.claude`, which runs this exception deliberately: *"if `pages.yml` ever
-gains a build or test stage, move the retry INSIDE it and drop `Pages` from
-`pages-retry.yml` and its REQUIRED entry."* That sentence is the load-bearing
-half — an exception with no stated end condition is indistinguishable from one
-nobody thought about, which is the failure this rule is actually guarding
-against.
+invalidates it unless something says what that change is. An exception with no
+stated end condition is indistinguishable from one nobody thought about, which
+is the failure this rule is actually guarding against.
+
+⚠️ **AND WHEN THE TRIGGER FIRES, DELETE THE WATCHER — DO NOT NARROW IT.**
+Narrowing leaves a file that passes every check and watches a name that can no
+longer fire.
+
+The worked example is a near-miss, kept in that form because the clean version
+teaches less. `apfp.claude` runs this exception deliberately and wrote the
+revisit trigger this rule asked for — *"if `pages.yml` ever gains a build or
+test stage, move the retry INSIDE it and drop `Pages` from `pages-retry.yml` and
+its REQUIRED entry."* Followed literally, that leaves `pages-retry.yml` watching
+**only `pages-build-deployment`**: a GitHub-managed name that still resolves, is
+allow-listed with a justification, passes every static check, and under
+Actions-source never fires again. **The exemplary revisit trigger manufactured
+the exact artifact the rule above forbids.** It should say *delete
+`pages-retry.yml` and its REQUIRED entry*, not *drop a name from it*.
+
+Note what that shares with the defect in `global.md` that occasioned this
+section — "repoint" where the scaffolding said "add". Neither verb is careless;
+both are locally sensible, and both leave a watcher that satisfies its guard and
+observes nothing. The common cause is that **our tooling can check whether a
+name RESOLVES and nothing checks whether a workflow can still FIRE** — the
+limitation `workflow-ref-guard`'s own scope warning states. Any rule written in
+the language of names inherits that blind spot, so a rule about watchers must
+say what happens to the FILE, not only to the names inside it.
 
 ⚠️ **After a source switch, an unrepointed `pages-retry.yml` is DEAD, not
 dormant — remove it or repoint it under the exception above, and do not leave

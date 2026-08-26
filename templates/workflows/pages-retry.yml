@@ -20,7 +20,17 @@ on:
     # this re-runs the whole watched run, so pointing it at a project-owned
     # deploy replays that workflow's entire build. Actions-source projects build
     # retry into their own deploy workflow instead (Automation 4b).
-    # Why, and the narrow exception for a provably idempotent deploy:
+    #
+    # ⚠️ ACTION ON AN ACTIONS-SOURCE SWITCH — DELETE THIS FILE (or repoint it
+    # under W3's idempotent exception). It is DEAD, not dormant, and nothing
+    # will tell you: 'pages-build-deployment' is GitHub-managed, so the name
+    # still RESOLVES after the switch — W1 passes, workflow-ref-guard passes,
+    # every static check stays green — and it simply stops FIRING. Left in
+    # place it is retry coverage that exists on disk and nowhere else, which is
+    # worse than none. Drop its REQUIRED entry in the same edit.
+    #
+    # Why, and the narrow exception for a provably idempotent deploy (which
+    # also requires a written REVISIT TRIGGER, not just the reasoning):
     # docs/standards/automations.md -> Watcher Rules (W3).
     workflows: [pages-build-deployment]
     types: [completed]

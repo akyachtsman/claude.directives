@@ -50,7 +50,13 @@ Execute in order:
    step, no tier to choose.
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
-   copy these nine workflow files from `claude.directives/templates/workflows/`
+   copy these workflow files from `claude.directives/templates/workflows/`
+   — **nine for a branch-source project, eight for an Actions-source one**:
+   `pages-retry.yml` is BRANCH-SOURCE ONLY and must not be installed on an
+   Actions-source project (see its bullet below; installing it there arms a
+   retry of a rogue unfiltered deploy). Omit its `REQUIRED` entry in the same
+   edit. This is the one file in the set whose installation is conditional —
+   check the project's Pages source before copying
    into `.github/workflows/`:
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages

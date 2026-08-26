@@ -381,7 +381,8 @@ would have checked it never ran, so as far as verification is concerned the
 failure is **silent** — and only an external watcher turns that silence into a
 tracking issue. A `workflow_run` watcher on `types: [completed]` fires on a
 **failed** run as well as a successful one and reads the conclusion, which is why
-repointing restores precisely the coverage the source switch removed.
+**adding** that trigger restores precisely the coverage the source switch
+removed. (Adding — never repointing; see below.)
 
 ⚠️ **Know the bound on that, and do not overclaim it.** `types: [completed]`
 means the watcher sees runs that reach a **terminal state**. A deploy that hangs

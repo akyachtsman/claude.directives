@@ -186,10 +186,19 @@ What `/new-repo` scaffolds in **every** project:
 - `CLAUDE.md` (from `CLAUDE-template.md`) + the five directive URLs + `index.html`
   + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
-- **all nine** standard workflows: `qa.yml`, `qa-live.yml`, `ci-notify.yml`,
-  `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`,
+- the standard workflows — **eight unconditionally**: `qa.yml`, `qa-live.yml`,
+  `ci-notify.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`,
   `qa-response.yml`, `cron-notify.yml` (`keepalive.yml` is NOT installed — it
   pushes to `main`, which the required ruleset refuses)
+- **plus `pages-retry.yml`, and ONLY on a branch-source project.** This is the
+  single exception to "no opt-in modules" above, and it is not a preference:
+  the file watches `pages-build-deployment`, which a **repo visibility flip
+  fires even under Actions-source**, publishing the unfiltered tree — so
+  installing it on an Actions-source project arms a **retry of a rogue
+  unfiltered deploy** (`directives/global.md` → *Hosting & Deployment*;
+  `automations.md` → *Watcher Rules* W3). Consistency loses to a security
+  hazard, and the condition is a fact about the project's Pages source rather
+  than a toggle anyone chooses. Omit its `REQUIRED` entry in the same edit
 - the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job /
   guardrail scripts (`.github/scripts/`: `notify-email.js`, `notify-task.js`,
   `check-contrast.js`, `package.json`)

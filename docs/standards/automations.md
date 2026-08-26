@@ -123,13 +123,19 @@ the language of names inherits that blind spot, so a rule about watchers must
 say what happens to the FILE, not only to the names inside it.
 
 ⚠️ **After a source switch, an unrepointed `pages-retry.yml` is DEAD, not
-dormant — remove it or repoint it under the exception above, and do not leave
-it sitting there.** The template watches `pages-build-deployment` by name. That
-name still *resolves* after the switch (GitHub manages it, so W1 and
-`workflow-ref-guard` both stay green) and simply stops *firing* — a retry that
-looks present, passes every static check, and covers nothing. This is the same
-looks-present-reports-nothing failure W2 describes for the monitor; it reaches
-the retry too, and the guard cannot see it, by its own documented limitation.
+dormant — DELETE it, or repoint it under the exception above.** The template
+watches `pages-build-deployment` by name. That name still *resolves* after the
+switch (GitHub manages it, so W1 and `workflow-ref-guard` both stay green),
+which is why nothing warns you.
+
+⚠️ **The reason is NOT that it goes quiet — that would only be dead weight.**
+Day to day it is inert. But a **repo visibility flip fires the legacy managed
+build even while Actions-source is configured** (`global.md` → *Hosting &
+Deployment*), publishing the **unfiltered tree** — and that build is exactly what
+this watcher names. A retry left installed will faithfully **re-run a rogue
+unfiltered deploy** on failure, turning a one-off exposure into a retried one.
+So this is **not** the monitor case one file over: an unrepointed monitor fails
+to notice, an unrepointed retry **participates**.
 
 ### Known limitation — `ci-notify` and `repository_dispatch`
 

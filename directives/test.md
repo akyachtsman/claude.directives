@@ -380,173 +380,79 @@ concurrently with the next task; batching independent tasks into one suite run i
 the norm, not a shortcut.
 
 ## Sandboxed local runs (agent sessions)
-A test run inside an agent sandbox is **not** a run of your suite. Measured in
-three sandboxes on 2026-08-26 — `claude.trading` 5 local failures / CI all green,
-`claude.insurance` **26 of 36** local failures / CI 24 passed 12 skipped **0
-failed**, and this repo reproducing the causes directly.
+A test run inside an agent sandbox can fail for reasons that have nothing to do
+with your suite. Measured 2026-08-26 in three sandboxes: `claude.trading` 5 local
+failures / CI all green; `claude.insurance` **26 of 36** local failures / CI 24
+passed 12 skipped 0 failed; this repo reproducing causes directly.
 
-- **A local failure that the environment BLOCKED is not evidence about the suite
-  until CI has *executed that scenario* on the same commit.** This applies only
-  to executions the environment prevented. A scenario whose browser launched,
-  whose page rendered real DOM, and whose specific assertion failed **is already
-  evidence** — that is a defect, fix it locally, and do not hand it to CI. A
-  green aggregate run is not arbitration either: `claude.insurance`'s CI read 24 passed **12 skipped** 0 failed,
-  so had their four failing scenarios been among the skips, the green would have
-  proven nothing about them. Confirm each locally-failed scenario **ran** in CI
-  under a comparable project/browser — conditional skips and a narrower CI matrix
-  both defeat this silently.
-- **This does not suspend the local gate** (`global.md` → *Pre-Push Verification*,
-  which says never rely on CI alone). The exception is narrow and must be stated
-  in the PR: everything that *can* execute in the sandbox still has to pass, and
-  only the scenarios blocked by a **named** environmental cause, with the evidence
-  naming it, are deferred to CI. "Sandbox" is not a blanket exemption from running
-  what runs.
+**Two rules, both absolute:**
+
 - **Never weaken a test to make a sandbox run green** — no relaxed assertion, no
   added retry, no skipped case. That converts an environment limit into a
   permanently blinded check: the suite goes green and nothing reports that it
   stopped looking.
-- **SUPPLY the missing thing instead of lowering the bar** (`claude.prop`). The
-  answer to an unreachable external host is a reachable equivalent — start a
-  local static server and point `APP_URL` at it, every assertion intact against
-  the same built tree — not a relaxed assertion. A config that keeps both the real `baseURL` and an
-  `APP_URL` override has this escape built in; one that hardcodes a remote
-  `baseURL` does not, and should gain one. **This solves an unreachable APP
-  HOST, and does not touch a blocked runtime import**: a local server still
-  serves the same built tree, so an absolute CDN module URL in it is still
-  fetched from the blocked host and the app still cannot boot. That case is
-  fixed by vendoring, rewriting, or proxying the import — not by moving the
-  origin. A browser absent from the image is **not** automatically a ceiling —
-  it may be installable, and `ui-suite/action.yml` already installs browsers this
-  way. Measured 2026-08-26, `cdn.playwright.dev` answers from the sandbox (a 400
-  to a bare GET is a response, not a refusal), while the deprecated
-  `playwright.azureedge.net` mirror does not resolve. So do not conclude
-  "unavailable" from "absent".
-
-  **Grade on whether the browser LAUNCHES, never on an install's exit code.**
-  A download that succeeds and cannot start is a ceiling; a dependency step that
-  aborts before downloading is not evidence of one. Record a ceiling only on an
-  observed launch failure, and quote the launch error — that error is what the
-  next session needs, and it is the only thing here that is self-verifying.
-
-  The install ladder itself — which command, in which order, and what to fall
-  back to when dependency setup needs privileges the sandbox lacks — is
-  deliberately **not** specified in prose. Four attempts to state it here
-  produced four different defects, each introduced by the fix for the one before;
-  it is specified with a script and a test in #332.
 - **Never disable TLS verification or unset `HTTPS_PROXY`.** That is not a
   workaround, it is removing the check.
 
-⚠️ **A reachable backend does NOT clear the environment**, and this is the trap
-worth the section. `claude.insurance` saw four scenarios fail to find their own
-UI with Supabase answering `401` in 0.63s — host up, auth simply not supplied.
-The cause was one layer up: the page imports its client at runtime from a CDN
-module URL on `esm.sh`, and **that host is blocked in the sandbox**, so the ES
-module graph never resolves, `main.js` never executes, and the router never
-renders while the page itself serves 200. (Named host-only on purpose: an illustrative
-scheme-plus-ellipsis placeholder gets extracted by the external-link check and
-fails as a dead URL — measured on this PR, twice, the second time in the fix for
-the first.)
+When a scenario genuinely cannot execute here, **supply the missing thing rather
+than lowering the bar** (`claude.prop`): they answered an unreachable host by
+starting a local static server and pointing `APP_URL` at it, every assertion
+intact against the same built tree. Note it fixes an unreachable app *host* and
+does not touch a blocked runtime import — a local server serves the same built
+tree, so an absolute CDN module URL in it still resolves to the blocked host.
+That case needs vendoring, rewriting or proxying the import.
 
-So the cheapest, most obvious diagnostic — *is the backend reachable?* —
-**returns YES precisely when the environment is at fault**, pointing you at your
-own code. For any app loading a dependency from a CDN at runtime, backend
-reachability says nothing about whether the app can boot; that is the default
-shape of a no-build static app.
+### The case worth knowing: a reachable backend proves nothing about boot
 
-**Rule out the environment as a CLASS, not by matching a symptom list.** A
-symptom list is one entry short of reality and reads as complete (the same
-enumerate-vs-derive failure as `refresh-repo.md`'s script exemptions). Check:
-browser binaries present, module/CDN sources reachable, backend reachable — and
-treat the known causes as a growing set. Observed so far: absent browser binary;
-blocked runtime CDN; the bundled browser unable to complete HTTPS through the
-agent proxy; unreachable backend. Note the CDN block is **selective** —
-`raw.githubusercontent.com` answers from the same shell that cannot reach
-`esm.sh`, so "the sandbox has no network" is the wrong model.
+`claude.insurance` had four scenarios fail to find their own UI while **Supabase
+answered `401` in 0.63s** — host up, auth simply not supplied. The cause was one
+layer up: the page imports its client at runtime from a CDN module URL on
+`esm.sh`, that host is blocked here, so the ES module graph never resolves,
+`main.js` never executes and the router never renders — while the page itself
+serves 200.
 
-⚠️ **The cheap first probe: `curl` the same URL from the same sandbox**
-(`claude.prop`). A 200 from `curl` beside a browser failure costs one command and
-exonerates a lot at once — the host is up, DNS resolves, the network path works,
-TLS terminates for a non-browser client.
+So the obvious probe can stay positive while the environment is at fault. It can
+*also* stay positive when the app has a real defect — a JavaScript exception, a
+wrong route, a selector regression. **Backend reachability decides nothing in
+either direction**; for an app that loads a dependency from a CDN at runtime, it
+says nothing about whether the app can boot at all.
 
-**But a `curl`/browser mismatch on ONE host is not by itself proof of
-environment.** Plenty of real defects produce exactly that pair: a resource that
-returns 200 to `curl` but is refused by the browser for missing CORS headers, a
-server regression that only browser-specific TLS or HTTP handling exposes, a
-redirect or CSP the browser honours and `curl` ignores. Treating every mismatch
-as environmental is how this rule would start dismissing genuine application and
-deployment defects — the same over-generalisation this section warns about two
-paragraphs down, so it does not get an exemption here.
+Blocking is **selective**, so "the sandbox has no network" is the wrong model:
 
-**Two conditions, both required, before calling it environment:**
+| target | `curl` |
+|--------|--------|
+| `esm.sh` | `000` — no connection |
+| `raw.githubusercontent.com` | `200` |
+| `cdn.playwright.dev` | `400` — a response, so reachable |
 
-1. the browser-side failure is **connection-level** (the navigation never
-   completes — a reset, a refused connection, a certificate rejection), not an
-   assertion failing against a page that loaded; **and**
-2. a **known-good control host** fails the same way in the same browser. That is
-   what makes it a property of the browser's path rather than of the target.
+For browser-side network failures, `global.md` → *Network Access Playbook* is the
+governing rule and this directive does not restate it.
 
-Measured here 2026-08-26, and the control is the part that generalises it:
+### Recording what your project cannot run here
 
-| target | `curl` | bundled chromium |
-|--------|--------|------------------|
-| a GitHub Pages app | 200 | `net::ERR_CONNECTION_RESET` |
-| `raw.githubusercontent.com` | 200 | `net::ERR_CONNECTION_RESET` |
+Which scenarios can run in a sandbox depends on the app's dependencies, the
+browser inventory, the egress policy and the runner — all of which move.
+**Record the limit in the PROJECT's `CLAUDE.md`, with the date, the causes, and
+what would make it wrong**, so the next session neither re-derives it nor trusts
+it past its expiry.
 
-The second row IS that control, and it is why the conclusion holds here rather
-than being assumed: **the browser fails identically on a host `curl` reaches
-fine, so this is not about the target at all** — the bundled browser has no working HTTPS path to
-*any* external host through the proxy — **in this measured environment, on this
-date.** Two consequences, and both inherit the two conditions above rather than
-replacing them: a browser-side network failure to an external host is
-environmental **once it is connection-level and a known-good control fails with
-it** — never on the mismatch alone, since a CORS, CSP, redirect or
-browser-specific server defect in the target produces the same pair and is a real
-bug; and where those conditions do hold, **a UI suite in that sandbox can only
-run against a LOCAL server.** Re-measure rather than inheriting this conclusion:
-another sandbox may reach some external hosts. Symptoms differ across repos (a certificate/CA complaint in one, a
-connection reset in another) and may be one root or two — do not match on the
-string; the `curl` pair is what decides.
+Two things that repeatedly get this wrong, both measured on this PR:
 
-**Let DURATION tell you where to look first — then read the error, which is what
-actually diagnoses** (`claude.insurance`). These buckets prioritise; they do not
-classify. Every row has an innocent-looking impostor: a uniformly instant run
-also comes from a config, import, or fixture error, and a 200 page that times out
-without the expected DOM also comes from an application exception, a wrong route,
-or a selector regression. Use the row to decide what to open, never to skip
-opening it:
+- **Grade on whether a thing WORKS, not on a cheaper stand-in.** A browser binary
+  present is not a browser that launches; an install that exits 0 is not a browser
+  that launches; a green aggregate CI run is not the scenario having executed
+  (`claude.insurance`'s green read 24 passed **12 skipped** 0 failed — a skipped
+  case and a passing case produce the same green).
+- **Absent is not unavailable.** A browser missing from the image may be
+  installable — `ui-suite/action.yml` installs browsers as a normal step. The
+  install ladder and its failure branches are specified with a script and a test
+  in #332, deliberately not in prose here: four attempts to state it as prose
+  produced four defects, each introduced by the fix for the one before.
 
-| duration | meaning |
-|----------|---------|
-| ~3ms, uniform | nothing launched — check the launch error first (absent binary, bad config, import throw) |
-| times out at the action budget, page 200, no app DOM | nothing booted — check the console and network log first (blocked module, app exception, wrong route) |
-| real elapsed time, real DOM, specific assertion | almost certainly an actual defect — treat it as one |
-
-Three milliseconds is not a test failing, it is a test never starting — which
-tells you to go read the launch error, not which launch error it was.
-
-**Falsify a newly-added bound before suspecting the code.** A timeout or limit
-introduced in the same change is the first thing to suspect and the cheapest
-thing to rule out: disable it, re-run one failing scenario, and see whether the
-failure survives. `claude.insurance` did exactly this with a new `actionTimeout`.
-
-Be precise about what that proves: **the bound is not required to trigger the
-failure — not that the failure pre-existed the change.** Some other edit in the
-same diff can still be the cause. To claim pre-existence you have to run the
-scenario on the parent commit or another known-good baseline. So the check
-narrows the search; it does not end it, and it is never grounds to stop reading
-the rest of your own diff.
-
-**Record the per-app ceiling in the PROJECT's `CLAUDE.md`, not here** — this
-directive ships the method, each project states its own limit with the causes
-named, so the next session does not rediscover it.
-
-**A ceiling is a dated observation, not a standing fact.** It depends on the
-sandbox's browser inventory and egress policy as much as on the app's
-dependencies, and both move: a host gets allowlisted, an image adds a browser. A
-stale ceiling suppresses coverage that is runnable again, and a stale `NONE`
-misleads in the other direction. So record it with **the date, the causes, and
-what would make it wrong** — and re-derive it rather than trusting it whenever
-the sandbox image or the network policy changes.
+Before blaming the code, **falsify any bound you just added** — a timeout or limit
+introduced in the same change is the likeliest culprit and the cheapest to
+eliminate. It proves only that the bound is not required to trigger the failure;
+claiming the failure pre-existed the change needs a run on the parent commit.
 
 ## CI triage
 - `qa.yml` runs on push to `main` and on PRs targeting `main` (branch commits are

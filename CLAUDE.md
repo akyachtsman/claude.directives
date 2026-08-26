@@ -45,7 +45,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
-| `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`) projects copy into `.github/scripts/` |
+| `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `check-ui-viewports.js`) projects copy into `.github/scripts/`. `check-ui-viewports.js` is run here straight from this path by `qa.yml`, so unlike `workflow-ref-guard.py` / `check-job-bounds.py` it has NO byte-identical `.github/scripts/` twin |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
@@ -159,6 +159,11 @@ A directive repo must pass its own CI before it can be trusted downstream.
   a clean-compile check over every tracked `.py`
   (`.github/scripts/check-py-warnings.py` — a guard that warns at compile time
   is a guard that stops running on a future interpreter), and
+  (`check-exports.js`, both directions), the viewport gate on the shipped
+  Playwright config (`check-ui-viewports.js`, plus `check-ui-viewports-cases.js`
+  guarding the gate itself — it IMPORTS the config so Node expands the device
+  spreads; a static read was tried three times and failed twelve ways, every
+  failure silent, #282), job bounds, the workflow-ref guard, and
   a paired-file diff check, plus a warn-only external-link job. It also runs
   `build-logical-map.js --check`, so a committed map that no longer matches
   `EXPORTS.json` fails the build, and `node --check` over the exported JS
@@ -262,6 +267,8 @@ node .github/scripts/check-exports.js            # export boundary: both directi
 node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header)
 python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
+node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic
+(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts) && node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone; the install is a one-time ~2.4s network step (node_modules/ is gitignored, no lockfile written)
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it

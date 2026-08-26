@@ -58,6 +58,17 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   outputDir: '../../../.agent-reports/screenshots',
+  // THIS LIST IS THE ONLY THING THAT DECIDES WHAT WIDTHS THIS APP IS EVER
+  // RENDERED AT. One spec set (tests/app.spec.js) runs against two targets — the
+  // bundled local server in qa.yml, the live URL in qa-live.yml/qa-response.yml —
+  // and both inherit this list; exactly one test sets a viewport of its own (S4,
+  // at 390). There is no second tier to compensate, so trimming this to phone
+  // profiles leaves nothing anywhere rendering the app at laptop width, and CI
+  // stays green while it happens: a viewport never instantiated produces no
+  // failing test. claude.prop's copy of this file lost its laptop and tablet
+  // profiles exactly that way, and nothing reported it.
+  // check-ui-viewports.js (run by the ui-suite composite) now fails the build on
+  // it, by IMPORTING this file rather than reading it as text.
   projects: [
     // Desktop first: global.md requires laptop + tablet + phone coverage, and
     // test.md → Layered UI mandates before/during/after screenshots at

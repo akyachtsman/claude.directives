@@ -55,10 +55,26 @@ Corollaries worth memorizing:
   laptop and tablet profiles exactly that way, and green CI said nothing — a
   viewport never instantiated produces no failing test. Nothing in `/refresh-repo`
   looks at it — not Phase 1.5, which does not walk those paths, and not the
-  session, which never reads this runbook — so this one is YOURS: open the config
-  yourself after a refresh, empty delta included, and check it declares a laptop,
-  a tablet and a phone (`test.md` → *UI coverage gates*). Automating it is #282;
-  until that lands, an unread config is an unchecked one.
+  session, which never reads this runbook. What DOES look is CI: the `ui-suite`
+  composite runs `check-ui-viewports.js` on every UI job, and the job's path
+  filter includes `.github/scripts/ui-tests/`, so any edit to the config fires the
+  gate on that same PR. The gate runs only where a live suite runs, so two holes
+  remain and they are yours. The silent one: a repo with no `index.html` sets
+  `ui=false` and skips the local UI job entirely, taking the gate with it and
+  reporting green. The loud one: `qa-response.yml` skips the composite when
+  `APP_URL` is unset — that job goes red on its own `Require APP_URL` step, so you
+  will hear about it, but the config still went unread on that run. And the gate
+  proves the config declares three width classes; it cannot prove those widths
+  match YOUR breakpoints (`test.md` → *UI coverage gates*). A config whose bands
+  you have never compared against your own CSS is still an unchecked one.
+- **`templates/actions/ui-suite/action.yml` and
+  `templates/scripts/check-ui-viewports.js` propagate TOGETHER.** The composite
+  names the script by path, so a project that takes the new composite without the
+  script fails every UI job at step resolution — not at test time, where it would
+  at least say why. Same shape as `check-job-bounds.py`'s coupling to `qa.yml`
+  (`docs/standards/cicd-setup.md` → *9c-ter — Job bounds guard*, whose install
+  step exists because `qa.yml` already invokes that script by path). Disposition
+  both files in the same `/refresh-repo` pass, or neither.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).

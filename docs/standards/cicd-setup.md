@@ -115,6 +115,25 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/scripts/ui-tests/tests/app.spec.js
 ```
 
+The kit's viewport gate ships alongside it. Install it **with** the `ui-suite`
+composite, not after: the composite names it by path, so an updated composite
+without it fails every UI job at step resolution.
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-viewports.js \
+  -o .github/scripts/check-ui-viewports.js
+```
+
+It reads `UI_TESTS_DIR` (or `--tests-dir`, which the composite passes), so a
+project that moved its test directory needs no edit. It imports
+`playwright.config.js` and fails the build when the `projects` list does not
+declare a laptop, a tablet and a phone (`test.md` → *UI coverage gates*, fifth
+gate). Every failure mode is loud and separately coded — a missing config, a
+throwing config, an absent `node_modules` and zero projects each say so rather
+than passing quiet. Bands default to phone <768 / tablet 768–1023 / laptop
+>=1024 and print on every run; `--tablet-min` / `--laptop-min` override them for
+a project whose breakpoints differ.
+
 Then generate and **commit** the lockfile — required: `qa.yml`, `qa-live.yml`, and
 `qa-response.yml` key setup-node's npm cache to `package-lock.json`, and setup-node
 hard-fails ("Dependencies lock file is not found") without it:
@@ -491,6 +510,7 @@ Required repository variables:
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
+- [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app's login ships a working credential and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)

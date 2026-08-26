@@ -294,8 +294,13 @@ async function detectAndAuth(page, credential) {
     return 'pin-keypad';
   }
 
-  // Heuristic 2: password input
-  const passwordInput = page.locator('input[type=password]').first();
+  // Heuristic 2: password input — `visible=true` BEFORE `.first()`, the same
+  // idiom as detection (passwordGateVisible) and for the same reason: a hidden
+  // responsive copy first in the DOM would otherwise make the attempt skip
+  // this branch and return mechanism 'none' — which no verifier checks — while
+  // detection correctly reports a gate. Attempt and detection must select from
+  // the same set.
+  const passwordInput = page.locator('input[type=password]').locator('visible=true').first();
   if (await passwordInput.isVisible().catch(() => false)) {
     // Email+password gate: fill the identifier BEFORE the password when one was
     // supplied. ANCHORED TO THE PASSWORD'S OWN FORM — a page-scoped
@@ -394,8 +399,10 @@ async function detectAndAuth(page, credential) {
     return 'password-form';
   }
 
-  // Heuristic 3: text input accepting short credential
-  const textInput = page.locator('input[type=text], input:not([type])').first();
+  // Heuristic 3: text input accepting short credential — same visible-first
+  // idiom as heuristic 2, carried proactively: a hidden text input first in
+  // the DOM would silently return 'none' here too.
+  const textInput = page.locator('input[type=text], input:not([type])').locator('visible=true').first();
   if (await textInput.isVisible().catch(() => false)) {
     await textInput.fill(String(credential));
     await textInput.press('Enter');

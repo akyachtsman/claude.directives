@@ -279,6 +279,48 @@ feedback. The subscription is **harness-side and automatic** — no tool call:
 
 ---
 
+## Automation 6 — Cross-Session Messaging (session-to-session, manual)
+
+One session can message another directly: `create_trigger` with the target's
+`persistent_session_id`, then `fire_trigger`, then `delete_trigger`. `ListAgents`
+shows nothing (cloud sessions are not local peers) and `SendMessage` fails, so
+this is the channel. It is written down here because it was not: the procedure
+ran the fleet for a day while existing only inside chat messages, and the version
+in circulation had the defect below.
+
+**Send POKE-ONLY. Never give the trigger a `cron_expression` or a `run_once_at`.**
+A poke-only trigger reports `next_run_at: 0001-01-01T00:00:00Z` and never fires
+on its own, so a missed `delete_trigger` is inert. Give it a `run_once_at` and a
+missed delete becomes a **time bomb**: the scheduled copy lands hours later
+carrying nothing that distinguishes it from a live instruction. Measured
+2026-08-26 — a correction was delivered to a peer *before* the message it
+corrected, and the peer's reasonable worry was that the retracted original would
+still arrive. Under poke-only it cannot. This makes the delete tidiness rather
+than load-bearing, which is the only version of the recipe that is safe by
+construction instead of by discipline.
+
+**A fired trigger can silently fail to deliver, and the return value says so.**
+`fire_trigger` returns `session_id`. Delivered into the persistent target ⇒ that
+value is `cse_` + the TARGET's session id **verbatim**. Anything else ⇒ a fresh
+session ran the prompt and nobody read it. **Compare it against your target
+before assuming delivery**, and re-send on a mismatch.
+
+Measured across six sends between three sessions, with independent confirmation
+from both peers: every matching id was received, every non-matching one was lost
+— including a message a peer confirmed never arriving. Perfectly correlated with
+passing `fire_trigger`'s optional `text` parameter — sends *with* it were lost,
+sends without it landed — so **omit `text`**; put everything in the trigger's own
+prompt. Six samples is strong for the correlation and thin for a mechanism, and
+`learnings.jsonl` records it at that confidence deliberately.
+
+Two consequences worth stating because both were learned the hard way:
+- A lost send is **lost, not delayed**. Do not wait for it to turn up.
+- The receiving session runs that turn possibly **without MCP connector tools**.
+  Write the prompt so local work is still possible, and do not put the caveat in
+  `text` — that is what loses the message.
+
+---
+
 ## Activation Checklist for New Sessions
 
 - [ ] Confirm `ci-monitor.yml` is present and its `workflow_run.workflows` list is correct

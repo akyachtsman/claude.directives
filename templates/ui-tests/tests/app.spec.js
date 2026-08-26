@@ -390,8 +390,15 @@ async function detectAuthGate(page) {
 // gate). One evaluate, two thresholds — factored so the two cannot drift.
 async function textGateSignals(page) {
   return page.evaluate(() => {
-    const inputs = [...document.querySelectorAll('input[type=text], input:not([type])')]
-      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+    // Geometry alone misses visibility:hidden (the box survives), so an SPA
+    // hiding its gate that way still counted here. Computed style added;
+    // opacity:0 deliberately still counts as visible — that is Playwright's own
+    // visibility definition, and this file follows it everywhere.
+    const vis = el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+    };
+    const inputs = [...document.querySelectorAll('input[type=text], input:not([type])')].filter(vis);
     if (inputs.length !== 1) return { single: false, looksAuth: false, controls: 0 };
     const el = inputs[0];
     const ctx = [el.placeholder, el.getAttribute('aria-label'), el.name, el.id,
@@ -415,14 +422,27 @@ async function textGateSignals(page) {
 // of 360, DISMISS ~950s of 1200) — re-derived, not assumed.
 async function expectGateCleared(page, mechanism, gateViewBefore) {
   if (mechanism === 'none') return; // nothing was attempted — nothing to verify
-  // For an attempted TEXT gate, judge with the sparsity cutoff REMOVED (see
-  // textGateSignals): a single auth-ish text input still visible after the
-  // attempt is the same gate, however many Retry/help controls the rejection
-  // revealed. For the other mechanisms detectAuthGate's branches carry no
-  // cutoff, so the general detector is the same test.
-  const t = mechanism === 'text-input' ? await textGateSignals(page) : null;
-  const gateRemains = t ? (t.single && t.looksAuth) : await detectAuthGate(page);
-  if (!gateRemains) return; // cleared — a WINDOW (#302), as stated above
+  // The TEXT-gate detector is DISCOVERY-grade, not proof-grade, in BOTH
+  // directions — established by counterexample, not judgement: a rejection that
+  // reveals a second text input (request-a-new-code email) breaks the
+  // single-input condition toward false-clear, and a hidden-but-boxed input
+  // with auth-ish context breaks it toward false-throw. A signal that fails
+  // both ways does not get to throw. So mechanism 'text-input' attaches an
+  // 'auth-unverified' diagnostic and continues — its loud verdict arrives with
+  // directives#302's per-project condition, not from a wider heuristic. The
+  // PIN and password verdicts stand: their signals are element-kind checks
+  // under Playwright's real visibility, which review did not break.
+  if (mechanism === 'text-input') {
+    test.info().attach('auth-unverified', {
+      body: JSON.stringify({
+        mechanism,
+        note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. directives#302 tracks the per-project condition that verifies this properly.',
+      }, null, 2),
+      contentType: 'application/json',
+    });
+    return;
+  }
+  if (!(await detectAuthGate(page))) return; // cleared — a WINDOW (#302), as stated above
   // THREE versions of a "did login actually succeed" heuristic died in review
   // before this one: (1) any remaining gate fails — false red on an app whose
   // post-login view carries a password field; (2) changed view passes — a
@@ -664,16 +684,23 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // that renders late is never swept, so a broken control can leave S3 green by
   // arriving after the settle. Measurement, not overhead.
   await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
-  // Authenticate if we have a credential; if there's a real auth gate but no credential,
-  // skip — sweeping the login screen would fire spurious PIN/password attempts and 401/403s
-  // don't block, so the job could "pass" without reaching app content. A public app with
-  // no gate falls through and is swept normally.
-  if (AUTH_CREDENTIAL) {
+  // Authenticate if we have a credential AND a real gate is present; if there's
+  // a gate but no credential, skip — sweeping the login screen would fire
+  // spurious PIN/password attempts and 401/403s don't block, so the job could
+  // "pass" without reaching app content. A public app with no gate falls
+  // through and is swept normally — which requires the detectAuthGate() guard
+  // S4 and gotoAndAuth() already carry: unguarded, detectAndAuth's text-input
+  // fallback typed the credential into a public page's search box, and the
+  // post-attempt verdict then read that same search box plus a "Log in" header
+  // as a retained gate, failing S3 on an app with no login screen at all. The
+  // old comment PROMISED the fall-through; the guard is what delivers it.
+  const s3Gated = await detectAuthGate(page);
+  if (AUTH_CREDENTIAL && s3Gated) {
     const gateViewBefore = await viewSignature(page);
     const mechanism = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
     await expectGateCleared(page, mechanism, gateViewBefore);
-  } else if (await detectAuthGate(page)) {
+  } else if (s3Gated) {
     test.skip(true, 'Auth gate present but no credential — skipping sweep (would only exercise the login screen)');
   }
 
@@ -1009,7 +1036,12 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       // Background, Returns and Homepage, silently excluding legitimate
       // drill-down entry points. The arrow glyphs sit OUTSIDE the \b group —
       // they are not word characters, so \b around them matches nothing.
-      if (/\b(back|return|home)\b|[←‹◀]/i.test(el.label)) { excludedAsBack++; continue; }
+      // Underscores are normalized to spaces FIRST: icon-font ligature text
+      // ("arrow_back", "keyboard_return") is what discoverElements records for
+      // a <span class="material-icons"> back button, and underscore is a word
+      // character, so \bback\b alone would let NAV click Back while drilling
+      // and walk a reversed trail. "Backup" has no underscore and stays allowed.
+      if (/\b(back|return|home)\b|[←‹◀]/i.test(el.label.replace(/_/g, ' '))) { excludedAsBack++; continue; }
       if (attempts >= ATTEMPT_CAP) { capExhausted = true; break; }
       try {
         const loc = el.id ? page.locator(`[id=${JSON.stringify(el.id)}]`) : page.locator(el.selector).nth(el.index);

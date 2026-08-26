@@ -316,10 +316,26 @@ both trigger on `page_build`, which fires only for **branch-source** builds
 (`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
 *Automation 4b — Pages Deploy Retry*). An Actions-source repo
 keeps the workflow files and gets no runs from them — monitoring that looks
-present and reports nothing, which is worse than none. The post-publish
-verification above is the replacement, not an extra: put the 200/404 assertions
-**inside the deploy workflow** so a bad filter fails the run that produced it,
-and do not rely on the monitors to notice.
+present and reports nothing, which is worse than none. **Repoint the monitor;
+do NOT repoint the retry.** `docs/standards/automations.md` → *Watcher Rules*
+(W2, W3) carries the table and the reasoning: `pages-monitor.yml` takes a
+`workflow_run` trigger naming your own deploy workflow (its file header ships the
+snippet), while `pages-retry.yml` must not, because it re-runs the **whole**
+watched run and would replay your entire build — an Actions-source project builds
+retry into its own deploy workflow instead (*Automation 4b*).
+
+⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
+monitor — they catch different failures, and swapping one for the other loses
+coverage silently.** Put the 200/404 assertions **inside the deploy workflow**, where
+a bad filter fails the run that produced it. But a deploy that fails *outright*
+never reaches its own assertions: the workflow did not finish, so nothing runs
+and nothing reports — **silence is the failure mode**, and only an external
+watcher converts that silence into a tracking issue. A `workflow_run` watcher on
+`types: [completed]` fires on a failed run too and reads the conclusion, which is
+why repointing restores precisely the coverage the source switch removed.
+*(Raised by `apfp.claude`, whose Pages incident prompted this whole section: the
+earlier wording here made the verification the monitor's replacement, which would
+have retired the only watcher that can see a deploy that never finished.)*
 
 *Written from an incident: on 2026-08-18 a repo's internal docs were public for
 ~18 minutes on exactly this path. The rule as it stood would have sent a session

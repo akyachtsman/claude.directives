@@ -298,6 +298,16 @@ node .github/scripts/check-repo-map-ui.js                    # when the map chan
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json or the map, regenerate first: node .github/scripts/build-logical-map.js
 ```
+⚠️ **RUN THE GATE AFTER `git add`, NOT BEFORE — a NEW file is invisible to it
+until staged.** `check-exports`, `check-py-warnings` and `check-claims --derive`
+all enumerate via `git ls-files`, which does not list untracked paths. So a gate
+run on a working tree containing a brand-new file **checks everything except the
+thing you just added**, and reports OK. Measured 2026-08-26 on #325: the gate
+passed 14 checks with `templates/scripts/check-py-warnings.py` untracked, and
+`check-exports` failed on that exact file in CI one minute later. This is the
+fail-open family (#323) inside the gate itself — a pass and a did-not-look are
+the same output. Stage first, then gate.
+
 Confirm `git status` shows no unintended changes. If any check fails, fix it
 before pushing rather than pushing and fixing on the PR. The Playwright UI
 check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a

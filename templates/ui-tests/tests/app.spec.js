@@ -406,7 +406,24 @@ async function detectAndAuth(page, credential) {
         } else {
           // querySelectorAll on the joined union returns document order, so
           // nearest() sees one proximity-sorted candidate pool.
-          pick = nearest(candsOf(sels.join(', ')));
+          // ACCESSIBLE-NAME candidates join the union: a formless gate may
+          // label its identifier via <label for> or aria-labelledby while its
+          // raw attributes carry generated ids — the accessible name is then
+          // the only place "Email" appears, and no attribute selector can see
+          // it. Same email/user/login vocabulary as the SEMANTIC rung.
+          const named = [...scope.querySelectorAll(':is(input[type=text], input:not([type]))')]
+            .filter(el => vis(el) && editable(el))
+            .filter(el => {
+              const rootNode = el.getRootNode();
+              const byId = id => (rootNode.getElementById ? rootNode : document).getElementById(id)?.textContent || '';
+              const labelledby = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(byId).join(' ');
+              const labels = el.labels ? [...el.labels].map(l => l.textContent || '').join(' ') : '';
+              return /email|user|login/i.test(`${labelledby} ${labels}`);
+            });
+          const pool = [...new Set([...candsOf(sels.join(', ')), ...named])];
+          pool.sort((a, b) => a === b ? 0
+            : (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+          pick = nearest(pool);
         }
         if (!pick) return false;
         pick.setAttribute('data-uitests-identifier', '');
@@ -1150,7 +1167,11 @@ function backControlAll(page) {
     'button:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), a:text-matches("\\bback\\b(?![\\s-]*up\\b)", "i"), ' +
     'button:has-text("←"), a:has-text("←")'
   ).or(page.getByRole('button', { name: BACK_NAME }))
-   .or(page.getByRole('link', { name: BACK_NAME }));
+   .or(page.getByRole('link', { name: BACK_NAME }))
+   // An anchor WITHOUT href has no link role, so the role arms cannot see
+   // <a aria-label="Back" onclick=…> — yet discoverElements admits it via
+   // [onclick] and it is a real back affordance. Label∩anchor covers it.
+   .or(page.getByLabel(BACK_NAME).and(page.locator('a')));
 }
 
 // ROLE + ACCESSIBLE NAME are the two semantics every earlier form of the
@@ -1220,6 +1241,8 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
   // claiming every attempt produced "no view change" would point the reader at
   // fixture data or excluded labels instead of the navigation that happened.
   let viewChangedNoBack = 0;
+  let clickFailed = 0;
+  const clickFailedLabels = [];
   // Tracked separately from the skip branch below, which only runs when the
   // traversal found NOTHING. If an earlier level drilled in successfully and a
   // later one exhausts the cap, that branch is bypassed entirely — the test
@@ -1269,7 +1292,17 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
         // string-side reimplementation missed).
         if (await loc.and(backControlAll(page)).count().catch(() => 0) > 0) { excludedAsBack++; continue; }
         attempts++;
-        await loc.click({ timeout: 3000 });
+        // A failed click (overlay interception, detach, timeout) is its own
+        // outcome, never folded into "produced no view change" — an occluded
+        // drill control misreported as inert fixture data sends the reader to
+        // the wrong diagnosis.
+        try {
+          await loc.click({ timeout: 3000 });
+        } catch {
+          clickFailed++;
+          if (clickFailedLabels.length < 5) clickFailedLabels.push(el.label || el.ariaLabel || `${el.selector}#${el.index}`);
+          continue;
+        }
         await page.waitForTimeout(800);
         await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
       } catch { continue; }
@@ -1309,9 +1342,12 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
       ? `Stopped after ${ATTEMPT_CAP} candidate attempts without finding a drill-in — the back-flow invariant was NOT evaluated. This is a budget outcome, not evidence the app lacks drill-down: raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`
       : `No multi-level drill-down with an in-app back control found — back-flow invariant N/A. ` +
         `(${candidatesSeen} candidates seen, ${excludedAsBack} excluded as back/home controls, ${attempts} tried: ` +
-        `${viewChangedNoBack} changed the view without revealing a back control, the rest produced no view change.) ` +
+        `${viewChangedNoBack} changed the view without revealing a back control, ${clickFailed} clicks failed` +
+        (clickFailed ? ` [${clickFailedLabels.join(', ')}]` : '') +
+        `, the rest produced no view change.) ` +
         `If exclusions are nonzero, check those labels before trusting the N/A; if view changes without a back control ` +
-        `are nonzero, the app navigates but backControl() did not recognise its back affordance; if the signed-in ` +
+        `are nonzero, the app navigates but backControl() did not recognise its back affordance; if clicks failed, ` +
+        `an overlay may be occluding drill controls — not inert fixture data; if the signed-in ` +
         `fixture seeds no rows, there may be nothing to drill into — a coverage gap, not an exercised invariant.`);
   }
 

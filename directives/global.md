@@ -320,19 +320,32 @@ present and reports nothing, which is worse than none. **Repoint the monitor;
 do NOT repoint the retry.** `docs/standards/automations.md` → *Watcher Rules*
 (W2, W3) carries the table and the reasoning: `pages-monitor.yml` takes a
 `workflow_run` trigger naming your own deploy workflow (its file header ships the
-snippet), while `pages-retry.yml` must not, because it re-runs the **whole**
-watched run and would replay your entire build — an Actions-source project builds
-retry into its own deploy workflow instead (*Automation 4b*).
+snippet), while `pages-retry.yml` must not **by default**, because it re-runs the
+**whole** watched run and would replay your entire build — an Actions-source
+project builds retry into its own deploy workflow instead (*Automation 4b*). W3
+carries one narrow exception and this rule does not override it: a project MAY
+extend the retry anyway **if its deploy is genuinely idempotent** — no build, no
+compile, no tests, same commit in and same tree out — provided it records that
+reasoning in its own `CLAUDE.md`, which routes the difference through
+`/refresh-repo`'s documented-customization path instead of preserving it
+silently.
 
 ⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
 monitor — they catch different failures, and swapping one for the other loses
 coverage silently.** Put the 200/404 assertions **inside the deploy workflow**, where
-a bad filter fails the run that produced it. But a deploy that fails *outright*
-never reaches its own assertions: the workflow did not finish, so nothing runs
-and nothing reports — **silence is the failure mode**, and only an external
-watcher converts that silence into a tracking issue. A `workflow_run` watcher on
-`types: [completed]` fires on a failed run too and reads the conclusion, which is
-why repointing restores precisely the coverage the source switch removed.
+a bad filter fails the run that produced it. But a deploy that **fails before
+reaching its own assertions** reports nothing about the live site: the steps that
+would have checked it never ran, so as far as verification is concerned the
+failure is **silent** — and only an external watcher turns that silence into a
+tracking issue. A `workflow_run` watcher on `types: [completed]` fires on a
+**failed** run as well as a successful one and reads the conclusion, which is why
+repointing restores precisely the coverage the source switch removed.
+
+⚠️ **Know the bound on that, and do not overclaim it.** `types: [completed]`
+means the watcher sees runs that reach a **terminal state**. A deploy that hangs
+and never completes emits no `workflow_run` event either, so it is covered by
+**neither** the in-run assertions nor the watcher — catching that needs timeout
+or staleness monitoring, which is a third thing and not what either of these is.
 *(Raised by `apfp.claude`, whose Pages incident prompted this whole section: the
 earlier wording here made the verification the monitor's replacement, which would
 have retired the only watcher that can see a deploy that never finished.)*

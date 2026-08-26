@@ -323,15 +323,31 @@ you are about to install**, which by definition the installed copy does not yet
 mention.
 
 So the input is the fetched upstream text, using the same `$raw` this command
-already establishes, over the caller files **in this refresh's delta** (not a
-fixed list — that is the mistake one level up):
+already establishes, over **every caller this refresh INSTALLS** — not a fixed
+list (that is the mistake one level up), and **not only the changed ones**:
+
+⚠️ **The installed set is WIDER than the delta, and the gap is exactly where
+#321 lives.** The composites row above installs `templates/actions/*/action.yml`
+**with any qa workflow update**, so a refresh whose delta touches only `qa.yml`
+still installs an *unchanged* `ui-suite/action.yml` — and `ui-suite` is the only
+caller that names `check-ui-viewports.js`. Scope the derivation to the delta and
+that script is never derived, on a project where it is absent, and every UI job
+dies at step resolution. **That is #321 again, reproduced by the command written
+to prevent it.**
+
+**This PR's own delta is the worked case**, which is how it was caught: it
+changes `templates/workflows/qa.yml` and does not touch
+`templates/actions/ui-suite/action.yml`.
+
+So: **changed callers ∪ callers co-installed unchanged by the rules above.**
 
 ```bash
 repo="akyachtsman/claude.directives"
 head="…the SHA Phase 2 classified…"   # NOT main — that ref moves under you
 raw="https://raw.githubusercontent.com/$repo/$head"
-callers="…the templates/workflows/*.yml and templates/actions/*/action.yml
-         paths this refresh is installing…"
+callers="…EVERY templates/workflows/*.yml and templates/actions/*/action.yml
+         path this refresh INSTALLS — the changed ones AND the ones
+         co-installed unchanged by the rules above…"
 
 buf=$(mktemp)
 for c in $callers; do
@@ -377,7 +393,7 @@ lands, which adds `check-py-warnings.py` to `qa.yml`. That is the derivation
 working: it reports what the callers you are installing actually reference, not
 what a list-writer remembered. **The output is never the rule.**
 
-⚠️ **This command has now failed FOUR ways, every one silent, and the history
+⚠️ **This command has now failed FIVE ways, every one silent, and the history
 is the argument for the shape above.** None were hypothetical:
 
 1. Written in the table cell with its pipes escaped for markdown — `\|` in
@@ -391,8 +407,13 @@ is the argument for the shape above.** None were hypothetical:
    check and silently dropped the scripts only that caller names.
 4. Asserted the result must be non-empty — which **fails closed** on a
    legitimate delta whose only changed caller invokes no script.
+5. Scoped the input to the refresh's **delta** rather than to everything it
+   **installs** — so a delta touching only `qa.yml` never derives
+   `check-ui-viewports.js`, because the caller that names it
+   (`ui-suite/action.yml`) is co-installed *unchanged*. #321 exactly, by the
+   command written to prevent it. Caught on this PR's own delta.
 
-Three of the four came from *fixing* the one before it. A derivation that fails
+Four of the five came from *fixing* the one before it. A derivation that fails
 open is strictly worse than the hand-list it replaced, because a hand-list at
 least tells you what somebody once believed; and one that fails closed gets
 muted, which returns it to failing open by another route. **Check the fetch,

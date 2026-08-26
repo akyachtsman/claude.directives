@@ -87,14 +87,33 @@ tablet (iPad), and phone (iPhone/Android). Design responsive-first:
   zoom on focus).
 
 ## Accessibility
-Non-negotiable, independent of the chosen look — enforced per-project by the
-contrast guardrail (`templates/scripts/check-contrast.js`, run in CI against
-`styles/tokens.css`):
+Non-negotiable, independent of the chosen look. A per-project contrast guardrail
+(`templates/scripts/check-contrast.js`, run in CI against `styles/tokens.css`)
+checks part of this — see the limits below before treating a green as proof:
 - **WCAG AA contrast:** normal text ≥ 4.5:1, large/icon ≥ 3.0:1
 - Visible keyboard focus: pair `:hover` with `:focus-visible`
 - Honor `prefers-reduced-motion`
 - Use `textContent` for DOM text from any backend/user input — never `innerHTML`;
   re-audit sinks when a value becomes user-editable (both per `global.md`)
+
+**The contrast guardrail is a floor, not a coverage report — read its pair list
+against your own token roles.** It measures a hand-written list of token pairs,
+which encodes the roles those tokens are *assumed* to play. Where your project
+gives a token a different role the green means nothing and looks exactly like a
+real pass. Measured downstream: a `--color-danger` used as a hover *background*
+under a hard-coded `#fff` scored 17.30 and 18.50 "OK" while the delete control
+rendered white-on-white; a `--color-accent` checked at the 3.0 large-text floor
+certified 3.54 "OK" for 12-13px labels that all fail AA. Pairs the list does not
+name are never measured at all — a chip at 4.32:1, 11px bold, shipped visible on
+a dashboard. So, per project: (1) read the pair list in `check-contrast.js` and
+confirm each token really plays the role assumed; (2) remember WCAG's large-text
+floor is 3.0 only at ≥18.66px bold or ≥24px — anything smaller needs 4.5, so
+check accent-coloured small text by hand; (3) as a second pass, derive pairs from
+your `styles/components.css` — every rule declaring both a `color:` and a
+`background:` from tokens — which catches combinations no hand-written list
+names. That derivation is also incomplete: it cannot see text that sets a colour
+and inherits its background. Only resolving each element's effective background
+through the cascade would be complete, and no tool here does that.
 
 ## Motion
 - Keep transitions short and calm (≈0.15s ease is a good default)

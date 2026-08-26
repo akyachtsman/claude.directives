@@ -4,6 +4,43 @@
 // .github/scripts/ and run it from qa.yml. If styles/tokens.css doesn't exist yet
 // (before /design-intake), it prints a notice and exits 0 — safe in a fresh repo.
 // CommonJS (matches the other .github/scripts/ helpers, e.g. notify-email.js).
+//
+// ── What a green run does NOT prove ─────────────────────────────────────────
+// The pair list below is a FLOOR, not a coverage report. It encodes the roles
+// these tokens are ASSUMED to play; it cannot see what your project renders.
+// Where the assumption is wrong this gate certifies a broken state, and that
+// certification is indistinguishable from a correct one. Three ways, all
+// measured downstream (claude.prop, 2026-08-23):
+//   1. WRONG ROLE. --color-danger is checked as a FOREGROUND over page
+//      surfaces. A project whose only use of it is a hover BACKGROUND under a
+//      hard-coded #fff agrees with these numbers only while surfaces stay light
+//      — contrast is symmetric. Forced to a dark theme with --color-danger:
+//      #fff, this script printed 17.30 and 18.50, "OK", 9/9, exit 0, while the
+//      delete control rendered white-on-white.
+//   2. WRONG FLOOR. accent/surface is checked at AA_LARGE (3.0). A project
+//      using --color-accent for 12-13px labels gets 3.54 certified "OK" while
+//      every one of those labels fails AA. Our own starter kit is one re-theme
+//      from this: templates/styles/components.css renders .btn-secondary:hover
+//      and :focus-visible in --color-accent over --color-surface at 15px/500 —
+//      normal text, so the real floor is 4.5 — and only the 3.0 pair below
+//      measures that combination. (The starter palette is 5.75, so it passes
+//      today; nothing here would notice if it stopped.)
+//   3. NOT LISTED, NOT MEASURED. Downstream, a chip shipped --color-accent on
+//      --color-accent-light at 4.32:1, 11px bold, visible on the dashboard,
+//      failing AA the whole time. No hand-written pair described it, and none
+//      here does either.
+// DERIVING the pairs from components.css instead — every rule declaring both a
+// color: and a background: from tokens — catches (3), and is also incomplete:
+// it cannot see text that sets a colour and INHERITS its background, which is
+// every selector in (2). It also misses what enumeration catches (.btn:hover
+// declares a background and no colour). Neither method subsumes the other. A
+// complete check resolves each element's EFFECTIVE background through the
+// cascade — a different program from this one, and nobody has written it.
+// So: "9/9 OK" means the nine listed pairs passed. Before trusting it, confirm
+// your token roles match the ones assumed below, derive your own pairs from
+// your components.css, and check by hand any text using --color-accent below
+// 18.66px (or below 24px when not bold).
+// ────────────────────────────────────────────────────────────────────────────
 const { readFileSync, existsSync, readdirSync } = require('fs');
 const { join } = require('path');
 
@@ -71,14 +108,45 @@ for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*(#[0-9a-fA-F]+)\s*;/g)) {
     console.error(`check-contrast: ${name} has an invalid hex value "${hex}" (expected 3, 4, 6, or 8 digits)`);
     process.exit(1);
   }
+  // ── Reject alpha, never drop it ────────────────────────────────────────────
+  // A translucent colour has no contrast ratio of its own: it depends on
+  // whatever is painted behind it at the point of use, which this script cannot
+  // know. lum() used to drop the channel unconditionally, which scored a fully
+  // transparent --color-on-accent: #FFFFFF00 as opaque white — 5.09, reported
+  // OK, 9/9, exit 0, on button text that is invisible (claude.prop, 2026-08-23).
+  // Compositing instead needs a background we do not have; inventing one is the
+  // same confident-wrong-number defect pointed the other way. Refusing the input
+  // is the only honest option, so this is fatal like the malformed-hex check
+  // above, not a measurement failure.
+  // Fully-opaque alpha (FF / F) is exempt: dropping THAT channel is exact rather
+  // than an approximation, and design tools export #RRGGBBFF routinely.
+  const digits = hex.slice(1);
+  const alpha = digits.length === 4 ? digits[3].toLowerCase()
+              : digits.length === 8 ? digits.slice(6).toLowerCase()
+              : null;
+  if (alpha !== null && alpha !== 'f' && alpha !== 'ff') {
+    console.error(`check-contrast: ${name} carries an alpha channel ("${hex}") and cannot be measured.`);
+    console.error('  A translucent colour has no contrast ratio of its own — it depends on');
+    console.error('  whatever is painted behind it where it is used, and this script cannot');
+    console.error('  know that. Dropping the channel scored a fully transparent #FFFFFF00 as');
+    console.error('  opaque white: 5.09, "OK", on invisible text.');
+    console.error('  Fix: declare an opaque #hex (or #RRGGBBFF) here. If the colour is purely');
+    console.error('  decorative — a scrim or overlay that is never a text foreground and never');
+    console.error('  a text background — declare it in rgba()/hsl() form, which this guardrail');
+    console.error('  does not parse.');
+    process.exit(1);
+  }
   t[name] = hex;
 }
 
 const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
 function lum(hex) {
   let h = hex.replace('#', '');
-  // The token regex admits #RGBA / #RRGGBBAA — drop the alpha channel so the
-  // channel pairs below stay aligned (alpha-blended contrast isn't computed here).
+  // Only FULLY OPAQUE alpha reaches here: the capture loop above rejects any
+  // token whose alpha is not FF/F, so dropping the channel is exact, not an
+  // approximation. That guard is the only thing keeping this true — a future
+  // caller that reaches lum() without passing through it reintroduces the bug
+  // where #FFFFFF00 scored as opaque white and certified invisible text.
   if (h.length === 4) h = h.slice(0, 3);
   if (h.length === 8) h = h.slice(0, 6);
   if (h.length === 3) h = h.split('').map((x) => x + x).join('');
@@ -136,7 +204,12 @@ if (evaluated < pairs.length) {
   exitCode = 1;
   continue;
 }
-console.log(failed ? `check-contrast: FAIL — fix ${FILE}` : `check-contrast: OK — ${evaluated}/${pairs.length} pairs meet WCAG AA in ${FILE}`);
+// "OK" is scoped deliberately: the listed pairs passed. It is NOT a claim about
+// the file — the pair list cannot see the roles this project actually gives its
+// tokens (see the header). An unqualified "meets WCAG AA" in a CI log is a
+// completeness this script has no basis for.
+console.log(failed ? `check-contrast: FAIL — fix ${FILE}` : `check-contrast: OK — ${evaluated}/${pairs.length} assumed pairs meet WCAG AA in ${FILE}`);
+if (!failed) console.log('        a floor, not a coverage report: pairs not listed, and tokens used in a role other than the one assumed, are NOT measured — read this script\'s header before trusting the count');
 if (failed) exitCode = 1;
 }
 process.exit(exitCode);

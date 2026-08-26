@@ -38,6 +38,13 @@ text.
 ## 3. Verify & gate
 - Run the contrast guardrail against the new tokens
   (`node .github/scripts/check-contrast.js`); fix any pair below AA.
+- **Then read its pair list against the roles this project actually gives its
+  tokens.** It measures assumed roles, so a token used the other way round — an
+  accent that is small text, a danger colour that is a background — passes
+  vacuously and the green looks identical to a real one. Also check by hand any
+  accent-coloured text below 18.66px bold / 24px regular: the guardrail holds
+  accent/surface only to the 3.0 large-text floor (`design.md` →
+  *Accessibility*).
 - **Present the reference page for sign-off** (deploy to Pages or attach a
   screenshot) — this is the look-gate. Don't build out until the user approves the
   look; the look is cheapest to fix on one page.

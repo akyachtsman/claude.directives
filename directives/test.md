@@ -68,6 +68,24 @@ Execute these before any task work:
   the auth-gated scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
+- **A scenario that can skip needs a budget sized for the day it stops
+  skipping.** Its observed runtime is zero, every run, which reads exactly like
+  "fast" to anyone sizing from history — so the scenario with the least evidence
+  behind its budget is the one that looks safest. Treat "it has always been
+  fast" as **inadmissible** where the observed runs are skips: that is zero data
+  presented as reassurance, the same shape as a green that verified nothing.
+  Where a scenario can `test.skip()` on a missing precondition, give it an
+  explicit budget sized for its FIRST REAL run and name the unlocking
+  precondition in the comment beside it; and when a precondition is newly
+  satisfied in a repo — a credential set, a page declared, a flag flipped —
+  re-read that budget **before** the first run, not after it times out.
+  `claude.insurance`, 2026-08-25: their auth scenario carried no
+  `test.setTimeout` and inherited the 30s config default, ran for the first time
+  ever the hour a credential was set, and measured 11.0–12.1s across four
+  profiles — the thinnest margin in their suite, on the one scenario nobody had
+  ever timed. Note what else lands that day: a scenario's first real run tends to
+  exercise several never-exercised things at once, so an unbudgeted timeout there
+  may be a newly-loud gate check rather than a cost problem.
 - **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` one is
   invoked exactly **once**. Playwright adopts the Promise it returns, and whatever
   that Promise settles to — `false` included — ends the wait. It never polls

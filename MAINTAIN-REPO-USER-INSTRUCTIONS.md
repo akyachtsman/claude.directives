@@ -65,6 +65,43 @@ Corollaries worth memorizing:
   Then re-save environments (install half) AND run `/refresh-repo` per project
   (enablement half). Shipping one half leaves projects installed-but-not-enabled
   or enabled-but-not-installed.
+- **A validator and the rule it enforces arrive in the same pull, so first
+  adoption surfaces every drift at once.** `UI_SUITE_FLOOR` lives inside
+  `check-job-bounds.py`: a project that does not carry that script is not checked
+  against the floor at all, so its bounds drift silently and then fail the build
+  on the pull that adopts the script. That is **adoption, not regression** — the
+  repo did nothing wrong on the day it drifted, it finds out on the day it
+  adopts. So adopting a validator for the first time means **auditing and fixing
+  what it now checks IN THE SAME CHANGE**: script and callers together, never
+  script first. `claude.insurance` did exactly that on 2026-08-25 —
+  `check-job-bounds.py` plus both composite callers 40→120 in one change, then
+  the kit, then the conventions. Their 40s were verbatim template adoptions, so
+  two upstream raises (40→60, then 60→120) had reached them as a red check
+  instead of a refresh. That is the Downstream-Finding Loop below failing, not a
+  project drifting.
+- **Record the pointer, not the value.** A number you own is a **record**; a
+  number someone else owns is an **authority**. Cache the first with a date and
+  provenance — `apfp.claude`'s 16.2–17.0min and `claude.trading`'s 30m35s are
+  correctly cached in our own bound comments, because they are observations.
+  Never cache someone else's THRESHOLD: downstream records "audit
+  `timeout-minutes` against the floor in `check-job-bounds.py` upstream on every
+  refresh", never the number, because a cached `120` is confidently wrong the day
+  the floor moves, in a file that reads as authoritative. **Where the config
+  format forces the literal** — Actions `timeout-minutes` takes no `${{ }}`, no
+  expression and no include — cache the value and put the pointer in the comment
+  beside it, naming the upstream source. The shipped qa workflows already have
+  that shape; it was the convention's practice before it was its text.
+  (Rules 1–2 `claude.prop`, the forced-literal exception `claude.insurance`,
+  both 2026-08-25.)
+- **A temporary prohibition caused by a template defect travels IN the
+  template.** "Do not do X until the upstream fix lands" is true today and false
+  the day it merges, and nothing downstream watches our tracker — so a copy of it
+  in four `CLAUDE.md` files cannot expire itself and is read as current six weeks
+  later. Put the warning as a comment at the exact line where someone would act,
+  naming the issue, and let **the PR that fixes the defect delete the warning** —
+  one diff, so the prohibition cannot outlive its truth. Where a downstream note
+  is still wanted in the interim, record the CONDITION with a pointer and an
+  explicit removal trigger, never the bare instruction.
 
 ## HUMAN STEPS — after every upstream merge
 
@@ -94,7 +131,8 @@ moves the rule server-side, where no shell form evades it.
 1. Name it (e.g. `main protection`); **Enforcement status: Active**.
 2. **Target branches → Add target → Include default branch.**
 3. Tick **Restrict deletions**, **Block force pushes**, and **Require a pull
-   request before merging**.
+   request before merging** — and inside that last rule also tick **Require
+   conversation resolution before merging**.
 4. Inside that last rule set **Required approvals to `0`.** GitHub defaults it
    to 1, and at 1 every agent PR waits forever for a reviewer who does not
    exist — `git.md` → *Conditional Auto-Merge on Green* has sessions merge their
@@ -105,6 +143,22 @@ moves the rule server-side, where no shell form evades it.
 6. Leave **Require status checks** unchecked. It pins a check by NAME, so a
    renamed workflow silently blocks every merge; sessions already verify CI
    green before merging and `ci-monitor` catches failures independently.
+
+**Why conversation resolution is on that list (owner ruling, 2026-08-26).**
+`git.md`'s merge gates include *no unresolved review threads*, and until this
+rule that gate had no mechanism at all — it was satisfied by an agent remembering
+to make one call, the thread read is GraphQL, and it fails **exactly when** the
+pool is empty, while the `codex-flagged` label is REST and stays readable at that
+same moment. The cheap wrong path was always available precisely when the correct
+one was not, which is why a stronger warning could not fix it: `claude.prop`
+merged with 5 of 9 threads unresolved on 2026-08-23 having checked and reported
+the other three gates. The ruleset moves that one server-side, where no session
+can forget it and no quota can block it. Note what you will NOT see: nothing
+announces that the rule is in force, and neither probe below tests it (both would
+need a second actor to leave a review thread). The first evidence is an ordinary
+merge refused as blocked with every other gate green — until you have seen one in
+a repo, sessions there still treat the thread gate as theirs to check
+(`directives/git.md` → *Repo-settings preflight*).
 
 **The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
 with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after

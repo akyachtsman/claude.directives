@@ -60,6 +60,19 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/actions/ui-suite/action.yml
 ```
 
+⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
+Actions cache SAVES are branch-scoped; RESTORES are not scoped the same way. A
+`workflow_run`-triggered job can READ a key it was denied WRITING — measured in
+`claude.insurance` on 2026-08-25 (run 32897692210), where a `qa-live` run
+restored the exact key a manual `workflow_dispatch` had written two days and
+three runs earlier. So narrow any statement of the limit to **saves**;
+"`workflow_run` can't use the cache" is wrong. It changes nothing in this
+procedure and there is deliberately **no manual warming step** here: the
+cache-hit path still runs `install-deps`, apt dominates it (`claude.prop`
+measured 114 MB of apt fetched on two runs with both caches hit), and warming
+bought ~15s. The measurement and its provenance live in one place — the
+composite's own comment at the cache step.
+
 Event-driven QA dispatch hook — **part of the standard set**, so
 `ci-monitor.yml` and `ci-notify.yml` ship watching it. Lets sessions and
 automations trigger QA via `repository_dispatch`:
@@ -293,7 +306,13 @@ same in every repo:
    - **ENFORCED** — a job using the **ui-suite** composite needs `>= 120`, since
      that composite is install + every project in `playwright.config.js` +
      retries + upload in one sum it cannot subdivide. The composite is read from
-     `uses:`, structured data with one correct answer.
+     `uses:`, structured data with one correct answer. **Compliance is per JOB,
+     not per repo.** The floor binds composite CALLERS only, so one repo can sit
+     above it on a job that runs `playwright install` directly and below it on
+     two that `uses:` the composite — same repo, same template lineage
+     (`claude.insurance`, 2026-08-25: `qa.yml` at 60 on the raw-install path,
+     `qa-live.yml` and `qa-response.yml` at 40 on the composite). "Is this repo
+     at the floor?" has no single answer; ask it per job.
    - **ADVISORY** — a job running `playwright install` directly wants `>= 30`.
      This prints and never fails the build. Deciding whether a `run:` block
      invokes playwright means parsing bash, and successive attempts produced
@@ -301,10 +320,26 @@ same in every repo:
      deleted and takes rules 1–2 with it. **A green run is not evidence this
      floor was met** — read the advisory lines.
 
+**The 120 is a fleet-wide MINIMUM sized for the slow end, so being far under it
+is expected, not a reason for an exemption.** It is not an estimate of your
+suite; it is the point below which a HEALTHY run gets cancelled — and a cancelled
+run reads as inconclusive rather than red, so nobody chases it. Sized from
+measured numbers at the slow end of the fleet: `claude.trading`'s 30m35s warm
+whole job plus the 21m25s cold browser install, plus a failing profile that
+replaces its healthy scenario with the per-test ceiling and then retries at it. A
+repo whose whole job runs ~3min is ~40x under the floor and still sets it
+(`claude.insurance`, 2026-08-25, who raised rather than argued — a floor with
+per-repo exemptions is not a floor). Set HIGHER where your suite needs it, never
+lower. The number's home is `UI_SUITE_FLOOR` in `check-job-bounds.py`: record the
+pointer, not the value — and where the format forces the literal, as Actions
+`timeout-minutes` does, cache the value and keep the pointer in the comment
+beside it (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*).
+
 Rule 3 is the one worth installing for. It exists because rule 1 passed the
 exact defect it was written for: every broken job DECLARED a bound, and the
-value was the fault. Until this guard shipped downstream, the 60 in the qa
-workflows was a number in a comment — three callers had already drifted to 40.
+value was the fault. Until this guard shipped downstream, the floor —
+60 at the time, 120 since — was a number in a comment, and three callers had
+already drifted to 40.
 
 The guard scans `.github/workflows`. Nothing else, unless you pass
 `--include-templates` — a flag only claude.directives uses, to also cover the
@@ -320,7 +355,12 @@ are all left alone. The reasoning is in the file's header — a guard that
 red-builds a healthy repo gets deleted, taking the real rules with it.
 
 Install it **with** the `qa.yml` update, not after: the workflow names the script
-by path, so an updated `qa.yml` without it fails every run at step resolution.
+by path, so an updated `qa.yml` without it fails every run at step resolution. And expect it to have something to say on that first run. A repo that
+has never carried this script has never been checked against the floor, so
+accumulated drift surfaces all at once as a red check on the adopting PR:
+**auditing and raising existing bounds is part of adopting it, in the same
+change** — adoption, not a regression the adoption caused
+(`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*).
 
 Like `workflow-ref-guard.py` it parses with PyYAML (present on GitHub's runner
 images) and fails loudly if that import is missing, rather than skipping.

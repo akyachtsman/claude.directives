@@ -347,6 +347,11 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     general case is in `global.md` → *Async Operations*: **any recorded SHA is
     stale from the moment it is written**, and a stale one does not error — it
     resolves perfectly and answers about the wrong commit.
+    The event is only the loudest instance. A check-in prompt, a PR body, a
+    handoff and a relay message all hand you the same kind of record, and one
+    line covers all of them: **resolve the head from the API at use time, never
+    from the record.** That includes a SHA you yourself wrote into this PR's body
+    ten minutes ago — re-read the PR before quoting it as the current head.
   - **Read the inline comments** (`pull_request_read` → `get_review_comments`).
     `get_reviews` cannot tell a clean `COMMENTED` review from an actionable one.
   - **Check EVERY unresolved thread, not just this round's.** An all-clear
@@ -355,7 +360,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     same head. Findings arrive as review THREADS while the issue comments show
     nothing — judging from comments alone reads an unreviewed PR as clean.
   - **Unreadable reviews do not clear the gate** — that call is GraphQL and fails
-    when the pool is empty. Wait or surface; never fall back to the label.
+    when the pool is empty. Wait or surface; never fall back to the label, which
+    is REST and stays readable at exactly the moment the correct check is
+    blocked. Where the repo's ruleset requires conversation resolution the server
+    refuses that merge for you (→ *Conditional Auto-Merge on Green*) — a backstop
+    against the fall-back, never a licence to stop looking: it is not on in every
+    repo, and it says nothing about the Codex verdict.
   - **A usage-limit reply is a fourth outcome: _unavailable_ — not clean, not
     pending.** When the allowance is spent, Codex answers with a comment saying so
     instead of reviewing, and no amount of further waiting produces a review. The
@@ -437,6 +447,31 @@ hold-for-approval list is SUPERSEDED — asking the owner permission to merge is
 now a directive violation, not caution. Always report the merge result;
 reporting is not asking.
 
+**One of those gates has a mechanism where the repo provides one.** Where the
+default-branch ruleset ticks *Require conversation resolution before merging*
+(`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*), GitHub refuses the
+merge while any review thread is unresolved — every unresolved thread, not just
+the current round's — with no model in the loop. That closes the failure this
+gate kept producing: the thread read is GraphQL and fails exactly when the pool
+is empty, while the `codex-flagged` label is REST and stays readable at that same
+moment, so the cheap wrong path was always available precisely when the correct
+one was not. Read it as a backstop, never a delegation:
+- **Do not assume it is on.** An agent cannot set a repo rule and usually cannot
+  read one. Until you have seen this refusal in THIS repo, the thread gate is
+  still yours to check by hand — a rule you assumed into existence protects
+  nothing.
+- **The other gates stay agent-checked.** CI green on the head SHA, the Codex
+  verdict, the `codex-flagged` label and the diff's file list have no server-side
+  rule behind them, and this one says nothing about any of them.
+- **A merge refused as blocked with everything else green is this rule firing**,
+  not a transient error and not a broken repo: go resolve the threads. Do not
+  retry the merge.
+- **It converts a bad merge into a stalled PR, deliberately.** Resolving a thread
+  is GraphQL too, so a GraphQL-exhausted session can neither read nor resolve
+  them — wait out the rolling hour, or hand it to the owner's browser
+  (→ *GitHub API Quota Economy*). A stalled PR is the failure this standard
+  prefers.
+
 Two stops survive, neither a permission ask:
 1. **Secrets, tokens, PINs, or personal data anywhere in the diff** — the PR is
    defective: scrub first, never merge as-is.
@@ -468,7 +503,7 @@ A manual-dispatch run on the PR's head SHA satisfies the merge gate: the policy
 requires the gate to pass on that SHA, not a particular trigger.
 
 ## Repo-settings preflight (warn once per session)
-Two GitHub repo settings make the merge rules above work end-to-end. Agents
+Three GitHub repo settings make the merge rules above work end-to-end. Agents
 cannot change repo settings themselves, so the deliverable is a **single warning
 per session** with the exact settings path. Never block work on it; never re-nag
 in the same session. Check at `/env-chk` or the session's first PR.
@@ -489,6 +524,18 @@ in the same session. Check at `/env-chk` or the session's first PR.
    stale branches as a workaround — in remote sessions branch-delete pushes are
    rejected (403; push scope covers the designated branch only). The fix is the
    setting; the warning is the deliverable.
+
+3. **Require conversation resolution before merging** — `Settings → Rules →
+   Rulesets →` the default-branch ruleset `→ Require a pull request before
+   merging → Require conversation resolution before merging`. This is the only
+   mechanism the *no unresolved review threads* gate has; without it the gate is
+   one GraphQL call an agent must remember to make, and that call fails exactly
+   when the quota is out. If it is off, warn once with that path. Detection is
+   usually unavailable: `GET /repos/{owner}/{repo}/rules/branches/{branch}`
+   exposes it where `gh api` works, and in remote sessions it returns *"GitHub
+   access is not enabled for this session"* (measured 2026-08-26). Absent a
+   reading, do not report either way — check the threads yourself and treat a
+   blocked merge with every other gate green as the rule being present.
 
 ## GitHub API Quota Economy (owner ruling, 2026-07-21)
 Every Claude session, in EVERY repo, acts on GitHub as one user identity and

@@ -87,6 +87,13 @@ naming the head is not one, since a review with live findings names it too — o
 one of that gate's two documented exits stated on the PR (the reaction ladder's
 attestation, or an *unavailable* usage-limit reply), no `codex-flagged` label,
 no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
+- `main` here enforces **Require conversation resolution before merging**
+  server-side (owner, 2026-08-26), so an unresolved thread refuses the merge
+  rather than depending on a GraphQL read that fails when the quota is out. It
+  backstops exactly one gate: a blocked merge with CI green and no
+  `codex-flagged` label is that rule firing — resolve the threads, do not retry
+  the merge — and everything else in the list above is still checked by the
+  session.
 - Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
   next from updated `main` rather than reusing/force-pushing one long-lived branch.
 - Before merging, verify the PR's file list against GitHub's own diff, not the

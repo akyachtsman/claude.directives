@@ -363,6 +363,15 @@
         "directives/git.md"
       ]
     },
+    "github-conversation-resolution": {
+      "vendor": "GitHub",
+      "serves": "git.lifecycle",
+      "sockets": [
+        "directives/git.md",
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        "NEW-REPO-USER-INSTRUCTIONS.md"
+      ]
+    },
     "playwright": {
       "vendor": "Microsoft",
       "serves": "test.ui-kit",

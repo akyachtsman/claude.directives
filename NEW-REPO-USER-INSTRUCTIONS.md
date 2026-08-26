@@ -117,7 +117,8 @@ once locally — it persists.
    no matter what the hook reports. `/new-repo` cannot set it; only you can.
    Enforcement **Active**, target **Include default branch**, tick **Restrict
    deletions**, **Block force pushes** and **Require a pull request before
-   merging**, set **Required approvals to `0`**, leave **Restrict updates**
+   merging**; inside that last rule tick **Require conversation resolution before
+   merging** and set **Required approvals to `0`**; leave **Restrict updates**
    unchecked, and leave the **bypass list empty**. Then run both probes — a
    direct write to `main` must be refused, and one ordinary PR must still merge.
    Full procedure and the reasoning for each setting:

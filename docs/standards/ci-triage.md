@@ -121,6 +121,16 @@ Every project using these agents runs two Playwright workflows:
   one most often waved through. It reads as infra noise, so nobody chases it —
   the same shape as *"a cancelled run is not a red one"*, one layer down at the
   test level. It means the budget sits below the work the scenario actually does.
+  ⚠️ **First question, before any of the below: did this scenario just stop
+  skipping?** A previously-green suite that starts timing out usually has a
+  scenario whose precondition was just satisfied — a credential set, a page
+  declared, a flag flipped. Its recorded duration was zero on every prior run, so
+  its budget was never sized against anything, and the run that reveals that is
+  its FIRST one, not a regression (`test.md` → *Playwright*). The tell is cheap:
+  compare the timing-out scenario's history — skips, not fast passes — and check
+  what changed in repo config rather than in the app. Rule this in or out before
+  you go looking at profiles or at the app, because everything below assumes a
+  scenario whose cost you have observed before.
   ⚠️ **Check the OTHER profiles before concluding anything**: the interaction
   sweep is uncapped and costs (element count × project count), and a WIDER
   viewport clips fewer controls, so it sweeps MORE of them. In `claude.trading`

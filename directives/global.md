@@ -516,6 +516,25 @@ naming what remains open, or "nothing open" — never absent.
        pre-approval activates from the NEXT session.
   3. **Condition-wait with `Monitor`** only when you must block on a specific
      state — always with an exit condition and a hard timeout.
+- **Any recorded SHA is stale from the moment it is written — and a stale one
+  does not error.** The asymmetry is the whole point. An INVENTED identifier
+  fails loudly: the API has nothing to return, so a fabricated run ID 404s
+  immediately and no harm is done. A SUPERSEDED one does the opposite — it
+  resolves perfectly and returns real, well-formed, entirely valid data about the
+  wrong commit. Not an error: a correct answer to a question you no longer meant
+  to ask. There is no failure to catch, which is why this rule cannot live in
+  error handling and has to live in **where the identifier comes from**:
+  **resolve the head from the API at use time, never from the record.** A
+  recorded SHA tells you to go and check; it never tells you the answer. Every
+  surface that hands you one is an instance of the same thing — an event
+  payload's `head_sha`, a check-in prompt (item 2 above), a PR body, a handoff or
+  relay message (→ *One Session, One Repo*) — and none of them is a BAD record:
+  each was accurate when written, which is exactly why the API agrees with it.
+  Measured in `claude.prop` on 2026-08-23: five `check_suite.completed` events
+  across two PRs, every one naming a superseded head, four of which would have
+  merged a stale commit if read as clearance (`git.md` → *PR Lifecycle*). The
+  same day, `claude.directives`' own check-ins fired twice carrying SHAs three
+  commits behind, and one carried a claim a later round had already disproved.
 - **Never background a bare `sleep` to wait.** On container suspend/resume the
   process is reaped while the harness keeps showing a phantom "running" task
   that never clears — and it was watching nothing. Use options 1–3. (The

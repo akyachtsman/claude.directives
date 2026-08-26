@@ -65,7 +65,8 @@ Execute these before any task work:
 - Always use `page.goto('./')`, never `page.goto('/')`
 - Normalize `APP_URL` to end with `/` in `playwright.config.js`
 - `API status: no call` is expected for a local run that cannot reach the backend;
-  the auth-gated scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
+  the auth-gated scenarios self-skip when no credential is available from EITHER
+  source — the env var, or a login form that ships a working one. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
 - **A scenario that can skip needs a budget sized for the day it stops
@@ -86,6 +87,21 @@ Execute these before any task work:
   ever timed. Note what else lands that day: a scenario's first real run tends to
   exercise several never-exercised things at once, so an unbudgeted timeout there
   may be a newly-loud gate check rather than a cost problem.
+- **"No auth gate" is a WINDOW unless the project makes it a proof.** The kit
+  settles, looks, and reports absence — but absence at time T is not evidence of
+  absence at T+1, so an app whose gate-determining request is still in flight
+  produces a green on auth that was never exercised. No timeout value fixes this;
+  a bigger number changes how OFTEN it happens, never WHETHER it can. Set
+  **`TEST_AUTH_READY_SELECTOR`** (a selector matching whichever outcome occurs —
+  the gate itself OR the authenticated app shell) or **`TEST_AUTH_READY_REQUEST`**
+  (a substring of the URL whose settling decides the gate), and the answer becomes
+  a decided one. Both optional: unset, behaviour is unchanged and the report
+  simply says the answer was `windowed` rather than `proven`. **That second half
+  is the point** — the defect was never the window's length, it was that a
+  windowed answer and a proven one were indistinguishable in the output.
+  A configured condition that never resolves FAILS rather than falling back,
+  because a silent fallback rebuilds exactly that ambiguity. A selector naming
+  only the gate times out on every signed-in run — it must match either outcome.
 - **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` one is
   invoked exactly **once**. Playwright adopts the Promise it returns, and whatever
   that Promise settles to — `false` included — ends the wait. It never polls

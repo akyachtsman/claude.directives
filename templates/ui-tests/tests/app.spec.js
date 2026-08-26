@@ -47,6 +47,65 @@ const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 const AUTH_EMAIL = process.env.TEST_AUTH_EMAIL || null;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AUTH READINESS — a windowed answer and a proven one must not look alike (#302)
+//
+// THE DEFECT THIS CLOSES IS EPISTEMIC, NOT NUMERIC. detectAuthGate() returning
+// false is read as a CONCLUSION: mechanism becomes 'none' and the supplied
+// credential is never tried. But absence of a gate at time T is not evidence of
+// absence at T+1, so an app whose gate-determining request is still in flight
+// when the settle ends produces a green on auth that was never exercised. #301
+// widened the window 10s -> 30s, which changes how OFTEN that happens and can
+// never change WHETHER it can. No timeout value can.
+//
+// A generic file cannot know the condition, which is why this is a per-project
+// surface rather than a bigger number. Set EITHER:
+//   TEST_AUTH_READY_SELECTOR — a selector matching whichever outcome occurs:
+//                              the gate itself, OR the authenticated app shell.
+//   TEST_AUTH_READY_REQUEST  — a substring of the URL of the request whose
+//                              settling decides the gate (/api/session, /auth/me).
+// Set neither and behaviour is exactly as before — but the report now SAYS the
+// answer was a window. That half matters more than the condition itself: the
+// failure today is not a short window, it is that a windowed answer and a proven
+// one are indistinguishable in the output.
+//
+// A CONFIGURED CONDITION THAT NEVER RESOLVES IS LOUD, not a silent fallback.
+// The project asserted this condition decides its gate; if it does not hold, the
+// app never resolved, and quietly degrading to a settle would rebuild the exact
+// ambiguity this surface exists to remove.
+const AUTH_READY_SELECTOR = process.env.TEST_AUTH_READY_SELECTOR || null;
+const AUTH_READY_REQUEST  = process.env.TEST_AUTH_READY_REQUEST  || null;
+
+async function awaitAuthReady(page) {
+  if (!AUTH_READY_SELECTOR && !AUTH_READY_REQUEST) {
+    await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+    return 'windowed';
+  }
+  try {
+    if (AUTH_READY_SELECTOR) {
+      await page.waitForSelector(AUTH_READY_SELECTOR, { timeout: LOAD_SETTLE_MS, state: 'attached' });
+    } else {
+      await page.waitForResponse((r) => r.url().includes(AUTH_READY_REQUEST), { timeout: LOAD_SETTLE_MS });
+    }
+    return 'proven';
+  } catch {
+    const which = AUTH_READY_SELECTOR
+      ? `TEST_AUTH_READY_SELECTOR (${AUTH_READY_SELECTOR})`
+      : `TEST_AUTH_READY_REQUEST (${AUTH_READY_REQUEST})`;
+    throw new Error(
+      `Auth-readiness condition never resolved within ${LOAD_SETTLE_MS}ms: ${which}.\n` +
+      `  This project declared that condition as the point at which its gate decision is made, ` +
+      `so nothing below it can be trusted — a gate that has not been decided cannot be reported ` +
+      `present or absent.\n` +
+      `  A SELECTOR must match WHICHEVER outcome occurs — the gate itself OR the authenticated ` +
+      `app shell — not only one of them; a selector that names just the gate times out on every ` +
+      `signed-in run. Failing rather than falling back to the settle, because a silent fallback ` +
+      `rebuilds the windowed-vs-proven ambiguity this condition exists to remove (directives#302).`
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // IDLE CAP — every networkidle wait is bounded, because NOTHING ELSE BOUNDS IT
 // ─────────────────────────────────────────────────────────────────────────────
 // Playwright Test defaults `use.navigationTimeout` to 0 = NO TIMEOUT, and
@@ -1283,7 +1342,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // gate-determining request is still pending at 30s still reads as mechanism
   // 'none'. Closing that needs an explicit auth-readiness condition (a named
   // request settling, or a gate/app-shell selector), not a larger number.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  const s2Evidence = await awaitAuthReady(page);
 
   // Resolve the gate ONCE — each detectAuthGate() call burns its 5s waitFor
   // when no gate is present, the same reason S3 and gotoAndAuth detect once.
@@ -1325,7 +1384,13 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
     const where = page.url();
     if (authConfigured) {
       throw new Error(
-        `S2 FAIL | no auth gate found at ${where}, but this project supplied auth credentials.\n` +
+        `S2 FAIL | no auth gate found at ${where} (evidence: ${s2Evidence}), but this project supplied auth credentials.\n` +
+        (s2Evidence === 'windowed'
+          ? `  That answer is a WINDOW, not a proof: nothing was visible before the settle expired, which is ` +
+            `not the same as nothing existing (directives#302). If this app's gate is slow to render, set ` +
+            `TEST_AUTH_READY_SELECTOR or TEST_AUTH_READY_REQUEST and this becomes a decided answer either way.\n`
+          : `  That answer is PROVEN: this project's own readiness condition resolved and there was still no ` +
+            `gate, so the contradiction is real and not a timing artefact.\n`) +
         `  A credential env var is the project asserting it HAS a gate, so finding none here means ` +
         `this scenario did not reach it — the usual cause is that the gate lives on a sub-route while ` +
         `the suite navigates to the baseURL (set APP_URL, or point this scenario at the login route).\n` +
@@ -1335,7 +1400,11 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       );
     }
     test.skip(true,
-      `No auth gate found at ${where} and no credentials configured — this app appears to have no auth. ` +
+      `No auth gate found at ${where} (evidence: ${s2Evidence}) and no credentials configured — this app appears to have no auth. ` +
+      (s2Evidence === 'windowed'
+        ? `APPEARS is load-bearing: nothing was visible before the settle expired, which is a WINDOW, not a proof. ` +
+          `Set TEST_AUTH_READY_SELECTOR or TEST_AUTH_READY_REQUEST to turn this into a decided answer (directives#302). `
+        : `This is a PROVEN absence: the project's own readiness condition resolved and no gate was there. `) +
       `Skipping rather than passing: S2 asserts a gate was discovered and a credential accepted, and ` +
       `neither happened, so a green result here would read as auth coverage that does not exist.`);
   }
@@ -1451,7 +1520,11 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 
   // Auth passed or no auth required — record mechanism
   test.info().attach('auth-result', {
-    body: JSON.stringify({ mechanism, credentialSource: credentialSource ?? 'none', domChanged }),
+    body: JSON.stringify({ mechanism, credentialSource: credentialSource ?? 'none', domChanged,
+      // 'windowed' = no gate was VISIBLE before the settle expired; 'proven' =
+      // this project's own readiness condition resolved first. Recorded because
+      // the two were indistinguishable, which is the whole of #302.
+      gateEvidence: s2Evidence }),
     contentType: 'application/json',
   });
 });
@@ -1520,6 +1593,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // post-attempt verdict then read that same search box plus a "Log in" header
   // as a retained gate, failing S3 on an app with no login screen at all. The
   // old comment PROMISED the fall-through; the guard is what delivers it.
+  await awaitAuthReady(page);
   const s3Gated = await detectAuthGate(page);
   // "A credential exists" is not "TEST_AUTH_CREDENTIAL is set" (#312): a login
   // form that ships a working credential is the other source, and a project
@@ -1694,6 +1768,7 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
   // Same two-source rule as S3 and gotoAndAuth (#312). S4 still does not skip
   // when the gate stands — see the paragraph below the branch.
+  await awaitAuthReady(page);
   if (await detectAuthGate(page) && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
     const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
@@ -1721,7 +1796,7 @@ async function gotoAndAuth(page) {
   // this function returns: CTRL counts primary controls (a late duplicate = a
   // green on a duplicated CTA), DISMISS computes triggerCount (a late trigger is
   // never swept), NAV fingerprints the view. Overhead for none of them.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  await awaitAuthReady(page);
   // Detect once and branch — each detectAuthGate() call burns a 5s waitFor timeout when
   // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
   const gated = await detectAuthGate(page);

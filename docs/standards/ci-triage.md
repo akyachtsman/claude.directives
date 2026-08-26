@@ -102,8 +102,24 @@ Every project using these agents runs two Playwright workflows:
 > (check the project CLAUDE.md scenario table). Match rules by the scenario's
 > **role**, never by its number alone.
 
+- **Read the auth answer's EVIDENCE before reading its verdict.** The kit's
+  `auth-result` attachment carries `gateEvidence: 'windowed' | 'proven'`, and S2's
+  own skip and failure text names it inline. `windowed` means nothing was visible
+  before the settle expired — which is not the same as nothing existing. A green
+  or skipped auth scenario on `windowed` evidence is **not** a statement that the
+  app has no gate; it is a statement that none appeared in time. Turn it into a
+  decided answer with `TEST_AUTH_READY_SELECTOR` / `TEST_AUTH_READY_REQUEST`
+  (`test.md` → *Playwright*). If S2 fails with `Auth-readiness condition never
+  resolved`, the project's own declared condition did not hold — that is a real
+  app or config problem, not a flake, and re-running will not change it.
+- **A skipped auth scenario is not always an exemption.** S2 skips when there is
+  genuinely no gate and no credential; it now **fails** when credentials ARE
+  supplied and no gate is found, because config asserting a gate while the
+  scenario lands on a page without one is a contradiction — usually a gate on a
+  sub-route while the suite navigated to the baseURL. Check `APP_URL` first.
 - `UI Tests (local server)` **skips** in the auth scenario or interaction sweep
-  (upstream kit: S2/S3) when no `TEST_AUTH_CREDENTIAL` is set
+  (upstream kit: S2/S3) when no credential is available from either source
+  (`TEST_AUTH_CREDENTIAL`, or a login form that ships a working one)
   → The kit self-skips these rather than failing; a skip is the exemption, and it
   is the ONLY one. `advisory-run` ships `'false'`, so the job is blocking: an
   actual red in those scenarios — a credential IS supplied and the backend is

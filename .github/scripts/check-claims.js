@@ -541,9 +541,16 @@ const normalize = (s) => s
 // (`Dr. Smith`), where the lowercase rule cannot help. A name missing from it
 // shortens a scope; it does not restore the hole Codex found.
 const SENTENCE_MARK = '\u0001';
+// LOWERCASE ONLY, and that is not tidying. Round 20 added the Title-case rule
+// below, which already keeps `Dr.`, `Mr.`, `Inc.`, `St.`, `Prof.` and every
+// other Title-case abbreviation before a capital — so those ten entries were
+// UNREACHABLE while still reading as the thing that protects them. A list that
+// looks like it does the work and does not is the defect this whole PR is
+// about; leaving it in place because it is harmless would have been the same
+// mistake in the same file. What remains is the case neither structural rule
+// reaches: a lowercase abbreviation followed by a capital, `etc. For details`.
 const ABBREV = new Set(['etc', 'vs', 'cf', 'al', 'eg', 'ie', 'approx', 'fig',
-  'Dr', 'Mr', 'Mrs', 'Ms', 'St', 'Inc', 'Ltd', 'Jr', 'Sr', 'Prof', 'viz',
-  'esp', 'incl', 'ca', 'no', 'pp']);
+  'viz', 'esp', 'incl', 'ca', 'no', 'pp']);
 const markSentences = (t) => {
 // Bracket depth is counted from the LAST BOUNDARY, not from the start of the
 // file. A first draft counted over everything before the stop, and in a

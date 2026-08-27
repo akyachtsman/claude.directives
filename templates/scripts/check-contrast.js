@@ -41,7 +41,7 @@
 // your components.css, and check by hand any text using --color-accent below
 // 18.66px (or below 24px when not bold).
 // ────────────────────────────────────────────────────────────────────────────
-const { readFileSync, existsSync, readdirSync } = require('fs');
+const { readFileSync, existsSync, readdirSync, statSync } = require('fs');
 const { join } = require('path');
 
 // styles/tokens.css is the design contract's single home (design.md -> Tokens &
@@ -75,7 +75,14 @@ if (FILES.length === 0) {
       return false;
     }
     for (const e of entries) {
-      if (e.isFile() && e.name.endsWith('.css')) return true;
+      // isFile() is FALSE for a symlink, so a project whose only stylesheet is
+      // one reported "no CSS at all" and took the bootstrap exit — the vacuous
+      // green this branch exists to reject, reached by the one path nobody
+      // checked. statSync follows the link; a broken link throws and is not CSS.
+      if (e.name.endsWith('.css') && !e.isDirectory()) {
+        if (e.isFile()) return true;
+        try { if (statSync(join(dir, e.name)).isFile()) return true; } catch { /* broken link */ }
+      }
       if (e.isDirectory() && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name)) {
         if (hasCssUnder(join(dir, e.name))) return true;
       }
@@ -144,21 +151,20 @@ function atRuleProblem(buf) {
   return `an @${name || '(unreadable)'} rule — only @media and @supports wrap declarations this check can read`;
 }
 
-// Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name --
-// as spelled, since an escaped identifier is refused rather than decoded -- to
-// every value declared for it, in source order.
+// Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name to
+// every value declared for it, in source order. Names are AS SPELLED: an
+// escaped identifier is refused, never decoded, so nothing here has unified two
+// spellings of one property and no caller may assume it has.
 function scanDeclarations(css) {
   const decls = {};
   let buf = '';          // the declaration candidate being accumulated
   let colonAt = -1;      // index in buf of its first top-level `:`
-  const closers = [];    // open ( [ and value-level { , innermost last
-  // What each open block CONTAINS, innermost last: 'decl' for a qualified
-  // rule's declaration list, 'rule' for a grouping rule (@media/@supports),
-  // which contains further rules and NOT declarations. A depth counter was not
-  // enough: inside @media, `blocks > 0` was true while the block held rules, so
-  // `@media (…) { --color-accent:hover { … } }` had its qualified rule read as a
-  // custom-property value. The kind is the property; the depth was a proxy.
-  const blockKinds = [];
+  const closers = [];    // open ( and [ , innermost last
+  // Plain nesting depth. There was a block-KIND stack here, to decide whether a
+  // `{` opened a rule or a custom-property value; the branch below refuses
+  // brace-valued declarations outright instead, so nothing needs to know what a
+  // block contains and the only question left is whether one is open.
+  let depth = 0;
 
   const flush = () => {
     if (colonAt >= 0) {
@@ -226,11 +232,18 @@ function scanDeclarations(css) {
     // whole state, and modelling it REMOVES two recognitions rather than adding
     // one. `url("…")` is a function token, not this — the quote is handled by
     // the string rule above, so only an unquoted first character takes this path.
-    const urlOpen = /^url\(\s*(?!["'])/i.exec(css.slice(i));
+    // The boundary matters: `myurl(` is an ordinary function and CSS does not
+    // enter the URL state for it, but an unanchored match did — closing the
+    // "URL" at a `)` inside a comment and recording the rest as declarations.
+    const urlOpen = (i === 0 || !/[A-Za-z0-9_-]/.test(css[i - 1]))
+      ? /^url\(\s*(?!["'])/i.exec(css.slice(i)) : null;
     if (urlOpen) {
       let j = i + urlOpen[0].length;
       for (; j < css.length; j++) {
-        if (css[j] === '\\') { j++; continue; }
+        // A backslash here would be an escape outside a string, which the
+        // shipped grammar refuses everywhere else. Consuming it silently made
+        // url() an undocumented exception to the contract.
+        if (css[j] === '\\') return { fatal: 'a backslash escape inside a url() — spell identifiers and values plainly here' };
         if (css[j] === ')') break;
       }
       if (j >= css.length) return { fatal: 'an unterminated url() token' };
@@ -242,32 +255,39 @@ function scanDeclarations(css) {
     if ((c === ')' || c === ']') && closers[closers.length - 1] === c) { closers.pop(); buf += c; continue; }
 
     if (c === '{') {
-      // A custom property may legally take a value containing balanced braces —
-      // but only INSIDE a declaration list. At the top level a `{` always opens
-      // a rule, so `--color-accent:hover { … }` is a qualified rule whose
-      // selector happens to start with two dashes, not a declaration; inferring
-      // "declaration" from the prefix alone recorded its whole block as a second
-      // value and rejected a valid palette.
-      const inDeclList = blockKinds[blockKinds.length - 1] === 'decl';
-      if (closers.length > 0
-          || (inDeclList && colonAt >= 0 && buf.slice(0, colonAt).trim().startsWith('--'))) {
-        closers.push('}');
-        buf += c;
-        continue;
+      // ── A DECLARATION VALUE MAY NOT CONTAIN A BLOCK ────────────────────────
+      // CSS allows it — `--x: { … }` is a legal custom-property value, and an
+      // ordinary `unknown: { … }` is a declaration whose contents apply nothing
+      // — and four rounds of trying to READ those correctly produced four
+      // findings, each a fix that was right about the case in front of it:
+      // record the block as a value (round 3), only inside a declaration list
+      // (round 4), and then nested grouping rules and ordinary-property blocks
+      // broke both (round 5). Resolving it properly needs CSS Nesting
+      // semantics, which is a different program.
+      // So it is REFUSED. A design token file has no use for a brace-valued
+      // declaration, and refusing is loud where every previous answer was a
+      // silent wrong value or a rejected valid palette.
+      // The test is what CSS uses: a declaration's prelude is a PLAIN
+      // IDENTIFIER before the colon. `.e:hover` is not one (it starts with a
+      // dot), so that stays a selector and its block opens normally; `unknown`
+      // and `--color-accent` both are.
+      const prelude = colonAt >= 0 ? buf.slice(0, colonAt).trim() : null;
+      if (prelude !== null && /^-{0,2}[A-Za-z_][A-Za-z0-9_-]*$/.test(prelude)) {
+        return { fatal: `a declaration whose value is a { } block (\`${prelude}\`) — this check cannot resolve one, and a token file does not need one` };
       }
       const bad = atRuleProblem(buf);
       if (bad) return { fatal: bad };
-      // A grouping rule's block holds RULES; a selector's block holds
-      // DECLARATIONS. Only the second can contain a custom property, so only
-      // the second lets a later `{` open a value.
-      blockKinds.push(buf.trim().startsWith('@') ? 'rule' : 'decl');
+      depth++;
       buf = ''; colonAt = -1;
       continue;
     }
     if (c === '}') {
-      if (closers[closers.length - 1] === '}') { closers.pop(); buf += c; continue; }
+      // An unmatched `}` used to pop an empty stack as a no-op, so a file that
+      // closes more blocks than it opens reached the end balanced and exited 0
+      // — contradicting the refusal this same function documents.
+      if (depth === 0) return { fatal: 'a closing brace with no matching open — the file does not parse as CSS' };
       flush();                       // the last declaration may omit its `;`
-      blockKinds.pop();
+      depth--;
       continue;
     }
 
@@ -282,7 +302,7 @@ function scanDeclarations(css) {
     buf += c;
   }
   flush();
-  if (closers.length > 0 || blockKinds.length > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
+  if (closers.length > 0 || depth > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
   return { decls };
 }
 
@@ -298,7 +318,7 @@ if (scan.fatal) {
   exitCode = 1;
   continue;
 }
-const decls = scan.decls;   // decoded name -> [value, …] every declaration, in source order
+const decls = scan.decls;   // name AS SPELLED -> [value, …] every declaration, in source order
 const t = {};
 // Validate and measure the HEX declarations. Non-hex values are RECORDED but not
 // measured — they are never skipped, because the ambiguity check below fails on

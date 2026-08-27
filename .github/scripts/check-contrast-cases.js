@@ -23,7 +23,7 @@
 // ESM (.github/scripts/package.json declares "type": "module").
 //
 // Run: node .github/scripts/check-contrast-cases.js
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
@@ -53,6 +53,7 @@ const plus = (extra) => BASE + extra;
 
 const OK9 = 'OK — 9/9 assumed pairs meet WCAG AA';
 const DUP = 'a measured token is declared more than once';
+const BLOCK = 'value is a { } block';
 
 // (label, {relative path: contents}, expected exit, required diagnostic)
 const CASES = [
@@ -223,8 +224,13 @@ const CASES = [
   // A qualified rule whose selector starts with two dashes: the pseudo-class
   // colon made colonAt nonnegative, and the brace was misread as opening a
   // custom-property value, recording the whole block as a second declaration.
-  ['a top-level rule whose selector starts with -- is a rule, not a declaration',
-    { 'styles/tokens.css': plus('--color-accent:hover { color: red; }\n') }, 0, OK9],
+  // Deliberately reversed at round 5, and worth stating: `--color-accent:hover`
+  // is not a valid selector (a custom-property name is not a type selector), so
+  // CSS discards the whole rule and refusing a token file containing one costs
+  // nothing real. Distinguishing it from a brace-valued declaration is what
+  // cost four rounds.
+  ['a brace after a plain identifier and colon is refused wherever it appears',
+    { 'styles/tokens.css': plus('--color-accent:hover { color: red; }\n') }, 1, BLOCK],
 
   // `content: "/*"` does not open a comment. Stripping comments first deleted
   // everything from there to the next real `*/` — including the real override.
@@ -258,11 +264,30 @@ const CASES = [
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: #C0392B !important;') },
     0, OK9],
 
-  // A custom property may legally take a value containing balanced braces.
-  // Excluding braces from the capture made the whole declaration disappear
-  // instead of being recorded as an unreadable override.
-  ['a brace-valued override is recorded, not dropped',
-    { 'styles/tokens.css': plus(':root { --color-accent: { #FFFFFF }; }\n') }, 1, DUP],
+  // ── A DECLARATION VALUE MAY NOT CONTAIN A BLOCK ───────────────────────────
+  // CSS allows it, and four rounds of trying to read it correctly produced four
+  // findings: record it as a value (r3), only inside a declaration list (r4),
+  // then CSS Nesting and ordinary-property blocks broke both (r5). It is now
+  // refused wherever it appears — one rule, no context, no nesting semantics.
+  // The test is CSS's own: a declaration's prelude is a PLAIN IDENTIFIER.
+  ['a brace-valued custom property is refused',
+    { 'styles/tokens.css': plus(':root { --color-accent: { #FFFFFF }; }\n') }, 1, BLOCK],
+
+  ['a brace-valued ORDINARY property is refused too',
+    { 'styles/tokens.css': plus('.e { unknown: { --color-accent: #0D47A1; }; }\n') }, 1, BLOCK],
+
+  ['…and inside a grouping rule nested in a qualified rule',
+    { 'styles/tokens.css': plus('.e { @media (min-width: 1px) { --color-accent: { #0D47A1 }; } }\n') },
+    1, BLOCK],
+
+  // The must-NOT-over-refuse twin: a pseudo-class selector also puts a colon
+  // before a brace, and `.e` is not a plain identifier, so it stays a selector.
+  ['a pseudo-class selector still opens a rule',
+    { 'styles/tokens.css': plus('.e:hover { color: red; }\n') }, 0, OK9],
+
+  ['a selector list with a pseudo-class still opens a rule',
+    { 'styles/tokens.css': plus('@media (min-width: 1px) { .a:focus, .b::before { color: red; } }\n') },
+    0, OK9],
 
   // ── #337 round 4: three more parser states ────────────────────────────────
   // Inside an unquoted url(), `/*` is URL DATA. Bracket nesting protected the
@@ -286,9 +311,38 @@ const CASES = [
   // `blocks > 0` was a proxy for "in a declaration list" and a grouping rule
   // breaks it: inside @media the block holds RULES, so the qualified rule's
   // brace was read as opening a custom-property value.
-  ['a qualified rule inside @media is a rule, not a declaration',
-    { 'styles/tokens.css': plus('@media (min-width: 1px) { --color-accent:hover { color: red; } }\n') },
+
+  // ── #337 round 5 ──────────────────────────────────────────────────────────
+  // `myurl(` is an ordinary function; CSS does not enter the URL state for it.
+  // An unanchored match closed the "URL" at a `)` inside a comment and read the
+  // rest as declarations.
+  ['url( only matches at an identifier boundary',
+    { 'styles/tokens.css': plus('.e { unknown: myurl(/* ) */ ; --color-accent: #0D47A1;); }\n') },
     0, OK9],
+
+  // A backslash inside url() was an undocumented exception to the grammar,
+  // which refuses escapes outside strings everywhere else.
+  ['a backslash inside a url() is refused like any other escape',
+    { 'styles/tokens.css': plus('.e { background: url(foo\\ bar); }\n') }, 1, 'backslash escape'],
+
+  // pop() on an empty stack was a no-op, so a file closing more blocks than it
+  // opens reached the end "balanced" and exited 0 — contradicting the refusal
+  // this same scanner documents.
+  ['an unmatched closing brace is refused',
+    { 'styles/tokens.css': BASE + '}\n' }, 1, 'closing brace with no matching open'],
+
+  // Dirent.isFile() is FALSE for a symlink, so a project whose only stylesheet
+  // was one reported "no CSS at all" and took the bootstrap exit — the vacuous
+  // green that branch exists to reject, by the one path nobody checked.
+  // The link is the ONLY .css name in the tree — a real .css file beside it
+  // would satisfy the old code too and the case would prove nothing.
+  ['a symlinked stylesheet counts as CSS',
+    { 'src/styles.txt': '.a { color: red; }\n', __symlink: ['src/app.css', 'styles.txt'] },
+    1, 'no tokens file at'],
+
+  ['a BROKEN symlink is not a stylesheet',
+    { 'index.html': '<!doctype html>\n', __symlink: ['src/app.css', 'gone.txt'] },
+    0, 'no stylesheet yet'],
 
   // ── Input this gate refuses outright ──────────────────────────────────────
   // An @import names a stylesheet this gate never reads, so a theme override
@@ -331,6 +385,13 @@ function runCase(files) {
   const tmp = mkdtempSync(join(tmpdir(), 'contrast-cases-'));
   try {
     for (const [rel, body] of Object.entries(files)) {
+      if (rel === '__symlink') {
+        const [linkRel, target] = body;
+        const dest = join(tmp, linkRel);
+        mkdirSync(dirname(dest), { recursive: true });
+        symlinkSync(target, dest);
+        continue;
+      }
       if (rel === '__shipped') {
         mkdirSync(join(tmp, 'styles'), { recursive: true });
         writeFileSync(join(tmp, 'styles', 'tokens.css'), readFileSync(SHIPPED_TOKENS, 'utf8'));

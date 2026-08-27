@@ -130,8 +130,8 @@ per run. Tokens no pair reads are unaffected.
 
 **What the guardrail accepts.** It reads the file with a small CSS scanner rather
 than a regex, so a comment inside a value, a `url()` containing a `;` or a `/*`,
-a `!important` flag, a string spanning an escaped newline, and a qualified rule
-inside `@media` are all read the way CSS reads them. What it **refuses
+a `!important` flag, a string spanning an escaped newline, and a pseudo-class
+selector inside `@media` are all read the way CSS reads them. What it **refuses
 outright**, because reading part of a palette is worse than reading none:
 
 - any at-rule other than `@media`/`@supports` — an `@import` names a sheet the
@@ -140,7 +140,10 @@ outright**, because reading part of a palette is worse than reading none:
   `--color-accent`; this refuses it instead of decoding it, so **spell
   identifiers plainly**;
 - an HTML comment delimiter (`<!--` / `-->`);
-- an unterminated string or comment, or unbalanced brackets.
+- **a declaration whose value is a `{ }` block** — `--x: { … }` is legal CSS and
+  this cannot resolve one, so it refuses rather than guess;
+- an unterminated string or comment, or unbalanced brackets — including a
+  closing brace with nothing open.
 
 Keep `styles/tokens.css` self-contained.
 

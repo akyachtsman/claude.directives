@@ -95,11 +95,13 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      a head Codex has cleared. While
      it is present, report the PR **Conditional** at best. The next step is
      **requesting another review pass** so the verdict lands as the comment the
-     monitor clears on — UNLESS the PR already records a state `git.md` → *PR
-     Lifecycle*'s **unreachable-review test** admits (an *unavailable* usage-limit
-     reply, an attested reaction-only round, an outage recorded after a
-     conclusively ended pass — that rule says what ends one). There the next step
-     is removal with that evidence, and reporting "request another pass" would keep
+     monitor clears on — UNLESS the PR already records an **observable terminal
+     state** `git.md` → *PR Lifecycle*'s **unreachable-review test** admits — an
+     *unavailable* usage-limit reply that has not passed its reset time, or a
+     request GitHub could not make or deliver at all. Neither needs a pass to
+     have run: a request rejected before any review began is the exit. A
+     reaction-only round is **not** one of these; that rule escalates it. There
+     the next step is removal with that evidence, and reporting "request another pass" would keep
      a mergeable PR Conditional forever, since no pass can succeed. Read the PR
      before choosing which.
    - Important issues are fixed or explicitly documented as accepted follow-ups.

@@ -84,9 +84,11 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 squash-merge on green — no approval is sought — once `git.md` → *Conditional
 Auto-Merge on Green* holds: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
-any state its *unreachable-review test* admits, stated on the PR (today: the
-reaction ladder's attestation, an *unavailable* usage-limit reply, or an outage
-recorded after a conclusively ended pass), no `codex-flagged` label,
+the reaction ladder's attestation, or any state its *unreachable-review test*
+admits, stated on the PR (today: an *unavailable* usage-limit reply still inside
+its reset window, or a request GitHub could not deliver) — and note the ladder
+clears the verdict gate ONLY, so a reaction-only round leaves the label and
+escalates, no `codex-flagged` label,
 no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
 - `main` here enforces **Require conversation resolution before merging**
   server-side (owner, 2026-08-26), so an unresolved thread refuses the merge

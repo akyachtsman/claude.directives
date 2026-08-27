@@ -145,60 +145,41 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   say; requesting a pass makes Codex say it, in the form the monitor watches. So
   the default is always: request the pass, let the monitor clear the label.
 
-  **The opening is a TEST, not a list — the *unreachable-review test*.** A list of
-  ways a reviewer can be unreachable is a list that is one entry short — an
-  enumeration of two was, and the third was found by the reviewer it forgot. The
-  test: **a further request demonstrably cannot produce a verdict, and the
-  evidence for that is ON THE PR** — what was requested, when, and what came back
-  or that nothing did. Then remove the label with a rationale naming that
-  evidence. Absent the evidence, a stuck label is work, not a formality: request
-  the pass. The same test is what opens the verdict gate below; one test, so the
-  two cannot drift into disagreeing about which states count.
+  **The opening is a TEST — the *unreachable-review test*.** Hand removal is
+  permitted only where an **observable terminal state**, recorded on the PR,
+  shows that a further request cannot produce a verdict. Record what was
+  requested, when, and what you observed. This same test opens the verdict gate
+  below; one test, so the two cannot drift into disagreeing about which states
+  count. Two states qualify today, and a state not listed still has to satisfy
+  the test — the observable is what makes it an exit rather than a shortcut.
+  **Never request a series**: Codex is metered per request from a shared weekly
+  pool (below).
+  - ***unavailable*** — Codex replied that the allowance is spent. Do not spend
+    another request while that reply holds; it already says none will be
+    reviewed. It **expires at the reset time it names**: past that the allowance
+    may be back, so request a current-head pass rather than merging on a stale
+    refusal.
+  - **outage** — the request could not be made or accepted at all: the App is
+    not installed, the trigger errors, GitHub reports it undeliverable.
 
-  **SILENCE IS NEVER THE EVIDENCE.** A request still in flight produces the
-  identical observation to one that will never be answered, so no amount of
-  elapsed quiet distinguishes them — a queued or degraded reviewer that answers
-  late looks exactly like a reviewer that is gone. The evidence must be a
-  **terminal state you can observe**: the request could not be made or accepted
-  at all (the App is not installed, the trigger errors, GitHub reports it
-  undeliverable), or Codex itself answered something terminal. Waiting may
-  prompt you to look again; it never opens the gate.
+  **SILENCE IS NEVER THE EVIDENCE, AND NEITHER IS A REACTION.** A request still
+  in flight looks exactly like one that will never be answered, so no amount of
+  elapsed quiet distinguishes them. And a second 👍 from an account that has
+  already reacted adds nothing to observe — one reaction per user per type, so
+  the only 👍 present is the first, with its original timestamp (the ladder
+  below records this). A further pass answered that way is therefore
+  indistinguishable from no answer at all.
 
-  **When nothing terminal is observable, the PR stays blocked and you SAY SO** —
-  one line to the owner naming what you requested, when, and what you checked.
-  That is the escape valve, and it is deliberately a person: a reviewer that has
-  silently stopped answering is not a state a session should resolve alone. A
-  stalled PR is loud; a PR merged past a review in progress is not.
+  **So a stuck label with no observable terminal state is not a removal case:
+  the PR stays blocked and you SAY SO** — one line to the owner naming what you
+  requested, when, and what you checked. That is the escape valve and it is
+  deliberately a person: a reviewer that has silently stopped answering is not a
+  state a session resolves alone. A stalled PR is loud; a PR merged past a review
+  in progress is not.
 
-  **Read output attributable to THIS request**, not the PR's history. A PR that
-  has run several rounds already carries reactions, comments and replies from
-  earlier ones, so "the PR carries nothing" is unsatisfiable on any PR that has
-  been reviewed before. What counts is what arrived after the request you are
-  waiting on — and check all four surfaces, since a verdict in a form the
-  monitor does not watch is still a verdict.
-
-  The instances seen so far, each with what it needs. **Never request a series**
-  — Codex is metered per request from a shared weekly pool (below):
-  - ***unavailable*** — Codex replied that the allowance is spent, and **that
-    reply must still be current at merge time**. Do not request another pass
-    while it is: the reply already says none will be reviewed. But the reply
-    names a reset time; **once that time has passed the exit has expired** — the
-    allowance may be back, so request a current-head pass rather than merging on
-    a stale refusal. While it holds: state the exit on the PR, remove the label,
-    merge.
-  - **reaction-only** — the reaction ladder was entered properly and reached its
-    **attestation** exit. Request **one** further pass FIRST: a reaction is not
-    evidence that a comment cannot arrive, and the comment form is the cheap fix.
-    Attest and remove only once that request has produced a reaction and nothing
-    else — a response, not a silence.
-  - **outage** — something terminal and observable: Codex disabled or uninstalled
-    for the repo, or a request GitHub could not deliver. Record what was
-    requested, when, what you observed, and remove. **Not** "I waited and
-    nothing came" — that is the case above, where the PR stays blocked and the
-    owner is told.
-
-  A state not on that list still has to satisfy the test, and the recorded
-  evidence is what makes it an exit rather than a shortcut.
+  ⚠️ **The reaction ladder below clears the GATE; it does not clear the LABEL.**
+  A reaction-only round therefore ends here, in the escalation above — not in a
+  removal. The two are different things and the merge needs both.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head. **On the normal path — some
   SHA-bearing Codex response names HEAD — every check below is NECESSARY and
@@ -215,7 +196,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   names HEAD, so a current-head response is not required on it;
   **_unavailable_**, a usage-limit reply that is never clean and still unblocks
   the merge once stated on the PR and still current; and **outage** — something
-  terminal and observable, never elapsed silence.
+  terminal and observable, never elapsed silence. ⚠️ The ladder clears this gate
+  and NOT the `codex-flagged` label: a reaction-only round leaves the label to
+  the rule above, which escalates rather than removing it.
   None of them is a way past a verdict you can READ:
   the ladder requires that nothing from Codex **names** the current head — a bare
   👍 names nothing, which is why it is the ladder's TRIGGER and never its bar —
@@ -509,12 +492,13 @@ and waiting has a real cost.
 sessions auto-merge — don't ask me permission to merge each time").** When the
 gates hold — CI green on the head SHA; a **clean** current-head Codex verdict per
 the gate above (a response naming the head is not a verdict, since a review with
-live findings names it too), or any state the *unreachable-review test* admits,
-recorded on the PR — the instances known today being the reaction
-ladder's attestation, an *unavailable* usage-limit reply, and a recorded outage;
-no `codex-flagged` label — request a pass to clear it, or, on any state that same
-test admits, remove it with the evidence the last-resort rule requires, since
-none of them can produce the comment the monitor watches; no unresolved review
+live findings names it too), or the reaction ladder's attestation, or any state
+the *unreachable-review test* admits, recorded on the PR;
+no `codex-flagged` label — request a pass to clear it, or, on a state that test
+admits, remove it with the observable the last-resort rule requires. ⚠️ These two
+are separate gates and the ladder clears only the first: a reaction-only round
+leaves the label, and the label rule escalates rather than removing it, so such a
+PR is not mergeable without the owner; no unresolved review
 threads; diff limited to the
 intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged

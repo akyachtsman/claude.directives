@@ -744,11 +744,15 @@ needs restating.
    (→ *Pipelined Execution*).
 4. **Auto-merge.** Take the PR through to merged, clearing a `codex-flagged`
    blocker by **requesting the review pass** rather than removing the label.
-   Take the label off by hand only on the two exits `git.md` → *PR Lifecycle*
-   defines, with the rationale that rule requires.
-5. **Keep going until the whole task is done.** Where the change is
-   deploy-backed and the repo carries the workflows, that includes verifying the
-   deploy and `qa-live`; where it does not, done is merged.
+   Take the label off by hand only where `git.md` → *PR Lifecycle*'s
+   last-resort test admits it, with the evidence that rule requires.
+5. **Keep going until the whole task is done.** What *done* means follows the
+   work: a change that produces a PR is done when it is merged, and when it is
+   also deploy-backed in a repo carrying the workflows, when the deploy and
+   `qa-live` are verified. Work that produces no PR — a read-only command, an
+   investigation, a question answered, a change correctly judged unnecessary —
+   is done when the finding is reported with its evidence. Never manufacture a
+   PR to reach a terminal state.
 6. **The Escalation Rules still bind.** They cover acts whose cost a later
    decision cannot recover: dropping or deleting data (schema and functions are
    reversible; rows are PITR-only), force-push and destructive git ops, secrets,

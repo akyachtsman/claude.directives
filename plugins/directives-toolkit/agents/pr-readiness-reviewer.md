@@ -93,10 +93,14 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      Look for the verdict in the PR's comments **and its review threads**: an inline
      reply never enters the comment list, so a comments-only check reports Pending on
      a head Codex has cleared. While
-     it is present, report the PR **Conditional** at best; the next step is
+     it is present, report the PR **Conditional** at best. The next step is
      **requesting another review pass** so the verdict lands as the comment the
-     monitor clears on — not removal, which `git.md` → *PR Lifecycle* bounds to
-     two documented exits.
+     monitor clears on — UNLESS the PR already records a state `git.md` → *PR
+     Lifecycle*'s last-resort test admits (an *unavailable* usage-limit reply, an
+     attested reaction-only round, a recorded outage). There the next step is
+     removal with that evidence, and reporting "request another pass" would keep
+     a mergeable PR Conditional forever, since no pass can succeed. Read the PR
+     before choosing which.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

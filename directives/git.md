@@ -140,39 +140,62 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   any of them. A label still present means concerns not yet re-reviewed, a clean
   round delivered in a form the monitor cannot see, or an all-clear that failed
   the SHA match — read the PR, never the label alone.
-- **Taking `codex-flagged` off by hand is the last resort, and it has exactly
-  one opening.** Removing it asserts the concern is resolved, which is the
-  author claiming what the reviewer should say; requesting a pass makes Codex
-  say it, in the form the monitor watches. So request the pass and let the
-  monitor clear the label. Remove it by hand ONLY when a further pass cannot
-  produce that comment — which is true in exactly two places, both of them gate
-  exits already documented below:
-  - Codex answered ***unavailable*** — the usage-limit reply — so no further
-    request will be reviewed at all; or
-  - the reaction ladder was entered properly and reached its **attestation**
-    exit.
+- **Taking `codex-flagged` off by hand is the last resort.** Removing it asserts
+  the concern is resolved, which is the author claiming what the reviewer should
+  say; requesting a pass makes Codex say it, in the form the monitor watches. So
+  the default is always: request the pass, let the monitor clear the label.
 
-  Both must be **stated on the PR** before the merge, and the removal needs a
-  rationale naming which exit applies and why another pass could not produce a
-  verdict. Absent one of those two on the record, a stuck label is work, not a
-  formality: request the pass. Request **one** further pass, not a series —
-  Codex is metered per request from a shared weekly pool (below).
+  **The opening is a TEST, not a list.** A list of ways a reviewer can be
+  unreachable is a list that is one entry short — an enumeration of two was, and
+  the third was found by the reviewer it forgot. The test: **a further request
+  demonstrably cannot produce a verdict, and the evidence for that is ON THE PR**
+  — what was requested, when, and what came back or that nothing did. Then remove
+  the label with a rationale naming that evidence. Absent the evidence, a stuck
+  label is work, not a formality: request the pass.
+
+  The instances seen so far, each with what it needs. **Never request a series**
+  — Codex is metered per request from a shared weekly pool (below):
+  - ***unavailable*** — Codex replied that the allowance is spent. Do **not**
+    request another pass: that reply already says none will be reviewed, so
+    spending one buys nothing. State the exit on the PR, remove the label, merge.
+  - **reaction-only** — the reaction ladder was entered properly and reached its
+    **attestation** exit. Request **one** further pass FIRST: a reaction is not
+    evidence that a comment cannot arrive, and the comment form is the cheap fix.
+    Only if that pass also returns nothing but a reaction do you attest and
+    remove.
+  - **no signal at all** — Codex disabled or uninstalled for the repo, unable to
+    reach the head, or a request that errors or is simply never answered.
+    Request **one** further pass; if that produces nothing either, record what
+    was requested and what came back, and remove.
+
+  A state not on that list still has to satisfy the test, and the recorded
+  evidence is what makes it an exit rather than a shortcut.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head. **On the normal path — some
   SHA-bearing Codex response names HEAD — every check below is NECESSARY and
   only the clean-verdict test is sufficient**: a check that passes narrows what
   you are looking at; it never opens the gate on its own.
-  ⚠️ **Two documented exits sit OUTSIDE that framing and it must not be read as
+  ⚠️ **Three documented exits sit OUTSIDE that framing and it must not be read as
   closing them** — a gate that cannot be cleared is not stricter than one that
   can, it just moves the failure from a bad merge to a stalled PR:
   the **reaction ladder** below, which applies precisely when NOTHING from Codex
-  names HEAD, so a current-head response is not required on it; and
+  names HEAD, so a current-head response is not required on it;
   **_unavailable_**, a usage-limit reply that is never clean and still unblocks
-  the merge once stated on the PR. Neither is a way past a verdict you can READ:
+  the merge once stated on the PR; and **outage** — Codex disabled or uninstalled
+  for the repo, unable to reach the head, or erroring or silent across a further
+  request. That third one is here because the enumeration was TWO until a review
+  pointed out that a reviewer can be unreachable without saying so: the ladder
+  needs a reaction to attest against, and *unavailable* needs a reply, so a Codex
+  that answers nothing at all satisfied neither and left the PR permanently
+  unmergeable. It carries the heaviest evidence bar of the three, and it is the
+  same bar as the label rule above: **record on the PR what was requested, when,
+  and that nothing came back.**
+  None of the three is a way past a verdict you can READ:
   the ladder requires that nothing from Codex **names** the current head — a bare
   👍 names nothing, which is why it is the ladder's TRIGGER and never its bar —
-  and *unavailable* requires that no review can be obtained at all. Neither ever
-  bypasses an adverse verdict that exists, and neither clears the gate silently.
+  *unavailable* requires that no review can be obtained at all, and outage
+  requires that a further request produced no signal. None ever
+  bypasses an adverse verdict that exists, and none clears the gate silently.
   The checks:
   - **Wait for a Codex response naming the current head** — a review, a plain
     comment naming the reviewed commit, or an inline reply inside a review thread
@@ -193,7 +216,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     `codex-flagged` by hand**, per the last-resort rule above: a clean verdict in
     the COMMENT form names the head and the monitor clears the label itself
     (observed 2026-08-27 on #333 at `63bed51`), and hand removal is reserved for
-    the two exits that rule names.
+    the states that rule's test admits.
   - **Check the author — it validates the SOURCE, not the outcome.** Wording and
     a current SHA are both forgeable, so a response that is not the Codex bot's
     own cannot clear the gate. Authorship is necessary and never sufficient: a
@@ -353,9 +376,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     leave the label sitting there looking like an open concern. The clear path
     requires an all-clear **comment** matching `"Codex Review: Didn't find any
     major issues"`. So a clean rerun delivered in either unwatched form leaves the
-    blocker in place with nothing to remove it automatically: take the label off
-    by hand, with the one-line dismissal rationale the rule above requires. **Do
-    not read the stuck label as unaddressed concerns; read the PR.**
+    blocker in place with nothing to remove it automatically. **Request another
+    pass so the verdict lands as a comment the monitor acts on** — an inline
+    reply clears the verdict gate but is not evidence that a comment cannot
+    arrive, so it is not an opening on its own. Hand removal is governed solely
+    by the last-resort rule above. **Do not read the stuck label as unaddressed
+    concerns; read the PR.**
   - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
     current head.** Its `head_sha` is whatever the suite ran against, and on a PR
     under active push that is routinely a commit you have already replaced.
@@ -457,10 +483,11 @@ and waiting has a real cost.
 sessions auto-merge — don't ask me permission to merge each time").** When the
 gates hold — CI green on the head SHA; a **clean** current-head Codex verdict per
 the gate above (a response naming the head is not a verdict, since a review with
-live findings names it too), or one of that gate's two documented exits noted on
-the PR: the reaction ladder's attestation, or an *unavailable* usage-limit reply;
-no `codex-flagged` label — request a pass to clear it, or, on either exit above,
-remove it with the rationale the last-resort rule requires, since neither exit
+live findings names it too), or one of that gate's three documented exits noted
+on the PR: the reaction ladder's attestation, an *unavailable* usage-limit reply,
+or a recorded outage;
+no `codex-flagged` label — request a pass to clear it, or, on any of those exits,
+remove it with the evidence the last-resort rule requires, since none of them
 can produce the comment the monitor watches; no unresolved review threads; diff limited to the
 intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged

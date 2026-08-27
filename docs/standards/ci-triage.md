@@ -84,8 +84,8 @@ not edit workflows chasing a bug that isn't there.
   comments, then request another pass and let the monitor clear it — it only
   sees a **commented** all-clear, and a clean rerun may instead arrive as a 👍
   reaction or an inline review-thread reply, so check the comments AND the
-  review threads. Hand removal is a last resort bounded to two exits by
-  `directives/git.md` → *PR Lifecycle*, and needs the rationale named there
+  review threads. Hand removal is a last resort that `directives/git.md` → *PR
+  Lifecycle* bounds by a recorded-evidence test, and needs what that rule names
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

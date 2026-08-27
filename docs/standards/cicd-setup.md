@@ -254,8 +254,8 @@ clean rerun can instead arrive as a bare 👍 reaction **or as an inline
 review-thread reply**, and the monitor watches neither event — so check the PR's
 comments AND its review threads for a verdict naming the current head, then
 request another pass so the verdict lands in the form the monitor acts on. Hand
-removal is a last resort bounded to two exits by `directives/git.md` → *PR
-Lifecycle*. All three forms were observed on 2026-08-23 and which one arrives is
+removal is a last resort that `directives/git.md` → *PR Lifecycle* bounds by a
+recorded-evidence test. All three forms were observed on 2026-08-23 and which one arrives is
 not predictable.
 Behavior detail: `docs/standards/automations.md` → Automation 3.
 

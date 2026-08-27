@@ -28,8 +28,8 @@
 //
 // SILENCE MEANS "CHECKED AND FINE", NEVER "COULD NOT LOOK". Every failure has its
 // own exit code and its own printed line:
-//   0  three classes covered
-//   1  checked — a class is uncovered (the gate FAILED)
+//   0  three classes DECLARED — a config read, never an observed run (#335)
+//   1  checked — a class is undeclared (the gate FAILED)
 //   2  tests dir not found
 //   3  no Playwright config in the tests dir
 //   4  @playwright/test not resolvable from the config (CANNOT CHECK)
@@ -40,6 +40,10 @@
 //   8  usage error (nonsensical band bounds)
 //   9  a TOP-LEVEL test-selection key is PRESENT (CANNOT CHECK) — flagged on
 //      presence alone; this gate does not decide whether it actually narrows
+//  10  a non-built-in reporter is configured (CANNOT CHECK) — its preprocess()
+//      can exclude every test; built-ins are read from the installed Playwright
+//  11  that built-in reporter list could not be read (CANNOT CHECK) — the
+//      discriminator for 10 is unavailable, so no reporter can be vouched for
 // node_modules is environment-provided, not repo-guaranteed: in CI it exists
 // because the ui-suite composite ran `npm install` first. Its absence is 4 — a
 // loud "cannot check", never a pass.
@@ -219,19 +223,8 @@ console.log(`config:    ${configPath}`);
   // genuine no-op is refused. The diagnostic says so outright rather than
   // implying the config is broken. That direction is safe; the other is not.
   //
-  // NOT CHECKED HERE, and each is a KNOWN hole rather than an oversight:
-  //   * testDir — four predicates across three rounds, symlink hole remained.
-  //   * reporter — a custom reporter's preprocess() can call testRun.exclude()
-  //     or .skip() on every test (public API, 1.62.1). Reproduced 2026-08-27: a
-  //     three-band config with such a reporter runs ZERO tests while this gate
-  //     exits 0. It is not in the list below because the SHIPPED kit declares
-  //     `reporter`, as does essentially every real config — flagging the key
-  //     would fail the whole fleet on a default, which is the muted-guard
-  //     failure this file's round-1 finding was about. Distinguishing "custom"
-  //     from "built-in" needs a version-dependent name list: the same
-  //     enumerate-vs-derive move that produced the seventeen findings above.
-  // Both belong to #335. See the OK line at the bottom, which states the limit
-  // rather than leaving the success message to imply more than was checked.
+  // testDir is NOT checked here — four predicates across three rounds and a
+  // symlink hole remained. It belongs to #335.
   const SELECTION_KEYS = ['grep', 'grepInvert', 'testMatch', 'testIgnore', 'shard'];
   const rootFilters = SELECTION_KEYS.filter(k => cfg[k] !== undefined);
 
@@ -248,6 +241,70 @@ console.log(`config:    ${configPath}`);
       '  NOT by relocating it to the CI command line: a `--shard` (or `--grep`)',
       '  passed to `playwright test` partitions the same run while being invisible',
       '  here, which converts a refusal into a false green rather than fixing it.',
+      '  test.md -> UI coverage gates, fifth gate.',
+    ]);
+  }
+
+  // REPORTERS CAN REMOVE TESTS, so a reporter this gate cannot vouch for is a
+  // CANNOT CHECK. A reporter's preprocess() receives a TestRun and may call
+  // exclude(), skip() or skipSharding() on any test — public API in 1.62.1.
+  // Reproduced 2026-08-27: three correctly banded projects plus a reporter
+  // calling testRun.exclude() on every test runs ZERO scenarios, and this gate
+  // exited 0 naming all three bands.
+  //
+  // I first declined to check this, on the grounds that separating "custom" from
+  // "built-in" needs a version-dependent name list — the same enumerate-vs-derive
+  // move that produced seventeen findings on this PR. Codex answered it in round
+  // 8: the installed Playwright EXPORTS the list, so it is derived, not
+  // maintained. That distinction is the whole point and I had collapsed it.
+  //
+  //   require('playwright/lib/common').builtInReporters
+  //   -> ["list","line","dot","json","junit","null","github","html","blob"]
+  //
+  // Version-matched by construction: it comes from the same install the run uses.
+  // A built-in is Playwright's own code and is trusted here; anything else is
+  // arbitrary user code with the power to empty the run, and gets a loud exit.
+  //
+  // If that export ever moves, this fails LOUDLY (exit 11) rather than silently
+  // trusting every reporter — the difference between a check that stopped working
+  // and a check that says nothing, which is this file's founding subject.
+  let builtInReporters;
+  try {
+    const mod = createRequire(pathToFileURL(configPath))('playwright/lib/common');
+    builtInReporters = mod && mod.builtInReporters;
+    if (!Array.isArray(builtInReporters) || builtInReporters.length === 0) {
+      throw new Error('builtInReporters is not a non-empty array');
+    }
+  } catch (e) {
+    die(11, [
+      'CANNOT CHECK: cannot read the installed Playwright\'s built-in reporter list.',
+      `  ${(e && e.message) || e}`,
+      '  This gate needs it to tell a Playwright reporter from arbitrary user code,',
+      '  because a reporter\'s preprocess() can exclude every test in the run.',
+      '  It is read from the INSTALLED package (playwright/lib/common) rather than',
+      '  hard-coded, so it cannot go stale — but it can move between versions.',
+      '  Refusing here is deliberate: the alternative is trusting every reporter.',
+      '  test.md -> UI coverage gates, fifth gate.',
+    ]);
+  }
+  // reporter accepts a bare id, a [id, options] pair, or an array of either.
+  const reporterIds = (r => {
+    if (r === undefined) return [];
+    const one = e => (Array.isArray(e) ? e[0] : e);
+    return (Array.isArray(r) && !(typeof r[0] === 'string' && r.length === 2 && typeof r[1] === 'object')
+      ? r.map(one)
+      : [one(r)]).filter(x => typeof x === 'string');
+  })(cfg.reporter);
+  const foreignReporters = reporterIds.filter(id => !builtInReporters.includes(id));
+  if (foreignReporters.length) {
+    die(10, [
+      `FAIL: the config declares non-built-in reporter(s): ${foreignReporters.join(', ')} — CANNOT CHECK.`,
+      '  A reporter\'s preprocess() can call testRun.exclude() or .skip() on any',
+      '  test, so a run can execute nothing while every band is declared. This gate',
+      '  reads a config; it cannot execute your reporter to find out.',
+      `  Built-in reporters are accepted (from the installed Playwright): ${builtInReporters.join(', ')}.`,
+      '  This does NOT say your reporter removes tests — only that nothing here can',
+      '  establish that it does not.',
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }

@@ -80,12 +80,13 @@ const CASES = [
     { 'playwright.config.js': withProjects(`  //${LAPTOP.trimEnd()}\n` + TABLET + PHONE) },
     1, 'no unrestricted project covers laptop'],
 
-  // The fix for claude.trading's finding: a root-level filter INTERSECTS with every
-  // project, so all three bands can be perfectly declared while zero scenarios are
-  // scheduled. Before exit 9 existed, each of these printed a confident
-  // "check-ui-viewports: OK" naming all three classes. Both the per-project case
-  // below and these must stay: they are different code paths (`p[k]` vs `cfg[k]`),
-  // and it was the project one being covered that made the root one look covered.
+  // OBSERVED 2026-08-26, on the two fixtures below: with a root-level key set and
+  // all three bands correctly declared, this gate printed "check-ui-viewports: OK"
+  // naming all three classes. That is what claude.trading reported; it is a record
+  // of what the gate did, not a claim about how Playwright resolves either config.
+  // Both these and the per-project case below must stay — different code paths
+  // (`cfg[k]` vs `p[k]`), and the project one being covered is what made the root
+  // one look covered.
   ['root grep declared — refused, though all three bands are correct',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  grep: /__NEVER_MATCHES_ANY_TEST__/,\n`
@@ -201,39 +202,50 @@ const CASES = [
       + `  testIgnore: ['', 'app.spec.js'],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL testIgnore'],
 
-  // Codex round 7 on #333, both directions of the SAME key, and the pair is the
-  // point. `reporter` is not in SELECTION_KEYS, and these two cases pin why that
-  // is a decision rather than an omission.
+  // REPORTER: THREE CASES, ONE PER OUTCOME. Rounds 7-8 on #333.
   //
-  // The first is the shipped kit's own shape. If `reporter` were ever added to
-  // SELECTION_KEYS this case fails — which is the guard, because the shipped kit
-  // and effectively every real config in the fleet declare a reporter. Flagging
-  // the key would fail all of them on a default: a guard that fails everything
-  // gets deleted, and then the root-filter hole this PR closed is open again.
+  // A reporter's preprocess() can call testRun.exclude() on every test, so a run
+  // executes nothing while all three bands are declared (reproduced 1.62.1).
+  // Round 7 shipped this as a KNOWN false green, on the reasoning that telling
+  // custom from built-in needed a hand-maintained name list. Round 8 showed the
+  // installed Playwright EXPORTS the list, so it is DERIVED and version-matched:
+  // require('playwright/lib/common').builtInReporters. The distinction between a
+  // list you maintain and one you read is the whole subject of this file, and it
+  // had been collapsed.
   //
-  // The second is a KNOWN FALSE GREEN, pinned deliberately rather than described
-  // in prose. Reproduced 2026-08-27 in Playwright 1.62.1: a reporter whose
-  // preprocess() calls testRun.exclude() on every test leaves the run executing
-  // ZERO scenarios while this gate certifies three bands. It is pinned at exit 0
-  // because that is what the gate DOES, and a bound nobody can see is the
-  // fail-open shape (#323) wearing a comment. #335 owns closing it.
-  //
-  // Do NOT "fix" the second by making the first fail. Both must hold, and no
-  // static read of a config object can satisfy both — which is the whole
-  // argument for observing a run instead.
-  ['reporter declared, shipped-kit shape — must NOT trip (fleet-wide false alarm)',
+  // The first case is the fleet guard: the shipped kit's own reporters are
+  // built-in and must pass. If anyone replaces the derived list with a stricter
+  // rule, this fails.
+  ['built-in reporters (shipped-kit shape) — must NOT trip',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['list'], ['json', { outputFile: 'r.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
-  ['custom reporter excluding every test — KNOWN false green, owned by #335',
+  // The second is the hole itself, now closed. It was pinned at exit 0 for one
+  // round as a visible known-wrong expectation; it is exit 10 now.
+  ['custom reporter (can exclude every test) — refused',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['./drop-all.js']],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'drop-all.js': 'export default class { preprocess({ testRun, suite }) '
         + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
-    0, 'declared, not executed'],
+    10, 'non-built-in reporter'],
+
+  // The third pins the DISCRIMINATOR'S OWN failure. Deriving the list is only
+  // safer than hard-coding it while the export exists; if it moves, the branch
+  // must go loud rather than trusting every reporter. Without this case that
+  // fallback is untested code, which is how a "cannot check" quietly becomes a
+  // pass. The fixture shadows `playwright` one directory below node_modules, so
+  // the config still imports the REAL @playwright/test from above it.
+  ['built-in reporter list unreadable — loud CANNOT CHECK, not a free pass',
+    { 'sub/playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['./whatever.js']],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'sub/node_modules/playwright/package.json': '{ "name": "playwright", "main": "index.js" }\n',
+      'sub/node_modules/playwright/index.js': 'module.exports = {};\n',
+      'sub/node_modules/playwright/lib/common.js': 'module.exports = {};\n' },
+    11, 'built-in reporter list', { subdir: 'sub' }],
 
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(
@@ -315,7 +327,13 @@ function runCase(files, opts) {
       writeFileSync(dest, body);
     }
     if (o.nodeModules !== false) symlinkSync(NODE_MODULES, link, 'dir');
-    const target = o.missingDir ? join(tmp, 'no-such-dir') : tmp;
+    // opts.subdir runs the gate against tmp/<subdir> while node_modules stays at
+    // tmp/. Node resolution walks UP, so a case can shadow one package for the
+    // gate (tmp/<subdir>/node_modules/<pkg>) while `@playwright/test` still
+    // resolves to the real install one level above. That is the only way to
+    // exercise the "cannot read the built-in reporter list" branch without
+    // writing into the shared node_modules, which this self-test must never do.
+    const target = o.missingDir ? join(tmp, 'no-such-dir') : (o.subdir ? join(tmp, o.subdir) : tmp);
     const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '' };
     const args = o.env ? [CHECK] : [CHECK, '--tests-dir', target];
     const r = spawnSync(process.execPath, args, { encoding: 'utf8', env, cwd: REPO_ROOT });

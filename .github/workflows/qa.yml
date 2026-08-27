@@ -213,6 +213,16 @@ jobs:
       - name: Check the viewport gate itself reads configs correctly
         run: node .github/scripts/check-ui-viewports-cases.js
 
+      # The viewport gate IMPORTS the config, so it evaluates whatever that config
+      # computes from process.env. Give it a thinner environment than the step
+      # that runs the suite and the two read different configs — a selection key
+      # conditional on TEST_AUTH_CREDENTIAL is invisible to one and active in the
+      # other (Codex reproduced it on #333). The composite now copies the run
+      # step's env onto the check step; this keeps that copy honest, since a
+      # comment saying "add it here too" is not a mechanism.
+      - name: Check the ui-suite composite gives both steps the same environment
+        run: python3 .github/scripts/check-ui-suite-env.py
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

@@ -117,10 +117,23 @@ runs:
     # Copy templates/scripts/check-ui-viewports.js to .github/scripts/ WITH this
     # composite — this step names it by path and fails at resolution without it,
     # the same coupling check-job-bounds.py has with qa.yml.
+    #
+    # THE SAME ENVIRONMENT AS THE RUN STEP, deliberately. This step IMPORTS the
+    # config, so it evaluates whatever that config computes from process.env — and
+    # the shipped config already reads APP_URL. Give it a thinner environment than
+    # `Run Playwright tests` below and the two steps read DIFFERENT configs: a
+    # selection key set only when TEST_AUTH_CREDENTIAL is present is invisible
+    # here and active there. Reproduced by Codex on #333 with a config setting
+    # `shard` under that condition — check step exit 0, run step partitioned.
+    # Any variable added to the run step below must be added here too.
     - name: Check three viewport classes are declared
       shell: bash
       env:
         TESTS_DIR: ${{ inputs.tests-dir }}
+        APP_URL: ${{ inputs.app-url }}
+        TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
+        TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        APP_PAGES: ${{ inputs.app-pages }}
       run: node .github/scripts/check-ui-viewports.js --tests-dir "$TESTS_DIR"
 
     # Browsers are ~400MB and were re-downloaded on EVERY run. This is a BUDGET

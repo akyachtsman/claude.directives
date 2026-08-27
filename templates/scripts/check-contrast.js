@@ -105,12 +105,12 @@ if (FILES.length === 0) {
 //   * `--color-\61 ccent` is `--color-accent` — an escape in an identifier
 //   * `content: "/*"` does not open a comment, and a later `*/` does not close one
 //   * a `\` before a newline continues a string
-//   * `url(data:…;…)` contains a `;` that is not a separator
 //   * `--x: { … }` is a legal custom-property value containing braces
 //   * `!important` is a flag on the declaration, not part of the value
 // So this walks the file once, in CSS's own terms: comments become a SPACE
 // (a boundary, never a join), strings and their escapes are consumed whole,
-// brackets nest, and identifier escapes are decoded before the name is read.
+// brackets nest, and what it cannot read in CSS's terms it REFUSES rather than
+// guessing at -- identifier escapes among them.
 // It is not a full CSS parser and does not need to be — it needs to agree with
 // one about where a declaration starts and ends, which is all this gate reads.
 // Anything it cannot reason about is FATAL, never skipped: `@import` brings in a
@@ -144,14 +144,21 @@ function atRuleProblem(buf) {
   return `an @${name || '(unreadable)'} rule — only @media and @supports wrap declarations this check can read`;
 }
 
-// Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name to
+// Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name --
+// as spelled, since an escaped identifier is refused rather than decoded -- to
 // every value declared for it, in source order.
 function scanDeclarations(css) {
   const decls = {};
   let buf = '';          // the declaration candidate being accumulated
   let colonAt = -1;      // index in buf of its first top-level `:`
   const closers = [];    // open ( [ and value-level { , innermost last
-  let blocks = 0;        // rule-block nesting
+  // What each open block CONTAINS, innermost last: 'decl' for a qualified
+  // rule's declaration list, 'rule' for a grouping rule (@media/@supports),
+  // which contains further rules and NOT declarations. A depth counter was not
+  // enough: inside @media, `blocks > 0` was true while the block held rules, so
+  // `@media (…) { --color-accent:hover { … } }` had its qualified rule read as a
+  // custom-property value. The kind is the property; the depth was a proxy.
+  const blockKinds = [];
 
   const flush = () => {
     if (colonAt >= 0) {
@@ -185,9 +192,15 @@ function scanDeclarations(css) {
         // CSS normalises CRLF to one newline before tokenizing, so a backslash
         // continues the string across BOTH characters. Skipping only the \r
         // left the \n to trip the unterminated check on a CRLF file.
-        if (css[j] === '\\') { j += (css[j + 1] === '\r' && css[j + 2] === '\n') ? 2 : 1; continue; }
+        if (css[j] === '\\') { j += (css[j + 1] === '\r' && css[j + 2] === '\n') ? 2 : 1; continue; }   // CRLF is ONE newline
         if (css[j] === c) break;
-        if (css[j] === '\n') return { fatal: `an unterminated ${c === '"' ? 'double' : 'single'}-quoted string` };
+        // CSS preprocessing turns a lone CR and a form feed into newlines, so
+        // all three end an unescaped string. Recognising only \n let a CR-only
+        // file run the "string" past a live override and exit 0 -- a silent
+        // certification where the intended answer was a loud refusal.
+        if (css[j] === '\n' || css[j] === '\r' || css[j] === '\f') {
+          return { fatal: `an unterminated ${c === '"' ? 'double' : 'single'}-quoted string` };
+        }
       }
       if (j >= css.length) return { fatal: `an unterminated ${c === '"' ? 'double' : 'single'}-quoted string` };
       buf += c + c;       // the string stays, its contents do not
@@ -204,6 +217,27 @@ function scanDeclarations(css) {
       return { fatal: 'an HTML comment delimiter (<!-- or -->), which CSS discards and this check will not read around' };
     }
 
+    // An UNQUOTED url() is its own tokenizer state, and the point of it is what
+    // it does NOT recognise: inside the URL, `/*` is data, not a comment opener.
+    // Bracket nesting alone protected the `;` and left this open, so `url(x/*)`
+    // followed later by a real `*/` deleted everything between them — a live
+    // override included — and the guard exited 0. Consume it here, to the first
+    // unescaped `)`, with no comment or string scanning inside: that is the
+    // whole state, and modelling it REMOVES two recognitions rather than adding
+    // one. `url("…")` is a function token, not this — the quote is handled by
+    // the string rule above, so only an unquoted first character takes this path.
+    const urlOpen = /^url\(\s*(?!["'])/i.exec(css.slice(i));
+    if (urlOpen) {
+      let j = i + urlOpen[0].length;
+      for (; j < css.length; j++) {
+        if (css[j] === '\\') { j++; continue; }
+        if (css[j] === ')') break;
+      }
+      if (j >= css.length) return { fatal: 'an unterminated url() token' };
+      buf += 'url()';
+      i = j;
+      continue;
+    }
     if (c === '(' || c === '[') { closers.push(c === '(' ? ')' : ']'); buf += c; continue; }
     if ((c === ')' || c === ']') && closers[closers.length - 1] === c) { closers.pop(); buf += c; continue; }
 
@@ -214,21 +248,26 @@ function scanDeclarations(css) {
       // selector happens to start with two dashes, not a declaration; inferring
       // "declaration" from the prefix alone recorded its whole block as a second
       // value and rejected a valid palette.
+      const inDeclList = blockKinds[blockKinds.length - 1] === 'decl';
       if (closers.length > 0
-          || (blocks > 0 && colonAt >= 0 && buf.slice(0, colonAt).trim().startsWith('--'))) {
+          || (inDeclList && colonAt >= 0 && buf.slice(0, colonAt).trim().startsWith('--'))) {
         closers.push('}');
         buf += c;
         continue;
       }
       const bad = atRuleProblem(buf);
       if (bad) return { fatal: bad };
-      buf = ''; colonAt = -1; blocks++;
+      // A grouping rule's block holds RULES; a selector's block holds
+      // DECLARATIONS. Only the second can contain a custom property, so only
+      // the second lets a later `{` open a value.
+      blockKinds.push(buf.trim().startsWith('@') ? 'rule' : 'decl');
+      buf = ''; colonAt = -1;
       continue;
     }
     if (c === '}') {
       if (closers[closers.length - 1] === '}') { closers.pop(); buf += c; continue; }
       flush();                       // the last declaration may omit its `;`
-      if (blocks > 0) blocks--;
+      blockKinds.pop();
       continue;
     }
 
@@ -243,7 +282,7 @@ function scanDeclarations(css) {
     buf += c;
   }
   flush();
-  if (closers.length > 0 || blocks > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
+  if (closers.length > 0 || blockKinds.length > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
   return { decls };
 }
 

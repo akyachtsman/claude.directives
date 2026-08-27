@@ -264,6 +264,32 @@ const CASES = [
   ['a brace-valued override is recorded, not dropped',
     { 'styles/tokens.css': plus(':root { --color-accent: { #FFFFFF }; }\n') }, 1, DUP],
 
+  // ── #337 round 4: three more parser states ────────────────────────────────
+  // Inside an unquoted url(), `/*` is URL DATA. Bracket nesting protected the
+  // `;` (round 2) and left comment recognition inside the URL, so the strip ate
+  // from the URL's `/*` to a later real `*/` — override included — and exited 0.
+  ['a comment marker inside an unquoted url() is URL data',
+    { 'styles/tokens.css': plus('.btn { background: url(x/*); --color-accent:#fff; /* */); }\n') },
+    1, DUP],
+
+  // CSS turns a lone CR and a form feed into newlines, so both end an unescaped
+  // string. Recognising only \n ran the "string" past a live override and
+  // certified the palette instead of refusing it.
+  ['a lone CR ends an unescaped string',
+    { 'styles/tokens.css': plus('.btn { content:"x\r; --color-accent:#fff; /* " */ }\n') },
+    1, 'unterminated'],
+
+  ['a form feed ends an unescaped string',
+    { 'styles/tokens.css': plus('.btn { content:"x\f; --color-accent:#fff; /* " */ }\n') },
+    1, 'unterminated'],
+
+  // `blocks > 0` was a proxy for "in a declaration list" and a grouping rule
+  // breaks it: inside @media the block holds RULES, so the qualified rule's
+  // brace was read as opening a custom-property value.
+  ['a qualified rule inside @media is a rule, not a declaration',
+    { 'styles/tokens.css': plus('@media (min-width: 1px) { --color-accent:hover { color: red; } }\n') },
+    0, OK9],
+
   // ── Input this gate refuses outright ──────────────────────────────────────
   // An @import names a stylesheet this gate never reads, so a theme override
   // living there is invisible: the guard exited 0 on a palette whose rendered

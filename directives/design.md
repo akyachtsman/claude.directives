@@ -128,14 +128,21 @@ tokens file** holding that theme's resolved values and adds it to `CANDIDATES`
 at the top of the script — every candidate that exists is measured, one palette
 per run. Tokens no pair reads are unaffected.
 
-The guardrail reads the file with a small CSS scanner rather than a regex, so an
-escaped identifier, a comment inside a value, a `url()` containing a `;` and a
-`!important` flag are all read the way CSS reads them. What it **refuses
-outright**: any at-rule other than `@media`/`@supports` (an `@import` names a
-sheet the check never reads, so a theme override living there would be
-invisible), a backslash escape outside a string, an HTML comment delimiter, and
-an unterminated string or comment. Keep `styles/tokens.css` self-contained and
-spell identifiers plainly.
+**What the guardrail accepts.** It reads the file with a small CSS scanner rather
+than a regex, so a comment inside a value, a `url()` containing a `;` or a `/*`,
+a `!important` flag, a string spanning an escaped newline, and a qualified rule
+inside `@media` are all read the way CSS reads them. What it **refuses
+outright**, because reading part of a palette is worse than reading none:
+
+- any at-rule other than `@media`/`@supports` — an `@import` names a sheet the
+  check never reads, so a theme override living there would be invisible;
+- **a backslash escape outside a string.** CSS would read `--color-\61 ccent` as
+  `--color-accent`; this refuses it instead of decoding it, so **spell
+  identifiers plainly**;
+- an HTML comment delimiter (`<!--` / `-->`);
+- an unterminated string or comment, or unbalanced brackets.
+
+Keep `styles/tokens.css` self-contained.
 
 ## Motion
 - Keep transitions short and calm (≈0.15s ease is a good default)

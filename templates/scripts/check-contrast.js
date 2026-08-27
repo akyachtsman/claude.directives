@@ -310,7 +310,8 @@ function scanDeclarations(rawCss) {
   //     Two rounds patched the consequences of not doing this (the identifier
   //     capture in round 8, the url boundary now); doing the substitution once,
   //     at the layer CSS does it, retires both.
-  const css = (rawCss.charCodeAt(0) === 0xFEFF ? rawCss.slice(1) : rawCss).replace(/\0/g, '\uFFFD');
+  const hadBom = rawCss.charCodeAt(0) === 0xFEFF;
+  const css = (hadBom ? rawCss.slice(1) : rawCss).replace(/\0/g, '\uFFFD');
 
   // @charset is read HERE, from the raw text, and not in atRuleProblem — by the
   // time a declaration reaches that function its strings have been consumed and
@@ -329,7 +330,21 @@ function scanDeclarations(rawCss) {
   // refused `@CHARSET "shift_jis";` on a file that is in fact readable UTF-8,
   // which is the loud-but-wrong direction: the previous version was strict about
   // the encoding and sloppy about what counts as declaring one.
-  const charset = /^@charset "([^"]*)";/.exec(css);
+  // AND ONLY WHEN THERE WAS NO BOM. A UTF-8 BOM is itself the encoding
+  // signature and it OUTRANKS `@charset`: per spec, text following a BOM is not
+  // an encoding declaration at all, so a BOM-prefixed `@charset "shift_jis";`
+  // describes a file that is already, correctly, being read as UTF-8. Sniffing
+  // the stripped text made the BOM invisible to the check that most needed to
+  // see it, and refused a stylesheet this gate reads perfectly well.
+  //
+  // Note which direction this was wrong in. Every other refusal here exists
+  // because a partial read produces a confident number about a colour the page
+  // may never render; this one produced no number at all, on a file with
+  // nothing wrong with it. I asked about exactly this position in the round-12
+  // request — "after the BOM strip, is offset 0 still the right position?" —
+  // and shipped the version I was already unsure of. Naming a doubt is not
+  // resolving it, which is the same note round 4 of the sibling PR earned.
+  const charset = hadBom ? null : /^@charset "([^"]*)";/.exec(css);
   if (charset && !/^utf-?8$/i.test(charset[1])) {
     return { fatal: `an @charset of "${charset[1]}" — this gate decodes every file as UTF-8,`
       + ' so it would read different characters than the browser does' };
@@ -547,6 +562,16 @@ function scanDeclarations(rawCss) {
       // closes more blocks than it opens reached the end balanced and exited 0
       // — contradicting the refusal this same function documents.
       if (depth === 0) return { fatal: 'a closing brace with no matching open — the file does not parse as CSS' };
+      // AND THE AT-RULE CHECK, which this terminator alone did not run. `;` and
+      // EOF both call atRuleProblem() before flush(); `}` called only flush(),
+      // so `.e { @whatever }` — an at-rule that is the last item in a block and
+      // is terminated by the closing brace — printed OK — 9/9 while the same
+      // at-rule under either twin was refused. Round 12's own commit note said
+      // "every other terminator checks it; EOF is a terminator too", and left
+      // the third one out while saying it. That is the EIGHTH time on these two
+      // PRs that a check existed on one path and not its twin.
+      const badAt = atRuleProblem(buf);
+      if (badAt) return { fatal: badAt };
       const bad = flush();           // the last declaration may omit its `;`
       if (bad) return { fatal: bad };
       records.pop();

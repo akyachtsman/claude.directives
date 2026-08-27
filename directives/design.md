@@ -182,7 +182,9 @@ none:
   comparing them literally, so one it cannot compare is refused rather than
   skipped — **spell token names in plain ASCII**;
 - **a non-UTF-8 `@charset`.** This gate decodes every file as UTF-8 whatever the
-  preamble says, so it would read different characters than the browser does;
+  preamble says, so it would read different characters than the browser does.
+  **A UTF-8 BOM outranks it:** the BOM is itself the encoding signature, so text
+  following one is not an encoding declaration at all and the file is accepted;
 - an unterminated string or comment, or an unbalanced bracket of any kind —
   including a closing `}`, `)` or `]` with nothing open.
 

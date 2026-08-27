@@ -690,6 +690,35 @@ const CASES = [
   ['an unknown at-rule terminated by EOF is still refused',
     { 'styles/tokens.css': BASE + '@whatever' }, 1, ATRULE],
 
+  // ── #337 round 13: the THIRD terminator, and the BOM's precedence ─────────
+  // `;` and EOF both ran the at-rule check before flush(); `}` ran only
+  // flush(). So an at-rule that is the last item in a block and is closed by
+  // the brace was never seen by the allow-list, and `.e { @whatever }` printed
+  // OK — 9/9 while the SAME at-rule under either twin was refused. Round 12
+  // added the EOF half and wrote "every other terminator checks it" while this
+  // one did not.
+  ['an unknown at-rule closed by } — not just by ; or EOF',
+    { 'styles/tokens.css': BASE + '.e { @whatever }\n' }, 1, ATRULE],
+
+  // The must-NOT-fail twin. Without it the case above passes for a file that
+  // refuses every at-rule inside a block, which is a different bug.
+  ['…while an allowed at-rule closed by } is still fine',
+    { 'styles/tokens.css': BASE + '.e { @media print { color: #000; } }\n' }, 0, OK9],
+
+  // A UTF-8 BOM IS the encoding signature and outranks @charset: per spec, text
+  // after a BOM is not an encoding declaration at all. Sniffing the stripped
+  // text hid the BOM from the check that most needed to see it, and refused a
+  // file this gate reads perfectly. The wrong direction is unusual here — no
+  // confident number, just a red build on a sound stylesheet.
+  ['a BOM outranks a following @charset, which declares nothing',
+    { 'styles/tokens.css': '\ufeff@charset "shift_jis";\n' + BASE }, 0, OK9],
+
+  // The twin that keeps the case above honest: with no BOM there is nothing to
+  // outrank, and the same declaration is still refused. Deleting the BOM must
+  // flip the verdict, or the first case is only testing that @charset parses.
+  ['…and without the BOM the same @charset is still refused',
+    { 'styles/tokens.css': '@charset "shift_jis";\n' + BASE }, 1, 'decodes every file as UTF-8'],
+
   // `\s*` consumed the space, the quote lookahead failed, and the engine
   // BACKTRACKED to zero width where the next character is a space — so a quoted
   // URL was read as unquoted and the scanner stopped at the `)` inside it.

@@ -89,7 +89,7 @@ admits, stated on the PR. The two states are an *unavailable* reply still inside
 its reset window, or a
 request that could not be made or accepted at all — never elapsed silence — and note the ladder
 clears the verdict gate ONLY. Where no `codex-flagged` label is present, the
-ladder is the whole gate and the merge proceeds unattended; where one is, a reaction-only
+ladder is the whole gate and the merge proceeds unattended. Where one is, a reaction-only
 round leaves it and escalates, no `codex-flagged` label,
 no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
 - `main` here enforces **Require conversation resolution before merging**

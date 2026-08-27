@@ -404,7 +404,22 @@ for (const claim of claims) {
           fail(`${id}: per-consumer mustNotMatch entries for ${file} must be non-empty strings, got ${JSON.stringify(bad)}`);
           continue;
         }
-        if (useRe.test(normalize(bad))) {
+        // `prep`, not normalize(): the consumer file below is read through
+        // `prep`, and a probe judged by a different reader is a probe about a
+        // string the checker never sees. On a `raw` claim normalize() erases the
+        // newline or the `*` marker the probe exists to carry, so the override
+        // would be accepted or rejected on evidence that does not exist — the
+        // exact reader split `raw` was added to close, surviving in the two
+        // override paths. Flagged as a risk when `raw` landed and shipped
+        // anyway; naming a hole is not closing it.
+        // READ THE LIMIT: NOTHING IN THE MANIFEST EXERCISES THIS TODAY. The only
+        // `raw` claim is sourceOnly and declares no per-consumer override, so
+        // reverting this line to normalize() passes the whole suite — measured.
+        // It is correct by construction, not by test, and it is the shape that
+        // rots: the first raw claim to gain an override inherits the guarantee
+        // silently, or inherits the bug silently, and the suite says the same
+        // thing either way.
+        if (useRe.test(prep(bad))) {
           fail(`${id}: per-consumer pattern for ${file} MATCHES a string it must reject: ${JSON.stringify(bad.slice(0, 90))}…\n      pattern: ${useRe.source}`);
         }
       }
@@ -423,7 +438,7 @@ for (const claim of claims) {
       // arm in a skill eval: a test that passes with and without the thing it
       // tests has measured nothing.
       const exercises = ovNot.some((bad) => {
-        const n = normalize(bad);
+        const n = prep(bad);          // the same reader as the check, see above
         return re.test(n) && !useRe.test(n);
       });
       if (!exercises) {

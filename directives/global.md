@@ -752,10 +752,14 @@ needs restating.
    happened and been verified — the deploy and `qa-live` where the change is
    deploy-backed and the repo carries the workflows, and equally the migration
    applied and checked, the edge function redeployed, the rollout completed
-   (`data.md` → *Reversible-by-Design Backend Changes*). Work that produces no
-   PR — a read-only command, an investigation, a question answered, a change
+   (`data.md` → *Reversible-by-Design Backend Changes*). **INFORMATIONAL** work
+   — a read-only command, an investigation, a question answered, a change
    correctly judged unnecessary — is done when the finding is reported with its
-   evidence. Never manufacture a PR to reach a terminal state.
+   evidence. Absence of a PR is not what makes it done: work that CHANGES
+   something is done when that change is verified whether or not it produced a
+   PR, so a migration applied by hand, an edge function redeployed, a service
+   restarted, a setting changed outside the repo are each done at the verified
+   effect, never at the report. Never manufacture a PR to reach a terminal state.
 6. **The Escalation Rules still bind — all of them, as written.** Proceed
    removes the need to ask about **steps**. It does not narrow that section, and
    nothing here restates it: read it. Two of its gates are the ones "proceed"

@@ -84,8 +84,9 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 squash-merge on green — no approval is sought — once `git.md` → *Conditional
 Auto-Merge on Green* holds: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
-one of that gate's three documented exits stated on the PR (the reaction ladder's
-attestation, an *unavailable* usage-limit reply, or a recorded outage), no `codex-flagged` label,
+any state its *unreachable-review test* admits, stated on the PR (today: the
+reaction ladder's attestation, an *unavailable* usage-limit reply, or an outage
+recorded after a conclusively ended pass), no `codex-flagged` label,
 no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
 - `main` here enforces **Require conversation resolution before merging**
   server-side (owner, 2026-08-26), so an unresolved thread refuses the merge
@@ -201,8 +202,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   **request another review pass** rather than removing the label — a clean
   COMMENT verdict naming the head clears it automatically, observed 2026-08-27
   on #333 at `63bed51`. Hand removal is the last resort `git.md` → *PR
-  Lifecycle* bounds by a test — a further request demonstrably cannot produce a
-  verdict, with the evidence on the PR. A
+  Lifecycle* bounds by the *unreachable-review test* — a further request
+  demonstrably cannot produce a verdict, with the evidence on the PR, and a pass
+  counts as ended only on that rule's terms. A
   stuck label is not evidence of open concerns, and removing it is not evidence
   of their absence.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the

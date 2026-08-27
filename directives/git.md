@@ -145,13 +145,33 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   say; requesting a pass makes Codex say it, in the form the monitor watches. So
   the default is always: request the pass, let the monitor clear the label.
 
-  **The opening is a TEST, not a list.** A list of ways a reviewer can be
-  unreachable is a list that is one entry short — an enumeration of two was, and
-  the third was found by the reviewer it forgot. The test: **a further request
-  demonstrably cannot produce a verdict, and the evidence for that is ON THE PR**
-  — what was requested, when, and what came back or that nothing did. Then remove
-  the label with a rationale naming that evidence. Absent the evidence, a stuck
-  label is work, not a formality: request the pass.
+  **The opening is a TEST, not a list — the *unreachable-review test*.** A list of
+  ways a reviewer can be unreachable is a list that is one entry short — an
+  enumeration of two was, and the third was found by the reviewer it forgot. The
+  test: **a further request demonstrably cannot produce a verdict, and the
+  evidence for that is ON THE PR** — what was requested, when, and what came back
+  or that nothing did. Then remove the label with a rationale naming that
+  evidence. Absent the evidence, a stuck label is work, not a formality: request
+  the pass. The same test is what opens the verdict gate below; one test, so the
+  two cannot drift into disagreeing about which states count.
+
+  **What ends a pass CONCLUSIVELY**, since the whole test turns on it. *Nothing
+  came back* is not a reading you may take the moment you look: a request still
+  in flight produces the identical observation to one that will never be
+  answered, and recording it early merges over findings Codex is still writing.
+  A pass has ended only when one of these holds:
+  - the request could not be made or accepted at all — the App is not installed,
+    the trigger errors, GitHub reports it cannot be delivered; or
+  - **30 minutes** have passed since the request and the PR still carries no
+    Codex review, comment, inline reply **or reaction**. Check all four: a
+    verdict in a form the monitor does not watch is still a verdict, and three of
+    those four are exactly the forms a comments-only check misses.
+
+  Thirty minutes is ~5× the slowest response measured in this repo (0–6 minutes
+  across five requests, 2026-08-27) and it costs nothing but waiting, which is
+  the point — the cheap error here is waiting too long, and the expensive one is
+  merging past a review in progress. State the request time and the check time on
+  the PR. **A pass that has not ended is not evidence.**
 
   The instances seen so far, each with what it needs. **Never request a series**
   — Codex is metered per request from a shared weekly pool (below):
@@ -161,12 +181,13 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **reaction-only** — the reaction ladder was entered properly and reached its
     **attestation** exit. Request **one** further pass FIRST: a reaction is not
     evidence that a comment cannot arrive, and the comment form is the cheap fix.
-    Only if that pass also returns nothing but a reaction do you attest and
-    remove.
+    Only once that pass has CONCLUSIVELY ended (above) with nothing but a
+    reaction do you attest and remove.
   - **no signal at all** — Codex disabled or uninstalled for the repo, unable to
     reach the head, or a request that errors or is simply never answered.
-    Request **one** further pass; if that produces nothing either, record what
-    was requested and what came back, and remove.
+    Request **one** further pass; once that pass has CONCLUSIVELY ended (above)
+    with nothing, record what was requested, when, what was checked and that
+    nothing came back, and remove.
 
   A state not on that list still has to satisfy the test, and the recorded
   evidence is what makes it an exit rather than a shortcut.
@@ -175,22 +196,20 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   SHA-bearing Codex response names HEAD — every check below is NECESSARY and
   only the clean-verdict test is sufficient**: a check that passes narrows what
   you are looking at; it never opens the gate on its own.
-  ⚠️ **Three documented exits sit OUTSIDE that framing and it must not be read as
-  closing them** — a gate that cannot be cleared is not stricter than one that
-  can, it just moves the failure from a bad merge to a stalled PR:
+  ⚠️ **Any state the _unreachable-review test_ above admits sits OUTSIDE that
+  framing, and it must not be read as closing them** — a gate that cannot be
+  cleared is not stricter than one that can, it just moves the failure from a bad
+  merge to a stalled PR. This gate takes the test, not a copy of its instances:
+  an enumeration here would disagree with the test the first time a fourth state
+  appears, which is the disagreement this wording exists to end. The instances
+  known today:
   the **reaction ladder** below, which applies precisely when NOTHING from Codex
   names HEAD, so a current-head response is not required on it;
   **_unavailable_**, a usage-limit reply that is never clean and still unblocks
   the merge once stated on the PR; and **outage** — Codex disabled or uninstalled
-  for the repo, unable to reach the head, or erroring or silent across a further
-  request. That third one is here because the enumeration was TWO until a review
-  pointed out that a reviewer can be unreachable without saying so: the ladder
-  needs a reaction to attest against, and *unavailable* needs a reply, so a Codex
-  that answers nothing at all satisfied neither and left the PR permanently
-  unmergeable. It carries the heaviest evidence bar of the three, and it is the
-  same bar as the label rule above: **record on the PR what was requested, when,
-  and that nothing came back.**
-  None of the three is a way past a verdict you can READ:
+  for the repo, unable to reach the head, or erroring or silent across a
+  conclusively ended pass.
+  None of them is a way past a verdict you can READ:
   the ladder requires that nothing from Codex **names** the current head — a bare
   👍 names nothing, which is why it is the ladder's TRIGGER and never its bar —
   *unavailable* requires that no review can be obtained at all, and outage
@@ -483,12 +502,13 @@ and waiting has a real cost.
 sessions auto-merge — don't ask me permission to merge each time").** When the
 gates hold — CI green on the head SHA; a **clean** current-head Codex verdict per
 the gate above (a response naming the head is not a verdict, since a review with
-live findings names it too), or one of that gate's three documented exits noted
-on the PR: the reaction ladder's attestation, an *unavailable* usage-limit reply,
-or a recorded outage;
-no `codex-flagged` label — request a pass to clear it, or, on any of those exits,
-remove it with the evidence the last-resort rule requires, since none of them
-can produce the comment the monitor watches; no unresolved review threads; diff limited to the
+live findings names it too), or any state the *unreachable-review test* admits,
+recorded on the PR — the instances known today being the reaction
+ladder's attestation, an *unavailable* usage-limit reply, and a recorded outage;
+no `codex-flagged` label — request a pass to clear it, or, on any state that same
+test admits, remove it with the evidence the last-resort rule requires, since
+none of them can produce the comment the monitor watches; no unresolved review
+threads; diff limited to the
 intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged
 SHA to a terminal state and confirm the live site serves it). This covers every

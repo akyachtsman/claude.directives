@@ -299,7 +299,18 @@ function scanDeclarations(rawCss) {
   // followed by `@property --color-accent { inherits: false; … }` printed
   // OK — 9/9 while the browser applied the registration. Strip it here, once,
   // rather than teaching every downstream test to ignore it.
-  const css = rawCss.charCodeAt(0) === 0xFEFF ? rawCss.slice(1) : rawCss;
+  // CSS PREPROCESSING, done here because it is what the browser does before
+  // tokenizing and every downstream rule assumes it has happened:
+  //   * a leading BOM is removed — CSS decoding drops it, Node's utf8 read keeps
+  //     it, and one U+FEFF made `head.startsWith('@')` false for the FIRST
+  //     at-rule in the file, skipping the whole allow-list (round 11);
+  //   * U+0000 becomes U+FFFD, which is a NAME character — so `<NUL>url(` stays
+  //     one ordinary function token and does NOT enter the URL state, and
+  //     `@media<NUL>` is the unknown at-rule `media<FFFD>` rather than `media`.
+  //     Two rounds patched the consequences of not doing this (the identifier
+  //     capture in round 8, the url boundary now); doing the substitution once,
+  //     at the layer CSS does it, retires both.
+  const css = (rawCss.charCodeAt(0) === 0xFEFF ? rawCss.slice(1) : rawCss).replace(/\0/g, '\uFFFD');
 
   // @charset is read HERE, from the raw text, and not in atRuleProblem — by the
   // time a declaration reaches that function its strings have been consumed and
@@ -311,7 +322,14 @@ function scanDeclarations(rawCss) {
   // whose bytes CSS reads as one identifier character arrives as U+FFFD plus a
   // stray backslash and fails on an escape that does not exist. Refusing beats
   // red-building a valid stylesheet for a reason that names the wrong thing.
-  const charset = /^@charset[ \t]+"([^"]*)"/i.exec(css);
+  // THE EXACT BYTE FORM, or it is not an encoding declaration at all. CSS's
+  // sniff requires `@charset "…";` spelled in lowercase, with ONE ASCII space
+  // and a terminating quote-semicolon — anything else is a parsed-and-ignored
+  // at-rule that changes no decoding. A case-insensitive, multi-whitespace match
+  // refused `@CHARSET "shift_jis";` on a file that is in fact readable UTF-8,
+  // which is the loud-but-wrong direction: the previous version was strict about
+  // the encoding and sloppy about what counts as declaring one.
+  const charset = /^@charset "([^"]*)";/.exec(css);
   if (charset && !/^utf-?8$/i.test(charset[1])) {
     return { fatal: `an @charset of "${charset[1]}" — this gate decodes every file as UTF-8,`
       + ' so it would read different characters than the browser does' };
@@ -553,7 +571,14 @@ function scanDeclarations(rawCss) {
   // terminator checks it; EOF is a terminator too.
   const trailingAtRule = atRuleProblem(buf);
   if (trailingAtRule) return { fatal: trailingAtRule };
-  flush();
+  // The EOF flush's fatal was DISCARDED. `;` and `}` both propagate it and this
+  // did not, so a measured declaration that is the last text in the file and
+  // omits its semicolon was recorded silently — while the identical declaration
+  // WITH a semicolon was refused. Round 11 added the at-rule check at this
+  // terminator and left the declaration half bare, which is the same
+  // one-of-two-paths omission this file keeps producing.
+  const trailingDecl = flush();
+  if (trailingDecl) return { fatal: trailingDecl };
   if (closers.length > 0 || depth > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
   return { decls };
 }

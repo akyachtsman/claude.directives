@@ -646,8 +646,12 @@ const CASES = [
   ['a conditional media query cannot supply a palette (@media print)',
     { 'styles/tokens.css': '@media print {\n' + BASE + '}\n' }, 1, ROOT],
 
+  // Round 12 moved this refusal EARLIER and made it more accurate: NUL is now
+  // preprocessed to U+FFFD as CSS does, so `@media\u0000` is the unknown at-rule
+  // `media\ufffd` and is refused at the wrapper rather than at the declarations
+  // inside it. Same verdict, better reason, and it is the reason CSS gives.
   ['a NUL inside an at-keyword cannot supply a palette',
-    { 'styles/tokens.css': '@media\u0000 {\n' + BASE + '}\n' }, 1, ROOT],
+    { 'styles/tokens.css': '@media\u0000 {\n' + BASE + '}\n' }, 1, ATRULE],
 
   ['an invalid pseudo-class cannot supply a palette',
     { 'styles/tokens.css': '.e:definitely-not-a-pseudo {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}\n' },
@@ -703,6 +707,32 @@ const CASES = [
   // other encoding would be read as different characters than the browser sees.
   ['a non-UTF-8 @charset is refused',
     { 'styles/tokens.css': '@charset "shift_jis";\n' + BASE }, 1, 'decodes every file as UTF-8'],
+
+  // ── #337 round 12: preprocessing, and a terminator that swallowed a fatal ──
+  // CSS replaces U+0000 with U+FFFD, a NAME character — so `<NUL>url(` stays one
+  // ordinary function token and must NOT enter the URL state. Treating the raw
+  // NUL as a boundary made the scanner close a false URL at the `)` inside the
+  // comment and refuse a buried accent CSS keeps inside the function value.
+  ['a NUL before url( does not open a URL token',
+    { 'styles/tokens.css': plus('.e { unknown: \u0000url(/* ) */ ; --color-accent: #0D47A1;); }\n') },
+    0, OK9],
+
+  // `;` and `}` both propagate a declaration fatal; EOF discarded it, so the
+  // SAME declaration passed or failed depending on a trailing semicolon.
+  ['a measured declaration at EOF without a semicolon is still refused',
+    { 'styles/tokens.css': BASE + '--color-accent: #FFFFFF' }, 1, ROOT],
+
+  ['…and with one, as before',
+    { 'styles/tokens.css': BASE + '--color-accent: #FFFFFF;\n' }, 1, ROOT],
+
+  // CSS's encoding sniff needs the exact byte form: lowercase, ONE ASCII space,
+  // quote-semicolon. Anything else is a parsed-and-ignored at-rule that changes
+  // no decoding, so refusing the file for it red-builds readable UTF-8.
+  ['a noncanonical @CHARSET spelling is not an encoding declaration',
+    { 'styles/tokens.css': '@CHARSET "shift_jis";\n' + BASE }, 0, OK9],
+
+  ['…and a tab after @charset is not one either',
+    { 'styles/tokens.css': '@charset\t"shift_jis";\n' + BASE }, 0, OK9],
 
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',

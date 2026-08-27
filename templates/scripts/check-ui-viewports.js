@@ -180,11 +180,18 @@ console.log(`config:    ${configPath}`);
   // and copying environment variables across, as round 8 did, does not make the
   // evaluations equivalent — it made one of two inputs match. Codex, round 9.
   //
+  // THE TESTS DIRECTORY, NOT THE CONFIG'S DIRECTORY. Playwright runs with the
+  // tests directory as cwd whatever `--config` points at, so with an explicit
+  // --config outside --tests-dir the two diverge again. Round 9 chose
+  // dirname(configPath) because in the shipped layout they are the same directory
+  // — I generalised from the case in front of me for the seventh time. Codex,
+  // round 11, reproduced it with an external-config fixture.
+  //
   // Fixed here rather than in the composite deliberately: a caller invoking this
   // script directly gets the same guarantee, and there is no second place to keep
   // in step. configPath is already absolute, so nothing below depends on cwd.
   try {
-    process.chdir(dirname(configPath));
+    process.chdir(resolve(dir));
     // process.chdir() does NOT update process.env.PWD — Node leaves it at the
     // value the shell exported. A config reading PWD would still see the repo
     // root while cwd said otherwise, so round 9's fix moved ONE of the two

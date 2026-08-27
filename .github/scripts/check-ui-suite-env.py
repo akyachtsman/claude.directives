@@ -31,7 +31,11 @@ Run: python3 .github/scripts/check-ui-suite-env.py
 import sys
 import yaml
 
-ACTION = "templates/actions/ui-suite/action.yml"
+# Overridable so check-ui-suite-env-cases.py can point it at fixtures. Without a
+# case suite this guard was hand-verified each round, and a branch verified in
+# round 9 broke in round 10 unnoticed (#333) -- the guard's own failure path is
+# exactly the code nobody exercises.
+ACTION = sys.argv[1] if len(sys.argv) > 1 else "templates/actions/ui-suite/action.yml"
 CHECK_STEP = "Check three viewport classes are declared"
 RUN_STEP = "Run Playwright tests"
 
@@ -94,7 +98,7 @@ def main():
                 + ", ".join(differing)
                 + "\n    "
                 + "; ".join(
-                    f"{k}: check={check_env[k]!r} run={expected[k]!r}" for k in differing
+                    f"{k}: check={check_env[k]!r} run={run_env[k]!r}" for k in differing
                 )
                 + "\n    Matching names are not matching inputs. A config conditional on the"
                 + "\n    VALUE then reads one thing here and another in the run (round 9)."
@@ -106,10 +110,23 @@ def main():
             print(f"  - {problem}")
         return 1
 
+    # SAY WHAT WAS CHECKED, NOT WHAT WOULD BE NICE. This compares the two steps'
+    # step-level `env:` mappings in YAML. It does NOT establish that the two
+    # processes see the same environment: the check runs `node` directly while
+    # the run goes through `npx`, which injects npm_lifecycle_event, INIT_CWD and
+    # a spread of npm_config_* that never appear in this file (Codex, #333 round
+    # 11, reproduced with a config branching on npm_lifecycle_event). Claiming
+    # "identical environment" here was the same overclaim this guard exists to
+    # catch, one level up. Launcher parity is not attainable from YAML and is
+    # recorded on #335.
     shared = sorted(run_env)
     print(
-        "check-ui-suite-env: OK -- both config evaluations get an identical environment "
+        "check-ui-suite-env: OK -- the two steps declare the same step-level env "
         f"({', '.join(shared) if shared else 'empty'})"
+    )
+    print(
+        "  (declared env only: the launchers differ -- `node` vs `npx` -- and the"
+        " npm_* / INIT_CWD they add are outside what this file can see; see #335)"
     )
     return 0
 

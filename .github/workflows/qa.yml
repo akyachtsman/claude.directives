@@ -223,6 +223,13 @@ jobs:
       - name: Check the ui-suite composite gives both steps the same environment
         run: python3 .github/scripts/check-ui-suite-env.py
 
+      # Same doctrine as the viewport gate's own guard above. This one was
+      # hand-verified for three rounds and a previously-working branch broke
+      # unnoticed (#333 round 11) — a guard whose failure path nobody exercises
+      # is a guard that reports a traceback instead of its finding.
+      - name: Check the composite env guard itself reports correctly
+        run: python3 .github/scripts/check-ui-suite-env-cases.py
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

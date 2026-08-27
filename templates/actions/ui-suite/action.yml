@@ -134,17 +134,27 @@ runs:
     - name: Check three viewport classes are declared
       shell: bash
       env:
+        TESTS_DIR: ${{ inputs.tests-dir }}
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         APP_PAGES: ${{ inputs.app-pages }}
-      # tests-dir is interpolated into the ARGUMENT rather than exported, and the
-      # run step below deliberately does not export it either. Round 10 achieved
-      # parity by adding TESTS_DIR to both steps; that was wrong, because the
-      # variable is not inert — the Playwright workers inherit it, so the fix
-      # changed what the real run's config and tests could see, and would override
-      # a value a calling job had set. Parity by SUBTRACTION has no such effect.
-      run: node .github/scripts/check-ui-viewports.js --tests-dir '${{ inputs.tests-dir }}'
+      # THREE CONSTRAINTS, AND THE OBVIOUS FIXES SATISFY TWO OF THEM:
+      #   1. the config this step imports must see the same environment as the one
+      #      the run step imports, or a config can branch on the difference;
+      #   2. TESTS_DIR must NOT reach the Playwright process — the workers inherit
+      #      it and it would override a value the calling job had set;
+      #   3. `${{ }}` must never be spliced into a shell body (template injection).
+      # Exporting TESTS_DIR to both steps breaks 2. Interpolating it into the
+      # command breaks 3 — flagged HIGH by security review, correctly.
+      # So: take it through env, copy it, and UNSET it before node starts. The
+      # config is then imported by a process whose environment matches the run's,
+      # with no interpolation anywhere. check-ui-suite-env.py verifies the unset
+      # rather than trusting this comment.
+      run: |
+        dir="$TESTS_DIR"
+        unset TESTS_DIR
+        node .github/scripts/check-ui-viewports.js --tests-dir "$dir"
 
     # Browsers are ~400MB and were re-downloaded on EVERY run. This is a BUDGET
     # fix, not a hang fix, and the distinction was measured rather than assumed:

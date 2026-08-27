@@ -28,7 +28,9 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-ui-suite-env.py
 """
+import re
 import sys
+
 import yaml
 
 # Overridable so check-ui-suite-env-cases.py can point it at fixtures. Without a
@@ -53,6 +55,35 @@ def env_of(steps, name):
         if step.get("name") == name:
             return dict(step.get("env") or {}), True
     return {}, False
+
+
+def body_of(steps, name):
+    for step in steps:
+        if step.get("name") == name:
+            return str(step.get("run") or "")
+    return ""
+
+
+def unset_before_node(body, var):
+    """Is `var` unset in this shell body BEFORE the node invocation?
+
+    A variable the check step declares and the run step does not is a real
+    divergence -- unless the check step drops it from the environment before the
+    process that imports the config starts. That is the shape the composite uses
+    for TESTS_DIR: it cannot be exported to the run (the Playwright workers
+    inherit it) and it cannot be interpolated into the command (template
+    injection, flagged HIGH by security review), so it comes in through env and
+    is unset before `node`.
+
+    This is derived from the file, not an allowlist: the exemption holds only
+    while the unset is actually there, and moving it after the node call fails.
+    """
+    node_at = body.find("node ")
+    if node_at < 0:
+        return False
+    before = body[:node_at]
+    return re.search(rf"^\s*unset\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)*{re.escape(var)}\b",
+                     before, re.MULTILINE) is not None
 
 
 def main():
@@ -84,13 +115,16 @@ def main():
                 + "\n    The check IMPORTS the config, so a selection key conditional on one"
                 + "\n    of these is invisible to it and active in the run (#333, round 8)."
             )
-        if extra:
+        check_body = body_of(steps, CHECK_STEP)
+        leaked = [k for k in extra if not unset_before_node(check_body, k)]
+        if leaked:
             problems.append(
                 "the viewport check step carries environment the run step lacks: "
-                + ", ".join(extra)
+                + ", ".join(leaked)
                 + "\n    This direction hides a filter too: a config can declare one only when"
                 + "\n    a variable is ABSENT, so the check sees none and the run applies it"
-                + "\n    (#333, round 10). Give both steps the same env, or neither."
+                + "\n    (#333, round 10). Either give both steps the same env, or `unset` it"
+                + "\n    in the check step's run body BEFORE the node invocation."
             )
         if differing:
             problems.append(

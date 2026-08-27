@@ -35,15 +35,16 @@ CHECK = "Check three viewport classes are declared"
 RUN = "Run Playwright tests"
 
 
-def action(check_env, run_env, check_name=CHECK, run_name=RUN):
+def action(check_env, run_env, check_name=CHECK, run_name=RUN, check_body=None):
     def block(env):
         if not env:
             return ""
         return "      env:\n" + "".join(f"        {k}: {v}\n" for k, v in env.items())
+    body = check_body or "node check.js"
+    body_yaml = "      run: |\n" + "".join(f"        {ln}\n" for ln in body.splitlines())
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
-        f"    - name: {check_name}\n      shell: bash\n{block(check_env)}"
-        "      run: node check.js\n"
+        f"    - name: {check_name}\n      shell: bash\n{block(check_env)}{body_yaml}"
         f"    - name: {run_name}\n      shell: bash\n{block(run_env)}"
         "      run: npx playwright test\n"
     )
@@ -77,6 +78,27 @@ CASES = [
      action({"APP_URL": "a"}, {"APP_URL": "z"}), 1, "DIFFERENT values"),
     ("same key, different values — names the run-side value, no traceback",
      action({"APP_URL": "a"}, {"APP_URL": "z"}), 1, "run='z'"),
+
+    # The composite cannot export TESTS_DIR to the run (workers inherit it) and
+    # cannot interpolate it into the command (template injection, flagged HIGH by
+    # security review). It takes it through env and unsets it before node. That
+    # exemption is DERIVED from the file, so these three cases pin the derivation
+    # rather than the exemption -- the third is the one that matters, because an
+    # unset placed after the node call is exactly the edit that looks harmless.
+    ("check-only var unset before node — allowed",
+     action({"APP_URL": "a", "TESTS_DIR": "d"}, {"APP_URL": "a"},
+            check_body='dir="$TESTS_DIR"\nunset TESTS_DIR\nnode check.js --tests-dir "$dir"'),
+     0, "declare the same step-level env"),
+
+    ("check-only var NOT unset — still a divergence",
+     action({"APP_URL": "a", "TESTS_DIR": "d"}, {"APP_URL": "a"},
+            check_body='node check.js --tests-dir "$TESTS_DIR"'),
+     1, "carries environment the run step lacks"),
+
+    ("check-only var unset AFTER node — too late, still a divergence",
+     action({"APP_URL": "a", "TESTS_DIR": "d"}, {"APP_URL": "a"},
+            check_body='node check.js --tests-dir "$TESTS_DIR"\nunset TESTS_DIR'),
+     1, "carries environment the run step lacks"),
 
     # A renamed step must fail loudly. Without this the guard looks up two names,
     # finds neither, compares two empty mappings and reports OK.

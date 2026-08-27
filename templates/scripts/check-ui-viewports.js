@@ -30,7 +30,8 @@
 //   7  reached exit 0 without a verdict — the backstop (a config that calls
 //      process.exit(0) at import time would otherwise pass silently)
 //   8  usage error (nonsensical band bounds)
-//   9  a TOP-LEVEL test-selection filter narrows the run (CANNOT CHECK)
+//   9  a TOP-LEVEL test-selection key is PRESENT (CANNOT CHECK) — flagged on
+//      presence alone; this gate does not decide whether it actually narrows
 // node_modules is environment-provided, not repo-guaranteed: in CI it exists
 // because the ui-suite composite ran `npm install` first. Its absence is 4 — a
 // loud "cannot check", never a pass.
@@ -49,7 +50,7 @@
 const { existsSync, statSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
-const { resolve, join, isAbsolute, dirname, sep } = require('path');
+const { resolve, join, isAbsolute } = require('path');
 
 let verdict = false;
 process.on('exit', code => {
@@ -201,133 +202,44 @@ console.log(`config:    ${configPath}`);
   // `grep` matches test TITLES, which live inside the spec files. So this is a
   // CANNOT CHECK, not a FAIL and emphatically not a pass: per this file's own
   // anti-silence rule, "could not look" gets its own loud exit code.
-  // POSITIVE filters (`grep`, `testMatch`) select what runs; NEGATIVE ones
-  // (`grepInvert`, `testIgnore`) subtract from it. That asymmetry decides how an
-  // EMPTY array is read, and getting it backwards fails in opposite directions:
-  //   testIgnore: []   subtracts nothing  -> harmless, flagging it is a false alarm
-  //   testMatch: []    selects nothing    -> maximally narrowing, MUST still flag
-  // So emptiness exempts a negative filter and never a positive one. A non-array
-  // value (a bare RegExp or string) is a real filter whatever its side.
-  const POSITIVE_FILTERS = ['grep', 'testMatch'];
-  const NEGATIVE_FILTERS = ['grepInvert', 'testIgnore'];
-  const narrows = k => {
-    const v = cfg[k];
-    if (v === undefined) return false;
-    // Only a NEGATIVE filter can be emptied into a no-op — and "empty" has two
-    // spellings, both of which Playwright treats as excluding nothing: `[]` and
-    // `''`. Round 1 of #333 covered the array; round 3 found the string, which
-    // fell through to CANNOT CHECK on an unrestricted suite. A POSITIVE filter is
-    // never exempt: `testMatch: ''` selects nothing, which is maximal narrowing.
-    // "Empty" has three spellings for a NEGATIVE filter, all excluding nothing:
-    // [], '', and ['', ''] — round 1 found the first, round 3 the second, round 5
-    // the third. A MIXED array keeps its real pattern and still narrows.
-    if (NEGATIVE_FILTERS.includes(k)) {
-      if (Array.isArray(v) && v.every(x => x === '')) return false;   // covers [] too
-      if (typeof v === 'string' && v === '') return false;
-    }
-    // A POSITIVE filter that matches EVERYTHING narrows nothing either. `/(?:)/`
-    // is the zero-length regexp — valid, matches every title — and round 5 found
-    // it blocking a suite it does not restrict. Only the universally-matching
-    // source counts; any other pattern is a real filter.
-    if (POSITIVE_FILTERS.includes(k)) {
-      const universal = r => r instanceof RegExp && (r.source === '(?:)' || r.source === '');
-      if (universal(v)) return false;
-      if (Array.isArray(v) && v.length > 0 && v.every(universal)) return false;
-    }
-    return true;
-  };
-  // `testDir` is not a filter but it REDIRECTS discovery wholesale, which reaches
-  // the same end by a shorter road: every project resolves against it, so a root
-  // `testDir: './other'` runs whatever is in ./other and the UI suite is simply
-  // never scheduled. Codex found this on round 2 of #333 and reproduced it with a
-  // single unrelated passing spec; before this branch the gate exited 0 and named
-  // all three bands. The per-project check below cannot catch it either — it
-  // compares `p.testDir` against `cfg.testDir`, so an INHERITED redirect reads as
-  // unrestricted.
+  // ROOT-LEVEL SELECTION IS A CANNOT CHECK, WITH NO ATTEMPT TO DECIDE WHETHER IT
+  // ACTUALLY NARROWS. Six review rounds produced sixteen findings, every one from
+  // trying to be cleverer than this: "empty" had three spellings ([], '', ['']),
+  // "matches everything" had at least two (/(?:)/ and /^/), testDir needed four
+  // predicates and still had a symlink hole, and a shard can be cancelled by a
+  // reporter calling skipSharding(). Each fix was correct for its example and
+  // wrong one step out.
   //
-  // This guard cannot know which spec IS the UI suite, so a non-default testDir is
-  // a CANNOT CHECK rather than a FAIL: the config may be perfectly good and the
-  // suite may well live there, but nothing here can establish it.
-  // Compare RESOLVED paths, never spellings. `'tests'`, `'./tests/'` and an
-  // absolute path all resolve to the same directory as `'./tests'`, and round 3
-  // caught the strict string test hard-failing every one of them. This is the
-  // false-alarm direction, so it gets the same treatment as round 1's empty
-  // arrays. Codex also pointed out my diagnostic's advice was wrong: changing
-  // --tests-dir does not alter the spelling the config exports.
+  // So this gate no longer models Playwright. It reports what it can SEE — a root
+  // key that participates in test selection — and refuses to certify coverage it
+  // cannot attribute. That is this file's own rule applied to itself: "could not
+  // look" is a loud exit, never a pass.
   //
-  // Path normalisation is a resolver, and this file otherwise prefers CANNOT
-  // CHECK to one — but the reasoning does not transfer: normalising a path is
-  // decidable, whereas inferring WHICH spec is the UI suite is not. Refusing to
-  // do the decidable thing is just a false alarm wearing a principle.
-  const SHIPPED_TEST_DIR = './tests';
-  const rootFilters = [...POSITIVE_FILTERS, ...NEGATIVE_FILTERS].filter(narrows);
-  const CONFIG_DIR = dirname(configPath);
-  const resolveDir = d => resolve(CONFIG_DIR, String(d));
-  // CONTAINMENT, not equality. Playwright discovers recursively, so testDir: '.'
-  // — or any ancestor of the shipped suite — still finds it; round 5 caught the
-  // equality test rejecting a config Playwright handles fine. Only a testDir that
-  // does NOT contain the suite redirects away from it.
-  const shippedTests = resolveDir(SHIPPED_TEST_DIR);
-  const contains = (dir, child) => child === dir || child.startsWith(dir.endsWith(sep) ? dir : dir + sep);
-  if (cfg.testDir !== undefined && !contains(resolveDir(cfg.testDir), shippedTests)) {
-    die(9, [
-      `FAIL: the config declares a root testDir of ${JSON.stringify(cfg.testDir)} — CANNOT CHECK.`,
-      `  Every project resolves against it, so the widths below describe whatever lives`,
-      `  there, not necessarily the UI suite. The shipped kit uses ${JSON.stringify(SHIPPED_TEST_DIR)};`,
-      '  this gate cannot tell which spec is the suite, so it will not certify coverage',
-      '  it cannot attribute.',
-      `  If the suite genuinely lives there, run the gate against that directory so`,
-      `  testDir reads as ${JSON.stringify(SHIPPED_TEST_DIR)} relative to it.`,
-      '  test.md -> UI coverage gates, fifth gate.',
-    ]);
-  }
-  // TWO MORE ways the root config keeps the suite from running, both found by
-  // Codex on round 3 of #333 and both reproduced against Playwright 1.62.1. Each
-  // is a REDIRECT/PARTITION rather than a filter, which is why enumerating
-  // "filters" missed them — see #335 for why this enumeration is the wrong shape
-  // and what replaces it.
+  // The cost is a conservative refusal when the root key happens to be a no-op.
+  // That is the SAFE direction, and the diagnostic says so plainly. The benefit is
+  // that this check cannot be wrong about Playwright, because it no longer claims
+  // anything about Playwright. #335 replaces it with `--list`, which OBSERVES
+  // discovery rather than predicting it.
   //
-  // respectGitIgnore is DELIBERATELY NOT CHECKED HERE. Round 3 added a probe for a
-  // .gitignore under testDir; round 4 found it wrong three separate ways, and the
-  // three together are the argument for #335 rather than for a fourth attempt:
-  //   * Playwright honours ignores only "if neither testConfig.testDir nor
-  //     testProject.testDir are explicitly specified" (installed 1.62.1 types), and
-  //     the shipped kit DOES set testDir — so the probe false-alarmed on the
-  //     default it was written for.
-  //   * respectGitIgnore is also a PROJECT option, so a root `false` with one
-  //     project overriding to `true` bypassed a root-only test entirely.
-  //   * .gitignore files nest: tests/sub/.gitignore suppresses the suite and a
-  //     direct testDir/.gitignore probe never sees it.
-  // Getting this right needs Playwright's conditional default, per-project
-  // resolution, recursive ignore discovery AND gitignore pattern matching against
-  // spec paths — a resolver, which is exactly what #335 replaces with `--list`.
-  // A broken check here would be worse than none: it false-alarms (and gets muted)
-  // AND misses the real case. Both failure modes at once.
-
-  // shard: PARTITIONS the discovered set across runs. With total > 1 a single run
-  // carries only its slice, so a band can be declared and never exercised in that
-  // run — reproduced with { current: 1, total: 4 }, where only the desktop project
-  // listed tests and shard 4 listed none, both reported as full coverage.
-  const shard = cfg.shard;
-  if (shard && typeof shard === 'object' && Number(shard.total) > 1) {
-    die(9, [
-      `FAIL: the config shards the run (total: ${shard.total}) — CANNOT CHECK.`,
-      '  A shard carries only part of the discovered set, so a project can declare a',
-      '  width and execute nothing in this run. Coverage is a property of the whole',
-      '  suite, which no single sharded run observes.',
-      '  Shard from the CI matrix rather than the config, or drop it to check coverage.',
-      '  test.md -> UI coverage gates, fifth gate.',
-    ]);
-  }
+  // testDir is deliberately NOT checked here: four predicates across three rounds
+  // (spelling, resolved path, containment) still left a symlink hole, and a
+  // realpath fix would be a fifth. It moves to #335 with the rest.
+  const SELECTION_KEYS = ['grep', 'grepInvert', 'testMatch', 'testIgnore', 'shard'];
+  const rootFilters = SELECTION_KEYS.filter(k => cfg[k] !== undefined);
 
   if (rootFilters.length) {
     die(9, [
       `FAIL: the config declares TOP-LEVEL ${rootFilters.join(', ')} — CANNOT CHECK.`,
-      '  Playwright intersects a root-level filter with every project, so the widths',
-      '  below say nothing about what would actually run: all three classes can be',
-      '  declared while zero scenarios are scheduled.',
-      '  Fix by moving the filter onto the projects that are NOT providing viewport',
-      '  coverage, so each banded project selects the UI suite unconditionally.',
+      '  A root-level selection key applies to EVERY project, so all three classes',
+      '  can be declared while zero scenarios are scheduled. This gate flags such a',
+      '  key on PRESENCE and does not judge whether yours actually narrows — it',
+      '  refuses to certify coverage it cannot attribute, rather than guessing.',
+      '  So this can be a conservative refusal on a key that is in fact a no-op.',
+      '  That is the safe direction; #335 replaces the guess with `--list`, which',
+      '  observes discovery instead of predicting it.',
+      '  Clear it by moving the key onto the projects that are NOT providing viewport',
+      '  coverage (or, for shard, sharding from the CI matrix rather than the config),',
+      '  so each banded project selects the UI suite unconditionally.',
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }

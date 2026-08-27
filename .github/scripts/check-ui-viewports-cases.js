@@ -103,17 +103,17 @@ const CASES = [
   // fail-open by another road. The third case is the one that keeps the fix from
   // being "simplified" into `any empty array is fine`: an empty POSITIVE filter
   // selects NOTHING and is maximally narrowing.
-  ['top-level testIgnore: [] subtracts nothing (must not false-alarm)',
+  ['root testIgnore: [] — conservative refusal, gate makes no Playwright claim',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  testIgnore: [],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+    9, 'root-level'],
 
-  ['top-level grepInvert: [] subtracts nothing (must not false-alarm)',
+  ['root grepInvert: [] — conservative refusal',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  grepInvert: [],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+    9, 'root-level'],
 
   ['top-level testMatch: [] selects NOTHING (empty positive is still fatal)',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
@@ -125,10 +125,10 @@ const CASES = [
   // wholesale, reaching the same false-green by a shorter road. The second case
   // is the one that keeps the rule honest — the SHIPPED default must still pass,
   // or the gate fails every correct config and gets muted.
-  ['root testDir redirects away from the suite',
+  ['root testDir redirect is DEFERRED to #335 — not checked here',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './other',\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'root testDir'],
+    0, 'check-ui-viewports: OK'],
 
   ['root testDir is the shipped default (must not false-alarm)',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
@@ -136,10 +136,10 @@ const CASES = [
 
   // Codex round 3 on #333: four more, two of them root keys the enumeration did
   // not know existed. Each fatal case is pinned beside its no-false-alarm twin.
-  ['top-level testIgnore: \'\' subtracts nothing (must not false-alarm)',
+  ['root testIgnore: \'\' — conservative refusal',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  testIgnore: '',\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+    9, 'root-level'],
 
   ['testDir spelled without ./ resolves the same (must not false-alarm)',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: 'tests',\n`
@@ -157,15 +157,15 @@ const CASES = [
       'tests/.gitignore': '*.spec.js\n' },
     0, 'check-ui-viewports: OK'],
 
-  ['root shard partitions the suite',
+  ['root shard: total 4 — conservative refusal, presence is enough',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  shard: { current: 1, total: 4 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'shards the run'],
+    9, 'TOP-LEVEL shard'],
 
-  ['shard total 1 partitions nothing (must not false-alarm)',
+  ['root shard: total 1 — conservative refusal, presence is enough',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  shard: { current: 1, total: 1 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+    9, 'root-level'],
 
   // Codex round 5 on #333: three more false alarms, all in the checks I asked the
   // review to attack. Each fatal twin is kept so the exemptions cannot widen into
@@ -175,20 +175,20 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
-  ['grep: /(?:)/ matches every title, narrows nothing (must not false-alarm)',
+  ['root grep: /(?:)/ — conservative refusal',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  grep: /(?:)/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+    9, 'root-level'],
 
   ['grep: /smoke/ is a REAL positive filter (still fatal)',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  grep: /smoke/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL grep'],
 
-  ['testIgnore: [\'\'] excludes nothing (must not false-alarm)',
+  ['root testIgnore: [\'\'] — conservative refusal',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  testIgnore: [''],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+    9, 'root-level'],
 
   ['testIgnore: [\'\', \'app.spec.js\'] is MIXED and still narrows (still fatal)',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`

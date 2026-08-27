@@ -591,7 +591,17 @@ return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
     const prevTok = (/([A-Za-z0-9]+)$/.exec(before) || [, ''])[1];
     // (a) A SENTENCE CANNOT END INSIDE BRACKETS. Codex's repro was exactly
     // that — `(contact Dept. Security)` — and this rule needs no list at all.
-    const opens = (before.match(/[([]/g) || []).length - (before.match(/[)\]]/g) || []).length;
+    // DEPTH, FLOORED AT ZERO — not a subtraction. A plain count of opens minus
+    // closes goes NEGATIVE on a stray `)`, and a negative running total masks a
+    // genuine open that follows it: `) ( a. b` nets to zero and marks a stop
+    // that is inside a bracket. Flooring at each close is what "am I inside
+    // something?" actually means, and an unmatched close is not a reason to
+    // believe I am outside one.
+    let opens = 0;
+    for (const ch of before) {
+      if (ch === '(' || ch === '[') opens++;
+      else if (ch === ')' || ch === ']') opens = Math.max(0, opens - 1);
+    }
     // AN OPEN BRACKET IS INDETERMINATE SCOPE, so do not mark — whatever the
     // rest of the line looks like. Round 20 tried to tell an inline aside from
     // a structural bracket by asking whether the close came before the next

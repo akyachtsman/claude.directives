@@ -87,7 +87,7 @@ naming the head is not one, since a review with live findings names it too — o
 the reaction ladder's attestation, or any state its *unreachable-review test*
 admits, stated on the PR. The two states are an *unavailable* reply still inside
 its reset window, or a
-request that could not be made or accepted at all — never elapsed silence — and note the ladder
+request that could not be made or accepted at all — never elapsed silence. Note that the ladder
 clears the verdict gate ONLY. Where no `codex-flagged` label is present, the
 ladder is the whole gate and the merge proceeds unattended. Where one is, a reaction-only
 round leaves it and escalates, no `codex-flagged` label,

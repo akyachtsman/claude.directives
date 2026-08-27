@@ -34,21 +34,6 @@
       "−case"
     ]
   },
-  "continuationFloor": {
-    "clause": [
-      " only after owner approval",
-      "; however, approval is required first",
-      "... only after owner approval",
-      ", for now",
-      " unless the owner objects"
-    ],
-    "suffix": [
-      "s",
-      "-case",
-      "‑case",
-      "–case"
-    ]
-  },
   "continuationRequired": [
     "no-label-no-escalation",
     "unreachable-review-terminal-states",
@@ -166,9 +151,9 @@
     },
     {
       "id": "unreachable-review-terminal-states",
-      "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 then proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half, and Codex asked for it by naming the drift it would permit: widen the canonical test so an accepted-but-silent request counts as an outage, or drop the reset bound so a stale usage-limit reply stays valid forever, and every merge consumer -- all of which admit 'any state that test admits' -- would authorise removing the blocker and merging while a review is still obtainable or in flight. The name-only pattern passes unchanged through both. So the two states are stated in one canonical sentence at each consumer and pinned whole: an *unavailable* reply STILL INSIDE ITS RESET WINDOW, a request that COULD NOT BE MADE OR ACCEPTED at all, and NEVER ELAPSED SILENCE. All three fragments are required and in order, because each was a separate defect on this PR -- round 4 deleted a 30-minute timer that made silence sufficient, round 4 also found the unavailable reply had no expiry, and round 6 found a third statement of outage still defined as 'produced no signal'. A pattern requiring only two of the three would certify the third's regression. ⚠️ Round 10: the pattern stopped at 'could not be made or accepted' and dropped the load-bearing AT ALL, so 'could not be made or accepted on the first attempt' and '... accepted yet' both matched. Either wording turns a TRANSIENT request failure into an outage exit -- authorising hand removal and a merge while a further request could still produce a verdict -- with every consumer and check-claims green. 'at all' is what makes the outage absolute, which is the whole difference between this exit and ordinary silence, so it is now required and the transient forms are probed. ⚠️ Round 11: requiring 'at all' was not enough, because nothing constrained what FOLLOWED it -- 'could not be made or accepted at all on the first attempt' and '... at all yet' both matched, and the round-10 probes tested the transient qualifiers only IN PLACE OF 'at all', never AFTER it, so they were green against a hole they were written for. Same defect as round 10's own probes one layer down. Fixed the same way 'unattended' was: 'at all' must END ITS CLAUSE -- the next non-space character is punctuation, never a word -- so no qualifier can attach. Every carrier already writes ' — never elapsed silence' after it. ⚠️ Round 12: requiring punctuation after 'at all' admitted FIVE marks, and a comma, semicolon, colon or dash can CONTINUE a clause -- 'at all, for now — never elapsed silence' was green, and the tempered gap swallowed the qualifier. Constraining the gap was the wrong move twice running, so the gap is DELETED: the canonical sentence puts the em dash directly between 'at all' and 'never elapsed silence' at every carrier, and that is now pinned literally. Nothing can sit in a gap that does not exist.",
+      "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 then proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half, and Codex asked for it by naming the drift it would permit: widen the canonical test so an accepted-but-silent request counts as an outage, or drop the reset bound so a stale usage-limit reply stays valid forever, and every merge consumer -- all of which admit 'any state that test admits' -- would authorise removing the blocker and merging while a review is still obtainable or in flight. The name-only pattern passes unchanged through both. So the two states are stated in one canonical sentence at each consumer and pinned whole: an *unavailable* reply STILL INSIDE ITS RESET WINDOW, a request that COULD NOT BE MADE OR ACCEPTED at all, and NEVER ELAPSED SILENCE. All three fragments are required and in order, because each was a separate defect on this PR -- round 4 deleted a 30-minute timer that made silence sufficient, round 4 also found the unavailable reply had no expiry, and round 6 found a third statement of outage still defined as 'produced no signal'. A pattern requiring only two of the three would certify the third's regression. ⚠️ Round 10: the pattern stopped at 'could not be made or accepted' and dropped the load-bearing AT ALL, so 'could not be made or accepted on the first attempt' and '... accepted yet' both matched. Either wording turns a TRANSIENT request failure into an outage exit -- authorising hand removal and a merge while a further request could still produce a verdict -- with every consumer and check-claims green. 'at all' is what makes the outage absolute, which is the whole difference between this exit and ordinary silence, so it is now required and the transient forms are probed. ⚠️ Round 11: requiring 'at all' was not enough, because nothing constrained what FOLLOWED it -- 'could not be made or accepted at all on the first attempt' and '... at all yet' both matched, and the round-10 probes tested the transient qualifiers only IN PLACE OF 'at all', never AFTER it, so they were green against a hole they were written for. Same defect as round 10's own probes one layer down. Fixed the same way 'unattended' was: 'at all' must END ITS CLAUSE -- the next non-space character is punctuation, never a word -- so no qualifier can attach. Every carrier already writes ' — never elapsed silence' after it. ⚠️ Round 12: requiring punctuation after 'at all' admitted FIVE marks, and a comma, semicolon, colon or dash can CONTINUE a clause -- 'at all, for now — never elapsed silence' was green, and the tempered gap swallowed the qualifier. Constraining the gap was the wrong move twice running, so the gap is DELETED: the canonical sentence puts the em dash directly between 'at all' and 'never elapsed silence' at every carrier, and that is now pinned literally. Nothing can sit in a gap that does not exist. ⚠️ Round 14: the pattern stopped at 'never elapsed silence' with nothing after it, so '… never elapsed silence, although an accepted request that remains silent also qualifies' matched — a continuation AFTER the complete assertion, which every derived probe missed because the placeholder sat before the em dash. A statement can be taken back at EITHER end, so the probe is now a map of positions and the assertion must end its sentence. One carrier (CLAUDE.md) continued with an em dash and was reworded to a full stop.",
       "source": "directives/git.md",
-      "pattern": "still inside its reset window(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,60}?could not be made or accepted at all\\s*—\\s*never elapsed silence",
+      "pattern": "still inside its reset window(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,60}?could not be made or accepted at all\\s*—\\s*never elapsed silence(?=\\s*\\.(?:\\s|$))",
       "consumers": [
         "CLAUDE.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
@@ -189,7 +174,10 @@
       },
       "continuationProbe": {
         "kind": "clause",
-        "shape": "The two states are an unavailable reply still inside its reset window, or a request that could not be made or accepted at all%s — never elapsed silence."
+        "shapes": {
+          "afterAtAll": "The two states are an unavailable reply still inside its reset window, or a request that could not be made or accepted at all%s — never elapsed silence.",
+          "afterSilence": "The two states are an unavailable reply still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence%s."
+        }
       }
     },
     {
@@ -223,7 +211,9 @@
       },
       "continuationProbe": {
         "kind": "clause",
-        "shape": "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended%s."
+        "shapes": {
+          "afterUnattended": "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended%s."
+        }
       }
     },
     {
@@ -255,7 +245,9 @@
       },
       "continuationProbe": {
         "kind": "suffix",
-        "shape": "the unreachable-review test%s admits it"
+        "shapes": {
+          "afterName": "the unreachable-review test%s admits it"
+        }
       }
     },
     {

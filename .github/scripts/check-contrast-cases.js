@@ -72,6 +72,8 @@ const DUP = 'a measured token is declared more than once';
 const BLOCK = 'value is a { } block';
 // #337 round 9: the one place a measured token may be declared.
 const ROOT = 'outside a top-level `:root` rule';
+// #337 round 10: an at-rule this gate cannot vouch for leaves the palette alone.
+const ATRULE = 'this gate does not know that it leaves a top-level';
 
 // (label, {relative path: contents}, expected exit, required diagnostic)
 const CASES = [
@@ -404,7 +406,7 @@ const CASES = [
   // yielded `media`, matched the allow-list, and a block CSS discards supplied
   // the entire palette at exit 0.
   ['an unknown at-rule cannot supply a palette (@media_)',
-    { 'styles/tokens.css': '@media_ {\n' + BASE + '}\n' }, 1, ROOT],
+    { 'styles/tokens.css': '@media_ {\n' + BASE + '}\n' }, 1, ATRULE],
 
   ['…and neither can a KNOWN one (@media): the wrapper is not the point',
     { 'styles/tokens.css': '@media (min-width: 1px) {\n' + BASE + '}\n' }, 1, ROOT],
@@ -416,7 +418,7 @@ const CASES = [
   // membership rule is "cascades as if the wrapper were not there", which this
   // never satisfied.
   ['@starting-style cannot supply a palette',
-    { 'styles/tokens.css': '@starting-style {\n' + BASE + '}\n' }, 1, ROOT],
+    { 'styles/tokens.css': '@starting-style {\n' + BASE + '}\n' }, 1, ATRULE],
 
   // ── #337 round 8: declarations at stylesheet top level ────────────────────
   // CSS has no declaration list there and discards them, but every `;` reached
@@ -577,9 +579,29 @@ const CASES = [
     { 'styles/tokens.css': plus('@font-face { font-family: x; src: url(x.woff2); }\n') },
     0, OK9],
 
-  ['@property declaring nothing measured passes',
-    { 'styles/tokens.css': plus('@property --color-accent { syntax: "<color>"; inherits: true; initial-value: #0D47A1; }\n') },
+  // ── #337 round 10: an at-rule need not SUPPLY a palette to break one ──────
+  // Registering a MEASURED token is the sharpest failure this gate has: the root
+  // declaration stays intact and measurable while every descendant renders the
+  // initial value instead.
+  ['@property registering a MEASURED token is refused',
+    { 'styles/tokens.css': plus('@property --color-accent { syntax: "<color>"; inherits: false; initial-value: #FFFFFF; }\n') },
+    1, 'registration of the measured token'],
+
+  ['…but registering an unmeasured one is fine',
+    { 'styles/tokens.css': plus('@property --spacing-x { syntax: "<length>"; inherits: false; initial-value: 4px; }\n') },
     0, OK9],
+
+  // A DEFAULT namespace re-points the implied universal selector, so `:root` no
+  // longer matches the HTML document root and the whole palette is inert.
+  ['a default @namespace is refused',
+    { 'styles/tokens.css': '@namespace url("http://www.w3.org/2000/svg");\n' + BASE }, 1, ATRULE],
+
+  // @forward emits CSS from a sheet this gate never opens, exactly like @use.
+  ['@forward is refused like @use',
+    { 'styles/tokens.css': '@forward "theme";\n' + BASE }, 1, ATRULE],
+
+  ['@charset is not refused',
+    { 'styles/tokens.css': '@charset "utf-8";\n' + BASE }, 0, OK9],
 
   // ── #337 round 6: a CONFIGURED candidate that is gone ─────────────────────
   // design.md tells a themed project to give each theme its own file and add it
@@ -638,9 +660,15 @@ const CASES = [
   ['an unmeasured custom property may live anywhere',
     { 'styles/tokens.css': plus('button:hover { --color-border: #000; --spacing-x: 4px; }\n') }, 0, OK9],
 
-  ['…including inside a media query and an unknown at-rule',
-    { 'styles/tokens.css': plus('@media print { .x { --color-border: #000; } }\n@whatever { --spacing-y: 2px; }\n') },
+  // (This twin used to include `@whatever { … }`. Round 10 made an at-rule this
+  //  gate cannot vouch for a refusal, so the unknown-at-rule half moved to its
+  //  own case above and this one keeps the part that is still about tokens.)
+  ['…including inside a media query and a nested rule',
+    { 'styles/tokens.css': plus('@media print { .x { --color-border: #000; } }\n@layer a { .y { --spacing-y: 2px; } }\n') },
     0, OK9],
+
+  ['an at-rule this gate cannot vouch for is refused, even holding nothing',
+    { 'styles/tokens.css': BASE + '@whatever { }\n' }, 1, ATRULE],
 
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',

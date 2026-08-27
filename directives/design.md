@@ -156,9 +156,20 @@ What it **refuses outright**, because a partial read of a palette is worse than
 none:
 
 - **a measured token outside a top-level `:root`** — see above;
-- **`@import` and `@use`** — they name a stylesheet this check never reads, so a
-  theme override living there would be invisible, and no rule about `:root` can
-  compensate for a file that was never opened;
+- **any at-rule this gate cannot vouch for.** The membership question is *can
+  this at-rule change what a top-level `:root` palette means?* — `@media`,
+  `@supports`, `@layer`, `@container`, `@scope`, `@font-face`, `@keyframes` and
+  `@charset` cannot, and are allowed. Everything else is refused, including
+  `@import`/`@use`/`@forward` (they name a stylesheet this check never reads, so
+  a theme override living there is invisible) and a default `@namespace` (it
+  re-points the implied universal selector, so `:root` stops matching the
+  document root and the whole palette is inert). A **new** at-rule is refused
+  until someone checks it against that question — the list will lag CSS, and a
+  loud refusal is the survivable direction;
+- **an `@property` registration of a *measured* token.** Registering
+  `--color-accent` with `inherits: false` and an initial value leaves the root
+  declaration intact and measurable while every descendant renders the initial
+  value instead. Registering an unmeasured property is fine;
 - **a backslash escape outside a string.** CSS would read `--color-\61 ccent` as
   `--color-accent`; this refuses it instead of decoding it, so **spell
   identifiers plainly**;

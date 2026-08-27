@@ -224,31 +224,64 @@ const cssTrim = (t) => t.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, '');
 const PLAIN_CUSTOM_NAME = /^--[A-Za-z0-9_-]*$/;
 
 // At-rules are checked at BOTH terminators, `;` and `{`. Checking only `;`
-// missed every block-form at-rule, and an @import can be reached through a
-// prelude the old check did not recognise.
+// missed every block-form at-rule.
 //
-// This was an ALLOW-LIST of grouping at-rules, and it was wrong twice: @layer
-// was missing (round 5, refusing a valid file) and @starting-style was added
-// (round 7, reading declarations that do not persist) — because it existed to
-// answer "may this block's declarations be read", and round 9 retired that
-// question. A measured token is now read only from a top-level `:root`, so an
-// at-rule's contents cannot supply a palette however it is spelled: a false
-// media query, an unknown rule, `@media` with a NUL in its name — all of them
-// now fail the same way, at the declaration.
+// THIS LIST HAS BEEN INVERTED TWICE, AND THE DIRECTION IS THE WHOLE POINT.
+// It began as an ALLOW-LIST of grouping rules, to decide whether a block's
+// declarations could be read. That was wrong twice (@layer missing, r5;
+// @starting-style added, r7) and its failure mode was silent — an at-rule
+// wrongly admitted supplied a palette.
+// Round 9 made a measured token readable only from a top-level `:root`, which
+// killed that job, so it became a DENY-LIST of text-hiding rules where a short
+// list could only over-refuse. Round 10 showed the deny-list had inherited the
+// silent direction anyway, three times over, because an at-rule need not
+// SUPPLY declarations to break the palette — it can change what the top-level
+// `:root` MEANS:
+//   @property --color-accent { inherits: false; initial-value: #FFF }
+//                     the root value stops inheriting; `.btn` renders the
+//                     white initial value while this gate measures 5.75:1
+//   @namespace url(…)  a DEFAULT namespace re-points the implied universal, so
+//                     `:root` no longer matches the HTML document root
+//   @forward "theme"   like @use: emits CSS from a sheet never opened here
 //
-// What survives is the one thing that is NOT about applicability: an at-rule
-// that brings in TEXT THIS GATE NEVER SEES. A theme override living in an
-// imported sheet is invisible, and no rule about `:root` compensates for a file
-// that was never read. So this is a deny-list of two, and it needs the complete
-// identifier rather than a prefix — a prefix would refuse `@importantly`, which
-// is a false refusal rather than a missed one.
-const AT_RULES_HIDE_TEXT = new Set(['import', 'use']);
+// So it is an allow-list again — and this time a short one FAILS LOUDLY, because
+// nothing here decides whether declarations may be read any more. An unknown or
+// newly-specified at-rule is refused with a message naming it, and the fix is to
+// add it after checking it against the question below. That question is the
+// membership rule, and it is not "is this a grouping rule" (the r7 error) but:
+//
+//   CAN THIS AT-RULE CHANGE WHAT A TOP-LEVEL `:root` PALETTE MEANS?
+//
+// @media/@supports/@container/@layer/@scope cannot: their contents are not read
+// and a `:root` outside them is untouched. @font-face/@keyframes declare
+// something that is not an element's tokens. @charset is a file-encoding
+// preamble.
+const AT_RULES_SAFE = new Set([
+  'charset', 'media', 'supports', 'container', 'layer', 'scope',
+  'font-face', 'keyframes', 'property',
+]);
 function atRuleProblem(buf) {
   const head = cssTrim(buf);
   if (!head.startsWith('@')) return null;
   const name = (/^@([A-Za-z0-9_\u0080-\uFFFF-]*)/.exec(head) || [, ''])[1].toLowerCase();
-  if (!AT_RULES_HIDE_TEXT.has(name)) return null;
-  return `an @${name} rule — it names a stylesheet this check never reads, so a token declared there would be invisible`;
+  if (!AT_RULES_SAFE.has(name)) {
+    return `an @${name || '(unreadable)'} rule — this gate does not know that it leaves a top-level \`:root\` palette`
+      + ' meaning what it says, and refuses rather than assume; if it does, add it to AT_RULES_SAFE';
+  }
+  // @property is safe EXCEPT for a measured name, where it is the sharpest
+  // failure this gate has: registering `--color-accent` with `inherits: false`
+  // and a white initial value leaves the root declaration intact and measurable
+  // while every descendant renders the initial value instead. Modelling that
+  // means modelling registration semantics; refusing costs a project nothing it
+  // needs, since a measured token has no reason to be registered.
+  if (name === 'property') {
+    const registered = (/^@property\s+(--[^\s{;]+)/i.exec(head) || [, ''])[1];
+    if (MEASURED.has(registered)) {
+      return `an @property registration of the measured token \`${registered}\` — it can stop the root value`
+        + ' inheriting, or give descendants a different initial value, neither of which this gate resolves';
+    }
+  }
+  return null;
 }
 
 // Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name to

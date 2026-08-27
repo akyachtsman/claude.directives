@@ -172,24 +172,37 @@ if (FILES.length === 0) {
 // tells the author to spell it plainly; decoding it correctly everywhere is a
 // standing invitation to miss one surface.
 
-// At-rules are checked at BOTH terminators, `;` and `{`. Checking only `;`
-// missed every block-form at-rule, and an @import can be reached through a
-// prelude the old check did not recognise. Allow-list rather than deny-list.
-// The MEMBERSHIP RULE is derived — a GROUPING at-rule's block holds rules and
-// declarations that cascade exactly as if the wrapper were not there, so
-// reading through one reads the same declarations the browser applies — but
-// THE LIST IS NOT CLAIMED COMPLETE, and saying it was cost two rounds: @layer
-// was missing in round 5 and @starting-style in round 7, each refusing a valid
-// stylesheet. CSS gains grouping rules over time and this list will lag them.
-// That is survivable in exactly one direction: a short list REFUSES a valid
-// file, loudly, and the fix is to add a name here. A long one would read a
-// block whose declarations do not apply, which is silent. Add on evidence.
-// Everything NOT in this set is refused because it is a different thing: it
-// brings in text this gate never sees (`@import`, `@use`), or its declarations
-// apply to something other than an element (`@font-face`, `@keyframes`,
-// `@property`, `@page`), so reading them as live tokens would be wrong.
-const AT_RULES_READ = new Set(['media', 'supports', 'layer', 'container', 'scope']);
-const AT_RULES_LIST = [...AT_RULES_READ].map((n) => `@${n}`).join(', ');
+// Pairs name their TOKENS, not their values. Listing names and resolving them
+// at evaluation time is what lets the ambiguity check below know which tokens
+// are actually measured without a second, drift-prone list of names.
+const AA = 4.5, AA_LARGE = 3.0;
+const pairs = [
+  // No `|| '#FFFFFF'` fallback: substituting a default made the pair "evaluable"
+  // while measuring a colour the page may not use, so a project that DROPPED the
+  // token still scored 8/8. A missing required token must fail like any other.
+  ['--color-on-accent', '--color-accent', AA, 'on-accent / accent (button)'],
+  ['--color-text-primary', '--color-bg', AA, 'text-primary / bg'],
+  ['--color-text-primary', '--color-surface', AA, 'text-primary / surface'],
+  ['--color-text-secondary', '--color-bg', AA, 'text-secondary / bg'],
+  ['--color-text-secondary', '--color-surface', AA, 'text-secondary / surface'],
+  // Both button templates render the on-accent foreground over accent-hover on
+  // hover (and the static one on keyboard focus), so the hover background is a
+  // real background for this text and needs its own pair. Checking only the
+  // resting state passed themes that go nearly-black-on-dark the moment a
+  // pointer touches the control.
+  ['--color-on-accent', '--color-accent-hover', AA, 'on-accent / accent-hover (button hover)'],
+  ['--color-accent', '--color-surface', AA_LARGE, 'accent / surface (large)'],
+  // design.md's error-message copy rule creates --color-danger; it carries meaning,
+  // so it needs the same AA floor as any other body text.
+  ['--color-danger', '--color-surface', AA, 'danger / surface'],
+  ['--color-danger', '--color-bg', AA, 'danger / bg'],
+];
+
+// The measured set, derived from `pairs` so there is no second list of names.
+// The scanner needs it: after #337 round 9 a measured token is recorded ONLY
+// from a top-level `:root` rule and refused anywhere else, so "is this name
+// measured" is a question the scan itself has to answer.
+const MEASURED = new Set(pairs.flatMap(([fg, bg]) => [fg, bg]));
 
 // ── CSS whitespace, not JavaScript's ────────────────────────────────────────
 // CSS whitespace is exactly these five code points. String.prototype.trim()
@@ -209,19 +222,33 @@ const cssTrim = (t) => t.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, '');
 // past the brace refusal below, and a skipped name is indistinguishable from a
 // file that never declared it.
 const PLAIN_CUSTOM_NAME = /^--[A-Za-z0-9_-]*$/;
+
+// At-rules are checked at BOTH terminators, `;` and `{`. Checking only `;`
+// missed every block-form at-rule, and an @import can be reached through a
+// prelude the old check did not recognise.
+//
+// This was an ALLOW-LIST of grouping at-rules, and it was wrong twice: @layer
+// was missing (round 5, refusing a valid file) and @starting-style was added
+// (round 7, reading declarations that do not persist) — because it existed to
+// answer "may this block's declarations be read", and round 9 retired that
+// question. A measured token is now read only from a top-level `:root`, so an
+// at-rule's contents cannot supply a palette however it is spelled: a false
+// media query, an unknown rule, `@media` with a NUL in its name — all of them
+// now fail the same way, at the declaration.
+//
+// What survives is the one thing that is NOT about applicability: an at-rule
+// that brings in TEXT THIS GATE NEVER SEES. A theme override living in an
+// imported sheet is invisible, and no rule about `:root` compensates for a file
+// that was never read. So this is a deny-list of two, and it needs the complete
+// identifier rather than a prefix — a prefix would refuse `@importantly`, which
+// is a false refusal rather than a missed one.
+const AT_RULES_HIDE_TEXT = new Set(['import', 'use']);
 function atRuleProblem(buf) {
   const head = cssTrim(buf);
   if (!head.startsWith('@')) return null;
-  // The WHOLE identifier, not a prefix of it. `[A-Za-z-]*` stopped at the first
-  // character it did not know, so `@media_` yielded `media`, matched the
-  // allow-list, and the scanner read a block CSS discards — nine tokens, exit 0.
-  // CSS identifier characters are letters, digits, `_`, `-` and everything at
-  // U+0080 and above, which is the same class the url() boundary uses; matching
-  // it here means an unknown at-rule cannot masquerade as a known one by
-  // sharing its opening letters.
   const name = (/^@([A-Za-z0-9_\u0080-\uFFFF-]*)/.exec(head) || [, ''])[1].toLowerCase();
-  if (AT_RULES_READ.has(name)) return null;
-  return `an @${name || '(unreadable)'} rule — only the grouping at-rules (${AT_RULES_LIST}) wrap declarations this check can read`;
+  if (!AT_RULES_HIDE_TEXT.has(name)) return null;
+  return `an @${name} rule — it names a stylesheet this check never reads, so a token declared there would be invisible`;
 }
 
 // Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name to
@@ -238,45 +265,49 @@ function scanDeclarations(css) {
   // brace-valued declarations outright instead, so nothing needs to know what a
   // block contains and the only question left is whether one is open.
   let depth = 0;
-  // ── AMBIGUOUS BLOCKS ───────────────────────────────────────────────────────
-  // One flag per open block: is this block, or any block containing it, opened
-  // by a prelude that might be a DECLARATION rather than a selector?
-  // `unknown: !important { … }` is such a prelude. CSS re-parses it as a rule,
-  // finds the selector invalid and drops it, so its declarations apply nothing —
-  // but round 7's test (only whitespace between the colon and the brace) reads
-  // `!important` as tokens and calls it a selector, and nine tokens inside it
-  // printed OK. Telling the two apart needs pseudo-class validity: `button:hover`
-  // is a selector, `unknown:!important` is not, and no local test separates them
-  // — that is the oscillation rounds 5 through 8 have been living in.
-  // So this stops trying. It DESCENDS, and refuses only when the ambiguity
-  // actually reaches the measurement: a MEASURED declaration inside an ambiguous
-  // block is fatal. `button:hover { color: red }` still passes, because nothing
-  // about its colour depends on which reading is right.
-  const ambiguous = [];
-  const inAmbiguous = () => ambiguous.length > 0 && ambiguous[ambiguous.length - 1];
-  // A prelude that could be a declaration name: a plain identifier before the
-  // top-level colon. `:root` (colon first, nothing before it) and `.a:focus`
-  // (starts with a dot) are unambiguously selectors.
-  const PLAIN_IDENT = /^[A-Za-z_\u0080-\uFFFF][A-Za-z0-9_\u0080-\uFFFF-]*$/;
+  // ── WHERE A MEASURED TOKEN MAY LIVE ────────────────────────────────────────
+  // ONE RULE, replacing four rounds of trying to classify blocks: a measured
+  // token is recorded only from a `:root` rule at the TOP LEVEL of the
+  // stylesheet, and is FATAL anywhere else.
+  //
+  // Rounds 5 through 9 each asked "does this context apply?" and answered it
+  // locally, and each answer was wrong in a way the next round found:
+  //   r5  prelude before the colon is a plain identifier
+  //   r6  only `--` preludes refuse; descend otherwise
+  //   r7  only whitespace between the colon and the `{`
+  //   r8  descend, but refuse a measured token in an ambiguous block
+  // Round 9 then broke r8 four different ways at once — a leading-hyphen
+  // property name, `@media print` (a condition that can be false), a NUL inside
+  // an at-keyword, and `.e:definitely-not-a-pseudo` (an invalid selector CSS
+  // drops) — every one of them printing OK — 9/9 on a palette the page never
+  // applies. The question has no local answer. It is not asked any more.
+  //
+  // What this buys, and it is the whole point: the scanner no longer needs to
+  // know whether a block applies, because nowhere except a top-level `:root`
+  // is allowed to hold a measured token. An unknown at-rule, a false media
+  // query, an invalid selector, a dropped declaration-shaped rule — all of them
+  // now fail the same way, loudly, without being told apart.
+  // The cost is stated in design.md: a themed project must give each theme its
+  // own file with a complete `:root` palette, which design.md already required.
+  const records = [];                    // one flag per open block
+  const recordingHere = () => records.length > 0 && records[records.length - 1];
 
-  // Returns a fatal message, or null. It cannot just record any more: a name
-  // this check is unable to compare literally must stop the run, and only the
-  // caller can return out of the scan.
   const flush = () => {
     let problem = null;
     if (colonAt >= 0) {
       const name = cssTrim(buf.slice(0, colonAt));
       if (name.startsWith('--')) {
-        if (depth === 0) {
-          // CSS has no declaration list at stylesheet top level, so it discards
-          // these outright. Every `;` still reached flush(), so a file whose
-          // nine declarations sat outside any rule recorded a complete palette
-          // and exited 0 while the rendered page had none of it.
-          problem = `a custom property declared outside any rule (\`${name}\`)`
-            + ' — CSS discards declarations at stylesheet top level, so this palette would never apply';
-        } else if (inAmbiguous()) {
-          problem = `a measured custom property inside a block this check cannot classify (\`${name}\`)`
-            + ' — its prelude may be a declaration rather than a selector, and CSS drops the whole rule if it is';
+        if (!recordingHere()) {
+          // Outside a top-level `:root`. A MEASURED token here is fatal — this
+          // is the one rule that replaced classifying blocks. An unmeasured one
+          // is ignored: no pair reads it, so where it lives cannot affect a
+          // number this gate prints, and refusing it would red-build valid
+          // token files over a property nothing measures.
+          if (MEASURED.has(name)) {
+            problem = `a measured custom property outside a top-level \`:root\` rule (\`${name}\`)`
+              + ' — whether those declarations apply depends on the selector, the media query and'
+              + ' the cascade, none of which this gate resolves, so it refuses rather than assume';
+          }
         } else if (!PLAIN_CUSTOM_NAME.test(name)) {
           problem = `a custom property whose name this check cannot compare literally (\`${name}\`)`
             + ' — spell token names with ASCII letters, digits, - and _';
@@ -396,58 +427,31 @@ function scanDeclarations(css) {
     }
 
     if (c === '{') {
-      // ── A DECLARATION VALUE MAY NOT CONTAIN A BLOCK ────────────────────────
-      // CSS allows it — `--x: { … }` is a legal custom-property value, and an
-      // ordinary `unknown: { … }` is a declaration whose contents apply nothing
-      // — and four rounds of trying to READ those correctly produced four
-      // findings, each a fix that was right about the case in front of it:
-      // record the block as a value (round 3), only inside a declaration list
-      // (round 4), and then nested grouping rules and ordinary-property blocks
-      // broke both (round 5). Resolving it properly needs CSS Nesting
-      // semantics, which is a different program.
-      // So it is REFUSED, and round 7 showed the refusal has to cover MORE than
-      // a custom property, not less.
-      //
-      // Round 6 narrowed it to `--` preludes and DESCENDED into everything else,
-      // on the argument that over-reading a block CSS drops can only add a
-      // duplicate and duplicates refuse — "it cannot turn a refusal into a
-      // green." THAT ARGUMENT WAS WRONG, and the counter-example is one file:
-      // `.e { unknown: { …the whole palette… } }` with no `:root` anywhere.
-      // CSS re-parses `unknown:` as a selector, finds it invalid, and drops the
-      // rule, so NOTHING is declared — but the scanner read all nine tokens as
-      // live and printed `OK — 9/9`, exit 0. An added declaration is only a
-      // duplicate when a real one exists; when none does, the over-read does not
-      // duplicate the palette, it SUPPLIES it. Same for `--é: { … }`, which the
-      // ASCII-only `--` test did not recognise as a custom property at all.
-      //
-      // The discriminator round 5 and round 6 both missed is not in the prelude
-      // BEFORE the colon — it is what sits between the colon and the `{`:
-      //   `unknown: {`        nothing  → the block IS the value. CSS drops it.
-      //   `--x: {`            nothing  → a legal custom-property value.
-      //   `button:hover {`    `hover`  → a type selector with a pseudo-class.
-      //   `.a:focus, .b {`    a list   → a selector.
-      // So: a `{` that follows the top-level colon with only whitespace between
-      // is a brace-valued declaration and is REFUSED; anything else is a rule
-      // and opens normally. One test, no selector validation, and no direction
-      // in which reading a dropped block can be mistaken for a live one.
-      // The `--` prefix is checked separately and first, because a custom
-      // property's block IS its value even with tokens before the brace, and
-      // `startsWith('--')` covers names this file refuses to spell elsewhere.
-      const prelude = colonAt >= 0 ? cssTrim(buf.slice(0, colonAt)) : null;
-      if (prelude !== null && prelude.startsWith('--')) {
-        return { fatal: `a custom property whose value is a { } block (\`${prelude}\`) — this check cannot resolve one, and a token file does not need one` };
+      // ── DOES THIS BLOCK RECORD? ────────────────────────────────────────────
+      // The only question left, after round 9 retired block classification (see
+      // "WHERE A MEASURED TOKEN MAY LIVE" above): a block records iff it is a
+      // `:root` rule opened at the STYLESHEET TOP LEVEL. Not inside a media
+      // query, not inside a layer, not nested in another rule — because in
+      // every one of those the declarations' applicability depends on something
+      // this gate does not resolve.
+      // A brace-valued CUSTOM PROPERTY is still refused outright: `--x: { … }`
+      // is a legal value this cannot resolve, and unlike the cases above it is
+      // not fixed by refusing to read the block, since the DECLARATION itself
+      // is then unreadable.
+      // TWO readings of the same text, and conflating them cost a debugging pass:
+      // the DECLARATION NAME is what sits before a top-level colon, and the
+      // SELECTOR is the whole prelude. For `:root {` the colon is at index 0, so
+      // the name is empty and the selector is `:root` — read the name and this
+      // rule never records.
+      const declName = colonAt >= 0 ? cssTrim(buf.slice(0, colonAt)) : '';
+      const selector = cssTrim(buf);
+      if (declName.startsWith('--')) {
+        return { fatal: `a custom property whose value is a { } block (\`${declName}\`) — this check cannot resolve one, and a token file does not need one` };
       }
-      if (colonAt >= 0 && cssTrim(buf.slice(colonAt + 1)) === '') {
-        return { fatal: `a declaration whose value is a { } block (\`${prelude}\`) — CSS drops it and applies nothing, so reading it would certify a palette the page never renders` };
-      }
-      // Anything else with a top-level colon whose left side is a bare
-      // identifier is the ambiguous shape above: descend, but remember. Once
-      // ambiguous, every nested block stays ambiguous — a rule CSS dropped
-      // takes its children with it.
-      const nowAmbiguous = inAmbiguous() || (prelude !== null && PLAIN_IDENT.test(prelude));
+      const isRootRule = depth === 0 && /^:root$/i.test(selector);
       const bad = atRuleProblem(buf);
       if (bad) return { fatal: bad };
-      ambiguous.push(nowAmbiguous);
+      records.push(isRootRule);
       depth++;
       buf = ''; colonAt = -1;
       continue;
@@ -459,7 +463,7 @@ function scanDeclarations(css) {
       if (depth === 0) return { fatal: 'a closing brace with no matching open — the file does not parse as CSS' };
       const bad = flush();           // the last declaration may omit its `;`
       if (bad) return { fatal: bad };
-      ambiguous.pop();
+      records.pop();
       depth--;
       continue;
     }
@@ -552,31 +556,6 @@ function lum(hex) {
 }
 const ratio = (a, b) => { const la = lum(a), lb = lum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); };
 
-const AA = 4.5, AA_LARGE = 3.0;
-// Pairs name their TOKENS, not their values. Listing names and resolving them
-// at evaluation time is what lets the ambiguity check below know which tokens
-// are actually measured without a second, drift-prone list of names.
-const pairs = [
-  // No `|| '#FFFFFF'` fallback: substituting a default made the pair "evaluable"
-  // while measuring a colour the page may not use, so a project that DROPPED the
-  // token still scored 8/8. A missing required token must fail like any other.
-  ['--color-on-accent', '--color-accent', AA, 'on-accent / accent (button)'],
-  ['--color-text-primary', '--color-bg', AA, 'text-primary / bg'],
-  ['--color-text-primary', '--color-surface', AA, 'text-primary / surface'],
-  ['--color-text-secondary', '--color-bg', AA, 'text-secondary / bg'],
-  ['--color-text-secondary', '--color-surface', AA, 'text-secondary / surface'],
-  // Both button templates render the on-accent foreground over accent-hover on
-  // hover (and the static one on keyboard focus), so the hover background is a
-  // real background for this text and needs its own pair. Checking only the
-  // resting state passed themes that go nearly-black-on-dark the moment a
-  // pointer touches the control.
-  ['--color-on-accent', '--color-accent-hover', AA, 'on-accent / accent-hover (button hover)'],
-  ['--color-accent', '--color-surface', AA_LARGE, 'accent / surface (large)'],
-  // design.md's error-message copy rule creates --color-danger; it carries meaning,
-  // so it needs the same AA floor as any other body text.
-  ['--color-danger', '--color-surface', AA, 'danger / surface'],
-  ['--color-danger', '--color-bg', AA, 'danger / bg'],
-];
 
 // ── One token, two values: refuse, never pick one ──────────────────────────
 // The capture loop keeps the LAST hex it sees and cannot see anything else, so
@@ -611,7 +590,6 @@ const canon = (v) => {
   if (h.length === 8 && h.slice(6) === 'ff') h = h.slice(0, 6);   // matches the alpha exemption above
   return `#${h}`;
 };
-const MEASURED = new Set(pairs.flatMap(([fg, bg]) => [fg, bg]));
 const ambiguous = [...MEASURED]
   .map((name) => [name, [...new Set((decls[name] || []).map(canon))]])
   .filter(([, vals]) => vals.length > 1);

@@ -70,6 +70,8 @@ const DARK = `:root {
 const OK9 = 'OK — 9/9 assumed pairs meet WCAG AA';
 const DUP = 'a measured token is declared more than once';
 const BLOCK = 'value is a { } block';
+// #337 round 9: the one place a measured token may be declared.
+const ROOT = 'outside a top-level `:root` rule';
 
 // (label, {relative path: contents}, expected exit, required diagnostic)
 const CASES = [
@@ -107,12 +109,18 @@ const CASES = [
   // after it, for different reasons — indistinguishable from a working check, and
   // exactly the non-discriminating fixture #333 spent a round on. With a passing
   // override, removing the refusal returns them to exit 0.
-  ['a second, different hex for a measured token (theme block)',
-    { 'styles/tokens.css': plus('[data-theme="dark"] { --color-accent: #0D47A1; }\n') }, 1, DUP],
+  // These two were `1, DUP` before round 9: the tokens were read, then refused for
+  // being a second value. They are now refused one step earlier and for a better
+  // reason — a `[data-theme]` rule and a media query are contexts whose
+  // applicability this gate does not resolve, so a measured token in either is
+  // refused whether or not it duplicates anything. design.md's remedy is
+  // unchanged: give each theme its own file with a complete `:root` palette.
+  ['a measured token in a theme-attribute rule is refused',
+    { 'styles/tokens.css': plus('[data-theme="dark"] { --color-accent: #0D47A1; }\n') }, 1, ROOT],
 
-  ['a prefers-color-scheme override of a measured token',
+  ['a measured token under prefers-color-scheme is refused',
     { 'styles/tokens.css': plus('@media (prefers-color-scheme: dark) {\n  :root { --color-bg: #FFFFFF; }\n}\n') },
-    1, DUP],
+    1, ROOT],
 
   // ── The must-NOT-fail twins for the ambiguity check ───────────────────────
   // A repeated declaration of the SAME colour has nothing to resolve. If these
@@ -229,8 +237,14 @@ const CASES = [
   ['@media still wraps declarations this check reads',
     { 'styles/tokens.css': BASE + '@media (min-width: 40em) { .a { color: red; } }\n' }, 0, OK9],
 
-  ['an at-rule outside the allow-list is refused at its brace',
-    { 'styles/tokens.css': BASE + '@font-face { font-family: x; }\n' }, 1, '@font-face rule'],
+  // The allow-list is gone (round 9): an at-rule's contents cannot supply a
+  // palette however it is spelled, because a measured token is only read from a
+  // top-level `:root`. What remains refused is the at-rule that hides TEXT.
+  ['an @font-face declaring nothing measured is fine',
+    { 'styles/tokens.css': BASE + '@font-face { font-family: x; }\n' }, 0, OK9],
+
+  ['an @use is refused at its brace like an @import',
+    { 'styles/tokens.css': BASE + '@use "theme" { }\n' }, 1, '@use rule'],
 
   // CSS normalises CRLF to one newline before tokenizing, so a backslash
   // continues the string across both characters.
@@ -305,11 +319,11 @@ const CASES = [
   // This is the case that killed the argument; it must never print OK again.
   ['a dropped unknown:{} block must not supply the whole palette',
     { 'styles/tokens.css': '.e { unknown: {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}; }\n' },
-    1, 'CSS drops it and applies nothing'],
+    1, ROOT],
 
-  ['a brace-valued ORDINARY property is refused, not read',
+  ['a brace-valued ORDINARY property refuses at the declaration',
     { 'styles/tokens.css': plus('.e { unknown: { --color-accent: #0D47A1; }; }\n') },
-    1, 'CSS drops it and applies nothing'],
+    1, ROOT],
 
   // The same hole through the OTHER door: `--é` is a custom property in CSS,
   // but the ASCII-only `--` test did not recognise it, so the brace refusal was
@@ -369,31 +383,31 @@ const CASES = [
   // This case was `1, DUP` in round 6, when the block was read as live. That
   // reading was not safe: `.e { unknown: !important { …nine tokens… } }` has the
   // identical shape and CSS applies none of it.
-  ['a measured token inside an unclassifiable block is refused, not read',
+  ['a measured token in a block that may be a declaration is refused',
     { 'styles/tokens.css': plus('button:hover { --color-accent: #0D47A1; }\n') },
-    1, 'cannot classify'],
+    1, ROOT],
 
   ['…including when the prelude carries tokens before the brace',
     { 'styles/tokens.css': '.e { unknown: !important {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '} }\n' },
-    1, 'cannot classify'],
+    1, ROOT],
 
   // The must-NOT-over-refuse twins. A block with no measured token is unaffected
   // however it was opened, and an unambiguous selector is still read as live.
   ['an unclassifiable block with no measured token still passes',
     { 'styles/tokens.css': plus('button:hover { color: red; }\nhtml:root { color: blue; }\n') }, 0, OK9],
 
-  ['a declaration inside an UNAMBIGUOUS selector is still live',
-    { 'styles/tokens.css': plus('.a:focus { --color-accent: #0D47A1; }\n') }, 1, DUP],
+  ['a measured token under any non-root selector is refused',
+    { 'styles/tokens.css': plus('.a:focus { --color-accent: #0D47A1; }\n') }, 1, ROOT],
 
   // ── #337 round 8: an at-rule name is a whole identifier ───────────────────
   // `[A-Za-z-]*` stopped at the first character it did not know, so `@media_`
   // yielded `media`, matched the allow-list, and a block CSS discards supplied
   // the entire palette at exit 0.
-  ['an unknown at-rule cannot masquerade as an allowed one by prefix',
-    { 'styles/tokens.css': '@media_ {\n' + BASE + '}\n' }, 1, '@media_ rule'],
+  ['an unknown at-rule cannot supply a palette (@media_)',
+    { 'styles/tokens.css': '@media_ {\n' + BASE + '}\n' }, 1, ROOT],
 
-  ['…and the allowed name itself still works',
-    { 'styles/tokens.css': '@media (min-width: 1px) {\n' + BASE + '}\n' }, 0, OK9],
+  ['…and neither can a KNOWN one (@media): the wrapper is not the point',
+    { 'styles/tokens.css': '@media (min-width: 1px) {\n' + BASE + '}\n' }, 1, ROOT],
 
   // ── #337 round 8: @starting-style does NOT persist ────────────────────────
   // Round 7 added it as a grouping rule. Its declarations are the STARTING state
@@ -401,15 +415,15 @@ const CASES = [
   // only there can be undefined in the rendered page. Refused again — and the
   // membership rule is "cascades as if the wrapper were not there", which this
   // never satisfied.
-  ['@starting-style is refused, not read as a persistent palette',
-    { 'styles/tokens.css': '@starting-style {\n' + BASE + '}\n' }, 1, '@starting-style rule'],
+  ['@starting-style cannot supply a palette',
+    { 'styles/tokens.css': '@starting-style {\n' + BASE + '}\n' }, 1, ROOT],
 
   // ── #337 round 8: declarations at stylesheet top level ────────────────────
   // CSS has no declaration list there and discards them, but every `;` reached
   // flush(), so a file with nine bare declarations recorded a complete palette.
-  ['custom properties declared outside any rule are refused',
+  ['measured tokens declared outside any rule are refused',
     { 'styles/tokens.css': BASE.replace(':root {\n', '').replace('\n}\n', '\n') },
-    1, 'outside any rule'],
+    1, ROOT],
 
   // ── #337 round 8: canon() undid the CSS trim ──────────────────────────────
   // The capture keeps a U+00A0 because CSS reads it as part of a token; canon()
@@ -540,32 +554,32 @@ const CASES = [
   // standard way a token file keeps its precedence below component overrides.
   // A grouping rule's block cascades as if the wrapper were not there, so this
   // is the derived set, not two names.
-  ['a token file wrapped in @layer is read, not refused',
-    { 'styles/tokens.css': '@layer tokens {\n' + BASE + '}\n' }, 0, OK9],
+  ['a token file wrapped in @layer is refused: :root must be top level',
+    { 'styles/tokens.css': '@layer tokens {\n' + BASE + '}\n' }, 1, ROOT],
 
-  ['the @layer statement form is read too',
+  ['…and the @layer statement form does not change that',
     { 'styles/tokens.css': '@layer tokens, components;\n@layer tokens {\n' + BASE + '}\n' },
-    0, OK9],
+    1, ROOT],
 
-  ['@container wraps declarations this check reads',
+  ['@container cannot supply a palette either',
     { 'styles/tokens.css': plus('@container (min-width: 1px) { :root { --color-accent: #0D47A1; } }\n') },
-    1, DUP],
+    1, ROOT],
 
   // …and declarations inside a layer are LIVE, not merely tolerated.
-  ['a declaration inside @layer is read as live',
+  ['a measured token inside @layer is refused',
     { 'styles/tokens.css': plus('@layer overrides { :root { --color-accent: #0D47A1; } }\n') },
-    1, DUP],
+    1, ROOT],
 
   // The must-still-refuse twin: widening the set must not turn it into a
   // deny-list. @font-face declarations are not element tokens; @import is text
   // this gate never sees.
-  ['@font-face is still refused',
+  ['@font-face declaring nothing measured passes',
     { 'styles/tokens.css': plus('@font-face { font-family: x; src: url(x.woff2); }\n') },
-    1, '@font-face rule'],
+    0, OK9],
 
-  ['@property is still refused',
+  ['@property declaring nothing measured passes',
     { 'styles/tokens.css': plus('@property --color-accent { syntax: "<color>"; inherits: true; initial-value: #0D47A1; }\n') },
-    1, '@property rule'],
+    0, OK9],
 
   // ── #337 round 6: a CONFIGURED candidate that is gone ─────────────────────
   // design.md tells a themed project to give each theme its own file and add it
@@ -595,6 +609,38 @@ const CASES = [
   // file is still the bootstrap notice, not this new failure.
   ['a single absent candidate is still the bootstrap case',
     { 'index.html': '<!doctype html>\n' }, 0, 'no stylesheet yet'],
+
+  // ── #337 round 9: the contexts that retired block classification ──────────
+  // Five findings, four of them silent greens, and each is a DIFFERENT reason a
+  // block does not apply: a leading-hyphen property name, a media condition that
+  // can be false, a NUL inside an at-keyword, an invalid pseudo-class. Rounds
+  // 5-8 tried to tell such blocks apart and were wrong four times. These cases
+  // exist to prove the answer is now one rule, not four: none of them is
+  // classified, all of them fail at the declaration.
+  ['a leading-hyphen property name cannot supply a palette',
+    { 'styles/tokens.css': '.e { -foo: !important {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '} }\n' },
+    1, ROOT],
+
+  ['a conditional media query cannot supply a palette (@media print)',
+    { 'styles/tokens.css': '@media print {\n' + BASE + '}\n' }, 1, ROOT],
+
+  ['a NUL inside an at-keyword cannot supply a palette',
+    { 'styles/tokens.css': '@media\u0000 {\n' + BASE + '}\n' }, 1, ROOT],
+
+  ['an invalid pseudo-class cannot supply a palette',
+    { 'styles/tokens.css': '.e:definitely-not-a-pseudo {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}\n' },
+    1, ROOT],
+
+  // The must-NOT-over-refuse twin, and the one that keeps the rule honest: an
+  // UNMEASURED custom property may live anywhere. No pair reads it, so where it
+  // sits cannot change a number this gate prints, and refusing it would
+  // red-build valid token files over a property nothing measures.
+  ['an unmeasured custom property may live anywhere',
+    { 'styles/tokens.css': plus('button:hover { --color-border: #000; --spacing-x: 4px; }\n') }, 0, OK9],
+
+  ['…including inside a media query and an unknown at-rule',
+    { 'styles/tokens.css': plus('@media print { .x { --color-border: #000; } }\n@whatever { --spacing-y: 2px; }\n') },
+    0, OK9],
 
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',

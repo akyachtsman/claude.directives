@@ -134,44 +134,42 @@ the surviving theme and printed green, while the renamed one was never opened.
 in a fresh repo, and still a hard failure in a repo that has CSS elsewhere.)
 Tokens no pair reads are unaffected.
 
+**Where measured tokens must live.** Every token a contrast pair reads must be
+declared in a **`:root` rule at the top level of the file** — not inside a media
+query, a cascade layer, a `[data-theme]` block, or any other selector. A measured
+token found anywhere else is a **hard failure**.
+
+That is narrower than CSS allows, and deliberately so. Whether a declaration
+applies depends on the selector, the media condition and the cascade, and this
+gate resolves none of them: nine review rounds produced a scanner that read
+`@media print { :root { … } }`, `.e:not-a-real-pseudo { … }` and
+`unknown: !important { … }` as live palettes and printed `OK — 9/9` on pages that
+render none of them. Rather than keep guessing which contexts apply, it reads one
+and refuses the rest. Tokens **no pair measures** are unaffected and may live
+anywhere.
+
 **What the guardrail accepts.** It reads the file with a small CSS scanner rather
 than a regex, so a comment inside a value, a `url()` containing a `;` or a `/*`,
-a `!important` flag, a string spanning an escaped newline, a type or class
-selector carrying a pseudo-class (`button:hover`), and a `@layer` or `@media`
-wrapper are all read the way CSS reads them. What it **refuses outright**,
-because reading part of a palette is worse than reading none:
+a `!important` flag, a string spanning an escaped newline, and any selector or
+at-rule that does not hold a measured token are all read the way CSS reads them.
+What it **refuses outright**, because a partial read of a palette is worse than
+none:
 
-- any at-rule that is not a **grouping** rule (`@media`, `@supports`, `@layer`,
-  `@container`, `@scope`) — a grouping rule's block cascades as if the wrapper
-  were not there, so reading through one reads the same declarations the browser
-  applies. Everything else is a different thing: `@import` names a sheet the
-  check never reads, so a theme override living there would be invisible, and
-  `@font-face`/`@keyframes`/`@property` declare something other than an
-  element's tokens;
+- **a measured token outside a top-level `:root`** — see above;
+- **`@import` and `@use`** — they name a stylesheet this check never reads, so a
+  theme override living there would be invisible, and no rule about `:root` can
+  compensate for a file that was never opened;
 - **a backslash escape outside a string.** CSS would read `--color-\61 ccent` as
   `--color-accent`; this refuses it instead of decoding it, so **spell
   identifiers plainly**;
 - an HTML comment delimiter (`<!--` / `-->`);
-- **any declaration whose value is a `{ }` block** — `--x: { … }` is legal CSS
-  and this cannot resolve one; `unknown: { … }` is a block CSS drops entirely,
-  so reading it would certify a palette the page never renders. A `{` that
-  follows the declaration's colon with only whitespace between is refused; a
-  selector that merely contains a colon (`button:hover { … }`, `.a:focus, .b`)
-  is a rule and opens normally;
-- **a custom-property name outside `[A-Za-z0-9_-]`.** CSS treats every code
-  point at U+0080 and up as an identifier character, so `--color-bg` followed by
-  a non-breaking space is a *different property* from `--color-bg`. This gate
-  measures names by comparing them literally, so one it cannot compare is
-  refused rather than skipped — **spell token names in plain ASCII**;
-- **a measured token declared outside any rule.** CSS has no declaration list at
-  stylesheet top level and discards what it finds there, so a bare
-  `--color-accent: #1565C0;` with no enclosing `{ }` never applies;
-- **a measured token inside a block whose prelude might be a declaration** —
-  `button:hover { … }` and `unknown: !important { … }` are the same shape to
-  anything short of a full selector parser, and CSS drops the whole rule for the
-  second. Blocks like these are read normally; only a **measured** token inside
-  one is refused, so `button:hover { color: red }` is unaffected. Declare your
-  tokens in `:root`;
+- **a custom property whose value is a `{ }` block** — `--x: { … }` is legal CSS
+  and this cannot resolve one;
+- **a custom-property name outside `[A-Za-z0-9_-]`.** CSS treats every code point
+  at U+0080 and up as an identifier character, so `--color-bg` followed by a
+  non-breaking space is a *different property*. This gate measures names by
+  comparing them literally, so one it cannot compare is refused rather than
+  skipped — **spell token names in plain ASCII**;
 - an unterminated string or comment, or an unbalanced bracket of any kind —
   including a closing `}`, `)` or `]` with nothing open.
 

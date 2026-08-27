@@ -167,6 +167,34 @@ const CASES = [
       + `  shard: { current: 1, total: 1 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
+  // Codex round 5 on #333: three more false alarms, all in the checks I asked the
+  // review to attack. Each fatal twin is kept so the exemptions cannot widen into
+  // a fail-open.
+  ['testDir: \'.\' is an ancestor that still contains the suite (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['grep: /(?:)/ matches every title, narrows nothing (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  grep: /(?:)/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['grep: /smoke/ is a REAL positive filter (still fatal)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  grep: /smoke/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    9, 'TOP-LEVEL grep'],
+
+  ['testIgnore: [\'\'] excludes nothing (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  testIgnore: [''],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['testIgnore: [\'\', \'app.spec.js\'] is MIXED and still narrows (still fatal)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  testIgnore: ['', 'app.spec.js'],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    9, 'TOP-LEVEL testIgnore'],
+
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"

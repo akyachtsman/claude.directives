@@ -49,7 +49,7 @@
 const { existsSync, statSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
-const { resolve, join, isAbsolute, dirname } = require('path');
+const { resolve, join, isAbsolute, dirname, sep } = require('path');
 
 let verdict = false;
 process.on('exit', code => {
@@ -218,9 +218,21 @@ console.log(`config:    ${configPath}`);
     // `''`. Round 1 of #333 covered the array; round 3 found the string, which
     // fell through to CANNOT CHECK on an unrestricted suite. A POSITIVE filter is
     // never exempt: `testMatch: ''` selects nothing, which is maximal narrowing.
+    // "Empty" has three spellings for a NEGATIVE filter, all excluding nothing:
+    // [], '', and ['', ''] — round 1 found the first, round 3 the second, round 5
+    // the third. A MIXED array keeps its real pattern and still narrows.
     if (NEGATIVE_FILTERS.includes(k)) {
-      if (Array.isArray(v) && v.length === 0) return false;
+      if (Array.isArray(v) && v.every(x => x === '')) return false;   // covers [] too
       if (typeof v === 'string' && v === '') return false;
+    }
+    // A POSITIVE filter that matches EVERYTHING narrows nothing either. `/(?:)/`
+    // is the zero-length regexp — valid, matches every title — and round 5 found
+    // it blocking a suite it does not restrict. Only the universally-matching
+    // source counts; any other pattern is a real filter.
+    if (POSITIVE_FILTERS.includes(k)) {
+      const universal = r => r instanceof RegExp && (r.source === '(?:)' || r.source === '');
+      if (universal(v)) return false;
+      if (Array.isArray(v) && v.length > 0 && v.every(universal)) return false;
     }
     return true;
   };
@@ -251,7 +263,13 @@ console.log(`config:    ${configPath}`);
   const rootFilters = [...POSITIVE_FILTERS, ...NEGATIVE_FILTERS].filter(narrows);
   const CONFIG_DIR = dirname(configPath);
   const resolveDir = d => resolve(CONFIG_DIR, String(d));
-  if (cfg.testDir !== undefined && resolveDir(cfg.testDir) !== resolveDir(SHIPPED_TEST_DIR)) {
+  // CONTAINMENT, not equality. Playwright discovers recursively, so testDir: '.'
+  // — or any ancestor of the shipped suite — still finds it; round 5 caught the
+  // equality test rejecting a config Playwright handles fine. Only a testDir that
+  // does NOT contain the suite redirects away from it.
+  const shippedTests = resolveDir(SHIPPED_TEST_DIR);
+  const contains = (dir, child) => child === dir || child.startsWith(dir.endsWith(sep) ? dir : dir + sep);
+  if (cfg.testDir !== undefined && !contains(resolveDir(cfg.testDir), shippedTests)) {
     die(9, [
       `FAIL: the config declares a root testDir of ${JSON.stringify(cfg.testDir)} — CANNOT CHECK.`,
       `  Every project resolves against it, so the widths below describe whatever lives`,

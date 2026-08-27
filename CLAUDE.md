@@ -79,9 +79,11 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 `/audit-repo` treats a shipped-downstream-but-applicable-here miss as drift.
 
 ## Branch policy
-`global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
-(`claude/<name>` branches, never commit to `main`, draft PR on first push,
-squash-merge on green — no approval is sought. The gate is `git.md` →
+`global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged:
+`claude/<name>` branches, never commit to `main`, draft PR on first push,
+squash-merge on green — no approval is sought.
+
+The gate is `git.md` →
 *Conditional Auto-Merge on Green*: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
 the reaction ladder's attestation, or any state its *unreachable-review test*
@@ -90,8 +92,10 @@ its reset window, or a
 request that could not be made or accepted at all — never elapsed silence. Note that the ladder
 clears the verdict gate ONLY. Where no `codex-flagged` label is present, the
 ladder is the whole gate and the merge proceeds unattended. Where one is, a reaction-only
-round leaves it and escalates, no `codex-flagged` label,
-no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
+round leaves it and escalates. The rest of the gate is unchanged: no `codex-flagged` label,
+no unresolved review threads, diff limited to the intended files.
+
+Repo-specific deltas:
 - `main` here enforces **Require conversation resolution before merging**
   server-side (owner, 2026-08-26), so an unresolved thread refuses the merge
   rather than depending on a GraphQL read that fails when the quota is out. It

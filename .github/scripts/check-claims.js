@@ -226,7 +226,15 @@ const CONDITION_OPENERS = [
   // the openers I happened to write, not from the ones that reverse a claim.
   'unless', 'until', 'except', 'if', 'when', 'whenever', 'where', 'wherever',
   // The former CLAUSE_OPENERS, folded in by round 20 (see the note below).
-  'after', 'once', 'however', 'although', 'subject to', 'following', 'yet',
+  'after', 'once', 'although', 'subject to', 'following', 'yet',
+  // `however` carries a lookahead because it is TWO WORDS in one spelling. As a
+  // gate it introduces a clause — "however the owner decides". Comma-flanked it
+  // is a discourse marker and changes nothing — "A RESPONSE, however, is not a
+  // verdict" states this claim absolutely, and round 21 caught the guard
+  // REFUSING it. That direction is not the safe one: it is how a maintainer
+  // gets taught to reword correct prose until a regex stops complaining, and
+  // this PR has already paid that five times.
+  'however(?![ \t]*,)',
   // `pending` was here for one run and came back out, for the reason round 17
   // removed `only` and `assuming`: it is a conditional opener in grammar and an
   // ordinary word in this repo's prose. `reading as "still pending"` turned four
@@ -584,22 +592,24 @@ return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
     // (a) A SENTENCE CANNOT END INSIDE BRACKETS. Codex's repro was exactly
     // that — `(contact Dept. Security)` — and this rule needs no list at all.
     const opens = (before.match(/[([]/g) || []).length - (before.match(/[)\]]/g) || []).length;
-    if (opens > 0) {
-      // ONLY WHEN THE BRACKET IS AN INLINE ASIDE. A first version suppressed
-      // the boundary whenever anything was open, and CLAUDE.md's branch-policy
-      // paragraph is ONE parenthesis spanning several sentences — so the scope
-      // swallowed the rest of the passage and two carriers went red.
-      //
-      // The distinction is not a length: an aside CLOSES before the next stop,
-      // and a structural bracket does not. Round 17's lesson was that bounding
-      // the guard with a number bounds the wrong thing; this asks the question
-      // directly instead.
-      const rest = str.slice(off + m.length);
-      const close = rest.search(/[)\]]/);
-      const nextStop = rest.search(/[.!?](?:\s|$)/);
-      if (close >= 0 && (nextStop < 0 || close < nextStop)) return keep();
-    }
-    // (b) TITLE-CASE AND SHORT, FOLLOWED BY A CAPITAL, is the shape an
+    // AN OPEN BRACKET IS INDETERMINATE SCOPE, so do not mark — whatever the
+    // rest of the line looks like. Round 20 tried to tell an inline aside from
+    // a structural bracket by asking whether the close came before the next
+    // stop, and round 21 walked through the fall-through twice: an UNBALANCED
+    // open, and a balanced aside holding a stop of its own. Both landed in
+    // `cut()` and put a boundary inside the bracket.
+    //
+    // The test was answering "is this aside short?" when the question is "do I
+    // know where this bracket ends?" — and where the answer is no, the only
+    // safe reading is the long one. A boundary I cannot justify is a boundary I
+    // must not insert.
+    //
+    // This costs the structural case round 20 added the test to protect: a
+    // parenthesis spanning several sentences now extends the scope through all
+    // of them. CLAUDE.md's branch policy was written that way and has been
+    // restructured instead — a parenthesis running across four sentences was
+    // hard to read before any guard cared about it.
+    if (opens > 0) return keep();    // (b) TITLE-CASE AND SHORT, FOLLOWED BY A CAPITAL, is the shape an
     // abbreviation before a proper noun takes: `Dept. Security`, `Dr. Smith`,
     // `Inc. Ltd`. It is also the shape of a sentence ending in a short
     // capitalised word, and nothing local separates them — so take the
@@ -611,7 +621,14 @@ return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
     // Deliberately not `^[A-Z]` — a first draft used that and turned the
     // CLAUDE.md carrier red on `clears the verdict gate ONLY. Where no …`.
     // A SHOUTED word is not an abbreviation; an abbreviation carries lowercase.
-    if (/[A-Z]/.test(nextCh) && /^[A-Z][a-z]{1,4}$/.test(prevTok)) return keep();
+    //
+    // AND NO LENGTH CAP. Round 20 wrote `{1,4}` and round 21 walked through it
+    // with `Messrs.` — seven characters, an ordinary title. The cap was a
+    // number standing in for "looks like an abbreviation", which is round 17's
+    // mistake for the third time on this PR: bounding the guard instead of the
+    // risk. Title-case before a capital is ambiguous at every length, so it is
+    // ambiguous at every length here.
+    if (/[A-Z]/.test(nextCh) && /^[A-Z][a-z]+$/.test(prevTok)) return keep();
     // THE WHOLE TOKEN, not a suffix of it. A first draft tested the trailing
     // DIGITS of the preceding text, so `observed working at b64ff09.` ended in
     // "09", was read as a list marker, and went unmarked — which merged that
@@ -629,7 +646,18 @@ return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
     // its tempered token looks for a marker followed by a space, and a mark
     // inserted between the `.` and that space made the marker unrecognisable.
     // The guard that watches for list drift must be able to see a list.
-    if (/^\d+$/.test(tok)) return keep();
+    // A LIST MARKER IS LINE-LEADING; AN ORDINARY NUMBER IS NOT. Round 20
+    // suppressed the boundary after ANY trailing digits, so `The policy changed
+    // after 2026. That establishes …` lost a real stop and let `after` leak
+    // into the next sentence's scope — the guard then REFUSED a correct
+    // carrier. Wrong direction, and the mirror of the `Dept.` finding: there a
+    // spurious boundary hid a condition, here a missing one invented it.
+    //
+    // The marker only means anything where list structure survives — the raw
+    // reader. `normalize()` has already collapsed newlines by the time the
+    // normalised path runs, so a suppression there could not be protecting a
+    // list and could only do the damage above.
+    if (/(?:^|\n)[ \t]*\d+$/.test(before) && /^\d+$/.test(tok)) return keep();
   }
   return cut();
 });

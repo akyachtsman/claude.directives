@@ -104,6 +104,15 @@ jobs:
         # not remove it — a downstream copy simply omits it.
         run: python3 .github/scripts/check-job-bounds.py --include-templates
 
+      # Same doctrine as the viewport gate's own guard below: this check is
+      # trusted when it is QUIET, and #334 is what that costs — an expression
+      # -bounded ui-suite caller skipped the 120-minute floor and the pass line
+      # asserted the floor anyway. The refusal cases hand the guard a bound it
+      # can SEE and cannot READ, and each is paired with a twin that must NOT
+      # fail, because the exemption for jobs carrying no floor is deliberate.
+      - name: Check the job-bounds guard itself reads workflows correctly
+        run: python3 .github/scripts/check-job-bounds-cases.py
+
       # The logical map is generated from EXPORTS.json, so a committed page that
       # no longer matches the manifest is drift — fail here rather than let the
       # map quietly describe a repo that has moved on.
@@ -229,6 +238,15 @@ jobs:
       # is a guard that reports a traceback instead of its finding.
       - name: Check the composite env guard itself reports correctly
         run: python3 .github/scripts/check-ui-suite-env-cases.py
+
+      # The contrast guardrail is exported, never run here — this repo has no
+      # styles/tokens.css — so nothing else in this repo would notice it break.
+      # #334 caught it measuring a token's SUPERSEDED value: the capture regex
+      # read only #hex, so a later rgb() declaration was invisible and the gate
+      # certified 9/9 AA on a button rendering white on white. Every refusal case
+      # here is paired with a must-NOT-fail twin.
+      - name: Check the contrast guardrail reads token files correctly
+        run: node .github/scripts/check-contrast-cases.js
 
   check-external-links:
     name: Check External Links (warn only)

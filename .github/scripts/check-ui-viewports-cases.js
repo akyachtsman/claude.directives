@@ -297,6 +297,25 @@ const CASES = [
   // reported a missing band. It is still refused — exempting it needs "does this
   // value narrow?", answered wrong six times in rounds 1-6 — but it is refused
   // under a verdict that does not misdescribe the config.
+  // Codex round 11: an explicit --config OUTSIDE --tests-dir. Playwright evaluates
+  // from the tests directory regardless of where the config lives, so chdir'ing to
+  // the CONFIG's directory (rounds 9-10) put the two evaluations back on different
+  // cwds. In the shipped layout the two coincide, which is why three rounds of
+  // fixes to this one line could not tell the difference.
+  //
+  // The config declares a root `grep` ONLY when evaluated somewhere other than the
+  // tests directory, so exit 0 means the gate stood where Playwright would.
+  ['explicit --config outside --tests-dir — evaluated from the TESTS dir',
+    { 'cfgdir/playwright.config.js':
+        `import { defineConfig, devices } from '@playwright/test';\n`
+        + `const here = process.cwd();\n`
+        + `const elsewhere = !here.endsWith('/suite');\n`
+        + `export default defineConfig({\n  testDir: '.',\n`
+        + `  ...(elsewhere ? { grep: /__ONLY_WHEN_READ_FROM_ELSEWHERE__/ } : {}),\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'suite/tests/app.spec.js': "import { test } from '@playwright/test';\ntest('s', async () => {});\n" },
+    0, 'check-ui-viewports: OK', { subdir: 'suite', configArg: 'cfgdir/playwright.config.js' }],
+
   ['laptop project carries testMatch — declared but unattributable',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"
@@ -402,7 +421,12 @@ function runCase(files, opts) {
     // past the config, so a value inherited from the developer's own shell would
     // change what every case measures.
     const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '', PW_TEST_REPORTER: '', ...(o.extraEnv || {}) };
+    // opts.configArg passes an explicit --config, which is how a config OUTSIDE
+    // the tests directory gets exercised. Playwright's cwd is the tests dir
+    // whatever --config points at, so the two only diverge when they are
+    // different directories — which the shipped layout never is (#333 round 11).
     const args = o.env ? [CHECK] : [CHECK, '--tests-dir', target];
+    if (o.configArg) args.push('--config', join(tmp, o.configArg));
     const r = spawnSync(process.execPath, args, { encoding: 'utf8', env, cwd: REPO_ROOT });
     return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };
   } finally {

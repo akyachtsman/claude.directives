@@ -135,12 +135,27 @@ const END_OF_SENTENCE = '(?:\\u0001|\\s|$)';
 // claim needs is not "no opener before me" but "nothing before me at all", so
 // a gate preposed in front of its own scoping clause has nowhere to sit.
 const START_OF_SENTENCE = '(?<=(?:^|\\u0001)\\s{0,4})';
+// ── AND A NARROWER SCOPE FOR LOOKING BACKWARD ──────────────────────────────
+// Round 23. The preposed-condition lookbehind scanned the whole marked
+// sentence, so a condition governing an EARLIER independent clause suppressed a
+// later absolute assertion: `A review starts when requested; that establishes a
+// RESPONSE, not a verdict` was refused, though `when requested` modifies only
+// the first clause.
+//
+// A semicolon separates independent clauses, and a gate cannot reach across one
+// backwards. It CAN reach across one forwards — round 12 is the evidence, where
+// `…unattended; however owner approval is required first` takes the claim back
+// from the tail. So the two directions genuinely differ and {{B}} is used in the
+// lookbehind only. That asymmetry is the finding, not an oversight: what
+// precedes a semicolon is a different statement; what follows it is a
+// continuation of this one.
+const BACKWARD_SCOPE = '[^\\u0001;]';
 // It is ONE definition on purpose. `[^.]` appeared in the lookbehind, in the
 // trailing lookahead, and in both tempered gaps -- four copies of one idea, in
 // a file whose recurring defect is a check that exists on one path and not its
 // twin. Fixing the lookbehind alone would have left the lookahead reading a
 // different sentence than the lookbehind, which is that defect exactly.
-const expand = (src) => src.replace(/\{\{SOS\}\}/g, () => START_OF_SENTENCE).replace(/\{\{EOS\}\}/g, () => END_OF_SENTENCE).replace(/\{\{S\}\}/g, () => SENTENCE_CHAR).replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
+const expand = (src) => src.replace(/\{\{B\}\}/g, () => BACKWARD_SCOPE).replace(/\{\{SOS\}\}/g, () => START_OF_SENTENCE).replace(/\{\{EOS\}\}/g, () => END_OF_SENTENCE).replace(/\{\{S\}\}/g, () => SENTENCE_CHAR).replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
   if (typeof NEGATORS !== 'string' || NEGATORS === '') {
     console.error('FAIL: a pattern uses {{NEG}} but the manifest declares no "negators" string.');
     process.exit(1);
@@ -226,7 +241,25 @@ const CONDITION_OPENERS = [
   // the openers I happened to write, not from the ones that reverse a claim.
   'unless', 'until', 'except', 'if', 'when', 'whenever', 'where', 'wherever',
   // The former CLAUSE_OPENERS, folded in by round 20 (see the note below).
-  'after', 'once', 'although', 'subject to', 'following',
+  'once', 'although', 'subject to', 'following',
+  // `while` and `before` are round 23: both make the assertion TEMPORARY
+  // rather than conditional — "not a verdict while it contains findings",
+  // "not a verdict before the owner confirms it" — which permits the same
+  // response to become a verdict later. That is the `until` failure again
+  // (round 18), and the same reason it matters: the state they hand back is
+  // the CLEAN one, which is what a merge happens on.
+  // Both carry a gerund lookahead. A GATE takes a finite clause — "while it
+  // contains findings", "before the owner confirms it". The temporal use takes
+  // a GERUND — "passes both checks while reporting that the head FAILED",
+  // "check the threads before concluding the monitor has failed" — which
+  // describes a concurrent or subsequent action and gates nothing. Both of
+  // those are real carriers in this repo, and both went red the moment these
+  // openers went in bare.
+  'while(?!\\s+\\w+ing\\b)', 'before(?!\\s+\\w+ing\\b)',
+  // `after` carries a lookahead for the same reason `however` does: `after
+  // all` is a discourse marker, not a gate, and the guard refused `not, after
+  // all, a verdict` — a sentence that states this claim absolutely.
+  'after(?!\\s+all\\b)',
   // `yet` was here for two rounds and is out. As a gate it is archaic
   // ("yet the owner objects"); in ordinary prose it is a coordinating
   // contrast, and `That establishes a RESPONSE, yet not a verdict` states
@@ -371,6 +404,22 @@ const CONTINUATION_FLOOR = {
     ' providing the owner agrees', ' as long as the owner agrees',
     ' so long as the owner agrees', ' where the owner agrees',
     ' except where the owner objects',
+    // Round 23. Both make the assertion TEMPORARY rather than conditional,
+    // which hands back the clean state — the one a merge happens on.
+    ' while it contains findings', ' before the owner confirms it',
+  ],
+  // A FOURTH KIND, and the reason is that these two claims are INSTRUCTIONS, not
+  // assertions. "Arm the check-in whenever the run's SHA is not your PR's head"
+  // carries a condition that SCOPES the instruction and is exactly right; a
+  // blanket condition guard refuses it, and refused three carriers when tried.
+  // What actually reverses an operational instruction is an OWNER GATE — the
+  // thing that turns "do this" into "ask first" — so that is what is guarded
+  // and that is what the floor holds. Round 23.
+  ownerGate: [
+    ' unless the owner objects', ' if the owner agrees',
+    ' once the owner has signed off', ' after owner approval',
+    ' provided the owner approves', ' when the owner asks',
+    ' subject to owner sign-off', ' where the owner permits',
   ],
   suffix: ['s', 'er', 'ing', 'ed', 'able', '-case', '-run', '-suite',
            '\u2011case', '\u2010case', '\u2013case', '\u2014case', '\u2212case',
@@ -595,8 +644,19 @@ const normalize = (s) => s
   // round-30 lesson (never match line-oriented) is incomplete without this:
   // collapsing whitespace re-introduces the very markers it was meant to skip.
   .replace(/^[ \t]*(?:#+|\/\/|--)[ \t]?/gm, '')
-  .replace(/[*_`]/g, '')
+  .replace(/[*_]/g, '')
   .replace(/\s+/g, ' ');
+// BACKTICKS SURVIVE `normalize()` AND ARE STRIPPED AFTER MARKING. Round 23:
+// normalize() removed them first, so `markSentences` could not see a code span
+// and cut a boundary at the period inside `` `codex unavailable. Retry later` ``
+// — hiding a preposed condition in the prose around it.
+//
+// A code span is a delimiter like a bracket, and this file already knows what
+// to do with those: do not mark inside one. The only reason it could not was
+// the ORDER — the reader threw the delimiter away before the marker ran. That
+// is the same defect as the `@charset` check on the sibling PR, which read a
+// layer where the information had already been consumed.
+const stripCode = (t) => t.replace(/`/g, '');
 // ── SENTENCE BOUNDARIES ARE DECIDED BY THE READER, NOT BY THE PATTERN ───────
 // Round 19. The {{S}} fix one round ago moved "still inside this sentence" into
 // one definition and then got the definition wrong: it recognised only a period
@@ -663,6 +723,9 @@ return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
       else malformed = true;   // unmatched, or closing the wrong type
     }
   }
+  // A CODE SPAN IS A DELIMITER TOO. An odd number of backticks before the stop
+  // means it sits inside one, and punctuation inside code is not prose.
+  if ((before.match(/`/g) || []).length % 2 === 1) return keep();
   if (stack.length > 0 || malformed) return keep();
 
   if (stop === '.') {
@@ -876,7 +939,9 @@ for (const claim of claims) {
   // otherwise see no boundaries at all, which is the one-path-and-not-its-twin
   // defect this PR has produced eight times — and the {{S}} in a raw claim's
   // pattern would silently match across every stop in the file.
-  const prep = claim.raw === true ? markSentences : (t) => markSentences(normalize(t));
+  const prep = claim.raw === true
+    ? (t) => stripCode(markSentences(t))
+    : (t) => stripCode(markSentences(normalize(t)));
 
   let re;
   try {

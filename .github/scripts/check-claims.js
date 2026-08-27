@@ -143,6 +143,15 @@ const CONTINUATIONS = MANIFEST_DOC.continuations;
 //      the same hand in the same file; here, narrowing it is a change to the
 //      CHECKER, which is a different review. The manifest's `continuations` is
 //      additive on top — it can grow the set, never shrink it below this.
+// ⚠️ A FOURTH STANDING BLIND SPOT, measured in round 15 while verifying a fix.
+// This guard asks "does this FILE state the claim", not "is every statement of
+// it intact". `directives/git.md` states `response-is-not-a-verdict` twice, and
+// corrupting one of them — appending `unless it contains no findings` — leaves
+// the guard green, because the other still matches. A reader following the
+// corrupted sentence is misled; the guard sees the file as compliant.
+// Fixing it means matching EVERY occurrence rather than the first, which is a
+// different scan and would newly fail files that mention a claim in passing.
+// Recorded rather than fixed, alongside the three in this file's header.
 const CONTINUATION_FLOOR = {
   clause: [
     ' only after escalating to the owner', ' after owner approval',
@@ -153,8 +162,27 @@ const CONTINUATION_FLOOR = {
     ' subject to owner sign-off', ' yet', ' on the first attempt',
     ', although an accepted request that remains silent also qualifies',
   ],
+  // SPACED compounds too. Round 15: the floor called itself complete while
+  // `the unreachable-review test case admits it` matched — a rename with a
+  // space is the most ordinary one there is, and every hyphen and dash spelling
+  // was covered while the plainest was not.
+  // A THIRD KIND, and the reason is round 12's lesson repeating: a claim pins a
+  // particular thing, and what UNDOES it differs by claim. `clause` was built
+  // for the merge-gate assertions, where an owner gate takes the conclusion
+  // back. It does not fit `response-is-not-a-verdict`, whose assertion sits
+  // MID-SENTENCE at three of its four carriers — a terminator is the wrong
+  // instrument there, and "A response is not a verdict after owner approval" is
+  // not English, let alone a reversal. What reverses an "X is not Y" assertion
+  // is a CONDITION attached to it, so that is its own set.
+  condition: [
+    ' unless it contains no findings', ' except when it is clean',
+    ' only if it names the head', ' provided it is clean',
+    ' as long as it is clean', ' so long as it names the head',
+    ' unless the owner says otherwise', ' except on a re-run',
+  ],
   suffix: ['s', 'er', 'ing', 'ed', 'able', '-case', '-run', '-suite',
-           '\u2011case', '\u2010case', '\u2013case', '\u2014case', '\u2212case'],
+           '\u2011case', '\u2010case', '\u2013case', '\u2014case', '\u2212case',
+           ' case', ' run', ' suite', ' harness', ' cases'],
 };
 // PARTICIPATION IS NOT OPTIONAL. A discovery pass over whichever claims happen
 // to declare a probe stops considering a claim the moment the probe is deleted,
@@ -597,18 +625,25 @@ for (const claim of claims) {
       // green, and the override's own mustNotMatch need only exercise some
       // unrelated added constraint. Same shape as the reader split one field
       // over: a suite that does not reach the regex doing the work.
-      // READ THE LIMIT, and note what round 14 changed about it. The CALL SITE
-      // below still has no exerciser — no claim carries both a
-      // continuationProbe and an override, so deleting these two lines passes
-      // the suite (measured). But the LOGIC it calls is now the same
-      // `runContinuationProbes` the claim-level path uses and exercises,
-      // including the positive-shape check that round 14 added here. So the
-      // untested surface shrank from a duplicated block to one call, which is
-      // the most this manifest can prove without the cases file argued for on
-      // this PR — a synthetic manifest is the only thing that reaches the
-      // combination.
+      // ROUND 15: THIS PATH NOW HAS AN EXERCISER, and it arrived by accident.
+      // Rounds 11, 13 and 14 each recorded that nothing in the manifest carried
+      // both an override and a continuation probe, so every fix here was
+      // written blind. Adding a probe to `response-is-not-a-verdict` — which has
+      // a CLAUDE.md override — created the combination, and the positive-shape
+      // check fired immediately on a real mismatch rather than a synthetic one.
+      // The cases file argued for on #336 is still worth having, but this branch
+      // is no longer the argument for it.
       if (claim.continuationProbe && claim.continuationProbe.shapes) {
-        const { kind, shapes } = claim.continuationProbe;
+        // AN OVERRIDE MAY NEED ITS OWN SHAPES. Round 14 predicted this and round
+        // 15 hit it: CLAUDE.md states this claim as "a response naming the head
+        // is not one", so the claim-level shape does not match the override and
+        // every derived probe would be rejected for the wrong reason. The
+        // positive-shape check catches that and says so; the consumer then
+        // supplies shapes of its own. `kind` is inherited — what reverses the
+        // claim does not change because the wording did.
+        const { kind } = claim.continuationProbe;
+        const ovProbe = consumerList.find((c) => norm(c.file) === norm(file))?.continuationProbe;
+        const shapes = (ovProbe && ovProbe.shapes) || claim.continuationProbe.shapes;
         for (const [position, shape] of Object.entries(shapes)) {
           runContinuationProbes(id, useRe, prep, kind, position, shape, `override for ${file}`);
         }

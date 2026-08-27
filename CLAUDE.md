@@ -85,8 +85,9 @@ squash-merge on green — no approval is sought — once `git.md` → *Condition
 Auto-Merge on Green* holds: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
 the reaction ladder's attestation, or any state its *unreachable-review test*
-admits, stated on the PR (today: an *unavailable* usage-limit reply still inside
-its reset window, or a request GitHub could not deliver) — and note the ladder
+admits, stated on the PR. The two states are an *unavailable* reply still inside
+its reset window, or a
+request that could not be made or accepted at all — never elapsed silence — and note the ladder
 clears the verdict gate ONLY. Where no `codex-flagged` label is present, the
 ladder is the whole gate and the merge proceeds; where one is, a reaction-only
 round leaves it and escalates, no `codex-flagged` label,

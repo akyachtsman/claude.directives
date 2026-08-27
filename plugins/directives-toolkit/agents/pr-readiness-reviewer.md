@@ -96,14 +96,21 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      it is present, report the PR **Conditional** at best. The next step is
      **requesting another review pass** so the verdict lands as the comment the
      monitor clears on — UNLESS the PR already records an **observable terminal
-     state** `git.md` → *PR Lifecycle*'s **unreachable-review test** admits — an
-     *unavailable* usage-limit reply that has not passed its reset time, or a
-     request GitHub could not make or deliver at all. Neither needs a pass to
+     state** `git.md` → *PR Lifecycle*'s **unreachable-review test** admits. The two states are an
+     *unavailable* reply still inside its reset window, or a
+     request that could not be made or accepted at all — never elapsed silence.
+     Neither needs a pass to
      have run: a request rejected before any review began is the exit. A
      reaction-only round is **not** one of these; where a label is still present
      that rule escalates it. Where no `codex-flagged` label is present, the ladder
-     is the whole gate and the merge proceeds — report this row Clear, not
-     Conditional. There
+     is the whole gate and the merge proceeds — **but that is the MERGER's
+     conclusion, not yours.** An absent label removes only the label blocker; it
+     is written asynchronously and proves nothing about the head. This agent has
+     no tool for the reaction endpoint and so cannot run the ladder, so with no
+     verdict it reports **Pending** exactly as above, and never upgrades a row on
+     label absence — an old or human-authored reaction would otherwise produce
+     Ready for an unreviewed head. Report the label itself as not-a-blocker and
+     leave the verdict to its own evidence. There
      the next step is removal with that evidence, and reporting "request another pass" would keep
      a mergeable PR Conditional forever, since no pass can succeed. Read the PR
      before choosing which.

@@ -93,10 +93,29 @@
       ]
     },
     {
-      "id": "no-label-no-escalation",
-      "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. I scoped the rule, the gate framing and the readiness agent -- and round 7 found the unconditional version still standing in the auto-merge gate, CLAUDE.md, automations.md and cicd-setup.md, where a session would have spent a metered review request or involved the owner for nothing. Seventh round of one rule stated in several places and only some updated, and the FIRST one to survive after `unreachable-review-test-name` was added -- which is the evidence that pinning the test's NAME does not pin its CONTENT, exactly as that entry says. Codex asked for this entry by name for that reason. ⚠️ What this pins is the POSITIVE path: a session that drops the no-label carve-out and reverts to escalating unconditionally fails here. It does not pin the negative half (that a label which IS present escalates) -- that half is the conservative direction, and a carrier that over-escalates wastes a request rather than merging past a review. Consumers derived by measuring the tree, not assumed.",
+      "id": "unreachable-review-terminal-states",
+      "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 then proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half, and Codex asked for it by naming the drift it would permit: widen the canonical test so an accepted-but-silent request counts as an outage, or drop the reset bound so a stale usage-limit reply stays valid forever, and every merge consumer -- all of which admit 'any state that test admits' -- would authorise removing the blocker and merging while a review is still obtainable or in flight. The name-only pattern passes unchanged through both. So the two states are stated in one canonical sentence at each consumer and pinned whole: an *unavailable* reply STILL INSIDE ITS RESET WINDOW, a request that COULD NOT BE MADE OR ACCEPTED at all, and NEVER ELAPSED SILENCE. All three fragments are required and in order, because each was a separate defect on this PR -- round 4 deleted a 30-minute timer that made silence sufficient, round 4 also found the unavailable reply had no expiry, and round 6 found a third statement of outage still defined as 'produced no signal'. A pattern requiring only two of the three would certify the third's regression.",
       "source": "directives/git.md",
-      "pattern": "no codex-flagged label is present(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,90}?merge proceeds",
+      "pattern": "still inside its reset window(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,60}?could not be made or accepted(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,40}?never elapsed silence",
+      "consumers": [
+        "CLAUDE.md",
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
+      ],
+      "mustNotMatch": [
+        "an unavailable reply still inside its reset window, or a request that could not be made or accepted at all",
+        "a request that could not be made or accepted at all — never elapsed silence",
+        "an unavailable reply, or a request that could not be made or accepted at all — never elapsed silence",
+        "still inside its reset window, or a request that could not be made or accepted, but never mind elapsed silence"
+      ],
+      "negatorProbe": {
+        "gap": "still inside its reset window, %s could not be made or accepted at all — never elapsed silence"
+      }
+    },
+    {
+      "id": "no-label-no-escalation",
+      "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. I scoped the rule, the gate framing and the readiness agent -- and round 7 found the unconditional version still standing in the auto-merge gate, CLAUDE.md, automations.md and cicd-setup.md, where a session would have spent a metered review request or involved the owner for nothing. Seventh round of one rule stated in several places and only some updated, and the FIRST one to survive after `unreachable-review-test-name` was added -- which is the evidence that pinning the test's NAME does not pin its CONTENT, exactly as that entry says. Codex asked for this entry by name for that reason. ⚠️ What this pins is the POSITIVE path: a session that drops the no-label carve-out and reverts to escalating unconditionally fails here. It does not pin the negative half (that a label which IS present escalates) -- that half is the conservative direction, and a carrier that over-escalates wastes a request rather than merging past a review. Consumers derived by measuring the tree, not assumed. The pattern requires the LADDER PREREQUISITE between the two halves, because without it the regex also accepted 'Where no codex-flagged label is present, the merge proceeds' -- which turns absence of an asynchronously-written label into sufficient merge evidence, the exact opposite of the surrounding rule that its absence proves nothing. A guard that accepts the dangerous shortening of the claim it pins is worse than no guard, since it reports the regression as coverage; that shortened form is in mustNotMatch.",
+      "source": "directives/git.md",
+      "pattern": "no codex-flagged label is present(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,40}?ladder is the whole gate(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,40}?merge proceeds",
       "consumers": [
         "CLAUDE.md",
         "docs/standards/automations.md",
@@ -109,7 +128,9 @@
         "no codex-flagged label is present, but never let the merge proceeds",
         "no codex-flagged label is present",
         "the ladder is the whole gate and the merge proceeds",
-        "no codex-flagged label is present, so escalate; instead the merge proceeds"
+        "no codex-flagged label is present, so escalate; instead the merge proceeds",
+        "Where no codex-flagged label is present, the merge proceeds",
+        "no codex-flagged label is present, and the ladder is the whole gate"
       ],
       "negatorProbe": {
         "gap": "no codex-flagged label is present, but %s the merge proceeds"

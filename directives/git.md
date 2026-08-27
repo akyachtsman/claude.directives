@@ -162,6 +162,9 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   - **outage** — the request could not be made or accepted at all: the App is
     not installed, the trigger errors, GitHub reports it undeliverable.
 
+  The two states are an *unavailable* reply still inside its reset window, or a
+  request that could not be made or accepted at all — never elapsed silence.
+
   **SILENCE IS NEVER THE EVIDENCE, AND NEITHER IS A REACTION.** A request still
   in flight looks exactly like one that will never be answered, so no amount of
   elapsed quiet distinguishes them. And a second 👍 from an account that has

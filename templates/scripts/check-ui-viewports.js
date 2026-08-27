@@ -132,7 +132,15 @@ const CONFIG_NAMES = ['playwright.config.ts', 'playwright.config.js', 'playwrigh
 let configPath;
 const explicit = opt('--config');
 if (explicit) {
-  configPath = isAbsolute(explicit) ? explicit : resolve(explicit);
+  // RELATIVE TO THE TESTS DIRECTORY, not to wherever this process was launched.
+  // Playwright's resolveConfigLocation() resolves --config against process.cwd(),
+  // and its cwd is the tests directory — so `--tests-dir suite --config configdir`
+  // means suite/configdir to Playwright and ./configdir to a naive resolve().
+  // Codex round 13 reproduced the false green: a three-band config at the launch
+  // path certified while Playwright loaded a phone-only config from the tests
+  // directory. This gate chdir's to the same place before importing (round 11),
+  // so resolving here against the same base is what makes the two agree.
+  configPath = isAbsolute(explicit) ? explicit : resolve(resolve(dir), explicit);
   if (!existsSync(configPath)) {
     die(3, [`CANNOT CHECK: --config path does not exist: ${configPath}`, '  This is NOT a pass.']);
   }

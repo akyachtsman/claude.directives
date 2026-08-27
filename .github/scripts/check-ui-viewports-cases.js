@@ -316,6 +316,25 @@ const CASES = [
       'suite/tests/app.spec.js': "import { test } from '@playwright/test';\ntest('s', async () => {});\n" },
     0, 'check-ui-viewports: OK', { subdir: 'suite', configArg: 'cfgdir/playwright.config.js' }],
 
+  // Codex round 13, and the only finding since round 6 that reopened a FALSE
+  // GREEN rather than a false alarm. Playwright's resolveConfigLocation() resolves
+  // a relative --config against process.cwd(), which is the tests directory; this
+  // gate resolved it against wherever the process was launched. So
+  // `--tests-dir suite --config configdir` meant two different files, and the gate
+  // certified one while Playwright loaded the other.
+  //
+  // The fixture puts a PHONE-ONLY config at suite/configdir. Resolved correctly it
+  // is found and fails for a missing laptop band (exit 1). Resolved against the
+  // launch directory it is not found at all (exit 3) — so the case pins the base,
+  // not merely that something went wrong.
+  ['relative --config resolves against the TESTS dir, as Playwright does',
+    { 'suite/configdir/playwright.config.js':
+        `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n`,
+      'suite/tests/app.spec.js': "import { test } from '@playwright/test';\ntest('s', async () => {});\n" },
+    1, 'no project declares a laptop viewport',
+    { subdir: 'suite', configArg: 'configdir', configArgRelative: true }],
+
   // Codex round 12: Playwright's --config is "Configuration file, OR a test
   // directory with optional playwright.config" (1.62.1 --help). Treating a
   // directory as a file made import() fail and the gate exit 4 on an invocation
@@ -453,7 +472,10 @@ function runCase(files, opts) {
     // whatever --config points at, so the two only diverge when they are
     // different directories — which the shipped layout never is (#333 round 11).
     const args = o.env ? [CHECK] : [CHECK, '--tests-dir', target];
-    if (o.configArg) args.push('--config', join(tmp, o.configArg));
+    // A RELATIVE --config is left relative: the point of that case is which base
+    // the gate resolves it against, and joining it to tmp here would make it
+    // absolute and test nothing.
+    if (o.configArg) args.push('--config', o.configArgRelative ? o.configArg : join(tmp, o.configArg));
     const r = spawnSync(process.execPath, args, { encoding: 'utf8', env, cwd: REPO_ROOT });
     return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };
   } finally {

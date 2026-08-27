@@ -36,7 +36,8 @@ RUN = "Run Playwright tests"
 
 
 def action(check_env, run_env, check_name=CHECK, run_name=RUN,
-           check_wd="tests", run_wd="tests", decoy=None, between=None):
+           check_wd="tests", run_wd="tests", decoy=None, between=None,
+           check_body=None, run_body=None, run_uses=None):
     def block(env):
         if not env:
             return ""
@@ -44,6 +45,10 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
 
     def wd(value):
         return f"      working-directory: {value}\n" if value is not None else ""
+
+    def body(text):
+        return "      run: |\n" + "".join(f"        {ln}\n" for ln in text.splitlines())
+
     decoy_yaml = ""
     if decoy:
         decoy_yaml = (f"    - name: {decoy}\n      shell: bash\n{wd('tests')}"
@@ -52,10 +57,10 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
         + decoy_yaml
         + f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
-        "      run: node check.js\n"
+        + body(check_body or "node check.js")
         + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
         + f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
-        "      run: npx playwright test\n"
+        + (f"      uses: {run_uses}\n" if run_uses else body(run_body or "npx playwright test"))
     )
 
 
@@ -66,6 +71,25 @@ CASES = [
     # suite would still be green on all the failure cases.
     ("identical env on both steps", action(dict(BOTH), dict(BOTH)), 0,
      "same step-level env and working directory"),
+
+    # Codex round 17: index adjacency is not EXECUTION adjacency. A command inside
+    # either step runs between the two config evaluations while the indices stay
+    # consecutive — the cheap observable standing in for the property, again.
+    ("a command inside the run step before playwright — refused",
+     action(dict(BOTH), dict(BOTH), run_body="./flip-the-world.sh\nnpx playwright test"),
+     1, "other command(s) after the one that evaluates the config"),
+
+    ("a command inside the check step after the gate — refused",
+     action(dict(BOTH), dict(BOTH), check_body="node check.js\n./flip-the-world.sh"),
+     1, "other command(s) before the one that evaluates the config"),
+
+    ("the run step is a `uses:` — refused, its internals are invisible",
+     action(dict(BOTH), dict(BOTH), run_uses="./some/action"), 1, "is a `uses:` step"),
+
+    # The twin: a single invocation per step must keep passing, or this fails the
+    # fleet rather than the configs it is meant to catch.
+    ("one command per step — must NOT trip",
+     action(dict(BOTH), dict(BOTH)), 0, "adjacent steps"),
 
     # Round 16: a step between the two lets the config observe a different world
     # at the gate than at the run — Codex reproduced it with `Start local server`

@@ -110,10 +110,30 @@ runs:
     # says nothing about it: a viewport never instantiated produces no failing
     # test. test.md → UI coverage gates, fifth gate.
     #
-    # HERE, specifically: this is the first point node_modules exists (the script
-    # IMPORTS the config so Node expands `...devices[…]`, which needs
-    # @playwright/test resolvable), and it is BEFORE the browser install so a
-    # broken config fails in seconds instead of after a ~20-minute download.
+    # WHERE THIS STEP SITS, and what that costs. It used to run right after the
+    # dependency install, BEFORE the browser download, so a broken config failed
+    # in seconds rather than after a cold-cache ~20-minute install. That is no
+    # longer true and the ordering is now deliberate the other way:
+    #
+    # This step and `Run Playwright tests` both EVALUATE THE CONFIG. Anything
+    # running between them can change what the config observes, so the gate ends
+    # up checking one config while the run uses another. Codex reproduced it on
+    # #333 with a config branching on whether APP_URL answers: the gate saw a dead
+    # URL (server not yet started), the run saw a live one, three projects versus
+    # one, and BOTH exited 0. Matching the two steps' env (round 8) and
+    # working-directory (round 12) did not help, because the divergence was time,
+    # not values.
+    #
+    # So correctness beat feedback speed: the gate is now the last thing before
+    # the run, and check-ui-suite-env.py enforces that adjacency mechanically.
+    # THE COST IS REAL — a config this gate would reject now costs a browser
+    # install first. It is bounded by the cache step above (the ~20 minutes is a
+    # cold-cache figure, not the steady state), and a gate that certifies a
+    # different config than the one that runs is worth nothing however fast it is.
+    #
+    # If the wait becomes intolerable, the fix is a SECOND advisory invocation
+    # early on, not moving this one back: the authoritative verdict has to come
+    # from the evaluation adjacent to the run.
     #
     # Always blocking — `advisory-run` flips ONLY the run step. There is no silent
     # exit: config missing, import throwing, node_modules absent and zero projects

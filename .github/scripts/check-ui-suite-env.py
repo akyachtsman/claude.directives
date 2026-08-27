@@ -144,6 +144,43 @@ def main():
                 + "\n    another (#333, round 16)."
             )
 
+        # INDEX ADJACENCY IS NOT EXECUTION ADJACENCY. Two consecutive steps can
+        # still run something in between if it is INSIDE one of them: a command
+        # prepended to the run step's body executes after the gate's import and
+        # before Playwright's. A `uses:` step can hide arbitrary work for the same
+        # reason. Codex round 17 -- and the same substitution as everywhere else
+        # on #333: the cheap observable (index) standing in for the property
+        # (nothing happens between the two config evaluations).
+        for label, i, want_last in ((CHECK_STEP, check_i, True), (RUN_STEP, run_i, False)):
+            if i is None:
+                continue
+            step = steps[i]
+            if step.get("uses"):
+                problems.append(
+                    f'"{label}" is a `uses:` step'
+                    + "\n    Its internals are not visible here, so nothing can establish that no"
+                    + "\n    other work runs between the two config evaluations (#333, round 17)."
+                )
+                continue
+            lines = [ln.strip() for ln in str(step.get("run") or "").splitlines()
+                     if ln.strip() and not ln.strip().startswith("#")]
+            if not lines:
+                continue
+            edge = lines[-1] if want_last else lines[0]
+            others = lines[:-1] if want_last else lines[1:]
+            if others:
+                problems.append(
+                    f'"{label}" runs {len(others)} other command(s) '
+                    + ("before" if want_last else "after")
+                    + " the one that evaluates the config"
+                    + f"\n    {'; '.join(others)}"
+                    + "\n    Those execute between the gate's config import and Playwright's, so"
+                    + "\n    index adjacency does not mean the two see the same world"
+                    + "\n    (#333, round 17). The gate invocation must be the LAST command in"
+                    + "\n    its step, and the Playwright invocation the FIRST in its own."
+                )
+            del edge
+
         check_wd = workdir_of(steps, CHECK_STEP)
         run_wd = workdir_of(steps, RUN_STEP)
         if check_wd != run_wd:

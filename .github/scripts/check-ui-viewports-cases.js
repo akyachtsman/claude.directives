@@ -332,6 +332,27 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK'],
 
+  // Codex round 17: the child writes its verdict and then keeps running until the
+  // event loop drains, so a config that schedules a throw crashes AFTER record(0).
+  // The child printed an uncaught exception and exited 1; the parent reported 0.
+  // A recorded PASS is now accepted only when the child also ended cleanly.
+  ['config throws on a timer AFTER the gate passes — pass is not accepted',
+    { 'playwright.config.js': `${IMPORT}setTimeout(() => { throw new Error('later'); }, 200);\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    14, 'recorded a pass and then failed'],
+
+  // The twin, and the asymmetry it pins: a recorded FAILURE needs no clean exit
+  // to corroborate it. The child had already decided to refuse, and a crash
+  // afterwards does not make the config acceptable. Without this case the fix
+  // could be "simplified" into requiring a clean exit for every verdict, which
+  // would turn precise refusals into the generic 14.
+  ['config throws on a timer after the gate FAILS — the failure still stands',
+    { 'playwright.config.js': `${IMPORT}setTimeout(() => { throw new Error('later'); }, 200);\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n` },
+    1, 'no project declares a laptop viewport'],
+
   // Codex round 16: after the bound-reference fix, a config registering
   // `process.on('exit', () => { process.exitCode = 0 })` still won — the bound
   // EXIT invokes exit listeners, and the listener overwrote the status. The gate

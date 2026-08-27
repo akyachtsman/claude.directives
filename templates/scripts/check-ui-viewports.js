@@ -110,6 +110,28 @@ if (!VERDICT_FILE) {
   try { recorded = JSON.parse(readFileSync(file, 'utf8')); } catch { /* handled below */ }
   rmSync(box, { recursive: true, force: true });
 
+  // A RECORDED SUCCESS NEEDS A CLEAN EXIT TO CORROBORATE IT. The child writes
+  // its verdict and then keeps running until the event loop drains, so a config
+  // that schedules a delayed throw crashes AFTER record(0) — Codex round 17
+  // reproduced a three-band config with a 200ms timer that threw: the child
+  // printed an uncaught exception and exited 1, and this parent reported 0.
+  //
+  // A recorded FAILURE needs no such corroboration: the child had already decided
+  // to refuse, and a crash afterwards does not make the config acceptable. Only
+  // the pass is upgraded from "was written" to "was written and nothing else went
+  // wrong", which is the same asymmetry as everywhere else in this file — a
+  // refusal may stand on partial evidence, a certification may not.
+  if (recorded && recorded.code === 0 && (child.signal || child.status !== 0)) {
+    console.error('CANNOT CHECK: the config evaluation recorded a pass and then failed.');
+    console.error(child.signal
+      ? `  it was killed by ${child.signal} after writing its verdict`
+      : `  it exited ${child.status} after writing its verdict`);
+    console.error('  Something in the config was still running after the gate finished —');
+    console.error('  a scheduled throw, an unhandled rejection, a handler that failed.');
+    console.error('  A pass is only accepted when the evaluation also ended cleanly.');
+    console.error('check-ui-viewports: FAIL (code 14)');
+    process.exit(14);
+  }
   if (!recorded || !Number.isInteger(recorded.code)) {
     console.error('CANNOT CHECK: the config evaluation did not report a verdict.');
     if (child && child.signal) console.error(`  the evaluation was killed by ${child.signal}`);

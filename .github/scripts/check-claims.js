@@ -126,13 +126,47 @@ const expand = (src) => src.replace(/\{\{NEG\}\}/g, () => {
 // list to the other produced fifteen failures that were not defects — proof the
 // distinction is real rather than tidiness.
 const CONTINUATIONS = MANIFEST_DOC.continuations;
+// A FLOOR, for the same reason `negatorFloor` exists: deleting an entry from
+// `continuations` deletes its derived probe IN THE SAME EDIT, so narrowing the
+// definition and widening a pattern back can pass together with nothing failing.
+// The floor is checked alongside the definition, never instead of it: the
+// definition covers what continuations currently says, the floor covers what it
+// must never stop saying.
+const CONTINUATION_FLOOR = MANIFEST_DOC.continuationFloor;
+// PARTICIPATION IS NOT OPTIONAL. A discovery pass over whichever claims happen
+// to declare a probe stops considering a claim the moment the probe is deleted,
+// and the checker stays green — the derived suite can be bypassed by removing
+// the thing that invokes it. `{{NEG}}` binds through the pattern itself; a
+// terminator has no placeholder to bind through, so the manifest names the
+// claims that must carry one. Two places, so deleting the probe alone fails.
+const CONTINUATION_REQUIRED = MANIFEST_DOC.continuationRequired;
+if (!Array.isArray(CONTINUATION_REQUIRED)) {
+  console.error('FAIL: the manifest declares no "continuationRequired" list — without it a claim leaves the derived continuation suite by deleting one field, silently.');
+  console.error('check-claims: FAIL');
+  process.exit(1);
+}
+for (const id of CONTINUATION_REQUIRED) {
+  const c = MANIFEST_DOC.claims.find((x) => x && x.id === id);
+  if (!c) {
+    console.error(`FAIL: continuationRequired names "${id}", which is not a claim in this manifest.`);
+    console.error('check-claims: FAIL');
+    process.exit(1);
+  }
+  if (!c.continuationProbe) {
+    console.error(`FAIL: ${id} is in continuationRequired but declares no "continuationProbe" — its statement can be taken back inside its own sentence with nothing failing.`);
+    console.error('check-claims: FAIL');
+    process.exit(1);
+  }
+}
 const probeKinds = new Set(MANIFEST_DOC.claims.filter((c) => c && c.continuationProbe)
   .map((c) => c.continuationProbe.kind));
 for (const kind of probeKinds) {
-  if (!Array.isArray(CONTINUATIONS && CONTINUATIONS[kind]) || CONTINUATIONS[kind].length === 0) {
-    console.error(`FAIL: a claim declares a "${kind}" continuationProbe but the manifest declares no continuations.${kind} list — the derived probes would test nothing.`);
-    console.error('check-claims: FAIL');
-    process.exit(1);
+  for (const [field, list] of [['continuations', CONTINUATIONS], ['continuationFloor', CONTINUATION_FLOOR]]) {
+    if (!Array.isArray(list && list[kind]) || list[kind].length === 0) {
+      console.error(`FAIL: a claim declares a "${kind}" continuationProbe but the manifest declares no ${field}.${kind} list — the derived probes would test nothing.`);
+      console.error('check-claims: FAIL');
+      process.exit(1);
+    }
   }
 }
 
@@ -386,7 +420,7 @@ for (const claim of claims) {
       // found in two hand-written probes that omitted the positive token.
       fail(`${id}: continuationProbe's own shape does not match the pattern with an EMPTY continuation, so every derived probe below would be rejected for the wrong reason.\n      shape: ${JSON.stringify(shape)}`);
     } else {
-      for (const cont of CONTINUATIONS[kind]) {
+      for (const cont of [...CONTINUATIONS[kind], ...CONTINUATION_FLOOR[kind]]) {
         const probe = shape.replace('%s', cont);
         if (re.test(prep(probe))) {
           fail(`${id}: continuation "${cont}" is NOT rejected: ${JSON.stringify(probe)}\n      The statement can be taken back inside its own sentence and this claim still reports coverage.`);
@@ -488,6 +522,31 @@ for (const claim of claims) {
       // override is doing work. This is the same shape as the `--ablation`
       // arm in a skill eval: a test that passes with and without the thing it
       // tests has measured nothing.
+      // The DERIVED continuation probes must reach the override too. They test
+      // the claim-level `re`, and an override is the regex that actually
+      // validates this consumer — so an override could accept an owner-gated or
+      // renamed continuation while the base pattern's derived suite stayed
+      // green, and the override's own mustNotMatch need only exercise some
+      // unrelated added constraint. Same shape as the reader split one field
+      // over: a suite that does not reach the regex doing the work.
+      // READ THE LIMIT: NOTHING EXERCISES THIS TODAY, and it is the SECOND fix
+      // to this override path with no exerciser (the `prep` reader was the
+      // first, round 11). No claim currently carries both a continuationProbe
+      // and a per-consumer override, so deleting this whole block passes the
+      // suite — measured. Two untested repairs to one path is not a run of bad
+      // luck, it is the argument for giving this checker its own cases file,
+      // the way check-workflow-ref-guard.py and check-contrast-cases.js have.
+      if (claim.continuationProbe && typeof claim.continuationProbe.shape === 'string') {
+        const { kind, shape } = claim.continuationProbe;
+        const all = [...(CONTINUATIONS[kind] || []), ...(CONTINUATION_FLOOR[kind] || [])];
+        for (const cont of all) {
+          const probe = shape.replace('%s', cont);
+          if (useRe.test(prep(probe))) {
+            fail(`${id}: per-consumer pattern for ${file} does NOT reject continuation "${cont}": ${JSON.stringify(probe)}\n      The override validates this consumer, so it must reject everything the claim-level pattern rejects.`);
+          }
+        }
+      }
+
       const exercises = ovNot.some((bad) => {
         const n = prep(bad);          // the same reader as the check, see above
         return re.test(n) && !useRe.test(n);

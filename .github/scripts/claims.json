@@ -26,9 +26,34 @@
       "-run",
       "-suite",
       "ed",
-      "able"
+      "able",
+      "‑case",
+      "‐case",
+      "–case",
+      "—case",
+      "−case"
     ]
   },
+  "continuationFloor": {
+    "clause": [
+      " only after owner approval",
+      "; however, approval is required first",
+      "... only after owner approval",
+      ", for now",
+      " unless the owner objects"
+    ],
+    "suffix": [
+      "s",
+      "-case",
+      "‑case",
+      "–case"
+    ]
+  },
+  "continuationRequired": [
+    "no-label-no-escalation",
+    "unreachable-review-terminal-states",
+    "unreachable-review-test-name"
+  ],
   "_negators_comment": "The ONE definition of a negation word, expanded into every pattern's {{NEG}} placeholder by check-claims.js. Round 7 exists because round 6 claimed to have unified two copies and instead wrote the same alternation twice: deleting `avoid` from only the lookbehind copy left every declared case passing while `avoid read the comments and the review threads` was accepted. Two literals are not one definition no matter what the commit message says. The guard also DERIVES a rejection case for each negator in BOTH positions from this string, so the tests cannot drift from it either -- there is no hand-written list to forget. Apostrophe forms are here because the normalizer deliberately does not strip apostrophes (that would corrupt ordinary prose), so `don't arm a check-in` needs the contraction spelled out.",
   "negatorFloor": [
     "never",
@@ -203,9 +228,9 @@
     },
     {
       "id": "unreachable-review-test-name",
-      "why": "#336 defined the *unreachable-review test* -- the one condition under which a session may take `codex-flagged` off by hand -- and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath ('last-resort test', 'recorded-evidence test') across five files, which is the shadow-copy mechanism the name was introduced to remove, reproduced inside its own fix. Round 5: the test's defining sentence still permitted silence. Round 6: a third statement of its outage exit survived at the verdict gate. Each time I claimed propagation and each time a reader found a copy I had not searched for. This repo's established answer to that class is a checker, not vigilance, and the name is exactly what makes the search runnable -- so the search runs in CI now. ⚠️ WHAT THIS PINS, stated plainly because the guard's header demands it: this pins the NAME, not the substance. A consumer that says 'unreachable-review test' while describing it wrongly passes; the three drifts above were all of that kind ONCE the name was present, which is why the name went in. What it catches is the failure that actually recurred first -- a consumer that stops naming the test and starts re-describing it, because a description cannot be searched for and the next revision will miss it. Consumers were derived by measuring the tree at 0ee2527, not assumed. The lookbehind admits an ARTICLE between the negator and the name, which the other entries' do not need: every pointer here reads 'where the unreachable-review test admits it', so a bare word-before-phrase lookbehind checks 'the' and lets 'never the unreachable-review test admits it' through. The guard's own derived probes caught that on the first run of this entry -- which is the entry justifying itself: a mechanism found the drift I would have shipped. ⚠️ Round 11: the pattern ended at 'test' with no boundary, so a consumer renaming it to 'unreachable-review tests', 'tester' or 'testing' still matched its own prefix and the NAME guard -- whose entire job is catching a renamed test -- stayed green. A trailing \\\\b rejects all three, since t|s is a word-to-word transition and not a boundary. ⚠️ Round 12: `\\\\b` sees the transition from 't' to '-' as a boundary, so 'unreachable-review test-case' and 'test-run' still matched. A hyphen continues a compound name, so the guard now rejects a following word character OR hyphen.",
+      "why": "#336 defined the *unreachable-review test* -- the one condition under which a session may take `codex-flagged` off by hand -- and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath ('last-resort test', 'recorded-evidence test') across five files, which is the shadow-copy mechanism the name was introduced to remove, reproduced inside its own fix. Round 5: the test's defining sentence still permitted silence. Round 6: a third statement of its outage exit survived at the verdict gate. Each time I claimed propagation and each time a reader found a copy I had not searched for. This repo's established answer to that class is a checker, not vigilance, and the name is exactly what makes the search runnable -- so the search runs in CI now. ⚠️ WHAT THIS PINS, stated plainly because the guard's header demands it: this pins the NAME, not the substance. A consumer that says 'unreachable-review test' while describing it wrongly passes; the three drifts above were all of that kind ONCE the name was present, which is why the name went in. What it catches is the failure that actually recurred first -- a consumer that stops naming the test and starts re-describing it, because a description cannot be searched for and the next revision will miss it. Consumers were derived by measuring the tree at 0ee2527, not assumed. The lookbehind admits an ARTICLE between the negator and the name, which the other entries' do not need: every pointer here reads 'where the unreachable-review test admits it', so a bare word-before-phrase lookbehind checks 'the' and lets 'never the unreachable-review test admits it' through. The guard's own derived probes caught that on the first run of this entry -- which is the entry justifying itself: a mechanism found the drift I would have shipped. ⚠️ Round 11: the pattern ended at 'test' with no boundary, so a consumer renaming it to 'unreachable-review tests', 'tester' or 'testing' still matched its own prefix and the NAME guard -- whose entire job is catching a renamed test -- stayed green. A trailing \\\\b rejects all three, since t|s is a word-to-word transition and not a boundary. ⚠️ Round 12: `\\\\b` sees the transition from 't' to '-' as a boundary, so 'unreachable-review test-case' and 'test-run' still matched. A hyphen continues a compound name, so the guard now rejects a following word character OR hyphen. ⚠️ Round 13: the boundary class was ASCII-only, so a rename using a NON-BREAKING HYPHEN (U+2011) or an EN DASH — both of which a word processor or a copy-paste produces silently — still matched the prefix. The class now covers the Unicode dash punctuation range, and the derived suffix set probes those spellings. Note the rejection is only for a dash IMMEDIATELY after the name: every carrier writes '*unreachable-review test* — an OBSERVABLE …', where a space intervenes, so the em dash in ordinary prose is untouched.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:{{NEG}})\\s(?:the |a |its |this |that )?)unreachable-review test(?![\\w-])",
+      "pattern": "(?<!\\b(?:{{NEG}})\\s(?:the |a |its |this |that )?)unreachable-review test(?![\\w\\u2010-\\u2015\\u2212-])",
       "consumers": [
         "CLAUDE.md",
         "directives/global.md",

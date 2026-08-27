@@ -742,11 +742,13 @@ needs restating.
 3. **Pipeline the work.** Recruit agents and run independent work in parallel
    rather than idling, especially while waiting on CI, a deploy, or a review
    (→ *Pipelined Execution*).
-4. **Auto-merge.** Take the PR through to merged, including clearing a
-   `codex-flagged` blocker by **requesting the review pass** — never by removing
-   the label.
-5. **Keep going until the whole task is done**, then verify the deploy and
-   `qa-live`.
+4. **Auto-merge.** Take the PR through to merged, clearing a `codex-flagged`
+   blocker by **requesting the review pass** rather than removing the label.
+   Take the label off by hand only on the two exits `git.md` → *PR Lifecycle*
+   defines, with the rationale that rule requires.
+5. **Keep going until the whole task is done.** Where the change is
+   deploy-backed and the repo carries the workflows, that includes verifying the
+   deploy and `qa-live`; where it does not, done is merged.
 6. **The Escalation Rules still bind.** They cover acts whose cost a later
    decision cannot recover: dropping or deleting data (schema and functions are
    reversible; rows are PITR-only), force-push and destructive git ops, secrets,
@@ -757,20 +759,9 @@ needs restating.
    it, then ask that one question. Guessing under a mandate to be autonomous is
    how a wrong assumption ships silently.
 
-**Relation to *Standing Authorization*.** That section governs a declared list of
-tasks; this is the same posture invoked by a single word, plus the merge and
-verify obligations in 4 and 5. Both leave the stop gates untouched — 6 restates
-that because "proceed" is the phrasing most likely to be read as overriding them.
-
-**Item 4 is a rule about EVIDENCE, not etiquette.** Removing the label asserts
-that the concern is resolved; requesting the pass makes Codex say so, in the
-comment form `codex-monitor` watches, naming the current head — and the monitor
-then clears the label itself. Observed 2026-08-27 on #333: a clean comment
-verdict at `63bed51` cleared the label with no manual step. Where a clean verdict
-arrives as an inline reply or a reaction — forms the monitor does not watch —
-**request another pass rather than removing the label by hand**, so the clearing
-is something the reviewer did and not something the author claimed
-(→ `git.md` → *PR Lifecycle*, the reaction ladder).
+*Standing Authorization* above governs a declared list of tasks; this is the same
+posture invoked by a single word, plus the merge and verify obligations in 4 and
+5. Neither touches the stop gates.
 
 ## Session Start
 At the start of every session:

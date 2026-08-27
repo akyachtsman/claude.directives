@@ -93,9 +93,10 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      Look for the verdict in the PR's comments **and its review threads**: an inline
      reply never enters the comment list, so a comments-only check reports Pending on
      a head Codex has cleared. While
-     it is present, report the PR **Conditional** at best; the next step is either
-     waiting for the monitor's clear on a genuine all-clear, or removal-with-rationale
-     where a human judges the concerns addressed.
+     it is present, report the PR **Conditional** at best; the next step is
+     **requesting another review pass** so the verdict lands as the comment the
+     monitor clears on — not removal, which `git.md` → *PR Lifecycle* bounds to
+     two documented exits.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

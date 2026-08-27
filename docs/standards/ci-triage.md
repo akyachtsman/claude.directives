@@ -61,7 +61,8 @@ anyway.
    label sits there with nothing to remove it. All three forms were observed in
    `claude.directives` on 2026-08-23, so do not assume any of them: check the
    PR's **comments and its review threads**, and when the clear arrives in
-   either unwatched form remove the label **by hand with a rationale**, and read the PR rather than reading the stuck label as
+   either unwatched form **request another pass** so the verdict lands in the
+   form the monitor acts on. Read the PR rather than reading the stuck label as
    unaddressed concerns. Never merge while the label is present, and clear the
    Codex gate itself per `git.md` → *PR Lifecycle* (a reaction is not a verdict
    you can attribute; that section carries the ladder).
@@ -79,11 +80,12 @@ not edit workflows chasing a bug that isn't there.
 ## What not to do
 
 - Do not close a `ci-failure` issue without fixing the underlying failure
-- Do not remove `codex-flagged` without addressing the inline comments. Let the
-  monitor clear it when it can — but it only sees a **commented** all-clear, and a
-  clean rerun may instead arrive as a 👍 reaction or as an inline review-thread
-  reply — so check the comments AND the review threads, and treat manual removal
-  with a rationale as a routine path rather than an exception
+- Do not remove `codex-flagged` by hand as a routine path. Address the inline
+  comments, then request another pass and let the monitor clear it — it only
+  sees a **commented** all-clear, and a clean rerun may instead arrive as a 👍
+  reaction or an inline review-thread reply, so check the comments AND the
+  review threads. Hand removal is a last resort bounded to two exits by
+  `directives/git.md` → *PR Lifecycle*, and needs the rationale named there
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

@@ -129,16 +129,34 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   itself when the PR merges or closes; `unsubscribe_pr_activity` is for a PR you
   were asked to stop watching, not for one you are driving.
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
-  apply the fix, or remove the label with a one-line dismissal rationale in the
-  PR. Check the PR's labels on GitHub before merging. The `codex-monitor`
-  workflow adds the label on a flagged round and clears it itself on a Codex
-  all-clear **comment** that names the current head SHA — the only form it can
-  act on, and the form that cleared #293. A clean rerun can equally be a 👍
-  reaction or an inline review-thread reply; the monitor sees neither, and then
-  manual removal with a rationale is required. Which form arrives is not
-  predictable: check before assuming either. A label still present means concerns not yet
-  re-reviewed, a clean round delivered in a form the monitor cannot see, or an
-  all-clear that failed the SHA match; read the PR before overriding by hand.
+  apply the fix, then get the label **cleared by requesting another review
+  pass**, not by removing it. Check the PR's labels on GitHub before merging.
+  The `codex-monitor` workflow adds the label on a flagged round and clears it
+  itself on a Codex all-clear **comment** that names the current head SHA — the
+  only form it can act on, and the form that cleared #293. A clean rerun can
+  equally be a 👍 reaction or an inline review-thread reply; the monitor sees
+  neither, and the label then sits with nothing to remove it. Which form arrives
+  is not predictable: check the comments AND the review threads before assuming
+  any of them. A label still present means concerns not yet re-reviewed, a clean
+  round delivered in a form the monitor cannot see, or an all-clear that failed
+  the SHA match — read the PR, never the label alone.
+- **Taking `codex-flagged` off by hand is the last resort, and it has exactly
+  one opening.** Removing it asserts the concern is resolved, which is the
+  author claiming what the reviewer should say; requesting a pass makes Codex
+  say it, in the form the monitor watches. So request the pass and let the
+  monitor clear the label. Remove it by hand ONLY when a further pass cannot
+  produce that comment — which is true in exactly two places, both of them gate
+  exits already documented below:
+  - Codex answered ***unavailable*** — the usage-limit reply — so no further
+    request will be reviewed at all; or
+  - the reaction ladder was entered properly and reached its **attestation**
+    exit.
+
+  Both must be **stated on the PR** before the merge, and the removal needs a
+  rationale naming which exit applies and why another pass could not produce a
+  verdict. Absent one of those two on the record, a stuck label is work, not a
+  formality: request the pass. Request **one** further pass, not a series —
+  Codex is metered per request from a shared weekly pool (below).
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head. **On the normal path — some
   SHA-bearing Codex response names HEAD — every check below is NECESSARY and
@@ -172,11 +190,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     start of the check, not the end of it.
     ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
     does not watch that event. **Request another review pass rather than removing
-    `codex-flagged` by hand** (→ `global.md` → *"Proceed" — the Standing
-    Directive*, item 4). A clean verdict in the COMMENT form names the head and
-    the monitor clears the label itself; observed 2026-08-27 on #333 at
-    `63bed51`. Removing the label asserts the concern is resolved, which is the
-    author claiming what the reviewer should say.
+    `codex-flagged` by hand**, per the last-resort rule above: a clean verdict in
+    the COMMENT form names the head and the monitor clears the label itself
+    (observed 2026-08-27 on #333 at `63bed51`), and hand removal is reserved for
+    the two exits that rule names.
   - **Check the author — it validates the SOURCE, not the outcome.** Wording and
     a current SHA are both forgeable, so a response that is not the Codex bot's
     own cannot clear the gate. Authorship is necessary and never sufficient: a
@@ -442,7 +459,9 @@ gates hold — CI green on the head SHA; a **clean** current-head Codex verdict 
 the gate above (a response naming the head is not a verdict, since a review with
 live findings names it too), or one of that gate's two documented exits noted on
 the PR: the reaction ladder's attestation, or an *unavailable* usage-limit reply;
-no `codex-flagged` label; no unresolved review threads; diff limited to the
+no `codex-flagged` label — request a pass to clear it, or, on either exit above,
+remove it with the rationale the last-resort rule requires, since neither exit
+can produce the comment the monitor watches; no unresolved review threads; diff limited to the
 intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged
 SHA to a terminal state and confirm the live site serves it). This covers every

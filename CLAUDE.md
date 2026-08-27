@@ -158,18 +158,22 @@ A directive repo must pass its own CI before it can be trusted downstream.
   validation, secret-scan pattern+filter sync, the export boundary
   (`check-exports.js`, both directions), the canonical-claim guard
   (`check-claims.js` — pinned rules still stated by every consumer that must
-  state them; it proves a claim TRAVELLED, never that it is TRUE), job bounds,
-  the workflow-ref guard, and
-  (`check-exports.js`, both directions), job bounds, the workflow-ref guard,
-  a clean-compile check over every tracked `.py`
+  state them; it proves a claim TRAVELLED, never that it is TRUE), a
+  clean-compile check over every tracked `.py`
   (`.github/scripts/check-py-warnings.py` — a guard that warns at compile time
-  is a guard that stops running on a future interpreter), and
-  (`check-exports.js`, both directions), the viewport gate on the shipped
-  Playwright config (`check-ui-viewports.js`, plus `check-ui-viewports-cases.js`
-  guarding the gate itself — it IMPORTS the config so Node expands the device
-  spreads; a static read was tried three times and failed twelve ways, every
-  failure silent, #282), job bounds, the workflow-ref guard, and
-  a paired-file diff check, plus a warn-only external-link job. It also runs
+  is a guard that stops running on a future interpreter), the viewport gate on
+  the shipped Playwright config (`check-ui-viewports.js`, plus
+  `check-ui-viewports-cases.js` guarding the gate itself — it IMPORTS the config
+  so Node expands the device spreads; a static read was tried three times and
+  failed twelve ways, every failure silent, #282), job bounds
+  (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an
+  unreadable bound on a job carrying a floor must REFUSE, and the exemption for
+  jobs carrying no floor must survive, #334), the exported contrast guardrail's
+  own guard (`check-contrast-cases.js` — this repo ships no project token file
+  for it to read, so nothing else here would notice `check-contrast.js` break,
+  #334), the
+  workflow-ref guard, and a paired-file diff check, plus a warn-only
+  external-link job. It also runs
   `build-logical-map.js --check`, so a committed map that no longer matches
   `EXPORTS.json` fails the build, and `node --check` over the exported JS
   templates — `Repo Map UI` exercises this repo's own map suite, not
@@ -283,10 +287,12 @@ python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a
 node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic
 python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives its viewport check the SAME env as the Playwright run — the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8)
 python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths (a NameError shipped in one, #333 round 11)
+node .github/scripts/check-contrast-cases.js      # the exported WCAG guardrail's own guard — this repo has no styles/tokens.css, so NOTHING else here would notice it break (#334)
 (cd templates/ui-tests && npm install --no-package-lock --ignore-scripts) && node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone; the install is a one-time ~2.4s network step (node_modules/ is gitignored, no lockfile written)
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
+python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree

@@ -121,6 +121,19 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL testMatch'],
 
+  // Codex round 2 on #333: testDir is not a filter but redirects discovery
+  // wholesale, reaching the same false-green by a shorter road. The second case
+  // is the one that keeps the rule honest — the SHIPPED default must still pass,
+  // or the gate fails every correct config and gets muted.
+  ['root testDir redirects away from the suite',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './other',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    9, 'root testDir'],
+
+  ['root testDir is the shipped default (must not false-alarm)',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK'],
+
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"

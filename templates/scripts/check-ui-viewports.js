@@ -217,7 +217,32 @@ console.log(`config:    ${configPath}`);
     if (NEGATIVE_FILTERS.includes(k) && Array.isArray(v) && v.length === 0) return false;
     return true;
   };
+  // `testDir` is not a filter but it REDIRECTS discovery wholesale, which reaches
+  // the same end by a shorter road: every project resolves against it, so a root
+  // `testDir: './other'` runs whatever is in ./other and the UI suite is simply
+  // never scheduled. Codex found this on round 2 of #333 and reproduced it with a
+  // single unrelated passing spec; before this branch the gate exited 0 and named
+  // all three bands. The per-project check below cannot catch it either — it
+  // compares `p.testDir` against `cfg.testDir`, so an INHERITED redirect reads as
+  // unrestricted.
+  //
+  // This guard cannot know which spec IS the UI suite, so a non-default testDir is
+  // a CANNOT CHECK rather than a FAIL: the config may be perfectly good and the
+  // suite may well live there, but nothing here can establish it.
+  const SHIPPED_TEST_DIR = './tests';
   const rootFilters = [...POSITIVE_FILTERS, ...NEGATIVE_FILTERS].filter(narrows);
+  if (cfg.testDir !== undefined && String(cfg.testDir) !== SHIPPED_TEST_DIR) {
+    die(9, [
+      `FAIL: the config declares a root testDir of ${JSON.stringify(cfg.testDir)} — CANNOT CHECK.`,
+      `  Every project resolves against it, so the widths below describe whatever lives`,
+      `  there, not necessarily the UI suite. The shipped kit uses ${JSON.stringify(SHIPPED_TEST_DIR)};`,
+      '  this gate cannot tell which spec is the suite, so it will not certify coverage',
+      '  it cannot attribute.',
+      `  If the suite genuinely lives there, run the gate against that directory so`,
+      `  testDir reads as ${JSON.stringify(SHIPPED_TEST_DIR)} relative to it.`,
+      '  test.md -> UI coverage gates, fifth gate.',
+    ]);
+  }
   if (rootFilters.length) {
     die(9, [
       `FAIL: the config declares TOP-LEVEL ${rootFilters.join(', ')} — CANNOT CHECK.`,

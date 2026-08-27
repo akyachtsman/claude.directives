@@ -152,17 +152,19 @@ because reading part of a palette is worse than reading none:
   `--color-accent`; this refuses it instead of decoding it, so **spell
   identifiers plainly**;
 - an HTML comment delimiter (`<!--` / `-->`);
-- **a custom property whose value is a `{ }` block** — `--x: { … }` is legal CSS
-  and this cannot resolve one, so it refuses rather than guess;
+- **any declaration whose value is a `{ }` block** — `--x: { … }` is legal CSS
+  and this cannot resolve one; `unknown: { … }` is a block CSS drops entirely,
+  so reading it would certify a palette the page never renders. A `{` that
+  follows the declaration's colon with only whitespace between is refused; a
+  selector that merely contains a colon (`button:hover { … }`, `.a:focus, .b`)
+  is a rule and opens normally;
+- **a custom-property name outside `[A-Za-z0-9_-]`.** CSS treats every code
+  point at U+0080 and up as an identifier character, so `--color-bg` followed by
+  a non-breaking space is a *different property* from `--color-bg`. This gate
+  measures names by comparing them literally, so one it cannot compare is
+  refused rather than skipped — **spell token names in plain ASCII**;
 - an unterminated string or comment, or an unbalanced bracket of any kind —
   including a closing `}`, `)` or `]` with nothing open.
-
-One thing it deliberately over-reads: a block used as the value of an **ordinary**
-property (`unknown: { … }`) is read as a rule, so declarations inside it count
-even though CSS drops them. Deciding otherwise means deciding whether the prelude
-is a valid selector, which is a CSS parser. The error is one-directional — an
-extra declaration can only produce a refusal, never a green — so spell token
-files plainly and this never arises.
 
 Keep `styles/tokens.css` self-contained.
 

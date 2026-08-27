@@ -174,19 +174,41 @@ if (FILES.length === 0) {
 
 // At-rules are checked at BOTH terminators, `;` and `{`. Checking only `;`
 // missed every block-form at-rule, and an @import can be reached through a
-// prelude the old check did not recognise. Allow-list rather than deny-list,
-// and the members are DERIVED, not collected: a GROUPING at-rule's block holds
-// rules and declarations that cascade exactly as if the wrapper were not there,
-// so reading through one reads the same declarations the browser applies. That
-// is the whole set below. Listing only @media and @supports left @layer out,
-// and wrapping a token file in `@layer tokens { … }` — the standard way to keep
-// token precedence below component overrides — was refused as unreadable.
+// prelude the old check did not recognise. Allow-list rather than deny-list.
+// The MEMBERSHIP RULE is derived — a GROUPING at-rule's block holds rules and
+// declarations that cascade exactly as if the wrapper were not there, so
+// reading through one reads the same declarations the browser applies — but
+// THE LIST IS NOT CLAIMED COMPLETE, and saying it was cost two rounds: @layer
+// was missing in round 5 and @starting-style in round 7, each refusing a valid
+// stylesheet. CSS gains grouping rules over time and this list will lag them.
+// That is survivable in exactly one direction: a short list REFUSES a valid
+// file, loudly, and the fix is to add a name here. A long one would read a
+// block whose declarations do not apply, which is silent. Add on evidence.
 // Everything NOT in this set is refused because it is a different thing: it
 // brings in text this gate never sees (`@import`, `@use`), or its declarations
 // apply to something other than an element (`@font-face`, `@keyframes`,
 // `@property`, `@page`), so reading them as live tokens would be wrong.
-const AT_RULES_READ = new Set(['media', 'supports', 'layer', 'container', 'scope']);
+const AT_RULES_READ = new Set(['media', 'supports', 'layer', 'container', 'scope', 'starting-style']);
 const AT_RULES_LIST = [...AT_RULES_READ].map((n) => `@${n}`).join(', ');
+
+// ── CSS whitespace, not JavaScript's ────────────────────────────────────────
+// CSS whitespace is exactly these five code points. String.prototype.trim()
+// removes a far larger set, U+00A0 among them — and U+00A0 is an IDENTIFIER
+// character in CSS. Trimming it off a name RENAMES the property: a file
+// declaring `--color-bg<NBSP>` (nine times over) left the browser with no
+// palette at all, while this gate trimmed each name back to the token it
+// measures and printed `OK — 9/9`, exit 0. One definition, used wherever a CSS
+// token is bounded here, because the same trim runs on names, values and the
+// !important flag and each one renames or revalues what it touches.
+const cssTrim = (t) => t.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, '');
+
+// A custom-property name this check can vouch for. CSS allows far more — every
+// non-ASCII code point is an identifier character, and escapes spell anything —
+// but this gate MEASURES these names by comparing them literally, so one it
+// cannot compare is FATAL rather than skipped. A silent skip is what let `--é`
+// past the brace refusal below, and a skipped name is indistinguishable from a
+// file that never declared it.
+const PLAIN_CUSTOM_NAME = /^--[A-Za-z0-9_-]*$/;
 function atRuleProblem(buf) {
   const head = buf.trim();
   if (!head.startsWith('@')) return null;
@@ -210,17 +232,30 @@ function scanDeclarations(css) {
   // block contains and the only question left is whether one is open.
   let depth = 0;
 
+  // Returns a fatal message, or null. It cannot just record any more: a name
+  // this check is unable to compare literally must stop the run, and only the
+  // caller can return out of the scan.
   const flush = () => {
+    let problem = null;
     if (colonAt >= 0) {
-      const name = buf.slice(0, colonAt).trim();
+      const name = cssTrim(buf.slice(0, colonAt));
       if (name.startsWith('--')) {
-        // !important is a declaration FLAG; CSS does not put it in the value.
-        const value = buf.slice(colonAt + 1).replace(/\s*!\s*important\s*$/i, '').trim();
-        (decls[name] ||= []).push(value);
+        if (!PLAIN_CUSTOM_NAME.test(name)) {
+          problem = `a custom property whose name this check cannot compare literally (\`${name}\`)`
+            + ' — spell token names with ASCII letters, digits, - and _';
+        } else {
+          // !important is a declaration FLAG; CSS does not put it in the value.
+          // Bounded with CSS whitespace for the same reason the name is: `\s`
+          // would eat a U+00A0 that CSS reads as part of an identifier, turning
+          // a declaration CSS DROPS into one this gate measures.
+          const value = cssTrim(buf.slice(colonAt + 1).replace(/[ \t\n\r\f]*![ \t\n\r\f]*important[ \t\n\r\f]*$/i, ''));
+          (decls[name] ||= []).push(value);
+        }
       }
     }
     buf = '';
     colonAt = -1;
+    return problem;
   };
 
   for (let i = 0; i < css.length; i++) {
@@ -290,7 +325,12 @@ function scanDeclarations(css) {
     // escape outside a string is fatal above.) Excluding a prefix can only make
     // this MISS a url token, never invent one, and CSS produces none after
     // `#` or `@` — so the exclusion costs nothing it was reading correctly.
-    const urlOpen = (i === 0 || !/[A-Za-z0-9_@#-]/.test(css[i - 1]))
+    // ROUND 7: the derivation above said "name character" and the class spelled
+    // ASCII. CSS makes EVERY code point at U+0080 and above an identifier
+    // character, so `éurl(` is one function token — this opened a URL state
+    // inside it, closed at a `)` sitting in a comment, and red-built a valid
+    // file. The class now says what that sentence always claimed.
+    const urlOpen = (i === 0 || !/[A-Za-z0-9_@#\u0080-\uFFFF-]/.test(css[i - 1]))
       ? /^url\(\s*(?!["'])/i.exec(css.slice(i)) : null;
     if (urlOpen) {
       let j = i + urlOpen[0].length;
@@ -328,28 +368,40 @@ function scanDeclarations(css) {
       // (round 4), and then nested grouping rules and ordinary-property blocks
       // broke both (round 5). Resolving it properly needs CSS Nesting
       // semantics, which is a different program.
-      // So it is REFUSED — but only where CSS agrees one exists, and CSS is
-      // narrower than "a plain identifier before the colon" was. That test read
-      // `button:hover {` and `html:root {` as brace-valued declarations of
-      // `button` and `html`, refusing two ordinary type selectors; the fixture
-      // that was supposed to cover this (`.e:hover`) missed it only because it
-      // starts with a dot.
-      // The real rule is not a shape, it is a property: a block SURVIVES as a
-      // declaration value for exactly one kind of property — a CUSTOM one.
-      // `--x: { … }` is a legal custom-property value and this check cannot
-      // resolve it. For any other property a block value is an invalid
-      // declaration, which CSS re-parses as a qualified rule; so every non-`--`
-      // prelude here is a rule, and the only question CSS is still asking is
-      // whether its selector is valid — `button:hover` yes, `unknown:` no.
-      // This scanner does not answer that: it DESCENDS either way. The cost is
-      // bounded and one-directional. Reading a block CSS would have dropped can
-      // only add declarations, and an added declaration either repeats a value
-      // (no effect — the ambiguity check canonicalises) or conflicts with one,
-      // which REFUSES. It can never turn a refusal into an OK. Over-reading is
-      // the fail-closed direction; deciding selector validity is a parser.
-      const prelude = colonAt >= 0 ? buf.slice(0, colonAt).trim() : null;
-      if (prelude !== null && /^--[A-Za-z0-9_-]*$/.test(prelude)) {
+      // So it is REFUSED, and round 7 showed the refusal has to cover MORE than
+      // a custom property, not less.
+      //
+      // Round 6 narrowed it to `--` preludes and DESCENDED into everything else,
+      // on the argument that over-reading a block CSS drops can only add a
+      // duplicate and duplicates refuse — "it cannot turn a refusal into a
+      // green." THAT ARGUMENT WAS WRONG, and the counter-example is one file:
+      // `.e { unknown: { …the whole palette… } }` with no `:root` anywhere.
+      // CSS re-parses `unknown:` as a selector, finds it invalid, and drops the
+      // rule, so NOTHING is declared — but the scanner read all nine tokens as
+      // live and printed `OK — 9/9`, exit 0. An added declaration is only a
+      // duplicate when a real one exists; when none does, the over-read does not
+      // duplicate the palette, it SUPPLIES it. Same for `--é: { … }`, which the
+      // ASCII-only `--` test did not recognise as a custom property at all.
+      //
+      // The discriminator round 5 and round 6 both missed is not in the prelude
+      // BEFORE the colon — it is what sits between the colon and the `{`:
+      //   `unknown: {`        nothing  → the block IS the value. CSS drops it.
+      //   `--x: {`            nothing  → a legal custom-property value.
+      //   `button:hover {`    `hover`  → a type selector with a pseudo-class.
+      //   `.a:focus, .b {`    a list   → a selector.
+      // So: a `{` that follows the top-level colon with only whitespace between
+      // is a brace-valued declaration and is REFUSED; anything else is a rule
+      // and opens normally. One test, no selector validation, and no direction
+      // in which reading a dropped block can be mistaken for a live one.
+      // The `--` prefix is checked separately and first, because a custom
+      // property's block IS its value even with tokens before the brace, and
+      // `startsWith('--')` covers names this file refuses to spell elsewhere.
+      const prelude = colonAt >= 0 ? cssTrim(buf.slice(0, colonAt)) : null;
+      if (prelude !== null && prelude.startsWith('--')) {
         return { fatal: `a custom property whose value is a { } block (\`${prelude}\`) — this check cannot resolve one, and a token file does not need one` };
+      }
+      if (colonAt >= 0 && cssTrim(buf.slice(colonAt + 1)) === '') {
+        return { fatal: `a declaration whose value is a { } block (\`${prelude}\`) — CSS drops it and applies nothing, so reading it would certify a palette the page never renders` };
       }
       const bad = atRuleProblem(buf);
       if (bad) return { fatal: bad };
@@ -362,7 +414,8 @@ function scanDeclarations(css) {
       // closes more blocks than it opens reached the end balanced and exited 0
       // — contradicting the refusal this same function documents.
       if (depth === 0) return { fatal: 'a closing brace with no matching open — the file does not parse as CSS' };
-      flush();                       // the last declaration may omit its `;`
+      const bad = flush();           // the last declaration may omit its `;`
+      if (bad) return { fatal: bad };
       depth--;
       continue;
     }
@@ -370,7 +423,8 @@ function scanDeclarations(css) {
     if (c === ';' && closers.length === 0) {
       const bad = atRuleProblem(buf);
       if (bad) return { fatal: bad };
-      flush();
+      const badName = flush();
+      if (badName) return { fatal: badName };
       continue;
     }
 

@@ -296,15 +296,58 @@ const CASES = [
     { 'styles/tokens.css': plus('.e { @media (min-width: 1px) { --color-accent: { #0D47A1 }; } }\n') },
     1, BLOCK],
 
-  // An ORDINARY property with a block value is an invalid declaration, which CSS
-  // re-parses as a qualified rule and then drops (`unknown:` is not a selector),
-  // so these declarations apply NOTHING. This scanner descends anyway and reads
-  // them, which is why the answer is a duplicate refusal rather than a green —
-  // the deliberate, one-directional cost of not deciding selector validity.
-  // Pinned so that cost stays visible: if this ever prints OK, the scanner has
-  // started silently dropping declarations it used to see.
-  ['a brace-valued ORDINARY property is read as a rule, so its contents conflict',
-    { 'styles/tokens.css': plus('.e { unknown: { --color-accent: #0D47A1; }; }\n') }, 1, DUP],
+  // ── #337 round 7: the over-read COULD turn a refusal into a green ─────────
+  // Round 6 descended into a brace-valued ordinary property, arguing that an
+  // extra declaration can only add a duplicate and duplicates refuse. That is
+  // true only when a real declaration exists. With no `:root` anywhere, the
+  // over-read does not duplicate the palette — it SUPPLIES it, and the gate
+  // printed `OK — 9/9`, exit 0, on a file where CSS applies nothing at all.
+  // This is the case that killed the argument; it must never print OK again.
+  ['a dropped unknown:{} block must not supply the whole palette',
+    { 'styles/tokens.css': '.e { unknown: {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}; }\n' },
+    1, 'CSS drops it and applies nothing'],
+
+  ['a brace-valued ORDINARY property is refused, not read',
+    { 'styles/tokens.css': plus('.e { unknown: { --color-accent: #0D47A1; }; }\n') },
+    1, 'CSS drops it and applies nothing'],
+
+  // The same hole through the OTHER door: `--é` is a custom property in CSS,
+  // but the ASCII-only `--` test did not recognise it, so the brace refusal was
+  // bypassed and the block's contents were read as live.
+  ['a non-ASCII custom property name cannot bypass the brace refusal',
+    { 'styles/tokens.css': ':root { --\u00e9: {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}; }\n' },
+    1, BLOCK],
+
+  // ── #337 round 7: CSS whitespace is not JavaScript's ──────────────────────
+  // U+00A0 is an IDENTIFIER character in CSS and whitespace to String.trim().
+  // Suffixing every name with one leaves the browser with no palette, while the
+  // gate trimmed each name back to the token it measures and printed 9/9.
+  ['a non-breaking space in a token name is a different property, and is refused',
+    { 'styles/tokens.css': BASE.replace(/--color-([a-z-]+):/g, '--color-$1\u00a0:') },
+    1, 'cannot compare literally'],
+
+  // READ THE LIMIT: this one passes with cssTrim reverted to .trim() too. A
+  // trailing U+00A0 defeats the !important strip either way, so the value stays
+  // non-hex and the run is loud. It is pinned because the LOUD outcome is the
+  // one that must not change — not as evidence for cssTrim, which the name case
+  // above carries.
+  ['a non-breaking space beside !important leaves the value unreadable, loudly',
+    { 'styles/tokens.css': BASE.replace('--color-accent:         #1565C0;', '--color-accent: #1565C0 !important\u00a0;') },
+    1, 'pairs were evaluable'],
+
+  // ── #337 round 7: a non-ASCII name character before url() ─────────────────
+  // CSS makes every code point at U+0080 and up an identifier character, so
+  // `éurl(` is one function token. The ASCII-only boundary opened a URL state
+  // inside it, closed at a `)` sitting in a comment, and red-built a valid file.
+  ['a url( preceded by a non-ASCII name character is not a URL token',
+    { 'styles/tokens.css': plus('.e { unknown: \u00e9url(/* ) */ ; --color-accent: #0D47A1;); }\n') },
+    0, OK9],
+
+  // ── #337 round 7: @starting-style ─────────────────────────────────────────
+  // Second grouping rule missing from a list claimed complete. The list is no
+  // longer claimed complete; this pins the member that proved it was not.
+  ['a token file wrapped in @starting-style is read, not refused',
+    { 'styles/tokens.css': '@starting-style {\n' + BASE + '}\n' }, 0, OK9],
 
   // ── #337 round 6: a TYPE selector with a pseudo-class ─────────────────────
   // `button:hover {` puts a plain identifier before a colon before a brace, so

@@ -505,9 +505,11 @@ live findings names it too), or the reaction ladder's attestation, or any state
 the *unreachable-review test* admits, recorded on the PR;
 no `codex-flagged` label — request a pass to clear it, or, on a state that test
 admits, remove it with the observable the last-resort rule requires. ⚠️ These two
-are separate gates and the ladder clears only the first: a reaction-only round
-leaves the label, and the label rule escalates rather than removing it, so such a
-PR is not mergeable without the owner; no unresolved review
+are separate gates and the ladder clears only the first. Where no `codex-flagged`
+label is present, the ladder is the whole gate and the merge proceeds. Where one
+from an earlier flagged round IS present, a reaction-only round leaves it, and the
+label rule escalates rather than removing it, so that PR is not mergeable without
+the owner; no unresolved review
 threads; diff limited to the
 intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged

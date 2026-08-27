@@ -87,8 +87,9 @@ naming the head is not one, since a review with live findings names it too — o
 the reaction ladder's attestation, or any state its *unreachable-review test*
 admits, stated on the PR (today: an *unavailable* usage-limit reply still inside
 its reset window, or a request GitHub could not deliver) — and note the ladder
-clears the verdict gate ONLY, so a reaction-only round leaves the label and
-escalates, no `codex-flagged` label,
+clears the verdict gate ONLY. Where no `codex-flagged` label is present, the
+ladder is the whole gate and the merge proceeds; where one is, a reaction-only
+round leaves it and escalates, no `codex-flagged` label,
 no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
 - `main` here enforces **Require conversation resolution before merging**
   server-side (owner, 2026-08-26), so an unresolved thread refuses the merge

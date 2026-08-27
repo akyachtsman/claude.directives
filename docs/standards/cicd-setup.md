@@ -252,8 +252,10 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 clears it on a Codex all-clear **comment** naming the current head SHA. ⚠️ A
 clean rerun can instead arrive as a bare 👍 reaction **or as an inline
 review-thread reply**, and the monitor watches neither event — so check the PR's
-comments AND its review threads for a verdict naming the current head, then
-request another pass so the verdict lands in the form the monitor acts on. Hand
+comments AND its review threads for a verdict naming the current head. Where no
+`codex-flagged` label is present, the ladder is the whole gate and the merge
+proceeds; where one is, request another pass so the verdict lands in the form the
+monitor acts on. Hand
 removal is a last resort that `directives/git.md` → *PR Lifecycle* bounds by a
 *unreachable-review test*. All three forms were observed on 2026-08-23 and which one arrives is
 not predictable.

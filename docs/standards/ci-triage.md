@@ -60,8 +60,10 @@ anyway.
    inline reply inside a review thread** — the monitor watches neither, so the
    label sits there with nothing to remove it. All three forms were observed in
    `claude.directives` on 2026-08-23, so do not assume any of them: check the
-   PR's **comments and its review threads**, and when the clear arrives in
-   either unwatched form **request another pass** so the verdict lands in the
+   PR's **comments and its review threads**. Where no `codex-flagged` label is
+   present, the ladder is the whole gate and the merge proceeds; where one is and
+   the clear arrives in
+   either unwatched form, **request another pass** so the verdict lands in the
    form the monitor acts on. Read the PR rather than reading the stuck label as
    unaddressed concerns. Never merge while the label is present, and clear the
    Codex gate itself per `git.md` → *PR Lifecycle* (a reaction is not a verdict

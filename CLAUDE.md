@@ -81,8 +81,8 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 ## Branch policy
 `global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
 (`claude/<name>` branches, never commit to `main`, draft PR on first push,
-squash-merge on green — no approval is sought — once `git.md` → *Conditional
-Auto-Merge on Green* holds: a **clean** current-head Codex verdict — a response
+squash-merge on green — no approval is sought. The gate is `git.md` →
+*Conditional Auto-Merge on Green*: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
 the reaction ladder's attestation, or any state its *unreachable-review test*
 admits, stated on the PR. The two states are an *unavailable* reply still inside

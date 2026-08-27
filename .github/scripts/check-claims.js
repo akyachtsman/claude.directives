@@ -140,7 +140,7 @@ const START_OF_SENTENCE = '(?<=(?:^|\\u0001)\\s{0,4})';
 // a file whose recurring defect is a check that exists on one path and not its
 // twin. Fixing the lookbehind alone would have left the lookahead reading a
 // different sentence than the lookbehind, which is that defect exactly.
-const expand = (src) => src.replace(/\{\{SOS\}\}/g, () => START_OF_SENTENCE).replace(/\{\{CLAUSE\}\}/g, () => CLAUSE).replace(/\{\{EOS\}\}/g, () => END_OF_SENTENCE).replace(/\{\{S\}\}/g, () => SENTENCE_CHAR).replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
+const expand = (src) => src.replace(/\{\{SOS\}\}/g, () => START_OF_SENTENCE).replace(/\{\{EOS\}\}/g, () => END_OF_SENTENCE).replace(/\{\{S\}\}/g, () => SENTENCE_CHAR).replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
   if (typeof NEGATORS !== 'string' || NEGATORS === '') {
     console.error('FAIL: a pattern uses {{NEG}} but the manifest declares no "negators" string.');
     process.exit(1);
@@ -225,6 +225,13 @@ const CONDITION_OPENERS = [
   // on. Same shape as round 16's missing bare `if`: the list was assembled from
   // the openers I happened to write, not from the ones that reverse a claim.
   'unless', 'until', 'except', 'if', 'when', 'whenever', 'where', 'wherever',
+  // The former CLAUSE_OPENERS, folded in by round 20 (see the note below).
+  'after', 'once', 'however', 'although', 'subject to', 'following', 'yet',
+  // `pending` was here for one run and came back out, for the reason round 17
+  // removed `only` and `assuming`: it is a conditional opener in grammar and an
+  // ordinary word in this repo's prose. `reading as "still pending"` turned four
+  // consumers red. A list drawn from grammar over-fires on writing, and the
+  // consumers going red is what says so — not review.
   'provided(?!\\s+(?:by|in|to|for|with|from|as|at|on)\\b)',
   'providing', 'as long as', 'so long as',
 ];
@@ -271,19 +278,21 @@ const COND = [...CONDITION_OPENERS].sort((a, b) => b.length - a.length).join('|'
 // comment, one round ago. "Constructing positions for those would be this file
 // inventing an attack shape and then failing carriers for not defending it."
 // The attack shape was not invented; it was one round away.
-const CLAUSE_OPENERS = ['after', 'once', 'however', 'although', 'subject to',
-  'pending', 'following', 'yet'];
-for (const opener of CLAUSE_OPENERS) {
-  const clash = CONDITION_OPENERS.find((o) => o === opener);
-  if (clash) {
-    console.error(`FAIL: "${opener}" is in both CONDITION_OPENERS and CLAUSE_OPENERS — two lists holding one word is how they drift apart, which is this file's oldest defect.`);
-    console.error('check-claims: FAIL');
-    process.exit(1);
-  }
-}
-const CLAUSE = [...CLAUSE_OPENERS].sort((a, b) => b.length - a.length).join('|');
-// Any opener at all, for the places that do not care which kind attached.
-const ANY_OPENER = new RegExp(`^(?:${COND}|${CLAUSE})\\b`, 'i');
+// ⚠️ ROUND 20 DELETED THE SECOND LIST. Round 19 added CLAUSE_OPENERS beside
+// CONDITION_OPENERS and guarded the condition claims with only the first, so
+// "not a verdict ONCE the owner confirms it" passed — `once` was in the list
+// this file had just written and in none of the guards that needed it.
+//
+// That is this file's oldest defect committed by the file's own author, one
+// round after writing the assertion that rejects it. The `why` on
+// verdict-lookup has said since round 6: "Two lists expressing one idea drift
+// silently." Round 19 wrote the second list AND a clash check between them,
+// which proves only that no word is in both — never that both are consulted.
+//
+// There is one list. A word that attaches a gate to a clause belongs in it
+// whether the gate reads as a condition or as a sequence; the distinction was
+// grammatical and the guards do not care about grammar.
+const ANY_OPENER = new RegExp(`^(?:${COND})\\b`, 'i');
 
 const CONTINUATION_FLOOR = {
   clause: [
@@ -535,8 +544,67 @@ const SENTENCE_MARK = '\u0001';
 const ABBREV = new Set(['etc', 'vs', 'cf', 'al', 'eg', 'ie', 'approx', 'fig',
   'Dr', 'Mr', 'Mrs', 'Ms', 'St', 'Inc', 'Ltd', 'Jr', 'Sr', 'Prof', 'viz',
   'esp', 'incl', 'ca', 'no', 'pp']);
-const markSentences = (t) => t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
+const markSentences = (t) => {
+// Bracket depth is counted from the LAST BOUNDARY, not from the start of the
+// file. A first draft counted over everything before the stop, and in a
+// document full of markdown links and code spans the running count is almost
+// never zero — so every stop looked as if it were inside brackets and NOTHING
+// was marked. The scope became the whole file, which is the fail-closed
+// direction and therefore silent: the suite went red on two carriers rather
+// than green on a hole, which is the only reason it was noticed at once.
+let lastCut = 0;
+return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
+  const keep = () => m;
+  const cut = () => { lastCut = off + m.length; return stop + SENTENCE_MARK + ws; };
   if (stop === '.') {
+    // A CAPITALISED TOKEN BEFORE THE STOP IS AMBIGUOUS, so do not mark. Round
+    // 20: `(contact Dept. Security)` marked a boundary and hid a preposed `If`,
+    // because `Dept` is not in the list below and `Security` is a capital. The
+    // list was FAIL-OPEN — every name missing from it reopened the hole — and
+    // no list can be finished.
+    //
+    // The rule that does not need one: `Word. Capital` is exactly the shape an
+    // abbreviation before a proper noun takes, and also the shape of an
+    // ordinary sentence end, and nothing local tells them apart. So take the
+    // FAIL-CLOSED reading. Not marking makes the scope LONGER, and a longer
+    // scope can only make this guard refuse a carrier — loud, and visible in
+    // CI. Marking makes it shorter, which is how a condition goes unseen.
+    // Every other rule here is chosen the same way; this one just had to be
+    // recognised as the same choice.
+    const before = str.slice(lastCut, off);
+    const nextCh = str.slice(off + m.length).charAt(0);
+    const prevTok = (/([A-Za-z0-9]+)$/.exec(before) || [, ''])[1];
+    // (a) A SENTENCE CANNOT END INSIDE BRACKETS. Codex's repro was exactly
+    // that — `(contact Dept. Security)` — and this rule needs no list at all.
+    const opens = (before.match(/[([]/g) || []).length - (before.match(/[)\]]/g) || []).length;
+    if (opens > 0) {
+      // ONLY WHEN THE BRACKET IS AN INLINE ASIDE. A first version suppressed
+      // the boundary whenever anything was open, and CLAUDE.md's branch-policy
+      // paragraph is ONE parenthesis spanning several sentences — so the scope
+      // swallowed the rest of the passage and two carriers went red.
+      //
+      // The distinction is not a length: an aside CLOSES before the next stop,
+      // and a structural bracket does not. Round 17's lesson was that bounding
+      // the guard with a number bounds the wrong thing; this asks the question
+      // directly instead.
+      const rest = str.slice(off + m.length);
+      const close = rest.search(/[)\]]/);
+      const nextStop = rest.search(/[.!?](?:\s|$)/);
+      if (close >= 0 && (nextStop < 0 || close < nextStop)) return keep();
+    }
+    // (b) TITLE-CASE AND SHORT, FOLLOWED BY A CAPITAL, is the shape an
+    // abbreviation before a proper noun takes: `Dept. Security`, `Dr. Smith`,
+    // `Inc. Ltd`. It is also the shape of a sentence ending in a short
+    // capitalised word, and nothing local separates them — so take the
+    // FAIL-CLOSED reading and do not mark. Not marking makes the scope LONGER,
+    // and a longer scope can only make this guard REFUSE a carrier: loud, and
+    // visible in CI. Marking makes it shorter, which is how a condition goes
+    // unseen. That asymmetry is the whole argument.
+    //
+    // Deliberately not `^[A-Z]` — a first draft used that and turned the
+    // CLAUDE.md carrier red on `clears the verdict gate ONLY. Where no …`.
+    // A SHOUTED word is not an abbreviation; an abbreviation carries lowercase.
+    if (/[A-Z]/.test(nextCh) && /^[A-Z][a-z]{1,4}$/.test(prevTok)) return keep();
     // THE WHOLE TOKEN, not a suffix of it. A first draft tested the trailing
     // DIGITS of the preceding text, so `observed working at b64ff09.` ended in
     // "09", was read as a list marker, and went unmarked — which merged that
@@ -546,18 +614,19 @@ const markSentences = (t) => t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, o
     const tok = (/([A-Za-z0-9]+)$/.exec(str.slice(0, off)) || [, ''])[1];
     // A lone letter is what an abbreviation looks like from behind: `e.`, `g.`,
     // `i.`. This is the round-18 rule, kept as the first line of defence.
-    if (tok.length === 1 && /[A-Za-z]/.test(tok)) return m;
-    if (ABBREV.has(tok)) return m;
+    if (tok.length === 1 && /[A-Za-z]/.test(tok)) return keep();
+    if (ABBREV.has(tok)) return keep();
     // A NUMBERED LIST MARKER IS NOT A SENTENCE STOP. `3.` at the head of a list
     // item looked exactly like one, and marking it broke the raw structural
     // claim, whose whole job is to notice a fourth list item being appended:
     // its tempered token looks for a marker followed by a space, and a mark
     // inserted between the `.` and that space made the marker unrecognisable.
     // The guard that watches for list drift must be able to see a list.
-    if (/^\d+$/.test(tok)) return m;
+    if (/^\d+$/.test(tok)) return keep();
   }
-  return stop + SENTENCE_MARK + ws;
+  return cut();
 });
+};
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 let failed = false;

@@ -175,6 +175,12 @@ const CONTINUATION_FLOOR = {
   // not English, let alone a reversal. What reverses an "X is not Y" assertion
   // is a CONDITION attached to it, so that is its own set.
   condition: [
+    // BARE openers too. Round 16: the guarded alternation had `only if` and not
+    // `if`, and the floor had neither `if` nor `when` — so "A response is not a
+    // verdict IF it contains live findings" passed every check. The compound
+    // form was covered and the plain one was not, which is the same shape as
+    // the hyphenated-vs-spaced rename a round earlier.
+    ' if it contains live findings', ' when it contains live findings',
     ' unless it contains no findings', ' except when it is clean',
     ' only if it names the head', ' provided it is clean',
     ' as long as it is clean', ' so long as it names the head',
@@ -643,6 +649,23 @@ for (const claim of claims) {
         // claim does not change because the wording did.
         const { kind } = claim.continuationProbe;
         const ovProbe = consumerList.find((c) => norm(c.file) === norm(file))?.continuationProbe;
+        // AN EMPTY MAP IS TRUTHY, and `Object.entries({})` runs zero probes —
+        // so `"shapes": {}` let an override opt out of a suite its claim is
+        // REQUIRED to carry, silently. The claim-level path already rejected an
+        // empty map; the override path accepted one, which is the third time a
+        // check existed on one of these two paths and not the other.
+        if (ovProbe !== undefined) {
+          if (!ovProbe.shapes || typeof ovProbe.shapes !== 'object'
+              || Object.keys(ovProbe.shapes).length === 0) {
+            fail(`${id}: per-consumer continuationProbe for ${file} declares no shapes — an empty map runs zero probes and opts this override out of a suite its claim is required to carry`);
+            continue;
+          }
+          for (const [position, shape] of Object.entries(ovProbe.shapes)) {
+            if (typeof shape !== 'string' || !shape.includes('%s')) {
+              fail(`${id}: per-consumer continuationProbe.shapes.${position} for ${file} must be a string containing %s`);
+            }
+          }
+        }
         const shapes = (ovProbe && ovProbe.shapes) || claim.continuationProbe.shapes;
         for (const [position, shape] of Object.entries(shapes)) {
           runContinuationProbes(id, useRe, prep, kind, position, shape, `override for ${file}`);

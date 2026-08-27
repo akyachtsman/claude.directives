@@ -115,6 +115,19 @@ names. That derivation is also incomplete: it cannot see text that sets a colour
 and inherits its background. Only resolving each element's effective background
 through the cascade would be complete, and no tool here does that.
 
+**One declaration per measured token, in `#hex`.** The guardrail reads
+declarations, not the cascade, so a token declared twice left it measuring
+whichever came last — and saying nothing about the other. Appending one line to
+the starter palette (`:root { --color-accent: rgb(255 255 255); }`) produced
+`OK — 9/9 assumed pairs meet WCAG AA`, exit 0, on a `.btn` rendering white on
+white: CSS applied the `rgb()`, the gate measured the superseded hex. It now
+refuses that file instead of picking a value, for both shapes — a non-hex
+override, and a second, different hex under a `[data-theme]` block or a
+`prefers-color-scheme` query. So a themed project gives **each theme its own
+tokens file** holding that theme's resolved values and adds it to `CANDIDATES`
+at the top of the script — every candidate that exists is measured, one palette
+per run. Tokens no pair reads are unaffected.
+
 ## Motion
 - Keep transitions short and calm (≈0.15s ease is a good default)
 - **Never** bounce, spin, flash, or use heavy keyframes that fight readability

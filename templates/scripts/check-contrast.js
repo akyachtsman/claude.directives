@@ -95,15 +95,30 @@ if (FILES.length === 0) {
 
 let exitCode = 0;
 for (const FILE of FILES) {
-const css = readFileSync(FILE, 'utf8');
+// Comments are stripped BEFORE anything reads a declaration. CSS has no nested
+// comments, so this is exact rather than a heuristic. It matters in both
+// directions: a commented-out declaration used to overwrite the live one in `t`
+// silently (the last match won, and `/* --color-accent: #old; */` is a match),
+// and under the duplicate-declaration refusal below it would instead reject a
+// perfectly valid file for a line CSS never applies. Neither is a real finding.
+const css = readFileSync(FILE, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 console.log(`\n── ${FILE}`);
 const t = {};
-// Capture every color token, then validate its hex length (3/4/6/8). A 5- or
-// 7-digit value is malformed: fail loudly rather than silently skip it — a
-// tighter regex that just doesn't match would drop the token from the checks
-// below and pass green, hiding the bad declaration instead of catching it.
-for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*(#[0-9a-fA-F]+)\s*;/g)) {
-  const [, name, hex] = m;
+// EVERY --color-* declaration, hex or not, in source order. One regex for both
+// jobs deliberately: a separate hex-only pattern would disagree with this one
+// about what counts as a declaration, and either direction of that disagreement
+// is a new silent seam — a declaration only this pattern sees reads as a
+// non-hex override that isn't there, and one only the hex pattern sees is an
+// override this check never notices. Terminator is `;` OR `}` because the last
+// declaration in a block may legally omit the semicolon.
+const decls = {};   // name -> [raw value, …] every declaration, in source order
+for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*([^;{}]+?)\s*(?=[;}])/g)) {
+  const [, name, raw] = m;
+  (decls[name] ||= []).push(raw);
+  // Non-hex values are RECORDED but not measured. They are not skipped: the
+  // ambiguity check below fails on any measured token that carries one.
+  if (!/^#[0-9a-fA-F]+$/.test(raw)) continue;
+  const hex = raw;
   if (![3, 4, 6, 8].includes(hex.length - 1)) {
     console.error(`check-contrast: ${name} has an invalid hex value "${hex}" (expected 3, 4, 6, or 8 digits)`);
     process.exit(1);
@@ -155,31 +170,82 @@ function lum(hex) {
 const ratio = (a, b) => { const la = lum(a), lb = lum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); };
 
 const AA = 4.5, AA_LARGE = 3.0;
+// Pairs name their TOKENS, not their values. Listing names and resolving them
+// at evaluation time is what lets the ambiguity check below know which tokens
+// are actually measured without a second, drift-prone list of names.
 const pairs = [
   // No `|| '#FFFFFF'` fallback: substituting a default made the pair "evaluable"
   // while measuring a colour the page may not use, so a project that DROPPED the
   // token still scored 8/8. A missing required token must fail like any other.
-  [t['--color-on-accent'], t['--color-accent'], AA, 'on-accent / accent (button)'],
-  [t['--color-text-primary'], t['--color-bg'], AA, 'text-primary / bg'],
-  [t['--color-text-primary'], t['--color-surface'], AA, 'text-primary / surface'],
-  [t['--color-text-secondary'], t['--color-bg'], AA, 'text-secondary / bg'],
-  [t['--color-text-secondary'], t['--color-surface'], AA, 'text-secondary / surface'],
+  ['--color-on-accent', '--color-accent', AA, 'on-accent / accent (button)'],
+  ['--color-text-primary', '--color-bg', AA, 'text-primary / bg'],
+  ['--color-text-primary', '--color-surface', AA, 'text-primary / surface'],
+  ['--color-text-secondary', '--color-bg', AA, 'text-secondary / bg'],
+  ['--color-text-secondary', '--color-surface', AA, 'text-secondary / surface'],
   // Both button templates render the on-accent foreground over accent-hover on
   // hover (and the static one on keyboard focus), so the hover background is a
   // real background for this text and needs its own pair. Checking only the
   // resting state passed themes that go nearly-black-on-dark the moment a
   // pointer touches the control.
-  [t['--color-on-accent'], t['--color-accent-hover'], AA, 'on-accent / accent-hover (button hover)'],
-  [t['--color-accent'], t['--color-surface'], AA_LARGE, 'accent / surface (large)'],
+  ['--color-on-accent', '--color-accent-hover', AA, 'on-accent / accent-hover (button hover)'],
+  ['--color-accent', '--color-surface', AA_LARGE, 'accent / surface (large)'],
   // design.md's error-message copy rule creates --color-danger; it carries meaning,
   // so it needs the same AA floor as any other body text.
-  [t['--color-danger'], t['--color-surface'], AA, 'danger / surface'],
-  [t['--color-danger'], t['--color-bg'], AA, 'danger / bg'],
+  ['--color-danger', '--color-surface', AA, 'danger / surface'],
+  ['--color-danger', '--color-bg', AA, 'danger / bg'],
 ];
+
+// ── One token, two values: refuse, never pick one ──────────────────────────
+// The capture loop keeps the LAST hex it sees and cannot see anything else, so
+// a token declared twice was silently resolved to one of its declarations and
+// the report claimed the file. Two shapes, one argument:
+//   * hex then non-hex — `--color-accent: #1565C0` followed anywhere by
+//     `--color-accent: rgb(255 255 255)`. CSS applies the rgb(); the gate
+//     measured the hex. Reproduced on the shipped tokens.css by appending one
+//     line: "OK — 9/9 assumed pairs meet WCAG AA", exit 0, on .btn rendering
+//     white on white (#334).
+//   * hex then a DIFFERENT hex — a second `:root`, a `[data-theme]` block, a
+//     prefers-color-scheme media query. The gate measured whichever came last
+//     and said nothing about the other theme.
+// Which declaration wins is a cascade question — selector specificity, order,
+// media context — and resolving it is the different, larger program this file's
+// header already says nobody has written. So this is a refusal, like the
+// malformed-hex and alpha branches above, not a measurement failure: picking
+// either value produces a confident number about a colour the page may not
+// render, which is the defect, not the fix.
+// Scoped to MEASURED tokens on purpose. A token no pair reads can be declared
+// per theme without this gate having an opinion — failing on it would red-build
+// a valid palette to defend a number nobody computes.
+const canon = (v) => {
+  const raw = v.trim();
+  if (!/^#[0-9a-fA-F]+$/.test(raw)) return raw.toLowerCase().replace(/\s+/g, ' ');
+  let h = raw.slice(1).toLowerCase();
+  if (h.length === 3 || h.length === 4) h = h.split('').map((x) => x + x).join('');
+  if (h.length === 8 && h.slice(6) === 'ff') h = h.slice(0, 6);   // matches the alpha exemption above
+  return `#${h}`;
+};
+const MEASURED = new Set(pairs.flatMap(([fg, bg]) => [fg, bg]));
+const ambiguous = [...MEASURED]
+  .map((name) => [name, [...new Set((decls[name] || []).map(canon))]])
+  .filter(([, vals]) => vals.length > 1);
+if (ambiguous.length > 0) {
+  console.error(`\ncheck-contrast: FAIL — ${FILE}: a measured token is declared more than once.`);
+  for (const [name, vals] of ambiguous) console.error(`  ${name}: ${vals.join('  |  ')}`);
+  console.error('  This script reads declarations, not the cascade: it cannot know which of');
+  console.error('  these the page actually renders, and measuring one of them would certify a');
+  console.error('  colour that may never appear. It refuses instead of guessing.');
+  console.error('  Fix: declare each measured token exactly once in this file, in #hex form.');
+  console.error('  If the project themes, give each theme its own tokens file holding that');
+  console.error('  theme\'s resolved values, add it to CANDIDATES at the top of this script, and');
+  console.error('  let each be measured on its own — one palette per run, every one checked.');
+  exitCode = 1;
+  continue;
+}
 
 let failed = false;
 let evaluated = 0;
-for (const [fg, bg, thr, name] of pairs) {
+for (const [fgName, bgName, thr, name] of pairs) {
+  const fg = t[fgName], bg = t[bgName];
   if (!fg || !bg) { console.log(`  skip  ${name} (token missing)`); continue; }
   evaluated++;
   const r = ratio(fg, bg), ok = r >= thr;
@@ -196,7 +262,7 @@ for (const [fg, bg, thr, name] of pairs) {
 // palette be certified while normal-text contrast was never measured at all,
 // which is the same vacuous pass as measuring nothing.
 if (evaluated < pairs.length) {
-  const missing = pairs.filter(([fg, bg]) => !fg || !bg).map(([, , , name]) => name);
+  const missing = pairs.filter(([fg, bg]) => !t[fg] || !t[bg]).map(([, , , name]) => name);
   console.error(`\ncheck-contrast: FAIL — ${FILE}: only ${evaluated}/${pairs.length} pairs were evaluable.`);
   console.error(`  Not measured: ${missing.join('; ')}`);
   console.error('  Each needs both tokens declared in #hex form (oklch()/rgb()/hsl()/var()');

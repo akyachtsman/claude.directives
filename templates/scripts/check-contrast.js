@@ -275,7 +275,11 @@ function atRuleProblem(buf) {
   // means modelling registration semantics; refusing costs a project nothing it
   // needs, since a measured token has no reason to be registered.
   if (name === 'property') {
-    const registered = (/^@property\s+(--[^\s{;]+)/i.exec(head) || [, ''])[1];
+    // CSS whitespace, not `\s`: JavaScript's class includes U+00A0, which CSS
+    // reads as part of an identifier. `--color-accent<NBSP>` is a DIFFERENT
+    // property and cannot affect the measured one, but `[^\s{;]+` truncated it
+    // to the measured name and refused a valid file.
+    const registered = (/^@property[ \t\n\r\f]+(--[^ \t\n\r\f{;]+)/i.exec(head) || [, ''])[1];
     if (MEASURED.has(registered)) {
       return `an @property registration of the measured token \`${registered}\` — it can stop the root value`
         + ' inheriting, or give descendants a different initial value, neither of which this gate resolves';
@@ -288,7 +292,30 @@ function atRuleProblem(buf) {
 // every value declared for it, in source order. Names are AS SPELLED: an
 // escaped identifier is refused, never decoded, so nothing here has unified two
 // spellings of one property and no caller may assume it has.
-function scanDeclarations(css) {
+function scanDeclarations(rawCss) {
+  // CSS decoding removes a leading BOM; Node's utf8 read keeps it as U+FEFF.
+  // That one invisible character made `head.startsWith('@')` false for the
+  // FIRST at-rule in the file, so the whole allow-list was skipped and a BOM
+  // followed by `@property --color-accent { inherits: false; … }` printed
+  // OK — 9/9 while the browser applied the registration. Strip it here, once,
+  // rather than teaching every downstream test to ignore it.
+  const css = rawCss.charCodeAt(0) === 0xFEFF ? rawCss.slice(1) : rawCss;
+
+  // @charset is read HERE, from the raw text, and not in atRuleProblem — by the
+  // time a declaration reaches that function its strings have been consumed and
+  // replaced with `""`, so the encoding name is gone. (I wrote it there first
+  // and `@charset "utf-8"` came back as `(unreadable)`, which is the scanner
+  // working as designed and the check asking the wrong layer.)
+  // The preamble must be the one this gate can actually read: readFileSync
+  // decodes every file as UTF-8 whatever the sheet says, so a Shift_JIS file
+  // whose bytes CSS reads as one identifier character arrives as U+FFFD plus a
+  // stray backslash and fails on an escape that does not exist. Refusing beats
+  // red-building a valid stylesheet for a reason that names the wrong thing.
+  const charset = /^@charset[ \t]+"([^"]*)"/i.exec(css);
+  if (charset && !/^utf-?8$/i.test(charset[1])) {
+    return { fatal: `an @charset of "${charset[1]}" — this gate decodes every file as UTF-8,`
+      + ' so it would read different characters than the browser does' };
+  }
   const decls = {};
   let buf = '';          // the declaration candidate being accumulated
   let colonAt = -1;      // index in buf of its first top-level `:`
@@ -432,7 +459,15 @@ function scanDeclarations(css) {
     // inside it, closed at a `)` sitting in a comment, and red-built a valid
     // file. The class now says what that sentence always claimed.
     const urlOpen = (i === 0 || !/[A-Za-z0-9_@#\u0080-\uFFFF-]/.test(css[i - 1]))
-      ? /^url\(\s*(?!["'])/i.exec(css.slice(i)) : null;
+    // ROUND 11: the quote lookahead must sit INSIDE it, not after a consuming
+    // `\s*`. With `url( "x) y" )` the `\s*` ate the space, `(?!["'])` failed at
+    // the quote, and the engine BACKTRACKED `\s*` to zero width — where the next
+    // character is a space, not a quote, so the lookahead passed and a QUOTED
+    // url was consumed as unquoted. The scanner then stopped at the `)` inside
+    // the string and red-built a valid file on a nonexistent unterminated
+    // string. Testing through the whitespace without consuming it first leaves
+    // the engine nothing to backtrack over.
+      ? /^url\((?![ \t\n\r\f]*["'])[ \t\n\r\f]*/i.exec(css.slice(i)) : null;
     if (urlOpen) {
       let j = i + urlOpen[0].length;
       for (; j < css.length; j++) {
@@ -512,6 +547,12 @@ function scanDeclarations(css) {
     if (c === ':' && colonAt < 0 && closers.length === 0) colonAt = buf.length;
     buf += c;
   }
+  // An at-rule that is the last construct and omits its optional `;` reaches
+  // here having hit NEITHER terminator, so the allow-list never saw it —
+  // `@whatever` appended to a valid palette printed OK — 9/9. Every other
+  // terminator checks it; EOF is a terminator too.
+  const trailingAtRule = atRuleProblem(buf);
+  if (trailingAtRule) return { fatal: trailingAtRule };
   flush();
   if (closers.length > 0 || depth > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
   return { decls };

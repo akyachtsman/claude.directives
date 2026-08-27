@@ -670,6 +670,40 @@ const CASES = [
   ['an at-rule this gate cannot vouch for is refused, even holding nothing',
     { 'styles/tokens.css': BASE + '@whatever { }\n' }, 1, ATRULE],
 
+  // ── #337 round 11: the invisible characters and the backtrack ─────────────
+  // A BOM is the sharpest of these: CSS decoding removes it, Node's utf8 read
+  // keeps it, and one U+FEFF made `head.startsWith('@')` false for the FIRST
+  // at-rule in the file — so the entire allow-list was skipped.
+  ['a BOM must not hide the first at-rule',
+    { 'styles/tokens.css': '\ufeff@property --color-accent { syntax: "<color>"; inherits: false; initial-value: #FFFFFF; }\n' + BASE },
+    1, 'registration of the measured token'],
+
+  ['…and a BOM on a valid file is still fine',
+    { 'styles/tokens.css': '\ufeff' + BASE }, 0, OK9],
+
+  // A statement at-rule that is the last construct and omits its `;` hits
+  // neither terminator, so the allow-list never saw it. EOF is a terminator.
+  ['an unknown at-rule terminated by EOF is still refused',
+    { 'styles/tokens.css': BASE + '@whatever' }, 1, ATRULE],
+
+  // `\s*` consumed the space, the quote lookahead failed, and the engine
+  // BACKTRACKED to zero width where the next character is a space — so a quoted
+  // URL was read as unquoted and the scanner stopped at the `)` inside it.
+  ['a quoted url() with leading whitespace is not an unquoted one',
+    { 'styles/tokens.css': plus('.e { background: url( "x) y" ); }\n') }, 0, OK9],
+
+  // JavaScript's `\s` includes U+00A0, which CSS reads as part of an
+  // identifier — so the registered name was truncated to the measured one and a
+  // file that cannot affect it was refused.
+  ['an @property name ending in U+00A0 is a different property',
+    { 'styles/tokens.css': '@property --color-accent\u00a0 { syntax: "<color>"; inherits: false; initial-value: #FFF; }\n' + BASE },
+    0, OK9],
+
+  // The file is decoded as UTF-8 whatever the preamble says, so a sheet in any
+  // other encoding would be read as different characters than the browser sees.
+  ['a non-UTF-8 @charset is refused',
+    { 'styles/tokens.css': '@charset "shift_jis";\n' + BASE }, 1, 'decodes every file as UTF-8'],
+
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },

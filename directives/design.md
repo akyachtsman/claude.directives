@@ -181,6 +181,8 @@ none:
   non-breaking space is a *different property*. This gate measures names by
   comparing them literally, so one it cannot compare is refused rather than
   skipped — **spell token names in plain ASCII**;
+- **a non-UTF-8 `@charset`.** This gate decodes every file as UTF-8 whatever the
+  preamble says, so it would read different characters than the browser does;
 - an unterminated string or comment, or an unbalanced bracket of any kind —
   including a closing `}`, `)` or `]` with nothing open.
 

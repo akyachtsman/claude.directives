@@ -18,7 +18,7 @@
 // ESM (.github/scripts/package.json declares "type": "module").
 //
 // Run: node .github/scripts/check-ui-viewports-cases.js
-import { mkdtempSync, writeFileSync, symlinkSync, rmSync, unlinkSync, lstatSync, existsSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, unlinkSync, lstatSync, existsSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import { pathToFileURL, fileURLToPath } from 'url';
@@ -134,6 +134,44 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK'],
 
+  // Codex round 3 on #333: four more, two of them root keys the enumeration did
+  // not know existed. Each fatal case is pinned beside its no-false-alarm twin.
+  ['top-level testIgnore: \'\' subtracts nothing (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  testIgnore: '',\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['testDir spelled without ./ resolves the same (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: 'tests',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['testDir with a trailing slash resolves the same (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests/',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['a .gitignore inside testDir can hide the suite',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/.gitignore': '*.spec.js\n' },
+    9, 'respectGitIgnore'],
+
+  ['respectGitIgnore: false with a .gitignore present (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  respectGitIgnore: false,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/.gitignore': '*.spec.js\n' },
+    0, 'check-ui-viewports: OK'],
+
+  ['root shard partitions the suite',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  shard: { current: 1, total: 4 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    9, 'shards the run'],
+
+  ['shard total 1 partitions nothing (must not false-alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  shard: { current: 1, total: 1 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"
@@ -206,7 +244,13 @@ function runCase(files, opts) {
   const link = join(tmp, 'node_modules');
   try {
     writeFileSync(join(tmp, 'package.json'), FIXTURE_PKG);
-    for (const [name, body] of Object.entries(files)) writeFileSync(join(tmp, name), body);
+    // A case may declare a nested path (tests/.gitignore); create parents rather
+    // than dropping the case, or the fixture the guard is meant to see never exists.
+    for (const [name, body] of Object.entries(files)) {
+      const dest = join(tmp, name);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, body);
+    }
     if (o.nodeModules !== false) symlinkSync(NODE_MODULES, link, 'dir');
     const target = o.missingDir ? join(tmp, 'no-such-dir') : tmp;
     const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '' };

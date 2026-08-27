@@ -49,7 +49,7 @@
 const { existsSync, statSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
-const { resolve, join, isAbsolute } = require('path');
+const { resolve, join, isAbsolute, dirname } = require('path');
 
 let verdict = false;
 process.on('exit', code => {
@@ -213,8 +213,15 @@ console.log(`config:    ${configPath}`);
   const narrows = k => {
     const v = cfg[k];
     if (v === undefined) return false;
-    // Only a negative filter can be emptied into a no-op.
-    if (NEGATIVE_FILTERS.includes(k) && Array.isArray(v) && v.length === 0) return false;
+    // Only a NEGATIVE filter can be emptied into a no-op — and "empty" has two
+    // spellings, both of which Playwright treats as excluding nothing: `[]` and
+    // `''`. Round 1 of #333 covered the array; round 3 found the string, which
+    // fell through to CANNOT CHECK on an unrestricted suite. A POSITIVE filter is
+    // never exempt: `testMatch: ''` selects nothing, which is maximal narrowing.
+    if (NEGATIVE_FILTERS.includes(k)) {
+      if (Array.isArray(v) && v.length === 0) return false;
+      if (typeof v === 'string' && v === '') return false;
+    }
     return true;
   };
   // `testDir` is not a filter but it REDIRECTS discovery wholesale, which reaches
@@ -229,9 +236,22 @@ console.log(`config:    ${configPath}`);
   // This guard cannot know which spec IS the UI suite, so a non-default testDir is
   // a CANNOT CHECK rather than a FAIL: the config may be perfectly good and the
   // suite may well live there, but nothing here can establish it.
+  // Compare RESOLVED paths, never spellings. `'tests'`, `'./tests/'` and an
+  // absolute path all resolve to the same directory as `'./tests'`, and round 3
+  // caught the strict string test hard-failing every one of them. This is the
+  // false-alarm direction, so it gets the same treatment as round 1's empty
+  // arrays. Codex also pointed out my diagnostic's advice was wrong: changing
+  // --tests-dir does not alter the spelling the config exports.
+  //
+  // Path normalisation is a resolver, and this file otherwise prefers CANNOT
+  // CHECK to one — but the reasoning does not transfer: normalising a path is
+  // decidable, whereas inferring WHICH spec is the UI suite is not. Refusing to
+  // do the decidable thing is just a false alarm wearing a principle.
   const SHIPPED_TEST_DIR = './tests';
   const rootFilters = [...POSITIVE_FILTERS, ...NEGATIVE_FILTERS].filter(narrows);
-  if (cfg.testDir !== undefined && String(cfg.testDir) !== SHIPPED_TEST_DIR) {
+  const CONFIG_DIR = dirname(configPath);
+  const resolveDir = d => resolve(CONFIG_DIR, String(d));
+  if (cfg.testDir !== undefined && resolveDir(cfg.testDir) !== resolveDir(SHIPPED_TEST_DIR)) {
     die(9, [
       `FAIL: the config declares a root testDir of ${JSON.stringify(cfg.testDir)} — CANNOT CHECK.`,
       `  Every project resolves against it, so the widths below describe whatever lives`,
@@ -243,6 +263,44 @@ console.log(`config:    ${configPath}`);
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }
+  // TWO MORE ways the root config keeps the suite from running, both found by
+  // Codex on round 3 of #333 and both reproduced against Playwright 1.62.1. Each
+  // is a REDIRECT/PARTITION rather than a filter, which is why enumerating
+  // "filters" missed them — see #335 for why this enumeration is the wrong shape
+  // and what replaces it.
+  //
+  // respectGitIgnore: discovery SKIPS gitignored specs. A tests/.gitignore holding
+  // `*.spec.js` made Playwright list zero tests while this gate exited 0 naming
+  // all three bands. Flagged only when a .gitignore actually exists under the
+  // resolved testDir AND the setting is not explicitly false — otherwise every
+  // config in the fleet would fail on a default.
+  const gitignoreInTestDir = existsSync(join(resolveDir(cfg.testDir ?? SHIPPED_TEST_DIR), '.gitignore'));
+  if (gitignoreInTestDir && cfg.respectGitIgnore !== false) {
+    die(9, [
+      'FAIL: a .gitignore sits inside testDir and respectGitIgnore is not false — CANNOT CHECK.',
+      '  Playwright SKIPS gitignored specs during discovery, so a pattern matching the',
+      '  suite makes every project below schedule nothing while still declaring a width.',
+      '  Set respectGitIgnore: false, or move the ignore file out of testDir.',
+      '  test.md -> UI coverage gates, fifth gate.',
+    ]);
+  }
+
+  // shard: PARTITIONS the discovered set across runs. With total > 1 a single run
+  // carries only its slice, so a band can be declared and never exercised in that
+  // run — reproduced with { current: 1, total: 4 }, where only the desktop project
+  // listed tests and shard 4 listed none, both reported as full coverage.
+  const shard = cfg.shard;
+  if (shard && typeof shard === 'object' && Number(shard.total) > 1) {
+    die(9, [
+      `FAIL: the config shards the run (total: ${shard.total}) — CANNOT CHECK.`,
+      '  A shard carries only part of the discovered set, so a project can declare a',
+      '  width and execute nothing in this run. Coverage is a property of the whole',
+      '  suite, which no single sharded run observes.',
+      '  Shard from the CI matrix rather than the config, or drop it to check coverage.',
+      '  test.md -> UI coverage gates, fifth gate.',
+    ]);
+  }
+
   if (rootFilters.length) {
     die(9, [
       `FAIL: the config declares TOP-LEVEL ${rootFilters.join(', ')} — CANNOT CHECK.`,

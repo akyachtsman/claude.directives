@@ -100,7 +100,9 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      *unavailable* usage-limit reply that has not passed its reset time, or a
      request GitHub could not make or deliver at all. Neither needs a pass to
      have run: a request rejected before any review began is the exit. A
-     reaction-only round is **not** one of these; that rule escalates it. There
+     reaction-only round is **not** one of these; where a label is still present
+     that rule escalates it (and where no label was ever added, there is nothing
+     here to report). There
      the next step is removal with that evidence, and reporting "request another pass" would keep
      a mergeable PR Conditional forever, since no pass can succeed. Read the PR
      before choosing which.

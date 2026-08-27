@@ -177,9 +177,13 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   state a session resolves alone. A stalled PR is loud; a PR merged past a review
   in progress is not.
 
-  ⚠️ **The reaction ladder below clears the GATE; it does not clear the LABEL.**
-  A reaction-only round therefore ends here, in the escalation above — not in a
-  removal. The two are different things and the merge needs both.
+  ⚠️ **All of this is about a label that is THERE.** The reaction ladder below
+  clears the verdict gate; it never clears the label. So on a PR carrying no
+  `codex-flagged` — a first pass that came back clean as a reaction, which the
+  monitor never labels — the ladder is the whole gate and the merge proceeds
+  autonomously. The escalation above applies only where a label from an earlier
+  flagged round is still sitting there and no observable terminal state explains
+  it.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head. **On the normal path — some
   SHA-bearing Codex response names HEAD — every check below is NECESSARY and
@@ -197,13 +201,18 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   **_unavailable_**, a usage-limit reply that is never clean and still unblocks
   the merge once stated on the PR and still current; and **outage** — something
   terminal and observable, never elapsed silence. ⚠️ The ladder clears this gate
-  and NOT the `codex-flagged` label: a reaction-only round leaves the label to
-  the rule above, which escalates rather than removing it.
+  and NOT the `codex-flagged` label. Where no label is present — a first pass
+  that came back clean as a reaction, so `codex-monitor` never added one — that
+  is the whole gate and the merge proceeds. Where a label from an earlier flagged
+  round is still there, the ladder does not take it off: the rule above does, and
+  on a reaction-only round it escalates instead.
   None of them is a way past a verdict you can READ:
   the ladder requires that nothing from Codex **names** the current head — a bare
   👍 names nothing, which is why it is the ladder's TRIGGER and never its bar —
   *unavailable* requires that no review can be obtained at all, and outage
-  requires that a further request produced no signal. None ever
+  requires that the request could not be MADE OR ACCEPTED — never that one was
+  accepted and stayed quiet, which is the same silence the rule above rejects.
+  None ever
   bypasses an adverse verdict that exists, and none clears the gate silently.
   The checks:
   - **Wait for a Codex response naming the current head** — a review, a plain

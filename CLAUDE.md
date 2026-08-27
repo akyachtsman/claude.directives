@@ -204,9 +204,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   **request another review pass** rather than removing the label — a clean
   COMMENT verdict naming the head clears it automatically, observed 2026-08-27
   on #333 at `63bed51`. Hand removal is the last resort `git.md` → *PR
-  Lifecycle* bounds by the *unreachable-review test* — a further request
-  demonstrably cannot produce a verdict, with the evidence on the PR, and a pass
-  counts as ended only on that rule's terms. A
+  Lifecycle* bounds by the *unreachable-review test* — an OBSERVABLE terminal
+  state on the PR showing a further request cannot produce a verdict, which
+  never needs a pass to have run: a request GitHub could not make or deliver is
+  itself the exit. A
   stuck label is not evidence of open concerns, and removing it is not evidence
   of their absence.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the

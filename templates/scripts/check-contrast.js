@@ -93,78 +93,194 @@ if (FILES.length === 0) {
   process.exit(1);
 }
 
+// ── Reading declarations: a SCAN, not a regex ───────────────────────────────
+// This was three regexes — strip comments, strip strings, match declarations —
+// and #337 round 2 returned NINE findings against them in one pass: five silent
+// (a wrong value measured and certified) and four spurious (a valid palette
+// rejected). They did not converge. Each fix drew a reshaped one, and the last
+// round's own fix became the next round's defect: deleting comments merges the
+// tokens either side, so `#15/**/65c0` — which CSS does NOT read as a colour —
+// became exactly `#1565c0` and matched the value it was overriding.
+// The cause is not any one pattern. Raw-text matching cannot see what CSS sees:
+//   * `--color-\61 ccent` is `--color-accent` — an escape in an identifier
+//   * `content: "/*"` does not open a comment, and a later `*/` does not close one
+//   * a `\` before a newline continues a string
+//   * `url(data:…;…)` contains a `;` that is not a separator
+//   * `--x: { … }` is a legal custom-property value containing braces
+//   * `!important` is a flag on the declaration, not part of the value
+// So this walks the file once, in CSS's own terms: comments become a SPACE
+// (a boundary, never a join), strings and their escapes are consumed whole,
+// brackets nest, and identifier escapes are decoded before the name is read.
+// It is not a full CSS parser and does not need to be — it needs to agree with
+// one about where a declaration starts and ends, which is all this gate reads.
+// Anything it cannot reason about is FATAL, never skipped: `@import` brings in a
+// stylesheet this gate never sees, and an unterminated string or comment means
+// the rest of the file is not what it appears to be.
+
+// `\` + 1-6 hex digits + optional single whitespace → that code point;
+// `\` + anything else → that character literally. Applied to NAMES only: two
+// spellings of one custom property must not read as two properties.
+function decodeIdent(text) {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '\\') { out += text[i]; continue; }
+    const hex = /^[0-9a-fA-F]{1,6}/.exec(text.slice(i + 1));
+    if (hex) {
+      out += String.fromCodePoint(parseInt(hex[0], 16));
+      i += hex[0].length;
+      if (/\s/.test(text[i + 1] || '')) i++;   // one whitespace terminator
+    } else {
+      out += text[i + 1] || '';
+      i++;
+    }
+  }
+  return out;
+}
+
+// Returns { decls } or { fatal: '…' }. `decls` maps a DECODED custom-property
+// name to every value declared for it, in source order.
+function scanDeclarations(css) {
+  const decls = {};
+  let buf = '';          // the declaration candidate being accumulated
+  let colonAt = -1;      // index in buf of its first top-level `:`
+  const closers = [];    // open ( [ and value-level { , innermost last
+  let blocks = 0;        // rule-block nesting
+
+  const flush = () => {
+    if (colonAt >= 0) {
+      const name = decodeIdent(buf.slice(0, colonAt)).trim();
+      if (name.startsWith('--')) {
+        // !important is a declaration FLAG; CSS does not put it in the value.
+        const value = buf.slice(colonAt + 1).replace(/\s*!\s*important\s*$/i, '').trim();
+        (decls[name] ||= []).push(value);
+      }
+    }
+    buf = '';
+    colonAt = -1;
+  };
+
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+
+    if (c === '/' && css[i + 1] === '*') {
+      const end = css.indexOf('*/', i + 2);
+      // A SPACE, not nothing: removing a comment must not weld its neighbours
+      // into a token CSS never saw.
+      if (end < 0) return { fatal: 'an unterminated /* comment — the rest of the file is inside it' };
+      buf += ' ';
+      i = end + 1;
+      continue;
+    }
+
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      for (; j < css.length; j++) {
+        if (css[j] === '\\') { j++; continue; }   // covers \" and a line continuation
+        if (css[j] === c) break;
+        if (css[j] === '\n') return { fatal: `an unterminated ${c === '"' ? 'double' : 'single'}-quoted string` };
+      }
+      if (j >= css.length) return { fatal: `an unterminated ${c === '"' ? 'double' : 'single'}-quoted string` };
+      buf += c + c;       // the string stays, its contents do not
+      i = j;
+      continue;
+    }
+
+    if (c === '\\') { buf += c + (css[i + 1] || ''); i++; continue; }   // escape, never a delimiter
+
+    if (c === '(' || c === '[') { closers.push(c === '(' ? ')' : ']'); buf += c; continue; }
+    if ((c === ')' || c === ']') && closers[closers.length - 1] === c) { closers.pop(); buf += c; continue; }
+
+    if (c === '{') {
+      // A custom property may legally take a value containing balanced braces.
+      // Anywhere else, `{` means the text so far was a selector or at-rule
+      // prelude, not a declaration.
+      if (closers.length > 0 || (colonAt >= 0 && decodeIdent(buf.slice(0, colonAt)).trim().startsWith('--'))) {
+        closers.push('}');
+        buf += c;
+        continue;
+      }
+      buf = ''; colonAt = -1; blocks++;
+      continue;
+    }
+    if (c === '}') {
+      if (closers[closers.length - 1] === '}') { closers.pop(); buf += c; continue; }
+      flush();                       // the last declaration may omit its `;`
+      if (blocks > 0) blocks--;
+      continue;
+    }
+
+    if (c === ';' && closers.length === 0) {
+      const head = buf.trim().toLowerCase();
+      if (head.startsWith('@import') || head.startsWith('@use')) {
+        return { fatal: `an ${head.split(/[\s(]/)[0]} rule — it brings in a stylesheet this check never reads` };
+      }
+      flush();
+      continue;
+    }
+
+    if (c === ':' && colonAt < 0 && closers.length === 0) colonAt = buf.length;
+    buf += c;
+  }
+  flush();
+  if (closers.length > 0 || blocks > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
+  return { decls };
+}
+
 let exitCode = 0;
 for (const FILE of FILES) {
-// Comments and string CONTENTS are removed BEFORE anything reads a declaration,
-// in that order — a quote inside a comment must not open a string, and a comment
-// marker inside a string is not a comment. Neither carries a declaration CSS
-// applies, so text that merely LOOKS like one in either place is not a finding:
-//   * a commented-out declaration used to overwrite the live token in `t`
-//     silently (the last match won, and `/* --color-accent: #old; */` is a
-//     match), and under the duplicate refusal below would instead reject a
-//     valid file for a line CSS never applies;
-//   * `content: "--color-accent: #0D47A1;"` is a string, and reading it as a
-//     second declaration rejected an otherwise valid palette whose rendered
-//     accent never changed (Codex, #337).
-// Strings collapse to an EMPTY string rather than vanishing, so the declaration
-// carrying them still parses: `--color-accent: "x"` stays a non-hex declaration
-// of a measured token and is still refused, which deleting it outright would
-// have hidden. The no-newline classes bound the damage from an unterminated
-// quote to its own line instead of the rest of the file.
-const css = readFileSync(FILE, 'utf8')
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/"(?:\\.|[^"\\\n])*"/g, '""')
-  .replace(/'(?:\\.|[^'\\\n])*'/g, "''");
+const scan = scanDeclarations(readFileSync(FILE, 'utf8'));
 console.log(`\n── ${FILE}`);
+if (scan.fatal) {
+  console.error(`\ncheck-contrast: FAIL — ${FILE} contains ${scan.fatal}.`);
+  console.error('  This gate refuses input it cannot read rather than measuring the part it');
+  console.error('  can: a partial read of a palette produces a confident number about a');
+  console.error('  colour the page may never render, which is the defect, not the fix.');
+  exitCode = 1;
+  continue;
+}
+const decls = scan.decls;   // decoded name -> [value, …] every declaration, in source order
 const t = {};
-// EVERY --color-* declaration, hex or not, in source order. One regex for both
-// jobs deliberately: a separate hex-only pattern would disagree with this one
-// about what counts as a declaration, and either direction of that disagreement
-// is a new silent seam — a declaration only this pattern sees reads as a
-// non-hex override that isn't there, and one only the hex pattern sees is an
-// override this check never notices. Terminator is `;` OR `}` because the last
-// declaration in a block may legally omit the semicolon.
-const decls = {};   // name -> [raw value, …] every declaration, in source order
-for (const m of css.matchAll(/(--color-[a-z-]+)\s*:\s*([^;{}]+?)\s*(?=[;}])/g)) {
-  const [, name, raw] = m;
-  (decls[name] ||= []).push(raw);
-  // Non-hex values are RECORDED but not measured. They are not skipped: the
-  // ambiguity check below fails on any measured token that carries one.
-  if (!/^#[0-9a-fA-F]+$/.test(raw)) continue;
-  const hex = raw;
-  if (![3, 4, 6, 8].includes(hex.length - 1)) {
-    console.error(`check-contrast: ${name} has an invalid hex value "${hex}" (expected 3, 4, 6, or 8 digits)`);
-    process.exit(1);
+// Validate and measure the HEX declarations. Non-hex values are RECORDED but not
+// measured — they are never skipped, because the ambiguity check below fails on
+// any measured token that carries one.
+for (const [name, values] of Object.entries(decls)) {
+  if (!name.startsWith('--color-')) continue;
+  for (const hex of values) {
+    if (!/^#[0-9a-fA-F]+$/.test(hex)) continue;
+    if (![3, 4, 6, 8].includes(hex.length - 1)) {
+      console.error(`check-contrast: ${name} has an invalid hex value "${hex}" (expected 3, 4, 6, or 8 digits)`);
+      process.exit(1);
+    }
+    // ── Reject alpha, never drop it ────────────────────────────────────────────
+    // A translucent colour has no contrast ratio of its own: it depends on
+    // whatever is painted behind it at the point of use, which this script cannot
+    // know. lum() used to drop the channel unconditionally, which scored a fully
+    // transparent --color-on-accent: #FFFFFF00 as opaque white — 5.09, reported
+    // OK, 9/9, exit 0, on button text that is invisible (claude.prop, 2026-08-23).
+    // Compositing instead needs a background we do not have; inventing one is the
+    // same confident-wrong-number defect pointed the other way. Refusing the input
+    // is the only honest option, so this is fatal like the malformed-hex check
+    // above, not a measurement failure.
+    // Fully-opaque alpha (FF / F) is exempt: dropping THAT channel is exact rather
+    // than an approximation, and design tools export #RRGGBBFF routinely.
+    const digits = hex.slice(1);
+    const alpha = digits.length === 4 ? digits[3].toLowerCase()
+                : digits.length === 8 ? digits.slice(6).toLowerCase()
+                : null;
+    if (alpha !== null && alpha !== 'f' && alpha !== 'ff') {
+      console.error(`check-contrast: ${name} carries an alpha channel ("${hex}") and cannot be measured.`);
+      console.error('  A translucent colour has no contrast ratio of its own — it depends on');
+      console.error('  whatever is painted behind it where it is used, and this script cannot');
+      console.error('  know that. Dropping the channel scored a fully transparent #FFFFFF00 as');
+      console.error('  opaque white: 5.09, "OK", on invisible text.');
+      console.error('  Fix: declare an opaque #hex (or #RRGGBBFF) here. If the colour is purely');
+      console.error('  decorative — a scrim or overlay that is never a text foreground and never');
+      console.error('  a text background — declare it in rgba()/hsl() form, which this guardrail');
+      console.error('  does not parse.');
+      process.exit(1);
+    }
+    t[name] = hex;
   }
-  // ── Reject alpha, never drop it ────────────────────────────────────────────
-  // A translucent colour has no contrast ratio of its own: it depends on
-  // whatever is painted behind it at the point of use, which this script cannot
-  // know. lum() used to drop the channel unconditionally, which scored a fully
-  // transparent --color-on-accent: #FFFFFF00 as opaque white — 5.09, reported
-  // OK, 9/9, exit 0, on button text that is invisible (claude.prop, 2026-08-23).
-  // Compositing instead needs a background we do not have; inventing one is the
-  // same confident-wrong-number defect pointed the other way. Refusing the input
-  // is the only honest option, so this is fatal like the malformed-hex check
-  // above, not a measurement failure.
-  // Fully-opaque alpha (FF / F) is exempt: dropping THAT channel is exact rather
-  // than an approximation, and design tools export #RRGGBBFF routinely.
-  const digits = hex.slice(1);
-  const alpha = digits.length === 4 ? digits[3].toLowerCase()
-              : digits.length === 8 ? digits.slice(6).toLowerCase()
-              : null;
-  if (alpha !== null && alpha !== 'f' && alpha !== 'ff') {
-    console.error(`check-contrast: ${name} carries an alpha channel ("${hex}") and cannot be measured.`);
-    console.error('  A translucent colour has no contrast ratio of its own — it depends on');
-    console.error('  whatever is painted behind it where it is used, and this script cannot');
-    console.error('  know that. Dropping the channel scored a fully transparent #FFFFFF00 as');
-    console.error('  opaque white: 5.09, "OK", on invisible text.');
-    console.error('  Fix: declare an opaque #hex (or #RRGGBBFF) here. If the colour is purely');
-    console.error('  decorative — a scrim or overlay that is never a text foreground and never');
-    console.error('  a text background — declare it in rgba()/hsl() form, which this guardrail');
-    console.error('  does not parse.');
-    process.exit(1);
-  }
-  t[name] = hex;
 }
 
 const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };

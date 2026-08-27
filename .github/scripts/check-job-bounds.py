@@ -605,6 +605,7 @@ errors = []
 warnings = []
 checked = 0
 unevaluatable = []
+ui_unverified = []   # ui-suite callers exempt from the floor AND unreadable: claim nothing about them
 
 for scan_dir in SCAN_DIRS:
     directory = REPO_ROOT / scan_dir
@@ -675,6 +676,13 @@ for scan_dir in SCAN_DIRS:
                     # Evaluating one more expression shape would leave every other
                     # shape open, so this refuses instead of guessing. The remedy
                     # is in the message: a floored job takes a literal bound.
+                    if is_ui_suite_job(job) and _statically_disabled(job):
+                        # Exempt (a parked job incurs no cost, so the floors do
+                        # not apply to it) but NOT verified -- the expression
+                        # could resolve below the floor if it were ever
+                        # re-enabled. Named on the pass line rather than folded
+                        # into a claim that the floor held for every caller.
+                        ui_unverified.append(f"{rel} → {name}")
                     if is_ui_suite_job(job) and not _statically_disabled(job):
                         errors.append(
                             f"{rel} → job '{name}' calls the ui-suite composite and is bounded by an\n"
@@ -766,8 +774,20 @@ advisory = (
 # the thing that can be wrong rather than qualifying it. (The ui-suite floor
 # needs no such hedge — an unreadable bound on a floored job is now an error
 # above, so reaching this line means every caller cleared it.)
+# The ui-suite claim covers the callers the floor was ENFORCED on. A disabled
+# caller with an unreadable bound is exempt from the floor (it incurs no cost)
+# but was never tested against it, so folding it into "ui-suite callers >= N"
+# credits the rule with a job it skipped -- the same over-claim, one carve-out
+# further in.
+ui_claim = f" ui-suite callers >= {UI_SUITE_FLOOR}."
+if ui_unverified:
+    ui_claim = (
+        f" ui-suite callers >= {UI_SUITE_FLOOR} where enforced; "
+        f"{len(ui_unverified)} disabled caller(s) exempt and unreadable, so unchecked: "
+        + "; ".join(ui_unverified) + "."
+    )
 print(
     f"✅ check-job-bounds: {checked} job(s) in {scope} bounded, "
-    f"none of the {checked - len(unevaluatable)} range-checked >= {GITHUB_DEFAULT}, "
-    f"ui-suite callers >= {UI_SUITE_FLOOR}.{note}{advisory}"
+    f"none of the {checked - len(unevaluatable)} range-checked >= {GITHUB_DEFAULT},"
+    f"{ui_claim}{note}{advisory}"
 )

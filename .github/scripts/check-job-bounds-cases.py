@@ -94,9 +94,23 @@ CASES = [
     # to it -- the same carve-out the literal path already makes two branches
     # down. Refusing here would fail a parked workflow for a rule it is exempt
     # from.
+    # …but exempt is not verified. The expression could resolve below the floor
+    # if the job were re-enabled, so the pass line names it instead of folding it
+    # into "ui-suite callers >= 120" — the same over-claim as the original
+    # defect, one carve-out further in (Codex, #337 round 2).
     ['a statically disabled ui-suite caller keeps the exemption',
      {"a.yml": wf(ui=job("${{ inputs.tmo }}", ui=True, extra="    if: false\n"))},
      0, "1 expression-bounded job(s) not range-checked", {}],
+
+    ['…and the pass line does not credit the floor for it',
+     {"a.yml": wf(ui=job("${{ inputs.tmo }}", ui=True, extra="    if: false\n"))},
+     0, "disabled caller(s) exempt and unreadable, so unchecked", {}],
+
+    # The twin: a disabled caller with a READABLE bound was tested against the
+    # floor like any other, so it must not appear in the unverified list.
+    ['a disabled ui-suite caller with a literal bound is still verified',
+     {"a.yml": wf(ui=job(130, ui=True, extra="    if: false\n"))},
+     0, "ui-suite callers >= 120.", {}],
 
     # A CONSTANT expression is not context-dependent, and the guard evaluates it.
     # Both directions pinned: refusing this would be the overreach, and passing

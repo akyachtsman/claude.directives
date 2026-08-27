@@ -128,6 +128,13 @@ tokens file** holding that theme's resolved values and adds it to `CANDIDATES`
 at the top of the script — every candidate that exists is measured, one palette
 per run. Tokens no pair reads are unaffected.
 
+The guardrail reads the file with a small CSS scanner rather than a regex, so an
+escaped identifier, a comment inside a value, a `url()` containing a `;` and a
+`!important` flag are all read the way CSS reads them. What it **refuses
+outright**: an `@import` (the imported sheet is never read, so a theme override
+living there would be invisible), and an unterminated string or comment. Keep
+`styles/tokens.css` self-contained.
+
 ## Motion
 - Keep transitions short and calm (≈0.15s ease is a good default)
 - **Never** bounce, spin, flash, or use heavy keyframes that fight readability

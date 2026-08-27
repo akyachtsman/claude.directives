@@ -176,6 +176,69 @@ const CASES = [
     { 'styles/tokens.css': plus('/* the " old accent */\n:root { --color-accent: rgb(255 255 255); }\n') },
     1, DUP],
 
+  // ── #337 round 2: nine findings against the regex scanner ─────────────────
+  // Five silent (a wrong value measured and certified) and four spurious (a
+  // valid palette rejected). They did not converge — the round-1 comment strip
+  // became a round-2 defect — so the scanner was replaced with a single-pass
+  // tokenizer. These pin what a regex over raw text cannot see.
+
+  // An escape in an identifier: CSS reads --color-\61 ccent as --color-accent,
+  // so this changes the rendered accent. The name pattern never matched it and
+  // the guard exited 0 with the original contrast result.
+  ['an escape in a custom-property name is the same property',
+    { 'styles/tokens.css': plus(':root { --color-\\61 ccent: #0D47A1; }\n') }, 1, DUP],
+
+  // `content: "/*"` does not open a comment. Stripping comments first deleted
+  // everything from there to the next real `*/` — including the real override.
+  ['a comment marker inside a string does not open a comment',
+    { 'styles/tokens.css': plus('.e::before { content: "/*"; }\n:root { --color-accent: #0D47A1; }\n/* note */\n') },
+    1, DUP],
+
+  // Deleting a comment welds its neighbours: CSS reads `#15/**/65c0` as two
+  // components and does NOT produce #1565c0, but the strip made it exactly that
+  // and canonicalised the two declarations as identical.
+  ['a comment inside a value is a boundary, not a join',
+    { 'styles/tokens.css': plus(':root { --color-accent: #15/**/65c0; }\n') }, 1, DUP],
+
+  // A backslash-newline continues a string. The old `\.` did not match a newline
+  // and the character class excluded it, so the string stayed unstripped and its
+  // contents were read as a declaration.
+  ['a string continued across an escaped newline is still a string',
+    { 'styles/tokens.css': plus('.e::before { content: "x\\\n--color-accent: #0D47A1;"; }\n') }, 0, OK9],
+
+  // A `;` inside an unquoted url() is not a separator.
+  ['declaration-shaped data inside an unquoted url() must NOT fail',
+    { 'styles/tokens.css': plus('.e { background-image: url(data:image/foo,--color-accent:#0D47A1;); }\n') },
+    0, OK9],
+
+  // !important is a declaration FLAG, not part of the value. Including it made
+  // an identical colour read as a second, different, non-hex value.
+  ['the same colour repeated with !important must NOT fail',
+    { 'styles/tokens.css': plus(':root { --color-accent: #1565C0 !important; }\n') }, 0, OK9],
+
+  ['a sole !important declaration is still evaluable',
+    { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: #C0392B !important;') },
+    0, OK9],
+
+  // A custom property may legally take a value containing balanced braces.
+  // Excluding braces from the capture made the whole declaration disappear
+  // instead of being recorded as an unreadable override.
+  ['a brace-valued override is recorded, not dropped',
+    { 'styles/tokens.css': plus(':root { --color-accent: { #FFFFFF }; }\n') }, 1, DUP],
+
+  // ── Input this gate refuses outright ──────────────────────────────────────
+  // An @import names a stylesheet this gate never reads, so a theme override
+  // living there is invisible: the guard exited 0 on a palette whose rendered
+  // contrast failed. Refusing beats measuring the half it can see.
+  ['an @import is refused, not partially measured',
+    { 'styles/tokens.css': '@import "theme.css";\n' + BASE }, 1, '@import rule'],
+
+  ['an unterminated string is refused',
+    { 'styles/tokens.css': plus('.e::before { content: "oops;\n}\n') }, 1, 'unterminated'],
+
+  ['an unterminated comment is refused',
+    { 'styles/tokens.css': plus('/* oops\n') }, 1, 'unterminated /* comment'],
+
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },

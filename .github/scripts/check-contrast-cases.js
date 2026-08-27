@@ -51,6 +51,22 @@ const BASE = `:root {
 `;
 const plus = (extra) => BASE + extra;
 
+// A second, genuinely dark palette for the multi-candidate cases: each theme
+// file is measured on its own, so a themed project's second file must carry a
+// COMPLETE palette, not an override fragment.
+const DARK = `:root {
+  --color-bg:             #12141A;
+  --color-surface:        #1B1E26;
+  --color-border:         #2A2E3A;
+  --color-text-primary:   #F2F4F8;
+  --color-text-secondary: #B7BEC9;
+  --color-accent:         #7FB3F5;
+  --color-accent-hover:   #A9CBFA;
+  --color-danger:         #F58A7F;
+  --color-on-accent:      #10131A;
+}
+`;
+
 const OK9 = 'OK — 9/9 assumed pairs meet WCAG AA';
 const DUP = 'a measured token is declared more than once';
 const BLOCK = 'value is a { } block';
@@ -264,21 +280,48 @@ const CASES = [
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: #C0392B !important;') },
     0, OK9],
 
-  // ── A DECLARATION VALUE MAY NOT CONTAIN A BLOCK ───────────────────────────
-  // CSS allows it, and four rounds of trying to read it correctly produced four
+  // ── A CUSTOM PROPERTY'S VALUE MAY NOT CONTAIN A BLOCK ─────────────────────
+  // Five rounds of trying to READ a brace-valued declaration produced five
   // findings: record it as a value (r3), only inside a declaration list (r4),
-  // then CSS Nesting and ordinary-property blocks broke both (r5). It is now
-  // refused wherever it appears — one rule, no context, no nesting semantics.
-  // The test is CSS's own: a declaration's prelude is a PLAIN IDENTIFIER.
+  // CSS Nesting and ordinary-property blocks broke both (r5), and refusing every
+  // "plain identifier before a colon" then refused `button:hover` (r6).
+  // The rule that survived is not a shape but a property: a block survives as a
+  // value for a CUSTOM property only. Everything else with a `{` is a rule and
+  // is descended into — see the ordinary-property case below for what that
+  // costs, and note the cost is always a refusal, never a green.
   ['a brace-valued custom property is refused',
     { 'styles/tokens.css': plus(':root { --color-accent: { #FFFFFF }; }\n') }, 1, BLOCK],
-
-  ['a brace-valued ORDINARY property is refused too',
-    { 'styles/tokens.css': plus('.e { unknown: { --color-accent: #0D47A1; }; }\n') }, 1, BLOCK],
 
   ['…and inside a grouping rule nested in a qualified rule',
     { 'styles/tokens.css': plus('.e { @media (min-width: 1px) { --color-accent: { #0D47A1 }; } }\n') },
     1, BLOCK],
+
+  // An ORDINARY property with a block value is an invalid declaration, which CSS
+  // re-parses as a qualified rule and then drops (`unknown:` is not a selector),
+  // so these declarations apply NOTHING. This scanner descends anyway and reads
+  // them, which is why the answer is a duplicate refusal rather than a green —
+  // the deliberate, one-directional cost of not deciding selector validity.
+  // Pinned so that cost stays visible: if this ever prints OK, the scanner has
+  // started silently dropping declarations it used to see.
+  ['a brace-valued ORDINARY property is read as a rule, so its contents conflict',
+    { 'styles/tokens.css': plus('.e { unknown: { --color-accent: #0D47A1; }; }\n') }, 1, DUP],
+
+  // ── #337 round 6: a TYPE selector with a pseudo-class ─────────────────────
+  // `button:hover {` puts a plain identifier before a colon before a brace, so
+  // the round-5 test called it a brace-valued declaration of `button` and
+  // refused an ordinary stylesheet. The `.e:hover` twin below missed it only
+  // because it starts with a dot — a fixture that agreed with the code for a
+  // reason unrelated to the property it was meant to hold.
+  ['a type selector with a pseudo-class still opens a rule',
+    { 'styles/tokens.css': plus('button:hover { color: red; }\n') }, 0, OK9],
+
+  ['a type selector with a pseudo-element still opens a rule',
+    { 'styles/tokens.css': plus('html:root { color: red; }\n') }, 0, OK9],
+
+  // …and it must still be READ, not merely tolerated: a live override inside one
+  // is a real duplicate. Without this, refusing to descend would also pass.
+  ['declarations inside a type-selector pseudo-class rule are live',
+    { 'styles/tokens.css': plus('button:hover { --color-accent: #0D47A1; }\n') }, 1, DUP],
 
   // The must-NOT-over-refuse twin: a pseudo-class selector also puts a colon
   // before a brace, and `.e` is not a plain identifier, so it stays a selector.
@@ -293,8 +336,11 @@ const CASES = [
   // Inside an unquoted url(), `/*` is URL DATA. Bracket nesting protected the
   // `;` (round 2) and left comment recognition inside the URL, so the strip ate
   // from the URL's `/*` to a later real `*/` — override included — and exited 0.
+  // The fixture is BALANCED CSS on purpose. It used to carry a stray `)`, which
+  // meant nothing (round 4) and then meant everything (round 6 refuses bracket
+  // underflow) — a case passing for a reason unrelated to the property it holds.
   ['a comment marker inside an unquoted url() is URL data',
-    { 'styles/tokens.css': plus('.btn { background: url(x/*); --color-accent:#fff; /* */); }\n') },
+    { 'styles/tokens.css': plus('.btn { background: url(x/*); }\n:root { --color-accent: #0D47A1; }\n/* note */\n') },
     1, DUP],
 
   // CSS turns a lone CR and a form feed into newlines, so both end an unescaped
@@ -357,6 +403,104 @@ const CASES = [
   ['an unterminated comment is refused',
     { 'styles/tokens.css': plus('/* oops\n') }, 1, 'unterminated /* comment'],
 
+  // ── #337 round 6: `#url(` is a HASH token, not a URL token ────────────────
+  // The boundary test excluded name characters only, so `#url(` entered the URL
+  // state CSS never enters — closing the false URL at the `)` inside the comment
+  // and reading the tail as declarations, which rejected a valid palette.
+  ['a url( preceded by # is a hash token, not a URL',
+    { 'styles/tokens.css': plus('.e { unknown: #url(/* ) */ ; --color-accent: #0D47A1;); }\n') },
+    0, OK9],
+
+  ['a url( preceded by @ is part of an at-keyword, not a URL',
+    { 'styles/tokens.css': plus('.e { unknown: @url(/* ) */ ; --color-accent: #0D47A1;); }\n') },
+    0, OK9],
+
+  // The must-still-work twin: excluding prefixes must not stop the real URL
+  // state, whose whole job is that `/*` inside it is data. Without this, deleting
+  // the url() branch outright would also pass the two cases above.
+  ['a genuine unquoted url() still suppresses comment recognition',
+    { 'styles/tokens.css': plus('.e { background: url(y/*); }\n:root { --color-accent: #0D47A1; }\n/* note */\n') },
+    1, DUP],
+
+  // ── #337 round 6: ) and ] underflow like } ────────────────────────────────
+  // A non-matching top fell through into `buf`, so the stack was empty at EOF
+  // and the file read as "balanced" — the underflow the closing brace already
+  // refused, surviving in the two bracket types nobody re-checked.
+  ['an unmatched closing paren is refused',
+    { 'styles/tokens.css': BASE + ')\n' }, 1, 'closing ) with no matching open'],
+
+  ['an unmatched closing bracket is refused',
+    { 'styles/tokens.css': BASE + ']\n' }, 1, 'closing ] with no matching open'],
+
+  ['a mismatched closer is refused',
+    { 'styles/tokens.css': plus('.e { width: calc(1px[ ); }\n') }, 1, 'with no matching open'],
+
+  // The must-NOT-over-refuse twin: legitimately nested brackets still balance.
+  ['nested balanced brackets are not underflow',
+    { 'styles/tokens.css': plus('.e { transform: translate(calc(1px + (2px * 3))); grid-area: e[a]; }\n') },
+    0, OK9],
+
+  // ── #337 round 6: @layer and the other grouping rules ─────────────────────
+  // Listing only @media and @supports refused `@layer tokens { … }` — the
+  // standard way a token file keeps its precedence below component overrides.
+  // A grouping rule's block cascades as if the wrapper were not there, so this
+  // is the derived set, not two names.
+  ['a token file wrapped in @layer is read, not refused',
+    { 'styles/tokens.css': '@layer tokens {\n' + BASE + '}\n' }, 0, OK9],
+
+  ['the @layer statement form is read too',
+    { 'styles/tokens.css': '@layer tokens, components;\n@layer tokens {\n' + BASE + '}\n' },
+    0, OK9],
+
+  ['@container wraps declarations this check reads',
+    { 'styles/tokens.css': plus('@container (min-width: 1px) { :root { --color-accent: #0D47A1; } }\n') },
+    1, DUP],
+
+  // …and declarations inside a layer are LIVE, not merely tolerated.
+  ['a declaration inside @layer is read as live',
+    { 'styles/tokens.css': plus('@layer overrides { :root { --color-accent: #0D47A1; } }\n') },
+    1, DUP],
+
+  // The must-still-refuse twin: widening the set must not turn it into a
+  // deny-list. @font-face declarations are not element tokens; @import is text
+  // this gate never sees.
+  ['@font-face is still refused',
+    { 'styles/tokens.css': plus('@font-face { font-family: x; src: url(x.woff2); }\n') },
+    1, '@font-face rule'],
+
+  ['@property is still refused',
+    { 'styles/tokens.css': plus('@property --color-accent { syntax: "<color>"; inherits: true; initial-value: #0D47A1; }\n') },
+    1, '@property rule'],
+
+  // ── #337 round 6: a CONFIGURED candidate that is gone ─────────────────────
+  // design.md tells a themed project to give each theme its own file and add it
+  // to CANDIDATES. existsSync filtered both, so renaming one measured the
+  // survivor and printed green — the every-theme guarantee reported about a file
+  // nobody opened. These two run a COPY of the script with the CANDIDATES line
+  // rewritten, which is exactly the edit design.md documents.
+  ['a configured token file that no longer exists is fatal',
+    { 'styles/light.css': BASE, __candidates: ['styles/light.css', 'styles/dark.css'] },
+    1, 'configured token files do not exist'],
+
+  ['…and the same configuration passes when both files are there',
+    { 'styles/light.css': BASE, 'styles/dark.css': DARK,
+      __candidates: ['styles/light.css', 'styles/dark.css'] },
+    0, OK9],
+
+  // Each theme is measured on its own terms, so the guarantee is per-file: a
+  // dark palette failing AA fails even while the light one passes. Without this,
+  // the pair above would hold with the second file read and never checked.
+  ['a failing second theme fails the run',
+    { 'styles/light.css': BASE,
+      'styles/dark.css': DARK.replace('--color-text-secondary: #B7BEC9;', '--color-text-secondary: #3A404C;'),
+      __candidates: ['styles/light.css', 'styles/dark.css'] },
+    1, 'check-contrast: FAIL — fix'],
+
+  // The must-NOT-over-refuse twin: with the single default candidate, an absent
+  // file is still the bootstrap notice, not this new failure.
+  ['a single absent candidate is still the bootstrap case',
+    { 'index.html': '<!doctype html>\n' }, 0, 'no stylesheet yet'],
+
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },
@@ -374,6 +518,39 @@ const CASES = [
     { 'styles/tokens.css': BASE.replace('--color-text-secondary: #5F6573;', '--color-text-secondary: #C9CDD4;') },
     1, 'check-contrast: FAIL — fix'],
 
+  // ── #337 round 6: a DIRECTORY symlink ─────────────────────────────────────
+  // Dirent reports a symlink as neither file nor directory. Round 5 patched the
+  // file half only, so `assets -> …` holding the project's only stylesheet was
+  // not counted AND not descended into, and the walk answered "no CSS at all" —
+  // the vacuous green this branch exists to reject, surviving in the half nobody
+  // re-checked.
+  // The target is inside node_modules, which the walk ignores, so the LINK is
+  // the only route to it — a project consuming a design system as a package and
+  // linking it into place. The first attempt at this case put the target in a
+  // plain directory, where the ordinary walk found it and the case passed with
+  // the fix reverted: it proved nothing.
+  ['a stylesheet reachable only through a directory symlink counts as CSS',
+    { 'node_modules/@acme/theme/app.css': '.a { color: red; }\n',
+      __symlink: ['assets', 'node_modules/@acme/theme'] },
+    1, 'no tokens file at'],
+
+  // The twin that keeps the ignore list meaningful: without the link, the same
+  // stylesheet is invisible and the repo bootstraps. Otherwise the case above
+  // would also pass by simply walking node_modules.
+  ['…and the same file with no link into it is still ignored',
+    { 'node_modules/@acme/theme/app.css': '.a { color: red; }\n', 'index.html': '<!doctype html>\n' },
+    0, 'no stylesheet yet'],
+
+  // A cycle through the repo root must not hang the walk. READ THE LIMIT: this
+  // case passes with the visited-set removed too, because Linux bounds symlink
+  // resolution (ELOOP) and readdir then throws into the catch. So it is a
+  // regression guard against a HANG, not evidence that the visited set is what
+  // prevents one — it stays because termination should not depend on an OS
+  // limit that a bind mount or a hardlinked directory would not trip.
+  ['a symlink cycle terminates instead of recursing forever',
+    { 'index.html': '<!doctype html>\n', __symlink: ['loop', '.'] },
+    0, 'no stylesheet yet'],
+
   ['CSS present but no tokens file is a gap, not a skip',
     { 'src/app.css': '.a { color: red; }\n' }, 1, 'no tokens file at'],
 
@@ -384,7 +561,20 @@ const CASES = [
 function runCase(files) {
   const tmp = mkdtempSync(join(tmpdir(), 'contrast-cases-'));
   try {
+    // A copy of the script with the CANDIDATES line rewritten — the edit
+    // design.md documents for a themed project. Substitution over the shipped
+    // source, never a re-implementation: if that line's shape changes this
+    // throws instead of silently testing the unedited default.
+    let check = CHECK;
+    if (files.__candidates) {
+      const src = readFileSync(CHECK, 'utf8');
+      const line = /^const CANDIDATES = \[.*\];$/m;
+      if (!line.test(src)) throw new Error('check-contrast.js no longer declares CANDIDATES on one line');
+      check = join(tmp, 'check-contrast.js');
+      writeFileSync(check, src.replace(line, `const CANDIDATES = ${JSON.stringify(files.__candidates)};`), 'utf8');
+    }
     for (const [rel, body] of Object.entries(files)) {
+      if (rel === '__candidates') continue;
       if (rel === '__symlink') {
         const [linkRel, target] = body;
         const dest = join(tmp, linkRel);
@@ -401,7 +591,7 @@ function runCase(files) {
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, body, 'utf8');
     }
-    const r = spawnSync(process.execPath, [CHECK], { encoding: 'utf8', cwd: tmp });
+    const r = spawnSync(process.execPath, [check], { encoding: 'utf8', cwd: tmp });
     return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };
   } finally {
     rmSync(tmp, { recursive: true, force: true });

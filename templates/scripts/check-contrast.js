@@ -41,7 +41,7 @@
 // your components.css, and check by hand any text using --color-accent below
 // 18.66px (or below 24px when not bold).
 // ────────────────────────────────────────────────────────────────────────────
-const { readFileSync, existsSync, readdirSync, statSync } = require('fs');
+const { readFileSync, existsSync, readdirSync, statSync, realpathSync } = require('fs');
 const { join } = require('path');
 
 // styles/tokens.css is the design contract's single home (design.md -> Tokens &
@@ -49,6 +49,25 @@ const { join } = require('path');
 // here; every candidate that exists is checked, never just the first.
 const CANDIDATES = ['styles/tokens.css'];
 const FILES = CANDIDATES.filter((f) => existsSync(f));
+
+// A CONFIGURED candidate that is gone is a broken configuration, not a fresh
+// repo. The single default below is a path this script GUESSES; a second entry
+// can only get there by a human editing this line to say "this project's tokens
+// live in these files" (design.md -> a themed project gives each theme its own
+// file). Filtering both through existsSync measured the surviving theme and
+// printed green for it, while the renamed one was never read -- the every-theme
+// guarantee reported about a file nobody opened. So once more than one is
+// declared, a missing one is FATAL. With exactly one, a miss is already covered:
+// absent + no CSS is the bootstrap notice, absent + CSS present is the gap below.
+const MISSING = CANDIDATES.filter((f) => !existsSync(f));
+if (CANDIDATES.length > 1 && MISSING.length > 0) {
+  console.error(`FAIL  ${MISSING.length} of ${CANDIDATES.length} configured token files do not exist:`);
+  for (const f of MISSING) console.error(`        ${f}`);
+  console.error('      CANDIDATES names the files this project declares as its design contract.');
+  console.error('      Measuring only the ones still present would certify a palette this gate');
+  console.error('      never read. Restore the file, or drop it from CANDIDATES.');
+  process.exit(1);
+}
 if (FILES.length === 0) {
   // A repo with no CSS at all has nothing to check (a fresh scaffold before
   // /design-intake). A repo that HAS stylesheets but none at a known token path
@@ -67,24 +86,41 @@ if (FILES.length === 0) {
   // a monorepo keeping its only stylesheet at packages/client/src/features/…
   // would have passed green. The ignore list below bounds the walk instead,
   // and the search short-circuits on the first .css file found.
+  // Dirent's isFile()/isDirectory() are BOTH false for a symlink, so link
+  // handling used to be a special case bolted onto the file test — which left
+  // the other half open: `assets -> ../shared/assets` holding the project's only
+  // stylesheet was neither a file nor a directory, so it was not counted and not
+  // descended into, and the walk answered "no CSS at all". One resolution step
+  // for every entry replaces both special cases: ask the filesystem what the
+  // entry IS, once, and let the file and directory branches read the answer.
+  // realpath keys the visited set, so a link cycle (`a -> .`) terminates.
+  const visited = new Set();
   const hasCssUnder = (dir) => {
     let entries;
     try {
+      const real = realpathSync(dir);
+      if (visited.has(real)) return false;   // a symlink cycle, already walked
+      visited.add(real);
       entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       return false;
     }
     for (const e of entries) {
-      // isFile() is FALSE for a symlink, so a project whose only stylesheet is
-      // one reported "no CSS at all" and took the bootstrap exit — the vacuous
-      // green this branch exists to reject, reached by the one path nobody
-      // checked. statSync follows the link; a broken link throws and is not CSS.
-      if (e.name.endsWith('.css') && !e.isDirectory()) {
-        if (e.isFile()) return true;
-        try { if (statSync(join(dir, e.name)).isFile()) return true; } catch { /* broken link */ }
+      const path = join(dir, e.name);
+      let isFile = e.isFile();
+      let isDir = e.isDirectory();
+      if (!isFile && !isDir) {
+        // A symlink, or something this walk has no opinion about. statSync
+        // follows the link; a broken one throws and is neither.
+        try {
+          const st = statSync(path);
+          isFile = st.isFile();
+          isDir = st.isDirectory();
+        } catch { continue; }
       }
-      if (e.isDirectory() && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name)) {
-        if (hasCssUnder(join(dir, e.name))) return true;
+      if (isFile && e.name.endsWith('.css')) return true;
+      if (isDir && !e.name.startsWith('.') && !IGNORED_DIRS.has(e.name)) {
+        if (hasCssUnder(path)) return true;
       }
     }
     return false;
@@ -138,17 +174,25 @@ if (FILES.length === 0) {
 
 // At-rules are checked at BOTH terminators, `;` and `{`. Checking only `;`
 // missed every block-form at-rule, and an @import can be reached through a
-// prelude the old check did not recognise. Allow-list rather than deny-list:
-// `@media` and `@supports` wrap declarations this gate reads, and everything
-// else either brings in text it never sees (`@import`, `@use`) or is outside
-// what a design token file needs.
-const AT_RULES_READ = new Set(['media', 'supports']);
+// prelude the old check did not recognise. Allow-list rather than deny-list,
+// and the members are DERIVED, not collected: a GROUPING at-rule's block holds
+// rules and declarations that cascade exactly as if the wrapper were not there,
+// so reading through one reads the same declarations the browser applies. That
+// is the whole set below. Listing only @media and @supports left @layer out,
+// and wrapping a token file in `@layer tokens { … }` — the standard way to keep
+// token precedence below component overrides — was refused as unreadable.
+// Everything NOT in this set is refused because it is a different thing: it
+// brings in text this gate never sees (`@import`, `@use`), or its declarations
+// apply to something other than an element (`@font-face`, `@keyframes`,
+// `@property`, `@page`), so reading them as live tokens would be wrong.
+const AT_RULES_READ = new Set(['media', 'supports', 'layer', 'container', 'scope']);
+const AT_RULES_LIST = [...AT_RULES_READ].map((n) => `@${n}`).join(', ');
 function atRuleProblem(buf) {
   const head = buf.trim();
   if (!head.startsWith('@')) return null;
   const name = (/^@([A-Za-z-]*)/.exec(head) || [, ''])[1].toLowerCase();
   if (AT_RULES_READ.has(name)) return null;
-  return `an @${name || '(unreadable)'} rule — only @media and @supports wrap declarations this check can read`;
+  return `an @${name || '(unreadable)'} rule — only the grouping at-rules (${AT_RULES_LIST}) wrap declarations this check can read`;
 }
 
 // Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name to
@@ -235,7 +279,18 @@ function scanDeclarations(css) {
     // The boundary matters: `myurl(` is an ordinary function and CSS does not
     // enter the URL state for it, but an unanchored match did — closing the
     // "URL" at a `)` inside a comment and recording the rest as declarations.
-    const urlOpen = (i === 0 || !/[A-Za-z0-9_-]/.test(css[i - 1]))
+    // A name character is not the only prefix that swallows the ident, though,
+    // and the fix that only excluded those left `#url(` entering a URL state
+    // CSS never enters: `#url` is a single HASH token, so its `(` is an
+    // ordinary paren. Rather than collect prefixes as they are found, take the
+    // closed set from the tokenizer: the token types that consume an ident
+    // sequence after a leading character are hash (`#`) and at-keyword (`@`);
+    // everything else that continues an ident IS a name character. Those three
+    // classes are the whole boundary. (A `\` prefix cannot reach here — an
+    // escape outside a string is fatal above.) Excluding a prefix can only make
+    // this MISS a url token, never invent one, and CSS produces none after
+    // `#` or `@` — so the exclusion costs nothing it was reading correctly.
+    const urlOpen = (i === 0 || !/[A-Za-z0-9_@#-]/.test(css[i - 1]))
       ? /^url\(\s*(?!["'])/i.exec(css.slice(i)) : null;
     if (urlOpen) {
       let j = i + urlOpen[0].length;
@@ -252,7 +307,16 @@ function scanDeclarations(css) {
       continue;
     }
     if (c === '(' || c === '[') { closers.push(c === '(' ? ')' : ']'); buf += c; continue; }
-    if ((c === ')' || c === ']') && closers[closers.length - 1] === c) { closers.pop(); buf += c; continue; }
+    if (c === ')' || c === ']') {
+      // A non-matching top used to fall through and land in `buf`, so a stray
+      // `)` left the stack empty at EOF and the file read as "balanced" — the
+      // same underflow the closing brace already refuses, surviving in the two
+      // bracket types nobody re-checked. Both terminators, one rule.
+      if (closers[closers.length - 1] !== c) {
+        return { fatal: `a closing ${c} with no matching open — the file does not parse as CSS` };
+      }
+      closers.pop(); buf += c; continue;
+    }
 
     if (c === '{') {
       // ── A DECLARATION VALUE MAY NOT CONTAIN A BLOCK ────────────────────────
@@ -264,16 +328,28 @@ function scanDeclarations(css) {
       // (round 4), and then nested grouping rules and ordinary-property blocks
       // broke both (round 5). Resolving it properly needs CSS Nesting
       // semantics, which is a different program.
-      // So it is REFUSED. A design token file has no use for a brace-valued
-      // declaration, and refusing is loud where every previous answer was a
-      // silent wrong value or a rejected valid palette.
-      // The test is what CSS uses: a declaration's prelude is a PLAIN
-      // IDENTIFIER before the colon. `.e:hover` is not one (it starts with a
-      // dot), so that stays a selector and its block opens normally; `unknown`
-      // and `--color-accent` both are.
+      // So it is REFUSED — but only where CSS agrees one exists, and CSS is
+      // narrower than "a plain identifier before the colon" was. That test read
+      // `button:hover {` and `html:root {` as brace-valued declarations of
+      // `button` and `html`, refusing two ordinary type selectors; the fixture
+      // that was supposed to cover this (`.e:hover`) missed it only because it
+      // starts with a dot.
+      // The real rule is not a shape, it is a property: a block SURVIVES as a
+      // declaration value for exactly one kind of property — a CUSTOM one.
+      // `--x: { … }` is a legal custom-property value and this check cannot
+      // resolve it. For any other property a block value is an invalid
+      // declaration, which CSS re-parses as a qualified rule; so every non-`--`
+      // prelude here is a rule, and the only question CSS is still asking is
+      // whether its selector is valid — `button:hover` yes, `unknown:` no.
+      // This scanner does not answer that: it DESCENDS either way. The cost is
+      // bounded and one-directional. Reading a block CSS would have dropped can
+      // only add declarations, and an added declaration either repeats a value
+      // (no effect — the ambiguity check canonicalises) or conflicts with one,
+      // which REFUSES. It can never turn a refusal into an OK. Over-reading is
+      // the fail-closed direction; deciding selector validity is a parser.
       const prelude = colonAt >= 0 ? buf.slice(0, colonAt).trim() : null;
-      if (prelude !== null && /^-{0,2}[A-Za-z_][A-Za-z0-9_-]*$/.test(prelude)) {
-        return { fatal: `a declaration whose value is a { } block (\`${prelude}\`) — this check cannot resolve one, and a token file does not need one` };
+      if (prelude !== null && /^--[A-Za-z0-9_-]*$/.test(prelude)) {
+        return { fatal: `a custom property whose value is a { } block (\`${prelude}\`) — this check cannot resolve one, and a token file does not need one` };
       }
       const bad = atRuleProblem(buf);
       if (bad) return { fatal: bad };

@@ -125,25 +125,44 @@ refuses that file instead of picking a value, for both shapes — a non-hex
 override, and a second, different hex under a `[data-theme]` block or a
 `prefers-color-scheme` query. So a themed project gives **each theme its own
 tokens file** holding that theme's resolved values and adds it to `CANDIDATES`
-at the top of the script — every candidate that exists is measured, one palette
-per run. Tokens no pair reads are unaffected.
+at the top of the script — every candidate is measured, one palette per run, and
+each theme file must carry a **complete** palette rather than an override
+fragment. Once more than one is listed, a candidate that does not exist is a
+**hard failure**, not a skip: filtering the list through "does it exist" measured
+the surviving theme and printed green, while the renamed one was never opened.
+(With the single default candidate, an absent file is still the bootstrap notice
+in a fresh repo, and still a hard failure in a repo that has CSS elsewhere.)
+Tokens no pair reads are unaffected.
 
 **What the guardrail accepts.** It reads the file with a small CSS scanner rather
 than a regex, so a comment inside a value, a `url()` containing a `;` or a `/*`,
-a `!important` flag, a string spanning an escaped newline, and a pseudo-class
-selector inside `@media` are all read the way CSS reads them. What it **refuses
-outright**, because reading part of a palette is worse than reading none:
+a `!important` flag, a string spanning an escaped newline, a type or class
+selector carrying a pseudo-class (`button:hover`), and a `@layer` or `@media`
+wrapper are all read the way CSS reads them. What it **refuses outright**,
+because reading part of a palette is worse than reading none:
 
-- any at-rule other than `@media`/`@supports` — an `@import` names a sheet the
-  check never reads, so a theme override living there would be invisible;
+- any at-rule that is not a **grouping** rule (`@media`, `@supports`, `@layer`,
+  `@container`, `@scope`) — a grouping rule's block cascades as if the wrapper
+  were not there, so reading through one reads the same declarations the browser
+  applies. Everything else is a different thing: `@import` names a sheet the
+  check never reads, so a theme override living there would be invisible, and
+  `@font-face`/`@keyframes`/`@property` declare something other than an
+  element's tokens;
 - **a backslash escape outside a string.** CSS would read `--color-\61 ccent` as
   `--color-accent`; this refuses it instead of decoding it, so **spell
   identifiers plainly**;
 - an HTML comment delimiter (`<!--` / `-->`);
-- **a declaration whose value is a `{ }` block** — `--x: { … }` is legal CSS and
-  this cannot resolve one, so it refuses rather than guess;
-- an unterminated string or comment, or unbalanced brackets — including a
-  closing brace with nothing open.
+- **a custom property whose value is a `{ }` block** — `--x: { … }` is legal CSS
+  and this cannot resolve one, so it refuses rather than guess;
+- an unterminated string or comment, or an unbalanced bracket of any kind —
+  including a closing `}`, `)` or `]` with nothing open.
+
+One thing it deliberately over-reads: a block used as the value of an **ordinary**
+property (`unknown: { … }`) is read as a rule, so declarations inside it count
+even though CSS drops them. Deciding otherwise means deciding whether the prelude
+is a valid selector, which is a CSS parser. The error is one-directional — an
+extra declaration can only produce a refusal, never a green — so spell token
+files plainly and this never arises.
 
 Keep `styles/tokens.css` self-contained.
 

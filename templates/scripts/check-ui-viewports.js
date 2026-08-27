@@ -269,21 +269,22 @@ console.log(`config:    ${configPath}`);
   // "filters" missed them — see #335 for why this enumeration is the wrong shape
   // and what replaces it.
   //
-  // respectGitIgnore: discovery SKIPS gitignored specs. A tests/.gitignore holding
-  // `*.spec.js` made Playwright list zero tests while this gate exited 0 naming
-  // all three bands. Flagged only when a .gitignore actually exists under the
-  // resolved testDir AND the setting is not explicitly false — otherwise every
-  // config in the fleet would fail on a default.
-  const gitignoreInTestDir = existsSync(join(resolveDir(cfg.testDir ?? SHIPPED_TEST_DIR), '.gitignore'));
-  if (gitignoreInTestDir && cfg.respectGitIgnore !== false) {
-    die(9, [
-      'FAIL: a .gitignore sits inside testDir and respectGitIgnore is not false — CANNOT CHECK.',
-      '  Playwright SKIPS gitignored specs during discovery, so a pattern matching the',
-      '  suite makes every project below schedule nothing while still declaring a width.',
-      '  Set respectGitIgnore: false, or move the ignore file out of testDir.',
-      '  test.md -> UI coverage gates, fifth gate.',
-    ]);
-  }
+  // respectGitIgnore is DELIBERATELY NOT CHECKED HERE. Round 3 added a probe for a
+  // .gitignore under testDir; round 4 found it wrong three separate ways, and the
+  // three together are the argument for #335 rather than for a fourth attempt:
+  //   * Playwright honours ignores only "if neither testConfig.testDir nor
+  //     testProject.testDir are explicitly specified" (installed 1.62.1 types), and
+  //     the shipped kit DOES set testDir — so the probe false-alarmed on the
+  //     default it was written for.
+  //   * respectGitIgnore is also a PROJECT option, so a root `false` with one
+  //     project overriding to `true` bypassed a root-only test entirely.
+  //   * .gitignore files nest: tests/sub/.gitignore suppresses the suite and a
+  //     direct testDir/.gitignore probe never sees it.
+  // Getting this right needs Playwright's conditional default, per-project
+  // resolution, recursive ignore discovery AND gitignore pattern matching against
+  // spec paths — a resolver, which is exactly what #335 replaces with `--list`.
+  // A broken check here would be worse than none: it false-alarms (and gets muted)
+  // AND misses the real case. Both failure modes at once.
 
   // shard: PARTITIONS the discovered set across runs. With total > 1 a single run
   // carries only its slice, so a band can be declared and never exercised in that

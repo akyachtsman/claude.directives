@@ -151,12 +151,7 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
-  ['a .gitignore inside testDir can hide the suite',
-    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
-      'tests/.gitignore': '*.spec.js\n' },
-    9, 'respectGitIgnore'],
-
-  ['respectGitIgnore: false with a .gitignore present (must not false-alarm)',
+  ['a .gitignore under testDir is NOT flagged — respectGitIgnore is #335 territory',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  respectGitIgnore: false,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'tests/.gitignore': '*.spec.js\n' },

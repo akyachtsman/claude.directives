@@ -97,7 +97,37 @@ const claims = MANIFEST_DOC.claims;
 // Two literals are not one definition, however the commit message describes
 // them. A placeholder is, because there is then no second copy to edit.
 const NEGATORS = MANIFEST_DOC.negators;
-const expand = (src) => src.replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
+
+// ── ONE DEFINITION OF "STILL INSIDE THIS SENTENCE", expanded into {{S}} ─────
+// Every guard here scopes itself to a sentence, and every one of them spelled
+// that as `[^.]` -- "any character that is not a period". Round 18(d) showed
+// what that actually means: an ABBREVIATION period ends the scope. Changing a
+// carrier to "If the owner approves (e.g. in a review), a RESPONSE is not a
+// verdict" left check-claims green, because the periods in `e.g.` stopped the
+// lookbehind before it could reach the `If`. The condition was preposed, in
+// plain sight, and the guard could not see past a full stop that was not one.
+//
+// A period ends a sentence when it is followed by whitespace and then something
+// that starts one -- a capital -- or by nothing at all. A period inside `e.g.`
+// is followed by a letter, or by whitespace and a lowercase word. That is the
+// rule, written once:
+// The discriminator is the LETTER BEFORE the period, not the word after it.
+// The obvious rule -- a stop is a stop when followed by whitespace and a
+// capital -- cannot be written here: these patterns compile with the `i` flag,
+// so `[A-Z]` and `[a-z]` both fold and neither can say "uppercase". Keying on
+// what precedes is case-free and more accurate anyway: `e.`, `g.`, `i.` are a
+// period after a LONE letter, which is what an abbreviation is; `SHA.`,
+// `head.`, `verdict.` are periods after a word, which is what a sentence end
+// is. A first draft keyed on the following character and read "SHA. ⚠️ A clean
+// rerun" as one sentence, because an emoji is not a capital -- it dragged two
+// carriers' scopes back into the previous sentence and turned them red.
+const SENTENCE_CHAR = '(?:[^.]|\\.(?!\\s|$)|(?<=\\b[A-Za-z])\\.)';
+// It is ONE definition on purpose. `[^.]` appeared in the lookbehind, in the
+// trailing lookahead, and in both tempered gaps -- four copies of one idea, in
+// a file whose recurring defect is a check that exists on one path and not its
+// twin. Fixing the lookbehind alone would have left the lookahead reading a
+// different sentence than the lookbehind, which is that defect exactly.
+const expand = (src) => src.replace(/\{\{S\}\}/g, () => SENTENCE_CHAR).replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
   if (typeof NEGATORS !== 'string' || NEGATORS === '') {
     console.error('FAIL: a pattern uses {{NEG}} but the manifest declares no "negators" string.');
     process.exit(1);
@@ -164,10 +194,32 @@ const CONTINUATIONS = MANIFEST_DOC.continuations;
 // special case; the bare head is the common one, and shipping the compound
 // alone guards the wording nobody writes. Named in round 16 as something the
 // checker could assert; round 17 is what it cost to not have done it then.
+//
+// TWO ENTRIES CARRY A LOOKAHEAD, and the reason is round 18(b): `provided` is
+// both a conditional opener and an ordinary past participle. Rejecting the bare
+// word in every position turned "A response PROVIDED BY Codex is not a verdict"
+// -- a sentence that states the intended rule -- into a guard failure, so the
+// guard was blocking the natural wording of the thing it protects. A false
+// refusal is not the harmless direction here: it is what makes a maintainer
+// reword a carrier to please a regex, which this PR has already paid for three
+// times. The participial use is the one followed by a preposition; the
+// conditional use is followed by its clause.
 const CONDITION_OPENERS = [
-  'unless', 'except', 'if', 'when', 'whenever', 'where', 'wherever',
-  'provided', 'providing', 'as long as', 'so long as',
+  // `until` is round 18(c). It is as ordinary a conditional opener as `if`, and
+  // it was missing, so "A response is not a verdict UNTIL it contains no
+  // findings" passed every check while reversing the assertion for the exact
+  // state that matters -- the clean response, which is the one a session merges
+  // on. Same shape as round 16's missing bare `if`: the list was assembled from
+  // the openers I happened to write, not from the ones that reverse a claim.
+  'unless', 'until', 'except', 'if', 'when', 'whenever', 'where', 'wherever',
+  'provided(?!\\s+(?:by|in|to|for|with|from|as|at|on)\\b)',
+  'providing', 'as long as', 'so long as',
 ];
+// ⚠️ RECORDED, NOT FIXED: `providing` has the same participial/conditional
+// ambiguity and no lookahead, because its participial form is followed by a
+// NOUN ("providing a rationale") rather than a preposition, so the same trick
+// does not reach it. Narrowing it needs a different discriminator; it is
+// written down here rather than left as a surprise for whoever hits it.
 // THE ASSERTION IS ABOUT REDUNDANCY, and finding the right one took a false
 // start worth recording. The first version required every compound's LAST WORD
 // to be a member, and it immediately failed on my own `provided that` — whose
@@ -226,6 +278,12 @@ const CONTINUATION_FLOOR = {
     ' only if it names the head', ' provided it is clean',
     ' as long as it is clean', ' so long as it names the head',
     ' unless the owner says otherwise', ' except on a re-run',
+    // Round 18(c). The floor is DEFINITION-INDEPENDENT on purpose -- it is what
+    // still fails if someone deletes an opener from CONDITION_OPENERS -- so a
+    // new opener has to be entered here too or the floor keeps defending the
+    // openers it already knew. `until` reverses this claim in the one direction
+    // that matters: it makes the CLEAN response a verdict.
+    ' until it contains no findings', ' until the owner approves',
   ],
   suffix: ['s', 'er', 'ing', 'ed', 'able', '-case', '-run', '-suite',
            '\u2011case', '\u2010case', '\u2013case', '\u2014case', '\u2212case',
@@ -271,6 +329,70 @@ for (const c of MANIFEST_DOC.claims) {
 // One place that runs a derived set, used by BOTH the claim-level pattern and a
 // per-consumer override — so the two cannot drift into testing different things,
 // which is the defect this file has now hit three times in three guises.
+// ── CONSTRUCTED PROBE POSITIONS ─────────────────────────────────────────────
+// Round 18(e), and the FIFTH fix to the claim-vs-override asymmetry. The first
+// four validated the override's config against the claim's: same positions,
+// non-empty map, a `%s`, a positive baseline. Codex kept every one of those and
+// still opted out of a guarded position — by moving `%s` INSIDE the literal the
+// pattern pins ("a response naming the head is not%s one."), where inserting
+// anything is rejected whatever it is. Every declared check passed; the probes
+// proved nothing; and the override's real attachment point was then free to go
+// unguarded.
+//
+// On the PR I said that if there was a fifth, the honest move was for the
+// override path to CONSTRUCT its probes rather than validate them. This is
+// that. Two positions are built by this file from the shape's own sentence and
+// run for every claim and every override, in addition to whatever is declared.
+// Nothing in the manifest can move, rename, or delete them, so a doctored shape
+// no longer removes coverage — it only adds a useless position beside the two
+// that always run.
+//
+// Why these two: a condition attaches to a clause at its head or its tail. The
+// third place — inside — is where a claim's own tempered gap does the work, and
+// it cannot be constructed without knowing where the clause divides, which is
+// exactly the knowledge a declared shape carries and this file does not.
+//
+// ONLY FOR THE `condition` KIND, and the reason is what the other kinds mean. A
+// `condition` reverses a claim by attaching to the clause, which is why it has a
+// head and a tail to attach to. A `clause` continuation takes a statement back
+// by CONTINUING it — a tail phenomenon by definition, and prepending one is not
+// a thing the guard should be asserting about. A `suffix` attaches to a
+// particular TOKEN (the canonical test's name), which only the declared shape
+// knows how to locate. Constructing positions for those would be this file
+// inventing an attack shape and then failing carriers for not defending it.
+const lowerFirst = (t) => t.replace(/^[A-Z](?![A-Z])/, (ch) => ch.toLowerCase());
+function constructedPositions(kind, sentence) {
+  if (kind !== 'condition') return [];
+  const body = sentence.replace(/\.\s*$/, '');
+  return [
+    ['constructed:preposed', `%s, ${lowerFirst(body)}.`],
+    ['constructed:appended', `${body}%s.`],
+  ];
+}
+// ALL POSITIONS OF ONE CONFIG DESCRIBE ONE SENTENCE. Removing the placeholder
+// must leave the same text every time — that is what makes "the same assertion,
+// guarded at three places" true rather than asserted. It also gives the
+// constructed positions a single sentence to be built from, instead of a choice
+// this file would have to make silently.
+function baselineSentence(id, shapes, whose) {
+  const seen = new Map();
+  for (const [position, shape] of Object.entries(shapes)) {
+    if (typeof shape === 'string' && shape.includes('%s')) {
+      // The reduction strips the SCAFFOLDING a position needs, not just the
+      // placeholder: a preposed shape carries the comma that joins the
+      // condition to the clause, and a leading ", " is not part of the
+      // sentence. Without this the check fires on every correctly-written pair.
+      seen.set(shape.replace('%s', '').replace(/\s+/g, ' ')
+        .replace(/^[\s,;:—–-]+/, '').trim().toLowerCase(), position);
+    }
+  }
+  if (seen.size > 1) {
+    const [[a, pa], [b, pb]] = [...seen.entries()].slice(0, 2);
+    fail(`${id}: continuationProbe shapes for the ${whose} describe DIFFERENT sentences once the placeholder is removed, so they are not one assertion guarded at several positions.\n      ${pa}: ${JSON.stringify(a)}\n      ${pb}: ${JSON.stringify(b)}`);
+    return null;
+  }
+  return seen.size === 1 ? [...seen.keys()][0] : null;
+}
 function runContinuationProbes(id, rx, prep, kind, position, shape, whose) {
   const positive = prep(shape.replace('%s', ''));
   if (!rx.test(positive)) {
@@ -553,7 +675,9 @@ for (const claim of claims) {
         || Object.keys(shapes).length === 0) {
       fail(`${id}: continuationProbe must be {kind, shapes: {position: "…%s…"}} with at least one position`);
     } else {
-      for (const [position, shape] of Object.entries(shapes)) {
+      const base = baselineSentence(id, shapes, 'pattern');
+      for (const [position, shape] of [...Object.entries(shapes),
+                                       ...(base ? constructedPositions(kind, base) : [])]) {
         if (typeof shape !== 'string' || !shape.includes('%s')) {
           fail(`${id}: continuationProbe.shapes.${position} must be a string containing %s (where the continuation goes)`);
           continue;
@@ -719,7 +843,9 @@ for (const claim of claims) {
           }
         }
         const shapes = (ovProbe && ovProbe.shapes) || claim.continuationProbe.shapes;
-        for (const [position, shape] of Object.entries(shapes)) {
+        const ovBase = baselineSentence(id, shapes, `override for ${file}`);
+        for (const [position, shape] of [...Object.entries(shapes),
+                                         ...(ovBase ? constructedPositions(kind, ovBase) : [])]) {
           runContinuationProbes(id, useRe, prep, kind, position, shape, `override for ${file}`);
         }
       }

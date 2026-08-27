@@ -57,7 +57,7 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
         + decoy_yaml
         + f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
-        + body(check_body or "node check.js")
+        + body(check_body or "node check-ui-viewports.js --tests-dir .")
         + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
         + f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
         + (f"      uses: {run_uses}\n" if run_uses else body(run_body or "npx playwright test"))
@@ -76,20 +76,42 @@ CASES = [
     # either step runs between the two config evaluations while the indices stay
     # consecutive — the cheap observable standing in for the property, again.
     ("a command inside the run step before playwright — refused",
-     action(dict(BOTH), dict(BOTH), run_body="./flip-the-world.sh\nnpx playwright test"),
-     1, "other command(s) after the one that evaluates the config"),
+     action(dict(BOTH), dict(BOTH),
+            run_body="./flip-the-world.sh\nnpx playwright test"),
+     1, "must run exactly one"),
 
     ("a command inside the check step after the gate — refused",
-     action(dict(BOTH), dict(BOTH), check_body="node check.js\n./flip-the-world.sh"),
-     1, "other command(s) before the one that evaluates the config"),
+     action(dict(BOTH), dict(BOTH),
+            check_body="node check-ui-viewports.js\n./flip-the-world.sh"),
+     1, "must run exactly one"),
+
+    # Codex round 18: ONE line, two commands. The round-17 line count called this
+    # adjacent. Shapes are now constrained rather than lines counted.
+    ("commands composed with && on one line — refused",
+     action(dict(BOTH), dict(BOTH),
+            run_body="./flip-the-world.sh && npx playwright test"),
+     1, "composes other commands onto its invocation"),
+
+    ("a command substitution on the invocation line — refused",
+     action(dict(BOTH), dict(BOTH),
+            run_body="npx playwright test $(./flip-the-world.sh)"),
+     1, "composes other commands onto its invocation"),
+
+    # Round 18 again: the round-17 version never checked the surviving line, so a
+    # step could be renamed onto an entirely different command and still pass.
+    ("the run step invokes something else entirely — refused",
+     action(dict(BOTH), dict(BOTH), run_body="./flip-the-world.sh"),
+     1, "does not appear to invoke what its name says"),
 
     ("the run step is a `uses:` — refused, its internals are invisible",
      action(dict(BOTH), dict(BOTH), run_uses="./some/action"), 1, "is a `uses:` step"),
 
     # The twin: a single invocation per step must keep passing, or this fails the
     # fleet rather than the configs it is meant to catch.
-    ("one command per step — must NOT trip",
-     action(dict(BOTH), dict(BOTH)), 0, "adjacent steps"),
+    ("one real invocation per step — must NOT trip",
+     action(dict(BOTH), dict(BOTH),
+            check_body="node .github/scripts/check-ui-viewports.js --tests-dir .",
+            run_body="npx playwright test"), 0, "adjacent steps"),
 
     # Round 16: a step between the two lets the config observe a different world
     # at the gate than at the run — Codex reproduced it with `Start local server`

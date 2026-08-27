@@ -151,7 +151,21 @@ def main():
         # reason. Codex round 17 -- and the same substitution as everywhere else
         # on #333: the cheap observable (index) standing in for the property
         # (nothing happens between the two config evaluations).
-        for label, i, want_last in ((CHECK_STEP, check_i, True), (RUN_STEP, run_i, False)):
+        # CONSTRAIN THE SHAPE, DO NOT COUNT LINES. Round 17 split each step's body
+        # into non-comment lines and required one at the edge. Codex round 18:
+        # `./flip-the-world.sh && npx playwright test` is ONE line, so the count
+        # said adjacent while a command ran between the two config evaluations —
+        # and the edge line was never checked at all, so a REPLACEMENT command
+        # passed too. Sixth time on this PR I measured the cheap observable
+        # (line count) instead of the property (what executes, and only that).
+        #
+        # So each step's body must consist of exactly the invocation it exists
+        # for, with nothing composed onto it. The accepted shapes are pinned in
+        # check-ui-suite-env-cases.py; anything else is refused rather than
+        # parsed, because parsing shell is how the previous version got here.
+        COMPOSERS = ("&&", "||", ";", "|", "&", "$(", "`")
+        for label, i, needle in ((CHECK_STEP, check_i, "check-ui-viewports"),
+                                 (RUN_STEP, run_i, "playwright test")):
             if i is None:
                 continue
             step = steps[i]
@@ -164,22 +178,30 @@ def main():
                 continue
             lines = [ln.strip() for ln in str(step.get("run") or "").splitlines()
                      if ln.strip() and not ln.strip().startswith("#")]
-            if not lines:
-                continue
-            edge = lines[-1] if want_last else lines[0]
-            others = lines[:-1] if want_last else lines[1:]
-            if others:
+            bad = [ln for ln in lines if any(c in ln for c in COMPOSERS)]
+            if bad:
                 problems.append(
-                    f'"{label}" runs {len(others)} other command(s) '
-                    + ("before" if want_last else "after")
-                    + " the one that evaluates the config"
-                    + f"\n    {'; '.join(others)}"
-                    + "\n    Those execute between the gate's config import and Playwright's, so"
-                    + "\n    index adjacency does not mean the two see the same world"
-                    + "\n    (#333, round 17). The gate invocation must be the LAST command in"
-                    + "\n    its step, and the Playwright invocation the FIRST in its own."
+                    f'"{label}" composes other commands onto its invocation'
+                    + f"\n    {'; '.join(bad)}"
+                    + "\n    Anything composed with && || ; | & or a substitution runs between the"
+                    + "\n    two config evaluations, however few LINES the step has"
+                    + "\n    (#333, round 18)."
                 )
-            del edge
+            elif len(lines) != 1:
+                problems.append(
+                    f'"{label}" runs {len(lines)} commands; it must run exactly one'
+                    + f"\n    {'; '.join(lines) if lines else '(none)'}"
+                    + "\n    Each of these steps evaluates the config, so anything else in either"
+                    + "\n    body executes between the two evaluations (#333, round 17)."
+                )
+            elif needle not in lines[0]:
+                problems.append(
+                    f'"{label}" does not appear to invoke what its name says'
+                    + f"\n    {lines[0]}"
+                    + f"\n    expected the command to mention {needle!r}. A step renamed onto a"
+                    + "\n    different command would otherwise satisfy every check here"
+                    + "\n    (#333, round 18)."
+                )
 
         check_wd = workdir_of(steps, CHECK_STEP)
         run_wd = workdir_of(steps, RUN_STEP)

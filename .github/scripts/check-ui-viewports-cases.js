@@ -324,13 +324,48 @@ const CASES = [
   //
   // The negative twin is the one that keeps it honest, same as every other env
   // refusal here — an unset variable must not trip it.
-  ['PW_TEST_SOURCE_TRANSFORM is set — refused',
+  ['PW_TEST_SOURCE_TRANSFORM + _SCOPE both set — refused',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    13, 'PW_TEST_SOURCE_TRANSFORM', { extraEnv: { PW_TEST_SOURCE_TRANSFORM: '/tmp/t.js' } }],
+    13, 'PW_TEST_SOURCE_TRANSFORM',
+    { extraEnv: { PW_TEST_SOURCE_TRANSFORM: '/tmp/t.js', PW_TEST_SOURCE_TRANSFORM_SCOPE: '/tmp' } }],
 
-  ['PW_TEST_SOURCE_TRANSFORM unset — must NOT trip',
+  // Codex round 18: Playwright applies the transform only when BOTH are set, so
+  // refusing on the transform variable alone was a false alarm on a valid setup —
+  // it loaded all three projects while this gate refused.
+  ['PW_TEST_SOURCE_TRANSFORM without _SCOPE — must NOT trip',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK', { extraEnv: { PW_TEST_SOURCE_TRANSFORM: '/tmp/t.js' } }],
+
+  ['neither transform variable set — must NOT trip',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK'],
+
+  // Codex round 18, and the first attack that never touches the exit path or the
+  // verdict file: `Array.prototype.filter = () => []` in a phone-only config makes
+  // the child's missing-band lists empty, so it printed OK naming empty bands and
+  // exited 0 cleanly. The child boundary protected termination, not arithmetic.
+  //
+  // The parent now re-decides from the reported rows with intrinsics the config
+  // never saw. A corrupted child can only report WORSE data, which becomes a
+  // refusal; it cannot manufacture a pass.
+  ['config corrupts Array.prototype.filter — the pass is not accepted',
+    { 'playwright.config.js': `${IMPORT}Array.prototype.filter = () => [];\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n` },
+    14, 'a pass its own data does not support'],
+
+  // Codex round 18: the verdict CHANNEL was visible to the config through
+  // process.env. An exit listener writing {"code":0} to it turned a recorded
+  // refusal into an accepted pass. I had written that I was not defending against
+  // this; it was one line to close, which was the wrong call to leave open.
+  ['config forges a verdict through the env-exposed channel — channel is gone',
+    { 'playwright.config.js': `${IMPORT}import { writeFileSync } from 'fs';\n`
+        + `process.on('exit', () => {\n`
+        + `  try { writeFileSync(process.env.__UI_VIEWPORTS_VERDICT_FILE, '{"code":0}'); } catch {}\n`
+        + `  process.exitCode = 0;\n});\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n` },
+    1, 'no project declares a laptop viewport'],
 
   // Codex round 17: the child writes its verdict and then keeps running until the
   // event loop drains, so a config that schedules a throw crashes AFTER record(0).
@@ -595,7 +630,7 @@ function runCase(files, opts) {
     // past the config, so a value inherited from the developer's own shell would
     // change what every case measures.
     const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '',
-      PW_TEST_REPORTER: '', PW_TEST_SOURCE_TRANSFORM: '', ...(o.extraEnv || {}) };
+      PW_TEST_REPORTER: '', PW_TEST_SOURCE_TRANSFORM: '', PW_TEST_SOURCE_TRANSFORM_SCOPE: '', ...(o.extraEnv || {}) };
     // opts.configArg passes an explicit --config, which is how a config OUTSIDE
     // the tests directory gets exercised. Playwright's cwd is the tests dir
     // whatever --config points at, so the two only diverge when they are

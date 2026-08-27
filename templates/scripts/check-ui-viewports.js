@@ -108,7 +108,6 @@ if (!VERDICT_FILE) {
   }
   let recorded = null;
   try { recorded = JSON.parse(readFileSync(file, 'utf8')); } catch { /* handled below */ }
-  rmSync(box, { recursive: true, force: true });
 
   // A RECORDED SUCCESS NEEDS A CLEAN EXIT TO CORROBORATE IT. The child writes
   // its verdict and then keeps running until the event loop drains, so a config
@@ -132,6 +131,28 @@ if (!VERDICT_FILE) {
     console.error('check-ui-viewports: FAIL (code 14)');
     process.exit(14);
   }
+  // THE PARENT RE-DECIDES THE BAND VERDICT FROM THE CHILD'S DATA. The child's
+  // own code for this can be corrupted by the config (round 18), so its answer is
+  // not taken on trust where this process can compute the same thing with clean
+  // intrinsics. Only a recorded 0 is re-checked: a refusal already refuses, and
+  // the parent has no reason to overturn one.
+  if (recorded && recorded.code === 0) {
+    let rows = null;
+    try { rows = JSON.parse(readFileSync(`${file}.rows`, 'utf8')); } catch { /* below */ }
+    const bands = ['laptop', 'tablet', 'phone'];
+    const ok = rows && Array.isArray(rows.rows) && rows.cover
+      && bands.every(b => Array.isArray(rows.cover[b]) && rows.cover[b].length > 0);
+    if (!ok) {
+      console.error('CANNOT CHECK: the evaluation reported a pass its own data does not support.');
+      console.error('  Every band must be covered by at least one unrestricted project for a');
+      console.error('  pass to stand, and the reported rows do not show that.');
+      console.error('  The child computes with whatever the config left of the runtime; this');
+      console.error('  process re-checks the conclusion with intrinsics the config never saw.');
+      console.error('check-ui-viewports: FAIL (code 14)');
+      rmSync(box, { recursive: true, force: true });
+      process.exit(14);
+    }
+  }
   if (!recorded || !Number.isInteger(recorded.code)) {
     console.error('CANNOT CHECK: the config evaluation did not report a verdict.');
     if (child && child.signal) console.error(`  the evaluation was killed by ${child.signal}`);
@@ -142,14 +163,40 @@ if (!VERDICT_FILE) {
     console.error('check-ui-viewports: FAIL (code 14)');
     process.exit(14);
   }
+  rmSync(box, { recursive: true, force: true });
   process.exit(recorded.code);
 }
 
 // --- everything below runs in the CHILD, where the config is imported. ---
+
+// THE CHANNEL IS REMOVED FROM THE CONFIG'S VIEW. Round 16 I wrote that a config
+// could read this path from its own environment and forge a verdict, and said I
+// was not defending against it. Codex round 18 then did it: an exit listener that
+// writes {"code":0} to process.env.__UI_VIEWPORTS_VERDICT_FILE and sets
+// process.exitCode = 0, so a recorded refusal became an accepted pass.
+//
+// "I am not defending against that" was the wrong posture for a hazard I could
+// close in one line. The variable is deleted before anything the config can see
+// runs, so the path exists only in this closure. That is the same move as every
+// fix on this PR that has held: remove the thing rather than reason about it.
+delete process.env.__UI_VIEWPORTS_VERDICT_FILE;
+
+// Captured before the config is imported: a corrupted JSON.stringify or a
+// corrupted writeFileSync would make the report unreadable, which the parent
+// treats as no answer — the safe direction, but worth not inviting.
+const STRINGIFY = JSON.stringify;
+const WRITE = writeFileSync;
+
 function record(code) {
   // Written before terminating, so the parent has an answer even if something
   // the config installed interferes with how this process ends.
-  try { writeFileSync(VERDICT_FILE, JSON.stringify({ code }), 'utf8'); } catch { /* parent reports */ }
+  try { WRITE(VERDICT_FILE, STRINGIFY({ code }), 'utf8'); } catch { /* parent reports */ }
+}
+
+// The band data, for the parent to decide on. Written to a sibling of the
+// verdict file so one read tells the parent whether the child got this far.
+function report(data) {
+  try { WRITE(`${VERDICT_FILE}.rows`, STRINGIFY(data), 'utf8'); } catch { /* parent reports */ }
 }
 
 // CAPTURED BEFORE ANY CONFIG CODE CAN RUN. The config is arbitrary JavaScript
@@ -525,10 +572,22 @@ console.log(`config:    ${configPath}`);
   // reproduced: applying the transform here would mean running an arbitrary Babel
   // plugin from this gate, and the point of the last eight rounds is that this
   // program should stop trying to reproduce Playwright's behaviour.
-  if (process.env.PW_TEST_SOURCE_TRANSFORM) {
+  // BOTH VARIABLES, because Playwright applies the transform only when both are
+  // set (transformHook, 1.62.1). Round 14 refused on the transform variable
+  // alone; Codex round 18 reproduced an inherited transform path with no scope
+  // where Playwright loaded all three projects and this gate refused a valid
+  // setup. A refusal on a config the run accepts is a false alarm, and false
+  // alarms are how a gate gets deleted.
+  //
+  // The scope's PREFIX MATCH against the config path is deliberately not
+  // evaluated. Deciding whether a scope covers a file is a prediction about
+  // Playwright, and this file has lost that argument in every round it tried.
+  // Both set → refuse; that is decidable and it is where the refusal belongs.
+  if (process.env.PW_TEST_SOURCE_TRANSFORM && process.env.PW_TEST_SOURCE_TRANSFORM_SCOPE) {
     die(13, [
-      'FAIL: PW_TEST_SOURCE_TRANSFORM is set — CANNOT CHECK.',
+      'FAIL: PW_TEST_SOURCE_TRANSFORM and _SCOPE are both set — CANNOT CHECK.',
       `  ${process.env.PW_TEST_SOURCE_TRANSFORM}`,
+      `  scope: ${process.env.PW_TEST_SOURCE_TRANSFORM_SCOPE}`,
       '  Playwright applies that transform while loading the config, so what it',
       '  sees is not what a plain import() produces. This gate reads the config;',
       '  it will not run your transform to find out what it changes.',
@@ -633,6 +692,22 @@ console.log(`config:    ${configPath}`);
   // question "does this value actually narrow?", which rounds 1-6 answered wrong
   // six times across three spellings of "empty" and two of "matches everything".
   // The refusal stays; only the false claim goes. See #335.
+  // THE DECISION IS MADE IN THE PARENT, from data this process reports.
+  //
+  // The child boundary stopped the config reaching the exit path (round 16) and
+  // the verdict file (round 18), but not the ARITHMETIC. Codex round 18:
+  // `Array.prototype.filter = () => []` in a phone-only config makes both lists
+  // below empty, so the gate prints OK naming empty bands and exits 0 cleanly —
+  // no exit trick, no forged file, just a corrupted computation.
+  //
+  // Capturing the primitives this analysis uses would be an enumeration
+  // (`filter`, then `map`, then `Object.keys`, then `JSON.stringify`…), and every
+  // enumeration on this PR has been defeated within a round. So the rows are
+  // reported to the parent, which never imported the config, and the parent
+  // decides. A corrupted child can only produce WORSE data — fewer rows, missing
+  // bands — which the parent turns into a refusal. It cannot manufacture a pass,
+  // because the pass is computed by code the config never touched.
+  report({ rows, cover });
   const bandProjects = b => rows.filter(r => r.band === b);
   const undeclared = ['laptop', 'tablet', 'phone'].filter(b => bandProjects(b).length === 0);
   const unattributable = ['laptop', 'tablet', 'phone']

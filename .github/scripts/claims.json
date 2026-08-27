@@ -93,6 +93,29 @@
       ]
     },
     {
+      "id": "unreachable-review-test-name",
+      "why": "#336 defined the *unreachable-review test* -- the one condition under which a session may take `codex-flagged` off by hand -- and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath ('last-resort test', 'recorded-evidence test') across five files, which is the shadow-copy mechanism the name was introduced to remove, reproduced inside its own fix. Round 5: the test's defining sentence still permitted silence. Round 6: a third statement of its outage exit survived at the verdict gate. Each time I claimed propagation and each time a reader found a copy I had not searched for. This repo's established answer to that class is a checker, not vigilance, and the name is exactly what makes the search runnable -- so the search runs in CI now. ⚠️ WHAT THIS PINS, stated plainly because the guard's header demands it: this pins the NAME, not the substance. A consumer that says 'unreachable-review test' while describing it wrongly passes; the three drifts above were all of that kind ONCE the name was present, which is why the name went in. What it catches is the failure that actually recurred first -- a consumer that stops naming the test and starts re-describing it, because a description cannot be searched for and the next revision will miss it. Consumers were derived by measuring the tree at 0ee2527, not assumed. The lookbehind admits an ARTICLE between the negator and the name, which the other entries' do not need: every pointer here reads 'where the unreachable-review test admits it', so a bare word-before-phrase lookbehind checks 'the' and lets 'never the unreachable-review test admits it' through. The guard's own derived probes caught that on the first run of this entry -- which is the entry justifying itself: a mechanism found the drift I would have shipped.",
+      "source": "directives/git.md",
+      "pattern": "(?<!\\b(?:{{NEG}})\\s(?:the |a |its |this |that )?)unreachable-review test",
+      "consumers": [
+        "CLAUDE.md",
+        "directives/global.md",
+        "docs/standards/automations.md",
+        "docs/standards/ci-triage.md",
+        "docs/standards/cicd-setup.md",
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
+      ],
+      "mustNotMatch": [
+        "the last-resort test admits it",
+        "bounds by a recorded-evidence test",
+        "never the unreachable-review test",
+        "a test for unreachable review"
+      ],
+      "negatorProbe": {
+        "lookbehind": "%s the unreachable-review test admits it"
+      }
+    },
+    {
       "id": "ci-notify-unique-match-is-not-proof",
       "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. The pattern deliberately requires the unique-match wording: an earlier draft matched only 'not a guaranteed wake', which is the weak sentence, so deleting the entire unique-match warning would have left this guard green. The lookbehind is the second half of the same lesson: 'unique' unanchored is a SUBSTRING of 'non-unique', so a carrier that regressed to warning about NON-unique matches — the weak case again, now wearing the strong case's words — satisfied the tightened pattern too. Requiring no word character or hyphen before it is what makes the tightening real.",
       "source": "docs/standards/automations.md",

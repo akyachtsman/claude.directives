@@ -131,34 +131,6 @@ runs:
     # here and active there. Reproduced by Codex on #333 with a config setting
     # `shard` under that condition — check step exit 0, run step partitioned.
     # Any variable added to the run step below must be added here too.
-    - name: Check three viewport classes are declared
-      shell: bash
-      # SAME working-directory AND SAME env AS THE RUN STEP BELOW. Both steps
-      # evaluate the config, so both must present it the same world.
-      #
-      # Four attempts got here, and the first three each satisfied some of the
-      # constraints while breaking another:
-      #   * export TESTS_DIR to both steps — the Playwright workers inherit it
-      #     and it overrides a value the calling job set;
-      #   * interpolate ${{ }} into the command — template injection, HIGH;
-      #   * take it through env and `unset` it before node — the unset is
-      #     textual (an `if false; then unset …; fi` satisfies a regex), and
-      #     the step-level assignment SHADOWS an inherited TESTS_DIR that the
-      #     run step still sees, so unsetting it created a fresh divergence.
-      # Each fix was aimed at the constraint that had just been violated.
-      #
-      # There is no variable here at all: `working-directory` is a YAML field, so
-      # the input is not interpolated into a shell body; GITHUB_WORKSPACE is
-      # runner-provided and identical in both steps; `--tests-dir .` is a literal.
-      # Nothing to shadow, nothing to unset, nothing to keep in step.
-      working-directory: ${{ inputs.tests-dir }}
-      env:
-        APP_URL: ${{ inputs.app-url }}
-        TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
-        TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
-        APP_PAGES: ${{ inputs.app-pages }}
-      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir .
-
     # Browsers are ~400MB and were re-downloaded on EVERY run. This is a BUDGET
     # fix, not a hang fix, and the distinction was measured rather than assumed:
     # downstream the install step SUCCEEDED in 21m25s, and the job then hit its
@@ -245,6 +217,46 @@ runs:
       run: |
         "./$TESTS_DIR/node_modules/.bin/http-server" "$SERVER_ROOT" -p 8080 --silent &
         sleep 2
+
+    # IMMEDIATELY BEFORE THE RUN, and after the local server is up. This step
+    # evaluates the config, and the run below evaluates it again; anything that
+    # differs between those two moments is a config the gate did not check.
+    # Round 8 matched their environment, round 12 their working directory —
+    # and round 16 found the step ORDER doing the same damage: a config that
+    # branches on whether APP_URL answers saw a dead URL here and a live one
+    # there. Codex reproduced it exporting three projects while down and one
+    # while up, with both this gate and Playwright exiting 0.
+    #
+    # So: nothing may run between this step and the Playwright command that
+    # changes what the config can observe. Adding a step in between is the
+    # regression to watch for.
+    - name: Check three viewport classes are declared
+      shell: bash
+      # SAME working-directory AND SAME env AS THE RUN STEP BELOW. Both steps
+      # evaluate the config, so both must present it the same world.
+      #
+      # Four attempts got here, and the first three each satisfied some of the
+      # constraints while breaking another:
+      #   * export TESTS_DIR to both steps — the Playwright workers inherit it
+      #     and it overrides a value the calling job set;
+      #   * interpolate ${{ }} into the command — template injection, HIGH;
+      #   * take it through env and `unset` it before node — the unset is
+      #     textual (an `if false; then unset …; fi` satisfies a regex), and
+      #     the step-level assignment SHADOWS an inherited TESTS_DIR that the
+      #     run step still sees, so unsetting it created a fresh divergence.
+      # Each fix was aimed at the constraint that had just been violated.
+      #
+      # There is no variable here at all: `working-directory` is a YAML field, so
+      # the input is not interpolated into a shell body; GITHUB_WORKSPACE is
+      # runner-provided and identical in both steps; `--tests-dir .` is a literal.
+      # Nothing to shadow, nothing to unset, nothing to keep in step.
+      working-directory: ${{ inputs.tests-dir }}
+      env:
+        APP_URL: ${{ inputs.app-url }}
+        TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
+        TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        APP_PAGES: ${{ inputs.app-pages }}
+      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir .
 
     - name: Run Playwright tests
       shell: bash

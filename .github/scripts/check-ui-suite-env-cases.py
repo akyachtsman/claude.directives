@@ -36,7 +36,7 @@ RUN = "Run Playwright tests"
 
 
 def action(check_env, run_env, check_name=CHECK, run_name=RUN,
-           check_wd="tests", run_wd="tests", decoy=None):
+           check_wd="tests", run_wd="tests", decoy=None, between=None):
     def block(env):
         if not env:
             return ""
@@ -53,7 +53,8 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
         + decoy_yaml
         + f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
         "      run: node check.js\n"
-        f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
+        + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
+        + f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
         "      run: npx playwright test\n"
     )
 
@@ -65,6 +66,13 @@ CASES = [
     # suite would still be green on all the failure cases.
     ("identical env on both steps", action(dict(BOTH), dict(BOTH)), 0,
      "same step-level env and working directory"),
+
+    # Round 16: a step between the two lets the config observe a different world
+    # at the gate than at the run — Codex reproduced it with `Start local server`
+    # flipping whether APP_URL answers.
+    ("a step between the check and the run — refused",
+     action(dict(BOTH), dict(BOTH), between="Start local server"), 1,
+     "not immediately before the Playwright run"),
 
     # The success message must not overclaim: it compares declared YAML env and
     # cannot see what `npx` adds (#333 round 11).

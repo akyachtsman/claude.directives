@@ -332,6 +332,30 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK'],
 
+  // Codex round 16: after the bound-reference fix, a config registering
+  // `process.on('exit', () => { process.exitCode = 0 })` still won — the bound
+  // EXIT invokes exit listeners, and the listener overwrote the status. The gate
+  // printed FAIL (code 1) and the process returned 0.
+  //
+  // That is the second primitive in two rounds, which is the argument against
+  // capturing a third. The config is now imported in a CHILD process and the
+  // verdict travels through a file the parent created, so nothing the config
+  // does can reach the exit path that decides pass or fail.
+  ['config installs an exit listener that zeroes the status — verdict survives',
+    { 'playwright.config.js': `${IMPORT}process.on('exit', () => { process.exitCode = 0; });\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n` },
+    1, 'no project declares a laptop viewport'],
+
+  // Belt and braces on the same mechanism: a config that both neuters exit AND
+  // installs a zeroing listener. Neither reaches the parent.
+  ['config neuters exit AND zeroes the status — verdict still survives',
+    { 'playwright.config.js': `${IMPORT}process.exit = () => {};\n`
+        + `process.on('exit', () => { process.exitCode = 0; });\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n` },
+    1, 'no project declares a laptop viewport'],
+
   // Codex round 15, and the most direct form this file's subject can take: the
   // CONFIG UNDER TEST disabling the verdict. A phone-only config containing
   // `process.exit = () => {}` let the gate print both missing-band failures, walk

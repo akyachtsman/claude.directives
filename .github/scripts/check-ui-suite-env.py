@@ -62,6 +62,11 @@ def env_of(steps, name):
     return dict(matches[0].get("env") or {}), 1
 
 
+def index_of(steps, name):
+    matches = [i for i, s in enumerate(steps) if s.get("name") == name]
+    return matches[0] if len(matches) == 1 else None
+
+
 def workdir_of(steps, name):
     matches = [s for s in steps if s.get("name") == name]
     return matches[0].get("working-directory") if len(matches) == 1 else None
@@ -118,6 +123,27 @@ def main():
         # depend on process.cwd() as much as on the environment (#333 round 9).
         # Both steps evaluate the config, so both must run from the same place --
         # and unlike the launcher's npm_* additions, this one IS visible here.
+        # ADJACENCY. Both steps evaluate the config, so anything running between
+        # them changes what the second one can observe and the first could not.
+        # Round 16: the check ran before `Start local server`, so a config that
+        # branches on whether APP_URL answers saw a dead URL at the gate and a
+        # live one at the run -- both exiting 0 on different configs. The fix was
+        # to move the step; this keeps it moved, because a comment saying "do not
+        # insert a step here" is not a mechanism.
+        check_i = index_of(steps, CHECK_STEP)
+        run_i = index_of(steps, RUN_STEP)
+        if check_i is not None and run_i is not None and run_i != check_i + 1:
+            between = [steps[i].get("name") for i in range(min(check_i, run_i) + 1,
+                                                           max(check_i, run_i))]
+            problems.append(
+                "the viewport check is not immediately before the Playwright run"
+                + (f"\n    between them: {', '.join(str(b) for b in between)}" if between else "")
+                + (f"\n    (the check is at index {check_i}, the run at {run_i})")
+                + "\n    Both steps evaluate the config. Anything in between can change what"
+                + "\n    the config observes, so the gate checks one config and the run uses"
+                + "\n    another (#333, round 16)."
+            )
+
         check_wd = workdir_of(steps, CHECK_STEP)
         run_wd = workdir_of(steps, RUN_STEP)
         if check_wd != run_wd:
@@ -156,7 +182,7 @@ def main():
     # recorded on #335.
     shared = sorted(run_env)
     print(
-        "check-ui-suite-env: OK -- same step-level env and working directory "
+        "check-ui-suite-env: OK -- adjacent steps, same step-level env and working directory "
         f"({', '.join(shared) if shared else 'empty'})"
     )
     print(

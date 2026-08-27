@@ -64,10 +64,71 @@
 //   UI_TESTS_DIR=... node .github/scripts/check-ui-viewports.js
 // Options: --config <path>, --tablet-min <px> (768), --laptop-min <px> (1024)
 
-const { existsSync, statSync } = require('fs');
+const { existsSync, statSync, mkdtempSync, writeFileSync, readFileSync, rmSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
 const { resolve, join, isAbsolute, dirname } = require('path');
+const { tmpdir } = require('os');
+
+// ============================================================================
+// THE VERDICT LIVES OUTSIDE THE PROCESS THAT IMPORTS THE CONFIG.
+//
+// A Playwright config is arbitrary JavaScript, and this gate imports it. Round
+// 15 found a config that set `process.exit = () => {}` and turned its own gate
+// green; I bound the reference and said plainly that this was a patch and not
+// isolation. Round 16 then found `process.on('exit', () => { process.exitCode =
+// 0 })`, which the bound EXIT still invokes — same false green, one primitive
+// further out. Capturing primitives one at a time is the enumerate-vs-derive
+// failure this whole PR is about, applied to my own runtime.
+//
+// So the config is now evaluated in a CHILD process, and the child reports its
+// verdict through a file the parent created. The parent never imports the
+// config, so nothing the config does can reach the exit path that decides pass
+// or fail. If the child dies without writing a verdict — crash, signal, an exit
+// the config forced — the parent has no verdict to report and says so (exit 14),
+// which is this file's founding rule applied to its own plumbing: a missing
+// answer is never a passing one.
+//
+// This is the "remove the thing that can be wrong" move that has held three
+// times on this PR, rather than a fourth captured primitive.
+// ============================================================================
+const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
+if (!VERDICT_FILE) {
+  const { spawnSync } = require('child_process');
+  const box = mkdtempSync(join(tmpdir(), 'ui-viewports-verdict-'));
+  const file = join(box, 'verdict.json');
+  let child;
+  try {
+    child = spawnSync(process.execPath, [__filename, ...process.argv.slice(2)], {
+      stdio: 'inherit',
+      env: { ...process.env, __UI_VIEWPORTS_VERDICT_FILE: file },
+    });
+  } finally {
+    // read before cleanup, so a throw in spawnSync still leaves nothing behind
+  }
+  let recorded = null;
+  try { recorded = JSON.parse(readFileSync(file, 'utf8')); } catch { /* handled below */ }
+  rmSync(box, { recursive: true, force: true });
+
+  if (!recorded || !Number.isInteger(recorded.code)) {
+    console.error('CANNOT CHECK: the config evaluation did not report a verdict.');
+    if (child && child.signal) console.error(`  the evaluation was killed by ${child.signal}`);
+    else if (child && child.error) console.error(`  ${child.error.message}`);
+    else console.error(`  it ended with status ${child ? child.status : 'unknown'} and wrote nothing`);
+    console.error('  The config is imported in a child process precisely so that nothing it');
+    console.error('  does can decide this outcome. No verdict is NOT a pass.');
+    console.error('check-ui-viewports: FAIL (code 14)');
+    process.exit(14);
+  }
+  process.exit(recorded.code);
+}
+
+// --- everything below runs in the CHILD, where the config is imported. ---
+function record(code) {
+  // Written before terminating, so the parent has an answer even if something
+  // the config installed interferes with how this process ends.
+  try { writeFileSync(VERDICT_FILE, JSON.stringify({ code }), 'utf8'); } catch { /* parent reports */ }
+}
 
 // CAPTURED BEFORE ANY CONFIG CODE CAN RUN. The config is arbitrary JavaScript
 // imported into THIS process, so anything it can reach, it can rewrite — and
@@ -91,6 +152,11 @@ process.on('exit', code => {
     console.error('      Something ended the process before the gate was evaluated (a config');
     console.error('      that calls process.exit() at import time does exactly this).');
     console.error('check-ui-viewports: FAIL (code 7)');
+    // Record it, so the parent reports the SPECIFIC diagnosis rather than the
+    // generic "no verdict". 7 says the config ended the process before the gate
+    // ran; 14 says the evaluation vanished without even reaching here (a signal,
+    // a hard kill). Both are refusals — this one names the cause.
+    record(7);
     process.exitCode = 7;
   }
 });
@@ -99,6 +165,7 @@ function die(code, lines) {
   for (const l of lines) console.error(l);
   console.error(`check-ui-viewports: FAIL (code ${code})`);
   verdict = true;
+  record(code);
   EXIT(code);
 }
 
@@ -556,6 +623,7 @@ console.log(`config:    ${configPath}`);
     console.error('  test.md -> UI coverage gates, fifth gate.');
     verdict = true;
     console.error('check-ui-viewports: FAIL (code 1)');
+    record(1);
     EXIT(1);
   }
   if (unattributable.length) {
@@ -572,6 +640,7 @@ console.log(`config:    ${configPath}`);
     console.error('  test.md -> UI coverage gates, fifth gate.');
     verdict = true;
     console.error('check-ui-viewports: FAIL (code 12)');
+    record(12);
     EXIT(12);
   }
   // SCOPE THE SUCCESS CLAIM. "OK" here means the config DECLARES an unrestricted
@@ -584,5 +653,10 @@ console.log(`config:    ${configPath}`);
   console.log(`check-ui-viewports: OK — DECLARED laptop:${cover.laptop.join('/')}  tablet:${cover.tablet.join('/')}  phone:${cover.phone.join('/')}`);
   console.log('  (declared, not executed: a config read cannot observe a run — see #335)');
   verdict = true;
+  // The PASS must be recorded too, and explicitly. If the success path forgot,
+  // every clean config would reach the parent with no verdict and report exit 14
+  // — loud and wrong, but in the safe direction. The dangerous direction is the
+  // one that cannot happen here: nothing writes a 0 except this line.
+  record(0);
 })().catch(err => die(5, ['CANNOT CHECK: unexpected failure inside check-ui-viewports.',
   `  ${(err && err.stack) || err}`]));

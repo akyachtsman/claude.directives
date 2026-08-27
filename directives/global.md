@@ -745,19 +745,24 @@ needs restating.
 4. **Auto-merge.** Take the PR through to merged, clearing a `codex-flagged`
    blocker by **requesting the review pass** rather than removing the label.
    Take the label off by hand only where `git.md` → *PR Lifecycle*'s
-   last-resort test admits it, with the evidence that rule requires.
-5. **Keep going until the whole task is done.** What *done* means follows the
-   work: a change that produces a PR is done when it is merged, and when it is
-   also deploy-backed in a repo carrying the workflows, when the deploy and
-   `qa-live` are verified. Work that produces no PR — a read-only command, an
-   investigation, a question answered, a change correctly judged unnecessary —
-   is done when the finding is reported with its evidence. Never manufacture a
-   PR to reach a terminal state.
-6. **The Escalation Rules still bind.** They cover acts whose cost a later
-   decision cannot recover: dropping or deleting data (schema and functions are
-   reversible; rows are PITR-only), force-push and destructive git ops, secrets,
-   workflow triggers. Proceed removes the need to ask about **steps** — not the
-   need to ask before destroying something that cannot be put back.
+   *unreachable-review test* admits it, with the evidence that rule requires.
+5. **Keep going until the whole task is done.** Merging is a milestone, not the
+   finish line: the task is done when every effect the work was for has
+   happened and been verified — the deploy and `qa-live` where the change is
+   deploy-backed and the repo carries the workflows, and equally the migration
+   applied and checked, the edge function redeployed, the rollout completed
+   (`data.md` → *Reversible-by-Design Backend Changes*). Work that produces no
+   PR — a read-only command, an investigation, a question answered, a change
+   correctly judged unnecessary — is done when the finding is reported with its
+   evidence. Never manufacture a PR to reach a terminal state.
+6. **The Escalation Rules still bind — all of them, as written.** Proceed
+   removes the need to ask about **steps**. It does not narrow that section, and
+   nothing here restates it: read it. Two of its gates are the ones "proceed"
+   most invites a session to skip, because they fire on ordinary recoverable
+   work rather than on damage — **a change touching more than one file's core
+   logic**, and **CI failing 3+ times on the same issue without progress**. Item
+   2 above never overrides them: a gate the owner set is not a decision he has
+   already made.
 7. **Never invent an answer to an open question.** Where a decision is genuinely
    unresolved rather than merely unstated, do every part that does not depend on
    it, then ask that one question. Guessing under a mandate to be autonomous is

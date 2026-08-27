@@ -155,39 +155,47 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   the pass. The same test is what opens the verdict gate below; one test, so the
   two cannot drift into disagreeing about which states count.
 
-  **What ends a pass CONCLUSIVELY**, since the whole test turns on it. *Nothing
-  came back* is not a reading you may take the moment you look: a request still
-  in flight produces the identical observation to one that will never be
-  answered, and recording it early merges over findings Codex is still writing.
-  A pass has ended only when one of these holds:
-  - the request could not be made or accepted at all — the App is not installed,
-    the trigger errors, GitHub reports it cannot be delivered; or
-  - **30 minutes** have passed since the request and the PR still carries no
-    Codex review, comment, inline reply **or reaction**. Check all four: a
-    verdict in a form the monitor does not watch is still a verdict, and three of
-    those four are exactly the forms a comments-only check misses.
+  **SILENCE IS NEVER THE EVIDENCE.** A request still in flight produces the
+  identical observation to one that will never be answered, so no amount of
+  elapsed quiet distinguishes them — a queued or degraded reviewer that answers
+  late looks exactly like a reviewer that is gone. The evidence must be a
+  **terminal state you can observe**: the request could not be made or accepted
+  at all (the App is not installed, the trigger errors, GitHub reports it
+  undeliverable), or Codex itself answered something terminal. Waiting may
+  prompt you to look again; it never opens the gate.
 
-  Thirty minutes is ~5× the slowest response measured in this repo (0–6 minutes
-  across five requests, 2026-08-27) and it costs nothing but waiting, which is
-  the point — the cheap error here is waiting too long, and the expensive one is
-  merging past a review in progress. State the request time and the check time on
-  the PR. **A pass that has not ended is not evidence.**
+  **When nothing terminal is observable, the PR stays blocked and you SAY SO** —
+  one line to the owner naming what you requested, when, and what you checked.
+  That is the escape valve, and it is deliberately a person: a reviewer that has
+  silently stopped answering is not a state a session should resolve alone. A
+  stalled PR is loud; a PR merged past a review in progress is not.
+
+  **Read output attributable to THIS request**, not the PR's history. A PR that
+  has run several rounds already carries reactions, comments and replies from
+  earlier ones, so "the PR carries nothing" is unsatisfiable on any PR that has
+  been reviewed before. What counts is what arrived after the request you are
+  waiting on — and check all four surfaces, since a verdict in a form the
+  monitor does not watch is still a verdict.
 
   The instances seen so far, each with what it needs. **Never request a series**
   — Codex is metered per request from a shared weekly pool (below):
-  - ***unavailable*** — Codex replied that the allowance is spent. Do **not**
-    request another pass: that reply already says none will be reviewed, so
-    spending one buys nothing. State the exit on the PR, remove the label, merge.
+  - ***unavailable*** — Codex replied that the allowance is spent, and **that
+    reply must still be current at merge time**. Do not request another pass
+    while it is: the reply already says none will be reviewed. But the reply
+    names a reset time; **once that time has passed the exit has expired** — the
+    allowance may be back, so request a current-head pass rather than merging on
+    a stale refusal. While it holds: state the exit on the PR, remove the label,
+    merge.
   - **reaction-only** — the reaction ladder was entered properly and reached its
     **attestation** exit. Request **one** further pass FIRST: a reaction is not
     evidence that a comment cannot arrive, and the comment form is the cheap fix.
-    Only once that pass has CONCLUSIVELY ended (above) with nothing but a
-    reaction do you attest and remove.
-  - **no signal at all** — Codex disabled or uninstalled for the repo, unable to
-    reach the head, or a request that errors or is simply never answered.
-    Request **one** further pass; once that pass has CONCLUSIVELY ended (above)
-    with nothing, record what was requested, when, what was checked and that
-    nothing came back, and remove.
+    Attest and remove only once that request has produced a reaction and nothing
+    else — a response, not a silence.
+  - **outage** — something terminal and observable: Codex disabled or uninstalled
+    for the repo, or a request GitHub could not deliver. Record what was
+    requested, when, what you observed, and remove. **Not** "I waited and
+    nothing came" — that is the case above, where the PR stays blocked and the
+    owner is told.
 
   A state not on that list still has to satisfy the test, and the recorded
   evidence is what makes it an exit rather than a shortcut.
@@ -206,9 +214,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   the **reaction ladder** below, which applies precisely when NOTHING from Codex
   names HEAD, so a current-head response is not required on it;
   **_unavailable_**, a usage-limit reply that is never clean and still unblocks
-  the merge once stated on the PR; and **outage** — Codex disabled or uninstalled
-  for the repo, unable to reach the head, or erroring or silent across a
-  conclusively ended pass.
+  the merge once stated on the PR and still current; and **outage** — something
+  terminal and observable, never elapsed silence.
   None of them is a way past a verdict you can READ:
   the ladder requires that nothing from Codex **names** the current head — a bare
   👍 names nothing, which is why it is the ladder's TRIGGER and never its bar —

@@ -33,10 +33,18 @@ SETUP_ONLY = {"TESTS_DIR", "SERVER_ROOT"}
 
 
 def env_of(steps, name):
+    """Return the step's env MAPPING, not just its keys.
+
+    Comparing key sets alone passes when a maintainer repoints an existing
+    variable at a different input -- same names, different values, and a config
+    conditional on that value exposes no selection key to the check while
+    activating one in the run (Codex, #333 round 9). The guard's whole job is
+    that the two evaluations see the same input, so it has to compare inputs.
+    """
     for step in steps:
         if step.get("name") == name:
-            return set((step.get("env") or {}).keys()), True
-    return set(), False
+            return dict(step.get("env") or {}), True
+    return {}, False
 
 
 def main():
@@ -56,13 +64,28 @@ def main():
         problems.append(f'no step named "{RUN_STEP}" in {ACTION}')
 
     if check_found and run_found:
-        missing = sorted((run_env - SETUP_ONLY) - check_env)
+        expected = {k: v for k, v in run_env.items() if k not in SETUP_ONLY}
+        missing = sorted(k for k in expected if k not in check_env)
+        differing = sorted(
+            k for k in expected if k in check_env and check_env[k] != expected[k]
+        )
         if missing:
             problems.append(
                 "the viewport check step is missing environment the run step has: "
                 + ", ".join(missing)
                 + "\n    The check IMPORTS the config, so a selection key conditional on one"
                 + "\n    of these is invisible to it and active in the run (#333, round 8)."
+            )
+        if differing:
+            problems.append(
+                "the two steps set the same variable to DIFFERENT values: "
+                + ", ".join(differing)
+                + "\n    "
+                + "; ".join(
+                    f"{k}: check={check_env[k]!r} run={expected[k]!r}" for k in differing
+                )
+                + "\n    Matching names are not matching inputs. A config conditional on the"
+                + "\n    VALUE then reads one thing here and another in the run (round 9)."
             )
 
     if problems:
@@ -71,7 +94,7 @@ def main():
             print(f"  - {problem}")
         return 1
 
-    shared = sorted(run_env - SETUP_ONLY)
+    shared = sorted(k for k in run_env if k not in SETUP_ONLY)
     print(
         "check-ui-suite-env: OK -- viewport check sees the run step's environment "
         f"({', '.join(shared) if shared else 'no config inputs'})"

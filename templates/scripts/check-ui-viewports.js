@@ -62,7 +62,7 @@
 const { existsSync, statSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
-const { resolve, join, isAbsolute } = require('path');
+const { resolve, join, isAbsolute, dirname } = require('path');
 
 let verdict = false;
 process.on('exit', code => {
@@ -168,6 +168,29 @@ console.log(`config:    ${configPath}`);
   }
 
   // --- 4. Import it. Node evaluates the spreads; nothing here parses text.
+  //
+  // CHDIR FIRST. A config is CODE, so what it exports can depend on where it is
+  // evaluated — process.cwd() as much as process.env. Playwright runs with the
+  // tests directory as its working directory (the ui-suite composite sets
+  // `working-directory` on the run step); this gate was invoked from the repo
+  // root. A config branching on cwd therefore handed the two a DIFFERENT object,
+  // and copying environment variables across, as round 8 did, does not make the
+  // evaluations equivalent — it made one of two inputs match. Codex, round 9.
+  //
+  // Fixed here rather than in the composite deliberately: a caller invoking this
+  // script directly gets the same guarantee, and there is no second place to keep
+  // in step. configPath is already absolute, so nothing below depends on cwd.
+  try {
+    process.chdir(dirname(configPath));
+  } catch (e) {
+    die(5, [
+      'CANNOT CHECK: cannot enter the config\'s directory to evaluate it.',
+      `  ${dirname(configPath)}`,
+      `  ${(e && e.message) || e}`,
+      '  Playwright evaluates the config from there, so reading it from elsewhere',
+      '  can produce a different config. Refusing rather than reading the wrong one.',
+    ]);
+  }
   let cfg;
   try {
     const mod = await import(pathToFileURL(configPath).href);
@@ -238,9 +261,10 @@ console.log(`config:    ${configPath}`);
       '  To clear it, the key has to stop being declared at the root for the run',
       '  this gate is certifying — either move it onto the projects that are NOT',
       '  providing viewport coverage, or drop it from this run entirely.',
-      '  NOT by relocating it to the CI command line: a `--shard` (or `--grep`)',
-      '  passed to `playwright test` partitions the same run while being invisible',
-      '  here, which converts a refusal into a false green rather than fixing it.',
+      '  NOT by relocating it to the CI command line. This gate reads a config; it',
+      '  cannot see the arguments `playwright test` is invoked with, so a selection',
+      '  flag moved there is simply outside what it can inspect — the refusal turns',
+      '  into a pass without anything about the run having been established.',
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }
@@ -287,6 +311,17 @@ console.log(`config:    ${configPath}`);
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }
+  // PW_TEST_REPORTER ADDS A REPORTER THE CONFIG NEVER MENTIONS. The runner
+  // appends it independently of `reporter`, so a config declaring only built-ins
+  // can still run arbitrary reporter code. Reproduced 2026-08-27 (Codex, round 9):
+  // with it pointing at a preprocess() that excludes everything, Playwright found
+  // 0 tests in 0 files while this gate exited 0 naming three bands.
+  //
+  // This is the same lesson as the cwd fix above, arriving from a third direction:
+  // the config object is not the whole input. Round 8 fixed environment VARIABLES
+  // reaching the config; this is the environment reaching PLAYWRIGHT, past the
+  // config entirely. Reading `reporter` was never going to see it.
+  const envReporter = process.env.PW_TEST_REPORTER;
   // reporter accepts a bare id, a [id, options] pair, or an array of either.
   const reporterIds = (r => {
     if (r === undefined) return [];
@@ -295,10 +330,16 @@ console.log(`config:    ${configPath}`);
       ? r.map(one)
       : [one(r)]).filter(x => typeof x === 'string');
   })(cfg.reporter);
+  if (envReporter) reporterIds.push(envReporter);
   const foreignReporters = reporterIds.filter(id => !builtInReporters.includes(id));
   if (foreignReporters.length) {
     die(10, [
-      `FAIL: the config declares non-built-in reporter(s): ${foreignReporters.join(', ')} — CANNOT CHECK.`,
+      `FAIL: non-built-in reporter(s) in effect: ${foreignReporters.join(', ')} — CANNOT CHECK.`,
+      ...(envReporter && foreignReporters.includes(envReporter)
+        ? ['  One of these comes from PW_TEST_REPORTER, not from the config: the runner',
+           '  appends it regardless of what `reporter` says. Clear that variable for both',
+           '  the check and the run, or point it at a built-in.']
+        : []),
       '  A reporter\'s preprocess() can call testRun.exclude() or .skip() on any',
       '  test, so a run can execute nothing while every band is declared. This gate',
       '  reads a config; it cannot execute your reporter to find out.',

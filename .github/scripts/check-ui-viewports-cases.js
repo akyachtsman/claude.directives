@@ -247,6 +247,46 @@ const CASES = [
       'sub/node_modules/playwright/lib/common.js': 'module.exports = {};\n' },
     11, 'built-in reporter list', { subdir: 'sub' }],
 
+  // Codex round 9 on #333: TWO more inputs that are not the config object, found
+  // after round 8 had "fixed" exactly that class by copying environment variables
+  // onto the check step. Both show the same thing from a new angle — a config is
+  // CODE, and what it exports depends on everything the evaluation can see.
+  //
+  // PW_TEST_REPORTER reaches PLAYWRIGHT rather than the config: the runner
+  // appends it whatever `reporter` says, so a config declaring only built-ins can
+  // still run arbitrary reporter code. Reproduced: Playwright found 0 tests in 0
+  // files while the gate exited 0. The negative twin matters as much — the gate
+  // must not refuse a clean config because the variable happens to be set to a
+  // built-in.
+  ['PW_TEST_REPORTER names a custom reporter — refused though the config is clean',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['list']],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    10, 'PW_TEST_REPORTER', { extraEnv: { PW_TEST_REPORTER: './sneaky-reporter.js' } }],
+
+  ['PW_TEST_REPORTER names a BUILT-IN — must NOT trip',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['list']],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK', { extraEnv: { PW_TEST_REPORTER: 'dot' } }],
+
+  // cwd: Playwright evaluates the config from the tests directory; this gate was
+  // invoked from the repo root, so a config branching on process.cwd() handed the
+  // two different objects. The gate now chdir's before importing. This config
+  // declares a root `grep` ONLY when evaluated from somewhere other than its own
+  // directory — so it is exit 0 iff the chdir happened, and exit 9 without it.
+  ['config branches on process.cwd() — evaluated from the config\'s own directory',
+    { 'playwright.config.js':
+        `import { defineConfig, devices } from '@playwright/test';\n`
+        + `import { dirname } from 'path';\n`
+        + `import { fileURLToPath } from 'url';\n`
+        + `const here = dirname(fileURLToPath(import.meta.url));\n`
+        + `const elsewhere = process.cwd() !== here;\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  ...(elsewhere ? { grep: /__ONLY_WHEN_READ_FROM_ELSEWHERE__/ } : {}),\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"
@@ -334,7 +374,10 @@ function runCase(files, opts) {
     // exercise the "cannot read the built-in reporter list" branch without
     // writing into the shared node_modules, which this self-test must never do.
     const target = o.missingDir ? join(tmp, 'no-such-dir') : (o.subdir ? join(tmp, o.subdir) : tmp);
-    const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '' };
+    // PW_TEST_REPORTER is cleared unless a case sets it: it reaches Playwright
+    // past the config, so a value inherited from the developer's own shell would
+    // change what every case measures.
+    const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '', PW_TEST_REPORTER: '', ...(o.extraEnv || {}) };
     const args = o.env ? [CHECK] : [CHECK, '--tests-dir', target];
     const r = spawnSync(process.execPath, args, { encoding: 'utf8', env, cwd: REPO_ROOT });
     return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };

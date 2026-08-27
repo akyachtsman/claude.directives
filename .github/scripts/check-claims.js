@@ -105,6 +105,37 @@ const expand = (src) => src.replace(/\{\{NEG\}\}/g, () => {
   return NEGATORS;
 });
 
+// ── ONE CONTINUATION DEFINITION, for claims whose statement must END ────────
+// Three claims here are only true if nothing takes them back inside the same
+// sentence: "the merge proceeds unattended", "could not be made or accepted at
+// all", the canonical test's name. Each grew a terminator, and rounds 10, 11
+// and 12 each found the SAME class of hole in the terminator chosen: `;`
+// continues a sentence, five punctuation marks continue a clause, the first dot
+// of an ellipsis is a period, and `\b` treats a hyphen as the end of a word.
+// Three rounds, three hand-written probe sets, three misses — because each
+// round I probed the continuation I had just thought of.
+// So the continuations are DERIVED. A claim declares the shape of its statement
+// once; every continuation below is rendered into it and must be REJECTED. A
+// future claim with a terminator gets the whole set free, and adding a
+// continuation here tests every such claim at once — which is the difference
+// between a probe set and a definition, the same argument as {{NEG}} above.
+// TWO KINDS, because a claim pins one of two things and they fail differently.
+// A STATEMENT ("the merge proceeds unattended") is undone by a clause that takes
+// it back; a NAME ("the unreachable-review test") is undone by a suffix that
+// renames the token, and a clause after it is just prose. Feeding one kind's
+// list to the other produced fifteen failures that were not defects — proof the
+// distinction is real rather than tidiness.
+const CONTINUATIONS = MANIFEST_DOC.continuations;
+const probeKinds = new Set(MANIFEST_DOC.claims.filter((c) => c && c.continuationProbe)
+  .map((c) => c.continuationProbe.kind));
+for (const kind of probeKinds) {
+  if (!Array.isArray(CONTINUATIONS && CONTINUATIONS[kind]) || CONTINUATIONS[kind].length === 0) {
+    console.error(`FAIL: a claim declares a "${kind}" continuationProbe but the manifest declares no continuations.${kind} list — the derived probes would test nothing.`);
+    console.error('check-claims: FAIL');
+    process.exit(1);
+  }
+}
+
 // An empty or non-array manifest checks NOTHING and would otherwise report
 // "OK — 0 claim(s)". That is the fully vacuous pass every hygiene rule below
 // exists to prevent, and a botched conflict resolution reaches it in one edit.
@@ -339,6 +370,26 @@ for (const claim of claims) {
           if (re.test(prep(probe))) {
             fail(`${id}: negator "${word}" is NOT rejected in the ${position} position: ${JSON.stringify(probe)}\n      This negator is in the manifest's definition but the pattern still accepts it there — the two positions have drifted.`);
           }
+        }
+      }
+    }
+  }
+
+  // ── derived continuation probes ────────────────────────────────────────────
+  if (claim.continuationProbe !== undefined) {
+    const { kind, shape } = claim.continuationProbe;
+    if (typeof shape !== 'string' || !shape.includes('%s') || typeof kind !== 'string') {
+      fail(`${id}: continuationProbe must be {kind, shape} with %s in the shape (where the continuation goes)`);
+    } else if (!re.test(prep(shape.replace('%s', '')))) {
+      // Without this the shape could drift from the claim and every derived
+      // probe would be rejected for the wrong reason — the exact defect round 11
+      // found in two hand-written probes that omitted the positive token.
+      fail(`${id}: continuationProbe's own shape does not match the pattern with an EMPTY continuation, so every derived probe below would be rejected for the wrong reason.\n      shape: ${JSON.stringify(shape)}`);
+    } else {
+      for (const cont of CONTINUATIONS[kind]) {
+        const probe = shape.replace('%s', cont);
+        if (re.test(prep(probe))) {
+          fail(`${id}: continuation "${cont}" is NOT rejected: ${JSON.stringify(probe)}\n      The statement can be taken back inside its own sentence and this claim still reports coverage.`);
         }
       }
     }

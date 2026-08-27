@@ -226,7 +226,14 @@ const CONDITION_OPENERS = [
   // the openers I happened to write, not from the ones that reverse a claim.
   'unless', 'until', 'except', 'if', 'when', 'whenever', 'where', 'wherever',
   // The former CLAUSE_OPENERS, folded in by round 20 (see the note below).
-  'after', 'once', 'although', 'subject to', 'following', 'yet',
+  'after', 'once', 'although', 'subject to', 'following',
+  // `yet` was here for two rounds and is out. As a gate it is archaic
+  // ("yet the owner objects"); in ordinary prose it is a coordinating
+  // contrast, and `That establishes a RESPONSE, yet not a verdict` states
+  // this claim ABSOLUTELY while the guard refused it. Third opener removed
+  // for over-firing after `only`, `assuming` (round 17) and `pending`
+  // (round 20) — every one of them arrived from grammar rather than from a
+  // carrier, and every one was evicted by prose.
   // `however` carries a lookahead because it is TWO WORDS in one spelling. As a
   // gate it introduces a clause — "however the owner decides". Comma-flanked it
   // is a discourse marker and changes nothing — "A RESPONSE, however, is not a
@@ -341,6 +348,29 @@ const CONTINUATION_FLOOR = {
     // openers it already knew. `until` reverses this claim in the one direction
     // that matters: it makes the CLEAN response a verdict.
     ' until it contains no findings', ' until the owner approves',
+    // ROUND 22: THE FLOOR MUST NAME EVERY OPENER, and it did not. Round 20
+    // merged the clause openers into the one definition and I extended the
+    // guards without extending the floor — so deleting `once` from
+    // CONDITION_OPENERS left the whole suite green while "not a verdict once
+    // the owner confirms it" was accepted again.
+    //
+    // That is the exact failure this floor exists to prevent, in the round that
+    // grew the definition it backstops. A floor is definition-INDEPENDENT only
+    // if it is kept independent; one that covers the words the definition had
+    // yesterday is a floor for yesterday's definition. The assertion below now
+    // requires an entry per opener rather than trusting this list to be
+    // complete, because "remember to add one" is what failed here.
+    ' after the owner approves', ' once the owner confirms it',
+    ', however the owner decides', ' although the owner may object',
+    ' subject to the owner agreeing', ' following owner approval',
+    // The assertion below found four more the finding never named — the list
+    // was short of `whenever`, `wherever`, `providing` and the two irreducible
+    // phrases. Which is the point of asserting rather than extending by hand:
+    // the hand extends to the case in front of it.
+    ' whenever the owner asks', ' wherever the owner says so',
+    ' providing the owner agrees', ' as long as the owner agrees',
+    ' so long as the owner agrees', ' where the owner agrees',
+    ' except where the owner objects',
   ],
   suffix: ['s', 'er', 'ing', 'ed', 'able', '-case', '-run', '-suite',
            '\u2011case', '\u2010case', '\u2013case', '\u2014case', '\u2212case',
@@ -352,6 +382,33 @@ const CONTINUATION_FLOOR = {
 // the thing that invokes it. `{{NEG}}` binds through the pattern itself; a
 // terminator has no placeholder to bind through, so the manifest names the
 // claims that must carry one. Two places, so deleting the probe alone fails.
+// EVERY OPENER MUST APPEAR IN THE CONDITION FLOOR. Round 22: the floor is the
+// definition-independent half — it is what still fails when someone deletes an
+// opener from CONDITION_OPENERS — and round 20 grew the definition without
+// growing it, so deleting `once` left the whole suite green.
+//
+// Asserting it beats remembering it, and this file has the precedent: round 17
+// stopped remembering to add a compound's bare head and asserted redundancy
+// instead. The same move, one list over. A floor kept in step by attention is
+// a floor that lapses in the round that most needs it — which is exactly what
+// happened.
+for (const opener of CONDITION_OPENERS) {
+  // Everything before the first `(` is the word; the rest is a lookahead. A
+  // first version tried to strip the lookahead with `\(\?[!=][^)]*\)` and
+  // broke on `provided`, whose lookahead contains a nested group — so the
+  // stripped "word" kept a stray `)` and the RegExp constructor threw. Caught
+  // by RUNNING it: `node --check` parses this file happily, because a bad
+  // pattern is a runtime error, which is the note this PR's sibling earned at
+  // its round 9.
+  const bare = opener.split('(')[0];
+  const rx = new RegExp(`\\b${bare}\\b`, 'i');
+  if (!CONTINUATION_FLOOR.condition.some((c) => rx.test(c))) {
+    console.error(`FAIL: the condition floor has no entry using the opener "${bare}", so deleting it from CONDITION_OPENERS would go unnoticed — which is what the floor exists to catch. Add one.`);
+    console.error('check-claims: FAIL');
+    process.exit(1);
+  }
+}
+
 const CONTINUATION_REQUIRED = MANIFEST_DOC.continuationRequired;
 if (!Array.isArray(CONTINUATION_REQUIRED)) {
   console.error('FAIL: the manifest declares no "continuationRequired" list — without it a claim leaves the derived continuation suite by deleting one field, silently.');
@@ -571,6 +628,31 @@ let lastCut = 0;
 return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
   const keep = () => m;
   const cut = () => { lastCut = off + m.length; return stop + SENTENCE_MARK + ws; };
+  // BRACKET SCOPE IS COMPUTED BEFORE DISPATCHING ON THE STOP CHARACTER. Round
+  // 22: the test lived inside the `.` branch, so `(really? Ask them)` cut a
+  // boundary inside the bracket on the question mark and hid the preposed
+  // condition. `?` and `!` end sentences too, and a bracket does not care which
+  // of the three is inside it — the suppression belongs to all of them or it is
+  // not about brackets at all.
+  //
+  // TYPE-AWARE, and a MISMATCHED CLOSE FAILS CLOSED. A shared counter let `]`
+  // close `(`, so `(see setup]` netted to zero and marked a stop inside a live
+  // parenthesis. A close of the wrong type is not evidence the bracket ended;
+  // it is evidence the text is malformed, and malformed is precisely when the
+  // long reading is the safe one.
+  const before = str.slice(lastCut, off);
+  const stack = [];
+  let malformed = false;
+  for (const ch of before) {
+    if (ch === '(' || ch === '[') stack.push(ch);
+    else if (ch === ')' || ch === ']') {
+      const want = ch === ')' ? '(' : '[';
+      if (stack.length && stack[stack.length - 1] === want) stack.pop();
+      else malformed = true;   // unmatched, or closing the wrong type
+    }
+  }
+  if (stack.length > 0 || malformed) return keep();
+
   if (stop === '.') {
     // A CAPITALISED TOKEN BEFORE THE STOP IS AMBIGUOUS, so do not mark. Round
     // 20: `(contact Dept. Security)` marked a boundary and hid a preposed `If`,
@@ -586,40 +668,11 @@ return t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
     // CI. Marking makes it shorter, which is how a condition goes unseen.
     // Every other rule here is chosen the same way; this one just had to be
     // recognised as the same choice.
-    const before = str.slice(lastCut, off);
     const nextCh = str.slice(off + m.length).charAt(0);
     const prevTok = (/([A-Za-z0-9]+)$/.exec(before) || [, ''])[1];
     // (a) A SENTENCE CANNOT END INSIDE BRACKETS. Codex's repro was exactly
     // that — `(contact Dept. Security)` — and this rule needs no list at all.
-    // DEPTH, FLOORED AT ZERO — not a subtraction. A plain count of opens minus
-    // closes goes NEGATIVE on a stray `)`, and a negative running total masks a
-    // genuine open that follows it: `) ( a. b` nets to zero and marks a stop
-    // that is inside a bracket. Flooring at each close is what "am I inside
-    // something?" actually means, and an unmatched close is not a reason to
-    // believe I am outside one.
-    let opens = 0;
-    for (const ch of before) {
-      if (ch === '(' || ch === '[') opens++;
-      else if (ch === ')' || ch === ']') opens = Math.max(0, opens - 1);
-    }
-    // AN OPEN BRACKET IS INDETERMINATE SCOPE, so do not mark — whatever the
-    // rest of the line looks like. Round 20 tried to tell an inline aside from
-    // a structural bracket by asking whether the close came before the next
-    // stop, and round 21 walked through the fall-through twice: an UNBALANCED
-    // open, and a balanced aside holding a stop of its own. Both landed in
-    // `cut()` and put a boundary inside the bracket.
-    //
-    // The test was answering "is this aside short?" when the question is "do I
-    // know where this bracket ends?" — and where the answer is no, the only
-    // safe reading is the long one. A boundary I cannot justify is a boundary I
-    // must not insert.
-    //
-    // This costs the structural case round 20 added the test to protect: a
-    // parenthesis spanning several sentences now extends the scope through all
-    // of them. CLAUDE.md's branch policy was written that way and has been
-    // restructured instead — a parenthesis running across four sentences was
-    // hard to read before any guard cared about it.
-    if (opens > 0) return keep();    // (b) TITLE-CASE AND SHORT, FOLLOWED BY A CAPITAL, is the shape an
+    // (b) TITLE-CASE AND SHORT, FOLLOWED BY A CAPITAL, is the shape an
     // abbreviation before a proper noun takes: `Dept. Security`, `Dr. Smith`,
     // `Inc. Ltd`. It is also the shape of a sentence ending in a short
     // capitalised word, and nothing local separates them — so take the

@@ -197,8 +197,11 @@ A directive repo must pass its own CI before it can be trusted downstream.
   arrive as a 👍 reaction **or as an inline review-thread reply**, and the
   monitor watches neither event — so check the PR's comments AND its review
   threads for a verdict naming the head (an inline reply never enters the comment
-  list), then take the label off by hand with a rationale (`git.md` → *PR
-  Lifecycle*). A stuck label is not evidence of open concerns.
+  list). If the verdict is clean but the label persists, **request another review
+  pass — never remove the label by hand** (`global.md` → *"Proceed"*, item 4): a
+  clean COMMENT verdict naming the head clears it automatically, observed
+  2026-08-27 on #333 at `63bed51`. A stuck label is not evidence of open
+  concerns, and removing it is not evidence of their absence.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
   deploy is live and on a problem opens/updates a deduplicated
   `pages-deploy-failure` issue (success → job summary only). The zero-model

@@ -730,6 +730,48 @@ which is KEEP GOING.
 - When the declared list drains: report done and stop. A standing authorization
   expires with its list.
 
+## "Proceed" — the Standing Directive (owner ruling, 2026-08-27)
+When the owner says **proceed**, it means all seven of these, and none of it
+needs restating.
+
+1. **Complete as much of the task as possible, autonomously.** Do not come back
+   between steps.
+2. **Do not involve the owner unless the decision is genuinely important and
+   critical.** A decision he has already made is not a new decision — executing
+   it is not an escalation.
+3. **Pipeline the work.** Recruit agents and run independent work in parallel
+   rather than idling, especially while waiting on CI, a deploy, or a review
+   (→ *Pipelined Execution*).
+4. **Auto-merge.** Take the PR through to merged, including clearing a
+   `codex-flagged` blocker by **requesting the review pass** — never by removing
+   the label.
+5. **Keep going until the whole task is done**, then verify the deploy and
+   `qa-live`.
+6. **The Escalation Rules still bind.** They cover acts whose cost a later
+   decision cannot recover: dropping or deleting data (schema and functions are
+   reversible; rows are PITR-only), force-push and destructive git ops, secrets,
+   workflow triggers. Proceed removes the need to ask about **steps** — not the
+   need to ask before destroying something that cannot be put back.
+7. **Never invent an answer to an open question.** Where a decision is genuinely
+   unresolved rather than merely unstated, do every part that does not depend on
+   it, then ask that one question. Guessing under a mandate to be autonomous is
+   how a wrong assumption ships silently.
+
+**Relation to *Standing Authorization*.** That section governs a declared list of
+tasks; this is the same posture invoked by a single word, plus the merge and
+verify obligations in 4 and 5. Both leave the stop gates untouched — 6 restates
+that because "proceed" is the phrasing most likely to be read as overriding them.
+
+**Item 4 is a rule about EVIDENCE, not etiquette.** Removing the label asserts
+that the concern is resolved; requesting the pass makes Codex say so, in the
+comment form `codex-monitor` watches, naming the current head — and the monitor
+then clears the label itself. Observed 2026-08-27 on #333: a clean comment
+verdict at `63bed51` cleared the label with no manual step. Where a clean verdict
+arrives as an inline reply or a reaction — forms the monitor does not watch —
+**request another pass rather than removing the label by hand**, so the clearing
+is something the reviewer did and not something the author claimed
+(→ `git.md` → *PR Lifecycle*, the reaction ladder).
+
 ## Session Start
 At the start of every session:
 1. Read this file fully and fetch all imported directive URLs.

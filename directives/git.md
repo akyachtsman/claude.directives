@@ -171,8 +171,12 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     explicitly dismissed on its thread. A response ends *pending* — it is the
     start of the check, not the end of it.
     ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
-    does not watch that event — so expect to remove `codex-flagged` by hand with
-    a rationale in that case.
+    does not watch that event. **Request another review pass rather than removing
+    `codex-flagged` by hand** (→ `global.md` → *"Proceed" — the Standing
+    Directive*, item 4). A clean verdict in the COMMENT form names the head and
+    the monitor clears the label itself; observed 2026-08-27 on #333 at
+    `63bed51`. Removing the label asserts the concern is resolved, which is the
+    author claiming what the reviewer should say.
   - **Check the author — it validates the SOURCE, not the outcome.** Wording and
     a current SHA are both forgeable, so a response that is not the Codex bot's
     own cannot clear the gate. Authorship is necessary and never sufficient: a

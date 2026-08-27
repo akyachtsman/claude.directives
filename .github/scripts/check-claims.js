@@ -121,13 +121,26 @@ const NEGATORS = MANIFEST_DOC.negators;
 // is. A first draft keyed on the following character and read "SHA. ⚠️ A clean
 // rerun" as one sentence, because an emoji is not a capital -- it dragged two
 // carriers' scopes back into the previous sentence and turned them red.
-const SENTENCE_CHAR = '(?:[^.]|\\.(?!\\s|$)|(?<=\\b[A-Za-z])\\.)';
+const SENTENCE_CHAR = '[^\\u0001]';
+// A claim that requires its assertion to END a sentence looks for the stop and
+// then whitespace-or-EOF. The mark now sits between the two, so {{EOS}} is that
+// alternation written once — the pattern says "a stop that ends a sentence"
+// rather than restating where the reader happens to put its bookkeeping.
+const END_OF_SENTENCE = '(?:\\u0001|\\s|$)';
+// And the other end. A claim whose own sentence legitimately OPENS with a
+// conditional word cannot use an "no opener earlier in this sentence"
+// lookbehind — the guard would reject the carrier it is there to certify.
+// `no-label-no-escalation` is exactly that: every carrier states it as "Where
+// no codex-flagged label is present, …", and `where` is an opener. What that
+// claim needs is not "no opener before me" but "nothing before me at all", so
+// a gate preposed in front of its own scoping clause has nowhere to sit.
+const START_OF_SENTENCE = '(?<=(?:^|\\u0001)\\s{0,4})';
 // It is ONE definition on purpose. `[^.]` appeared in the lookbehind, in the
 // trailing lookahead, and in both tempered gaps -- four copies of one idea, in
 // a file whose recurring defect is a check that exists on one path and not its
 // twin. Fixing the lookbehind alone would have left the lookahead reading a
 // different sentence than the lookbehind, which is that defect exactly.
-const expand = (src) => src.replace(/\{\{S\}\}/g, () => SENTENCE_CHAR).replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
+const expand = (src) => src.replace(/\{\{SOS\}\}/g, () => START_OF_SENTENCE).replace(/\{\{CLAUSE\}\}/g, () => CLAUSE).replace(/\{\{EOS\}\}/g, () => END_OF_SENTENCE).replace(/\{\{S\}\}/g, () => SENTENCE_CHAR).replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
   if (typeof NEGATORS !== 'string' || NEGATORS === '') {
     console.error('FAIL: a pattern uses {{NEG}} but the manifest declares no "negators" string.');
     process.exit(1);
@@ -244,6 +257,33 @@ for (const opener of CONDITION_OPENERS) {
   }
 }
 const COND = [...CONDITION_OPENERS].sort((a, b) => b.length - a.length).join('|');
+
+// ── THE OPENERS THAT ATTACH A CLAUSE AT THE HEAD, expanded into {{CLAUSE}} ──
+// Round 19(b). Round 18 built constructed probe positions and then exempted the
+// whole `clause` kind from the preposed one, on the reasoning that a clause
+// continuation "takes a statement back by CONTINUING it — a tail phenomenon by
+// definition". Codex preposed `Only after owner approval,` to the no-label
+// carrier and it passed, reinstating the owner gate the claim exists to
+// exclude. The reasoning was wrong: a clause continuation names a GATE, and a
+// gate reads the same whichever end of the sentence it sits at.
+//
+// Note what the exemption cost. It was not an oversight — I argued for it, in a
+// comment, one round ago. "Constructing positions for those would be this file
+// inventing an attack shape and then failing carriers for not defending it."
+// The attack shape was not invented; it was one round away.
+const CLAUSE_OPENERS = ['after', 'once', 'however', 'although', 'subject to',
+  'pending', 'following', 'yet'];
+for (const opener of CLAUSE_OPENERS) {
+  const clash = CONDITION_OPENERS.find((o) => o === opener);
+  if (clash) {
+    console.error(`FAIL: "${opener}" is in both CONDITION_OPENERS and CLAUSE_OPENERS — two lists holding one word is how they drift apart, which is this file's oldest defect.`);
+    console.error('check-claims: FAIL');
+    process.exit(1);
+  }
+}
+const CLAUSE = [...CLAUSE_OPENERS].sort((a, b) => b.length - a.length).join('|');
+// Any opener at all, for the places that do not care which kind attached.
+const ANY_OPENER = new RegExp(`^(?:${COND}|${CLAUSE})\\b`, 'i');
 
 const CONTINUATION_FLOOR = {
   clause: [
@@ -362,12 +402,15 @@ for (const c of MANIFEST_DOC.claims) {
 // inventing an attack shape and then failing carriers for not defending it.
 const lowerFirst = (t) => t.replace(/^[A-Z](?![A-Z])/, (ch) => ch.toLowerCase());
 function constructedPositions(kind, sentence) {
-  if (kind !== 'condition') return [];
+  if (kind !== 'condition' && kind !== 'clause') return [];
   const body = sentence.replace(/\.\s*$/, '');
-  return [
-    ['constructed:preposed', `%s, ${lowerFirst(body)}.`],
-    ['constructed:appended', `${body}%s.`],
-  ];
+  const positions = [['constructed:preposed', `%s, ${lowerFirst(body)}.`]];
+  // The APPENDED position stays `condition`-only. A clause claim already
+  // declares its own tail probes at the exact terminators its assertion ends
+  // on — that is what rounds 10 to 12 were about — and a constructed one built
+  // by stripping the final stop lands in the same place with less precision.
+  if (kind === 'condition') positions.push(['constructed:appended', `${body}%s.`]);
+  return positions;
 }
 // ALL POSITIONS OF ONE CONFIG DESCRIBE ONE SENTENCE. Removing the placeholder
 // must leave the same text every time — that is what makes "the same assertion,
@@ -394,7 +437,14 @@ function baselineSentence(id, shapes, whose) {
   return seen.size === 1 ? [...seen.keys()][0] : null;
 }
 function runContinuationProbes(id, rx, prep, kind, position, shape, whose) {
-  const positive = prep(shape.replace('%s', ''));
+  // The empty-continuation form of a PREPOSED shape is the sentence itself —
+  // the joining comma belongs to the scaffolding, not to the claim. Without
+  // this strip the positive baseline reads ", no codex-flagged label is
+  // present…", which a sentence-start anchor correctly refuses, and the
+  // position is reported as unusable when it is the only one that works. Same
+  // reduction `baselineSentence` uses, so the two agree about what a shape's
+  // sentence is.
+  const positive = prep(shape.replace('%s', '').replace(/^[\s,;:—–-]+/, ''));
   if (!rx.test(positive)) {
     // Without this the whole derived set is rejected for the WRONG reason and
     // proves nothing — round 11 found exactly that in hand-written probes, and
@@ -403,7 +453,24 @@ function runContinuationProbes(id, rx, prep, kind, position, shape, whose) {
     fail(`${id}: continuationProbe.shapes.${position} does not match the ${whose} with an EMPTY continuation, so every derived probe would be rejected for the wrong reason.\n      shape: ${JSON.stringify(shape)}`);
     return;
   }
-  for (const cont of [...(CONTINUATIONS[kind] || []), ...(CONTINUATION_FLOOR[kind] || [])]) {
+  let conts = [...(CONTINUATIONS[kind] || []), ...(CONTINUATION_FLOOR[kind] || [])];
+  if (position === 'constructed:preposed') {
+    // ONLY THE ONES THAT OPEN WITH AN OPENER. A continuation like
+    // "; the owner must still be told" reverses a claim from the tail by
+    // continuing the sentence; preposed, it is not a gate attached to the
+    // assertion but a separate clause in front of it, and demanding the pattern
+    // reject it would mean banning arbitrary prose before the claim. What a
+    // preposed position guards is a gate, and a gate announces itself.
+    conts = conts.filter((c) => ANY_OPENER.test(c.replace(/^[\s,;:—–-]+/, '')));
+    if (conts.length === 0) {
+      // A floor for the filter, not for the list. If every continuation of this
+      // kind is opener-less, the position runs zero probes and reports success
+      // — the vacuous pass every rule in this file exists to prevent.
+      fail(`${id}: the constructed preposed position for the ${whose} has NO continuation that opens with a recognised opener, so it would test nothing. Add one to the ${kind} floor, or the position is decorative.`);
+      return;
+    }
+  }
+  for (const cont of conts) {
     const probe = shape.replace('%s', cont);
     if (rx.test(prep(probe))) {
       fail(`${id}: continuation "${cont}" is NOT rejected by the ${whose} at position "${position}": ${JSON.stringify(probe)}\n      The statement can be taken back and this claim still reports coverage.`);
@@ -444,6 +511,53 @@ const normalize = (s) => s
   .replace(/^[ \t]*(?:#+|\/\/|--)[ \t]?/gm, '')
   .replace(/[*_`]/g, '')
   .replace(/\s+/g, ' ');
+// ── SENTENCE BOUNDARIES ARE DECIDED BY THE READER, NOT BY THE PATTERN ───────
+// Round 19. The {{S}} fix one round ago moved "still inside this sentence" into
+// one definition and then got the definition wrong: it recognised only a period
+// after a LONE letter as an abbreviation, so `etc.`, `Dr.` and `Inc.` still
+// ended the scope and still hid a preposed condition. Widening the lone-letter
+// rule to a longer list of abbreviations would be the same mistake with more
+// entries — round 18(c) is on this same PR, where an opener list assembled from
+// the cases I happened to think of was missing `until`.
+//
+// The rule that is not a list: a period ends a sentence when what FOLLOWS it
+// starts one. A lowercase word does not. That could not be written inside the
+// patterns — they compile with `i`, where `[a-z]` folds and cannot say
+// "lowercase" — so it is written HERE, in the reader, where JS is
+// case-sensitive, and the patterns are handed text with the boundaries already
+// marked. {{S}} then only has to avoid one sentinel character.
+//
+// The abbreviation set below is therefore NOT the mechanism; it is a narrow
+// backstop for the rarer case of an abbreviation followed by a capital
+// (`Dr. Smith`), where the lowercase rule cannot help. A name missing from it
+// shortens a scope; it does not restore the hole Codex found.
+const SENTENCE_MARK = '\u0001';
+const ABBREV = new Set(['etc', 'vs', 'cf', 'al', 'eg', 'ie', 'approx', 'fig',
+  'Dr', 'Mr', 'Mrs', 'Ms', 'St', 'Inc', 'Ltd', 'Jr', 'Sr', 'Prof', 'viz',
+  'esp', 'incl', 'ca', 'no', 'pp']);
+const markSentences = (t) => t.replace(/([.!?])(\s+)(?![a-z])/g, (m, stop, ws, off, str) => {
+  if (stop === '.') {
+    // THE WHOLE TOKEN, not a suffix of it. A first draft tested the trailing
+    // DIGITS of the preceding text, so `observed working at b64ff09.` ended in
+    // "09", was read as a list marker, and went unmarked — which merged that
+    // sentence with the next and dragged a `when` into the scope of a claim two
+    // sentences later. One carrier went red and the cause was four lines away
+    // from anything to do with it.
+    const tok = (/([A-Za-z0-9]+)$/.exec(str.slice(0, off)) || [, ''])[1];
+    // A lone letter is what an abbreviation looks like from behind: `e.`, `g.`,
+    // `i.`. This is the round-18 rule, kept as the first line of defence.
+    if (tok.length === 1 && /[A-Za-z]/.test(tok)) return m;
+    if (ABBREV.has(tok)) return m;
+    // A NUMBERED LIST MARKER IS NOT A SENTENCE STOP. `3.` at the head of a list
+    // item looked exactly like one, and marking it broke the raw structural
+    // claim, whose whole job is to notice a fourth list item being appended:
+    // its tempered token looks for a marker followed by a space, and a mark
+    // inserted between the `.` and that space made the marker unrecognisable.
+    // The guard that watches for list drift must be able to see a list.
+    if (/^\d+$/.test(tok)) return m;
+  }
+  return stop + SENTENCE_MARK + ws;
+});
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 let failed = false;
@@ -579,7 +693,11 @@ for (const claim of claims) {
     fail(`${id}: "raw" needs "pattern" — a "phrase" is escaped from its NORMALIZED form, so a raw phrase claim would compare a normalized needle against un-normalized text and never match`);
     continue;
   }
-  const prep = claim.raw === true ? (t) => t : normalize;
+  // BOTH READERS MARK SENTENCES. A raw claim skips normalize() and would
+  // otherwise see no boundaries at all, which is the one-path-and-not-its-twin
+  // defect this PR has produced eight times — and the {{S}} in a raw claim's
+  // pattern would silently match across every stop in the file.
+  const prep = claim.raw === true ? markSentences : (t) => markSentences(normalize(t));
 
   let re;
   try {

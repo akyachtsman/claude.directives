@@ -402,8 +402,20 @@ for (const opener of CONDITION_OPENERS) {
   // its round 9.
   const bare = opener.split('(')[0];
   const rx = new RegExp(`\\b${bare}\\b`, 'i');
-  if (!CONTINUATION_FLOOR.condition.some((c) => rx.test(c))) {
-    console.error(`FAIL: the condition floor has no entry using the opener "${bare}", so deleting it from CONDITION_OPENERS would go unnoticed — which is what the floor exists to catch. Add one.`);
+  // AND THE ENTRY MUST EXERCISE THIS OPENER ALONE. An entry holding two of them
+  // — `except where the owner objects` covers both `except` and `where` —
+  // satisfies a presence check for each while testing neither on its own: with
+  // one opener deleted the OTHER still rejects the entry, and the floor reports
+  // success about a word it is no longer checking. That is the shared-observable
+  // defect this whole PR is about, and it would have walked straight into the
+  // assertion written to prevent it. Self-found by asking the question rather
+  // than posting it.
+  const soleUse = (c) => rx.test(c) && !CONDITION_OPENERS.some((o) => {
+    const w = o.split('(')[0];
+    return w !== bare && new RegExp(`\\b${w}\\b`, 'i').test(c);
+  });
+  if (!CONTINUATION_FLOOR.condition.some(soleUse)) {
+    console.error(`FAIL: the condition floor has no entry using the opener "${bare}" ON ITS OWN, so deleting it from CONDITION_OPENERS would go unnoticed — an entry that also holds another opener is rejected by that one instead, and the floor reports success about a word it has stopped checking. Add a sole-use entry.`);
     console.error('check-claims: FAIL');
     process.exit(1);
   }

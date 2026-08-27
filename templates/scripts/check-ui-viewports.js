@@ -44,6 +44,9 @@
 //      can exclude every test; built-ins are read from the installed Playwright
 //  11  that built-in reporter list could not be read (CANNOT CHECK) — the
 //      discriminator for 10 is unavailable, so no reporter can be vouched for
+//  12  a band is DECLARED at the right width but only by projects carrying
+//      selection keys (CANNOT CHECK) — distinct from 1, which is a band no
+//      project declares at all
 // node_modules is environment-provided, not repo-guaranteed: in CI it exists
 // because the ui-suite composite ran `npm install` first. Its absence is 4 — a
 // loud "cannot check", never a pass.
@@ -182,6 +185,12 @@ console.log(`config:    ${configPath}`);
   // in step. configPath is already absolute, so nothing below depends on cwd.
   try {
     process.chdir(dirname(configPath));
+    // process.chdir() does NOT update process.env.PWD — Node leaves it at the
+    // value the shell exported. A config reading PWD would still see the repo
+    // root while cwd said otherwise, so round 9's fix moved ONE of the two
+    // cwd-derived inputs. Codex, round 10. Verified: after chdir, cwd changed
+    // and process.env.PWD had not.
+    process.env.PWD = process.cwd();
   } catch (e) {
     die(5, [
       'CANNOT CHECK: cannot enter the config\'s directory to evaluate it.',
@@ -196,9 +205,29 @@ console.log(`config:    ${configPath}`);
     const mod = await import(pathToFileURL(configPath).href);
     cfg = mod.default !== undefined ? mod.default : mod;
   } catch (e) {
+    // The old wording here said "or keep a playwright.config.js", which is wrong
+    // for the case Codex reported in round 10: a config that IS JavaScript but
+    // imports a TypeScript helper. Node rejects the whole module graph, so the
+    // file's own extension is not the deciding factor and that advice sends the
+    // reader nowhere. Playwright's runner accepts such a config, so this is a
+    // refusal on a config the subsequent run would have handled.
+    //
+    // Deliberately NOT fixed by falling back to Playwright's own config loader,
+    // which does load it. Measured 2026-08-27: loadConfigFromFile NORMALISES
+    // defaults onto its output — the shipped kit declares no `grep` and the
+    // loader reports `grep: /.*/`; it declares no project `testMatch` and the
+    // loader reports the default glob. It cannot distinguish DECLARED from
+    // DEFAULTED, and every refusal in this gate is a statement about what the
+    // config declares. Loading through it would read every config as carrying a
+    // root filter on every project — exit 9 for the entire fleet. Recorded on
+    // #335, because it constrains the rewrite too.
     const hint = e && e.code === 'ERR_UNKNOWN_FILE_EXTENSION'
-      ? ['  This Node cannot import a TypeScript config. Run this step on Node >= 22.18',
-        '  (type stripping is on by default there), or keep a playwright.config.js.']
+      ? ['  This Node cannot import the config\'s module graph — note that the config',
+        '  itself may be JavaScript and still import a TypeScript file, which is enough.',
+        '  Playwright\'s own runner WOULD load it, so this is a refusal on a config the',
+        '  run accepts. Either raise this step to Node >= 22.18 (type stripping is on by',
+        '  default there), or keep the config\'s imports to JavaScript.',
+        '  The ui-suite composite pins Node 20; see its header note.']
       : [];
     die(5, [
       'CANNOT CHECK: importing the config threw.',
@@ -217,7 +246,9 @@ console.log(`config:    ${configPath}`);
   const projects = Array.isArray(cfg.projects) ? cfg.projects : null;
   if (projects === null) {
     die(6, ['FAIL: the config declares no `projects` array.',
-      '  Every test then runs in ONE implicit project, so three classes cannot be covered.',
+      '  This gate reads per-project viewports to decide which bands are DECLARED,',
+      '  so with no projects there is nothing here that declares a band. It makes',
+      '  no claim about what such a config would run.',
       '  test.md -> UI coverage gates, fifth gate.']);
   }
   if (projects.length === 0) {
@@ -360,6 +391,8 @@ console.log(`config:    ${configPath}`);
   // the UI suite — round 2 of #280 found exactly that. Such a project is printed
   // with its width but does NOT count toward a band: the conservative direction is
   // a false alarm naming the project, never a false pass.
+  const CONFIG_DIR = dirname(configPath);
+  const resolveDir = d => resolve(CONFIG_DIR, String(d));
   const RESTRICTORS = ['testMatch', 'testIgnore', 'grep', 'grepInvert'];
   const cover = { laptop: [], tablet: [], phone: [] };
   const rows = [];
@@ -369,7 +402,17 @@ console.log(`config:    ${configPath}`);
       : cfg.use && cfg.use.viewport !== undefined ? cfg.use.viewport
         : DEFAULT_VIEWPORT;
     const restricted = RESTRICTORS.filter(k => p && p[k] !== undefined);
-    if (p && p.testDir !== undefined && p.testDir !== cfg.testDir) restricted.push('testDir');
+    // RESOLVED paths, not spellings. A project redundantly declaring the root's
+    // own directory as 'tests' against a root './tests' is not restricted, and
+    // the string test called it so — reported as a missing band on a config
+    // Playwright runs fine. Round 3 made exactly this fix for the ROOT testDir
+    // and it never reached this separate per-project comparison (Codex, round
+    // 10); the same reasoning applies unchanged, because normalising a path is
+    // decidable where inferring which spec is the suite is not.
+    if (p && p.testDir !== undefined
+        && resolveDir(p.testDir) !== resolveDir(cfg.testDir === undefined ? '.' : cfg.testDir)) {
+      restricted.push('testDir');
+    }
     if (vp === null) {
       rows.push({ name, w: 'null', band: 'UNCLASSIFIABLE (viewport: null — no fixed viewport)', restricted });
       continue;
@@ -387,16 +430,51 @@ console.log(`config:    ${configPath}`);
     console.log(`  ${String(r.name).padEnd(18)} ${String(r.w).padEnd(12)} ${r.band}${tail}`);
   }
 
-  const missing = ['laptop', 'tablet', 'phone'].filter(b => cover[b].length === 0);
-  if (missing.length) {
-    for (const b of missing) console.error(`FAIL: no unrestricted project covers ${b} width.`);
+  // TWO DIFFERENT VERDICTS, because they are different facts. A band with no
+  // project in it at all is UNDECLARED — that is a FAIL this gate can prove from
+  // the widths alone. A band whose only projects carry selection keys is
+  // DECLARED BUT UNATTRIBUTABLE: the projects exist at the right widths and this
+  // gate cannot tell whether their filters exclude the suite.
+  //
+  // They were one verdict until round 10, and calling the second "no project
+  // covers laptop" states something false — a laptop project is right there.
+  // Codex reproduced the cost: a laptop project carrying `testIgnore: []`, which
+  // excludes nothing, reported a missing band while Playwright listed the spec
+  // for all three projects.
+  //
+  // What is NOT done here, deliberately: exempting the no-op. That needs the
+  // question "does this value actually narrow?", which rounds 1-6 answered wrong
+  // six times across three spellings of "empty" and two of "matches everything".
+  // The refusal stays; only the false claim goes. See #335.
+  const bandProjects = b => rows.filter(r => r.band === b);
+  const undeclared = ['laptop', 'tablet', 'phone'].filter(b => bandProjects(b).length === 0);
+  const unattributable = ['laptop', 'tablet', 'phone']
+    .filter(b => cover[b].length === 0 && bandProjects(b).length > 0);
+  if (undeclared.length) {
+    for (const b of undeclared) console.error(`FAIL: no project declares a ${b} viewport.`);
     console.error('  global.md requires laptop, tablet AND phone. This config is the only place');
     console.error('  the UI suite gets its widths, and exactly one test sets its own (S4, at 390),');
-    console.error('  so every other scenario simply never executes at the missing width.');
+    console.error('  so no scenario is ever rendered at the missing width.');
     console.error('  test.md -> UI coverage gates, fifth gate.');
     verdict = true;
     console.error('check-ui-viewports: FAIL (code 1)');
     process.exit(1);
+  }
+  if (unattributable.length) {
+    for (const b of unattributable) {
+      const who = bandProjects(b).map(r => `${r.name} (${r.restricted.join(', ')})`).join('; ');
+      console.error(`FAIL: ${b} is declared only by projects carrying selection keys — CANNOT CHECK.`);
+      console.error(`  ${who}`);
+    }
+    console.error('  Those projects are at the right width. This gate reads a config and cannot');
+    console.error('  tell whether their selection keys exclude the UI suite, so it will not');
+    console.error('  certify the band. It does NOT claim they do exclude it — if the key is a');
+    console.error('  no-op, this is a conservative refusal, and that is the deliberate direction.');
+    console.error('  Clear it by leaving at least one project per band without selection keys.');
+    console.error('  test.md -> UI coverage gates, fifth gate.');
+    verdict = true;
+    console.error('check-ui-viewports: FAIL (code 12)');
+    process.exit(12);
   }
   // SCOPE THE SUCCESS CLAIM. "OK" here means the config DECLARES an unrestricted
   // project in each band — not that any scenario will execute at those widths.

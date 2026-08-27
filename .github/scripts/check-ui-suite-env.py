@@ -15,9 +15,14 @@ hand-maintained coupling held together by a comment, which is the enumerate-vs-
 derive failure #333 spent seven rounds on. This script derives it instead: add a
 variable to the run step and forget the check step, and CI says so.
 
-Keys named in SETUP_ONLY are step plumbing rather than config inputs -- they
-address the workspace, not the config's behaviour -- so they are exempt in the
-direction that cannot hide a filter (the check step may carry them alone).
+EXACT PARITY, no exemptions. An earlier version exempted "step plumbing" names
+(TESTS_DIR, SERVER_ROOT) in the direction where the CHECK step carried a variable
+the run step lacked, on the argument that this direction could not hide a filter.
+That argument was wrong, and Codex showed how (#333 round 10): a config can
+declare a filter only when a variable is ABSENT. The check step had TESTS_DIR and
+saw no filter; the run step lacked it and applied one. An extra variable on
+either side is a divergence, so both directions are now checked and the exemption
+list is gone -- the composite gives both steps the same env instead.
 
 NOT exported: .github/ is outside every EXPORTS.json category path.
 
@@ -29,7 +34,6 @@ import yaml
 ACTION = "templates/actions/ui-suite/action.yml"
 CHECK_STEP = "Check three viewport classes are declared"
 RUN_STEP = "Run Playwright tests"
-SETUP_ONLY = {"TESTS_DIR", "SERVER_ROOT"}
 
 
 def env_of(steps, name):
@@ -64,10 +68,10 @@ def main():
         problems.append(f'no step named "{RUN_STEP}" in {ACTION}')
 
     if check_found and run_found:
-        expected = {k: v for k, v in run_env.items() if k not in SETUP_ONLY}
-        missing = sorted(k for k in expected if k not in check_env)
+        missing = sorted(k for k in run_env if k not in check_env)
+        extra = sorted(k for k in check_env if k not in run_env)
         differing = sorted(
-            k for k in expected if k in check_env and check_env[k] != expected[k]
+            k for k in run_env if k in check_env and check_env[k] != run_env[k]
         )
         if missing:
             problems.append(
@@ -75,6 +79,14 @@ def main():
                 + ", ".join(missing)
                 + "\n    The check IMPORTS the config, so a selection key conditional on one"
                 + "\n    of these is invisible to it and active in the run (#333, round 8)."
+            )
+        if extra:
+            problems.append(
+                "the viewport check step carries environment the run step lacks: "
+                + ", ".join(extra)
+                + "\n    This direction hides a filter too: a config can declare one only when"
+                + "\n    a variable is ABSENT, so the check sees none and the run applies it"
+                + "\n    (#333, round 10). Give both steps the same env, or neither."
             )
         if differing:
             problems.append(
@@ -94,10 +106,10 @@ def main():
             print(f"  - {problem}")
         return 1
 
-    shared = sorted(k for k in run_env if k not in SETUP_ONLY)
+    shared = sorted(run_env)
     print(
-        "check-ui-suite-env: OK -- viewport check sees the run step's environment "
-        f"({', '.join(shared) if shared else 'no config inputs'})"
+        "check-ui-suite-env: OK -- both config evaluations get an identical environment "
+        f"({', '.join(shared) if shared else 'empty'})"
     )
     return 0
 

@@ -227,6 +227,15 @@ runs:
       shell: bash
       continue-on-error: ${{ inputs.advisory-run == 'true' }}
       env:
+        # TESTS_DIR is not used by the command below. It is here so that the two
+        # steps that EVALUATE THE CONFIG — this one and the viewport check above —
+        # expose an identical environment to it. A variable present for one and
+        # absent for the other lets a config branch on its absence: Codex
+        # reproduced a root filter declared only when TESTS_DIR was unset, which
+        # the check (which had it) never saw and the run (which did not) applied.
+        # Exact parity is what check-ui-suite-env.py now enforces; it replaces a
+        # hand-written exemption list whose safety argument was wrong.
+        TESTS_DIR: ${{ inputs.tests-dir }}
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}

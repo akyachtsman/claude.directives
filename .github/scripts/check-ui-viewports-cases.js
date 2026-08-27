@@ -65,7 +65,7 @@ const CASES = [
     { 'playwright.config.js': withProjects(
       "    { name: 'mobile-chrome', use: { ...devices['Pixel 5'] } },\n"
       + "    { name: 'iphone', use: { ...devices['iPhone 12'] } },\n") },
-    1, 'no unrestricted project covers laptop'],
+    1, 'no project declares a laptop viewport'],
 
   // The spread runs AFTER the literal, so this project is 393 wide however it is
   // named. A regex reading `width: 1440` calls it a laptop; this pins that the
@@ -74,11 +74,11 @@ const CASES = [
     { 'playwright.config.js': withProjects(
       '    { name: \'desktop\', use: { viewport: { width: 1440, height: 900 }, ...devices["Pixel 5"] } },\n'
       + TABLET + PHONE) },
-    1, 'no unrestricted project covers laptop'],
+    1, 'no project declares a laptop viewport'],
 
   ['laptop project commented out',
     { 'playwright.config.js': withProjects(`  //${LAPTOP.trimEnd()}\n` + TABLET + PHONE) },
-    1, 'no unrestricted project covers laptop'],
+    1, 'no project declares a laptop viewport'],
 
   // OBSERVED 2026-08-26, on the two fixtures below: with a root-level key set and
   // all three bands correctly declared, this gate printed "check-ui-viewports: OK"
@@ -287,11 +287,35 @@ const CASES = [
         + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
-  ['laptop project carries testMatch',
+  // Codex round 10: DECLARED-BUT-RESTRICTED is exit 12, not exit 1. The laptop
+  // project is right there at 1440 — saying "no project covers laptop" states
+  // something false. Exit 1 is reserved for a band no project declares at all
+  // (the two-phone-profiles case above), which this gate CAN prove from widths.
+  //
+  // The second case is the one Codex reproduced: `testIgnore: []` excludes
+  // nothing, and Playwright listed the spec for all three projects while the gate
+  // reported a missing band. It is still refused — exempting it needs "does this
+  // value narrow?", answered wrong six times in rounds 1-6 — but it is refused
+  // under a verdict that does not misdescribe the config.
+  ['laptop project carries testMatch — declared but unattributable',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"
       + TABLET + PHONE) },
-    1, 'RESTRICTED by testMatch'],
+    12, 'declared only by projects carrying selection keys'],
+
+  ['laptop project carries a no-op testIgnore: [] — still refused, but not called missing',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'desktop', testIgnore: [], use: { viewport: { width: 1440, height: 900 } } },\n"
+      + TABLET + PHONE) },
+    12, 'declared only by projects carrying selection keys'],
+
+  // The no-false-alarm twin for the round-10 path fix: a project redundantly
+  // naming the root's own directory, spelled differently, is NOT restricted.
+  ['project testDir spelled differently but resolving to the root\'s — must NOT trip',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'desktop', testDir: 'tests', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK'],
 
   ['laptop project declares viewport: null',
     { 'playwright.config.js': withProjects(

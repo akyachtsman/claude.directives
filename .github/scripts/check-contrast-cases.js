@@ -148,6 +148,34 @@ const CASES = [
   ['a commented-out hex must not overwrite the live token',
     { 'styles/tokens.css': plus('/* --color-text-secondary: #C9CDD4; */\n') }, 0, OK9],
 
+  // ── Strings are not declarations ──────────────────────────────────────────
+  // Codex, #337: appending a rule whose `content` is a string containing
+  // declaration-like text made the scanner record a second `--color-accent` and
+  // reject a palette whose rendered accent never changed. Same family as the
+  // comment cases above — text that looks like a declaration somewhere CSS does
+  // not read one.
+  ['a declaration inside a CSS string must NOT fail (#337)',
+    { 'styles/tokens.css': plus('.example::before { content: "--color-accent: #0D47A1;"; }\n') }, 0, OK9],
+
+  ['the same in single quotes must NOT fail',
+    { 'styles/tokens.css': plus(".example::after { content: '--color-accent: #0D47A1;'; }\n") }, 0, OK9],
+
+  ['an escaped quote inside the string does not end it early',
+    { 'styles/tokens.css': plus('.e::before { content: "a\\" --color-accent: #0D47A1; b"; }\n') }, 0, OK9],
+
+  // The twin that makes the strip a strip and not a delete. A string used as a
+  // measured token's VALUE is still a second declaration of that token — CSS
+  // accepts any token stream for a custom property — so collapsing the string to
+  // "" has to leave the declaration standing.
+  ['a string VALUE for a measured token is still a second declaration',
+    { 'styles/tokens.css': plus(':root { --color-accent: "not a colour"; }\n') }, 1, DUP],
+
+  // Ordering: comments are stripped first, so a lone quote inside a comment must
+  // not open a string that swallows the real override after it.
+  ['a quote inside a comment does not swallow the override that follows',
+    { 'styles/tokens.css': plus('/* the " old accent */\n:root { --color-accent: rgb(255 255 255); }\n') },
+    1, DUP],
+
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },

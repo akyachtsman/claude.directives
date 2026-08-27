@@ -95,13 +95,26 @@ if (FILES.length === 0) {
 
 let exitCode = 0;
 for (const FILE of FILES) {
-// Comments are stripped BEFORE anything reads a declaration. CSS has no nested
-// comments, so this is exact rather than a heuristic. It matters in both
-// directions: a commented-out declaration used to overwrite the live one in `t`
-// silently (the last match won, and `/* --color-accent: #old; */` is a match),
-// and under the duplicate-declaration refusal below it would instead reject a
-// perfectly valid file for a line CSS never applies. Neither is a real finding.
-const css = readFileSync(FILE, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+// Comments and string CONTENTS are removed BEFORE anything reads a declaration,
+// in that order — a quote inside a comment must not open a string, and a comment
+// marker inside a string is not a comment. Neither carries a declaration CSS
+// applies, so text that merely LOOKS like one in either place is not a finding:
+//   * a commented-out declaration used to overwrite the live token in `t`
+//     silently (the last match won, and `/* --color-accent: #old; */` is a
+//     match), and under the duplicate refusal below would instead reject a
+//     valid file for a line CSS never applies;
+//   * `content: "--color-accent: #0D47A1;"` is a string, and reading it as a
+//     second declaration rejected an otherwise valid palette whose rendered
+//     accent never changed (Codex, #337).
+// Strings collapse to an EMPTY string rather than vanishing, so the declaration
+// carrying them still parses: `--color-accent: "x"` stays a non-hex declaration
+// of a measured token and is still refused, which deleting it outright would
+// have hidden. The no-newline classes bound the damage from an unterminated
+// quote to its own line instead of the rest of the file.
+const css = readFileSync(FILE, 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/"(?:\\.|[^"\\\n])*"/g, '""')
+  .replace(/'(?:\\.|[^'\\\n])*'/g, "''");
 console.log(`\n── ${FILE}`);
 const t = {};
 // EVERY --color-* declaration, hex or not, in source order. One regex for both

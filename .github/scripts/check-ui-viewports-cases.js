@@ -86,23 +86,29 @@ const CASES = [
   // "check-ui-viewports: OK" naming all three classes. Both the per-project case
   // below and these must stay: they are different code paths (`p[k]` vs `cfg[k]`),
   // and it was the project one being covered that made the root one look covered.
-  ['top-level grep excludes the suite (all three bands correct)',
+  ['root grep declared — refused, though all three bands are correct',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  grep: /__NEVER_MATCHES_ANY_TEST__/,\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL grep'],
 
-  ['top-level testIgnore excludes the suite (all three bands correct)',
+  ['root testIgnore declared — refused, though all three bands are correct',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  testIgnore: /app\\.spec\\.js/,\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL testIgnore'],
 
-  // Codex round 1 on #333: an empty NEGATIVE filter subtracts nothing, so exit 9
-  // on it is a false alarm — and a guard that cries wolf gets muted, which is
-  // fail-open by another road. The third case is the one that keeps the fix from
-  // being "simplified" into `any empty array is fine`: an empty POSITIVE filter
-  // selects NOTHING and is maximally narrowing.
+  // THESE CASES PIN A POLICY, NOT A PREDICTION. Rounds 1-6 tried to decide which
+  // root values actually narrow a run; seventeen findings later that attempt is
+  // gone, and every root selection key is refused on presence. Several of the
+  // shapes below provably narrow nothing — that is why they are here. They pin
+  // that the gate refuses them ANYWAY, so nobody restores the exemptions and, with
+  // them, the false-green path this PR closed.
+  //
+  // The accepted cost is a false alarm on a harmless config, which is the muting
+  // risk Codex raised in round 1 and which still stands. It is taken knowingly:
+  // the alternative was a gate that stated things about Playwright that were
+  // false in eight measured cases.
   ['root testIgnore: [] — conservative refusal, gate makes no Playwright claim',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  testIgnore: [],\n`
@@ -115,7 +121,7 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'root-level'],
 
-  ['top-level testMatch: [] selects NOTHING (empty positive is still fatal)',
+  ['root testMatch: [] — refused on presence, like every other root selection key',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  testMatch: [],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
@@ -157,12 +163,12 @@ const CASES = [
       'tests/.gitignore': '*.spec.js\n' },
     0, 'check-ui-viewports: OK'],
 
-  ['root shard: total 4 — conservative refusal, presence is enough',
+  ['root shard: total 4 — refused on presence',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  shard: { current: 1, total: 4 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL shard'],
 
-  ['root shard: total 1 — conservative refusal, presence is enough',
+  ['root shard: total 1 — refused on presence',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  shard: { current: 1, total: 1 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'root-level'],
@@ -180,7 +186,7 @@ const CASES = [
       + `  grep: /(?:)/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'root-level'],
 
-  ['grep: /smoke/ is a REAL positive filter (still fatal)',
+  ['root grep: /smoke/ — refused on presence',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  grep: /smoke/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL grep'],
@@ -190,10 +196,44 @@ const CASES = [
       + `  testIgnore: [''],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'root-level'],
 
-  ['testIgnore: [\'\', \'app.spec.js\'] is MIXED and still narrows (still fatal)',
+  ['root testIgnore: [\'\', \'app.spec.js\'] — refused on presence',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  testIgnore: ['', 'app.spec.js'],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     9, 'TOP-LEVEL testIgnore'],
+
+  // Codex round 7 on #333, both directions of the SAME key, and the pair is the
+  // point. `reporter` is not in SELECTION_KEYS, and these two cases pin why that
+  // is a decision rather than an omission.
+  //
+  // The first is the shipped kit's own shape. If `reporter` were ever added to
+  // SELECTION_KEYS this case fails — which is the guard, because the shipped kit
+  // and effectively every real config in the fleet declare a reporter. Flagging
+  // the key would fail all of them on a default: a guard that fails everything
+  // gets deleted, and then the root-filter hole this PR closed is open again.
+  //
+  // The second is a KNOWN FALSE GREEN, pinned deliberately rather than described
+  // in prose. Reproduced 2026-08-27 in Playwright 1.62.1: a reporter whose
+  // preprocess() calls testRun.exclude() on every test leaves the run executing
+  // ZERO scenarios while this gate certifies three bands. It is pinned at exit 0
+  // because that is what the gate DOES, and a bound nobody can see is the
+  // fail-open shape (#323) wearing a comment. #335 owns closing it.
+  //
+  // Do NOT "fix" the second by making the first fail. Both must hold, and no
+  // static read of a config object can satisfy both — which is the whole
+  // argument for observing a run instead.
+  ['reporter declared, shipped-kit shape — must NOT trip (fleet-wide false alarm)',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['list'], ['json', { outputFile: 'r.json' }]],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  ['custom reporter excluding every test — KNOWN false green, owned by #335',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['./drop-all.js']],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'drop-all.js': 'export default class { preprocess({ testRun, suite }) '
+        + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
+    0, 'declared, not executed'],
 
   ['laptop project carries testMatch',
     { 'playwright.config.js': withProjects(

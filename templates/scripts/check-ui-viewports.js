@@ -13,6 +13,14 @@
 // exits 0 with 0 specs when TEST_AUTH_CREDENTIAL is unset (the same silent pass),
 // and reports `viewport: null` for every project even when all 102 specs
 // enumerate — so it cannot answer this question at all (apfp.claude, 2026-08-23).
+// A third reason found 2026-08-27: `--reporter=json` REPLACES the config's
+// reporters rather than adding to one, so a custom reporter's preprocess() never
+// runs under that command. Measured on 1.62.1 — a config whose reporter excludes
+// every test listed all three projects and exited 0 with the flag, and exited 1
+// having excluded 3 tests without it. Any future rewrite that shells out to
+// `--list` must NOT override the reporter, or it reproduces the very false green
+// it was written to catch. (templates/actions/ui-suite/action.yml already carries
+// this warning for the test run itself; it applies identically to listing.)
 //
 // So: IMPORT the config and let Node evaluate it. Spread order, quoting, comments
 // and the device table all stop mattering, because JavaScript does the resolving.
@@ -190,56 +198,56 @@ console.log(`config:    ${configPath}`);
       '  test.md -> UI coverage gates, fifth gate.']);
   }
 
-  // TOP-LEVEL test selection defeats per-project coverage entirely. Playwright
-  // INTERSECTS `grep`/`grepInvert`/`testMatch`/`testIgnore` declared at the config
-  // root with each project's own selection, so three perfectly-banded projects can
-  // schedule ZERO scenarios and this gate would otherwise print a confident OK.
-  // Reported by claude.trading from a Codex finding on their #283 and reproduced
-  // here 2026-08-26: a config with laptop+tablet+phone projects plus a root
-  // `grep: /__NEVER_MATCHES_ANY_TEST__/` exited 0 with all three classes named.
+  // ROOT-LEVEL SELECTION KEYS ARE FLAGGED ON PRESENCE. This code makes no claim
+  // about what Playwright would run with them set.
   //
-  // Whether the suite survives a root filter is not statically decidable here —
-  // `grep` matches test TITLES, which live inside the spec files. So this is a
-  // CANNOT CHECK, not a FAIL and emphatically not a pass: per this file's own
-  // anti-silence rule, "could not look" gets its own loud exit code.
-  // ROOT-LEVEL SELECTION IS A CANNOT CHECK, WITH NO ATTEMPT TO DECIDE WHETHER IT
-  // ACTUALLY NARROWS. Six review rounds produced sixteen findings, every one from
-  // trying to be cleverer than this: "empty" had three spellings ([], '', ['']),
-  // "matches everything" had at least two (/(?:)/ and /^/), testDir needed four
-  // predicates and still had a symlink hole, and a shard can be cancelled by a
-  // reporter calling skipSharding(). Each fix was correct for its example and
-  // wrong one step out.
+  // The history is the argument. claude.trading reported (from a Codex finding on
+  // their #283) that a root `grep` left this gate printing a confident OK, and
+  // seven review rounds then produced seventeen findings — every one a rule that
+  // held for the example that motivated it and failed one step out. "Empty" had
+  // three spellings ([], '', ['']). "Matches everything" had at least two
+  // (/(?:)/ and /^/). testDir took four predicates and a symlink still beat it.
+  // A `shard` can be cancelled at runtime by a reporter calling skipSharding().
   //
-  // So this gate no longer models Playwright. It reports what it can SEE — a root
-  // key that participates in test selection — and refuses to certify coverage it
-  // cannot attribute. That is this file's own rule applied to itself: "could not
-  // look" is a loud exit, never a pass.
+  // So the rule here is a POLICY, not a prediction: if a key whose documented job
+  // is test selection is declared at the root, this gate stops. Not because that
+  // key necessarily narrows anything — several of the flagged shapes provably do
+  // not — but because this gate has no way to establish that it does not, and its
+  // own anti-silence rule says "could not look" gets a loud exit, never a pass.
   //
-  // The cost is a conservative refusal when the root key happens to be a no-op.
-  // That is the SAFE direction, and the diagnostic says so plainly. The benefit is
-  // that this check cannot be wrong about Playwright, because it no longer claims
-  // anything about Playwright. #335 replaces it with `--list`, which OBSERVES
-  // discovery rather than predicting it.
+  // The cost is real and is accepted deliberately: a config whose root key is a
+  // genuine no-op is refused. The diagnostic says so outright rather than
+  // implying the config is broken. That direction is safe; the other is not.
   //
-  // testDir is deliberately NOT checked here: four predicates across three rounds
-  // (spelling, resolved path, containment) still left a symlink hole, and a
-  // realpath fix would be a fifth. It moves to #335 with the rest.
+  // NOT CHECKED HERE, and each is a KNOWN hole rather than an oversight:
+  //   * testDir — four predicates across three rounds, symlink hole remained.
+  //   * reporter — a custom reporter's preprocess() can call testRun.exclude()
+  //     or .skip() on every test (public API, 1.62.1). Reproduced 2026-08-27: a
+  //     three-band config with such a reporter runs ZERO tests while this gate
+  //     exits 0. It is not in the list below because the SHIPPED kit declares
+  //     `reporter`, as does essentially every real config — flagging the key
+  //     would fail the whole fleet on a default, which is the muted-guard
+  //     failure this file's round-1 finding was about. Distinguishing "custom"
+  //     from "built-in" needs a version-dependent name list: the same
+  //     enumerate-vs-derive move that produced the seventeen findings above.
+  // Both belong to #335. See the OK line at the bottom, which states the limit
+  // rather than leaving the success message to imply more than was checked.
   const SELECTION_KEYS = ['grep', 'grepInvert', 'testMatch', 'testIgnore', 'shard'];
   const rootFilters = SELECTION_KEYS.filter(k => cfg[k] !== undefined);
 
   if (rootFilters.length) {
     die(9, [
       `FAIL: the config declares TOP-LEVEL ${rootFilters.join(', ')} — CANNOT CHECK.`,
-      '  A root-level selection key applies to EVERY project, so all three classes',
-      '  can be declared while zero scenarios are scheduled. This gate flags such a',
-      '  key on PRESENCE and does not judge whether yours actually narrows — it',
-      '  refuses to certify coverage it cannot attribute, rather than guessing.',
-      '  So this can be a conservative refusal on a key that is in fact a no-op.',
-      '  That is the safe direction; #335 replaces the guess with `--list`, which',
-      '  observes discovery instead of predicting it.',
-      '  Clear it by moving the key onto the projects that are NOT providing viewport',
-      '  coverage (or, for shard, sharding from the CI matrix rather than the config),',
-      '  so each banded project selects the UI suite unconditionally.',
+      '  This gate stops whenever a root-level test-selection key is declared. It',
+      '  does NOT claim your key narrows the run: it cannot tell either way, and it',
+      '  will not certify per-band coverage it cannot attribute.',
+      '  If the key is a no-op, this is a conservative refusal. That is deliberate.',
+      '  To clear it, the key has to stop being declared at the root for the run',
+      '  this gate is certifying — either move it onto the projects that are NOT',
+      '  providing viewport coverage, or drop it from this run entirely.',
+      '  NOT by relocating it to the CI command line: a `--shard` (or `--grep`)',
+      '  passed to `playwright test` partitions the same run while being invisible',
+      '  here, which converts a refusal into a false green rather than fixing it.',
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }
@@ -292,7 +300,15 @@ console.log(`config:    ${configPath}`);
     console.error('check-ui-viewports: FAIL (code 1)');
     process.exit(1);
   }
-  console.log(`check-ui-viewports: OK — laptop:${cover.laptop.join('/')}  tablet:${cover.tablet.join('/')}  phone:${cover.phone.join('/')}`);
+  // SCOPE THE SUCCESS CLAIM. "OK" here means the config DECLARES an unrestricted
+  // project in each band — not that any scenario will execute at those widths.
+  // This gate reads a config object; it never observes a run. A custom reporter's
+  // preprocess() can exclude every test at runtime (reproduced 2026-08-27) and
+  // nothing in a config read can see it. Saying "declared" rather than "covered"
+  // costs nothing and stops this line being quoted as proof of coverage it does
+  // not establish — which is the same fail-open shape, moved into the wording.
+  console.log(`check-ui-viewports: OK — DECLARED laptop:${cover.laptop.join('/')}  tablet:${cover.tablet.join('/')}  phone:${cover.phone.join('/')}`);
+  console.log('  (declared, not executed: a config read cannot observe a run — see #335)');
   verdict = true;
 })().catch(err => die(5, ['CANNOT CHECK: unexpected failure inside check-ui-viewports.',
   `  ${(err && err.stack) || err}`]));

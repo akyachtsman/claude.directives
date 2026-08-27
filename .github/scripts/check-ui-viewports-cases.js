@@ -332,6 +332,34 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK'],
 
+  // Codex round 15, and the most direct form this file's subject can take: the
+  // CONFIG UNDER TEST disabling the verdict. A phone-only config containing
+  // `process.exit = () => {}` let the gate print both missing-band failures, walk
+  // past its own process.exit(1), print the OK line and exit 0.
+  //
+  // `process.exit` is now bound before any config code can run, so the config
+  // cannot reach the reference the gate terminates through. This case must exit 1
+  // — the phone-only verdict — and not 0.
+  ['config neuters process.exit — the verdict still stands',
+    { 'playwright.config.js': `${IMPORT}process.exit = () => {};\n`
+        + `export default defineConfig({\n  testDir: './tests',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n` },
+    1, 'no project declares a laptop viewport'],
+
+  // Codex round 15: a shell entering a symlinked directory keeps the LOGICAL path
+  // in PWD while cwd is the real target. Round 10 set PWD to process.cwd(), which
+  // is physical — right when no symlink is involved and wrong exactly when one is.
+  // The config declares a root grep only when PWD is the physical path, so exit 0
+  // means the gate presented the logical one, as the run's shell would.
+  ['symlinked tests dir keeps the LOGICAL PWD, as a shell would',
+    { 'real/inner/playwright.config.js':
+        `import { defineConfig, devices } from '@playwright/test';\n`
+        + `const physical = process.env.PWD && process.env.PWD.includes('/real/');\n`
+        + `export default defineConfig({\n  testDir: '.',\n`
+        + `  ...(physical ? { grep: /__ONLY_WHEN_PWD_IS_PHYSICAL__/ } : {}),\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK', { subdir: 'link', symlink: ['link', 'real/inner'] }],
+
   // Codex round 14: a symlinked --tests-dir plus a relative --config that
   // traverses a parent. The link points DEEPER than its lexical location, so the
   // two parents genuinely differ:

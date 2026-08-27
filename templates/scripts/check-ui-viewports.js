@@ -69,6 +69,21 @@ const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
 const { resolve, join, isAbsolute, dirname } = require('path');
 
+// CAPTURED BEFORE ANY CONFIG CODE CAN RUN. The config is arbitrary JavaScript
+// imported into THIS process, so anything it can reach, it can rewrite — and
+// `process.exit` is the one that decides the verdict. Codex reproduced it in
+// round 15: a phone-only config containing `process.exit = () => {}` let the
+// gate print both missing-band failures, walk past its own `process.exit(1)`,
+// print the OK line, and exit 0. A false green produced by the config under
+// test, which is the most direct form this file's subject can take.
+//
+// A bound reference is not reachable from the config, so every termination below
+// goes through EXIT rather than looking the method up at call time. The stronger
+// fix is a child process — the config could still mutate console, prototypes, or
+// exit handlers — and that belongs with #335, which has to spawn a run anyway.
+// This closes the verdict path, which is the part that decides pass or fail.
+const EXIT = process.exit.bind(process);
+
 let verdict = false;
 process.on('exit', code => {
   if (code === 0 && !verdict) {
@@ -84,7 +99,7 @@ function die(code, lines) {
   for (const l of lines) console.error(l);
   console.error(`check-ui-viewports: FAIL (code ${code})`);
   verdict = true;
-  process.exit(code);
+  EXIT(code);
 }
 
 const argv = process.argv.slice(2);
@@ -144,9 +159,17 @@ if (!existsSync(TESTS_DIR) || !statSync(TESTS_DIR).isDirectory()) {
 // construction, so there is no base to get wrong and no fifth predicate to add.
 try {
   process.chdir(TESTS_DIR);
-  // chdir moves process.cwd() and leaves process.env.PWD at whatever the shell
-  // exported (round 10). A config reading PWD must see the same place.
-  process.env.PWD = process.cwd();
+  // THE LOGICAL PATH, NOT THE PHYSICAL ONE. A shell entering a symlinked
+  // directory keeps the symlink path in PWD while cwd is the real target, so the
+  // run sees PWD=/…/link and cwd=/…/real. Round 10 set PWD to process.cwd(),
+  // which is the physical path — correct when no symlink is involved and wrong
+  // exactly when one is. Codex round 15 reproduced a config branching on a PWD
+  // ending in /link.
+  //
+  // TESTS_DIR is resolve()d, which does NOT follow symlinks, so it is the same
+  // logical path the shell would export. cwd stays physical via the chdir above.
+  // Between them the two match what the run's shell produces.
+  process.env.PWD = TESTS_DIR;
 } catch (e) {
   die(5, [
     'CANNOT CHECK: cannot enter the tests directory to evaluate the config.',
@@ -215,7 +238,15 @@ console.log(`config:    ${configPath}`);
   // mistaken for "the config is broken". Resolves exactly as Node will when the
   // config's own `import ... from '@playwright/test'` runs.
   try {
-    createRequire(pathToFileURL(configPath)).resolve('@playwright/test');
+    // FROM THE TESTS DIRECTORY, not from the config. These are the GATE'S OWN
+    // dependencies: it needs Playwright installed to do its job, and Playwright
+    // is installed next to the suite. A config living outside the tests dir may
+    // legitimately export a plain object without importing Playwright at all —
+    // Codex round 15 reproduced that layout, where the runner listed all three
+    // projects and this probe exited 4 on a valid setup.
+    // Whether the CONFIG's own imports resolve is reported by importing it,
+    // which is where that belongs.
+    createRequire(pathToFileURL(join(TESTS_DIR, 'noop.js'))).resolve('@playwright/test');
   } catch (e) {
     die(4, [
       'CANNOT CHECK: @playwright/test is not resolvable from the config.',
@@ -364,7 +395,10 @@ console.log(`config:    ${configPath}`);
   // and a check that says nothing, which is this file's founding subject.
   let builtInReporters;
   try {
-    const mod = createRequire(pathToFileURL(configPath))('playwright/lib/common');
+    // Same base as the @playwright/test probe above, and for the same reason:
+    // this is the gate's dependency, not the config's. Resolving it from an
+    // external config produced a spurious exit 11 on the same layout.
+    const mod = createRequire(pathToFileURL(join(TESTS_DIR, 'noop.js')))('playwright/lib/common');
     builtInReporters = mod && mod.builtInReporters;
     if (!Array.isArray(builtInReporters) || builtInReporters.length === 0) {
       throw new Error('builtInReporters is not a non-empty array');
@@ -522,7 +556,7 @@ console.log(`config:    ${configPath}`);
     console.error('  test.md -> UI coverage gates, fifth gate.');
     verdict = true;
     console.error('check-ui-viewports: FAIL (code 1)');
-    process.exit(1);
+    EXIT(1);
   }
   if (unattributable.length) {
     for (const b of unattributable) {
@@ -538,7 +572,7 @@ console.log(`config:    ${configPath}`);
     console.error('  test.md -> UI coverage gates, fifth gate.');
     verdict = true;
     console.error('check-ui-viewports: FAIL (code 12)');
-    process.exit(12);
+    EXIT(12);
   }
   // SCOPE THE SUCCESS CLAIM. "OK" here means the config DECLARES an unrestricted
   // project in each band — not that any scenario will execute at those widths.

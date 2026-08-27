@@ -240,6 +240,29 @@ for (const claim of claims) {
   if (!pattern && !phrase) { fail(`${id}: needs "pattern" or "phrase"`); continue; }
   if (pattern && phrase) { fail(`${id}: has both "pattern" and "phrase" — pick one`); continue; }
 
+  // ── raw: match the file as written, not as normalized ─────────────────────
+  // Every other claim pins WORDING, which normalize() preserves. A claim that
+  // pins STRUCTURE cannot use it: `terminal-states-list-is-closed` checks that
+  // no third bullet was appended to a list, and normalize() collapses newlines
+  // to spaces and strips `*`, so a `- ` marker survives as prose, a `* ` marker
+  // is ERASED, and the line boundary that distinguishes a list item from a
+  // hyphen mid-sentence is gone. #336 round 10 found the entry detecting only
+  // the one marker that happened to survive — it read as a closed-list
+  // guarantee and was a hyphen check. Structure has to be read raw.
+  // The cost is real and belongs to the entry, not the checker: raw text keeps
+  // line-leading comment markers and emphasis, so a raw claim cannot be carried
+  // by a wrapped `#`-commented file. Declaring `raw` is declaring that this
+  // claim's carriers are prose files whose layout is the thing being pinned.
+  if (claim.raw !== undefined && typeof claim.raw !== 'boolean') {
+    fail(`${id}: "raw" must be a boolean`);
+    continue;
+  }
+  if (claim.raw === true && !pattern) {
+    fail(`${id}: "raw" needs "pattern" — a "phrase" is escaped from its NORMALIZED form, so a raw phrase claim would compare a normalized needle against un-normalized text and never match`);
+    continue;
+  }
+  const prep = claim.raw === true ? (t) => t : normalize;
+
   let re;
   try {
     re = new RegExp(pattern ? expand(pattern) : esc(normalize(phrase)), 'i');
@@ -313,7 +336,7 @@ for (const claim of claims) {
           // could actually contain, so the probe tests prose, not a pattern.
           const word = neg.replace(/\['’\]\?/g, "'").replace(/[?]/g, '');
           const probe = shape.replace('%s', word);
-          if (re.test(normalize(probe))) {
+          if (re.test(prep(probe))) {
             fail(`${id}: negator "${word}" is NOT rejected in the ${position} position: ${JSON.stringify(probe)}\n      This negator is in the manifest's definition but the pattern still accepts it there — the two positions have drifted.`);
           }
         }
@@ -326,10 +349,13 @@ for (const claim of claims) {
       fail(`${id}: mustNotMatch entries must be non-empty strings, got ${JSON.stringify(bad)}`);
       continue;
     }
-    // Tested through the SAME normalizer the check uses. A case written the way
-    // a file actually reads — wrapped, emphasised — must be judged the way a
-    // file is judged, or the suite proves something about a string nobody has.
-    if (re.test(normalize(bad))) {
+    // Tested through the SAME reader the check uses — normalized, or raw for a
+    // structural claim. A case written the way a file actually reads — wrapped,
+    // emphasised — must be judged the way a file is judged, or the suite proves
+    // something about a string nobody has. Using normalize() here while the
+    // check used raw text would be the same defect one level up: probes that
+    // pass against a string the checker never sees.
+    if (re.test(prep(bad))) {
       fail(`${id}: pattern MATCHES a string it must reject: ${JSON.stringify(bad)}\n      pattern: ${re.source}\n      This wording does not state the claim — certifying it reports a regression as coverage.`);
     }
   }
@@ -404,7 +430,7 @@ for (const claim of claims) {
         fail(`${id}: per-consumer mustNotMatch for ${file} never exercises the override — every case is rejected by the claim-level pattern too, so deleting the override entirely would not fail any of them.\n      Add a case the CLAIM pattern accepts and this override must reject; that gap is the only proof the override constrains anything.`);
       }
     }
-    if (useRe.test(normalize(readFileSync(file, 'utf8')))) {
+    if (useRe.test(prep(readFileSync(file, 'utf8')))) {
       console.log(`OK:   ${id} → ${file}${override ? ' (strict)' : ''}`);
     } else {
       fail(`${id}: ${role} no longer states the claim: ${file}\n      pattern: ${useRe.source}\n      why:     ${why}`);
@@ -415,7 +441,7 @@ for (const claim of claims) {
     const listed = new Set([source, ...consumerFiles]);
     const alsoStates = trackedTextFiles()
       .filter((f) => !listed.has(f))
-      .filter((f) => { try { return re.test(normalize(readFileSync(f, 'utf8'))); } catch { return false; } });
+      .filter((f) => { try { return re.test(prep(readFileSync(f, 'utf8'))); } catch { return false; } });
     if (alsoStates.length) {
       console.log(`      ↳ DERIVE: ${alsoStates.length} unlisted file(s) also state ${id}:`);
       for (const f of alsoStates) console.log(`         ${f}`);

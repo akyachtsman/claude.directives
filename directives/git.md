@@ -165,13 +165,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   The two states are an *unavailable* reply still inside its reset window, or a
   request that could not be made or accepted at all — never elapsed silence.
 
-  **SILENCE IS NEVER THE EVIDENCE, AND NEITHER IS A REACTION.** A request still
-  in flight looks exactly like one that will never be answered, so no amount of
-  elapsed quiet distinguishes them. And a second 👍 from an account that has
-  already reacted adds nothing to observe — one reaction per user per type, so
-  the only 👍 present is the first, with its original timestamp (the ladder
-  below records this). A further pass answered that way is therefore
-  indistinguishable from no answer at all.
+  **SILENCE IS NEVER THE EVIDENCE, AND NEITHER IS A REACTION.** A user holds one
+  reaction per type, so the only 👍 present is the first, with its original
+  timestamp — a further pass answered that way leaves nothing new to observe
+  (the ladder below records this).
 
   **So a stuck label with no observable terminal state is not a removal case:
   the PR stays blocked and you SAY SO** — one line to the owner naming what you

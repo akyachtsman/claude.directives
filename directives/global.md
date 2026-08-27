@@ -742,10 +742,11 @@ needs restating.
 3. **Pipeline the work.** Recruit agents and run independent work in parallel
    rather than idling, especially while waiting on CI, a deploy, or a review
    (→ *Pipelined Execution*).
-4. **Auto-merge.** Take the PR through to merged, clearing a `codex-flagged`
-   blocker by **requesting the review pass** rather than removing the label.
-   Take the label off by hand only where `git.md` → *PR Lifecycle*'s
-   *unreachable-review test* admits it, with the evidence that rule requires.
+4. **Auto-merge.** Where the work produces a PR, take it through to merged,
+   clearing a `codex-flagged` blocker by **requesting the review pass** rather
+   than removing the label. Take the label off by hand only where `git.md` →
+   *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
+   rule requires. Work that produces no PR has nothing to merge — see item 5.
 5. **Keep going until the whole task is done.** Merging is a milestone, not the
    finish line: the task is done when every effect the work was for has
    happened and been verified — the deploy and `qa-live` where the change is

@@ -26,11 +26,13 @@ name: Codex Monitor
 # invisible to this workflow: a bare 👍 reaction, and an INLINE REVIEW COMMENT
 # (pull_request_review_comment) when Codex replies inside a review thread. Both
 # observed on #294, 2026-08-23. When a clean round arrives either way the label
-# cannot clear itself and must be removed by hand with a rationale — see
-# git.md -> PR Lifecycle. Look for the verdict in the PR's comments AND its
-# review threads: an inline reply never enters the comment list, so a
-# comments-only check reads as "still pending" on a head Codex has cleared.
-# Do not read a stuck label as unaddressed concerns.
+# cannot clear itself: request another pass so the verdict lands as the COMMENT
+# this workflow acts on. Taking the label off by hand is governed solely by
+# git.md -> PR Lifecycle's unreachable-review test, and an inline reply is not
+# evidence that a comment cannot arrive. Look for the verdict in the PR's
+# comments AND its review threads: an inline reply never enters the comment
+# list, so a comments-only check reads as "still pending" on a head Codex has
+# cleared. Do not read a stuck label as unaddressed concerns.
 on:
   pull_request_review:
     types: [submitted]

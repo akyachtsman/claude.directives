@@ -188,7 +188,7 @@ if (FILES.length === 0) {
 // brings in text this gate never sees (`@import`, `@use`), or its declarations
 // apply to something other than an element (`@font-face`, `@keyframes`,
 // `@property`, `@page`), so reading them as live tokens would be wrong.
-const AT_RULES_READ = new Set(['media', 'supports', 'layer', 'container', 'scope', 'starting-style']);
+const AT_RULES_READ = new Set(['media', 'supports', 'layer', 'container', 'scope']);
 const AT_RULES_LIST = [...AT_RULES_READ].map((n) => `@${n}`).join(', ');
 
 // ── CSS whitespace, not JavaScript's ────────────────────────────────────────
@@ -210,9 +210,16 @@ const cssTrim = (t) => t.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, '');
 // file that never declared it.
 const PLAIN_CUSTOM_NAME = /^--[A-Za-z0-9_-]*$/;
 function atRuleProblem(buf) {
-  const head = buf.trim();
+  const head = cssTrim(buf);
   if (!head.startsWith('@')) return null;
-  const name = (/^@([A-Za-z-]*)/.exec(head) || [, ''])[1].toLowerCase();
+  // The WHOLE identifier, not a prefix of it. `[A-Za-z-]*` stopped at the first
+  // character it did not know, so `@media_` yielded `media`, matched the
+  // allow-list, and the scanner read a block CSS discards — nine tokens, exit 0.
+  // CSS identifier characters are letters, digits, `_`, `-` and everything at
+  // U+0080 and above, which is the same class the url() boundary uses; matching
+  // it here means an unknown at-rule cannot masquerade as a known one by
+  // sharing its opening letters.
+  const name = (/^@([A-Za-z0-9_\u0080-\uFFFF-]*)/.exec(head) || [, ''])[1].toLowerCase();
   if (AT_RULES_READ.has(name)) return null;
   return `an @${name || '(unreadable)'} rule — only the grouping at-rules (${AT_RULES_LIST}) wrap declarations this check can read`;
 }
@@ -231,6 +238,26 @@ function scanDeclarations(css) {
   // brace-valued declarations outright instead, so nothing needs to know what a
   // block contains and the only question left is whether one is open.
   let depth = 0;
+  // ── AMBIGUOUS BLOCKS ───────────────────────────────────────────────────────
+  // One flag per open block: is this block, or any block containing it, opened
+  // by a prelude that might be a DECLARATION rather than a selector?
+  // `unknown: !important { … }` is such a prelude. CSS re-parses it as a rule,
+  // finds the selector invalid and drops it, so its declarations apply nothing —
+  // but round 7's test (only whitespace between the colon and the brace) reads
+  // `!important` as tokens and calls it a selector, and nine tokens inside it
+  // printed OK. Telling the two apart needs pseudo-class validity: `button:hover`
+  // is a selector, `unknown:!important` is not, and no local test separates them
+  // — that is the oscillation rounds 5 through 8 have been living in.
+  // So this stops trying. It DESCENDS, and refuses only when the ambiguity
+  // actually reaches the measurement: a MEASURED declaration inside an ambiguous
+  // block is fatal. `button:hover { color: red }` still passes, because nothing
+  // about its colour depends on which reading is right.
+  const ambiguous = [];
+  const inAmbiguous = () => ambiguous.length > 0 && ambiguous[ambiguous.length - 1];
+  // A prelude that could be a declaration name: a plain identifier before the
+  // top-level colon. `:root` (colon first, nothing before it) and `.a:focus`
+  // (starts with a dot) are unambiguously selectors.
+  const PLAIN_IDENT = /^[A-Za-z_\u0080-\uFFFF][A-Za-z0-9_\u0080-\uFFFF-]*$/;
 
   // Returns a fatal message, or null. It cannot just record any more: a name
   // this check is unable to compare literally must stop the run, and only the
@@ -240,7 +267,17 @@ function scanDeclarations(css) {
     if (colonAt >= 0) {
       const name = cssTrim(buf.slice(0, colonAt));
       if (name.startsWith('--')) {
-        if (!PLAIN_CUSTOM_NAME.test(name)) {
+        if (depth === 0) {
+          // CSS has no declaration list at stylesheet top level, so it discards
+          // these outright. Every `;` still reached flush(), so a file whose
+          // nine declarations sat outside any rule recorded a complete palette
+          // and exited 0 while the rendered page had none of it.
+          problem = `a custom property declared outside any rule (\`${name}\`)`
+            + ' — CSS discards declarations at stylesheet top level, so this palette would never apply';
+        } else if (inAmbiguous()) {
+          problem = `a measured custom property inside a block this check cannot classify (\`${name}\`)`
+            + ' — its prelude may be a declaration rather than a selector, and CSS drops the whole rule if it is';
+        } else if (!PLAIN_CUSTOM_NAME.test(name)) {
           problem = `a custom property whose name this check cannot compare literally (\`${name}\`)`
             + ' — spell token names with ASCII letters, digits, - and _';
         } else {
@@ -403,8 +440,14 @@ function scanDeclarations(css) {
       if (colonAt >= 0 && cssTrim(buf.slice(colonAt + 1)) === '') {
         return { fatal: `a declaration whose value is a { } block (\`${prelude}\`) — CSS drops it and applies nothing, so reading it would certify a palette the page never renders` };
       }
+      // Anything else with a top-level colon whose left side is a bare
+      // identifier is the ambiguous shape above: descend, but remember. Once
+      // ambiguous, every nested block stays ambiguous — a rule CSS dropped
+      // takes its children with it.
+      const nowAmbiguous = inAmbiguous() || (prelude !== null && PLAIN_IDENT.test(prelude));
       const bad = atRuleProblem(buf);
       if (bad) return { fatal: bad };
+      ambiguous.push(nowAmbiguous);
       depth++;
       buf = ''; colonAt = -1;
       continue;
@@ -416,6 +459,7 @@ function scanDeclarations(css) {
       if (depth === 0) return { fatal: 'a closing brace with no matching open — the file does not parse as CSS' };
       const bad = flush();           // the last declaration may omit its `;`
       if (bad) return { fatal: bad };
+      ambiguous.pop();
       depth--;
       continue;
     }
@@ -556,7 +600,11 @@ const pairs = [
 // per theme without this gate having an opinion — failing on it would red-build
 // a valid palette to defend a number nobody computes.
 const canon = (v) => {
-  const raw = v.trim();
+  // cssTrim, not .trim(): the capture deliberately keeps a U+00A0 because CSS
+  // reads it as part of a token, and trimming it HERE collapsed `#1565C0` and
+  // `<NBSP>#1565C0` — a valid value and one CSS rejects — to the same hex, so
+  // the ambiguity check saw one value and stayed silent about a live override.
+  const raw = cssTrim(v);
   if (!/^#[0-9a-fA-F]+$/.test(raw)) return raw.toLowerCase().replace(/\s+/g, ' ');
   let h = raw.slice(1).toLowerCase();
   if (h.length === 3 || h.length === 4) h = h.split('').map((x) => x + x).join('');

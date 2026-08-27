@@ -343,11 +343,12 @@ const CASES = [
     { 'styles/tokens.css': plus('.e { unknown: \u00e9url(/* ) */ ; --color-accent: #0D47A1;); }\n') },
     0, OK9],
 
-  // ── #337 round 7: @starting-style ─────────────────────────────────────────
-  // Second grouping rule missing from a list claimed complete. The list is no
-  // longer claimed complete; this pins the member that proved it was not.
-  ['a token file wrapped in @starting-style is read, not refused',
-    { 'styles/tokens.css': '@starting-style {\n' + BASE + '}\n' }, 0, OK9],
+  // (#337 round 7 added a case asserting @starting-style is READ. Round 8
+  //  reversed it — see the refusal case below — because those declarations are
+  //  the starting state of a transition, not the element's persistent style.
+  //  Added on a review's say-so, removed on the next review's: the membership
+  //  rule was always "cascades as if the wrapper were not there", and I widened
+  //  the list without checking the candidate against it.)
 
   // ── #337 round 6: a TYPE selector with a pseudo-class ─────────────────────
   // `button:hover {` puts a plain identifier before a colon before a brace, so
@@ -361,10 +362,61 @@ const CASES = [
   ['a type selector with a pseudo-element still opens a rule',
     { 'styles/tokens.css': plus('html:root { color: red; }\n') }, 0, OK9],
 
-  // …and it must still be READ, not merely tolerated: a live override inside one
-  // is a real duplicate. Without this, refusing to descend would also pass.
-  ['declarations inside a type-selector pseudo-class rule are live',
-    { 'styles/tokens.css': plus('button:hover { --color-accent: #0D47A1; }\n') }, 1, DUP],
+  // ── #337 round 8: the ambiguity is refused only where it MEASURES ─────────
+  // `button:hover` and `unknown:!important` are the same shape to every local
+  // test — telling them apart is pseudo-class validity — so the scanner stops
+  // trying and refuses only when a MEASURED token sits inside such a block.
+  // This case was `1, DUP` in round 6, when the block was read as live. That
+  // reading was not safe: `.e { unknown: !important { …nine tokens… } }` has the
+  // identical shape and CSS applies none of it.
+  ['a measured token inside an unclassifiable block is refused, not read',
+    { 'styles/tokens.css': plus('button:hover { --color-accent: #0D47A1; }\n') },
+    1, 'cannot classify'],
+
+  ['…including when the prelude carries tokens before the brace',
+    { 'styles/tokens.css': '.e { unknown: !important {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '} }\n' },
+    1, 'cannot classify'],
+
+  // The must-NOT-over-refuse twins. A block with no measured token is unaffected
+  // however it was opened, and an unambiguous selector is still read as live.
+  ['an unclassifiable block with no measured token still passes',
+    { 'styles/tokens.css': plus('button:hover { color: red; }\nhtml:root { color: blue; }\n') }, 0, OK9],
+
+  ['a declaration inside an UNAMBIGUOUS selector is still live',
+    { 'styles/tokens.css': plus('.a:focus { --color-accent: #0D47A1; }\n') }, 1, DUP],
+
+  // ── #337 round 8: an at-rule name is a whole identifier ───────────────────
+  // `[A-Za-z-]*` stopped at the first character it did not know, so `@media_`
+  // yielded `media`, matched the allow-list, and a block CSS discards supplied
+  // the entire palette at exit 0.
+  ['an unknown at-rule cannot masquerade as an allowed one by prefix',
+    { 'styles/tokens.css': '@media_ {\n' + BASE + '}\n' }, 1, '@media_ rule'],
+
+  ['…and the allowed name itself still works',
+    { 'styles/tokens.css': '@media (min-width: 1px) {\n' + BASE + '}\n' }, 0, OK9],
+
+  // ── #337 round 8: @starting-style does NOT persist ────────────────────────
+  // Round 7 added it as a grouping rule. Its declarations are the STARTING state
+  // for a transition, not the element's after-change style, so a palette living
+  // only there can be undefined in the rendered page. Refused again — and the
+  // membership rule is "cascades as if the wrapper were not there", which this
+  // never satisfied.
+  ['@starting-style is refused, not read as a persistent palette',
+    { 'styles/tokens.css': '@starting-style {\n' + BASE + '}\n' }, 1, '@starting-style rule'],
+
+  // ── #337 round 8: declarations at stylesheet top level ────────────────────
+  // CSS has no declaration list there and discards them, but every `;` reached
+  // flush(), so a file with nine bare declarations recorded a complete palette.
+  ['custom properties declared outside any rule are refused',
+    { 'styles/tokens.css': BASE.replace(':root {\n', '').replace('\n}\n', '\n') },
+    1, 'outside any rule'],
+
+  // ── #337 round 8: canon() undid the CSS trim ──────────────────────────────
+  // The capture keeps a U+00A0 because CSS reads it as part of a token; canon()
+  // trimmed it off again, collapsing a valid hex and one CSS rejects to the same
+  // value, so the ambiguity check saw one value and said nothing.
+  ['an NBSP-prefixed hex override is a distinct value, not the same one',
+    { 'styles/tokens.css': plus(':root { --color-accent: \u00a0#1565C0; }\n') }, 1, DUP],
 
   // The must-NOT-over-refuse twin: a pseudo-class selector also puts a colon
   // before a brace, and `.e` is not a plain identifier, so it stays a selector.

@@ -163,6 +163,15 @@ because reading part of a palette is worse than reading none:
   a non-breaking space is a *different property* from `--color-bg`. This gate
   measures names by comparing them literally, so one it cannot compare is
   refused rather than skipped — **spell token names in plain ASCII**;
+- **a measured token declared outside any rule.** CSS has no declaration list at
+  stylesheet top level and discards what it finds there, so a bare
+  `--color-accent: #1565C0;` with no enclosing `{ }` never applies;
+- **a measured token inside a block whose prelude might be a declaration** —
+  `button:hover { … }` and `unknown: !important { … }` are the same shape to
+  anything short of a full selector parser, and CSS drops the whole rule for the
+  second. Blocks like these are read normally; only a **measured** token inside
+  one is refused, so `button:hover { color: red }` is unaffected. Declare your
+  tokens in `:root`;
 - an unterminated string or comment, or an unbalanced bracket of any kind —
   including a closing `}`, `)` or `]` with nothing open.
 

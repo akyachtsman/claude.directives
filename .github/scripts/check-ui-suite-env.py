@@ -50,17 +50,21 @@ def env_of(steps, name):
     activating one in the run (Codex, #333 round 9). The guard's whole job is
     that the two evaluations see the same input, so it has to compare inputs.
     """
-    for step in steps:
-        if step.get("name") == name:
-            return dict(step.get("env") or {}), True
-    return {}, False
+    matches = [s for s in steps if s.get("name") == name]
+    if len(matches) != 1:
+        # NOT "take the first". A decoy step carrying the reserved name, placed
+        # before the real one, silently disabled this whole check -- Codex, #333
+        # round 14, reproduced with a decoy `Run Playwright tests` holding the
+        # check-side env while the actual run carried an extra filter switch.
+        # Zero matches and two matches are both "this file is not the shape this
+        # guard understands", and neither may read as parity.
+        return {}, len(matches)
+    return dict(matches[0].get("env") or {}), 1
 
 
 def workdir_of(steps, name):
-    for step in steps:
-        if step.get("name") == name:
-            return step.get("working-directory")
-    return None
+    matches = [s for s in steps if s.get("name") == name]
+    return matches[0].get("working-directory") if len(matches) == 1 else None
 
 
 def main():
@@ -68,15 +72,25 @@ def main():
         doc = yaml.safe_load(handle)
     steps = (doc.get("runs") or {}).get("steps") or []
 
-    check_env, check_found = env_of(steps, CHECK_STEP)
-    run_env, run_found = env_of(steps, RUN_STEP)
+    check_env, check_n = env_of(steps, CHECK_STEP)
+    run_env, run_n = env_of(steps, RUN_STEP)
+    check_found = check_n == 1
+    run_found = run_n == 1
 
     problems = []
+    for label, count in ((CHECK_STEP, check_n), (RUN_STEP, run_n)):
+        if count > 1:
+            problems.append(
+                f'{count} steps are named "{label}" in {ACTION}'
+                + "\n    This guard identifies both steps by name, so a duplicate makes it"
+                + "\n    unable to say which one runs -- and taking the first silently"
+                + "\n    disabled it (#333, round 14)."
+            )
     # A renamed step is not a pass. Without this the whole guard reads two empty
     # sets, finds them equal, and reports OK -- the fail-open shape it guards.
-    if not check_found:
+    if check_n == 0:
         problems.append(f'no step named "{CHECK_STEP}" in {ACTION}')
-    if not run_found:
+    if run_n == 0:
         problems.append(f'no step named "{RUN_STEP}" in {ACTION}')
 
     if check_found and run_found:

@@ -23,7 +23,7 @@ import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import { pathToFileURL, fileURLToPath } from 'url';
 import { tmpdir } from 'os';
-import { join, resolve, dirname, sep } from 'path';
+import { join, resolve, dirname, sep, relative } from 'path';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const CHECK = join(REPO_ROOT, 'templates', 'scripts', 'check-ui-viewports.js');
@@ -316,6 +316,54 @@ const CASES = [
       'suite/tests/app.spec.js': "import { test } from '@playwright/test';\ntest('s', async () => {});\n" },
     0, 'check-ui-viewports: OK', { subdir: 'suite', configArg: 'cfgdir/playwright.config.js' }],
 
+  // Codex round 14: PW_TEST_SOURCE_TRANSFORM makes Playwright run a Babel plugin
+  // over the config as it loads it, so a plain import() reads a different object.
+  // Reproduced with a transform that ADDS a root grep — the gate certified three
+  // bands while `--list` found zero tests. Refused rather than reproduced: this
+  // gate should not be running arbitrary Babel plugins to predict Playwright.
+  //
+  // The negative twin is the one that keeps it honest, same as every other env
+  // refusal here — an unset variable must not trip it.
+  ['PW_TEST_SOURCE_TRANSFORM is set — refused',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    13, 'PW_TEST_SOURCE_TRANSFORM', { extraEnv: { PW_TEST_SOURCE_TRANSFORM: '/tmp/t.js' } }],
+
+  ['PW_TEST_SOURCE_TRANSFORM unset — must NOT trip',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK'],
+
+  // Codex round 14: a symlinked --tests-dir plus a relative --config that
+  // traverses a parent. The link points DEEPER than its lexical location, so the
+  // two parents genuinely differ:
+  //
+  //     tmp/link  ->  tmp/real/inner
+  //     lexical  resolve('tmp/link', '..')      = tmp        -> three-band decoy
+  //     real cwd chdir('tmp/link') => tmp/real/inner, '..'    = tmp/real -> phone-only
+  //
+  // My first attempt at this fixture used `tmp/link -> tmp/real` and did NOT
+  // discriminate: both bases named a path the filesystem followed to the same
+  // file, so the case passed against the very defect it was written for. Caught by
+  // reverting the fix and seeing it still pass — which is the only reason to run
+  // that check on every new case rather than on the ones that look risky.
+  ['relative --config with a symlinked --tests-dir resolves from the real cwd',
+    { 'real/inner/keep.txt': 'x\n',
+      'real/configdir/playwright.config.js':
+        `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+        + `  projects: [\n${PHONE}  ],\n});\n`,
+      'configdir/playwright.config.js':
+        `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    1, 'no project declares a laptop viewport',
+    { subdir: 'link', symlink: ['link', 'real/inner'], configArg: '../configdir', configArgRelative: true }],
+
+  // A RELATIVE --tests-dir. Every other case passes an absolute path, so none of
+  // them would have caught the tests dir being re-resolved against itself after
+  // the chdir — the shipped kit did, which is a case suite being outrun by a
+  // smoke test.
+  ['--tests-dir passed RELATIVE to the launch directory',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK', { relativeTestsDir: true }],
+
   // Codex round 13, and the only finding since round 6 that reopened a FALSE
   // GREEN rather than a false alarm. Playwright's resolveConfigLocation() resolves
   // a relative --config against process.cwd(), which is the tests directory; this
@@ -455,6 +503,13 @@ function runCase(files, opts) {
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, body);
     }
+    // opts.symlink: [linkName, targetName] inside tmp, created after the files so
+    // the target exists. Needed to express the round-14 fixture at all.
+    if (o.symlink) {
+      const [linkName, targetName] = o.symlink;
+      mkdirSync(join(tmp, targetName), { recursive: true });
+      symlinkSync(join(tmp, targetName), join(tmp, linkName), 'dir');
+    }
     if (o.nodeModules !== false) symlinkSync(NODE_MODULES, link, 'dir');
     // opts.subdir runs the gate against tmp/<subdir> while node_modules stays at
     // tmp/. Node resolution walks UP, so a case can shadow one package for the
@@ -466,12 +521,19 @@ function runCase(files, opts) {
     // PW_TEST_REPORTER is cleared unless a case sets it: it reaches Playwright
     // past the config, so a value inherited from the developer's own shell would
     // change what every case measures.
-    const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '', PW_TEST_REPORTER: '', ...(o.extraEnv || {}) };
+    const env = { ...process.env, UI_TESTS_DIR: o.env ? target : '',
+      PW_TEST_REPORTER: '', PW_TEST_SOURCE_TRANSFORM: '', ...(o.extraEnv || {}) };
     // opts.configArg passes an explicit --config, which is how a config OUTSIDE
     // the tests directory gets exercised. Playwright's cwd is the tests dir
     // whatever --config points at, so the two only diverge when they are
     // different directories — which the shipped layout never is (#333 round 11).
-    const args = o.env ? [CHECK] : [CHECK, '--tests-dir', target];
+    // opts.relativeTestsDir passes the tests dir RELATIVE to the spawn cwd. Once
+    // the gate chdir's into it, a relative path re-resolved against the new cwd
+    // names itself twice — a defect the shipped kit caught and no case did,
+    // because every other case passes an absolute path (#333 round 14).
+    const args = o.env
+      ? [CHECK]
+      : [CHECK, '--tests-dir', o.relativeTestsDir ? relative(REPO_ROOT, target) : target];
     // A RELATIVE --config is left relative: the point of that case is which base
     // the gate resolves it against, and joining it to tmp here would make it
     // absolute and test nothing.

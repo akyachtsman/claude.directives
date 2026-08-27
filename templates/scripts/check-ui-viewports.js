@@ -47,6 +47,8 @@
 //  12  a band is DECLARED at the right width but only by projects carrying
 //      selection keys (CANNOT CHECK) — distinct from 1, which is a band no
 //      project declares at all
+//  13  PW_TEST_SOURCE_TRANSFORM is set (CANNOT CHECK) — Playwright transforms
+//      the config as it loads it, so a plain import() reads a different object
 // node_modules is environment-provided, not repo-guaranteed: in CI it exists
 // because the ui-suite composite ran `npm install` first. Its absence is 4 — a
 // loud "cannot check", never a pass.
@@ -111,15 +113,47 @@ if (!Number.isFinite(TABLET_MIN) || !Number.isFinite(LAPTOP_MIN) || TABLET_MIN >
   die(8, [`CANNOT CHECK: nonsensical band bounds (tablet-min=${TABLET_MIN}, laptop-min=${LAPTOP_MIN})`]);
 }
 
-console.log(`tests dir: ${resolve(dir)}  (source: ${dirSource})`);
+// ABSOLUTE, CAPTURED BEFORE THE CHDIR BELOW. Every later use must be this and
+// not `dir`: once cwd is the tests directory, a relative `dir` would resolve
+// against ITSELF. Caught immediately by the shipped kit (it looked for
+// templates/ui-tests/templates/ui-tests) but NOT by any case, because the cases
+// harness passes an absolute --tests-dir — so a relative one is now pinned too.
+const TESTS_DIR = resolve(dir);
+console.log(`tests dir: ${TESTS_DIR}  (source: ${dirSource})`);
 console.log(`bands (${bandSource}): phone <${TABLET_MIN}px | tablet ${TABLET_MIN}-${LAPTOP_MIN - 1}px | laptop >=${LAPTOP_MIN}px`);
 
-if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+if (!existsSync(TESTS_DIR) || !statSync(TESTS_DIR).isDirectory()) {
   die(2, [
-    `CANNOT CHECK: tests dir does not exist: ${resolve(dir)}`,
+    `CANNOT CHECK: tests dir does not exist: ${TESTS_DIR}`,
     `  resolved from: ${dirSource}`,
     '  order tried:   --tests-dir, then $UI_TESTS_DIR, then .github/scripts/ui-tests',
     '  This is NOT a pass — the viewport gate was not evaluated.',
+  ]);
+}
+
+// ENTER THE TESTS DIRECTORY FIRST, then resolve everything relative to being
+// there. Playwright does `path.resolve(process.cwd(), configFile)` AFTER its cwd
+// is the tests directory — and cwd is the REAL path, because chdir resolves
+// symlinks. Computing a base instead reproduces that only while no symlink is
+// involved: with `--tests-dir suite-link --config ../configdir`, resolving `..`
+// against the lexical path names a different directory than resolving it from
+// inside the link's target (Codex, round 14 — a false green, reproduced).
+//
+// Rounds 9 through 13 each corrected WHICH base to compute. This stops computing
+// one. `process.cwd()` after the chdir is the same value Playwright will use, by
+// construction, so there is no base to get wrong and no fifth predicate to add.
+try {
+  process.chdir(TESTS_DIR);
+  // chdir moves process.cwd() and leaves process.env.PWD at whatever the shell
+  // exported (round 10). A config reading PWD must see the same place.
+  process.env.PWD = process.cwd();
+} catch (e) {
+  die(5, [
+    'CANNOT CHECK: cannot enter the tests directory to evaluate the config.',
+    `  ${TESTS_DIR}`,
+    `  ${(e && e.message) || e}`,
+    '  Playwright evaluates the config from there, so reading it from elsewhere',
+    '  can produce a different config. Refusing rather than reading the wrong one.',
   ]);
 }
 
@@ -132,15 +166,11 @@ const CONFIG_NAMES = ['playwright.config.ts', 'playwright.config.js', 'playwrigh
 let configPath;
 const explicit = opt('--config');
 if (explicit) {
-  // RELATIVE TO THE TESTS DIRECTORY, not to wherever this process was launched.
-  // Playwright's resolveConfigLocation() resolves --config against process.cwd(),
-  // and its cwd is the tests directory — so `--tests-dir suite --config configdir`
-  // means suite/configdir to Playwright and ./configdir to a naive resolve().
-  // Codex round 13 reproduced the false green: a three-band config at the launch
-  // path certified while Playwright loaded a phone-only config from the tests
-  // directory. This gate chdir's to the same place before importing (round 11),
-  // so resolving here against the same base is what makes the two agree.
-  configPath = isAbsolute(explicit) ? explicit : resolve(resolve(dir), explicit);
+  // Plain resolve() against the CURRENT directory, which the chdir above has
+  // already made the tests directory — exactly Playwright's
+  // resolve(process.cwd(), configFile). Round 13 computed the base instead and
+  // round 14 defeated that with a symlink.
+  configPath = isAbsolute(explicit) ? explicit : resolve(explicit);
   if (!existsSync(configPath)) {
     die(3, [`CANNOT CHECK: --config path does not exist: ${configPath}`, '  This is NOT a pass.']);
   }
@@ -165,10 +195,10 @@ if (explicit) {
     configPath = join(configPath, found[0]);
   }
 } else {
-  const present = CONFIG_NAMES.filter(n => existsSync(join(dir, n)));
+  const present = CONFIG_NAMES.filter(n => existsSync(join(TESTS_DIR, n)));
   if (!present.length) {
     die(3, [
-      `CANNOT CHECK: no Playwright config in ${resolve(dir)}`,
+      `CANNOT CHECK: no Playwright config in ${TESTS_DIR}`,
       `  looked for: ${CONFIG_NAMES.join(', ')}`,
       '  This is NOT a pass — the viewport gate was not evaluated.',
     ]);
@@ -176,7 +206,7 @@ if (explicit) {
   if (present.length > 1) {
     console.log(`NOTE: ${present.length} configs present — Playwright reads ${present[0]}, shadowing ${present.slice(1).join(', ')}`);
   }
-  configPath = resolve(join(dir, present[0]));
+  configPath = resolve(join(TESTS_DIR, present[0]));
 }
 console.log(`config:    ${configPath}`);
 
@@ -192,7 +222,7 @@ console.log(`config:    ${configPath}`);
       `  config: ${configPath}`,
       `  ${(e && (e.code || e.name)) || 'Error'}: ${String(e && e.message).split('\n')[0]}`,
       '  In CI this step must run AFTER the ui-suite composite\'s "Install test dependencies".',
-      `  Locally: (cd ${dir} && npm install --no-package-lock --ignore-scripts)`,
+      `  Locally: (cd ${TESTS_DIR} && npm install --no-package-lock --ignore-scripts)`,
       '  node_modules is environment-provided (gitignored, never in a fresh clone),',
       '  so its absence is a loud "cannot check" — NOT a pass.',
     ]);
@@ -208,33 +238,7 @@ console.log(`config:    ${configPath}`);
   // and copying environment variables across, as round 8 did, does not make the
   // evaluations equivalent — it made one of two inputs match. Codex, round 9.
   //
-  // THE TESTS DIRECTORY, NOT THE CONFIG'S DIRECTORY. Playwright runs with the
-  // tests directory as cwd whatever `--config` points at, so with an explicit
-  // --config outside --tests-dir the two diverge again. Round 9 chose
-  // dirname(configPath) because in the shipped layout they are the same directory
-  // — I generalised from the case in front of me for the seventh time. Codex,
-  // round 11, reproduced it with an external-config fixture.
-  //
-  // Fixed here rather than in the composite deliberately: a caller invoking this
-  // script directly gets the same guarantee, and there is no second place to keep
-  // in step. configPath is already absolute, so nothing below depends on cwd.
-  try {
-    process.chdir(resolve(dir));
-    // process.chdir() does NOT update process.env.PWD — Node leaves it at the
-    // value the shell exported. A config reading PWD would still see the repo
-    // root while cwd said otherwise, so round 9's fix moved ONE of the two
-    // cwd-derived inputs. Codex, round 10. Verified: after chdir, cwd changed
-    // and process.env.PWD had not.
-    process.env.PWD = process.cwd();
-  } catch (e) {
-    die(5, [
-      'CANNOT CHECK: cannot enter the config\'s directory to evaluate it.',
-      `  ${dirname(configPath)}`,
-      `  ${(e && e.message) || e}`,
-      '  Playwright evaluates the config from there, so reading it from elsewhere',
-      '  can produce a different config. Refusing rather than reading the wrong one.',
-    ]);
-  }
+  // (the chdir into the tests directory happened before config resolution above)
   let cfg;
   try {
     const mod = await import(pathToFileURL(configPath).href);
@@ -387,6 +391,29 @@ console.log(`config:    ${configPath}`);
   // the config object is not the whole input. Round 8 fixed environment VARIABLES
   // reaching the config; this is the environment reaching PLAYWRIGHT, past the
   // config entirely. Reading `reporter` was never going to see it.
+  // PW_TEST_SOURCE_TRANSFORM makes Playwright run a Babel plugin over the config
+  // as it loads it, so the object Playwright gets is not the object a plain
+  // import() produces. Codex reproduced a transform that ADDS a root grep: the
+  // gate imported the untransformed three-band config and exited 0 while
+  // `--list` found zero tests. Round 14.
+  //
+  // Same family as PW_TEST_REPORTER above — an environment variable that changes
+  // what Playwright does, invisible to reading the config. Refused rather than
+  // reproduced: applying the transform here would mean running an arbitrary Babel
+  // plugin from this gate, and the point of the last eight rounds is that this
+  // program should stop trying to reproduce Playwright's behaviour.
+  if (process.env.PW_TEST_SOURCE_TRANSFORM) {
+    die(13, [
+      'FAIL: PW_TEST_SOURCE_TRANSFORM is set — CANNOT CHECK.',
+      `  ${process.env.PW_TEST_SOURCE_TRANSFORM}`,
+      '  Playwright applies that transform while loading the config, so what it',
+      '  sees is not what a plain import() produces. This gate reads the config;',
+      '  it will not run your transform to find out what it changes.',
+      '  Clear it for the run this gate is certifying, or accept that coverage',
+      '  here cannot be attributed.',
+      '  test.md -> UI coverage gates, fifth gate.',
+    ]);
+  }
   const envReporter = process.env.PW_TEST_REPORTER;
   // reporter accepts a bare id, a [id, options] pair, or an array of either.
   const reporterIds = (r => {

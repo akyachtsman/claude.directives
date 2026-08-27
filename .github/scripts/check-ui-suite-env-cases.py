@@ -36,7 +36,7 @@ RUN = "Run Playwright tests"
 
 
 def action(check_env, run_env, check_name=CHECK, run_name=RUN,
-           check_wd="tests", run_wd="tests"):
+           check_wd="tests", run_wd="tests", decoy=None):
     def block(env):
         if not env:
             return ""
@@ -44,9 +44,14 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
 
     def wd(value):
         return f"      working-directory: {value}\n" if value is not None else ""
+    decoy_yaml = ""
+    if decoy:
+        decoy_yaml = (f"    - name: {decoy}\n      shell: bash\n{wd('tests')}"
+                      f"{block(dict(BOTH))}      run: echo decoy\n")
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
-        f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
+        + decoy_yaml
+        + f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
         "      run: node check.js\n"
         f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
         "      run: npx playwright test\n"
@@ -100,6 +105,17 @@ CASES = [
     ("check step declares no working directory at all",
      action(dict(BOTH), dict(BOTH), check_wd=None), 1,
      "DIFFERENT working directories"),
+
+    # Codex round 14: a DECOY step carrying a reserved name, placed before the
+    # real one, made env_of() return the decoy's environment and the guard report
+    # parity while the actual run saw something else. "Take the first match" is
+    # the same substitution as every other one on this PR — a cheap stand-in for
+    # identifying the thing itself.
+    ("a decoy step named like the run step — refused, not silently preferred",
+     action({"APP_URL": "a"}, dict(BOTH), decoy=RUN), 1, f'2 steps are named "{RUN}"'),
+
+    ("a decoy step named like the check step — refused",
+     action(dict(BOTH), dict(BOTH), decoy=CHECK), 1, f'2 steps are named "{CHECK}"'),
 
     # A renamed step must fail loudly. Without this the guard looks up two names,
     # finds neither, compares two empty mappings and reports OK.

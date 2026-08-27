@@ -184,7 +184,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   clears the verdict gate; it never clears the label. So on a PR carrying no
   `codex-flagged` — a first pass that came back clean as a reaction, which the
   monitor never labels — the ladder is the whole gate and the merge proceeds
-  autonomously. The escalation above applies only where a label from an earlier
+  unattended. The escalation above applies only where a label from an earlier
   flagged round is still sitting there and no observable terminal state explains
   it.
 - **Neither a missing label nor an empty review list is proof.** Before merging,
@@ -509,7 +509,7 @@ the *unreachable-review test* admits, recorded on the PR;
 no `codex-flagged` label — request a pass to clear it, or, on a state that test
 admits, remove it with the observable the last-resort rule requires. ⚠️ These two
 are separate gates and the ladder clears only the first. Where no `codex-flagged`
-label is present, the ladder is the whole gate and the merge proceeds. Where one
+label is present, the ladder is the whole gate and the merge proceeds unattended. Where one
 from an earlier flagged round IS present, a reaction-only round leaves it, and the
 label rule escalates rather than removing it, so that PR is not mergeable without
 the owner; no unresolved review

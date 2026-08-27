@@ -93,6 +93,18 @@
       ]
     },
     {
+      "id": "terminal-states-list-is-closed",
+      "why": "The companion entry `unreachable-review-terminal-states` pins the SENTENCE 'The two states are …' at each consumer. Codex, #336 round 9: that catches a consumer drifting away from the sentence and NOT a third bullet appended to the list in git.md, after which every consumer keeps asserting 'the two states' truthfully-as-written while the source admits three. check-claims.js's own header names this as one of its three documented blind spots -- it 'cannot see a fix that says MORE than intended' (rounds 38-39 of #294) -- so closing it needs a pattern about STRUCTURE, not wording. This one requires the summary sentence to follow the outage bullet with NO further bullet between them: append a third and the tempered gap rejects it, so the source and its summary cannot disagree about how many states there are. sourceOnly because the structure exists only in git.md; the consumers carry the sentence, which the companion entry pins. ⚠️ What it does NOT catch: a bullet inserted BEFORE the unavailable one, or a state added somewhere other than this list. The realistic edit is an append, which is what this covers.",
+      "source": "directives/git.md",
+      "sourceOnly": true,
+      "pattern": "outage — the request could not be made or accepted at all(?:(?!- )[^])*?The two states are",
+      "mustNotMatch": [
+        "outage — the request could not be made or accepted at all: the App is not installed. - **stale head** — Codex cannot reach it. The two states are",
+        "The two states are an unavailable reply still inside its reset window",
+        "outage — the request could not be made or accepted at all"
+      ]
+    },
+    {
       "id": "unreachable-review-terminal-states",
       "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 then proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half, and Codex asked for it by naming the drift it would permit: widen the canonical test so an accepted-but-silent request counts as an outage, or drop the reset bound so a stale usage-limit reply stays valid forever, and every merge consumer -- all of which admit 'any state that test admits' -- would authorise removing the blocker and merging while a review is still obtainable or in flight. The name-only pattern passes unchanged through both. So the two states are stated in one canonical sentence at each consumer and pinned whole: an *unavailable* reply STILL INSIDE ITS RESET WINDOW, a request that COULD NOT BE MADE OR ACCEPTED at all, and NEVER ELAPSED SILENCE. All three fragments are required and in order, because each was a separate defect on this PR -- round 4 deleted a 30-minute timer that made silence sufficient, round 4 also found the unavailable reply had no expiry, and round 6 found a third statement of outage still defined as 'produced no signal'. A pattern requiring only two of the three would certify the third's regression.",
       "source": "directives/git.md",
@@ -113,15 +125,14 @@
     },
     {
       "id": "no-label-no-escalation",
-      "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. I scoped the rule, the gate framing and the readiness agent -- and round 7 found the unconditional version still standing in the auto-merge gate, CLAUDE.md, automations.md and cicd-setup.md, where a session would have spent a metered review request or involved the owner for nothing. Seventh round of one rule stated in several places and only some updated, and the FIRST one to survive after `unreachable-review-test-name` was added -- which is the evidence that pinning the test's NAME does not pin its CONTENT, exactly as that entry says. Codex asked for this entry by name for that reason. ⚠️ What this pins is the POSITIVE path: a session that drops the no-label carve-out and reverts to escalating unconditionally fails here. It does not pin the negative half (that a label which IS present escalates) -- that half is the conservative direction, and a carrier that over-escalates wastes a request rather than merging past a review. Consumers derived by measuring the tree, not assumed. The pattern requires the LADDER PREREQUISITE between the two halves, because without it the regex also accepted 'Where no codex-flagged label is present, the merge proceeds' -- which turns absence of an asynchronously-written label into sufficient merge evidence, the exact opposite of the surrounding rule that its absence proves nothing. A guard that accepts the dangerous shortening of the claim it pins is worse than no guard, since it reports the regression as coverage; that shortened form is in mustNotMatch.",
+      "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. I scoped the rule, the gate framing and the readiness agent -- and round 7 found the unconditional version still standing in the auto-merge gate, CLAUDE.md, automations.md and cicd-setup.md, where a session would have spent a metered review request or involved the owner for nothing. Seventh round of one rule stated in several places and only some updated, and the FIRST one to survive after `unreachable-review-test-name` was added -- which is the evidence that pinning the test's NAME does not pin its CONTENT, exactly as that entry says. Codex asked for this entry by name for that reason. ⚠️ What this pins is the POSITIVE path: a session that drops the no-label carve-out and reverts to escalating unconditionally fails here. It does not pin the negative half (that a label which IS present escalates) -- that half is the conservative direction, and a carrier that over-escalates wastes a request rather than merging past a review. Consumers derived by measuring the tree, not assumed. The pattern requires the LADDER PREREQUISITE between the two halves, because without it the regex also accepted 'Where no codex-flagged label is present, the merge proceeds' -- which turns absence of an asynchronously-written label into sufficient merge evidence, the exact opposite of the surrounding rule that its absence proves nothing. A guard that accepts the dangerous shortening of the claim it pins is worse than no guard, since it reports the regression as coverage; that shortened form is in mustNotMatch. It also requires the word UNATTENDED, because the pattern ended at 'merge proceeds' and an owner-gated suffix -- 'the merge proceeds only after escalating to the owner', 'after owner approval' -- satisfied it while reinstating the escalation this claim exists to prevent. A pattern that stops before the consequence pins the condition and not the outcome. The READINESS AGENT is deliberately NOT a consumer: it cannot run the ladder and round 8 taught it that the no-label merge result is the merger's conclusion, so requiring it to restate that conclusion would force it to keep the shadow copy that went stale in rounds 5, 6 and 8. It states the part that IS its own -- an absent label removes only the label blocker -- and nothing further.",
       "source": "directives/git.md",
-      "pattern": "no codex-flagged label is present(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,40}?ladder is the whole gate(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,40}?merge proceeds",
+      "pattern": "no codex-flagged label is present(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,40}?ladder is the whole gate(?:(?!\\b(?:{{NEG}})\\b)[^.]){0,40}?merge proceeds unattended",
       "consumers": [
         "CLAUDE.md",
         "docs/standards/automations.md",
         "docs/standards/ci-triage.md",
-        "docs/standards/cicd-setup.md",
-        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
+        "docs/standards/cicd-setup.md"
       ],
       "mustNotMatch": [
         "a codex-flagged label is present, so the merge proceeds",
@@ -130,7 +141,9 @@
         "the ladder is the whole gate and the merge proceeds",
         "no codex-flagged label is present, so escalate; instead the merge proceeds",
         "Where no codex-flagged label is present, the merge proceeds",
-        "no codex-flagged label is present, and the ladder is the whole gate"
+        "no codex-flagged label is present, and the ladder is the whole gate",
+        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds only after escalating to the owner",
+        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds after owner approval"
       ],
       "negatorProbe": {
         "gap": "no codex-flagged label is present, but %s the merge proceeds"

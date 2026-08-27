@@ -223,7 +223,7 @@ especially under auto-merge.
   has failed.** Checking only the comments misses the inline-reply form entirely:
   that verdict never enters the comment list, so the search comes back empty and
   reads as "still pending" on a head Codex has in fact cleared. Where no `codex-flagged` label is present, the ladder
-  is the whole gate and the merge proceeds — none of this applies. Where a label
+  is the whole gate and the merge proceeds unattended — none of this applies. Where a label
   from an earlier flagged round IS present and the clear
   arrives in an unwatched form, **request another pass** so the
   verdict lands as a comment the monitor acts on; hand removal is reserved for

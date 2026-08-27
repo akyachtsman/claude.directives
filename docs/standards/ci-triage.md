@@ -61,7 +61,7 @@ anyway.
    label sits there with nothing to remove it. All three forms were observed in
    `claude.directives` on 2026-08-23, so do not assume any of them: check the
    PR's **comments and its review threads**. Where no `codex-flagged` label is
-   present, the ladder is the whole gate and the merge proceeds; where one is and
+   present, the ladder is the whole gate and the merge proceeds unattended; where one is and
    the clear arrives in
    either unwatched form, **request another pass** so the verdict lands in the
    form the monitor acts on. Read the PR rather than reading the stuck label as

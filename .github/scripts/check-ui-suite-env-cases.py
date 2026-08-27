@@ -35,17 +35,20 @@ CHECK = "Check three viewport classes are declared"
 RUN = "Run Playwright tests"
 
 
-def action(check_env, run_env, check_name=CHECK, run_name=RUN, check_body=None):
+def action(check_env, run_env, check_name=CHECK, run_name=RUN,
+           check_wd="tests", run_wd="tests"):
     def block(env):
         if not env:
             return ""
         return "      env:\n" + "".join(f"        {k}: {v}\n" for k, v in env.items())
-    body = check_body or "node check.js"
-    body_yaml = "      run: |\n" + "".join(f"        {ln}\n" for ln in body.splitlines())
+
+    def wd(value):
+        return f"      working-directory: {value}\n" if value is not None else ""
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
-        f"    - name: {check_name}\n      shell: bash\n{block(check_env)}{body_yaml}"
-        f"    - name: {run_name}\n      shell: bash\n{block(run_env)}"
+        f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
+        "      run: node check.js\n"
+        f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
         "      run: npx playwright test\n"
     )
 
@@ -56,7 +59,7 @@ CASES = [
     # The success path. Without this the guard could fail everything and the
     # suite would still be green on all the failure cases.
     ("identical env on both steps", action(dict(BOTH), dict(BOTH)), 0,
-     "declare the same step-level env"),
+     "same step-level env and working directory"),
 
     # The success message must not overclaim: it compares declared YAML env and
     # cannot see what `npx` adds (#333 round 11).
@@ -79,26 +82,24 @@ CASES = [
     ("same key, different values — names the run-side value, no traceback",
      action({"APP_URL": "a"}, {"APP_URL": "z"}), 1, "run='z'"),
 
-    # The composite cannot export TESTS_DIR to the run (workers inherit it) and
-    # cannot interpolate it into the command (template injection, flagged HIGH by
-    # security review). It takes it through env and unsets it before node. That
-    # exemption is DERIVED from the file, so these three cases pin the derivation
-    # rather than the exemption -- the third is the one that matters, because an
-    # unset placed after the node call is exactly the edit that looks harmless.
-    ("check-only var unset before node — allowed",
-     action({"APP_URL": "a", "TESTS_DIR": "d"}, {"APP_URL": "a"},
-            check_body='dir="$TESTS_DIR"\nunset TESTS_DIR\nnode check.js --tests-dir "$dir"'),
-     0, "declare the same step-level env"),
+    # WORKING DIRECTORY IS AN INPUT TOO (#333 rounds 9-12). A config is code and
+    # can branch on process.cwd(), so the two steps evaluating it must run from
+    # the same place. This replaced an `unset TESTS_DIR` mechanism that took four
+    # attempts and was defective in two more ways when it was removed: the unset
+    # was textual (an `if false; then unset …; fi` satisfied the regex) and the
+    # step-level assignment shadowed an inherited value the run step still saw.
+    # The composite now passes the directory via working-directory and a literal
+    # `--tests-dir .`, so there is no variable to shadow, unset, or verify.
+    ("both steps run from the same working directory", action(dict(BOTH), dict(BOTH)), 0,
+     "same step-level env and working directory"),
 
-    ("check-only var NOT unset — still a divergence",
-     action({"APP_URL": "a", "TESTS_DIR": "d"}, {"APP_URL": "a"},
-            check_body='node check.js --tests-dir "$TESTS_DIR"'),
-     1, "carries environment the run step lacks"),
+    ("different working directories — a cwd-branching config diverges",
+     action(dict(BOTH), dict(BOTH), check_wd=".", run_wd="tests"), 1,
+     "DIFFERENT working directories"),
 
-    ("check-only var unset AFTER node — too late, still a divergence",
-     action({"APP_URL": "a", "TESTS_DIR": "d"}, {"APP_URL": "a"},
-            check_body='node check.js --tests-dir "$TESTS_DIR"\nunset TESTS_DIR'),
-     1, "carries environment the run step lacks"),
+    ("check step declares no working directory at all",
+     action(dict(BOTH), dict(BOTH), check_wd=None), 1,
+     "DIFFERENT working directories"),
 
     # A renamed step must fail loudly. Without this the guard looks up two names,
     # finds neither, compares two empty mappings and reports OK.

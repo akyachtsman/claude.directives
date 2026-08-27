@@ -316,6 +316,33 @@ const CASES = [
       'suite/tests/app.spec.js': "import { test } from '@playwright/test';\ntest('s', async () => {});\n" },
     0, 'check-ui-viewports: OK', { subdir: 'suite', configArg: 'cfgdir/playwright.config.js' }],
 
+  // Codex round 12: Playwright's --config is "Configuration file, OR a test
+  // directory with optional playwright.config" (1.62.1 --help). Treating a
+  // directory as a file made import() fail and the gate exit 4 on an invocation
+  // Playwright handles — a refusal on a valid config, so it counts against the
+  // muting risk. Same precedence list as the implicit search, so the two paths
+  // cannot disagree about which file Playwright would read.
+  ['--config names a DIRECTORY, not a file',
+    { 'cfgdir/playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'suite/tests/app.spec.js': "import { test } from '@playwright/test';\ntest('s', async () => {});\n" },
+    0, 'check-ui-viewports: OK', { subdir: 'suite', configArg: 'cfgdir' }],
+
+  // Codex round 12 again: a project testDir is NO LONGER part of `restricted`.
+  // Round 10 compared spellings, round 12 defeated it with a directory symlink —
+  // the same defeat round 6 delivered to the root check after four predicates.
+  // All testDir inference, root and project, now goes to #335 together.
+  //
+  // This case pins a REAL HOLE at exit 0, deliberately: a project redirecting
+  // discovery away from the suite is not flagged. Recorded as a case rather than
+  // prose, so re-adding a fifth predicate trips a test instead of passing quietly
+  // — and so the hole is visible to anyone reading what this gate covers.
+  ['project testDir redirect is NOT flagged — a known hole, deferred to #335',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'desktop', testDir: './elsewhere', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK'],
+
   ['laptop project carries testMatch — declared but unattributable',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"

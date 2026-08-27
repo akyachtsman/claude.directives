@@ -136,6 +136,26 @@ if (explicit) {
   if (!existsSync(configPath)) {
     die(3, [`CANNOT CHECK: --config path does not exist: ${configPath}`, '  This is NOT a pass.']);
   }
+  // Playwright's own --config is "Configuration file, OR a test directory with
+  // optional playwright.config" (1.62.1 --help). Treating a directory as a file
+  // made import() fail and the gate exit 4 on a config Playwright loads fine —
+  // a refusal on a valid invocation, not a fail-open, but still a false alarm.
+  // Codex, round 12. Same precedence list as the implicit search below, so the
+  // two paths cannot disagree about which file Playwright would read.
+  if (statSync(configPath).isDirectory()) {
+    const found = CONFIG_NAMES.filter(n => existsSync(join(configPath, n)));
+    if (!found.length) {
+      die(3, [
+        `CANNOT CHECK: --config names a directory with no Playwright config: ${configPath}`,
+        `  looked for: ${CONFIG_NAMES.join(', ')}`,
+        '  This is NOT a pass — the viewport gate was not evaluated.',
+      ]);
+    }
+    if (found.length > 1) {
+      console.log(`NOTE: ${found.length} configs present — Playwright reads ${found[0]}, shadowing ${found.slice(1).join(', ')}`);
+    }
+    configPath = join(configPath, found[0]);
+  }
 } else {
   const present = CONFIG_NAMES.filter(n => existsSync(join(dir, n)));
   if (!present.length) {
@@ -398,8 +418,6 @@ console.log(`config:    ${configPath}`);
   // the UI suite — round 2 of #280 found exactly that. Such a project is printed
   // with its width but does NOT count toward a band: the conservative direction is
   // a false alarm naming the project, never a false pass.
-  const CONFIG_DIR = dirname(configPath);
-  const resolveDir = d => resolve(CONFIG_DIR, String(d));
   const RESTRICTORS = ['testMatch', 'testIgnore', 'grep', 'grepInvert'];
   const cover = { laptop: [], tablet: [], phone: [] };
   const rows = [];
@@ -409,17 +427,21 @@ console.log(`config:    ${configPath}`);
       : cfg.use && cfg.use.viewport !== undefined ? cfg.use.viewport
         : DEFAULT_VIEWPORT;
     const restricted = RESTRICTORS.filter(k => p && p[k] !== undefined);
-    // RESOLVED paths, not spellings. A project redundantly declaring the root's
-    // own directory as 'tests' against a root './tests' is not restricted, and
-    // the string test called it so — reported as a missing band on a config
-    // Playwright runs fine. Round 3 made exactly this fix for the ROOT testDir
-    // and it never reached this separate per-project comparison (Codex, round
-    // 10); the same reasoning applies unchanged, because normalising a path is
-    // decidable where inferring which spec is the suite is not.
-    if (p && p.testDir !== undefined
-        && resolveDir(p.testDir) !== resolveDir(cfg.testDir === undefined ? '.' : cfg.testDir)) {
-      restricted.push('testDir');
-    }
+    // testDir IS NOT PART OF `restricted`, at the project level either. Round 10
+    // fixed the spelling comparison here; round 12 defeated the fix with a
+    // directory symlink — `alias -> .` makes two lexically different paths name
+    // one directory, and every project was marked restricted, refusing all three
+    // bands on a config Playwright runs.
+    //
+    // That is the SAME defeat round 6 delivered to the root testDir check, after
+    // four predicates. I removed the root one then and left this one, because the
+    // finding named the root. A realpath here would be predicate five, and
+    // bind mounts and case-insensitive filesystems are the next two.
+    //
+    // So all testDir inference now goes to #335 together, root and project. The
+    // cost is a project that genuinely redirects discovery away from the suite is
+    // not flagged — a real hole, recorded rather than papered over, and no worse
+    // than the root case that has been deferred since round 6.
     if (vp === null) {
       rows.push({ name, w: 'null', band: 'UNCLASSIFIABLE (viewport: null — no fixed viewport)', restricted });
       continue;

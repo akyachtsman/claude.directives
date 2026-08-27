@@ -15,7 +15,7 @@ hand-maintained coupling held together by a comment, which is the enumerate-vs-
 derive failure #333 spent seven rounds on. This script derives it instead: add a
 variable to the run step and forget the check step, and CI says so.
 
-EXACT PARITY, no exemptions. An earlier version exempted "step plumbing" names
+EXACT PARITY OF ENV AND WORKING DIRECTORY, no exemptions. An earlier version exempted "step plumbing" names
 (TESTS_DIR, SERVER_ROOT) in the direction where the CHECK step carried a variable
 the run step lacked, on the argument that this direction could not hide a filter.
 That argument was wrong, and Codex showed how (#333 round 10): a config can
@@ -28,7 +28,6 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-ui-suite-env.py
 """
-import re
 import sys
 
 import yaml
@@ -57,33 +56,11 @@ def env_of(steps, name):
     return {}, False
 
 
-def body_of(steps, name):
+def workdir_of(steps, name):
     for step in steps:
         if step.get("name") == name:
-            return str(step.get("run") or "")
-    return ""
-
-
-def unset_before_node(body, var):
-    """Is `var` unset in this shell body BEFORE the node invocation?
-
-    A variable the check step declares and the run step does not is a real
-    divergence -- unless the check step drops it from the environment before the
-    process that imports the config starts. That is the shape the composite uses
-    for TESTS_DIR: it cannot be exported to the run (the Playwright workers
-    inherit it) and it cannot be interpolated into the command (template
-    injection, flagged HIGH by security review), so it comes in through env and
-    is unset before `node`.
-
-    This is derived from the file, not an allowlist: the exemption holds only
-    while the unset is actually there, and moving it after the node call fails.
-    """
-    node_at = body.find("node ")
-    if node_at < 0:
-        return False
-    before = body[:node_at]
-    return re.search(rf"^\s*unset\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)*{re.escape(var)}\b",
-                     before, re.MULTILINE) is not None
+            return step.get("working-directory")
+    return None
 
 
 def main():
@@ -115,16 +92,26 @@ def main():
                 + "\n    The check IMPORTS the config, so a selection key conditional on one"
                 + "\n    of these is invisible to it and active in the run (#333, round 8)."
             )
-        check_body = body_of(steps, CHECK_STEP)
-        leaked = [k for k in extra if not unset_before_node(check_body, k)]
-        if leaked:
+        if extra:
             problems.append(
                 "the viewport check step carries environment the run step lacks: "
-                + ", ".join(leaked)
+                + ", ".join(extra)
                 + "\n    This direction hides a filter too: a config can declare one only when"
                 + "\n    a variable is ABSENT, so the check sees none and the run applies it"
-                + "\n    (#333, round 10). Either give both steps the same env, or `unset` it"
-                + "\n    in the check step's run body BEFORE the node invocation."
+                + "\n    (#333, round 10). Give both steps the same env, or neither."
+            )
+        # WORKING DIRECTORY IS AN INPUT TOO. A config is code: its export can
+        # depend on process.cwd() as much as on the environment (#333 round 9).
+        # Both steps evaluate the config, so both must run from the same place --
+        # and unlike the launcher's npm_* additions, this one IS visible here.
+        check_wd = workdir_of(steps, CHECK_STEP)
+        run_wd = workdir_of(steps, RUN_STEP)
+        if check_wd != run_wd:
+            problems.append(
+                "the two steps run from DIFFERENT working directories: "
+                f"check={check_wd!r} run={run_wd!r}"
+                + "\n    A config branching on process.cwd() then exports one thing to the"
+                + "\n    gate and another to the run (#333, rounds 9-12)."
             )
         if differing:
             problems.append(
@@ -155,7 +142,7 @@ def main():
     # recorded on #335.
     shared = sorted(run_env)
     print(
-        "check-ui-suite-env: OK -- the two steps declare the same step-level env "
+        "check-ui-suite-env: OK -- same step-level env and working directory "
         f"({', '.join(shared) if shared else 'empty'})"
     )
     print(

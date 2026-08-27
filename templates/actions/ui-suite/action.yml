@@ -133,28 +133,31 @@ runs:
     # Any variable added to the run step below must be added here too.
     - name: Check three viewport classes are declared
       shell: bash
+      # SAME working-directory AND SAME env AS THE RUN STEP BELOW. Both steps
+      # evaluate the config, so both must present it the same world.
+      #
+      # Four attempts got here, and the first three each satisfied some of the
+      # constraints while breaking another:
+      #   * export TESTS_DIR to both steps — the Playwright workers inherit it
+      #     and it overrides a value the calling job set;
+      #   * interpolate ${{ }} into the command — template injection, HIGH;
+      #   * take it through env and `unset` it before node — the unset is
+      #     textual (an `if false; then unset …; fi` satisfies a regex), and
+      #     the step-level assignment SHADOWS an inherited TESTS_DIR that the
+      #     run step still sees, so unsetting it created a fresh divergence.
+      # Each fix was aimed at the constraint that had just been violated.
+      #
+      # There is no variable here at all: `working-directory` is a YAML field, so
+      # the input is not interpolated into a shell body; GITHUB_WORKSPACE is
+      # runner-provided and identical in both steps; `--tests-dir .` is a literal.
+      # Nothing to shadow, nothing to unset, nothing to keep in step.
+      working-directory: ${{ inputs.tests-dir }}
       env:
-        TESTS_DIR: ${{ inputs.tests-dir }}
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         APP_PAGES: ${{ inputs.app-pages }}
-      # THREE CONSTRAINTS, AND THE OBVIOUS FIXES SATISFY TWO OF THEM:
-      #   1. the config this step imports must see the same environment as the one
-      #      the run step imports, or a config can branch on the difference;
-      #   2. TESTS_DIR must NOT reach the Playwright process — the workers inherit
-      #      it and it would override a value the calling job had set;
-      #   3. `${{ }}` must never be spliced into a shell body (template injection).
-      # Exporting TESTS_DIR to both steps breaks 2. Interpolating it into the
-      # command breaks 3 — flagged HIGH by security review, correctly.
-      # So: take it through env, copy it, and UNSET it before node starts. The
-      # config is then imported by a process whose environment matches the run's,
-      # with no interpolation anywhere. check-ui-suite-env.py verifies the unset
-      # rather than trusting this comment.
-      run: |
-        dir="$TESTS_DIR"
-        unset TESTS_DIR
-        node .github/scripts/check-ui-viewports.js --tests-dir "$dir"
+      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir .
 
     # Browsers are ~400MB and were re-downloaded on EVERY run. This is a BUDGET
     # fix, not a hang fix, and the distinction was measured rather than assumed:
@@ -248,10 +251,10 @@ runs:
       continue-on-error: ${{ inputs.advisory-run == 'true' }}
       env:
         # Deliberately NO TESTS_DIR here, and none on the viewport check above
-        # either. Both steps evaluate the config, so a variable present for one
-        # and absent for the other lets a config branch on its absence — Codex
-        # reproduced a root filter declared only when TESTS_DIR was unset.
-        # check-ui-suite-env.py enforces that these two mappings match exactly.
+        # either — neither step declares one, so neither shadows an inherited
+        # value and neither can branch on the other's absence.
+        # check-ui-suite-env.py enforces that these two mappings match exactly,
+        # and that both steps run from the same working-directory.
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}

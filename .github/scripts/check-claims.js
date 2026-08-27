@@ -97,7 +97,7 @@ const claims = MANIFEST_DOC.claims;
 // Two literals are not one definition, however the commit message describes
 // them. A placeholder is, because there is then no second copy to edit.
 const NEGATORS = MANIFEST_DOC.negators;
-const expand = (src) => src.replace(/\{\{NEG\}\}/g, () => {
+const expand = (src) => src.replace(/\{\{COND\}\}/g, () => COND).replace(/\{\{NEG\}\}/g, () => {
   if (typeof NEGATORS !== 'string' || NEGATORS === '') {
     console.error('FAIL: a pattern uses {{NEG}} but the manifest declares no "negators" string.');
     process.exit(1);
@@ -152,6 +152,47 @@ const CONTINUATIONS = MANIFEST_DOC.continuations;
 // Fixing it means matching EVERY occurrence rather than the first, which is a
 // different scan and would newly fail files that mention a claim in passing.
 // Recorded rather than fixed, alongside the three in this file's header.
+// ── ONE CONDITION DEFINITION, expanded into {{COND}} ────────────────────────
+// The openers that make an assertion conditional. This was written inline in
+// THREE patterns (a claim, its override, and the verdict-lookup claim), which
+// is the arrangement round 15 recorded as "a rule stated in more than one place
+// will disagree with itself" — and it did, twice: `only if` was there without
+// `if` (round 16), then `except where` without `where` (round 17).
+//
+// Both are the same property, so it is ASSERTED rather than remembered: every
+// multi-word opener's LAST WORD must itself be an opener. A compound is the
+// special case; the bare head is the common one, and shipping the compound
+// alone guards the wording nobody writes. Named in round 16 as something the
+// checker could assert; round 17 is what it cost to not have done it then.
+const CONDITION_OPENERS = [
+  'unless', 'except', 'if', 'when', 'whenever', 'where', 'wherever',
+  'provided', 'providing', 'as long as', 'so long as',
+];
+// THE ASSERTION IS ABOUT REDUNDANCY, and finding the right one took a false
+// start worth recording. The first version required every compound's LAST WORD
+// to be a member, and it immediately failed on my own `provided that` — whose
+// head is `provided`, the FIRST word. Compounds are irregular that way.
+//
+// The property that IS regular: with every bare opener present, a compound is
+// REDUNDANT, because the bare member already matches inside it — `\bif\b`
+// matches within `only if`, `\bexcept\b` within `except where`, `\bprovided\b`
+// within `provided that`. So a compound in this list is either redundant or it
+// is a genuinely irreducible phrase (`as long as`, whose words are not openers).
+// Rejecting redundant compounds is what stops the two-round pattern: `only if`
+// without `if` (r16) and `except where` without `where` (r17) were BOTH someone
+// adding the compound and believing the head was covered.
+for (const opener of CONDITION_OPENERS) {
+  if (!opener.includes(' ')) continue;
+  const covered = CONDITION_OPENERS.find((o) => !o.includes(' ')
+    && new RegExp(`\\b${o}\\b`).test(opener));
+  if (covered) {
+    console.error(`FAIL: CONDITION_OPENERS contains "${opener}", which the bare opener "${covered}" already matches inside — a redundant compound is how a missing bare head hides, twice on this PR. Drop the compound; the head covers it.`);
+    console.error('check-claims: FAIL');
+    process.exit(1);
+  }
+}
+const COND = [...CONDITION_OPENERS].sort((a, b) => b.length - a.length).join('|');
+
 const CONTINUATION_FLOOR = {
   clause: [
     ' only after escalating to the owner', ' after owner approval',
@@ -663,6 +704,17 @@ for (const claim of claims) {
           for (const [position, shape] of Object.entries(ovProbe.shapes)) {
             if (typeof shape !== 'string' || !shape.includes('%s')) {
               fail(`${id}: per-consumer continuationProbe.shapes.${position} for ${file} must be a string containing %s`);
+            }
+          }
+          // EVERY CLAIM-LEVEL POSITION, not merely a non-empty map. Round 16
+          // rejected `{}`; round 17 showed a PARTIAL map opts out just as
+          // effectively — deleting one position and its matching lookbehind left
+          // the map non-empty, so the count check passed and the guarded end
+          // went unprobed. A position is a place the claim can be taken back,
+          // and an override that drops one drops the only probe for it.
+          for (const position of Object.keys(claim.continuationProbe.shapes)) {
+            if (!(position in ovProbe.shapes)) {
+              fail(`${id}: per-consumer continuationProbe for ${file} is missing position "${position}" — the claim guards it, so the override must probe it too; a partial map opts out of the part it omits`);
             }
           }
         }

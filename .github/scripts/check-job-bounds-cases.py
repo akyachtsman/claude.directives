@@ -104,13 +104,18 @@ CASES = [
 
     ['…and the pass line does not credit the floor for it',
      {"a.yml": wf(ui=job("${{ inputs.tmo }}", ui=True, extra="    if: false\n"))},
-     0, "disabled caller(s) exempt and unreadable, so unchecked", {}],
+     0, "disabled caller(s) exempt, so unchecked", {}],
 
-    # The twin: a disabled caller with a READABLE bound was tested against the
-    # floor like any other, so it must not appear in the unverified list.
-    ['a disabled ui-suite caller with a literal bound is still verified',
-     {"a.yml": wf(ui=job(130, ui=True, extra="    if: false\n"))},
-     0, "ui-suite callers >= 120.", {}],
+    # Readability is irrelevant: the disabled `continue` sits ABOVE the floor
+    # test, so a LITERAL bound below the floor was exempted and uncounted too.
+    # Recording the exemption only in the expression branch covered half the
+    # cases and left the same over-claim for the other half (Codex, #337 r3).
+    ['a disabled ui-suite caller with a literal sub-floor bound is also unchecked',
+     {"a.yml": wf(ui=job(60, ui=True, extra="    if: false\n"))},
+     0, "disabled caller(s) exempt, so unchecked", {}],
+
+    ['an ENABLED ui-suite caller is still credited plainly',
+     {"a.yml": wf(ui=job(130, ui=True))}, 0, "ui-suite callers >= 120.", {}],
 
     # A CONSTANT expression is not context-dependent, and the guard evaluates it.
     # Both directions pinned: refusing this would be the overreach, and passing

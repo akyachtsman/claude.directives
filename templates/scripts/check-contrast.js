@@ -117,28 +117,35 @@ if (FILES.length === 0) {
 // stylesheet this gate never sees, and an unterminated string or comment means
 // the rest of the file is not what it appears to be.
 
-// `\` + 1-6 hex digits + optional single whitespace → that code point;
-// `\` + anything else → that character literally. Applied to NAMES only: two
-// spellings of one custom property must not read as two properties.
-function decodeIdent(text) {
-  let out = '';
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] !== '\\') { out += text[i]; continue; }
-    const hex = /^[0-9a-fA-F]{1,6}/.exec(text.slice(i + 1));
-    if (hex) {
-      out += String.fromCodePoint(parseInt(hex[0], 16));
-      i += hex[0].length;
-      if (/\s/.test(text[i + 1] || '')) i++;   // one whitespace terminator
-    } else {
-      out += text[i + 1] || '';
-      i++;
-    }
-  }
-  return out;
+// NO ESCAPE DECODER. There was one, for two rounds, and it was the wrong shape:
+// `--color-\61 ccent` really is `--color-accent`, so a decoder unified them —
+// and then `\FFFFFF` threw a RangeError out of String.fromCodePoint (CSS maps an
+// invalid code point to U+FFFD), `@\69mport` slipped past the at-rule check
+// because the raw text did not start with `@import`, and `!\69mportant` was not
+// recognised as the flag. Three findings, one per surface the decoder touched.
+// A backslash outside a string or a comment has no legitimate place in a design
+// token file, so it is FATAL instead — one rule, no decoder, and none of those
+// three classes can exist. Loud beats clever: refusing an escaped identifier
+// tells the author to spell it plainly; decoding it correctly everywhere is a
+// standing invitation to miss one surface.
+
+// At-rules are checked at BOTH terminators, `;` and `{`. Checking only `;`
+// missed every block-form at-rule, and an @import can be reached through a
+// prelude the old check did not recognise. Allow-list rather than deny-list:
+// `@media` and `@supports` wrap declarations this gate reads, and everything
+// else either brings in text it never sees (`@import`, `@use`) or is outside
+// what a design token file needs.
+const AT_RULES_READ = new Set(['media', 'supports']);
+function atRuleProblem(buf) {
+  const head = buf.trim();
+  if (!head.startsWith('@')) return null;
+  const name = (/^@([A-Za-z-]*)/.exec(head) || [, ''])[1].toLowerCase();
+  if (AT_RULES_READ.has(name)) return null;
+  return `an @${name || '(unreadable)'} rule — only @media and @supports wrap declarations this check can read`;
 }
 
-// Returns { decls } or { fatal: '…' }. `decls` maps a DECODED custom-property
-// name to every value declared for it, in source order.
+// Returns { decls } or { fatal: '…' }. `decls` maps a custom-property name to
+// every value declared for it, in source order.
 function scanDeclarations(css) {
   const decls = {};
   let buf = '';          // the declaration candidate being accumulated
@@ -148,7 +155,7 @@ function scanDeclarations(css) {
 
   const flush = () => {
     if (colonAt >= 0) {
-      const name = decodeIdent(buf.slice(0, colonAt)).trim();
+      const name = buf.slice(0, colonAt).trim();
       if (name.startsWith('--')) {
         // !important is a declaration FLAG; CSS does not put it in the value.
         const value = buf.slice(colonAt + 1).replace(/\s*!\s*important\s*$/i, '').trim();
@@ -175,7 +182,10 @@ function scanDeclarations(css) {
     if (c === '"' || c === "'") {
       let j = i + 1;
       for (; j < css.length; j++) {
-        if (css[j] === '\\') { j++; continue; }   // covers \" and a line continuation
+        // CSS normalises CRLF to one newline before tokenizing, so a backslash
+        // continues the string across BOTH characters. Skipping only the \r
+        // left the \n to trip the unterminated check on a CRLF file.
+        if (css[j] === '\\') { j += (css[j + 1] === '\r' && css[j + 2] === '\n') ? 2 : 1; continue; }
         if (css[j] === c) break;
         if (css[j] === '\n') return { fatal: `an unterminated ${c === '"' ? 'double' : 'single'}-quoted string` };
       }
@@ -185,20 +195,33 @@ function scanDeclarations(css) {
       continue;
     }
 
-    if (c === '\\') { buf += c + (css[i + 1] || ''); i++; continue; }   // escape, never a delimiter
+    // See "NO ESCAPE DECODER" above. Outside a string or comment this is fatal.
+    if (c === '\\') return { fatal: 'a backslash escape outside a string — spell identifiers and values plainly here' };
+
+    // CDO/CDC. CSS discards these at the top level and carries on, so a file can
+    // hide an at-rule behind one. Nothing in a token file needs them.
+    if ((c === '<' && css.startsWith('<!--', i)) || (c === '-' && css.startsWith('-->', i))) {
+      return { fatal: 'an HTML comment delimiter (<!-- or -->), which CSS discards and this check will not read around' };
+    }
 
     if (c === '(' || c === '[') { closers.push(c === '(' ? ')' : ']'); buf += c; continue; }
     if ((c === ')' || c === ']') && closers[closers.length - 1] === c) { closers.pop(); buf += c; continue; }
 
     if (c === '{') {
-      // A custom property may legally take a value containing balanced braces.
-      // Anywhere else, `{` means the text so far was a selector or at-rule
-      // prelude, not a declaration.
-      if (closers.length > 0 || (colonAt >= 0 && decodeIdent(buf.slice(0, colonAt)).trim().startsWith('--'))) {
+      // A custom property may legally take a value containing balanced braces —
+      // but only INSIDE a declaration list. At the top level a `{` always opens
+      // a rule, so `--color-accent:hover { … }` is a qualified rule whose
+      // selector happens to start with two dashes, not a declaration; inferring
+      // "declaration" from the prefix alone recorded its whole block as a second
+      // value and rejected a valid palette.
+      if (closers.length > 0
+          || (blocks > 0 && colonAt >= 0 && buf.slice(0, colonAt).trim().startsWith('--'))) {
         closers.push('}');
         buf += c;
         continue;
       }
+      const bad = atRuleProblem(buf);
+      if (bad) return { fatal: bad };
       buf = ''; colonAt = -1; blocks++;
       continue;
     }
@@ -210,10 +233,8 @@ function scanDeclarations(css) {
     }
 
     if (c === ';' && closers.length === 0) {
-      const head = buf.trim().toLowerCase();
-      if (head.startsWith('@import') || head.startsWith('@use')) {
-        return { fatal: `an ${head.split(/[\s(]/)[0]} rule — it brings in a stylesheet this check never reads` };
-      }
+      const bad = atRuleProblem(buf);
+      if (bad) return { fatal: bad };
       flush();
       continue;
     }

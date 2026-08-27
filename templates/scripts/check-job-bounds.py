@@ -676,13 +676,6 @@ for scan_dir in SCAN_DIRS:
                     # Evaluating one more expression shape would leave every other
                     # shape open, so this refuses instead of guessing. The remedy
                     # is in the message: a floored job takes a literal bound.
-                    if is_ui_suite_job(job) and _statically_disabled(job):
-                        # Exempt (a parked job incurs no cost, so the floors do
-                        # not apply to it) but NOT verified -- the expression
-                        # could resolve below the floor if it were ever
-                        # re-enabled. Named on the pass line rather than folded
-                        # into a claim that the floor held for every caller.
-                        ui_unverified.append(f"{rel} → {name}")
                     if is_ui_suite_job(job) and not _statically_disabled(job):
                         errors.append(
                             f"{rel} → job '{name}' calls the ui-suite composite and is bounded by an\n"
@@ -694,6 +687,13 @@ for scan_dir in SCAN_DIRS:
                             f"      (A job with no floor keeps the expression exemption; this one has one.)"
                         )
                         continue
+                    # A DISABLED ui-suite caller lands here before reaching the
+                    # exemption below, so record it here too. Both paths, because
+                    # recording in only one covered only half the disabled
+                    # callers -- the defect this whole branch exists to stop,
+                    # reproduced inside its own fix.
+                    if is_ui_suite_job(job) and _statically_disabled(job):
+                        ui_unverified.append(f"{rel} → {name}")
                     unevaluatable.append(f"{rel} → {name}")
                     continue
                 bound = int(literal)
@@ -720,6 +720,16 @@ for scan_dir in SCAN_DIRS:
             # is a live defect the moment someone re-enables it. Cost is
             # conditional on running; a declaration is not.
             if _statically_disabled(job):
+                # Exempt: a parked job incurs no cost, so the two cost floors do
+                # not apply. Exempt is NOT verified, though -- this `continue`
+                # sits ABOVE the floor test, so a disabled ui-suite caller never
+                # reached it whether its bound was readable or not, and folding
+                # it into "ui-suite callers >= N" credits the rule with a job it
+                # skipped. Recorded here rather than in the expression branch:
+                # putting it there covered only the unreadable half and left the
+                # same over-claim for a disabled caller bounded at a literal 60.
+                if is_ui_suite_job(job):
+                    ui_unverified.append(f"{rel} → {name}")
                 continue
             if bound < UI_SUITE_FLOOR and is_ui_suite_job(job):
                 errors.append(
@@ -783,7 +793,7 @@ ui_claim = f" ui-suite callers >= {UI_SUITE_FLOOR}."
 if ui_unverified:
     ui_claim = (
         f" ui-suite callers >= {UI_SUITE_FLOOR} where enforced; "
-        f"{len(ui_unverified)} disabled caller(s) exempt and unreadable, so unchecked: "
+        f"{len(ui_unverified)} disabled caller(s) exempt, so unchecked: "
         + "; ".join(ui_unverified) + "."
     )
 print(

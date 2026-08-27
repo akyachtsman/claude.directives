@@ -183,10 +183,48 @@ const CASES = [
   // tokenizer. These pin what a regex over raw text cannot see.
 
   // An escape in an identifier: CSS reads --color-\61 ccent as --color-accent,
-  // so this changes the rendered accent. The name pattern never matched it and
-  // the guard exited 0 with the original contrast result.
-  ['an escape in a custom-property name is the same property',
-    { 'styles/tokens.css': plus(':root { --color-\\61 ccent: #0D47A1; }\n') }, 1, DUP],
+  // so this changes the rendered accent, and the old name pattern never matched
+  // it — exit 0 with the original contrast result. A decoder fixed that and
+  // opened three more holes (round 3), so a backslash outside a string is now
+  // refused instead. Loud, and there is no decoder left to be wrong.
+  ['an escape in a custom-property name is refused',
+    { 'styles/tokens.css': plus(':root { --color-\\61 ccent: #0D47A1; }\n') }, 1, 'backslash escape'],
+
+  // …and the three the decoder itself introduced, all refused by the same rule.
+  ['an out-of-range escape does not crash the guard',
+    { 'styles/tokens.css': plus(':root { --x-\\FFFFFF: 1; }\n') }, 1, 'backslash escape'],
+
+  ['an escaped at-keyword cannot smuggle an import past the check',
+    { 'styles/tokens.css': '@\\69mport "theme.css";\n' + BASE }, 1, 'backslash escape'],
+
+  ['an escaped !important spelling is refused, not misread as a value',
+    { 'styles/tokens.css': plus(':root { --color-accent: #1565C0 !\\69mportant; }\n') }, 1, 'backslash escape'],
+
+  // CSS discards a CDO at the top level and applies what follows, so a file can
+  // hide an at-rule behind one. The prelude check read the raw text and saw
+  // `<!--`, not `@import`.
+  ['a CDO cannot hide an at-rule from the check',
+    { 'styles/tokens.css': '<!--\n@import "theme.css";\n' + BASE }, 1, 'HTML comment delimiter'],
+
+  // Block-form at-rules terminate at `{`, not `;`, so a check that only ran at
+  // `;` never saw one. @media and @supports wrap declarations this gate reads;
+  // everything else is refused.
+  ['@media still wraps declarations this check reads',
+    { 'styles/tokens.css': BASE + '@media (min-width: 40em) { .a { color: red; } }\n' }, 0, OK9],
+
+  ['an at-rule outside the allow-list is refused at its brace',
+    { 'styles/tokens.css': BASE + '@font-face { font-family: x; }\n' }, 1, '@font-face rule'],
+
+  // CSS normalises CRLF to one newline before tokenizing, so a backslash
+  // continues the string across both characters.
+  ['a string continued across an escaped CRLF is still a string',
+    { 'styles/tokens.css': plus('.e::before { content: "x\\\r\nnext"; }\n') }, 0, OK9],
+
+  // A qualified rule whose selector starts with two dashes: the pseudo-class
+  // colon made colonAt nonnegative, and the brace was misread as opening a
+  // custom-property value, recording the whole block as a second declaration.
+  ['a top-level rule whose selector starts with -- is a rule, not a declaration',
+    { 'styles/tokens.css': plus('--color-accent:hover { color: red; }\n') }, 0, OK9],
 
   // `content: "/*"` does not open a comment. Stripping comments first deleted
   // everything from there to the next real `*/` — including the real override.

@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""Guard: the ui-suite composite's viewport check and its Playwright run must see
+the SAME environment.
+
+WHY THIS EXISTS. `check-ui-viewports.js` IMPORTS the Playwright config, so it
+evaluates whatever that config computes from process.env. If the check step is
+given a thinner environment than the step that actually runs the suite, the two
+read DIFFERENT configs: a selection key set only when TEST_AUTH_CREDENTIAL is
+present is invisible to the check and active in the run. Codex reproduced exactly
+that on #333 (a config setting `shard` under that condition) -- check step exit 0,
+run step partitioned.
+
+The fix was to copy the run step's env onto the check step. That copy is a
+hand-maintained coupling held together by a comment, which is the enumerate-vs-
+derive failure #333 spent seven rounds on. This script derives it instead: add a
+variable to the run step and forget the check step, and CI says so.
+
+EXACT PARITY OF ENV AND WORKING DIRECTORY, no exemptions. An earlier version exempted "step plumbing" names
+(TESTS_DIR, SERVER_ROOT) in the direction where the CHECK step carried a variable
+the run step lacked, on the argument that this direction could not hide a filter.
+That argument was wrong, and Codex showed how (#333 round 10): a config can
+declare a filter only when a variable is ABSENT. The check step had TESTS_DIR and
+saw no filter; the run step lacked it and applied one. An extra variable on
+either side is a divergence, so both directions are now checked and the exemption
+list is gone -- the composite gives both steps the same env instead.
+
+NOT exported: .github/ is outside every EXPORTS.json category path.
+
+Run: python3 .github/scripts/check-ui-suite-env.py
+"""
+import sys
+
+import yaml
+
+# Overridable so check-ui-suite-env-cases.py can point it at fixtures. Without a
+# case suite this guard was hand-verified each round, and a branch verified in
+# round 9 broke in round 10 unnoticed (#333) -- the guard's own failure path is
+# exactly the code nobody exercises.
+ACTION = sys.argv[1] if len(sys.argv) > 1 else "templates/actions/ui-suite/action.yml"
+CHECK_STEP = "Check three viewport classes are declared"
+RUN_STEP = "Run Playwright tests"
+
+
+def env_of(steps, name):
+    """Return the step's env MAPPING, not just its keys.
+
+    Comparing key sets alone passes when a maintainer repoints an existing
+    variable at a different input -- same names, different values, and a config
+    conditional on that value exposes no selection key to the check while
+    activating one in the run (Codex, #333 round 9). The guard's whole job is
+    that the two evaluations see the same input, so it has to compare inputs.
+    """
+    matches = [s for s in steps if s.get("name") == name]
+    if len(matches) != 1:
+        # NOT "take the first". A decoy step carrying the reserved name, placed
+        # before the real one, silently disabled this whole check -- Codex, #333
+        # round 14, reproduced with a decoy `Run Playwright tests` holding the
+        # check-side env while the actual run carried an extra filter switch.
+        # Zero matches and two matches are both "this file is not the shape this
+        # guard understands", and neither may read as parity.
+        return {}, len(matches)
+    return dict(matches[0].get("env") or {}), 1
+
+
+def index_of(steps, name):
+    matches = [i for i, s in enumerate(steps) if s.get("name") == name]
+    return matches[0] if len(matches) == 1 else None
+
+
+def workdir_of(steps, name):
+    matches = [s for s in steps if s.get("name") == name]
+    return matches[0].get("working-directory") if len(matches) == 1 else None
+
+
+def main():
+    with open(ACTION, encoding="utf-8") as handle:
+        doc = yaml.safe_load(handle)
+    steps = (doc.get("runs") or {}).get("steps") or []
+
+    check_env, check_n = env_of(steps, CHECK_STEP)
+    run_env, run_n = env_of(steps, RUN_STEP)
+    check_found = check_n == 1
+    run_found = run_n == 1
+
+    problems = []
+    for label, count in ((CHECK_STEP, check_n), (RUN_STEP, run_n)):
+        if count > 1:
+            problems.append(
+                f'{count} steps are named "{label}" in {ACTION}'
+                + "\n    This guard identifies both steps by name, so a duplicate makes it"
+                + "\n    unable to say which one runs -- and taking the first silently"
+                + "\n    disabled it (#333, round 14)."
+            )
+    # A renamed step is not a pass. Without this the whole guard reads two empty
+    # sets, finds them equal, and reports OK -- the fail-open shape it guards.
+    if check_n == 0:
+        problems.append(f'no step named "{CHECK_STEP}" in {ACTION}')
+    if run_n == 0:
+        problems.append(f'no step named "{RUN_STEP}" in {ACTION}')
+
+    if check_found and run_found:
+        missing = sorted(k for k in run_env if k not in check_env)
+        extra = sorted(k for k in check_env if k not in run_env)
+        differing = sorted(
+            k for k in run_env if k in check_env and check_env[k] != run_env[k]
+        )
+        if missing:
+            problems.append(
+                "the viewport check step is missing environment the run step has: "
+                + ", ".join(missing)
+                + "\n    The check IMPORTS the config, so a selection key conditional on one"
+                + "\n    of these is invisible to it and active in the run (#333, round 8)."
+            )
+        if extra:
+            problems.append(
+                "the viewport check step carries environment the run step lacks: "
+                + ", ".join(extra)
+                + "\n    This direction hides a filter too: a config can declare one only when"
+                + "\n    a variable is ABSENT, so the check sees none and the run applies it"
+                + "\n    (#333, round 10). Give both steps the same env, or neither."
+            )
+        # WORKING DIRECTORY IS AN INPUT TOO. A config is code: its export can
+        # depend on process.cwd() as much as on the environment (#333 round 9).
+        # Both steps evaluate the config, so both must run from the same place --
+        # and unlike the launcher's npm_* additions, this one IS visible here.
+        # ADJACENCY. Both steps evaluate the config, so anything running between
+        # them changes what the second one can observe and the first could not.
+        # Round 16: the check ran before `Start local server`, so a config that
+        # branches on whether APP_URL answers saw a dead URL at the gate and a
+        # live one at the run -- both exiting 0 on different configs. The fix was
+        # to move the step; this keeps it moved, because a comment saying "do not
+        # insert a step here" is not a mechanism.
+        check_i = index_of(steps, CHECK_STEP)
+        run_i = index_of(steps, RUN_STEP)
+        if check_i is not None and run_i is not None and run_i != check_i + 1:
+            between = [steps[i].get("name") for i in range(min(check_i, run_i) + 1,
+                                                           max(check_i, run_i))]
+            problems.append(
+                "the viewport check is not immediately before the Playwright run"
+                + (f"\n    between them: {', '.join(str(b) for b in between)}" if between else "")
+                + (f"\n    (the check is at index {check_i}, the run at {run_i})")
+                + "\n    Both steps evaluate the config. Anything in between can change what"
+                + "\n    the config observes, so the gate checks one config and the run uses"
+                + "\n    another (#333, round 16)."
+            )
+
+        # INDEX ADJACENCY IS NOT EXECUTION ADJACENCY. Two consecutive steps can
+        # still run something in between if it is INSIDE one of them: a command
+        # prepended to the run step's body executes after the gate's import and
+        # before Playwright's. A `uses:` step can hide arbitrary work for the same
+        # reason. Codex round 17 -- and the same substitution as everywhere else
+        # on #333: the cheap observable (index) standing in for the property
+        # (nothing happens between the two config evaluations).
+        # CONSTRAIN THE SHAPE, DO NOT COUNT LINES. Round 17 split each step's body
+        # into non-comment lines and required one at the edge. Codex round 18:
+        # `./flip-the-world.sh && npx playwright test` is ONE line, so the count
+        # said adjacent while a command ran between the two config evaluations —
+        # and the edge line was never checked at all, so a REPLACEMENT command
+        # passed too. Sixth time on this PR I measured the cheap observable
+        # (line count) instead of the property (what executes, and only that).
+        #
+        # So each step's body must consist of exactly the invocation it exists
+        # for, with nothing composed onto it. The accepted shapes are pinned in
+        # check-ui-suite-env-cases.py; anything else is refused rather than
+        # parsed, because parsing shell is how the previous version got here.
+        COMPOSERS = ("&&", "||", ";", "|", "&", "$(", "`")
+        for label, i, needle in ((CHECK_STEP, check_i, "check-ui-viewports"),
+                                 (RUN_STEP, run_i, "playwright test")):
+            if i is None:
+                continue
+            step = steps[i]
+            if step.get("uses"):
+                problems.append(
+                    f'"{label}" is a `uses:` step'
+                    + "\n    Its internals are not visible here, so nothing can establish that no"
+                    + "\n    other work runs between the two config evaluations (#333, round 17)."
+                )
+                continue
+            lines = [ln.strip() for ln in str(step.get("run") or "").splitlines()
+                     if ln.strip() and not ln.strip().startswith("#")]
+            bad = [ln for ln in lines if any(c in ln for c in COMPOSERS)]
+            if bad:
+                problems.append(
+                    f'"{label}" composes other commands onto its invocation'
+                    + f"\n    {'; '.join(bad)}"
+                    + "\n    Anything composed with && || ; | & or a substitution runs between the"
+                    + "\n    two config evaluations, however few LINES the step has"
+                    + "\n    (#333, round 18)."
+                )
+            elif len(lines) != 1:
+                problems.append(
+                    f'"{label}" runs {len(lines)} commands; it must run exactly one'
+                    + f"\n    {'; '.join(lines) if lines else '(none)'}"
+                    + "\n    Each of these steps evaluates the config, so anything else in either"
+                    + "\n    body executes between the two evaluations (#333, round 17)."
+                )
+            elif needle not in lines[0]:
+                problems.append(
+                    f'"{label}" does not appear to invoke what its name says'
+                    + f"\n    {lines[0]}"
+                    + f"\n    expected the command to mention {needle!r}. A step renamed onto a"
+                    + "\n    different command would otherwise satisfy every check here"
+                    + "\n    (#333, round 18)."
+                )
+
+        check_wd = workdir_of(steps, CHECK_STEP)
+        run_wd = workdir_of(steps, RUN_STEP)
+        if check_wd != run_wd:
+            problems.append(
+                "the two steps run from DIFFERENT working directories: "
+                f"check={check_wd!r} run={run_wd!r}"
+                + "\n    A config branching on process.cwd() then exports one thing to the"
+                + "\n    gate and another to the run (#333, rounds 9-12)."
+            )
+        if differing:
+            problems.append(
+                "the two steps set the same variable to DIFFERENT values: "
+                + ", ".join(differing)
+                + "\n    "
+                + "; ".join(
+                    f"{k}: check={check_env[k]!r} run={run_env[k]!r}" for k in differing
+                )
+                + "\n    Matching names are not matching inputs. A config conditional on the"
+                + "\n    VALUE then reads one thing here and another in the run (round 9)."
+            )
+
+    if problems:
+        print("check-ui-suite-env: FAILED")
+        for problem in problems:
+            print(f"  - {problem}")
+        return 1
+
+    # SAY WHAT WAS CHECKED, NOT WHAT WOULD BE NICE. This compares the two steps'
+    # step-level `env:` mappings in YAML. It does NOT establish that the two
+    # processes see the same environment: the check runs `node` directly while
+    # the run goes through `npx`, which injects npm_lifecycle_event, INIT_CWD and
+    # a spread of npm_config_* that never appear in this file (Codex, #333 round
+    # 11, reproduced with a config branching on npm_lifecycle_event). Claiming
+    # "identical environment" here was the same overclaim this guard exists to
+    # catch, one level up. Launcher parity is not attainable from YAML and is
+    # recorded on #335.
+    shared = sorted(run_env)
+    print(
+        "check-ui-suite-env: OK -- adjacent steps, same step-level env and working directory "
+        f"({', '.join(shared) if shared else 'empty'})"
+    )
+    print(
+        "  (declared env only: the launchers differ -- `node` vs `npx` -- and the"
+        " npm_* / INIT_CWD they add are outside what this file can see; see #335)"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

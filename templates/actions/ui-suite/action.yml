@@ -34,10 +34,15 @@
 #   setup/install/server/upload always stay blocking, so a broken install can
 #   never pass green.
 # - The viewport gate below runs on THIS composite's Node, which `setup-node` pins
-#   to 20. A project that has migrated to a TypeScript `playwright.config.ts` must
-#   either raise that pin to 22 (type stripping is on by default from 22.18) or
-#   keep a `.js` config — Node 20 cannot import a TS config, and the gate says so
-#   by name when it hits ERR_UNKNOWN_FILE_EXTENSION rather than passing quiet.
+#   to 20. That Node cannot import a TypeScript module ANYWHERE IN THE CONFIG'S
+#   GRAPH — a `playwright.config.js` that imports a `.ts` helper fails exactly as
+#   a `playwright.config.ts` does, so "keep a .js config" is not the escape hatch
+#   this note used to claim (Codex, #333 round 11). A project in that position must
+#   either raise the pin to 22 (type stripping is on by default from 22.18) or keep
+#   the config's ENTIRE import graph in JavaScript. The gate names the condition
+#   when it hits ERR_UNKNOWN_FILE_EXTENSION rather than passing quiet — and it is a
+#   refusal on a config Playwright's own runner would have loaded, so it counts
+#   against the muting risk, not for it.
 name: 'UI test suite'
 description: >
   Install deps + Playwright, optionally start a bundled local server, run the
@@ -105,10 +110,30 @@ runs:
     # says nothing about it: a viewport never instantiated produces no failing
     # test. test.md → UI coverage gates, fifth gate.
     #
-    # HERE, specifically: this is the first point node_modules exists (the script
-    # IMPORTS the config so Node expands `...devices[…]`, which needs
-    # @playwright/test resolvable), and it is BEFORE the browser install so a
-    # broken config fails in seconds instead of after a ~20-minute download.
+    # WHERE THIS STEP SITS, and what that costs. It used to run right after the
+    # dependency install, BEFORE the browser download, so a broken config failed
+    # in seconds rather than after a cold-cache ~20-minute install. That is no
+    # longer true and the ordering is now deliberate the other way:
+    #
+    # This step and `Run Playwright tests` both EVALUATE THE CONFIG. Anything
+    # running between them can change what the config observes, so the gate ends
+    # up checking one config while the run uses another. Codex reproduced it on
+    # #333 with a config branching on whether APP_URL answers: the gate saw a dead
+    # URL (server not yet started), the run saw a live one, three projects versus
+    # one, and BOTH exited 0. Matching the two steps' env (round 8) and
+    # working-directory (round 12) did not help, because the divergence was time,
+    # not values.
+    #
+    # So correctness beat feedback speed: the gate is now the last thing before
+    # the run, and check-ui-suite-env.py enforces that adjacency mechanically.
+    # THE COST IS REAL — a config this gate would reject now costs a browser
+    # install first. It is bounded by the cache step above (the ~20 minutes is a
+    # cold-cache figure, not the steady state), and a gate that certifies a
+    # different config than the one that runs is worth nothing however fast it is.
+    #
+    # If the wait becomes intolerable, the fix is a SECOND advisory invocation
+    # early on, not moving this one back: the authoritative verdict has to come
+    # from the evaluation adjacent to the run.
     #
     # Always blocking — `advisory-run` flips ONLY the run step. There is no silent
     # exit: config missing, import throwing, node_modules absent and zero projects
@@ -117,12 +142,15 @@ runs:
     # Copy templates/scripts/check-ui-viewports.js to .github/scripts/ WITH this
     # composite — this step names it by path and fails at resolution without it,
     # the same coupling check-job-bounds.py has with qa.yml.
-    - name: Check three viewport classes are declared
-      shell: bash
-      env:
-        TESTS_DIR: ${{ inputs.tests-dir }}
-      run: node .github/scripts/check-ui-viewports.js --tests-dir "$TESTS_DIR"
-
+    #
+    # THE SAME ENVIRONMENT AS THE RUN STEP, deliberately. This step IMPORTS the
+    # config, so it evaluates whatever that config computes from process.env — and
+    # the shipped config already reads APP_URL. Give it a thinner environment than
+    # `Run Playwright tests` below and the two steps read DIFFERENT configs: a
+    # selection key set only when TEST_AUTH_CREDENTIAL is present is invisible
+    # here and active there. Reproduced by Codex on #333 with a config setting
+    # `shard` under that condition — check step exit 0, run step partitioned.
+    # Any variable added to the run step below must be added here too.
     # Browsers are ~400MB and were re-downloaded on EVERY run. This is a BUDGET
     # fix, not a hang fix, and the distinction was measured rather than assumed:
     # downstream the install step SUCCEEDED in 21m25s, and the job then hit its
@@ -210,10 +238,55 @@ runs:
         "./$TESTS_DIR/node_modules/.bin/http-server" "$SERVER_ROOT" -p 8080 --silent &
         sleep 2
 
+    # IMMEDIATELY BEFORE THE RUN, and after the local server is up. This step
+    # evaluates the config, and the run below evaluates it again; anything that
+    # differs between those two moments is a config the gate did not check.
+    # Round 8 matched their environment, round 12 their working directory —
+    # and round 16 found the step ORDER doing the same damage: a config that
+    # branches on whether APP_URL answers saw a dead URL here and a live one
+    # there. Codex reproduced it exporting three projects while down and one
+    # while up, with both this gate and Playwright exiting 0.
+    #
+    # So: nothing may run between this step and the Playwright command that
+    # changes what the config can observe. Adding a step in between is the
+    # regression to watch for.
+    - name: Check three viewport classes are declared
+      shell: bash
+      # SAME working-directory AND SAME env AS THE RUN STEP BELOW. Both steps
+      # evaluate the config, so both must present it the same world.
+      #
+      # Four attempts got here, and the first three each satisfied some of the
+      # constraints while breaking another:
+      #   * export TESTS_DIR to both steps — the Playwright workers inherit it
+      #     and it overrides a value the calling job set;
+      #   * interpolate ${{ }} into the command — template injection, HIGH;
+      #   * take it through env and `unset` it before node — the unset is
+      #     textual (an `if false; then unset …; fi` satisfies a regex), and
+      #     the step-level assignment SHADOWS an inherited TESTS_DIR that the
+      #     run step still sees, so unsetting it created a fresh divergence.
+      # Each fix was aimed at the constraint that had just been violated.
+      #
+      # There is no variable here at all: `working-directory` is a YAML field, so
+      # the input is not interpolated into a shell body; GITHUB_WORKSPACE is
+      # runner-provided and identical in both steps; `--tests-dir .` is a literal.
+      # Nothing to shadow, nothing to unset, nothing to keep in step.
+      working-directory: ${{ inputs.tests-dir }}
+      env:
+        APP_URL: ${{ inputs.app-url }}
+        TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
+        TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        APP_PAGES: ${{ inputs.app-pages }}
+      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir .
+
     - name: Run Playwright tests
       shell: bash
       continue-on-error: ${{ inputs.advisory-run == 'true' }}
       env:
+        # Deliberately NO TESTS_DIR here, and none on the viewport check above
+        # either — neither step declares one, so neither shadows an inherited
+        # value and neither can branch on the other's absence.
+        # check-ui-suite-env.py enforces that these two mappings match exactly,
+        # and that both steps run from the same working-directory.
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}

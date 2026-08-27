@@ -268,6 +268,8 @@ node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, 
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header)
 python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
 node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic
+python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives its viewport check the SAME env as the Playwright run — the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8)
+python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths (a NameError shipped in one, #333 round 11)
 (cd templates/ui-tests && npm install --no-package-lock --ignore-scripts) && node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone; the install is a one-time ~2.4s network step (node_modules/ is gitignored, no lockfile written)
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form

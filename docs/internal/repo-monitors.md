@@ -34,9 +34,16 @@ An all-clear can travel as a SHA-bearing **comment**, which the monitor sees and
 acts on — that is what cleared #293 — or as a 👍 **reaction** or an inline
 **review-thread reply**, neither of which it can see at all. All three were
 observed on 2026-08-23 and **which one arrives is not predictable**, so check the
-PR's **comments AND its review threads** before assuming the label needs removing
-by hand: a clean inline reply leaves the comment list empty, so a comments-only
+PR's **comments AND its review threads** for a verdict naming the current head:
+a clean inline reply leaves the comment list empty, so a comments-only
 search comes back reading as "still pending" on a head Codex has cleared.
+
+**A stuck label is not removed by hand.** Request another pass — a clean
+**comment** verdict naming the head clears it automatically, which is what
+cleared #293 and #337. Hand removal is bounded by `git.md` → *PR Lifecycle*'s
+***unreachable-review test***: an observable terminal state, recorded on the PR,
+showing that a further request cannot produce a verdict. Elapsed silence is
+never that state, and neither is a label that looks stale.
 Contract detail: `docs/standards/automations.md` → Automation 3.
 
 **pages-monitor.yml** — fires on every GitHub Pages build (`page_build`). Reads the

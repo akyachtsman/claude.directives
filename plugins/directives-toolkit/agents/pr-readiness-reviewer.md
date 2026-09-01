@@ -93,9 +93,27 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      Look for the verdict in the PR's comments **and its review threads**: an inline
      reply never enters the comment list, so a comments-only check reports Pending on
      a head Codex has cleared. While
-     it is present, report the PR **Conditional** at best; the next step is either
-     waiting for the monitor's clear on a genuine all-clear, or removal-with-rationale
-     where a human judges the concerns addressed.
+     it is present, report the PR **Conditional** at best. The next step is
+     **requesting another review pass** so the verdict lands as the comment the
+     monitor clears on — UNLESS the PR already records an **observable terminal
+     state** `git.md` → *PR Lifecycle*'s **unreachable-review test** admits. The two states are an
+     *unavailable* reply still inside its reset window, or a
+     request that could not be made or accepted at all — never elapsed silence.
+     Neither needs a pass to
+     have run: a request rejected before any review began is the exit. A
+     reaction-only round is **not** one of these; where a label is still present
+     that rule escalates it. **An absent label removes only the label
+     blocker.** It is written asynchronously and proves nothing about the head,
+     and this agent has no tool for the reaction endpoint so it cannot run the
+     ladder: with no verdict it reports **Pending** exactly as above, and never
+     upgrades a row on label absence — an old or human-authored reaction would
+     otherwise produce Ready for an unreviewed head. Report the label as
+     not-a-blocker and leave the verdict to its own evidence. What follows from
+     that for the MERGE is the merger's call under `git.md`, not a conclusion
+     this agent draws or restates. There
+     the next step is removal with that evidence, and reporting "request another pass" would keep
+     a mergeable PR Conditional forever, since no pass can succeed. Read the PR
+     before choosing which.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

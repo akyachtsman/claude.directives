@@ -730,6 +730,53 @@ which is KEEP GOING.
 - When the declared list drains: report done and stop. A standing authorization
   expires with its list.
 
+## "Proceed" — the Standing Directive (owner ruling, 2026-08-27)
+When the owner says **proceed**, it means all seven of these, and none of it
+needs restating.
+
+1. **Complete as much of the task as possible, autonomously.** Do not come back
+   between steps.
+2. **Do not involve the owner unless the decision is genuinely important and
+   critical.** A decision he has already made is not a new decision — executing
+   it is not an escalation.
+3. **Pipeline the work.** Recruit agents and run independent work in parallel
+   rather than idling, especially while waiting on CI, a deploy, or a review
+   (→ *Pipelined Execution*).
+4. **Auto-merge.** Where the work produces a PR, take it through to merged,
+   clearing a `codex-flagged` blocker by **requesting the review pass** rather
+   than removing the label. Take the label off by hand only where `git.md` →
+   *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
+   rule requires. Work that produces no PR has nothing to merge — see item 5.
+5. **Keep going until the whole task is done.** Merging is a milestone, not the
+   finish line: the task is done when every effect the work was for has
+   happened and been verified — the deploy and `qa-live` where the change is
+   deploy-backed and the repo carries the workflows, and equally the migration
+   applied and checked, the edge function redeployed, the rollout completed
+   (`data.md` → *Reversible-by-Design Backend Changes*). **INFORMATIONAL** work
+   — a read-only command, an investigation, a question answered, a change
+   correctly judged unnecessary — is done when the finding is reported with its
+   evidence. Absence of a PR is not what makes it done: work that CHANGES
+   something is done when that change is verified whether or not it produced a
+   PR, so a migration applied by hand, an edge function redeployed, a service
+   restarted, a setting changed outside the repo are each done at the verified
+   effect, never at the report. Never manufacture a PR to reach a terminal state.
+6. **The Escalation Rules still bind — all of them, as written.** Proceed
+   removes the need to ask about **steps**. It does not narrow that section, and
+   nothing here restates it: read it. Two of its gates are the ones "proceed"
+   most invites a session to skip, because they fire on ordinary recoverable
+   work rather than on damage — **a change touching more than one file's core
+   logic**, and **CI failing 3+ times on the same issue without progress**. Item
+   2 above never overrides them: a gate the owner set is not a decision he has
+   already made.
+7. **Never invent an answer to an open question.** Where a decision is genuinely
+   unresolved rather than merely unstated, do every part that does not depend on
+   it, then ask that one question. Guessing under a mandate to be autonomous is
+   how a wrong assumption ships silently.
+
+*Standing Authorization* above governs a declared list of tasks; this is the same
+posture invoked by a single word, plus the merge and verify obligations in 4 and
+5. Neither touches the stop gates.
+
 ## Session Start
 At the start of every session:
 1. Read this file fully and fetch all imported directive URLs.

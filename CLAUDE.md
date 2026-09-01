@@ -79,14 +79,23 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 `/audit-repo` treats a shipped-downstream-but-applicable-here miss as drift.
 
 ## Branch policy
-`global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged
-(`claude/<name>` branches, never commit to `main`, draft PR on first push,
-squash-merge on green — no approval is sought — once `git.md` → *Conditional
-Auto-Merge on Green* holds: a **clean** current-head Codex verdict — a response
+`global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged:
+`claude/<name>` branches, never commit to `main`, draft PR on first push,
+squash-merge on green — no approval is sought.
+
+The gate is `git.md` →
+*Conditional Auto-Merge on Green*: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
-one of that gate's two documented exits stated on the PR (the reaction ladder's
-attestation, or an *unavailable* usage-limit reply), no `codex-flagged` label,
-no unresolved review threads, diff limited to the intended files). Repo-specific deltas:
+the reaction ladder's attestation, or any state its *unreachable-review test*
+admits, stated on the PR. The two states are an *unavailable* reply still inside
+its reset window, or a
+request that could not be made or accepted at all — never elapsed silence. Note that the ladder
+clears the verdict gate ONLY. Where no `codex-flagged` label is present, the
+ladder is the whole gate and the merge proceeds unattended. Where one is, a reaction-only
+round leaves it and escalates. The rest of the gate is unchanged: no `codex-flagged` label,
+no unresolved review threads, diff limited to the intended files.
+
+Repo-specific deltas:
 - `main` here enforces **Require conversation resolution before merging**
   server-side (owner, 2026-08-26), so an unresolved thread refuses the merge
   rather than depending on a GraphQL read that fails when the quota is out. It
@@ -201,8 +210,16 @@ A directive repo must pass its own CI before it can be trusted downstream.
   arrive as a 👍 reaction **or as an inline review-thread reply**, and the
   monitor watches neither event — so check the PR's comments AND its review
   threads for a verdict naming the head (an inline reply never enters the comment
-  list), then take the label off by hand with a rationale (`git.md` → *PR
-  Lifecycle*). A stuck label is not evidence of open concerns.
+  list). If the verdict is clean but the label persists,
+  **request another review pass** rather than removing the label — a clean
+  COMMENT verdict naming the head clears it automatically, observed 2026-08-27
+  on #333 at `63bed51`. Hand removal is the last resort `git.md` → *PR
+  Lifecycle* bounds by the *unreachable-review test* — an OBSERVABLE terminal
+  state on the PR showing a further request cannot produce a verdict, which
+  never needs a pass to have run: a request GitHub could not make or deliver is
+  itself the exit. A
+  stuck label is not evidence of open concerns, and removing it is not evidence
+  of their absence.
 - `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
   deploy is live and on a problem opens/updates a deduplicated
   `pages-deploy-failure` issue (success → job summary only). The zero-model

@@ -171,9 +171,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   round 6 keep the pins honest: no phrasing may contain another (the longer one
   could never be the sole match, so it read as coverage and was none), and only
   `.`/`!`/`?` count as a terminator — a phrasing stopping at a `,` or `:` is
-  mid-sentence and an appended condition survives it. Plus `check-claims-cases.js`
-  guarding the guard: two of the old override checks were MEASURED fail-open, #342), a
-  clean-compile check over every tracked `.py`
+  mid-sentence and an appended condition survives it), `check-claims-cases.js`
+  guarding that guard (two of the old override checks were MEASURED fail-open,
+  #342), a clean-compile check over every tracked `.py`
   (`.github/scripts/check-py-warnings.py` — a guard that warns at compile time
   is a guard that stops running on a future interpreter), the viewport gate on
   the shipped Playwright config (`check-ui-viewports.js`, plus

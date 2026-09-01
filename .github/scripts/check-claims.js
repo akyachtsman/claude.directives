@@ -115,7 +115,10 @@ import { execFileSync } from 'child_process';
 // approval,` kept this guard green while the run reported the phrasing as
 // closed. Only `.`, `!` and `?` end an assertion, and only those count now.
 // Seven of the twelve had a carrier-unanimous continuation running to a real
-// terminator and were extended through it; the rest are counted as open.
+// terminator; FOUR were extended through it, the three whose continuations run
+// 79-100+ characters were not. Pinning a hundred characters of tail buys one
+// append and costs a red on every later edit to that sentence. So eight of the
+// twelve are still open, and the count line is the place to read that.
 //
 // The counts are PRINTED on every run rather than written here: three separate
 // sentences in this header describing this tool's own output have been measured
@@ -354,7 +357,19 @@ for (const claim of claims) {
   let consumerKeysOk = true;
   for (const c of consumerList) {
     if (!c || typeof c !== 'object') { fail(`${id}: consumer entry is not a path or an object`); consumerKeysOk = false; continue; }
-    if (!allowKeys(`${id}: consumer ${c.file || '(no file)'}`, c, CONSUMER_KEYS, 'consumer')) consumerKeysOk = false;
+    // BEFORE the paths are normalised, because `resolve(undefined)` throws
+    // ERR_INVALID_ARG_TYPE and kills the process — so `"consumers": [{}]` gave a
+    // stack trace instead of this diagnostic and every claim after it went
+    // unchecked. The `consumer entry with no "file"` refusal further down ran
+    // too late to be reached. Same defect as the missing-source read earlier on
+    // this PR: a malformed manifest must FAIL the entry, never abort the run.
+    // Codex, #346 round 7.
+    if (typeof c.file !== 'string' || c.file.trim() === '') {
+      fail(`${id}: consumer entry with no usable "file": ${JSON.stringify(c).slice(0, 120)}`);
+      consumerKeysOk = false;
+      continue;
+    }
+    if (!allowKeys(`${id}: consumer ${c.file}`, c, CONSUMER_KEYS, 'consumer')) consumerKeysOk = false;
   }
   if (!consumerKeysOk) continue;
 
@@ -624,8 +639,8 @@ const allPhrasings = claims.flatMap((c) => c.phrasings || []);
 // Measured: with `never instead of it,` pinned, rewriting global.md to
 // `never instead of it, but only after owner approval,` kept the guard GREEN,
 // and twelve of the then-21 "terminated" entries ended in `,` or `:`.
-// Codex, #346 round 6. The seven of those twelve whose carriers agreed on a
-// short continuation were extended through it; the rest are counted as open.
+// Codex, #346 round 6. Four of the twelve were extended through a short
+// carrier-unanimous continuation; the other eight are counted as open.
 const SENTENCE_END = '.!?';
 const isClosed = (p) => SENTENCE_END.includes(p.trimEnd().slice(-1));
 const terminated = allPhrasings.filter(isClosed).length;

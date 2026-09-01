@@ -47,6 +47,10 @@
  *      -> "the run PRINTS what each excluded guard artifact contains"
  *   K  the --derive artifact exclusion removed
  *      -> both "--derive excludes the guard's own …" cases
+ *   L  a plain `Error` thrown after a diagnostic (the HARNESS's own contract)
+ *      -> every negative-path case, via the stack-frame check
+ *   M  the consumer `file` validation removed
+ *      -> all three malformed-consumer cases
  *   F  a comment reworded (control) -> nothing reddens
  *
  * G-K were added on #346 round 6 and each reddens EXACTLY ONE case (K, two),
@@ -115,7 +119,16 @@ function testCase(name, { manifest, files, expectExit, needle, absent, args = []
   rmSync(root, { recursive: true, force: true });
 
   const problems = [];
-  if (/SyntaxError|ReferenceError|TypeError|Cannot find module/.test(out)) {
+  // A V8 STACK FRAME, not a list of error NAMES. The four names this matched
+  // before were the ones that had actually happened, so a guard throwing a plain
+  // `Error` — or a `RangeError`, or anything else — crashed while every case
+  // reported OK: exit 1 and the expected needle are both still produced by a
+  // process that died. Codex reproduced it by throwing after the empty-phrasing
+  // diagnostic, and all 50 cases passed. An allowlist of the failures already
+  // seen is the fail-open family (#323) in the harness that exists to find it.
+  // `    at file:line:col` is the shape every uncaught throw prints and no
+  // diagnostic here produces, so it needs no maintenance as new errors appear.
+  if (/^\s+at .*:\d+:\d+\)?$/m.test(out) || /Cannot find module/.test(out)) {
     problems.push('the guard CRASHED — a stack trace is not a catch, so this proves nothing');
   }
   if (code !== expectExit) problems.push(`expected exit ${expectExit}, got ${code}`);
@@ -602,6 +615,44 @@ testCase('…and a full-stop phrasing counts as closed', {
 testCase('the run PRINTS what each excluded guard artifact contains', {
   manifest: manifest([claim()]), files: FILES, expectExit: 0,
   needle: 'guard artifacts excluded by identity — phrasings each happens to contain: claims.json 1/1',
+});
+
+// ── a malformed consumer FAILS the entry, and does not abort the run ──────
+// `resolve(undefined)` throws ERR_INVALID_ARG_TYPE, so an object-form consumer
+// with no `file` killed the process before the refusal meant to catch it, and
+// every claim after it went unchecked. Third instance on this PR of a malformed
+// manifest aborting rather than failing. Codex, #346 round 7.
+testCase('a consumer object with no "file" FAILS rather than crashing the run', {
+  manifest: manifest([
+    claim({ id: 'first', consumers: [{}] }),
+    claim({ id: 'second', consumers: ['docs/other.md'] }),
+  ]),
+  files: { ...FILES, 'docs/other.md': CONS },
+  expectExit: 1, needle: 'consumer entry with no usable "file"',
+});
+
+testCase('…and the claims after a malformed consumer are still checked', {
+  manifest: manifest([
+    claim({ id: 'first', consumers: [{}] }),
+    claim({ id: 'second', consumers: ['docs/other.md'] }),
+  ]),
+  files: { ...FILES, 'docs/other.md': CONS },
+  // The SECOND claim's OK line is the half a crash-only assertion misses: the
+  // process dying and the entry failing both produce exit 1. This must use the
+  // SAME `{}` fixture as the case above — `{ file: '' }` was tried and does not
+  // crash the unvalidated guard (`resolve('')` is legal), so the case passed
+  // against the mutant and proved nothing. The condition a case's name claims
+  // has to be the condition its fixture actually creates.
+  expectExit: 1, needle: 'OK:   second → docs/other.md',
+});
+
+testCase('a whitespace-only consumer "file" gets the same refusal', {
+  // The non-crashing half of the same validation. Without it the guard reaches
+  // the read and reports `cannot read consumer` — true, less useful, and it
+  // describes the filesystem rather than the manifest entry at fault.
+  manifest: manifest([claim({ consumers: [{ file: '   ' }] })]),
+  files: FILES,
+  expectExit: 1, needle: 'consumer entry with no usable "file"',
 });
 
 // ── a missing SOURCE fails like a missing consumer, and does not abort ─────

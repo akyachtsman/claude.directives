@@ -8,9 +8,9 @@
       "phrasings": [
         "predictable: check the comments AND the review threads",
         "so check the PR's comments AND its review threads",
-        "them: check the PR's comments and its review threads",
-        "Look for the verdict in the PR's comments AND its review threads",
-        "Look for the verdict in the PR's comments and its review threads",
+        "them: check the PR's comments and its review threads.",
+        "Look for the verdict in the PR's comments AND its review threads:",
+        "Look for the verdict in the PR's comments and its review threads:",
         "— read the PR's comments AND its review threads"
       ],
       "consumers": [
@@ -93,7 +93,7 @@
       "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half: the closed two-item list, pinned as the sentence all three carriers share verbatim. The phrasing runs to '— never elapsed silence' on purpose — the mustNotMatch entries are the same sentence with that tail removed, which is precisely how the rule was weakened before.",
       "source": "directives/git.md",
       "phrasings": [
-        "an unavailable reply still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence"
+        "an unavailable reply still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence."
       ],
       "consumers": [
         "CLAUDE.md",
@@ -118,7 +118,7 @@
       "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. All five carriers state it in one shared sentence, so one phrasing pins it everywhere.",
       "source": "directives/git.md",
       "phrasings": [
-        "Where no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended"
+        "Where no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended."
       ],
       "consumers": [
         "CLAUDE.md",
@@ -148,7 +148,7 @@
       "source": "directives/git.md",
       "phrasings": [
         "the unreachable-review test.",
-        "its unreachable-review test admits",
+        "its unreachable-review test admits,",
         "its unreachable-review test, and",
         "by a unreachable-review test.",
         "PR Lifecycle's unreachable-review test:",
@@ -186,9 +186,9 @@
       "phrasings": [
         ". ⚠️ A unique match is not a guaranteed wake for YOUR session",
         "a unique match is not a guaranteed wake for YOUR session",
-        ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN",
-        ". ⚠️ A unique match is not proof of coverage either",
-        "even a unique match is not proof of coverage"
+        ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN,",
+        ". ⚠️ A unique match is not proof of coverage either:",
+        "even a unique match is not proof of coverage,"
       ],
       "consumers": [
         "CLAUDE.md",
@@ -215,14 +215,14 @@
         "is: arm the check-in, then drop it when THAT OUTCOME is observed terminal",
         "comment instead. Arm the check-in whenever the run's SHA is not your PR's head",
         "coverage -- arm the check-in whenever the run's SHA is not your PR's head",
-        "so arm the check-in alongside the event wake, never instead of it",
-        "the waiting session still arms a check-in",
+        "so arm the check-in alongside the event wake, never instead of it,",
+        "the waiting session still arms a check-in.",
         "that set, arm a check-in — that is not polling",
-        "otherwise arm a check-in",
-        "the rule: arm a check-in for any awaited outcome that can end without emitting a wake",
+        "otherwise arm a check-in.",
+        "the rule: arm a check-in for any awaited outcome that can end without emitting a wake,",
         ". Arm a check-in rather than treating a green run",
         "so arm a check-in whenever the run's SHA is not the PR's head",
-        "— and ARM A CHECK-IN ALONGSIDE IT, not instead of it"
+        "— and ARM A CHECK-IN ALONGSIDE IT, not instead of it:"
       ],
       "consumers": [
         "CLAUDE.md",

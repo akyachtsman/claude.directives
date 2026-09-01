@@ -368,6 +368,21 @@ testCase('a gate OUTSIDE the pinned span is NOT caught — the stated limit', {
   expectExit: 0, needle: 'check-claims: OK',
 });
 
+testCase('an appended condition displaces a terminator-carrying pin', {
+  // Round 3 (#346): the round-2 terminator rule had been applied only to the
+  // claim Codex pointed at. This pins the rule itself, on a different claim.
+  manifest: manifest([claim({
+    phrasings: ['the merge proceeds unattended.'],
+    mustNotMatch: ['the merge proceeds unattended only after escalating to the owner.'],
+    consumers: ['docs/consumer.md'],
+  })]),
+  files: {
+    'directives/src.md': 'Where no label is present, the merge proceeds unattended.\n',
+    'docs/consumer.md': 'Where no label is present, the merge proceeds unattended only after escalating to the owner.\n',
+  },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
 // ── --derive: retained, and its semantics CHANGED, so it needs coverage ────
 // The rewrite narrowed what --derive can find (approved wordings only) while
 // this suite stopped passing the flag at all. Codex, #346: changing a mode's
@@ -392,6 +407,17 @@ testCase('--derive does NOT name a file stating the rule in unapproved words', {
   files: { ...FILES, 'docs/unlisted.md': 'Consult the comments together with every review thread.\n' },
   args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
   absent: 'docs/unlisted.md',
+});
+
+testCase('--derive excludes the guard\'s own CASES FILE from its candidates', {
+  // It quotes approved wordings as fixtures, so it matches by construction. The
+  // exclusion covered the manifest and the guard but not this file, and it was
+  // reported as an unlisted carrier on every real run — which also made the
+  // header's "derive reports nothing" claim false. Codex, #346 round 3.
+  manifest: manifest([claim()]),
+  files: { ...FILES, '.github/scripts/check-claims-cases.js': 'fixture: so check the comments AND the review threads\n' },
+  args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
+  absent: 'check-claims-cases.js',
 });
 
 testCase('--derive excludes the guard\'s own manifest from its candidates', {

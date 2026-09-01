@@ -100,9 +100,23 @@ import { execFileSync } from 'child_process';
 // while appearing to try.
 //
 // So the guard's claim is scoped: it proves the WORDING TRAVELLED. It does not
-// prove the rule is UNCONDITIONED at its carrier. Treat a third round of this
-// class as a signal to re-scope rather than to extend pins again — that is the
-// "no downward trend" reading #341 itself was filed on.
+// prove the rule is UNCONDITIONED at its carrier.
+//
+// ── ROUND 3 ARRIVED, AND THIS IS WHERE THE EXTENDING STOPS ─────────────────
+// It found the round-2 rule applied only to the claim it had pointed at, so
+// every phrasing with an UNAMBIGUOUS single terminating mark now carries it —
+// 14 of them, across all eight claims rather than one.
+//
+// SIXTEEN ARE DELIBERATELY LEFT SHORT. Their next character is a space, so
+// closing them needs the END of the assertion, and a scan for it stops inside
+// `git.md` and `codex-monitor.yml`. That is sentence detection, rebuilt badly,
+// in a build script — the exact machinery #341 deleted for failing in both
+// directions. Extending those pins would reintroduce it one layer out, which is
+// the treadmill, not an escape from it.
+//
+// So: an appended condition on a carrier whose assertion has no unambiguous
+// terminator is NOT caught, and closing it costs more than it buys. If a future
+// round wants it, the answer is a different mechanism — not a longer string.
 //
 // ⚠️ WHAT THIS GUARD PROVABLY CANNOT CATCH — read before trusting a green run.
 // A consistency check confirms a claim TRAVELLED. It never asks whether the
@@ -194,7 +208,14 @@ const states = (haystack, phrasings) => phrasings.some((p) => haystack.includes(
 // copies of an approved phrasing, and no longer discovers a carrier that states
 // the same rule in new words. Finding those is back to review — which is how
 // CLAUDE.md's anaphoric carrier was found in the first place, by a reader rather
-// than by this flag. Verified on the current tree: --derive reports nothing.
+// than by this flag.
+//
+// "Verified on the current tree: --derive reports nothing" was written here and
+// was FALSE: the scan reported check-claims-cases.js as an unlisted carrier for
+// response-is-not-a-verdict on every run, because the exclusion covered two of
+// the three guard artifacts. Codex, #346 round 3. It is true now, and the
+// exclusion is pinned by a case — a claim about the tool's own output belongs in
+// a test, not in a comment nobody re-runs.
 const DERIVE = process.argv.includes('--derive');
 // EVERY tracked file, minus binaries detected BY CONTENT. An extension
 // allowlist here would recreate the exact blindness --derive exists to end:
@@ -210,7 +231,15 @@ const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'ut
   // they match by construction and are permanent false candidates in advisory
   // output. Excluding only the manifest reported the checker as an unlisted
   // carrier on every single run, which is how an advisory list gets ignored.
-  .filter((f) => f !== MANIFEST && f !== '.github/scripts/check-claims.js')
+  // ALL THREE guard artifacts. The cases file quotes approved phrasings as test
+  // fixtures, so it matches by construction exactly as the manifest and the
+  // guard do — and it was reported as an unlisted carrier for
+  // `response-is-not-a-verdict` on every run, which is how an advisory list gets
+  // ignored. Excluding two of three was a check present on one path and absent
+  // from its twin, for the second time in this file. Codex, #346 round 3.
+  .filter((f) => f !== MANIFEST
+    && f !== '.github/scripts/check-claims.js'
+    && f !== '.github/scripts/check-claims-cases.js')
   .filter((f) => {
     try {
       const head = readFileSync(f).subarray(0, 8192);

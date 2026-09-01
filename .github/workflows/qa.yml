@@ -198,11 +198,16 @@ jobs:
       # rendering the app at laptop width — invisible to a green suite, because a
       # viewport never instantiated produces no failing test.
       #
-      # The install is what makes the check possible: the script IMPORTS the config
-      # so Node expands `...devices[…]`, which needs @playwright/test resolvable
-      # from where the config lives. Measured 2.4s. --ignore-scripts skips the
-      # browser download (none is launched — the config is imported, not run) and
-      # --no-package-lock writes nothing into the tree. node_modules is gitignored
+      # The install is what makes the check possible, now for two reasons. The gate
+      # IMPORTS the config so Node expands `...devices[…]`, which needs
+      # @playwright/test resolvable from where the config lives; and since #335 it
+      # also RUNS `playwright test --list` to observe what discovery actually
+      # yields, which needs the playwright CLI on the same install.
+      # Measured 2.4s. --ignore-scripts skips the browser download and STAYS
+      # correct: listing enumerates specs without launching anything, verified
+      # with PLAYWRIGHT_BROWSERS_PATH pointed at an empty directory — the gate and
+      # all 63 of its cases pass with no browser present. --no-package-lock writes
+      # nothing into the tree. node_modules is gitignored
       # everywhere and every validator here already skips it (check-paths.js names
       # templates/ui-tests/node_modules in its own header).
       - name: Install the UI kit's own test deps (for the viewport gate)

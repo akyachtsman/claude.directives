@@ -303,6 +303,42 @@ testCase('…and a third list item breaks it', {
   expectExit: 1, needle: 'the SOURCE no longer states the claim',
 });
 
+testCase('a raw pattern matching the EMPTY STRING is refused', {
+  // Restored: the rewrite kept `re.test('')` and dropped the case proving it.
+  // Codex disabled that single line on #346 round 4 and all 35 cases still
+  // passed, because every raw fixture used a nonempty-matching pattern — so a
+  // regression would let terminal-states-list-is-closed certify any source.
+  manifest: manifest([claim({
+    raw: true, phrasings: undefined, sourceOnly: true, consumers: [],
+    pattern: 'x*',
+    mustNotMatch: ['nothing relevant'],
+  })]),
+  files: { 'directives/src.md': 'anything at all\n' },
+  expectExit: 1, needle: 'matches the empty string',
+});
+
+testCase('the guard\'s own CASES FILE cannot evidence a claim', {
+  // The SELF set excluded the manifest and the guard but not this file, so a
+  // fixture quoting an approved wording could vacuously evidence propagation.
+  // Round 3 fixed the same omission in --derive; round 4 found it here, because
+  // the two exclusions were separate literals. They are one list now.
+  manifest: manifest([claim({ consumers: ['.github/scripts/check-claims-cases.js'] })]),
+  files: { ...FILES, '.github/scripts/check-claims-cases.js': 'fixture: so check the comments AND the review threads\n' },
+  expectExit: 1, needle: "this guard's own artifact",
+});
+
+testCase('a legacy inference field is refused, not ignored', {
+  // continuationProbe/negatorProbe/phrase read as live condition protection and
+  // do nothing. The check is an allowlist, so an unlisted key of any name fails.
+  manifest: manifest([claim({ continuationProbe: { kind: 'condition', shapes: { x: '%s' } } })]),
+  files: FILES, expectExit: 1, needle: 'unknown manifest key(s): continuationProbe',
+});
+
+testCase('…and so is any other key the schema does not name', {
+  manifest: manifest([claim({ someFutureField: true })]),
+  files: FILES, expectExit: 1, needle: 'unknown manifest key(s): someFutureField',
+});
+
 testCase('a raw claim carrying phrasings is refused', {
   manifest: manifest([claim({ raw: true, pattern: 'outage', sourceOnly: true, consumers: [] })]),
   files: FILES, expectExit: 1, needle: 'carry a "pattern", not "phrasings"',

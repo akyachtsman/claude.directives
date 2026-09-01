@@ -185,7 +185,8 @@
       "source": "docs/standards/automations.md",
       "phrasings": [
         ". ⚠️ A unique match is not a guaranteed wake for YOUR session",
-        "a unique match is not a guaranteed wake for YOUR session",
+        "a unique match is not a guaranteed wake for YOUR session.",
+        "a unique match is not a guaranteed wake for YOUR session:",
         ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN,",
         ". ⚠️ A unique match is not proof of coverage either:",
         "even a unique match is not proof of coverage,"

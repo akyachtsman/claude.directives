@@ -167,6 +167,18 @@ import { execFileSync } from 'child_process';
 // here needs to know where a sentence ends.
 
 const MANIFEST = '.github/scripts/claims.json';
+// ONE LIST, used by the target check AND by --derive. Both must exclude the same
+// files: each quotes every claim as rationale, phrasing or fixture, so each
+// matches by construction and none is an operational carrier. They were kept as
+// two literals, and #346 found the same omission in each ONE ROUND APART — the
+// cases file missing from --derive (round 3) and then from the SELF set (round
+// 4), because round 3's fix was applied to the copy Codex pointed at. Two
+// literals are not one definition, however the commit message describes them.
+const GUARD_ARTIFACTS = [
+  MANIFEST,
+  '.github/scripts/check-claims.js',
+  '.github/scripts/check-claims-cases.js',
+];
 const MANIFEST_DOC = JSON.parse(readFileSync(MANIFEST, 'utf8'));
 const claims = MANIFEST_DOC.claims;
 
@@ -237,9 +249,7 @@ const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'ut
   // `response-is-not-a-verdict` on every run, which is how an advisory list gets
   // ignored. Excluding two of three was a check present on one path and absent
   // from its twin, for the second time in this file. Codex, #346 round 3.
-  .filter((f) => f !== MANIFEST
-    && f !== '.github/scripts/check-claims.js'
-    && f !== '.github/scripts/check-claims-cases.js')
+  .filter((f) => !GUARD_ARTIFACTS.includes(f))
   .filter((f) => {
     try {
       const head = readFileSync(f).subarray(0, 8192);
@@ -256,6 +266,23 @@ for (const claim of claims) {
   // silently checking nothing — a vacuous pass is the failure mode every
   // earlier version of this class of guard died from.
   if (!id) { fail(`manifest entry with no id: ${JSON.stringify(claim).slice(0, 120)}`); continue; }
+  // AN ALLOWLIST, not a list of the legacy fields someone remembers. #341
+  // deleted continuationProbe, negatorProbe, phrase and the rest, and the
+  // rewrite IGNORED them rather than refusing them — so a copied entry or a
+  // merge resolution could carry fields that read as live condition/negation
+  // protection while doing nothing, which is the whole failure mode this repo
+  // calls fail-open. Naming the three removed fields would leave the fourth
+  // silent, so the check is inverted: anything not in the new schema is an
+  // error. Codex, #346 round 4.
+  const KNOWN_KEYS = new Set(['id', 'why', 'source', 'sourceOnly', 'phrasings',
+    'raw', 'pattern', 'consumers', 'mustNotMatch']);
+  const unknown = Object.keys(claim).filter((k) => !KNOWN_KEYS.has(k));
+  if (unknown.length) {
+    fail(`${id}: unknown manifest key(s): ${unknown.join(', ')}\n`
+      + `      #341 removed the inference layer; a key it does not read is not inert, it reads as protection that is not there.\n`
+      + `      Known keys: ${[...KNOWN_KEYS].join(', ')}`);
+    continue;
+  }
   if (seenIds.has(id)) fail(`duplicate claim id: ${id}`);
   seenIds.add(id);
   if (!why) fail(`${id}: no "why" — an entry nobody can interpret cannot be maintained`);
@@ -284,7 +311,7 @@ for (const claim of claims) {
   // guard still contains its own test data. Codex reproduced it: swap
   // arm-the-check-in's consumers for claims.json, or for check-claims.js, and
   // the guard reports OK while checking no consumer at all.
-  const SELF = new Set([norm(MANIFEST), norm('.github/scripts/check-claims.js')]);
+  const SELF = new Set(GUARD_ARTIFACTS.map(norm));
   for (const f of [sourceNorm, ...consumerFiles]) {
     if (SELF.has(f)) fail(`${id}: ${f} is this guard's own artifact — it states the claim only as rationale, phrasing or test data, so it can never evidence that the claim reached an operational consumer`);
   }

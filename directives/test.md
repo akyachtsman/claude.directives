@@ -353,12 +353,25 @@ five:
   so it runs the same in every project — a phone-only list makes it redundant,
   not skipped.) Because this gate lives in the config and not in any scenario, a
   green suite is not evidence for it: read the `projects` list — or let
-  `check-ui-viewports.js` read it for you. That script imports the config so Node
-  expands `...devices[…]`, and the `ui-suite` composite runs it on every UI job.
-  A static read of the config does NOT work and is not worth retrying: three
-  attempts produced twelve findings, and `npx playwright test --list
-  --reporter=json` reports `viewport: null` for every project even while
-  enumerating all its specs.
+  `check-ui-viewports.js` read it for you, which the `ui-suite` composite does on
+  every UI job.
+  That gate works in two stages, and both are needed. It IMPORTS the config, so
+  Node expands `...devices[…]` and the declared widths are read rather than
+  pattern-matched — a static read does not work and is not worth retrying, three
+  attempts produced twelve findings. Then it ASKS Playwright what it discovers
+  (`playwright test --list`, with your reporters left in place) and reports a band
+  covered only when a project at that width actually turns up. Predicting
+  discovery from the config was tried for eight rounds and produced twenty
+  findings, every one a rule correct for its example and wrong one step out: a
+  `.gitignore` under `testDir`, a per-project `respectGitIgnore`, a symlinked
+  `testDir`, a reporter excluding every test, a `shard` set only when a
+  credential is present. Each is now caught without the gate knowing the
+  mechanism exists.
+  Two consequences worth knowing before you see them in CI. A suite with no
+  discovered tests FAILS, where it used to pass on declared widths alone. And a
+  selection key that narrows nothing — `testIgnore: []`, `grep: /(?:)/`,
+  `shard: {current:1,total:1}` — no longer trips anything; the gate used to
+  refuse those on presence because it could not tell.
 
   **One spec set, one viewport source.** This kit ships a single suite —
   `tests/app.spec.js` under `playwright.config.js` — and runs it against two

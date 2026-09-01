@@ -26,7 +26,13 @@ import { tmpdir } from 'os';
 import { join, resolve, dirname, sep, relative } from 'path';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CHECK = join(REPO_ROOT, 'templates', 'scripts', 'check-ui-viewports.js');
+// Points the suite at a MUTATED copy of the gate, so "these cases discriminate"
+// is re-provable rather than a claim made once. Same mechanism as
+// CHECK_CLAIMS_BIN on #346, for the same reason: a case that cannot be shown to
+// redden is a case nobody has measured.
+const CHECK = process.env.CHECK_UI_VIEWPORTS_BIN
+  ? resolve(process.env.CHECK_UI_VIEWPORTS_BIN)
+  : join(REPO_ROOT, 'templates', 'scripts', 'check-ui-viewports.js');
 const ANCHOR = join(REPO_ROOT, 'templates', 'ui-tests', 'playwright.config.js');
 
 // The fixtures import @playwright/test the way a real config does, so they need a
@@ -51,6 +57,11 @@ const IMPORT = "import { defineConfig, devices } from '@playwright/test';\n";
 const TABLET = "    { name: 'tablet', use: { viewport: { width: 810, height: 1080 } } },\n";
 const PHONE = "    { name: 'phone', use: { viewport: { width: 390, height: 664 } } },\n";
 const LAPTOP = "    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },\n";
+
+// The spec a fixture needs in order to have anything to discover. runCase()
+// writes one into tests/ by default; a case whose testDir resolves ELSEWHERE
+// (a config in its own directory, a symlinked layout) places this itself.
+const SPEC = "import { test, expect } from '@playwright/test';\ntest('present', async () => { expect(1).toBe(1); });\n";
 
 const cfg = body => `${IMPORT}export default defineConfig({\n  testDir: './tests',\n${body}});\n`;
 const withProjects = rows => cfg(`  projects: [\n${rows}  ],\n`);
@@ -80,73 +91,73 @@ const CASES = [
     { 'playwright.config.js': withProjects(`  //${LAPTOP.trimEnd()}\n` + TABLET + PHONE) },
     1, 'no project declares a laptop viewport'],
 
-  // OBSERVED 2026-08-26, on the two fixtures below: with a root-level key set and
-  // all three bands correctly declared, this gate printed "check-ui-viewports: OK"
-  // naming all three classes. That is what claude.trading reported; it is a record
-  // of what the gate did, not a claim about how Playwright resolves either config.
-  // Both these and the per-project case below must stay — different code paths
-  // (`cfg[k]` vs `p[k]`), and the project one being covered is what made the root
-  // one look covered.
-  ['root grep declared — refused, though all three bands are correct',
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  grep: /__NEVER_MATCHES_ANY_TEST__/,\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'TOP-LEVEL grep'],
-
-  ['root testIgnore declared — refused, though all three bands are correct',
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  testIgnore: /app\\.spec\\.js/,\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'TOP-LEVEL testIgnore'],
-
-  // THESE CASES PIN A POLICY, NOT A PREDICTION. Rounds 1-6 tried to decide which
-  // root values actually narrow a run; seventeen findings later that attempt is
-  // gone, and every root selection key is refused on presence. Several of the
-  // shapes below provably narrow nothing — that is why they are here. They pin
-  // that the gate refuses them ANYWAY, so nobody restores the exemptions and, with
-  // them, the false-green path this PR closed.
+  // ── SELECTION KEYS: OBSERVED, NOT REFUSED (#335) ─────────────────────────
+  // Until #335 every one of these was exit 9, refused on PRESENCE, because a
+  // config read could not tell a key that narrows from one that does not — a
+  // question rounds 1-6 of #333 answered wrong six times, across three spellings
+  // of "empty" and two of "matches everything". The refusal was honest and it
+  // cost real false alarms: six of the twelve shapes below narrow NOTHING.
   //
-  // The accepted cost is a false alarm on a harmless config, which is the muting
-  // risk Codex raised in round 1 and which still stands. It is taken knowingly:
-  // the alternative was a gate that stated things about Playwright that were
-  // false in eight measured cases.
-  ['root testIgnore: [] — conservative refusal, gate makes no Playwright claim',
+  // Stage two asks Playwright. Both columns are now decided by what it
+  // enumerates, so these cases pin the two halves of that:
+  //   * a key that narrows nothing must PASS — the false alarm is gone
+  //   * a key that empties a band must FAIL at exit 12, naming the band
+  // Together they are the discriminator. Pinning only the first would let a
+  // rewrite that ignores selection entirely pass; only the second would let the
+  // old blanket refusal come back.
+  //
+  // Every expectation below was measured against Playwright 1.62.1 and agrees
+  // with what the key means. The fixture's one spec is `tests/gate.spec.js`,
+  // whose test title is `present` — which is why /smoke/ matches nothing.
+  ...[
+    ["testIgnore: []", '  testIgnore: [],\n'],
+    ["grepInvert: []", '  grepInvert: [],\n'],
+    ["testIgnore: ''", "  testIgnore: '',\n"],
+    ["testIgnore: ['']", "  testIgnore: [''],\n"],
+    ['grep: /(?:)/', '  grep: /(?:)/,\n'],
+    ['shard 1 of 1', '  shard: { current: 1, total: 1 },\n'],
+  ].map(([label, line]) => [
+    `root ${label} narrows nothing — PASSES now, no longer refused on presence`,
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  testIgnore: [],\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'root-level'],
+      + line + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK']),
 
-  ['root grepInvert: [] — conservative refusal',
+  ...[
+    ['testMatch: []', '  testMatch: [],\n'],
+    ['grep: /smoke/', '  grep: /smoke/,\n'],
+    ['grep: /__NEVER_MATCHES_ANY_TEST__/', '  grep: /__NEVER_MATCHES_ANY_TEST__/,\n'],
+    ["testIgnore: ['', 'gate.spec.js']", "  testIgnore: ['', 'gate.spec.js'],\n"],
+  ].map(([label, line]) => [
+    `root ${label} empties the run — OBSERVED, exit 12`,
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  grepInvert: [],\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'root-level'],
+      + line + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    12, 'discovers no test for it']),
 
-  ['root testMatch: [] — refused on presence, like every other root selection key',
+  // Sharding is its own case because it does not empty the run — it splits it,
+  // and the band that survives depends on how Playwright distributes. The
+  // assertion is on the exit and the diagnostic shape, not on WHICH band is
+  // named, because that is Playwright's business and pinning it would make this
+  // case a prediction again.
+  ['root shard 1 of 4 leaves a band with nothing — OBSERVED, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  testMatch: [],\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'TOP-LEVEL testMatch'],
+      + `  shard: { current: 1, total: 4 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    12, 'discovers no test for it'],
 
-  // Codex round 2 on #333: testDir is not a filter but redirects discovery
-  // wholesale, reaching the same false-green by a shorter road. The second case
-  // is the one that keeps the rule honest — the SHIPPED default must still pass,
-  // or the gate fails every correct config and gets muted.
-  ['root testDir redirect is DEFERRED to #335 — not checked here',
+  // ── testDir: BOTH HOLES CLOSED, and neither needed a predicate ───────────
+  // The root redirect was deferred at round 6 of #333 after four predicates and
+  // a symlink defeat; the project redirect was deferred at round 12 for the same
+  // reason. #335 closes both by not asking the question: a redirected project
+  // discovers nothing, and that is visible without comparing any paths. There is
+  // no code in the gate mentioning testDir, symlinks or realpath.
+  ['root testDir redirected away from the suite — OBSERVED, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './other',\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'other/keep.txt': 'x\n' },
+    12, 'discovers no test for it'],
 
   ['root testDir is the shipped default (must not false-alarm)',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK'],
-
-  // Codex round 3 on #333: four more, two of them root keys the enumeration did
-  // not know existed. Each fatal case is pinned beside its no-false-alarm twin.
-  ['root testIgnore: \'\' — conservative refusal',
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  testIgnore: '',\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'root-level'],
 
   ['testDir spelled without ./ resolves the same (must not false-alarm)',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: 'tests',\n`
@@ -158,49 +169,33 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
-  ['a .gitignore under testDir is NOT flagged — respectGitIgnore is #335 territory',
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  respectGitIgnore: false,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
-      'tests/.gitignore': '*.spec.js\n' },
-    0, 'check-ui-viewports: OK'],
-
-  ['root shard: total 4 — refused on presence',
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  shard: { current: 1, total: 4 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'TOP-LEVEL shard'],
-
-  ['root shard: total 1 — refused on presence',
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  shard: { current: 1, total: 1 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'root-level'],
-
-  // Codex round 5 on #333: three more false alarms, all in the checks I asked the
-  // review to attack. Each fatal twin is kept so the exemptions cannot widen into
-  // a fail-open.
   ['testDir: \'.\' is an ancestor that still contains the suite (must not false-alarm)',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
-  ['root grep: /(?:)/ — conservative refusal',
+  // ── respectGitIgnore: acceptance fixture 1 and 2 from #335 ───────────────
+  // Neither is expressible as a config predicate — the second is a per-project
+  // override of a root setting, the same shape as round 2's testDir finding, and
+  // the first depends on the CONTENTS of a file the config never names.
+  ['a .gitignore under testDir with respectGitIgnore off — still discovered',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  grep: /(?:)/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'root-level'],
+      + `  respectGitIgnore: false,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/.gitignore': '*.spec.js\n' },
+    0, 'check-ui-viewports: OK'],
 
-  ['root grep: /smoke/ — refused on presence',
+  ['a .gitignore under testDir with respectGitIgnore ON — OBSERVED, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  grep: /smoke/,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'TOP-LEVEL grep'],
+      + `  respectGitIgnore: true,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/.gitignore': '*.spec.js\n' },
+    12, 'discovers no test for it'],
 
-  ['root testIgnore: [\'\'] — conservative refusal',
+  ['respectGitIgnore overridden on ONE project — that band alone is caught',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  testIgnore: [''],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'root-level'],
-
-  ['root testIgnore: [\'\', \'app.spec.js\'] — refused on presence',
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  testIgnore: ['', 'app.spec.js'],\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    9, 'TOP-LEVEL testIgnore'],
+      + `  respectGitIgnore: false,\n  projects: [\n${LAPTOP}${TABLET}`
+      + `    { name: 'phone', respectGitIgnore: true, use: { viewport: { width: 390, height: 664 } } },\n  ],\n});\n`,
+      'tests/.gitignore': '*.spec.js\n' },
+    12, 'phone is declared but Playwright discovers no test for it'],
 
   // REPORTER: THREE CASES, ONE PER OUTCOME. Rounds 7-8 on #333.
   //
@@ -222,53 +217,93 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
-  // The second is the hole itself, now closed. It was pinned at exit 0 for one
-  // round as a visible known-wrong expectation; it is exit 10 now.
-  ['custom reporter (can exclude every test) — refused',
+  // The second is acceptance fixture 4 from #335, and the criterion the rewrite
+  // was set: catch it WITHOUT the special case. Until now the gate refused any
+  // reporter absent from the installed Playwright's `builtInReporters` — derived
+  // rather than hand-maintained, but still a rule about which reporters are
+  // TRUSTED, not an observation of what they DID.
+  //
+  // Stage two lists with the config's own reporters intact and `['list']`
+  // appended, so preprocess() still runs and the inventory is still readable.
+  // Measured: this reporter yields `Total: 0 tests`, and the bands go uncovered.
+  // The exit-11 case that pinned the derived list's own failure is deleted with
+  // the list — there is no discriminator left to guard.
+  ['a reporter that excludes every test — OBSERVED, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['./drop-all.js']],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'drop-all.js': 'export default class { preprocess({ testRun, suite }) '
         + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
-    10, 'non-built-in reporter'],
+    12, 'discovers no test for it'],
 
-  // The third pins the DISCRIMINATOR'S OWN failure. Deriving the list is only
-  // safer than hard-coding it while the export exists; if it moves, the branch
-  // must go loud rather than trusting every reporter. Without this case that
-  // fallback is untested code, which is how a "cannot check" quietly becomes a
-  // pass. The fixture shadows `playwright` one directory below node_modules, so
-  // the config still imports the REAL @playwright/test from above it.
-  ['built-in reporter list unreadable — loud CANNOT CHECK, not a free pass',
-    { 'sub/playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['./whatever.js']],\n`
+  // The negative twin, and the false alarm the allowlist used to produce: a
+  // custom reporter that removes NOTHING is now a pass. Under exit 10 this was
+  // refused for existing. It is also the case that proves the listing survives a
+  // custom reporter at all — without the appended `list`, a custom reporter
+  // replaces the built-in one and `--list` prints nothing, which is
+  // indistinguishable from excluding everything. Both silent, one a pass.
+  ['a custom reporter that excludes NOTHING — passes now, no longer refused',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['./quiet.js']],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
-      'sub/node_modules/playwright/package.json': '{ "name": "playwright", "main": "index.js" }\n',
-      'sub/node_modules/playwright/index.js': 'module.exports = {};\n',
-      'sub/node_modules/playwright/lib/common.js': 'module.exports = {};\n' },
-    11, 'built-in reporter list', { subdir: 'sub' }],
+      'quiet.js': 'export default class { }\n' },
+    0, 'check-ui-viewports: OK'],
 
-  // Codex round 9 on #333: TWO more inputs that are not the config object, found
-  // after round 8 had "fixed" exactly that class by copying environment variables
-  // onto the check step. Both show the same thing from a new angle — a config is
-  // CODE, and what it exports depends on everything the evaluation can see.
-  //
   // PW_TEST_REPORTER reaches PLAYWRIGHT rather than the config: the runner
   // appends it whatever `reporter` says, so a config declaring only built-ins can
-  // still run arbitrary reporter code. Reproduced: Playwright found 0 tests in 0
-  // files while the gate exited 0. The negative twin matters as much — the gate
-  // must not refuse a clean config because the variable happens to be set to a
-  // built-in.
-  ['PW_TEST_REPORTER names a custom reporter — refused though the config is clean',
+  // still run arbitrary reporter code. Found at round 9 of #333, after round 8
+  // had "fixed" exactly that class — a config is CODE, and what it exports
+  // depends on everything the evaluation can see. Stage two inherits the
+  // environment, so the variable reaches the listing exactly as it reaches the
+  // run, and no case needs to know the variable's name.
+  ['PW_TEST_REPORTER names a reporter that excludes everything — OBSERVED',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['list']],\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    10, 'PW_TEST_REPORTER', { extraEnv: { PW_TEST_REPORTER: './sneaky-reporter.js' } }],
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      // Playwright resolves PW_TEST_REPORTER relative to testDir, not to the
+      // config — measured, after placing it beside the config produced
+      // "Cannot find module .../tests/drop-all.js". Left where Playwright looks
+      // rather than guessed at: the default testMatch does not match a plain
+      // .js, so it is not picked up as a spec.
+      'tests/drop-all.js': 'export default class { preprocess({ testRun, suite }) '
+        + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
+    12, 'discovers no test for it', { extraEnv: { PW_TEST_REPORTER: './drop-all.js' } }],
 
   ['PW_TEST_REPORTER names a BUILT-IN — must NOT trip',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['list']],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK', { extraEnv: { PW_TEST_REPORTER: 'dot' } }],
+
+  // ── THE OBSERVATION'S OWN FAILURES (#335) ────────────────────────────────
+  // Stage two can fail in two ways, and both must be loud. This is the founding
+  // rule of this file applied to the new half: a listing that did not happen is
+  // "could not look", never "no tests" and never a pass. Without these cases the
+  // CANNOT-CHECK branches are untested code on the path that runs when the check
+  // breaks — which is how a refusal quietly becomes a certification.
+  ['the listing cannot run at all — CANNOT CHECK, exit 15',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    15, 'could not observe what Playwright discovers',
+    // PATH emptied so `npx` cannot be found. The config is perfect and all three
+    // bands are declared: the point is that a gate which cannot observe must not
+    // fall back on what the config says.
+    { extraEnv: { PATH: '' } }],
+
+  ['the listing runs but enumerates nothing readable — CANNOT CHECK, exit 16',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    16, 'produced no "Total:" line',
+    // An unresolvable reporter: Playwright fails before listing, so there is no
+    // inventory. Distinct from "listed zero tests", which is exit 12 — the gate
+    // must not report an observed absence it never observed.
+    { extraEnv: { PW_TEST_REPORTER: './no-such-reporter.js' } }],
+
+  // A suite with no spec files at all. Before #335 this passed: three bands were
+  // declared and nothing asked whether anything ran. It is exit 12 now, and the
+  // change is not a technicality — a suite with no tests has no coverage at any
+  // width, and the gate used to certify all three.
+  ['a config declaring all three bands with NO tests to run — exit 12',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    12, 'discovers no test for it', { noSpec: true }],
 
   // cwd: Playwright evaluates the config from the tests directory; this gate was
   // invoked from the repo root, so a config branching on process.cwd() handed the
@@ -306,7 +341,8 @@ const CASES = [
   // The config declares a root `grep` ONLY when evaluated somewhere other than the
   // tests directory, so exit 0 means the gate stood where Playwright would.
   ['explicit --config outside --tests-dir — evaluated from the TESTS dir',
-    { 'cfgdir/playwright.config.js':
+    { 'cfgdir/tests/a.spec.js': SPEC,
+      'cfgdir/playwright.config.js':
         `import { defineConfig, devices } from '@playwright/test';\n`
         + `const here = process.cwd();\n`
         + `const elsewhere = !here.endsWith('/suite');\n`
@@ -432,7 +468,8 @@ const CASES = [
   // The config declares a root grep only when PWD is the physical path, so exit 0
   // means the gate presented the logical one, as the run's shell would.
   ['symlinked tests dir keeps the LOGICAL PWD, as a shell would',
-    { 'real/inner/playwright.config.js':
+    { 'real/inner/tests/a.spec.js': SPEC,
+      'real/inner/playwright.config.js':
         `import { defineConfig, devices } from '@playwright/test';\n`
         + `const physical = process.env.PWD && process.env.PWD.includes('/real/');\n`
         + `export default defineConfig({\n  testDir: '.',\n`
@@ -498,7 +535,8 @@ const CASES = [
   // muting risk. Same precedence list as the implicit search, so the two paths
   // cannot disagree about which file Playwright would read.
   ['--config names a DIRECTORY, not a file',
-    { 'cfgdir/playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+    { 'cfgdir/tests/a.spec.js': SPEC,
+      'cfgdir/playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
         + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'suite/tests/app.spec.js': "import { test } from '@playwright/test';\ntest('s', async () => {});\n" },
     0, 'check-ui-viewports: OK', { subdir: 'suite', configArg: 'cfgdir' }],
@@ -508,27 +546,33 @@ const CASES = [
   // the same defeat round 6 delivered to the root check after four predicates.
   // All testDir inference, root and project, now goes to #335 together.
   //
-  // This case pins a REAL HOLE at exit 0, deliberately: a project redirecting
-  // discovery away from the suite is not flagged. Recorded as a case rather than
-  // prose, so re-adding a fifth predicate trips a test instead of passing quietly
-  // — and so the hole is visible to anyone reading what this gate covers.
-  ['project testDir redirect is NOT flagged — a known hole, deferred to #335',
+  // ── PROJECT-LEVEL SELECTION: the same two halves, one level down ─────────
+  // These were exits 0 and 12 for three different reasons, all now obsolete. The
+  // redirect was a KNOWN HOLE pinned at exit 0 (round 12 defeated the fourth
+  // path predicate with a symlink, and all testDir inference went to #335). The
+  // two selection keys were exit 12 CANNOT-CHECK — a band whose only project
+  // carried a key could not be attributed, whether or not the key did anything.
+  //
+  // Observation settles all three, and the no-op one is the important twin: it
+  // is the false alarm the old refusal produced, and it must now pass.
+  ['project testDir redirected away from the suite — OBSERVED, exit 12',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testDir: './elsewhere', use: { viewport: { width: 1440, height: 900 } } },\n"
-      + TABLET + PHONE) },
-    0, 'check-ui-viewports: OK'],
+      + TABLET + PHONE),
+      'elsewhere/keep.txt': 'x\n' },
+    12, 'laptop is declared but Playwright discovers no test for it'],
 
-  ['laptop project carries testMatch — declared but unattributable',
+  ['project testMatch that matches nothing — OBSERVED, exit 12',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"
       + TABLET + PHONE) },
-    12, 'declared only by projects carrying selection keys'],
+    12, 'laptop is declared but Playwright discovers no test for it'],
 
-  ['laptop project carries a no-op testIgnore: [] — still refused, but not called missing',
+  ['project no-op testIgnore: [] — passes now, no longer unattributable',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testIgnore: [], use: { viewport: { width: 1440, height: 900 } } },\n"
       + TABLET + PHONE) },
-    12, 'declared only by projects carrying selection keys'],
+    0, 'check-ui-viewports: OK'],
 
   // The no-false-alarm twin for the round-10 path fix: a project redundantly
   // naming the root's own directory, spelled differently, is NOT restricted.
@@ -610,6 +654,23 @@ function runCase(files, opts) {
       const dest = join(tmp, name);
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, body);
+    }
+    // EVERY FIXTURE NEEDS SOMETHING TO DISCOVER. Since #335 the gate does not
+    // stop at what the config declares — it asks Playwright what it enumerates,
+    // and a fixture with no spec file legitimately enumerates nothing, so every
+    // formerly-passing case would fail with "declared but discovers no test".
+    // That is the gate being right about a fixture that was never realistic: a
+    // suite with no tests has no coverage at any width.
+    //
+    // Written only when the case supplies no spec of its own, so a case ABOUT
+    // discovery (an ignored spec, an excluding reporter, a redirected testDir)
+    // still controls exactly what is there. ESM because FIXTURE_PKG declares
+    // "type": "module".
+    const hasSpec = Object.keys(files).some(n => /\.spec\.[cm]?[jt]s$/.test(n));
+    if (!hasSpec && o.noSpec !== true) {
+      mkdirSync(join(tmp, 'tests'), { recursive: true });
+      writeFileSync(join(tmp, 'tests', 'gate.spec.js'),
+        "import { test, expect } from '@playwright/test';\ntest('present', async () => { expect(1).toBe(1); });\n");
     }
     // opts.symlink: [linkName, targetName] inside tmp, created after the files so
     // the target exists. Needed to express the round-14 fixture at all.

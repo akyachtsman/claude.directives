@@ -24,11 +24,27 @@
 //
 // So: IMPORT the config and let Node evaluate it. Spread order, quoting, comments
 // and the device table all stop mattering, because JavaScript does the resolving.
-// That is the whole design.
+// That answers WHICH WIDTHS ARE DECLARED, and it is the half of this gate that
+// has always worked.
+//
+// It cannot answer whether anything RUNS at those widths, and #335 records eight
+// review rounds and twenty findings from trying — every one a rule correct for
+// the example that motivated it and wrong one step out. "Empty" alone had three
+// spellings, found one per round. Playwright decides what runs from testDir plus
+// testMatch/testIgnore plus grep/grepInvert plus respectGitIgnore plus nested
+// .gitignore contents plus shard plus reporter preprocessing plus per-project
+// overrides — version-dependent, two of them arbitrary user code, and the config
+// object is itself a function of the environment it is evaluated in.
+//
+// So the second half stops predicting and ASKS: `playwright test --list`, with
+// the config's own reporters left in place, in the same environment the suite
+// runs in. See `observe()` below for the three constraints that shape it. A band
+// is covered when a project at that width turns up in what Playwright actually
+// enumerated — declared AND observed, joined in the parent process.
 //
 // SILENCE MEANS "CHECKED AND FINE", NEVER "COULD NOT LOOK". Every failure has its
 // own exit code and its own printed line:
-//   0  three classes DECLARED — a config read, never an observed run (#335)
+//   0  three classes declared AND observed to discover tests (#335)
 //   1  checked — a class is undeclared (the gate FAILED)
 //   2  tests dir not found
 //   3  no Playwright config in the tests dir
@@ -38,17 +54,27 @@
 //   7  reached exit 0 without a verdict — the backstop (a config that calls
 //      process.exit(0) at import time would otherwise pass silently)
 //   8  usage error (nonsensical band bounds)
-//   9  a TOP-LEVEL test-selection key is PRESENT (CANNOT CHECK) — flagged on
-//      presence alone; this gate does not decide whether it actually narrows
-//  10  a non-built-in reporter is configured (CANNOT CHECK) — its preprocess()
-//      can exclude every test; built-ins are read from the installed Playwright
-//  11  that built-in reporter list could not be read (CANNOT CHECK) — the
-//      discriminator for 10 is unavailable, so no reporter can be vouched for
-//  12  a band is DECLARED at the right width but only by projects carrying
-//      selection keys (CANNOT CHECK) — distinct from 1, which is a band no
-//      project declares at all
-//  13  PW_TEST_SOURCE_TRANSFORM is set (CANNOT CHECK) — Playwright transforms
-//      the config as it loads it, so a plain import() reads a different object
+//   9  RETIRED by #335 — a top-level selection key used to be refused on
+//      presence alone. Stage two observes whether it narrows anything.
+//  10  RETIRED by #335 — a non-built-in reporter used to be refused by name.
+//      Stage two runs the listing with the config's own reporters intact.
+//  11  RETIRED by #335 — the built-in reporter list is no longer consulted.
+//  12  a band is DECLARED at the right width and Playwright discovers NO test
+//      for it (the gate FAILED) — distinct from 1, which is a band no project
+//      declares at all. Under #333 this code meant "cannot attribute"; it now
+//      means an observed absence, which is a stronger statement, not a weaker one
+//  13  PW_TEST_SOURCE_TRANSFORM and _SCOPE are both set (CANNOT CHECK) —
+//      Playwright transforms the config as it loads it, so a plain import()
+//      reads a different object than the run does
+//  14  the config evaluation reported no verdict, or a pass its own data or its
+//      exit status does not support (CANNOT CHECK)
+//  15  the listing could not be run at all (CANNOT CHECK)
+//  16  the listing ran and produced no inventory to read (CANNOT CHECK) — a
+//      `--list` that prints nothing is "could not look", never "no tests"
+//
+// The three RETIRED codes are kept in this list rather than deleted. They were
+// documented exits of a shipped gate, and a reader meeting one in an old CI log
+// needs to find out what it meant and why it stopped happening.
 // node_modules is environment-provided, not repo-guaranteed: in CI it exists
 // because the ui-suite composite ran `npm install` first. Its absence is 4 — a
 // loud "cannot check", never a pass.
@@ -67,7 +93,7 @@
 const { existsSync, statSync, mkdtempSync, writeFileSync, readFileSync, rmSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
-const { resolve, join, isAbsolute, dirname } = require('path');
+const { resolve, join, isAbsolute, dirname, basename } = require('path');
 const { tmpdir } = require('os');
 
 // ============================================================================
@@ -92,6 +118,105 @@ const { tmpdir } = require('os');
 // This is the "remove the thing that can be wrong" move that has held three
 // times on this PR, rather than a fourth captured primitive.
 // ============================================================================
+// ============================================================================
+// OBSERVING DISCOVERY. Runs in the PARENT, which never imports the config.
+//
+// `npx playwright test --list` answers the question a config read cannot, and
+// #335 records why every static answer failed. Three constraints shape this:
+//
+//   1. NO `--reporter` FLAG. A CLI reporter REPLACES the config's list rather
+//      than adding to it, so a custom reporter's preprocess() never runs and the
+//      listing reports tests that will not execute. Measured on 1.62.1: a config
+//      whose reporter excludes every test listed all three projects and exited 0
+//      WITH the flag, and listed zero WITHOUT it. Overriding the reporter here
+//      would reproduce the exact false green this stage exists to catch.
+//   2. THE LISTING MUST BE READABLE. A custom reporter replaces the built-in
+//      `list` reporter, so `--list` prints nothing at all — and a no-op custom
+//      reporter is indistinguishable from one that excluded everything, both
+//      silent. So a WRAPPER config re-exports the user's config with `['list']`
+//      APPENDED to whatever reporters it already declares. Appending keeps every
+//      preprocess() running (measured: an excluding reporter still yields
+//      `Total: 0 tests`) while restoring an inventory to read.
+//   3. NO ANSWER IS NOT A PASS. If the listing cannot run, or runs without
+//      producing its `Total:` trailer, this is CANNOT CHECK and exits loudly.
+//
+// The wrapper is written BESIDE the config, so every relative path in it —
+// testDir, reporter module paths — resolves exactly as it does for the real run,
+// and it is `.mjs` so its own module system is not in question. That last point
+// was a bug first: deriving the wrapper's format from the config's EXTENSION is
+// a prediction, and it was wrong on the first real config it met, because
+// templates/ui-tests/package.json carries "type": "module". `.mjs` is ESM under
+// every resolver rule and ESM can import a CommonJS config through its default
+// export, so one form covers CJS, ESM and TypeScript configs alike — all three
+// measured.
+// ============================================================================
+function observe(configPath, testsDir) {
+  const { spawnSync } = require('child_process');
+  if (typeof configPath !== 'string' || typeof testsDir !== 'string') {
+    return { ok: false, code: 15, lines: ['the evaluation did not report which config to observe'] };
+  }
+  const wrapper = join(dirname(configPath), `.ui-viewports-observe.${process.pid}.mjs`);
+  const rel = './' + basename(configPath);
+  // Appending, never replacing — see constraint 1. A bare string reporter is
+  // normalised to a tuple because Playwright rejects a loose string INSIDE the
+  // array form (`config.reporter[0] must be a tuple [name, options]`), which is
+  // the one shape of the four that failed when this was written.
+  const body = `import base from ${JSON.stringify(rel)};\n`
+    + 'const cfg = base && base.default ? base.default : base;\n'
+    + 'const r = cfg.reporter;\n'
+    + "const list = r === undefined ? [['list']]\n"
+    + "  : typeof r === 'string' ? [[r], ['list']]\n"
+    + "  : Array.isArray(r) ? [...r, ['list']]\n"
+    + "  : [r, ['list']];\n"
+    + 'export default { ...cfg, reporter: list };\n';
+  let res;
+  try {
+    writeFileSync(wrapper, body, 'utf8');
+    // PWD IS SET EXPLICITLY, and it is load-bearing. spawnSync's `cwd` does not
+    // update PWD in the child, so the listing inherited whatever PWD this process
+    // was started with — and Playwright reads PWD during discovery. Measured on
+    // the symlinked-tests-dir fixture: PWD inherited, or deleted, or set to the
+    // PHYSICAL path all discover ZERO tests, while PWD set to the LOGICAL tests
+    // dir discovers all of them. So the observation would have reported an empty
+    // run for a suite that runs fine.
+    //
+    // The gate already knew this: round 15 of #333 established that a shell
+    // entering a symlinked directory keeps the LOGICAL path in PWD, and fixed the
+    // gate's own chdir accordingly. This spawn is that path's twin, and it
+    // shipped without the same treatment — the defect shape #346 counted four
+    // times, reappearing in the first new code written after it.
+    res = spawnSync('npx', ['playwright', 'test', '--list', '--config', wrapper],
+      { cwd: testsDir, encoding: 'utf8', timeout: 120000,
+        env: { ...process.env, PWD: testsDir } });
+  } catch (e) {
+    return { ok: false, code: 15, lines: [`could not run the listing: ${(e && e.message) || e}`] };
+  } finally {
+    try { rmSync(wrapper, { force: true }); } catch { /* best effort; nothing reads it again */ }
+  }
+  if (res.error) return { ok: false, code: 15, lines: [`could not run the listing: ${res.error.message}`] };
+  const out = `${res.stdout || ''}`;
+  // THE TRAILER IS THE PROOF THE LISTING HAPPENED. `--list` exits 0 having
+  // printed nothing when a custom reporter swallows the output, and exits 0 with
+  // zero specs when an environment variable the config reads is unset — both
+  // silent passes if absence were read as "no tests". Only `Total: N` is
+  // evidence that Playwright enumerated and reported.
+  const m = /^Total: (\d+) test/m.exec(out);
+  if (!m) {
+    const err = `${res.stderr || ''}`.trim().split('\n').slice(0, 4);
+    return { ok: false, code: 16, lines: [
+      'the listing produced no "Total:" line, so nothing was enumerated to read',
+      `  exit status: ${res.status}${res.signal ? ` (signal ${res.signal})` : ''}`,
+      ...err.map(l => `  ${l}`),
+    ] };
+  }
+  const projects = new Set();
+  for (const line of out.split('\n')) {
+    const p = /^\s+\[([^\]]+)\]\s+›/.exec(line);
+    if (p) projects.add(p[1]);
+  }
+  return { ok: true, total: Number(m[1]), projects: [...projects] };
+}
+
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
 if (!VERDICT_FILE) {
   const { spawnSync } = require('child_process');
@@ -142,6 +267,44 @@ if (!VERDICT_FILE) {
     const bands = ['laptop', 'tablet', 'phone'];
     const ok = rows && Array.isArray(rows.rows) && rows.cover
       && bands.every(b => Array.isArray(rows.cover[b]) && rows.cover[b].length > 0);
+    if (ok) {
+      // ── STAGE TWO: OBSERVE, do not predict ────────────────────────────────
+      // Everything above establishes what the config DECLARES. It cannot
+      // establish what Playwright will DISCOVER, and eight rounds of trying
+      // produced twenty findings, each a rule correct for its example and wrong
+      // one step out (#335). So this stage stops reasoning about selection and
+      // asks Playwright, then joins the two answers: a band is covered when a
+      // project at that width actually turns up in the listing.
+      const obs = observe(rows.configPath, rows.testsDir);
+      if (!obs.ok) {
+        console.error('CANNOT CHECK: could not observe what Playwright discovers.');
+        for (const line of obs.lines) console.error(`  ${line}`);
+        console.error('  A listing that did not happen is NOT a pass — the gate can say what the');
+        console.error('  config declares and nothing about what runs, so it refuses.');
+        console.error(`check-ui-viewports: FAIL (code ${obs.code})`);
+        rmSync(box, { recursive: true, force: true });
+        process.exit(obs.code);
+      }
+      const seen = new Set(obs.projects);
+      const missing = bands.filter(b => !rows.cover[b].some(n => seen.has(n)));
+      if (missing.length) {
+        for (const b of missing) {
+          console.error(`FAIL: ${b} is declared but Playwright discovers no test for it.`);
+          console.error(`  declared by: ${rows.cover[b].join(', ')}`);
+        }
+        console.error(`  Playwright listed ${obs.total} test(s) across: ${obs.projects.join(', ') || '(no project)'}`);
+        console.error('  This is an OBSERVED result, not an inference from the config: the widths');
+        console.error('  are declared correctly and no scenario reaches them. Something between');
+        console.error('  the config and discovery removes them — a filter, an ignore rule, a');
+        console.error('  shard, a reporter. This gate does not need to know which.');
+        console.error('  test.md -> UI coverage gates, fifth gate.');
+        rmSync(box, { recursive: true, force: true });
+        process.exit(12);
+      }
+      const where = b => rows.cover[b].filter(n => seen.has(n)).join('/');
+      console.log(`check-ui-viewports: OK — OBSERVED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
+      console.log(`  (${obs.total} test(s) discovered across ${obs.projects.join(', ')} — asked Playwright, not inferred)`);
+    }
     if (!ok) {
       console.error('CANNOT CHECK: the evaluation reported a pass its own data does not support.');
       console.error('  Every band must be covered by at least one unrestricted project for a');
@@ -425,8 +588,10 @@ console.log(`config:    ${configPath}`);
     // loader reports the default glob. It cannot distinguish DECLARED from
     // DEFAULTED, and every refusal in this gate is a statement about what the
     // config declares. Loading through it would read every config as carrying a
-    // root filter on every project — exit 9 for the entire fleet. Recorded on
-    // #335, because it constrains the rewrite too.
+    // root filter on every project — which, while this gate still refused those,
+    // meant refusing the entire fleet. #335 removed that refusal, so the cost is
+    // no longer fatal; the plain import stays because DECLARED-vs-DEFAULTED still
+    // decides which widths are the author's and which are Playwright's.
     const hint = e && e.code === 'ERR_UNKNOWN_FILE_EXTENSION'
       ? ['  This Node cannot import the config\'s module graph — note that the config',
         '  itself may be JavaScript and still import a TypeScript file, which is enough.',
@@ -474,83 +639,31 @@ console.log(`config:    ${configPath}`);
   // A `shard` can be cancelled at runtime by a reporter calling skipSharding().
   //
   // So the rule here is a POLICY, not a prediction: if a key whose documented job
-  // is test selection is declared at the root, this gate stops. Not because that
-  // key necessarily narrows anything — several of the flagged shapes provably do
-  // not — but because this gate has no way to establish that it does not, and its
-  // own anti-silence rule says "could not look" gets a loud exit, never a pass.
+  // ROOT SELECTION KEYS ARE NO LONGER REFUSED. Until #335 this gate stopped
+  // whenever `grep`, `grepInvert`, `testMatch`, `testIgnore` or `shard` appeared
+  // at the root — not because such a key necessarily narrows anything, but
+  // because a config read could not establish that it does not. That refused
+  // configs that were provably fine, and it was the honest move only while
+  // nothing better existed.
   //
-  // The cost is real and is accepted deliberately: a config whose root key is a
-  // genuine no-op is refused. The diagnostic says so outright rather than
-  // implying the config is broken. That direction is safe; the other is not.
-  //
-  // testDir is NOT checked here — four predicates across three rounds and a
-  // symlink hole remained. It belongs to #335.
-  const SELECTION_KEYS = ['grep', 'grepInvert', 'testMatch', 'testIgnore', 'shard'];
-  const rootFilters = SELECTION_KEYS.filter(k => cfg[k] !== undefined);
+  // Stage two asks Playwright instead. A key that narrows shows up as a project
+  // missing from the listing; a key that is a no-op shows up as nothing at all.
+  // The question "does this value actually narrow?" — answered wrong six times
+  // across three spellings of "empty" and two of "matches everything" — is no
+  // longer asked by anyone here.
 
-  if (rootFilters.length) {
-    die(9, [
-      `FAIL: the config declares TOP-LEVEL ${rootFilters.join(', ')} — CANNOT CHECK.`,
-      '  This gate stops whenever a root-level test-selection key is declared. It',
-      '  does NOT claim your key narrows the run: it cannot tell either way, and it',
-      '  will not certify per-band coverage it cannot attribute.',
-      '  If the key is a no-op, this is a conservative refusal. That is deliberate.',
-      '  To clear it, the key has to stop being declared at the root for the run',
-      '  this gate is certifying — either move it onto the projects that are NOT',
-      '  providing viewport coverage, or drop it from this run entirely.',
-      '  NOT by relocating it to the CI command line. This gate reads a config; it',
-      '  cannot see the arguments `playwright test` is invoked with, so a selection',
-      '  flag moved there is simply outside what it can inspect — the refusal turns',
-      '  into a pass without anything about the run having been established.',
-      '  test.md -> UI coverage gates, fifth gate.',
-    ]);
-  }
-
-  // REPORTERS CAN REMOVE TESTS, so a reporter this gate cannot vouch for is a
-  // CANNOT CHECK. A reporter's preprocess() receives a TestRun and may call
-  // exclude(), skip() or skipSharding() on any test — public API in 1.62.1.
-  // Reproduced 2026-08-27: three correctly banded projects plus a reporter
-  // calling testRun.exclude() on every test runs ZERO scenarios, and this gate
-  // exited 0 naming all three bands.
+  // REPORTERS ARE NO LONGER VETTED BY NAME. A reporter's preprocess() can call
+  // testRun.exclude() on every test, and this gate used to refuse any reporter
+  // absent from the installed Playwright's `builtInReporters` — a derived list,
+  // but still a rule about which reporters are TRUSTED rather than an
+  // observation of what they DID.
   //
-  // I first declined to check this, on the grounds that separating "custom" from
-  // "built-in" needs a version-dependent name list — the same enumerate-vs-derive
-  // move that produced seventeen findings on this PR. Codex answered it in round
-  // 8: the installed Playwright EXPORTS the list, so it is derived, not
-  // maintained. That distinction is the whole point and I had collapsed it.
-  //
-  //   require('playwright/lib/common').builtInReporters
-  //   -> ["list","line","dot","json","junit","null","github","html","blob"]
-  //
-  // Version-matched by construction: it comes from the same install the run uses.
-  // A built-in is Playwright's own code and is trusted here; anything else is
-  // arbitrary user code with the power to empty the run, and gets a loud exit.
-  //
-  // If that export ever moves, this fails LOUDLY (exit 11) rather than silently
-  // trusting every reporter — the difference between a check that stopped working
-  // and a check that says nothing, which is this file's founding subject.
-  let builtInReporters;
-  try {
-    // Same base as the @playwright/test probe above, and for the same reason:
-    // this is the gate's dependency, not the config's. Resolving it from an
-    // external config produced a spurious exit 11 on the same layout.
-    const mod = createRequire(pathToFileURL(join(TESTS_DIR, 'noop.js')))('playwright/lib/common');
-    builtInReporters = mod && mod.builtInReporters;
-    if (!Array.isArray(builtInReporters) || builtInReporters.length === 0) {
-      throw new Error('builtInReporters is not a non-empty array');
-    }
-  } catch (e) {
-    die(11, [
-      'CANNOT CHECK: cannot read the installed Playwright\'s built-in reporter list.',
-      `  ${(e && e.message) || e}`,
-      '  This gate needs it to tell a Playwright reporter from arbitrary user code,',
-      '  because a reporter\'s preprocess() can exclude every test in the run.',
-      '  It is read from the INSTALLED package (playwright/lib/common) rather than',
-      '  hard-coded, so it cannot go stale — but it can move between versions.',
-      '  Refusing here is deliberate: the alternative is trusting every reporter.',
-      '  test.md -> UI coverage gates, fifth gate.',
-    ]);
-  }
+  // Stage two runs the listing with the config's own reporters intact and the
+  // built-in `list` reporter appended, so a reporter that empties the run yields
+  // `Total: 0 tests` and the bands go uncovered. Measured on 1.62.1 against a
+  // reporter calling testRun.exclude() on every test. #335 set this as the
+  // criterion for whether the rewrite had actually moved from predicting to
+  // observing: if `--list` still needed the reporter allowlist, it had not.
   // PW_TEST_REPORTER ADDS A REPORTER THE CONFIG NEVER MENTIONS. The runner
   // appends it independently of `reporter`, so a config declaring only built-ins
   // can still run arbitrary reporter code. Reproduced 2026-08-27 (Codex, round 9):
@@ -596,34 +709,6 @@ console.log(`config:    ${configPath}`);
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }
-  const envReporter = process.env.PW_TEST_REPORTER;
-  // reporter accepts a bare id, a [id, options] pair, or an array of either.
-  const reporterIds = (r => {
-    if (r === undefined) return [];
-    const one = e => (Array.isArray(e) ? e[0] : e);
-    return (Array.isArray(r) && !(typeof r[0] === 'string' && r.length === 2 && typeof r[1] === 'object')
-      ? r.map(one)
-      : [one(r)]).filter(x => typeof x === 'string');
-  })(cfg.reporter);
-  if (envReporter) reporterIds.push(envReporter);
-  const foreignReporters = reporterIds.filter(id => !builtInReporters.includes(id));
-  if (foreignReporters.length) {
-    die(10, [
-      `FAIL: non-built-in reporter(s) in effect: ${foreignReporters.join(', ')} — CANNOT CHECK.`,
-      ...(envReporter && foreignReporters.includes(envReporter)
-        ? ['  One of these comes from PW_TEST_REPORTER, not from the config: the runner',
-           '  appends it regardless of what `reporter` says. Clear that variable for both',
-           '  the check and the run, or point it at a built-in.']
-        : []),
-      '  A reporter\'s preprocess() can call testRun.exclude() or .skip() on any',
-      '  test, so a run can execute nothing while every band is declared. This gate',
-      '  reads a config; it cannot execute your reporter to find out.',
-      `  Built-in reporters are accepted (from the installed Playwright): ${builtInReporters.join(', ')}.`,
-      '  This does NOT say your reporter removes tests — only that nothing here can',
-      '  establish that it does not.',
-      '  test.md -> UI coverage gates, fifth gate.',
-    ]);
-  }
 
   // Playwright merges top-level `use` into each project at RUNTIME, but
   // defineConfig() does not do it at authoring time (measured 2026-08-26), so do it
@@ -631,11 +716,14 @@ console.log(`config:    ${configPath}`);
   // default; `viewport: null` is an explicit "no fixed viewport" and must NOT fall
   // through, which is why this tests `!== undefined` rather than truthiness.
   const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
-  // A project that restricts its test set may declare a width and still never run
-  // the UI suite — round 2 of #280 found exactly that. Such a project is printed
-  // with its width but does NOT count toward a band: the conservative direction is
-  // a false alarm naming the project, never a false pass.
-  const RESTRICTORS = ['testMatch', 'testIgnore', 'grep', 'grepInvert'];
+  // PROJECT-LEVEL SELECTION KEYS ARE NO LONGER SUBTRACTED HERE. A project that
+  // restricts its test set may declare a width and still never run the UI suite —
+  // round 2 of #280 — and this gate used to answer that by refusing to count any
+  // project carrying `testMatch`, `testIgnore`, `grep` or `grepInvert`. That is
+  // the root-key refusal one level down, with the same cost: a project whose key
+  // is a no-op was dropped from its band and the band reported unattributable.
+  // Stage two counts a project when Playwright discovers a test for it, which
+  // answers the same question by observation and needs no list of key names.
   const cover = { laptop: [], tablet: [], phone: [] };
   const rows = [];
   for (const p of projects) {
@@ -643,7 +731,6 @@ console.log(`config:    ${configPath}`);
     const vp = p && p.use && p.use.viewport !== undefined ? p.use.viewport
       : cfg.use && cfg.use.viewport !== undefined ? cfg.use.viewport
         : DEFAULT_VIEWPORT;
-    const restricted = RESTRICTORS.filter(k => p && p[k] !== undefined);
     // testDir IS NOT PART OF `restricted`, at the project level either. Round 10
     // fixed the spelling comparison here; round 12 defeated the fix with a
     // directory symlink — `alias -> .` makes two lexically different paths name
@@ -660,20 +747,19 @@ console.log(`config:    ${configPath}`);
     // not flagged — a real hole, recorded rather than papered over, and no worse
     // than the root case that has been deferred since round 6.
     if (vp === null) {
-      rows.push({ name, w: 'null', band: 'UNCLASSIFIABLE (viewport: null — no fixed viewport)', restricted });
+      rows.push({ name, w: 'null', band: 'UNCLASSIFIABLE (viewport: null — no fixed viewport)' });
       continue;
     }
     if (typeof vp !== 'object' || !Number.isFinite(vp.width)) {
-      rows.push({ name, w: JSON.stringify(vp), band: 'UNCLASSIFIABLE (malformed viewport)', restricted });
+      rows.push({ name, w: JSON.stringify(vp), band: 'UNCLASSIFIABLE (malformed viewport)' });
       continue;
     }
     const band = vp.width >= LAPTOP_MIN ? 'laptop' : vp.width >= TABLET_MIN ? 'tablet' : 'phone';
-    rows.push({ name, w: `${vp.width}x${vp.height}`, band, restricted });
-    if (!restricted.length) cover[band].push(name);
+    rows.push({ name, w: `${vp.width}x${vp.height}`, band });
+    cover[band].push(name);
   }
   for (const r of rows) {
-    const tail = r.restricted.length ? `  RESTRICTED by ${r.restricted.join(', ')} — NOT counted` : '';
-    console.log(`  ${String(r.name).padEnd(18)} ${String(r.w).padEnd(12)} ${r.band}${tail}`);
+    console.log(`  ${String(r.name).padEnd(18)} ${String(r.w).padEnd(12)} ${r.band}`);
   }
 
   // TWO DIFFERENT VERDICTS, because they are different facts. A band with no
@@ -707,11 +793,12 @@ console.log(`config:    ${configPath}`);
   // decides. A corrupted child can only produce WORSE data — fewer rows, missing
   // bands — which the parent turns into a refusal. It cannot manufacture a pass,
   // because the pass is computed by code the config never touched.
-  report({ rows, cover });
+  // configPath travels with the rows so the PARENT can observe discovery. The
+  // parent never imports the config; it hands the path to Playwright and reads
+  // what comes back, which is the whole point of #335.
+  report({ rows, cover, configPath, testsDir: TESTS_DIR });
   const bandProjects = b => rows.filter(r => r.band === b);
   const undeclared = ['laptop', 'tablet', 'phone'].filter(b => bandProjects(b).length === 0);
-  const unattributable = ['laptop', 'tablet', 'phone']
-    .filter(b => cover[b].length === 0 && bandProjects(b).length > 0);
   if (undeclared.length) {
     for (const b of undeclared) console.error(`FAIL: no project declares a ${b} viewport.`);
     console.error('  global.md requires laptop, tablet AND phone. This config is the only place');
@@ -723,32 +810,19 @@ console.log(`config:    ${configPath}`);
     record(1);
     EXIT(1);
   }
-  if (unattributable.length) {
-    for (const b of unattributable) {
-      const who = bandProjects(b).map(r => `${r.name} (${r.restricted.join(', ')})`).join('; ');
-      console.error(`FAIL: ${b} is declared only by projects carrying selection keys — CANNOT CHECK.`);
-      console.error(`  ${who}`);
-    }
-    console.error('  Those projects are at the right width. This gate reads a config and cannot');
-    console.error('  tell whether their selection keys exclude the UI suite, so it will not');
-    console.error('  certify the band. It does NOT claim they do exclude it — if the key is a');
-    console.error('  no-op, this is a conservative refusal, and that is the deliberate direction.');
-    console.error('  Clear it by leaving at least one project per band without selection keys.');
-    console.error('  test.md -> UI coverage gates, fifth gate.');
-    verdict = true;
-    console.error('check-ui-viewports: FAIL (code 12)');
-    record(12);
-    EXIT(12);
-  }
-  // SCOPE THE SUCCESS CLAIM. "OK" here means the config DECLARES an unrestricted
-  // project in each band — not that any scenario will execute at those widths.
-  // This gate reads a config object; it never observes a run. A custom reporter's
-  // preprocess() can exclude every test at runtime (reproduced 2026-08-27) and
-  // nothing in a config read can see it. Saying "declared" rather than "covered"
-  // costs nothing and stops this line being quoted as proof of coverage it does
-  // not establish — which is the same fail-open shape, moved into the wording.
-  console.log(`check-ui-viewports: OK — DECLARED laptop:${cover.laptop.join('/')}  tablet:${cover.tablet.join('/')}  phone:${cover.phone.join('/')}`);
-  console.log('  (declared, not executed: a config read cannot observe a run — see #335)');
+  // ONE VERDICT NOW, not two. "Declared but unattributable" existed because a
+  // config read could not tell whether a project's selection keys excluded the
+  // suite, so a band with only restricted projects got its own refusal (exit 12,
+  // CANNOT CHECK). Stage two answers that question outright, so the refusal is
+  // gone and exit 12 now means something PROVEN: the band is declared and
+  // Playwright discovers nothing for it. The code is reused deliberately — it was
+  // always "this band is not established"; what changed is that the gate can now
+  // say why with evidence instead of declining to say.
+  // NO VERDICT LINE HERE. Declaring the bands is half the question; the other
+  // half is whether Playwright discovers anything for them, and only the parent
+  // can ask (it never imported the config). A success printed here would be the
+  // "declared, not executed" claim #335 was filed to replace — and worse, it
+  // would print BEFORE the observation that can still refuse it.
   verdict = true;
   // The PASS must be recorded too, and explicitly. If the success path forgot,
   // every clean config would reach the parent with no verdict and report exit 14

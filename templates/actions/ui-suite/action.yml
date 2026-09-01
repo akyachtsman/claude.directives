@@ -143,6 +143,14 @@ runs:
     # composite — this step names it by path and fails at resolution without it,
     # the same coupling check-job-bounds.py has with qa.yml.
     #
+    # That coupling is DERIVED now, not just documented here. /refresh-repo greps
+    # its callers for `.github/scripts/*` paths, and until 2026-09-01 its pattern
+    # demanded a command prefix immediately before `.github/` — which the
+    # `"$GITHUB_WORKSPACE/..."` form below does not have, so this file returned no
+    # match and a refresh silently omitted the one script this composite cannot
+    # run without. This comment was the compensation for that. Keep it as the
+    # explanation; check-refresh-derivation.py is the enforcement.
+    #
     # THE SAME ENVIRONMENT AS THE RUN STEP, deliberately. This step IMPORTS the
     # config, so it evaluates whatever that config computes from process.env — and
     # the shipped config already reads APP_URL. Give it a thinner environment than

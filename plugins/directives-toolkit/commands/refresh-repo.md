@@ -354,14 +354,59 @@ for c in $callers; do
   curl -fsSL "$raw/$c" >>"$buf" \
     || { echo "FETCH FAILED: $c — derivation INVALID, do not use it" >&2
          rm -f "$buf"; exit 1; }
+  printf '\n' >>"$buf"   # token boundary — see the third bullet below
 done
-refs=$(grep -oE '(node|python3) \.github/scripts/[A-Za-z0-9_.-]+\.(js|py)' "$buf" \
-       | awk '{print $2}' | sort -u)
+refs=$(grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' "$buf" \
+       | grep -E '\.(js|py)$' | sort -u)
 rm -f "$buf"
 printf '%s\n' "$refs"
 ```
 
-Three things about that shape, each of which a shorter version got wrong:
+Seven things about that shape, each of which a shorter version got wrong:
+
+- **It matches the script PATH, never the invocation prefix.** The earlier form
+  required `node ` or `python3 ` *immediately* before `.github/`, so
+  `node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"` — the real
+  line in `ui-suite/action.yml` — returned **no match at all**, and the
+  derivation silently omitted the one script that composite cannot run without.
+  Reported by PROP6, 2026-09-01, and measured here before the fix. The failure is
+  invisible in outcome wherever the script already exists, and installs a red
+  build wherever it does not — `claude.insurance`'s exact situation in #321.
+  A prefix is a form; the path is the fact. Note the two-stage filter: grabbing
+  the whole token and *then* requiring a `.js`/`.py` ending is what keeps
+  `.github/scripts/package-lock.json` out, since an unterminated `\.(js|py)`
+  matches the `.js` inside `.json`. That defect was latent in the old pattern
+  too — the prefix requirement just kept it from ever being reached.
+  `check-refresh-derivation.py` now runs this exact pattern, read out of this
+  file, against every shipped caller, so the next invocation-form change fails
+  CI instead of shipping.
+
+- **It matches a MENTION, not only an invocation, and that is the accepted
+  cost.** A comment reading `# replaced .github/scripts/legacy.py` puts
+  `legacy.py` in the set. The extension filter already excludes the two cases
+  that used to justify prefix-matching — bare directories and
+  `package-lock.json` — so what remains is comment-only paths, and the asymmetry
+  runs the right way: a spare installed file is inert, a missing one is a red
+  build at step resolution. The earlier prose here said the opposite
+  ("Match on the INVOCATION, not the bare path"); it was left standing when the
+  pipeline was inverted, and Codex caught the contradiction on #345.
+- **The character class admits `/`, so a NESTED script is reachable.**
+  `templates/ui-tests/` installs to `.github/scripts/ui-tests/`, so a script one
+  directory down is a reference waiting to happen — and while the class excluded
+  `/`, `.github/scripts/nested/a.py` truncated to `.github/scripts/nested`, which
+  the extension filter then dropped. The script vanished, with no error: PROP6's
+  failure again, one directory down. A bare directory reference like
+  `.github/scripts/ui-tests/` is still excluded, because the extension filter is
+  anchored. Found by Codex on #345 round 2, which caught it as a guard bug — the
+  guard's own ground truth was slash-blind too, so neither scan could see it.
+
+- **The fetch loop appends a newline after every caller.** `>>` concatenates,
+  and a YAML file need not end in one. Without the delimiter a caller whose last
+  scalar ends in a script path merges into the next file's first word —
+  `.github/scripts/a.js` + `name:` becomes `.github/scripts/a.jsname`, which the
+  token grep consumes whole and the extension filter then drops. The script
+  disappears from the set with no error anywhere. Measured on #345; a per-caller
+  scan cannot see it, because the defect only exists in the concatenation.
 
 - **Every fetch is checked individually, and a failure exits before the
   pipeline.** Putting the loop *inside* `refs=$(…)` does not work: the `exit 1`
@@ -382,8 +427,8 @@ Three things about that shape, each of which a shorter version got wrong:
   Phase 3's head check only refuses the *stamp* afterwards; it does not un-install
   anything.
 
-Match on the INVOCATION, not the bare path, or it also emits directories,
-`package-lock.json`, and paths that appear only in comments.
+Match on the PATH and filter by extension — see the bullets below for why the
+invocation-matching form was wrong, and what the path form costs.
 
 **The output is the answer for THAT refresh, and it moves.** Run against
 `main` on 2026-08-26 with `qa.yml` + `ui-suite/action.yml` as the callers it

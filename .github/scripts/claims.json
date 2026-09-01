@@ -49,9 +49,9 @@
       "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. The three phrasings are the three carriers' actual wordings; CLAUDE.md states it anaphorically ('a response naming the head is not one'), which is why its wording is listed separately rather than approximated by a shared one.",
       "source": "directives/git.md",
       "phrasings": [
-        "A response is not a verdict",
-        "a RESPONSE, not a verdict",
-        "a response naming the head is not one"
+        "A response is not a verdict.",
+        "a RESPONSE, not a verdict:",
+        "a response naming the head is not one, since a review with live findings names it too"
       ],
       "consumers": [
         "docs/standards/automations.md",
@@ -65,7 +65,8 @@
         "a response naming the head is a clean verdict",
         "a Codex response is a verdict",
         "a response is usually not a verdict",
-        "a response is not, if it is clean, a verdict"
+        "a response is not, if it is clean, a verdict",
+        "A response is not a verdict unless it contains no findings."
       ]
     },
     {
@@ -212,7 +213,7 @@
       "source": "directives/git.md",
       "phrasings": [
         "is: arm the check-in, then drop it when THAT OUTCOME is observed terminal",
-        ". Arm the check-in whenever the run's SHA is not your PR's head",
+        "comment instead. Arm the check-in whenever the run's SHA is not your PR's head",
         "coverage -- arm the check-in whenever the run's SHA is not your PR's head",
         "so arm the check-in alongside the event wake, never instead of it",
         "the waiting session still arms a check-in",
@@ -221,7 +222,7 @@
         "the rule: arm a check-in for any awaited outcome that can end without emitting a wake",
         ". Arm a check-in rather than treating a green run",
         "so arm a check-in whenever the run's SHA is not the PR's head",
-        "ARM A CHECK-IN ALONGSIDE IT, not instead of it"
+        "— and ARM A CHECK-IN ALONGSIDE IT, not instead of it"
       ],
       "consumers": [
         "CLAUDE.md",
@@ -249,6 +250,8 @@
         "doesn't arm a check-in",
         "arm the check-in unless the owner objects",
         "Only if the owner asks, arm the check-in",
+        "comment instead. Only if the owner asks. Arm the check-in whenever the run's SHA is not your PR's head",
+        "— and DO NOT ARM A CHECK-IN ALONGSIDE IT, not instead of it",
         "instead. Only if the owner asks, Arm the check-in whenever the run's SHA is not your PR's head",
         "Never arm the check-in whenever the run's SHA is not your PR's head",
         "never arm the check-in whenever the run's SHA is not your PR's head"

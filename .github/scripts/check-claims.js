@@ -75,13 +75,34 @@ import { execFileSync } from 'child_process';
 // inversion someone thought of is enough to force the phrasing that excludes
 // it, and the check runs on every load rather than on a reviewer's memory.
 //
-// ⚠️ WHAT RULE 2 STILL DOES NOT REACH: an inversion nobody wrote down. A
-// lowercase mid-sentence phrasing remains a substring of its own negation
-// (`never arm the check-in, then drop it …` contains git.md's wording), and
-// only a `mustNotMatch` entry makes that fail. The residue is far smaller than
-// the old design's, and it is bounded by something a person can act on — add
-// the inversion — rather than by a lexical proxy that was wrong in both
-// directions.
+// ── ⚠️ THE LIMIT, STATED ONCE AND BOUNDED ──────────────────────────────────
+// Substring matching answers exactly one question: is this text present. A
+// carrier can therefore contain an approved phrasing and still mean the
+// opposite, by putting the negation or condition somewhere the phrasing does
+// not cover. #346 produced six instances of that one class across two review
+// rounds — a negator preposed inside the sentence, a condition APPENDED after
+// the assertion, a gate written as a separate preceding sentence, an UPPERCASE
+// negation in front of an uppercase phrasing, and two owner gates whose
+// rejections were the wrong case to constrain anything.
+//
+// Every one is closed the same way, and the way generalises: EXTEND THE PIN SO
+// THE MUTATION FALLS INSIDE IT. A phrasing carries its connector on the left
+// and its terminator on the right, so any in-span edit — negate it, condition
+// it, reword it — changes the pinned text and the guard goes red.
+//
+// What that does NOT reach, and cannot: a gate placed OUTSIDE the pinned span.
+// Measured on #346 — prefixing CLAUDE.md's bullet with "Everything in this
+// bullet applies only with owner approval." leaves every pinned phrasing
+// byte-identical and the guard green. Extending the pin further moves the
+// boundary; it never removes it, because the next sentence out is always
+// available. No substring method closes this, and the lexical inference layer
+// #341 deleted did not close it either — it just failed in both directions
+// while appearing to try.
+//
+// So the guard's claim is scoped: it proves the WORDING TRAVELLED. It does not
+// prove the rule is UNCONDITIONED at its carrier. Treat a third round of this
+// class as a signal to re-scope rather than to extend pins again — that is the
+// "no downward trend" reading #341 itself was filed on.
 //
 // ⚠️ WHAT THIS GUARD PROVABLY CANNOT CATCH — read before trusting a green run.
 // A consistency check confirms a claim TRAVELLED. It never asks whether the

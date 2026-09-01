@@ -308,6 +308,66 @@ testCase('a raw claim carrying phrasings is refused', {
   files: FILES, expectExit: 1, needle: 'carry a "pattern", not "phrasings"',
 });
 
+// ── the in-span/out-of-span boundary, pinned in both directions ───────────
+// Six instances of one class arrived over two review rounds (#346). These fix
+// the boundary so a seventh cannot arrive silently, and the last case pins the
+// LIMIT — a guard that quietly started catching it would mean the pin had grown
+// in a way nobody reviewed.
+testCase('a condition APPENDED after the assertion is refused', {
+  manifest: manifest([claim({
+    phrasings: ['A response is not a verdict.'],
+    mustNotMatch: ['A response is not a verdict unless it contains no findings.'],
+    consumers: ['docs/consumer.md'],
+  })]),
+  files: {
+    'directives/src.md': 'A response is not a verdict.\n',
+    'docs/consumer.md': 'A response is not a verdict unless it contains no findings.\n',
+  },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
+testCase('a gate written as a separate PRECEDING sentence is refused', {
+  manifest: manifest([claim({
+    phrasings: ['instead. Arm the check-in whenever the SHA differs'],
+    mustNotMatch: ['instead. Only if the owner asks. Arm the check-in whenever the SHA differs'],
+    consumers: ['docs/consumer.md'],
+  })]),
+  files: {
+    'directives/src.md': 'It goes elsewhere instead. Arm the check-in whenever the SHA differs.\n',
+    'docs/consumer.md': 'It goes elsewhere instead. Only if the owner asks. Arm the check-in whenever the SHA differs.\n',
+  },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
+testCase('an UPPERCASE negation before an uppercase phrasing is refused', {
+  manifest: manifest([claim({
+    phrasings: ['— and ARM A CHECK-IN ALONGSIDE IT'],
+    mustNotMatch: ['— and DO NOT ARM A CHECK-IN ALONGSIDE IT'],
+    consumers: ['docs/consumer.md'],
+  })]),
+  files: {
+    'directives/src.md': 'let the wake fire — and ARM A CHECK-IN ALONGSIDE IT.\n',
+    'docs/consumer.md': 'let the wake fire — and DO NOT ARM A CHECK-IN ALONGSIDE IT.\n',
+  },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
+testCase('a gate OUTSIDE the pinned span is NOT caught — the stated limit', {
+  // Not a defect to fix: extending the pin moves the boundary and never removes
+  // it, because the next sentence out is always available. Pinned so the limit
+  // stays honest — if this ever starts failing, the pin grew unreviewed.
+  manifest: manifest([claim({
+    phrasings: ['so check the comments AND the review threads'],
+    mustNotMatch: ['so never check the comments AND the review threads'],
+    consumers: ['docs/consumer.md'],
+  })]),
+  files: {
+    ...FILES,
+    'docs/consumer.md': 'Everything below applies only with owner approval. Per the source: so check the comments AND the review threads before merging.\n',
+  },
+  expectExit: 0, needle: 'check-claims: OK',
+});
+
 // ── --derive: retained, and its semantics CHANGED, so it needs coverage ────
 // The rewrite narrowed what --derive can find (approved wordings only) while
 // this suite stopped passing the flag at all. Codex, #346: changing a mode's

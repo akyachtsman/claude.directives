@@ -15,34 +15,47 @@ ui-suite/action.yml invokes
 
 so the derivation returned NO MATCH for that file. The omission is invisible
 wherever the script already exists and installs a red build wherever it does
-not — every UI job dies at step resolution. It fails OPEN: a short result looks
+not -- every UI job dies at step resolution. It fails OPEN: a short result looks
 exactly like a correct short result, and the procedure's own text (rightly) says
 an empty derivation is not automatically wrong.
 
 The tell that it was already known: ui-suite/action.yml carries a hand-written
 comment telling you to copy check-ui-viewports.js by hand. Prose compensating
-for what the derivation should have caught — enumerate-vs-derive reappearing one
+for what the derivation should have caught -- enumerate-vs-derive reappearing one
 level up, inside the fix for it.
 
 WHAT THIS CHECKS. The pattern is read OUT OF refresh-repo.md rather than copied
-here; a copy is the same drift one file over. It is then run against every
-shipped caller and compared with a form-independent scan for the same paths. Any
-script a caller references that the documented pattern misses is a failure.
+here; a copy is the same drift one file over. It is then run -- through real
+`grep -E`, see below -- against every shipped caller and compared with a
+form-independent scan, THREE ways:
 
-MEASURED, 2026-09-01. A guard nobody has run against a mutant is decorative, so
-each of these was applied to refresh-repo.md and the result observed. The green
-control is the load-bearing one -- three reds prove nothing if the fourth is red
-too.
+  1. PER CALLER. A script a caller references must be found in THAT caller. An
+     aggregate set hides a miss: if `shared.py` is matched in qa.yml but its
+     other invocation form is missed in an action, the union still contains it
+     and the check passes -- while a refresh installing only that action derives
+     nothing for it. /refresh-repo processes a SUBSET of callers, so the union is
+     not the thing to check.
+  2. CONCATENATED, the way the shipped loop builds `$buf`. `>>` concatenates and
+     a YAML file need not end in a newline, so a caller whose last scalar ends in
+     a script path merges into the next file's first word: `.github/scripts/a.js`
+     + `name:` = `.github/scripts/a.jsname`, consumed whole by the token grep and
+     dropped by the extension filter. The script vanishes with no error. This
+     defect exists ONLY in the concatenation, so check 1 is structurally blind to
+     it. Whether the loop delimits is read out of the command text, not assumed.
+  3. OFF-CONTRACT. Anything the pattern accepts that is not .js/.py under
+     .github/scripts/ -- see the extras split below.
 
-    M1  the old command-prefixed form            -> FAIL, naming check-ui-viewports.js
-    M2  `\.(js|py)` with no `$`                  -> FAIL, naming package-lock.json
-    M3  pipeline reshaped past the extractor     -> FAIL, naming the extractor
-    M4  char class widened to admit `/`          -> OK  (a widening, not a break)
-
-Found by running them: an earlier draft used `findall`, which returns TUPLES for
-a pattern carrying capture groups. M1's pattern carries two, so the guard died of
-a TypeError on precisely the defect it exists to reject -- exit 1 for the wrong
-reason, which a harness reads as a catch.
+WHY grep AND NOT `re`. An earlier version compiled the extracted patterns with
+Python's `re` and matched with Python. The shipped pipeline runs GNU `grep -E`,
+a DIFFERENT engine, and the two disagree in the dangerous direction: the common
+Python form `\.(?:js|py)$` compiles and matches under `re`, while `grep -E`
+warns "? at start of expression" and matches nothing. The documented pipeline
+ends in `| sort -u`, so the pipeline's exit status is sort's -- 0 -- and the
+derivation silently returns EMPTY while this guard reports OK. Certifying one
+engine's behaviour to vouch for another's is the fail-open family (#323) inside
+the guard written to prevent it. Caught by Codex on #345. So: every pattern is
+executed by `grep -E` itself, and grep writing ANYTHING to stderr is a failure,
+because that is how it reports a construct it will then silently not match.
 
 ⚠️ WHAT IT CANNOT CATCH. Ground truth is "the token `.github/scripts/<name>.js|py`
 appears in a caller". A caller that referenced a script by some other root, or
@@ -53,6 +66,7 @@ derivation finds every script a caller could conceivably need.
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -67,10 +81,51 @@ CALLER_GLOBS = ("templates/workflows/*.yml", "templates/actions/*/action.yml")
 TOKEN_LINE = re.compile(r"grep -oE '([^']+)' \"\$buf\"")
 FILTER_LINE = re.compile(r"grep -E '([^']+)'")
 
+# Does the fetch loop put a boundary between concatenated callers? Read, not
+# assumed -- this guard models whatever the command actually does.
+DELIMITER_LINE = re.compile(r"(printf\s+'\\n'|echo)\s*>>\s*\"\$buf\"")
+
+# Form-independent: the path token anywhere in the file, whatever precedes it.
+TRUTH_RE = re.compile(r"\.github/scripts/[A-Za-z0-9_.-]+")
+
 
 def fail(msg):
     print(f"FAIL: {msg}", file=sys.stderr)
     return 1
+
+
+def run_grep(args, data):
+    """Run one grep stage on `data`. Returns (lines, error_or_None).
+
+    grep exits 1 for "no matches", which is not an error. It exits 2 -- and,
+    for some malformed-but-accepted constructs, exits 1 while WARNING on
+    stderr -- for a pattern it cannot honour. That warning is the only signal
+    distinguishing "matched nothing" from "could not match", and the shipped
+    pipeline throws it away, so treat any stderr as fatal here.
+    """
+    p = subprocess.run(args, input=data, capture_output=True, text=True)
+    if p.stderr.strip():
+        return [], f"grep wrote to stderr: {p.stderr.strip()}"
+    if p.returncode not in (0, 1):
+        return [], f"grep exited {p.returncode}"
+    return [ln for ln in p.stdout.split("\n") if ln], None
+
+
+def derive(token_pat, filter_pat, text):
+    """Run the SHIPPED two-stage pipeline over `text` using real grep."""
+    hits, err = run_grep(["grep", "-oE", token_pat], text)
+    if err:
+        return None, err
+    if not hits:
+        return set(), None
+    kept, err = run_grep(["grep", "-E", filter_pat], "\n".join(hits) + "\n")
+    if err:
+        return None, err
+    return set(kept), None
+
+
+def truth(text):
+    return {h for h in TRUTH_RE.findall(text) if h.endswith((".js", ".py"))}
 
 
 def main():
@@ -93,12 +148,7 @@ def main():
             "      Without the extension stage the derivation matches `.github/scripts/package-lock.json`,\n"
             "      because an unterminated `\\.(js|py)` matches the `.js` inside `.json`."
         )
-
-    try:
-        token_re = re.compile(token_m.group(1))
-        filter_re = re.compile(filter_m.group(1))
-    except re.error as err:
-        return fail(f"the derivation's pattern does not compile as a regex: {err}")
+    token_pat, filter_pat = token_m.group(1), filter_m.group(1)
 
     callers = sorted({p for g in CALLER_GLOBS for p in Path().glob(g)})
     if not callers:
@@ -108,47 +158,86 @@ def main():
             "      fail-open shape it exists to prevent."
         )
 
-    documented = set()
-    ground_truth = {}
-    # Form-independent: the path token anywhere in the file, whatever precedes it.
-    truth_re = re.compile(r"\.github/scripts/[A-Za-z0-9_.-]+")
+    bodies = {c: c.read_text(encoding="utf-8") for c in callers}
 
+    # ---- check 1: per caller -------------------------------------------------
+    missed = []
+    documented_all = set()
     for caller in callers:
-        body = caller.read_text(encoding="utf-8")
-        # finditer + group(0), NOT findall: findall returns TUPLES for a pattern
-        # carrying capture groups, and the derivation's earlier form carried two
-        # (`(node|python3)` and `(js|py)`). With findall this guard crashed with a
-        # TypeError on exactly the pattern it exists to reject -- exit 1 for the
-        # wrong reason, which reads as a catch and proves nothing.
-        for m in token_re.finditer(body):
-            hit = m.group(0)
-            if filter_re.search(hit):
-                documented.add(hit)
-        for hit in truth_re.findall(body):
-            if hit.endswith(".js") or hit.endswith(".py"):
-                ground_truth.setdefault(hit, []).append(str(caller))
+        got, err = derive(token_pat, filter_pat, bodies[caller])
+        if err:
+            return fail(
+                f"the documented pattern is not usable by the engine that RUNS it.\n"
+                f"      {err}\n"
+                "      GNU grep -E is not Python's `re`: a construct `re` accepts (e.g. `(?:`)\n"
+                "      makes grep warn and match NOTHING, and the pipeline's trailing `sort`\n"
+                "      swallows the failure — an empty derivation reported as success.\n"
+                f"      token: {token_pat}   filter: {filter_pat}\n"
+                f"      Fix the pattern in {COMMAND}, not this guard."
+            )
+        got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
+        documented_all |= got
+        for script in sorted(truth(bodies[caller]) - got):
+            missed.append((script, str(caller)))
 
-    # A prefix-carrying form matches more than the path (`node .github/scripts/x.js`),
-    # so compare on the path token the derivation is ultimately after.
-    documented = {m.group(0) for h in documented for m in [truth_re.search(h)] if m}
-
-    missed = sorted(set(ground_truth) - documented)
     if missed:
         lines = [
             "the documented derivation MISSES script(s) a shipped caller references.",
             "      A refresh installing that caller would not install the script, and the",
             "      job dies at step resolution on any project that lacks it.",
+            "      Checked PER CALLER: /refresh-repo installs a SUBSET, so another caller",
+            "      matching the same script does not save the one that misses it.",
             "",
         ]
-        for script in missed:
-            lines.append(f"      MISSED: {script}")
-            for where in ground_truth[script]:
-                lines.append(f"              referenced by {where}")
-        lines.append("")
-        lines.append(f"      documented pattern: {token_m.group(1)}  then  {filter_m.group(1)}")
-        lines.append(f"      Fix the pattern in {COMMAND}, not this guard.")
+        lines += [f"      MISSED: {s}\n              referenced by {w}" for s, w in missed]
+        lines += ["", f"      documented pattern: {token_pat}  then  {filter_pat}",
+                  f"      Fix the pattern in {COMMAND}, not this guard."]
         return fail("\n".join(lines))
 
+    # ---- check 2: the concatenated buffer ------------------------------------
+    # ORDER-INDEPENDENT on purpose. `$callers` is whatever that refresh lists, not
+    # a sorted set, and the hazard only bites when a newline-less caller lands
+    # BEFORE another. A single concatenation in one arbitrary order tests one
+    # permutation and calls it proof -- the first draft did exactly that, put the
+    # newline-less fixture last where nothing follows it, and passed a case built
+    # to fail. Only callers missing a trailing newline can cause this, so pair
+    # each of those against every other caller instead of guessing an order.
+    per_caller = set().union(*(truth(b) for b in bodies.values()))
+    delimited = bool(DELIMITER_LINE.search(text))
+    ragged = [c for c in callers if not bodies[c].endswith("\n")]
+    joiner = "\n" if delimited else ""
+
+    lost, lost_pair = [], None
+    for first in ragged:
+        for second in callers:
+            if second is first:
+                continue
+            buf = bodies[first] + joiner + bodies[second] + joiner
+            got, err = derive(token_pat, filter_pat, buf)
+            if err:
+                return fail(f"the documented pattern failed on the concatenated buffer: {err}")
+            got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
+            dropped = sorted((truth(bodies[first]) | truth(bodies[second])) - got)
+            if dropped:
+                lost, lost_pair = dropped, (first, second)
+                break
+        if lost:
+            break
+
+    if lost:
+        return fail(
+            "script(s) survive a per-caller scan but VANISH from the concatenated buffer.\n"
+            "      `>>` concatenates and a YAML file need not end in a newline, so a caller\n"
+            "      whose last scalar ends in a script path merges into the next file's first\n"
+            "      word — `.github/scripts/a.js` + `name:` = `.github/scripts/a.jsname`, which\n"
+            "      the token grep consumes whole and the extension filter drops.\n"
+            f"      The fetch loop {'DOES' if delimited else 'DOES NOT'} append a delimiter.\n"
+            f"      Concatenating {lost_pair[0]} before {lost_pair[1]} loses:\n"
+            + "".join(f"      LOST: {s}\n" for s in lost)
+            + f"      Append a token boundary after every fetch in {COMMAND}."
+        )
+
+    # ---- check 3: extras -----------------------------------------------------
     # Extras split in two, and the split is the whole point -- "matches more than
     # ground truth" is NOT one condition.
     #
@@ -165,33 +254,37 @@ def main():
     #     `.github/scripts/package-lock.json` enters the install list as a script.
     #     Printing that and exiting 0 is the fail-open shape (#323) -- a green run
     #     with a note nobody reads is indistinguishable from a guard that passed.
-    extra = sorted(documented - set(ground_truth))
+    extra = sorted(documented_all - per_caller)
     off_contract = [s for s in extra if not s.endswith((".js", ".py"))]
     if off_contract:
-        lines = [
-            "the documented derivation matches path(s) OUTSIDE its own contract.",
-            "      It is meant to yield .js/.py under .github/scripts/. These are neither,",
-            "      so a refresh would install them as scripts:",
-            "",
-        ]
-        lines += [f"      OFF-CONTRACT: {s}" for s in off_contract]
-        lines += [
-            "",
-            "      The usual cause is an unterminated extension filter: `\\.(js|py)` with",
-            "      no `$` matches the `.js` inside `.json`.",
-            f"      documented pattern: {token_m.group(1)}  then  {filter_m.group(1)}",
-            f"      Fix the pattern in {COMMAND}, not this guard.",
-        ]
-        return fail("\n".join(lines))
-
+        return fail(
+            "the documented derivation matches path(s) OUTSIDE its own contract.\n"
+            "      It is meant to yield .js/.py under .github/scripts/. These are neither,\n"
+            "      so a refresh would install them as scripts:\n\n"
+            + "".join(f"      OFF-CONTRACT: {s}\n" for s in off_contract)
+            + "\n      The usual cause is an unterminated extension filter: `\\.(js|py)` with\n"
+            "      no `$` matches the `.js` inside `.json`.\n"
+            f"      documented pattern: {token_pat}  then  {filter_pat}\n"
+            f"      Fix the pattern in {COMMAND}, not this guard."
+        )
     for script in extra:
         print(f"note: derivation also matches {script}, which the truth scan does not reach")
 
     print(
-        f"check-refresh-derivation: OK — {len(ground_truth)} referenced script(s) "
-        f"across {len(callers)} caller(s), all found by the documented pattern"
+        f"check-refresh-derivation: OK — {len(per_caller)} referenced script(s) across "
+        f"{len(callers)} caller(s), found per-caller, via grep -E"
     )
-    for script in sorted(ground_truth):
+    if ragged:
+        print(
+            f"  concatenation: {len(ragged)} caller(s) lack a trailing newline, each paired "
+            f"against every other — none lost ({'delimited' if delimited else 'UNDELIMITED'} loop)"
+        )
+    else:
+        print(
+            "  concatenation: NOT EXERCISED — every caller ends in a newline, so the "
+            "merge hazard cannot arise today; the check stands for a future one"
+        )
+    for script in sorted(per_caller):
         print(f"  {script}")
     return 0
 

@@ -270,6 +270,13 @@ jobs:
       - name: Check /refresh-repo's script derivation still finds every caller
         run: python3 .github/scripts/check-refresh-derivation.py
 
+      # Two of that guard's three checks are NOT exercised by this repo — every
+      # shipped caller ends in a newline, and every one is matched by the current
+      # pattern — so without these cases they are assertions CI cannot falsify.
+      # Drive a mutated copy with CHECK_REFRESH_DERIVATION_BIN to re-prove them.
+      - name: Check the derivation guard enforces what it claims
+        run: python3 .github/scripts/check-refresh-derivation-cases.py
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

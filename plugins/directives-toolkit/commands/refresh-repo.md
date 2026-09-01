@@ -354,6 +354,7 @@ for c in $callers; do
   curl -fsSL "$raw/$c" >>"$buf" \
     || { echo "FETCH FAILED: $c — derivation INVALID, do not use it" >&2
          rm -f "$buf"; exit 1; }
+  printf '\n' >>"$buf"   # token boundary — see the third bullet below
 done
 refs=$(grep -oE '\.github/scripts/[A-Za-z0-9_.-]+' "$buf" \
        | grep -E '\.(js|py)$' | sort -u)
@@ -361,7 +362,7 @@ rm -f "$buf"
 printf '%s\n' "$refs"
 ```
 
-Four things about that shape, each of which a shorter version got wrong:
+Six things about that shape, each of which a shorter version got wrong:
 
 - **It matches the script PATH, never the invocation prefix.** The earlier form
   required `node ` or `python3 ` *immediately* before `.github/`, so
@@ -379,6 +380,23 @@ Four things about that shape, each of which a shorter version got wrong:
   `check-refresh-derivation.py` now runs this exact pattern, read out of this
   file, against every shipped caller, so the next invocation-form change fails
   CI instead of shipping.
+
+- **It matches a MENTION, not only an invocation, and that is the accepted
+  cost.** A comment reading `# replaced .github/scripts/legacy.py` puts
+  `legacy.py` in the set. The extension filter already excludes the two cases
+  that used to justify prefix-matching — bare directories and
+  `package-lock.json` — so what remains is comment-only paths, and the asymmetry
+  runs the right way: a spare installed file is inert, a missing one is a red
+  build at step resolution. The earlier prose here said the opposite
+  ("Match on the INVOCATION, not the bare path"); it was left standing when the
+  pipeline was inverted, and Codex caught the contradiction on #345.
+- **The fetch loop appends a newline after every caller.** `>>` concatenates,
+  and a YAML file need not end in one. Without the delimiter a caller whose last
+  scalar ends in a script path merges into the next file's first word —
+  `.github/scripts/a.js` + `name:` becomes `.github/scripts/a.jsname`, which the
+  token grep consumes whole and the extension filter then drops. The script
+  disappears from the set with no error anywhere. Measured on #345; a per-caller
+  scan cannot see it, because the defect only exists in the concatenation.
 
 - **Every fetch is checked individually, and a failure exits before the
   pipeline.** Putting the loop *inside* `refs=$(…)` does not work: the `exit 1`
@@ -399,8 +417,8 @@ Four things about that shape, each of which a shorter version got wrong:
   Phase 3's head check only refuses the *stamp* afterwards; it does not un-install
   anything.
 
-Match on the INVOCATION, not the bare path, or it also emits directories,
-`package-lock.json`, and paths that appear only in comments.
+Match on the PATH and filter by extension — see the bullets below for why the
+invocation-matching form was wrong, and what the path form costs.
 
 **The output is the answer for THAT refresh, and it moves.** Run against
 `main` on 2026-08-26 with `qa.yml` + `ui-suite/action.yml` as the callers it

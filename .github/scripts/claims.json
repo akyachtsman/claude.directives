@@ -1,89 +1,18 @@
 {
-  "_comment": "Canonical-claim manifest for check-claims.js (#300). Each entry pins a rule that MUST keep being stated by every file listed, because #294 proved that a correct claim fixed in one file routinely goes stale, narrowed or absent in the others. Read check-claims.js's header before trusting a green run: this guard confirms a claim TRAVELLED, never that it is TRUE, and it cannot see a fix that says more than intended. Patterns are JS regex sources matched case-insensitively against the file with whitespace collapsed and markdown emphasis markers stripped, so one entry spans the wording variants a claim legitimately has. Consumer lists were derived by measuring the current tree, not by assumption — the issue that proposed this guard listed phrases that did not exist verbatim anywhere.",
-  "negators": "never|not|no|don['’]?t|doesn['’]?t|didn['’]?t|won['’]?t|can['’]?t|cannot|avoid|avoids|skip|skips|ignore|ignores|ignoring|disregard|disregards|except|without|instead|rather than",
-  "continuations": {
-    "clause": [
-      " only after escalating to the owner",
-      " after owner approval",
-      " unless the owner objects",
-      " once the owner has signed off",
-      "; however, owner approval is required first",
-      "; the owner must still be told",
-      "... only after owner approval",
-      ", for now",
-      ", on the first attempt",
-      " — but only with approval",
-      " provided the owner agrees",
-      " subject to owner sign-off",
-      " yet",
-      " on the first attempt"
-    ],
-    "suffix": [
-      "s",
-      "er",
-      "ing",
-      "-case",
-      "-run",
-      "-suite",
-      "ed",
-      "able",
-      "‑case",
-      "‐case",
-      "–case",
-      "—case",
-      "−case"
-    ],
-    "condition": [
-      " unless it is clean",
-      " except where the head matches"
-    ],
-    "ownerGate": [
-      " unless the owner approves it first",
-      " only after the owner has been told",
-      " once the owner confirms"
-    ]
-  },
-  "continuationRequired": [
-    "no-label-no-escalation",
-    "unreachable-review-terminal-states",
-    "unreachable-review-test-name",
-    "response-is-not-a-verdict",
-    "verdict-lookup",
-    "ci-notify-unique-match-is-not-proof",
-    "arm-the-check-in"
-  ],
-  "_negators_comment": "The ONE definition of a negation word, expanded into every pattern's {{NEG}} placeholder by check-claims.js. Round 7 exists because round 6 claimed to have unified two copies and instead wrote the same alternation twice: deleting `avoid` from only the lookbehind copy left every declared case passing while `avoid read the comments and the review threads` was accepted. Two literals are not one definition no matter what the commit message says. The guard also DERIVES a rejection case for each negator in BOTH positions from this string, so the tests cannot drift from it either -- there is no hand-written list to forget. Apostrophe forms are here because the normalizer deliberately does not strip apostrophes (that would corrupt ordinary prose), so `don't arm a check-in` needs the contraction spelled out.",
-  "negatorFloor": [
-    "never",
-    "not",
-    "no",
-    "don't",
-    "doesn't",
-    "didn't",
-    "won't",
-    "can't",
-    "cannot",
-    "avoid",
-    "avoids",
-    "skip",
-    "skips",
-    "ignore",
-    "ignores",
-    "ignoring",
-    "disregard",
-    "disregards",
-    "except",
-    "without",
-    "instead",
-    "rather than"
-  ],
-  "_negatorFloor_comment": "The definition-independent BASELINE. Round 7 claimed literal cases cover what derived probes cannot -- narrowing the definition -- and then pinned only the four negators review had happened to find. Round 8 deleted `ignores` and the guard stayed green, which is the same carry-it-to-the-siblings defect for the fourth time in this PR: the mechanism was identified correctly and applied to a subset. This list is checked BEHAVIOURALLY -- every entry must still be rejected in every declared position -- so it does not drift into being a second copy of `negators` that agrees by luck. Removing a value from `negators` now fails here, which is exactly the edit derivation cannot see. Adding one to `negators` without adding it here is fine and deliberate: the floor is a MINIMUM, not a mirror.",
+  "_comment": "Canonical claims: rules this repo must state identically everywhere they are relied on. Each entry pins the EXACT phrasings that count as stating the claim; a carrier contains one or it does not. There is no condition/negation inference — #341 deleted it after 24 review rounds and 100 findings with no downward trend. Read check-claims.js's header before editing: it explains why a phrasing must be long enough that no `mustNotMatch` string contains it, which the guard enforces mechanically at load. Adding a legitimately reworded carrier means adding its wording here — that visible edit IS the design, not a workaround.",
   "claims": [
     {
       "id": "verdict-lookup",
-      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found the narrowed form in nine files while the source said both. The pattern requires a positive lookup VERB because the nouns alone certified the exact inversion — 'ignore the PR's comments and its review threads' — and the negator lookbehind is there because 'do not read' supplied the verb while reversing the instruction. Both alternations are \\b-anchored after an unanchored 'read' was found matching the tail of 'review-thread', letting an already-inverted sentence supply its own verb. Round 5 closed a subtler inversion than round 4's: requiring a positive verb is not enough if the gap between it and the channels can hold a NEGATIVE one. 'check the PR status, but ignore its comments AND its review threads' satisfied a bare gap, because 'check' supplied the verb while 'ignore' governed the nouns. The gap is now a tempered token admitting no negation word, so the verb it requires is the verb that actually governs. Round 6 found the same defect one level down and it is the most instructive instance: the fix itself introduced a SECOND negator list. The lookbehind already rejected never/not/dont/avoid/skip; the tempered gap I added rejected a different, overlapping set, so 'but avoid its comments AND its review threads' passed while 'but ignore ...' failed. Two lists expressing one idea drift silently. There is now one alternation used in both positions, and mustNotMatch carries a case per negator so the SUITE is what keeps them synchronised rather than a maintainer's memory. Round 7: round 6 said 'one alternation used in both positions' and wrote the string TWICE. Codex deleted `avoid` from a single copy and every declared case still passed. The alternation now lives once, at the manifest's top level, expanded into {{NEG}}; the guard also DERIVES a rejection case per negator per position from it, so the tests cannot drift from the definition either. The explicit cases below anchor the specific negators review paid to find -- derived probes catch DRIFT between positions, but narrowing the definition would delete a negator and its probe together, and only a literal case catches that. ⚠️ Round 16: this claim had no continuation probe, so 'check the PR status, but read its comments and its review threads ONLY IF THE OWNER ASKS' matched — making the lookup of the two channels that carry live review findings conditional, which is how a session misses findings and merges. It is the second claim found this way, after `response-is-not-a-verdict` one round ago, and both were found by review rather than by the two-way participation check — which compares declared probes against the required list and cannot see a claim that should have one and does not. ⚠️ Round 17: the probe covered only the position AFTER the lookup, so 'Only if the owner asks, check the PR's comments and its review threads.' passed — the same preposed-condition hole found in `response-is-not-a-verdict` one round earlier, in the claim I had just added a probe to while that fix was on screen.",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found that narrowed form in nine files while the source said both — this claim's best case, and the reason it is pinned. The phrasings carry their connector ('so check …', 'predictable: check …') rather than the bare instruction: with the bare form, inverting automations.md to 'so never check …' PASSED, because a phrasing is a substring of its own negation. Measured on #341, not imagined.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:{{COND}})\\b{{B}}*)(?<!\\b(?:{{NEG}})\\s)\\b(?:check|read|look for)\\b(?:(?!\\b(?:{{NEG}}|{{COND}})\\b){{S}}){0,60}?comments and (?:the |its |their )?review threads(?!{{S}}*\\b(?:{{COND}})\\b)",
+      "phrasings": [
+        "predictable: check the comments AND the review threads",
+        "so check the PR's comments AND its review threads",
+        "them: check the PR's comments and its review threads.",
+        "Look for the verdict in the PR's comments AND its review threads:",
+        "Look for the verdict in the PR's comments and its review threads:",
+        "— read the PR's comments AND its review threads"
+      ],
       "consumers": [
         "CLAUDE.md",
         "docs/internal/repo-monitors.md",
@@ -110,45 +39,25 @@
         "check the run, without reading the comments AND its review threads",
         "avoid read the comments and the review threads",
         "don't read the comments and the review threads",
-        "check the PR status, but don't check its comments AND its review threads"
-      ],
-      "negatorProbe": {
-        "lookbehind": "%s read the comments and the review threads",
-        "gap": "check the PR status, but %s its comments and its review threads"
-      },
-      "continuationProbe": {
-        "kind": "condition",
-        "shapes": {
-          "beforeLookup": "%s, check the PR's comments and its review threads.",
-          "afterLookup": "check the PR's comments and its review threads%s.",
-          "insideLookup": "check%s the PR's comments and its review threads."
-        }
-      }
+        "check the PR status, but don't check its comments AND its review threads",
+        "so never check the PR's comments AND its review threads",
+        "so do not check the PR's comments AND its review threads"
+      ]
     },
     {
       "id": "response-is-not-a-verdict",
-      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. Two drafts of this entry were wrong in opposite directions and both are instructive: the first accepted 'a reaction is not a verdict' — a DIFFERENT rule, about attribution — and so certified a consumer that never stated this claim; the second over-corrected to a pattern so narrow it could not see automations.md's 'establishes a RESPONSE, not a verdict', and declared the claim source-only on that basis. A pattern that matches a neighbouring rule reports coverage that does not exist; a pattern that misses a real carrier hides a consumer that can drift. ⚠️ Round 15: this claim needed a continuation probe and did not have one, which the two-way participation check could not see -- it compares the claims that DECLARE a probe against the required list, and a claim that should declare one and does not is invisible to both. 'A response is not a verdict unless it contains no findings.' matched every check while turning a clean response back into merge evidence. Probe added under a new `condition` kind -- the `clause` set was built for the merge-gate assertions and does not reverse this one -- and the pattern rejects a same-sentence conditional opener. A TERMINATOR would have been wrong here: three of the four carriers state the assertion MID-SENTENCE ('a response naming the head is not a verdict, since a review with live findings names it too'), so requiring it to end a sentence would have meant rewording three more carriers, which is a cost this PR has already paid three times. ⚠️ MEMBERSHIP IS STILL MANUAL: nothing derives WHICH claims need a probe, so the next one to need it will be found by review, exactly as this one was. ⚠️ Round 16, two more on this one claim. (a) The alternation had `only if` and not bare `if` or `when`, so 'A response is not a verdict IF it contains live findings.' passed — the compound covered, the plain one not, exactly like the hyphenated-vs-spaced rename a round earlier. (b) A condition PREPOSED to the assertion -- 'Unless it contains no findings, a response is not a verdict.' -- was invisible, because the pattern and its probe both looked only FORWARD from the predicate. A condition attaches at either end of a clause, so there is now a lookbehind and a `beforeAssertion` probe position. Same lesson as round 14's afterSilence, which I fixed at one end and did not generalise. ⚠️ Round 17, two more: (a) the 30-character gap between `response` and the predicate was UNGUARDED, so 'That establishes a RESPONSE, WHEN FLAGGED, not a verdict' passed with the condition sitting between the two ends I had just fixed — a clause has three places a condition can attach, not two, and I fixed the ends because those were the two I had been shown. (b) The round-16 lookbehind was capped at 60 characters, so a longer preposed condition simply reached past it. Both gaps now run to the sentence boundary. The opener list is `{{COND}}`, expanded from ONE definition in the checker, because it was inline in three patterns and disagreed with itself twice.",
+      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. The three phrasings are the three carriers' actual wordings; CLAUDE.md states it anaphorically ('a response naming the head is not one'), which is why its wording is listed separately rather than approximated by a shared one.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:{{COND}})\\b{{B}}*)\\bresponse\\b(?:(?!\\b(?:{{COND}})\\b){{S}}){0,30}?(?:is not a verdict|,\\s*(?:yet|but|still|though)?\\s*not(?:,\\s*(?:after all|in fact|of course),)?\\s*a verdict)(?!{{S}}*\\b(?:{{COND}})\\b)",
+      "phrasings": [
+        "A response is not a verdict.",
+        "a RESPONSE, not a verdict:",
+        "a response naming the head is not one, since a review with live findings names it too"
+      ],
       "consumers": [
         "docs/standards/automations.md",
         {
           "file": "CLAUDE.md",
-          "why": "Found by review, NOT by --derive, and the reason is the entry's own recorded limit made concrete: this carrier states the claim ANAPHORICALLY — 'a clean current-head Codex verdict — a response naming the head is not one, since a review with live findings names it too'. The claim-level pattern needs the words 'is not a verdict' adjacent to 'response'; here the predicate is the pronoun 'one', pointing back to 'verdict' a clause earlier. No widening of the claim-level pattern reaches that without also matching sentences that are not this claim, which is why it gets its own pattern instead. This is the repo's PRIMARY instruction file and the merge gate it describes is the one that authorises merging over live findings, so it is the last carrier that should have been unlisted.",
-          "pattern": "(?<!\\b(?:{{COND}})\\b{{B}}*)response naming the head is not one(?!{{S}}*\\b(?:{{COND}})\\b)",
-          "mustNotMatch": [
-            "a response naming the head is one",
-            "a response naming the head is a clean verdict",
-            "a Codex response is not a verdict",
-            "a reaction is not a verdict you can attribute"
-          ],
-          "whyMustNotMatch": "The first two are this override's own inversion: a carrier that flipped 'is not one' to 'is one' states the OPPOSITE rule and must not certify. The third is the case that proves these cases exercise the OVERRIDE rather than the claim pattern -- the claim-level regex MATCHES it, this override rejects it, so it can only pass by the override doing work. Round 6 caught the absence of exactly that: every case here was a copied wait-gate string, rejected by both patterns, proving nothing. The fourth pins the neighbouring-rule confusion this entry already made once.",
-          "continuationProbe": {
-            "shapes": {
-              "beforeAssertion": "%s, a response naming the head is not one.",
-              "afterVerdict": "a response naming the head is not one%s."
-            }
-          }
+          "why": "Found by review, NOT by --derive, and it is the entry's own recorded limit made concrete: this carrier states the claim ANAPHORICALLY — 'a clean current-head Codex verdict — a response naming the head is not one' — where the predicate is the pronoun 'one', pointing back to 'verdict' a clause earlier. Under the old regex this needed a per-consumer override, because no widening reached the pronoun without also matching sentences that are not this claim. Under literal pinning it is simply one more approved phrasing. This is the repo's PRIMARY instruction file and the merge gate it describes is the one that authorises merging over live findings, so it is the last carrier that should have been unlisted."
         }
       ],
       "mustNotMatch": [
@@ -156,19 +65,13 @@
         "a response naming the head is a clean verdict",
         "a Codex response is a verdict",
         "a response is usually not a verdict",
-        "a response is not, if it is clean, a verdict"
-      ],
-      "continuationProbe": {
-        "kind": "condition",
-        "shapes": {
-          "beforeAssertion": "%s, a response is not a verdict.",
-          "afterVerdict": "A response is not a verdict%s."
-        }
-      }
+        "a response is not, if it is clean, a verdict",
+        "A response is not a verdict unless it contains no findings."
+      ]
     },
     {
       "id": "terminal-states-list-is-closed",
-      "why": "The companion entry `unreachable-review-terminal-states` pins the SENTENCE 'The two states are …' at each consumer. Codex, #336 round 9: that catches a consumer drifting away from the sentence and NOT a third bullet appended to the list in git.md, after which every consumer keeps asserting 'the two states' truthfully-as-written while the source admits three. check-claims.js's own header names this as one of its three documented blind spots -- it 'cannot see a fix that says MORE than intended' (rounds 38-39 of #294) -- so closing it needs a pattern about STRUCTURE, not wording. This one requires the summary sentence to follow the outage bullet with NO further bullet between them: append a third and the tempered gap rejects it, so the source and its summary cannot disagree about how many states there are. sourceOnly because the structure exists only in git.md; the consumers carry the sentence, which the companion entry pins. ⚠️ What it does NOT catch: a bullet inserted BEFORE the unavailable one, or a state added somewhere other than this list. The realistic edit is an append, which is what this covers. ⚠️ Round 10: the tempered gap rejected only the literal '- ', so a third state written with any other valid Markdown marker -- '* ', '+ ', '3. ' -- left the pattern matching and check-claims green while the source listed three states and every consumer still said two. That is the closed-list guarantee failing in the one direction it exists to hold. The gap now rejects a LIST ITEM rather than a hyphen: a line break, optional indent, then a bullet marker ([-*+]) or an ordered marker (digits followed by '.' or ')'), then whitespace. Anchoring to the line break is what makes it structural -- a hyphen mid-sentence is prose, a hyphen starting a line is a list item, and only the second can add a state. This entry is the checker's only `raw` claim, and it has to be: normalize() collapses newlines to spaces and strips `*`, so through it a '- ' marker survives as ordinary prose, a '* ' marker is ERASED entirely, and the line boundary that tells a list item from a hyphen mid-sentence is gone. The hyphen-only version was not a weaker structural check, it was a check of the one marker the normalizer happened to leave behind. Structure is read raw; every other claim here pins wording, which the normalizer preserves.",
+      "why": "The companion entry `unreachable-review-terminal-states` pins the SENTENCE 'The two states are …' at each consumer. Codex, #336 round 9: that catches a consumer drifting away from the sentence and NOT a third bullet appended to the list in git.md, after which every consumer keeps asserting 'the two states' truthfully-as-written while the source admits three. Closing it needs a check about STRUCTURE, not wording, so this is the one `raw` claim: it requires the summary sentence to follow the outage bullet with NO further list item between them. Round 10 is why the gap rejects a LIST ITEM rather than a literal '- ': a third state written '* ', '+ ' or '3. ' left the guard green while the source listed three and every consumer still said two. ⚠️ It does NOT catch a bullet inserted BEFORE the outage one, or a state added outside this list. sourceOnly because the structure exists only in git.md.",
       "source": "directives/git.md",
       "sourceOnly": true,
       "raw": true,
@@ -187,9 +90,11 @@
     },
     {
       "id": "unreachable-review-terminal-states",
-      "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 then proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half, and Codex asked for it by naming the drift it would permit: widen the canonical test so an accepted-but-silent request counts as an outage, or drop the reset bound so a stale usage-limit reply stays valid forever, and every merge consumer -- all of which admit 'any state that test admits' -- would authorise removing the blocker and merging while a review is still obtainable or in flight. The name-only pattern passes unchanged through both. So the two states are stated in one canonical sentence at each consumer and pinned whole: an *unavailable* reply STILL INSIDE ITS RESET WINDOW, a request that COULD NOT BE MADE OR ACCEPTED at all, and NEVER ELAPSED SILENCE. All three fragments are required and in order, because each was a separate defect on this PR -- round 4 deleted a 30-minute timer that made silence sufficient, round 4 also found the unavailable reply had no expiry, and round 6 found a third statement of outage still defined as 'produced no signal'. A pattern requiring only two of the three would certify the third's regression. ⚠️ Round 10: the pattern stopped at 'could not be made or accepted' and dropped the load-bearing AT ALL, so 'could not be made or accepted on the first attempt' and '... accepted yet' both matched. Either wording turns a TRANSIENT request failure into an outage exit -- authorising hand removal and a merge while a further request could still produce a verdict -- with every consumer and check-claims green. 'at all' is what makes the outage absolute, which is the whole difference between this exit and ordinary silence, so it is now required and the transient forms are probed. ⚠️ Round 11: requiring 'at all' was not enough, because nothing constrained what FOLLOWED it -- 'could not be made or accepted at all on the first attempt' and '... at all yet' both matched, and the round-10 probes tested the transient qualifiers only IN PLACE OF 'at all', never AFTER it, so they were green against a hole they were written for. Same defect as round 10's own probes one layer down. Fixed the same way 'unattended' was: 'at all' must END ITS CLAUSE -- the next non-space character is punctuation, never a word -- so no qualifier can attach. Every carrier already writes ' — never elapsed silence' after it. ⚠️ Round 12: requiring punctuation after 'at all' admitted FIVE marks, and a comma, semicolon, colon or dash can CONTINUE a clause -- 'at all, for now — never elapsed silence' was green, and the tempered gap swallowed the qualifier. Constraining the gap was the wrong move twice running, so the gap is DELETED: the canonical sentence puts the em dash directly between 'at all' and 'never elapsed silence' at every carrier, and that is now pinned literally. Nothing can sit in a gap that does not exist. ⚠️ Round 14: the pattern stopped at 'never elapsed silence' with nothing after it, so '… never elapsed silence, although an accepted request that remains silent also qualifies' matched — a continuation AFTER the complete assertion, which every derived probe missed because the placeholder sat before the em dash. A statement can be taken back at EITHER end, so the probe is now a map of positions and the assertion must end its sentence. One carrier (CLAUDE.md) continued with an em dash and was reworded to a full stop. ⚠️ Round 15: the probe shapes covered the two LATER positions and left the first — 'still inside its reset window, even if that window has expired, or a request …' was consumed by the 60-character tempered gap and matched, widening the usage-limit exit past the bound that defines it. A probe set that covers some positions is a probe set that measures some positions. The fix is the one that worked for 'at all' two rounds ago: DELETE THE GAP rather than probe it. Every carrier writes 'reset window, or a request that could not be made…', so the comma and the clause are pinned literally and nothing can sit between them. With both gaps gone the pattern holds no {{NEG}} and its negatorProbe was removed — the checker refuses a negatorProbe on a pattern with no placeholder, correctly, since it would test nothing. Negator guarding is what a GAP needs; a literal has no gap to guard.",
+      "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half: the closed two-item list, pinned as the sentence all three carriers share verbatim. The phrasing runs to '— never elapsed silence' on purpose — the mustNotMatch entries are the same sentence with that tail removed, which is precisely how the rule was weakened before.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:{{COND}})\\b{{B}}*)unavailable\\s+reply still inside its reset window\\s*,\\s*or a request that could not be made or accepted at all\\s*—\\s*never elapsed silence(?=\\s*\\.{{EOS}})",
+      "phrasings": [
+        "an unavailable reply still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence."
+      ],
       "consumers": [
         "CLAUDE.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
@@ -206,21 +111,15 @@
         "still inside its reset window, or a request that could not be made or accepted at all for now — never elapsed silence",
         "The two states are an owner waiver still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence.",
         "The two states are an unavailable or accepted reply still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence."
-      ],
-      "continuationProbe": {
-        "kind": "clause",
-        "shapes": {
-          "afterResetWindow": "The two states are an unavailable reply still inside its reset window%s, or a request that could not be made or accepted at all — never elapsed silence.",
-          "afterAtAll": "The two states are an unavailable reply still inside its reset window, or a request that could not be made or accepted at all%s — never elapsed silence.",
-          "afterSilence": "The two states are an unavailable reply still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence%s."
-        }
-      }
+      ]
     },
     {
       "id": "no-label-no-escalation",
-      "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. I scoped the rule, the gate framing and the readiness agent -- and round 7 found the unconditional version still standing in the auto-merge gate, CLAUDE.md, automations.md and cicd-setup.md, where a session would have spent a metered review request or involved the owner for nothing. Seventh round of one rule stated in several places and only some updated, and the FIRST one to survive after `unreachable-review-test-name` was added -- which is the evidence that pinning the test's NAME does not pin its CONTENT, exactly as that entry says. Codex asked for this entry by name for that reason. ⚠️ What this pins is the POSITIVE path: a session that drops the no-label carve-out and reverts to escalating unconditionally fails here. It does not pin the negative half (that a label which IS present escalates) -- that half is the conservative direction, and a carrier that over-escalates wastes a request rather than merging past a review. Consumers derived by measuring the tree, not assumed. The pattern requires the LADDER PREREQUISITE between the two halves, because without it the regex also accepted 'Where no codex-flagged label is present, the merge proceeds' -- which turns absence of an asynchronously-written label into sufficient merge evidence, the exact opposite of the surrounding rule that its absence proves nothing. A guard that accepts the dangerous shortening of the claim it pins is worse than no guard, since it reports the regression as coverage; that shortened form is in mustNotMatch. It also requires the word UNATTENDED, because the pattern ended at 'merge proceeds' and an owner-gated suffix -- 'the merge proceeds only after escalating to the owner', 'after owner approval' -- satisfied it while reinstating the escalation this claim exists to prevent. A pattern that stops before the consequence pins the condition and not the outcome. The READINESS AGENT is deliberately NOT a consumer: it cannot run the ladder and round 8 taught it that the no-label merge result is the merger's conclusion, so requiring it to restate that conclusion would force it to keep the shadow copy that went stale in rounds 5, 6 and 8. It states the part that IS its own -- an absent label removes only the label blocker -- and nothing further. ⚠️ Round 10: requiring the word UNATTENDED was not enough, because the pattern ENDED there and anything could follow -- 'the merge proceeds unattended only after escalating to the owner' and '... unattended after owner approval' both matched, reinstating the escalation while the guard reported coverage. Worse, the two mustNotMatch probes added for that regression OMITTED the word 'unattended', so they were rejected merely for lacking the positive token and never exercised the suffix at all: a negative probe that fails for the wrong reason is a test that is not there. The fix is structural rather than a list of gate words -- `unattended` must END ITS CLAUSE, followed by `.` or `;`. Every carrier already does (one was reworded from an em dash to a semicolon so the terminator set could stay at two), and no conditional can attach to a clause that has closed. It still cannot see a CONTRADICTING NEXT SENTENCE -- the tempered gaps end at the period -- which is check-claims.js's standing says-more-than-intended blind spot, not a new one. ⚠️ Round 11: the round-10 terminator set was [.;], and a SEMICOLON EXPLICITLY CONTINUES THE SAME SENTENCE -- 'the merge proceeds unattended; however, owner approval is required first' matched and stayed green. That is not the conceded next-sentence blind spot; it is the same clause taking the claim back. Only a full stop now ends it, and the three carriers that used a semicolon were reworded to one. What remains uncovered is still the NEXT sentence, which check-claims.js's header records as a standing limitation. ⚠️ Round 12: `(?=\\\\s*\\\\.)` is satisfied by the FIRST DOT OF AN ELLIPSIS, so 'the merge proceeds unattended... only after owner approval' was green. The period must now be followed by whitespace or end-of-input, which an ellipsis is not. ⚠️ Round 15: one shape probed only the sentence END, so a qualifier in the FIRST tempered gap -- 'no codex-flagged label is present, but owner approval is required, the ladder is …' -- matched and reinstated the owner gate. Every gap in a pattern is a place the claim can be taken back, so every gap now carries a probe position. ⚠️ Round 15 (second half): probing the gaps was the wrong instrument for the same reason 'at all' was — a tempered gap admits any qualifier that is not a negator, and 'present AFTER OWNER APPROVAL, the ladder…' is not a negation. Both gaps are DELETED and the sentence is pinned literally; every carrier already writes it identically after normalisation. The negatorProbe went with them: no gap, no placeholder, nothing for it to test.",
+      "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. All five carriers state it in one shared sentence, so one phrasing pins it everywhere.",
       "source": "directives/git.md",
-      "pattern": "{{SOS}}(?:Where\\s+)?no codex-flagged label is present\\s*,\\s*the ladder is the whole gate\\s+and the merge proceeds unattended(?=\\s*\\.{{EOS}})",
+      "phrasings": [
+        "Where no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended."
+      ],
       "consumers": [
         "CLAUDE.md",
         "docs/standards/automations.md",
@@ -241,21 +140,23 @@
         "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended once the owner has signed off;",
         "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended; however, owner approval is required first.",
         "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended; the owner must still be told first."
-      ],
-      "continuationProbe": {
-        "kind": "clause",
-        "shapes": {
-          "afterNoLabel": "no codex-flagged label is present%s, the ladder is the whole gate and the merge proceeds unattended.",
-          "afterLadder": "no codex-flagged label is present, the ladder is the whole gate%s and the merge proceeds unattended.",
-          "afterUnattended": "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended%s."
-        }
-      }
+      ]
     },
     {
       "id": "unreachable-review-test-name",
-      "why": "#336 defined the *unreachable-review test* -- the one condition under which a session may take `codex-flagged` off by hand -- and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath ('last-resort test', 'recorded-evidence test') across five files, which is the shadow-copy mechanism the name was introduced to remove, reproduced inside its own fix. Round 5: the test's defining sentence still permitted silence. Round 6: a third statement of its outage exit survived at the verdict gate. Each time I claimed propagation and each time a reader found a copy I had not searched for. This repo's established answer to that class is a checker, not vigilance, and the name is exactly what makes the search runnable -- so the search runs in CI now. ⚠️ WHAT THIS PINS, stated plainly because the guard's header demands it: this pins the NAME, not the substance. A consumer that says 'unreachable-review test' while describing it wrongly passes; the three drifts above were all of that kind ONCE the name was present, which is why the name went in. What it catches is the failure that actually recurred first -- a consumer that stops naming the test and starts re-describing it, because a description cannot be searched for and the next revision will miss it. Consumers were derived by measuring the tree at 0ee2527, not assumed. The lookbehind admits an ARTICLE between the negator and the name, which the other entries' do not need: every pointer here reads 'where the unreachable-review test admits it', so a bare word-before-phrase lookbehind checks 'the' and lets 'never the unreachable-review test admits it' through. The guard's own derived probes caught that on the first run of this entry -- which is the entry justifying itself: a mechanism found the drift I would have shipped. ⚠️ Round 11: the pattern ended at 'test' with no boundary, so a consumer renaming it to 'unreachable-review tests', 'tester' or 'testing' still matched its own prefix and the NAME guard -- whose entire job is catching a renamed test -- stayed green. A trailing \\\\b rejects all three, since t|s is a word-to-word transition and not a boundary. ⚠️ Round 12: `\\\\b` sees the transition from 't' to '-' as a boundary, so 'unreachable-review test-case' and 'test-run' still matched. A hyphen continues a compound name, so the guard now rejects a following word character OR hyphen. ⚠️ Round 13: the boundary class was ASCII-only, so a rename using a NON-BREAKING HYPHEN (U+2011) or an EN DASH — both of which a word processor or a copy-paste produces silently — still matched the prefix. The class now covers the Unicode dash punctuation range, and the derived suffix set probes those spellings. Note the rejection is only for a dash IMMEDIATELY after the name: every carrier writes '*unreachable-review test* — an OBSERVABLE …', where a space intervenes, so the em dash in ordinary prose is untouched. ⚠️ Round 15: SPACED compounds. 'the unreachable-review test case admits it' matched — every hyphen and dash spelling was covered and the plainest rename was not. The boundary now also rejects a space followed by a compound-forming noun. ⚠️ THAT HALF IS AN ENUMERATION and is the one place in this entry that is: a space cannot be rejected outright, because every carrier writes 'the *unreachable-review test* — an OBSERVABLE …' and the guard's own probes read 'test admits it'. So the list is cases/runs/suites/harness, and a compound noun outside it renames the test silently. Stated rather than papered over.",
+      "why": "#336 defined the *unreachable-review test* — the one condition under which a session may take `codex-flagged` off by hand — and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath. A NAME is undone by a suffix rather than by a clause, so each phrasing pins the character that follows it ('test.', 'test admits', 'test, and', 'test:') — that boundary is what keeps 'tests', 'tester', 'testing' and 'test-cases' from counting as the name, and the mustNotMatch entries are exactly those four. ⚠️ Pinning the name cannot see the CONTENT of the rule; `unreachable-review-terminal-states` is the entry that does.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:{{NEG}})\\s(?:the |a |its |this |that )?)unreachable-review test(?![\\w\\u2010-\\u2015\\u2212-])(?![ \\t]+(?:cases?|runs?|suites?|harness|harnesses)\\b)",
+      "phrasings": [
+        "the unreachable-review test.",
+        "its unreachable-review test admits, stated on the PR.",
+        "by a unreachable-review test.",
+        "PR Lifecycle's unreachable-review test:",
+        "PR Lifecycle's unreachable-review test, and",
+        "PR Lifecycle's unreachable-review test admits, with the evidence that rule requires.",
+        "PR Lifecycle's unreachable-review test admits it, with the evidence that rule requires.",
+        "PR Lifecycle's unreachable-review test admits.",
+        "bounds by its unreachable-review test, and"
+      ],
       "consumers": [
         "CLAUDE.md",
         "directives/global.md",
@@ -277,22 +178,20 @@
         "unreachable-review testing admits it",
         "the unreachable-review test-case admits it",
         "the unreachable-review test-run admits it"
-      ],
-      "negatorProbe": {
-        "lookbehind": "%s the unreachable-review test admits it"
-      },
-      "continuationProbe": {
-        "kind": "suffix",
-        "shapes": {
-          "afterName": "the unreachable-review test%s admits it"
-        }
-      }
+      ]
     },
     {
       "id": "ci-notify-unique-match-is-not-proof",
-      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. The pattern deliberately requires the unique-match wording: an earlier draft matched only 'not a guaranteed wake', which is the weak sentence, so deleting the entire unique-match warning would have left this guard green. The lookbehind is the second half of the same lesson: 'unique' unanchored is a SUBSTRING of 'non-unique', so a carrier that regressed to warning about NON-unique matches — the weak case again, now wearing the strong case's words — satisfied the tightened pattern too. Requiring no word character or hyphen before it is what makes the tightening real.",
+      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. Both capitalisations are listed because CLAUDE.md opens a sentence with it and the others do not.",
       "source": "docs/standards/automations.md",
-      "pattern": "(?<!\\b(?:{{COND}})\\b{{B}}*)(?<![\\w-])unique match is not (?:a guaranteed wake|proof)(?!{{S}}*\\b(?:{{COND}})\\b{{S}}{0,40}?\\bowner\\b)",
+      "phrasings": [
+        ". ⚠️ A unique match is not a guaranteed wake for YOUR session",
+        "a unique match is not a guaranteed wake for YOUR session.",
+        "a unique match is not a guaranteed wake for YOUR session:",
+        ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN, EITHER.",
+        ". ⚠️ A unique match is not proof of coverage either:",
+        "even a unique match is not proof of coverage,"
+      ],
       "consumers": [
         "CLAUDE.md",
         "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
@@ -306,21 +205,27 @@
         "a green run is not a guaranteed wake",
         "a unique match is proof of coverage",
         "a unique match is not a guaranteed wake unless the owner confirms it",
-        "If the owner asks, a unique match is not a guaranteed wake"
-      ],
-      "continuationProbe": {
-        "kind": "ownerGate",
-        "shapes": {
-          "beforeAssertion": "%s, a unique match is not a guaranteed wake.",
-          "afterAssertion": "A unique match is not a guaranteed wake%s."
-        }
-      }
+        "If the owner asks, a unique match is not a guaranteed wake",
+        "waits. Only if the owner asks, A unique match is not a guaranteed wake for YOUR session"
+      ]
     },
     {
       "id": "arm-the-check-in",
-      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in plugins/directives-toolkit/scripts/wait-gate.sh, whose PreToolUse message is the highest-authority copy of the rule because it is delivered unprompted at the decision point, and every .md-only sweep missed it. That carrier is listed here, and the pattern accepts 'arm a check-in' / 'arms a check-in' as well as 'arm the check-in' because the shell copy uses the indefinite article — an entry that named the round-39 file in its rationale while omitting it from its consumers, as the first draft of this one did, reproduces the exact failure it cites. The leading word boundary matters more here than in most patterns because this claim's exact INVERSION contains it: 'disarm a check-in' is the opposite instruction and the unanchored form certified it. A pattern that accepts the negation of its own claim is worse than no pattern, since it reports the regression as coverage — so the boundary is required in the per-consumer variant below as well. The negator lookbehind rejects 'never arm a check-in'. It deliberately checks only the word IMMEDIATELY before the verb: a clause-level negation scan was designed, measured and rejected, because ci-notify.yml legitimately reads 'a green run is not a guaranteed wake and a waiting session still arms a check-in', where the negator belongs to a different proposition in the same clause. 'never explicitly arm a check-in' therefore still passes; narrowing that needs the claim's CONDITION pinned, not just its verb. Round 7 added the apostrophe forms: the normalizer deliberately does not strip apostrophes -- doing so would corrupt ordinary prose -- so `dont` in the negator list did not cover `don't arm a check-in`, the way a person actually writes the inversion.",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in wait-gate.sh, which states the rule twice and whose DELIVERED message is the copy that matters. Eleven carriers word it eleven ways, which is why there are eleven phrasings and why #341 abandoned trying to infer the shape. Each lowercase one carries its connector: with a bare 'arm the check-in whenever …', inverting CLAUDE.md to 'Never arm the check-in whenever …' PASSED, because ci-notify's lowercase wording matched inside the negation — one carrier's phrasing covering another carrier's inversion.",
       "source": "directives/git.md",
-      "pattern": "(?<!\\b(?:{{COND}})\\b{{B}}*)(?<!\\b(?:{{NEG}})\\s)(?<!\\bun)\\barms? (?:a|the) check-?in(?!{{S}}*\\b(?:{{COND}})\\b{{S}}{0,40}?\\bowner\\b)",
+      "phrasings": [
+        "is: arm the check-in, then drop it when THAT OUTCOME is observed terminal",
+        "comment instead. Arm the check-in whenever the run's SHA is not your PR's head",
+        "coverage -- arm the check-in whenever the run's SHA is not your PR's head",
+        "so arm the check-in alongside the event wake, never instead of it, and drop it when THAT outcome is terminal.",
+        "the waiting session still arms a check-in.",
+        "that set, arm a check-in — that is not polling",
+        "otherwise arm a check-in.",
+        "the rule: arm a check-in for any awaited outcome that can end without emitting a wake, and drop it when THAT outcome is terminal.",
+        ". Arm a check-in rather than treating a green run",
+        "so arm a check-in whenever the run's SHA is not the PR's head",
+        "— and ARM A CHECK-IN ALONGSIDE IT, not instead of it:"
+      ],
       "consumers": [
         "CLAUDE.md",
         "directives/global.md",
@@ -334,20 +239,7 @@
         "plugins/directives-toolkit/commands/new-repo.md",
         {
           "file": "plugins/directives-toolkit/scripts/wait-gate.sh",
-          "why": "This file states the rule TWICE — once in its explanatory header comment, once inside the echo the PreToolUse hook actually delivers. The claim-level pattern matched the header, so deleting the instruction from the DELIVERED message left the guard green on the copy that carries the most authority (it reaches a session unprompted, at the decision point). The pattern below requires the delivered message's own opening text, so only the emitted form satisfies it.",
-          "pattern": "(?<!\\b(?:{{COND}})\\b{{B}}*)blocked by directives wait-gate.{0,600}?(?<!\\b(?:{{NEG}})\\s)(?<!\\bun)\\barms? (?:a|the) check-?in(?!{{S}}*\\b(?:{{COND}})\\b{{S}}{0,40}?\\bowner\\b)",
-          "mustNotMatch": [
-            "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) - and DISARM A CHECK-IN ALONGSIDE IT, not instead of it; (2) that check-in is `send_later`.",
-            "BLOCKED by directives wait-gate: do not background a `sleep` to wait. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks); (2) use `send_later` (the pre-approved primary).",
-            "# The hook arms a check-in alongside it, but the delivered message below says nothing about one."
-          ],
-          "whyMustNotMatch": "An override exists to be STRICTER than the claim pattern, so it needs its own inversions or the escape hatch reopens every defect the claim-level suite closed. Codex reproduced exactly that: widen this override back to an unbounded arms?, invert the delivered message to DISARM, and every claim-level case still passed while this strict consumer reported OK. The third case is the original round-2 defect restated - the file's HEADER COMMENT satisfying the pattern while the DELIVERED echo has lost the instruction - so the override must reject it even though it plainly states the rule. The third case is also the override-exercising one: the claim-level pattern MATCHES it (it plainly says 'arms a check-in') while this override rejects it for lacking the delivered message's own opening text -- so it can only pass by the override doing work, which is the property the guard now requires of every override suite.",
-          "continuationProbe": {
-            "shapes": {
-              "beforeAssertion": "%s, blocked by directives wait-gate: arm the check-in.",
-              "afterAssertion": "blocked by directives wait-gate: arm the check-in%s."
-            }
-          }
+          "why": "This file states the rule TWICE — once in its explanatory header comment, once inside the echo the PreToolUse hook actually delivers. The delivered copy carries the most authority: it reaches a session unprompted, at the decision point. Round 39 of #294 was this claim missing here. The header says 'arms a check-in alongside it' and the message says 'ARM A CHECK-IN ALONGSIDE IT', so the phrasing pinned for this claim matches only the delivered form — verified on #341 by deleting the rule from the echo alone, leaving the header intact, and watching the guard go red."
         }
       ],
       "mustNotMatch": [
@@ -359,18 +251,13 @@
         "don't arm a check-in",
         "doesn't arm a check-in",
         "arm the check-in unless the owner objects",
-        "Only if the owner asks, arm the check-in"
-      ],
-      "negatorProbe": {
-        "lookbehind": "%s arm a check-in"
-      },
-      "continuationProbe": {
-        "kind": "ownerGate",
-        "shapes": {
-          "beforeAssertion": "%s, arm the check-in.",
-          "afterAssertion": "Arm the check-in%s."
-        }
-      }
+        "Only if the owner asks, arm the check-in",
+        "comment instead. Only if the owner asks. Arm the check-in whenever the run's SHA is not your PR's head",
+        "— and DO NOT ARM A CHECK-IN ALONGSIDE IT, not instead of it",
+        "instead. Only if the owner asks, Arm the check-in whenever the run's SHA is not your PR's head",
+        "Never arm the check-in whenever the run's SHA is not your PR's head",
+        "never arm the check-in whenever the run's SHA is not your PR's head"
+      ]
     }
   ]
 }

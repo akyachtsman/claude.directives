@@ -162,7 +162,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   validation, secret-scan pattern+filter sync, the export boundary
   (`check-exports.js`, both directions), the canonical-claim guard
   (`check-claims.js` — pinned rules still stated by every consumer that must
-  state them; it proves a claim TRAVELLED, never that it is TRUE), a
+  state them; it proves a claim TRAVELLED, never that it is TRUE, plus
+  `check-claims-cases.js` guarding the guard — two of its override checks were
+  MEASURED fail-open, forcing `exercises` true and skipping the override probe
+  loop each leaving the suite green, #342), a
   clean-compile check over every tracked `.py`
   (`.github/scripts/check-py-warnings.py` — a guard that warns at compile time
   is a guard that stops running on a future interpreter), the viewport gate on
@@ -287,6 +290,7 @@ node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
 node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header)
+node .github/scripts/check-claims-cases.js       # that guard's own guard — two override checks were MEASURED fail-open (#342): forcing `exercises` true and skipping the override probe loop each left the suite green. Re-prove with CHECK_CLAIMS_BIN=<mutant>
 python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
 node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic
 python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives its viewport check the SAME env as the Playwright run — the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8)

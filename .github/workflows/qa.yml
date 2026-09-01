@@ -248,6 +248,15 @@ jobs:
       - name: Check the contrast guardrail reads token files correctly
         run: node .github/scripts/check-contrast-cases.js
 
+      # check-claims was the last guard here without its own guard, and the one
+      # that grew fastest — 24 review rounds on #336. Two of its override checks
+      # were measured fail-open: forcing `exercises` true, and never invoking the
+      # override probe loop, each left the whole suite green (#342). The two META
+      # cases exist for exactly those mutations and were proven to discriminate
+      # one-to-one. Drive a mutated copy with CHECK_CLAIMS_BIN to re-prove it.
+      - name: Check the canonical-claim guard enforces what it claims
+        run: node .github/scripts/check-claims-cases.js
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

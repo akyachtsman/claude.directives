@@ -152,7 +152,9 @@
         "by a unreachable-review test.",
         "PR Lifecycle's unreachable-review test:",
         "PR Lifecycle's unreachable-review test, and",
-        "PR Lifecycle's unreachable-review test admits",
+        "PR Lifecycle's unreachable-review test admits, with the evidence that rule requires.",
+        "PR Lifecycle's unreachable-review test admits it, with the evidence that rule requires.",
+        "PR Lifecycle's unreachable-review test admits.",
         "bounds by its unreachable-review test, and"
       ],
       "consumers": [

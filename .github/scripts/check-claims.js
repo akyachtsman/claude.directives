@@ -155,8 +155,11 @@ import { execFileSync } from 'child_process';
 //      carries an approved phrasing, so inverting THAT one turns this guard red
 //      and inverting the other — the "What not to do" restatement — leaves it
 //      green. This comment previously said inverting either one alone was
-//      green; Codex measured the opposite on #346 round 6, and both directions
-//      are now pinned by cases rather than by this paragraph.
+//      green; Codex measured the opposite on #346 round 6. It then said both
+//      directions were pinned by cases when NO case existed — round 8, the
+//      fifth sentence in this header asserting behaviour nothing held. Three
+//      cases now do, named for what they hold: the pinned inversion is caught,
+//      the unpinned one is not, and pinning BOTH turns the first green.
 //      PINNING BOTH OCCURRENCES DOES NOT FIX IT AND MAKES IT WORSE. Phrasings
 //      are an OR: add a phrasing for the second sentence and the file passes on
 //      either one, so each occurrence individually becomes deletable. Measured
@@ -642,7 +645,14 @@ const allPhrasings = claims.flatMap((c) => c.phrasings || []);
 // Codex, #346 round 6. Four of the twelve were extended through a short
 // carrier-unanimous continuation; the other eight are counted as open.
 const SENTENCE_END = '.!?';
-const isClosed = (p) => SENTENCE_END.includes(p.trimEnd().slice(-1));
+// CLASSIFY THE NORMALISED PHRASING, because that is the text matching uses.
+// `*The merge proceeds unattended.*` pins the period — normalize() strips the
+// emphasis markers from both sides before comparing — but the raw string ends in
+// `*`, so the unnormalised test called it open and the run reported an audit
+// residue that was not there. Reading a value one way for matching and another
+// way for reporting is how the count stops describing the guard. Codex, #346
+// round 8.
+const isClosed = (p) => SENTENCE_END.includes(normalize(p).slice(-1));
 const terminated = allPhrasings.filter(isClosed).length;
 console.log(`check-claims: OK — ${claims.length} claim(s) still stated by every listed file`);
 // COUNTED, NOT ASSERTED. The header carried "14 extended / 16 short" as prose

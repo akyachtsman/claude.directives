@@ -51,6 +51,12 @@
  *      -> every negative-path case, via the stack-frame check
  *   M  the consumer `file` validation removed
  *      -> all three malformed-consumer cases
+ *   N  the CHECKER dropped from GUARD_ARTIFACTS (the one member no case reached)
+ *      -> both "…own CHECKER…" cases, target-validation and derive
+ *   P  `throw 'boom'` — a PRIMITIVE, which prints no stack frame at all
+ *      -> every negative-path case, via the terminal-summary check
+ *   Q  the terminator classified on the RAW phrasing instead of the normalised one
+ *      -> "a terminator inside markdown emphasis still counts as closed"
  *   F  a comment reworded (control) -> nothing reddens
  *
  * G-K were added on #346 round 6 and each reddens EXACTLY ONE case (K, two),
@@ -119,17 +125,22 @@ function testCase(name, { manifest, files, expectExit, needle, absent, args = []
   rmSync(root, { recursive: true, force: true });
 
   const problems = [];
-  // A V8 STACK FRAME, not a list of error NAMES. The four names this matched
-  // before were the ones that had actually happened, so a guard throwing a plain
-  // `Error` — or a `RangeError`, or anything else — crashed while every case
-  // reported OK: exit 1 and the expected needle are both still produced by a
-  // process that died. Codex reproduced it by throwing after the empty-phrasing
-  // diagnostic, and all 50 cases passed. An allowlist of the failures already
-  // seen is the fail-open family (#323) in the harness that exists to find it.
-  // `    at file:line:col` is the shape every uncaught throw prints and no
-  // diagnostic here produces, so it needs no maintenance as new errors appear.
-  if (/^\s+at .*:\d+:\d+\)?$/m.test(out) || /Cannot find module/.test(out)) {
-    problems.push('the guard CRASHED — a stack trace is not a catch, so this proves nothing');
+  // THE GUARD'S OWN TERMINAL SUMMARY — a contract it keeps, NOT a pattern a
+  // crash makes. Two attempts to recognise a crash by its shape each missed one,
+  // in consecutive rounds: a list of four error NAMES let a plain `Error`
+  // through (#346 round 7), and a V8 stack frame let `throw 'boom'` through,
+  // because a primitive throw prints a source excerpt and no frame at all
+  // (round 8). Both mutants exited 1 with the expected needle already printed,
+  // so every negative-path case reported OK against a dead process — the exact
+  // fail-open the harness exists to find, twice, inside its own fix.
+  //
+  // Guessing at the shape of failure was the wrong direction. Every exit path in
+  // check-claims.js prints `check-claims: OK` or `check-claims: FAIL`
+  // immediately before terminating, so the ABSENCE of that line means the run
+  // did not reach its own end — whatever was thrown, whether or not it printed,
+  // and however Node chooses to report it in some later version.
+  if (!/^check-claims: (OK|FAIL)/m.test(out)) {
+    problems.push('the guard never reached its terminal summary — it died mid-run, so the exit code and the needle prove nothing');
   }
   if (code !== expectExit) problems.push(`expected exit ${expectExit}, got ${code}`);
   if (needle && !out.includes(needle)) problems.push(`expected ${JSON.stringify(needle)} in the output`);
@@ -353,6 +364,18 @@ testCase('the guard\'s own CASES FILE cannot evidence a claim', {
   expectExit: 1, needle: "this guard's own artifact",
 });
 
+testCase("the guard's own CHECKER cannot evidence a claim", {
+  // The THIRD member of GUARD_ARTIFACTS, and the only one no case reached.
+  // Removing just this entry left all 53 cases green while the run reported the
+  // checker as containing an approved phrasing — so the one list that was
+  // supposed to end the two-copies problem had an unexercised member instead.
+  // Every member of a shared list needs its own case, or the list is only as
+  // constrained as the members someone happened to test. Codex, #346 round 8.
+  manifest: manifest([claim({ consumers: ['.github/scripts/check-claims.js'] })]),
+  files: { ...FILES, '.github/scripts/check-claims.js': '// header: so check the comments AND the review threads\n' },
+  expectExit: 1, needle: "this guard's own artifact",
+});
+
 testCase('a non-raw EMPTY pattern is refused on presence, not truthiness', {
   // `"pattern": ""` is falsey, so a truthiness test read it as absent.
   manifest: manifest([claim({ pattern: '' })]), files: FILES,
@@ -511,6 +534,16 @@ testCase('--derive excludes the guard\'s own CASES FILE from its candidates', {
   absent: '\n         .github/scripts/check-claims-cases.js',
 });
 
+testCase("--derive excludes the guard's own CHECKER from its candidates", {
+  // The derive half of the case above. The checker quotes claim text in its
+  // header as worked examples, so what it matches moves with an ordinary header
+  // edit — which happened inside this very PR, taking it from 0 phrasings to 1.
+  manifest: manifest([claim()]),
+  files: { ...FILES, '.github/scripts/check-claims.js': '// header: so check the comments AND the review threads\n' },
+  args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
+  absent: '\n         .github/scripts/check-claims.js',
+});
+
 testCase('--derive excludes the guard\'s own manifest from its candidates', {
   // claims.json contains every phrasing by construction, so without the
   // exclusion it is reported as an unlisted carrier on every single run — which
@@ -607,6 +640,24 @@ testCase('…and a full-stop phrasing counts as closed', {
   needle: '1 total — 1 run to a sentence terminator, 0 stop short',
 });
 
+testCase('a terminator inside markdown emphasis still counts as closed', {
+  // The count has to read the phrasing the way MATCHING reads it. normalize()
+  // strips `*` from both sides, so `…threads.*` pins the period and an appended
+  // condition IS caught — but the raw string ends in `*`, so the unnormalised
+  // test called it open and the run reported a residue that did not exist.
+  // Codex, #346 round 8.
+  manifest: manifest([claim({
+    phrasings: ['*so check the comments AND the review threads.*'],
+    mustNotMatch: ['so never check anything'],
+  })]),
+  files: {
+    'directives/src.md': 'Rule: *so check the comments AND the review threads.* Always.\n',
+    'docs/consumer.md': 'Per source: *so check the comments AND the review threads.* Yes.\n',
+  },
+  expectExit: 0,
+  needle: '1 total — 1 run to a sentence terminator, 0 stop short',
+});
+
 // ── the exclusion's effect is PRINTED, not asserted in a comment ───────────
 // Three separate sentences in this guard's header describing its own output have
 // been measured false. The counts move with an ordinary header or fixture edit,
@@ -653,6 +704,50 @@ testCase('a whitespace-only consumer "file" gets the same refusal', {
   manifest: manifest([claim({ consumers: [{ file: '   ' }] })]),
   files: FILES,
   expectExit: 1, needle: 'consumer entry with no usable "file"',
+});
+
+// ── a carrier stating one claim TWICE: which occurrence is pinned ─────────
+// The guard's header describes this boundary in both directions and, until
+// round 8, nothing tested it — the fifth sentence in that header asserting
+// behaviour no case held. These two are the measurement, and they must move
+// together: pinning the second occurrence as well would turn the first one
+// GREEN, which is why the header says to pin one and declare the other open.
+const TWICE = 'Procedure: so check the comments AND the review threads before merging.\n'
+  + '\nReminder elsewhere in the file: read the comments and the threads.\n';
+
+testCase('inverting the PINNED occurrence of a doubly-stated claim is caught', {
+  manifest: manifest([claim({ consumers: ['docs/consumer.md'] })]),
+  files: { ...FILES, 'docs/consumer.md': TWICE.replace('so check the comments AND the review threads', 'check only the comments') },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
+testCase('PINNING BOTH occurrences unpins both — measured, not argued', {
+  // The reason the header says to pin ONE. `states()` ORs over the set, so with
+  // both wordings approved the file passes on either, and the inversion the
+  // first case catches goes GREEN. This was tried on the real ci-triage.md
+  // carrier during round 6 and reverted; the case is what stops it being tried
+  // again, and it is the discriminator for the two cases above — a phrasing
+  // added to cover the restatement turns this green case and that red one
+  // simultaneously.
+  manifest: manifest([claim({
+    consumers: ['docs/consumer.md'],
+    phrasings: [
+      'so check the comments AND the review threads',
+      'read the comments and the threads',
+    ],
+    mustNotMatch: ['so never look at anything'],
+  })]),
+  files: { ...FILES, 'docs/consumer.md': TWICE.replace('so check the comments AND the review threads', 'check only the comments') },
+  expectExit: 0, needle: 'check-claims: OK',
+});
+
+testCase('…and inverting the UNPINNED restatement is not — the documented limit', {
+  // Not a defect being enshrined. If this case ever starts failing, a phrasing
+  // grew to cover the restatement too, and the case above has silently stopped
+  // protecting the occurrence a reader acts on.
+  manifest: manifest([claim({ consumers: ['docs/consumer.md'] })]),
+  files: { ...FILES, 'docs/consumer.md': TWICE.replace('read the comments and the threads', 'read the comments only') },
+  expectExit: 0, needle: 'check-claims: OK',
 });
 
 // ── a missing SOURCE fails like a missing consumer, and does not abort ─────

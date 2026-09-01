@@ -1,315 +1,303 @@
 #!/usr/bin/env node
-// THE CANONICAL-CLAIM GUARD'S OWN GUARD (#342).
-//
-// WHY IT EXISTS. check-claims.js was the last guard in this repo without one,
-// and the one that grew fastest — 24 review rounds on #336 alone, 100 findings.
-// Every sibling cases file was added because the guard it tests had shipped
-// broken: check-ui-viewports-cases.js (the static read failed twelve ways, every
-// failure silent, #282), check-job-bounds-cases.py (#334), check-contrast-cases.js
-// (#334), check-ui-suite-env-cases.py (a NameError inside a failure path, #333).
-//
-// THE MEASUREMENT THAT MOTIVATED IT (2026-09-01, against the real manifest):
-//   `const exercises = true`                     -> exit 0, NOT CAUGHT
-//   override continuation probes never invoked   -> exit 0, NOT CAUGHT
-// Both guards ran on every real run and both could be deleted with no signal.
-// That is the fail-open family (#323): a pass and a did-not-look are the same
-// output. The two cases marked META below exist to make those two mutations
-// fail; if you change the override machinery, run them against the mutation and
-// confirm they go red, or you have re-created the hole this file closes.
-//
-// ⚠️ WHAT THIS FILE DOES NOT PROVE. It exercises check-claims' BEHAVIOUR against
-// synthetic manifests. It says nothing about whether the real claims.json pins
-// the right sentences, and nothing about whether those sentences are TRUE — the
-// guard's own header is explicit that it proves a claim TRAVELLED, never that it
-// is correct. A green run here plus a green run there still permits a wrong rule
-// stated consistently everywhere.
-//
-// HOW IT WORKS. check-claims.js has no exports and resolves MANIFEST relative to
-// cwd, so each case builds a temp directory containing .github/scripts/claims.json
-// plus its consumer files and runs the REAL script there. That tests the shipped
-// CLI contract rather than a copy of the logic. `git ls-files` is reached only
-// under --derive, so only those cases need a git fixture.
+/**
+ * Guard check-claims.js — the canonical-claim guard.
+ *
+ * WHY IT EXISTS. #342 measured two of the old guard's override checks fail-open:
+ * forcing `exercises` true, and never invoking the override probe loop, each
+ * left the whole suite green. Both checks ran on every real run and both could
+ * have been deleted with no signal. That is the fail-open family (#323) — a pass
+ * and a did-not-look produce identical output.
+ *
+ * #341 then replaced the guard's core: lexical condition-detection is gone, and
+ * a claim now pins the exact phrasings that count as stating it. The checks are
+ * different, so the cases are different, but the reason for having them is not.
+ *
+ * WHAT THIS DRIVES. check-claims.js has no exports and resolves MANIFEST
+ * relative to cwd, so each case writes a synthetic manifest and carrier files
+ * into a temp directory and runs the REAL script there as a subprocess. That is
+ * the shipped CLI contract, which is also what qa.yml runs.
+ *
+ * A case asserts BOTH the exit code and a needle from the diagnostic. Exit code
+ * alone is not enough — #344's suite had a case that reddened on the unmutated
+ * guard AND on the mutant, passing for a reason it was not about, and #345 had
+ * two more of the same shape. A crash is rejected outright: a stack trace is not
+ * a catch.
+ *
+ * MEASURED 2026-09-01. Mutations applied to the guard via CHECK_CLAIMS_BIN, and
+ * the cases that reddened for each:
+ *
+ *   A  containment check neutered (a phrasing may sit inside a rejection)
+ *      -> "a phrasing contained in a mustNotMatch is refused"
+ *   B  matching made case-INsensitive (the old `i` flag)
+ *      -> "case distinguishes a claim from its capitalised negation"
+ *      -> "case distinguishes an authoritative copy from a weaker one"
+ *   C  empty-phrasing rejection removed
+ *      -> "an empty phrasing is refused, never a wildcard"
+ *   D  the mustNotMatch requirement removed
+ *      -> "a claim with no mustNotMatch is refused"
+ *   E  `sourceOnly` accepted as truthy rather than boolean
+ *      -> "sourceOnly must be a literal boolean"
+ *   F  a comment reworded (control) -> nothing reddens
+ *
+ * B is the load-bearing one. Case-sensitivity is the whole of rule 1 in the
+ * guard's header, it is what makes negation and delivered-vs-header work without
+ * inference, and nothing else in this repo would notice if it were dropped.
+ *
+ * Two things this table records because measuring produced them rather than
+ * confirming them. B originally reddened only ONE of its two cases: the
+ * authoritative-copy fixture wrote "arms a check-in" in the weaker copy, and the
+ * trailing `s` distinguished it without any help from case — a case whose name
+ * promised case-sensitivity and did not test it. The fixture now differs in case
+ * alone. And C and E redden on the NEEDLE, not the exit code: the mutated guard
+ * still exits 1 for an unrelated reason, so an exit-code-only assertion would
+ * have called both of them caught while they checked nothing.
+ */
 
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import { execFileSync } from 'child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
-import { join, resolve, dirname } from 'path';
-import { execFileSync, spawnSync } from 'child_process';
+import { join, dirname, resolve } from 'path';
 
-// CHECK_CLAIMS_BIN points the suite at a MUTATED copy of the guard. That is how
-// the two META cases below are proven to discriminate: run this file once
-// unmutated (all green), then once per mutation (the matching META case red).
-// A cases file nobody has run against a mutant is an assertion, not a test.
+// Points the suite at a MUTATED copy of the guard, so "these cases discriminate"
+// is re-provable rather than a claim made once in a commit message.
 const SCRIPT = resolve(process.env.CHECK_CLAIMS_BIN || '.github/scripts/check-claims.js');
-const REAL = JSON.parse(readFileSync('.github/scripts/claims.json', 'utf8'));
 
-let failures = 0;
-let ran = 0;
+const PASS = [];
+const FAIL = [];
 
-// The manifest-level blocks are infrastructure every run needs: the condition
-// floor is asserted against the hardcoded CONDITION_OPENERS at startup, so a
-// synthetic manifest that omits it fails for a reason no case is about. Cases
-// vary `claims` and `continuationRequired`; everything else comes from the real
-// file, which also means a change to those blocks surfaces here.
-function manifest({ claims, continuationRequired = [] }) {
-  return {
-    negators: REAL.negators,
-    continuations: REAL.continuations,
-    continuationRequired,
-    negatorFloor: REAL.negatorFloor,
-    claims,
-  };
-}
-
-function sandbox({ claims, continuationRequired, files = {}, args = [], git = false }) {
-  const dir = mkdtempSync(join(tmpdir(), 'claims-cases-'));
+function run(root) {
   try {
-    mkdirSync(join(dir, '.github', 'scripts'), { recursive: true });
-    writeFileSync(join(dir, '.github', 'scripts', 'claims.json'),
-                  JSON.stringify(manifest({ claims, continuationRequired }), null, 2));
-    for (const [rel, body] of Object.entries(files)) {
-      const p = join(dir, rel);
-      mkdirSync(dirname(p), { recursive: true });
-      writeFileSync(p, body);
-    }
-    if (git) {
-      execFileSync('git', ['init', '-q'], { cwd: dir });
-      execFileSync('git', ['add', '-A'], { cwd: dir });
-    }
-    const r = spawnSync('node', [SCRIPT, ...args], { cwd: dir, encoding: 'utf8' });
-    return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+    const out = execFileSync('node', [SCRIPT], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    return { code: 0, out };
+  } catch (err) {
+    return { code: err.status === undefined ? -1 : err.status, out: `${err.stdout || ''}${err.stderr || ''}` };
   }
 }
 
-// `expect` is 0 or 1; `needle` must appear in the output when a failure is
-// expected. A case that asserts only the exit code is the near-miss this repo
-// has logged repeatedly — a red for an unrelated reason reads as a pass. A
-// SyntaxError is never a legitimate red.
-function assertCase(name, result, expect, needle) {
-  ran += 1;
+/**
+ * files: { path: contents }. manifest: the claims.json object.
+ */
+function build(manifest, files) {
+  const root = mkdtempSync(join(tmpdir(), 'claims-cases-'));
+  mkdirSync(join(root, '.github/scripts'), { recursive: true });
+  writeFileSync(join(root, '.github/scripts/claims.json'), JSON.stringify(manifest, null, 2));
+  for (const [p, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, p)), { recursive: true });
+    writeFileSync(join(root, p), body);
+  }
+  return root;
+}
+
+function testCase(name, { manifest, files, expectExit, needle }) {
+  const root = build(manifest, files);
+  const { code, out } = run(root);
+  rmSync(root, { recursive: true, force: true });
+
   const problems = [];
-  if (result.code !== expect) problems.push(`exit ${result.code}, expected ${expect}`);
-  if (/SyntaxError/.test(result.out)) problems.push('SyntaxError — the run crashed, so it proves nothing');
-  if (expect === 1 && needle && !result.out.includes(needle)) {
-    problems.push(`expected diagnostic not found: ${JSON.stringify(needle)}`);
+  if (/SyntaxError|ReferenceError|TypeError|Cannot find module/.test(out)) {
+    problems.push('the guard CRASHED — a stack trace is not a catch, so this proves nothing');
   }
-  if (expect === 0 && /^FAIL/m.test(result.out)) problems.push('unexpected FAIL line on a case that must pass');
+  if (code !== expectExit) problems.push(`expected exit ${expectExit}, got ${code}`);
+  if (needle && !out.includes(needle)) problems.push(`expected ${JSON.stringify(needle)} in the output`);
+
   if (problems.length) {
-    failures += 1;
-    console.error(`FAIL: ${name}`);
-    for (const p of problems) console.error(`      ${p}`);
-    const shown = result.out.split('\n').filter((l) => /FAIL|Error/.test(l)).slice(0, 3);
-    for (const l of shown) console.error(`      | ${l.slice(0, 200)}`);
+    FAIL.push(name);
+    console.log(`FAIL: ${name} (exit ${code})`);
+    for (const p of problems) console.log(`        ${p}`);
+    for (const line of out.trim().split('\n').slice(0, 6)) console.log(`      | ${line}`);
   } else {
-    console.log(`OK:   ${name}`);
+    PASS.push(name);
+    console.log(`OK:   ${name} (exit ${code})`);
   }
 }
 
-// ---------------------------------------------------------------------------
-// A minimal, VALID claim. Every case below is this shape with one thing changed,
-// so a red says which single property the guard is enforcing.
-// ---------------------------------------------------------------------------
-const SENTENCE = 'The merge proceeds unattended.';
-const CONSUMER = 'docs/consumer.md';
-const SOURCE = 'docs/source.md';
-
-// Guarded at BOTH ends. A claim pattern guarded only at the trailing end still
-// fails the `constructed:preposed` probe, so any case built on it reds for a
-// reason the case is not about.
-const GUARDED = '(?<!\\b(?:{{COND}})\\b{{B}}*)The merge proceeds unattended(?!{{S}}*\\b(?:{{COND}})\\b)';
-
-const basicClaim = (over = {}) => ({
+// A minimal well-formed claim, cloned and perturbed per case.
+const claim = (over = {}) => ({
   id: 'demo',
-  why: 'A synthetic claim used only by check-claims-cases.js.',
-  source: SOURCE,
-  consumers: [CONSUMER],
-  pattern: 'The merge proceeds unattended',
-  mustNotMatch: ['The merge does not proceed unattended'],
+  why: 'why this claim is pinned',
+  source: 'directives/src.md',
+  phrasings: ['so check the comments AND the review threads'],
+  consumers: ['docs/consumer.md'],
+  mustNotMatch: ['so never check the comments AND the review threads'],
   ...over,
 });
+const manifest = (claims) => ({ _comment: 'test fixture', claims });
 
-const bothFiles = { [SOURCE]: SENTENCE, [CONSUMER]: SENTENCE };
+const SRC = 'Which form arrives is not predictable, so check the comments AND the review threads.\n';
+const CONS = 'Per the source: so check the comments AND the review threads before merging.\n';
+const FILES = { 'directives/src.md': SRC, 'docs/consumer.md': CONS };
 
-// 1. Baseline — the shape every other case mutates.
-assertCase('baseline: a stated claim passes',
-  sandbox({ claims: [basicClaim()], files: bothFiles }), 0);
-
-// 2. The guard's whole purpose: a consumer that stopped stating the claim.
-assertCase('a consumer that dropped the claim fails',
-  sandbox({ claims: [basicClaim()], files: { [SOURCE]: SENTENCE, [CONSUMER]: 'Nothing relevant here.' } }),
-  1, 'no longer states the claim');
-
-// 3. An empty manifest verifies nothing while reporting success.
-assertCase('an empty claims list fails rather than passing vacuously',
-  sandbox({ claims: [], files: bothFiles }), 1, 'declares no claims');
-
-// 4. Every pattern must carry the inversions it rejects — see the guard's
-//    header for the four inversions that got through without this.
-assertCase('a claim with no mustNotMatch fails',
-  sandbox({ claims: [basicClaim({ mustNotMatch: undefined })], files: bothFiles }),
-  1, 'no "mustNotMatch"');
-
-// 5. The inversion check itself: a mustNotMatch case the pattern ACCEPTS means
-//    the pattern certifies the opposite of its claim.
-assertCase('a mustNotMatch case the pattern accepts fails',
-  sandbox({ claims: [basicClaim({ mustNotMatch: ['The merge proceeds unattended'] })], files: bothFiles }),
-  1, 'MATCHES a string it must reject');
-
-// 6. A pattern matching the empty string certifies every file.
-assertCase('a pattern matching the empty string fails',
-  sandbox({ claims: [basicClaim({ pattern: '(?:)' })], files: bothFiles }),
-  1, 'matches the empty string');
-
-// 7. An entry with no consumers checks nothing.
-assertCase('no consumers without sourceOnly fails',
-  sandbox({ claims: [basicClaim({ consumers: [] })], files: bothFiles }),
-  1, 'no consumers');
-
-// 8. A truthy non-boolean silently waives the requirement it appears to set.
-assertCase('a non-boolean sourceOnly fails',
-  sandbox({ claims: [basicClaim({ consumers: [], sourceOnly: 'yes' })], files: bothFiles }),
-  1, '"sourceOnly" must be a boolean');
-
-// 9/10. The two halves of the derived-continuation opt-out: a claim leaves the
-//       suite either by dropping the probe or by leaving the required list.
-const probed = basicClaim({
-  pattern: 'The merge proceeds unattended(?!{{S}}*\\b(?:{{COND}})\\b)',
-  continuationProbe: { kind: 'condition', shapes: { appended: 'The merge proceeds unattended%s.' } },
-});
-assertCase('a continuationProbe outside continuationRequired fails',
-  sandbox({ claims: [probed], continuationRequired: [], files: bothFiles }),
-  1, 'not in continuationRequired');
-
-assertCase('continuationRequired without a continuationProbe fails',
-  sandbox({ claims: [basicClaim()], continuationRequired: ['demo'], files: bothFiles }),
-  1, 'declares no "continuationProbe"');
-
-// 11. The probe doing its job: a pattern with no trailing guard lets the
-//     statement be taken back inside its own sentence.
-assertCase('an unguarded pattern is caught by its continuation probe',
-  sandbox({
-    claims: [basicClaim({
-      continuationProbe: { kind: 'condition', shapes: { appended: 'The merge proceeds unattended%s.' } },
-    })],
-    continuationRequired: ['demo'],
-    files: bothFiles,
-  }), 1, 'is NOT rejected');
-
-// 12. Baseline for the override cases: a strict per-consumer pattern that is
-//     genuinely stricter, with a case only it rejects.
-const STRICT_LINE = 'Delivered: the merge proceeds unattended.';
-const overrideConsumer = (over = {}) => ({
-  file: CONSUMER,
-  why: 'Synthetic override.',
-  pattern: 'Delivered: the merge proceeds unattended',
-  // The third case is the exercising one: the CLAIM pattern matches it, this
-  // override rejects it, so it can only pass by the override doing work.
-  mustNotMatch: ['The merge does not proceed unattended', 'The merge proceeds unattended'],
-  ...over,
+// ── the shipped shape, and the two failures it must report ─────────────────
+testCase('a well-formed claim stated by both files passes', {
+  manifest: manifest([claim()]), files: FILES, expectExit: 0,
+  needle: 'check-claims: OK',
 });
 
-assertCase('baseline: a working override passes',
-  sandbox({
-    claims: [basicClaim({ consumers: [overrideConsumer()] })],
-    files: { [SOURCE]: SENTENCE, [CONSUMER]: STRICT_LINE },
-  }), 0);
-
-// 13. META (#342). An override whose mustNotMatch cases are ALL rejected by the
-//     claim pattern too proves nothing — deleting the override entirely would
-//     fail none of them. This case is the exerciser for `const exercises = …`:
-//     force that value true and this case goes green.
-assertCase('META: an override that never does work fails (guards `exercises`)',
-  sandbox({
-    claims: [basicClaim({
-      consumers: [overrideConsumer({ mustNotMatch: ['The merge does not proceed unattended'] })],
-    })],
-    files: { [SOURCE]: SENTENCE, [CONSUMER]: STRICT_LINE },
-  }), 1, 'never exercises the override');
-
-// 14. META (#342). An override pattern that omits the trailing guard must be
-//     caught by the probes run against the OVERRIDE, not the claim. This case is
-//     the exerciser for the override probe loop: delete that loop and this case
-//     goes green while the claim-level probes still pass.
-// The CLAIM pattern here is guarded at BOTH ends, so the claim-level probes pass
-// and the only thing that can fail is the override. A trailing-only guard leaves
-// `constructed:preposed` failing at the claim level, which reds the case for the
-// wrong reason — measured, and the reason the needle below names the override.
-assertCase('META: an unguarded override pattern is caught (guards the override probe loop)',
-  sandbox({
-    claims: [basicClaim({
-      pattern: GUARDED,
-      continuationProbe: { kind: 'condition', shapes: { appended: 'The merge proceeds unattended%s.' } },
-      consumers: [overrideConsumer({
-        pattern: 'Delivered: the merge proceeds unattended',   // no guard at either end
-        continuationProbe: { kind: 'condition', shapes: { appended: 'Delivered: the merge proceeds unattended%s.' } },
-      })],
-    })],
-    continuationRequired: ['demo'],
-    files: { [SOURCE]: SENTENCE, [CONSUMER]: STRICT_LINE },
-  }), 1, 'is NOT rejected by the override for');
-
-// 15. Round 16's defect: an empty shapes map runs zero probes.
-assertCase('an override continuationProbe with no shapes fails',
-  sandbox({
-    claims: [basicClaim({
-      pattern: 'The merge proceeds unattended(?!{{S}}*\\b(?:{{COND}})\\b)',
-      continuationProbe: { kind: 'condition', shapes: { appended: 'The merge proceeds unattended%s.' } },
-      consumers: [overrideConsumer({
-        pattern: 'Delivered: the merge proceeds unattended(?!{{S}}*\\b(?:{{COND}})\\b)',
-        continuationProbe: { kind: 'condition', shapes: {} },
-      })],
-    })],
-    continuationRequired: ['demo'],
-    files: { [SOURCE]: SENTENCE, [CONSUMER]: STRICT_LINE },
-  }), 1, 'declares no shapes');
-
-// 16. Round 17's defect: a PARTIAL map opts out of the position it omits, and a
-//     non-empty count check cannot see that.
-assertCase('an override continuationProbe missing a position fails',
-  sandbox({
-    claims: [basicClaim({
-      pattern: 'The merge proceeds unattended(?!{{S}}*\\b(?:{{COND}})\\b)',
-      continuationProbe: {
-        kind: 'condition',
-        shapes: {
-          appended: 'The merge proceeds unattended%s.',
-          trailing: 'The merge proceeds unattended%s, and nothing else.',
-        },
-      },
-      consumers: [overrideConsumer({
-        pattern: 'Delivered: the merge proceeds unattended(?!{{S}}*\\b(?:{{COND}})\\b)',
-        continuationProbe: {
-          kind: 'condition',
-          shapes: { appended: 'Delivered: the merge proceeds unattended%s.' },
-        },
-      })],
-    })],
-    continuationRequired: ['demo'],
-    files: { [SOURCE]: SENTENCE, [CONSUMER]: STRICT_LINE },
-  }), 1, 'missing position');
-
-// 17. --derive names a carrier nobody listed. This is the only path reaching
-//     `git ls-files`, so it is the only case needing a git fixture.
-const derived = sandbox({
-  claims: [basicClaim()],
-  files: { ...bothFiles, 'docs/unlisted.md': SENTENCE },
-  args: ['--derive'],
-  git: true,
+testCase('a consumer that dropped the claim is refused', {
+  manifest: manifest([claim()]),
+  files: { ...FILES, 'docs/consumer.md': 'Per the source: check the comments.\n' },
+  expectExit: 1, needle: 'consumer no longer states the claim',
 });
-assertCase('--derive reports an unlisted carrier', derived, 0);
-ran += 1;
-if (!derived.out.includes('docs/unlisted.md')) {
-  failures += 1;
-  console.error('FAIL: --derive did not name the unlisted carrier docs/unlisted.md');
-  console.error('      Without this the flag reports success while finding nothing.');
-} else {
-  console.log('OK:   --derive names the unlisted file');
-}
 
-// ---------------------------------------------------------------------------
-if (failures) {
-  console.error(`check-claims-cases: FAIL — ${failures} of ${ran} case(s)`);
+testCase('a SOURCE that dropped the claim is refused', {
+  manifest: manifest([claim()]),
+  files: { ...FILES, 'directives/src.md': 'Which form arrives is not predictable.\n' },
+  expectExit: 1, needle: 'the SOURCE no longer states the claim',
+});
+
+// ── rule 2: a phrasing may not sit inside a string the claim rejects ───────
+testCase('a phrasing contained in a mustNotMatch is refused', {
+  manifest: manifest([claim({
+    phrasings: ['check the comments AND the review threads'],   // no connector
+    mustNotMatch: ['so never check the comments AND the review threads'],
+  })]),
+  files: FILES, expectExit: 1,
+  needle: 'is contained in a string this claim must REJECT',
+});
+
+testCase('…and the connector that excludes it is accepted', {
+  manifest: manifest([claim()]), files: FILES, expectExit: 0,
+  needle: 'check-claims: OK',
+});
+
+// ── rule 1: case-sensitivity, which nothing else in the repo would notice ──
+testCase('case distinguishes a claim from its capitalised negation', {
+  manifest: manifest([claim({
+    phrasings: ['Check the comments AND the review threads'],
+    mustNotMatch: ['Never check the comments AND the review threads'],
+  })]),
+  files: {
+    'directives/src.md': 'Check the comments AND the review threads.\n',
+    // The consumer NEGATES it. Under case-insensitive matching the phrasing
+    // matches inside "Never check …" and this passes — the exact hole #341
+    // found by inverting a real carrier.
+    'docs/consumer.md': 'Never check the comments AND the review threads.\n',
+  },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
+testCase('case distinguishes an authoritative copy from a weaker one', {
+  // wait-gate.sh's real shape: the rule appears in an explanatory comment AND in
+  // the message the hook delivers. Only the delivered form is pinned.
+  manifest: manifest([claim({
+    phrasings: ['ARM A CHECK-IN ALONGSIDE IT'],
+    mustNotMatch: ['never arm a check-in alongside it'],
+    consumers: ['scripts/gate.sh'],
+  })]),
+  files: {
+    'directives/src.md': 'The rule: ARM A CHECK-IN ALONGSIDE IT.\n',
+    // The comment and the delivered message differ ONLY in case here, on
+    // purpose: an earlier draft wrote "arms a check-in" in the comment, which
+    // the trailing `s` already distinguished — so the case reddened under a
+    // case-insensitive mutant for the wrong reason, and its name promised
+    // something it did not test.
+    'scripts/gate.sh': "# the hook will arm a check-in alongside it via send_later\necho 'BLOCKED: rely on the wake alone.'\n",
+  },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
+// ── the vacuous-pass family: every way an entry can check nothing ──────────
+testCase('an empty phrasing is refused, never a wildcard', {
+  manifest: manifest([claim({ phrasings: [''] })]), files: FILES,
+  expectExit: 1, needle: 'every phrasing must be a non-empty string',
+});
+
+testCase('an empty phrasings array is refused', {
+  manifest: manifest([claim({ phrasings: [] })]), files: FILES,
+  expectExit: 1, needle: 'needs a non-empty "phrasings" array',
+});
+
+testCase('a claim with no mustNotMatch is refused', {
+  manifest: manifest([claim({ mustNotMatch: [] })]), files: FILES,
+  expectExit: 1, needle: 'no "mustNotMatch"',
+});
+
+testCase('a claim with no consumers and no sourceOnly is refused', {
+  manifest: manifest([claim({ consumers: [] })]), files: FILES,
+  expectExit: 1, needle: 'no consumers',
+});
+
+testCase('sourceOnly must be a literal boolean', {
+  // "false" is truthy in JS, so a string switches ON the waiver it appears to
+  // decline — restoring the vacuous pass the boolean check exists to stop.
+  manifest: manifest([claim({ consumers: [], sourceOnly: 'false' })]), files: FILES,
+  expectExit: 1, needle: '"sourceOnly" must be a boolean',
+});
+
+testCase('…and sourceOnly: true genuinely waives the consumer requirement', {
+  manifest: manifest([claim({ consumers: [], sourceOnly: true })]), files: FILES,
+  expectExit: 0, needle: 'check-claims: OK',
+});
+
+testCase('an empty manifest is refused', {
+  manifest: manifest([]), files: FILES,
+  expectExit: 1, needle: 'declares no claims',
+});
+
+testCase('a duplicate claim id is refused', {
+  manifest: manifest([claim(), claim()]), files: FILES,
+  expectExit: 1, needle: 'duplicate claim id',
+});
+
+testCase('a consumer that is also the source is refused', {
+  manifest: manifest([claim({ consumers: ['directives/src.md'] })]), files: FILES,
+  expectExit: 1, needle: 'consumer is the source itself',
+});
+
+testCase("the guard's own manifest cannot evidence a claim", {
+  manifest: manifest([claim({ consumers: ['.github/scripts/claims.json'] })]), files: FILES,
+  expectExit: 1, needle: "this guard's own artifact",
+});
+
+testCase('a duplicate consumer path is refused', {
+  manifest: manifest([claim({ consumers: ['docs/consumer.md', './docs/consumer.md'] })]), files: FILES,
+  expectExit: 1, needle: 'duplicate consumer path',
+});
+
+// ── the removed mechanisms must stay removed, and say so ──────────────────
+testCase('a non-raw "pattern" is refused, not silently honoured', {
+  // #341 deleted the inference layer; accepting a pattern here would let it back
+  // in one entry at a time, which is how the old opener list grew.
+  manifest: manifest([claim({ pattern: 'check the comments' })]), files: FILES,
+  expectExit: 1, needle: '"pattern" is only for "raw"',
+});
+
+testCase('a per-consumer override is refused with the reason', {
+  manifest: manifest([claim({
+    consumers: [{ file: 'docs/consumer.md', phrasings: ['so check the comments AND the review threads'], why: 'x', mustNotMatch: ['y'] }],
+  })]),
+  files: FILES, expectExit: 1, needle: 'per-consumer override, which no longer exists',
+});
+
+// ── raw: the one structural exception ──────────────────────────────────────
+testCase('a raw claim matches unnormalised structure', {
+  manifest: manifest([claim({
+    raw: true, phrasings: undefined, sourceOnly: true, consumers: [],
+    pattern: 'outage(?:(?!\\n[ \\t]*[-*+][ \\t])[^])*?The two states are',
+    mustNotMatch: ['outage — a state\n  - third — another\n\n  The two states are'],
+  })]),
+  files: { 'directives/src.md': '  - outage — the request failed\n\n  The two states are two.\n' },
+  expectExit: 0, needle: 'check-claims: OK',
+});
+
+testCase('…and a third list item breaks it', {
+  manifest: manifest([claim({
+    raw: true, phrasings: undefined, sourceOnly: true, consumers: [],
+    pattern: 'outage(?:(?!\\n[ \\t]*[-*+][ \\t])[^])*?The two states are',
+    mustNotMatch: ['nothing relevant'],
+  })]),
+  files: { 'directives/src.md': '  - outage — the request failed\n  - third — another\n\n  The two states are two.\n' },
+  expectExit: 1, needle: 'the SOURCE no longer states the claim',
+});
+
+testCase('a raw claim carrying phrasings is refused', {
+  manifest: manifest([claim({ raw: true, pattern: 'outage', sourceOnly: true, consumers: [] })]),
+  files: FILES, expectExit: 1, needle: 'carry a "pattern", not "phrasings"',
+});
+
+console.log();
+if (FAIL.length) {
+  console.log(`check-claims-cases: FAIL — ${FAIL.length} of ${PASS.length + FAIL.length} case(s) failed`);
   process.exit(1);
 }
-console.log(`check-claims-cases: OK — ${ran} case(s)`);
+console.log(`check-claims-cases: OK — ${PASS.length} pinned guard behaviours read correctly.`);

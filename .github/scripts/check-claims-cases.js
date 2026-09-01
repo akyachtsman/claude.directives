@@ -67,7 +67,23 @@
  *      -> that field's own override case; the other two stay green
  *   R5 `!` or `?` removed from SENTENCE_END
  *      -> that mark's own closed-count case
+ *   S1 `:` or `;` ADDED to SENTENCE_END
+ *      -> that mark's own open-count case
+ *   S2 a comment marker dropped from normalize()'s alternation
+ *      -> that marker's own wrapping case
+ *   S2b `_` dropped from the emphasis class -> the underscore case
+ *   S2c whitespace collapsed per-line instead of across the file
+ *      -> all four wrapping cases
+ *   S3 the raw `mustNotMatch` rejection disabled
+ *      -> "a raw pattern that MATCHES its own mustNotMatch is refused"
+ *   S4 the CONSUMER read's try/catch removed
+ *      -> both missing-consumer cases
  *   F  a comment reworded (control) -> nothing reddens
+ *
+ * The normalisation cases had to be rewritten before they discriminated: with
+ * the marker merely PRECEDING the phrase, every mutant stayed green, because a
+ * leading marker leaves the phrase a substring either way. The marker has to
+ * land INSIDE the phrase — which is the measured failure the rule exists for.
  *
  * G-K were added on #346 round 6 and each reddens EXACTLY ONE case (K, two),
  * with no collateral — so each names a behaviour nothing else here covers.
@@ -234,6 +250,61 @@ testCase('…and the connector that excludes it is accepted', {
   needle: 'check-claims: OK',
 });
 
+// ── the NORMALISATION contract: every alternative, one case each ──────────
+// Literal matching rests entirely on normalize(), and its three rules name six
+// alternatives between them. Every fixture in this suite used unformatted,
+// unwrapped prose, so five of the six were never exercised: mutants dropping
+// `//`, dropping `--`, and dropping `_` from the emphasis class each left the
+// real manifest AND all 65 cases green. Each rule is in normalize() because a
+// measured false failure put it there (see the guard's header), so a rule that
+// can silently disappear is one of those failures waiting to return.
+// Codex, #346 round 10.
+//
+// The phrasing is plain in every case; only the CARRIER is decorated, which is
+// the direction that matters — a manifest author pastes text as written and the
+// carrier is whatever the repo happens to contain.
+const PHRASE = 'so check the comments AND the review threads';
+
+// THE MARKER MUST LAND INSIDE THE PHRASE, or the case proves nothing. A marker
+// merely PRECEDING the phrase leaves it a substring either way — written that
+// way first, and all three mutants stayed green. Stripping only matters where
+// the claim WRAPS inside a commented block and the marker collapses into the
+// middle of it, which is the measured failure the rule exists for: the guard's
+// first manifest could not see codex-monitor.yml at all.
+for (const marker of ['#', '//', '--']) {
+  testCase(`a claim WRAPPING inside a "${marker}" comment block still matches`, {
+    manifest: manifest([claim()]),
+    files: { ...FILES, 'docs/consumer.md': `${marker} so check the comments AND the\n${marker} review threads before merging.\n` },
+    expectExit: 0, needle: 'check-claims: OK',
+  });
+}
+
+// Same requirement: emphasis WITHIN the phrase, not around it.
+for (const [name, wrap] of [['asterisk', '**'], ['underscore', '_'], ['backtick', '`']]) {
+  testCase(`a carrier with ${name} emphasis inside the claim still matches`, {
+    manifest: manifest([claim()]),
+    files: { ...FILES, 'docs/consumer.md': `Per the source: so check the ${wrap}comments${wrap} AND the review threads before merging.\n` },
+    expectExit: 0, needle: 'check-claims: OK',
+  });
+}
+
+testCase('a carrier whose claim WRAPS across lines still matches', {
+  // Round 30 of #294 wasted a cycle on this: `grep -c` reported 0 for three
+  // files that did contain the phrase, because it wrapped. Whitespace is
+  // collapsed across the whole file for that reason, and nothing tested it.
+  manifest: manifest([claim()]),
+  files: { ...FILES, 'docs/consumer.md': 'Per the source: so check the comments\n  AND the review\n  threads before merging.\n' },
+  expectExit: 0, needle: 'check-claims: OK',
+});
+
+testCase('…and a comment marker mid-line is NOT stripped', {
+  // The rule is line-LEADING only, and a rule that strips a marker anywhere
+  // would quietly rewrite carriers. The discriminator for the three cases above.
+  manifest: manifest([claim()]),
+  files: { ...FILES, 'docs/consumer.md': `Per the source: so check the # comments AND the review threads\n` },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
 // ── rule 1: case-sensitivity, which nothing else in the repo would notice ──
 testCase('case distinguishes a claim from its capitalised negation', {
   manifest: manifest([claim({
@@ -356,6 +427,23 @@ for (const [field, value] of [
 }
 
 // ── raw: the one structural exception ──────────────────────────────────────
+testCase('a raw pattern that MATCHES its own mustNotMatch is refused', {
+  // The raw negative branch had no case: the passing raw fixture supplies a
+  // counterexample its regex already rejects, and the failing one fails through
+  // source matching instead — so disabling `re.test(n)` entirely left the real
+  // manifest and all 65 cases green. A structural regex broadened over time
+  // could then accept every counterexample it declares. Codex, #346 round 10.
+  manifest: manifest([claim({
+    raw: true, phrasings: undefined, sourceOnly: true, consumers: [],
+    pattern: 'The two states are',
+    // The pattern matches this, which is the whole point — it is declared as a
+    // string the claim must NOT accept, and it does.
+    mustNotMatch: ['a third bullet — and The two states are'],
+  })]),
+  files: { 'directives/src.md': 'The two states are two.\n' },
+  expectExit: 1, needle: 'pattern MATCHES a string it must reject',
+});
+
 testCase('a raw "pattern" that is not a string is refused, not coerced', {
   // `new RegExp` coerces anything, so `"pattern": 123` compiled to /123/ and
   // certified a structural claim off a JSON type mistake. Truthiness reads
@@ -663,18 +751,26 @@ testCase('a comma-terminated phrasing does NOT survive an appended condition', {
   expectExit: 1, needle: 'consumer no longer states the claim',
 });
 
-testCase('the run counts a comma-stopping phrasing as OPEN, not terminated', {
-  manifest: manifest([claim({
-    phrasings: ['so check the comments AND the review threads,'],
-    mustNotMatch: ['so never check anything'],
-  })]),
-  files: {
-    'directives/src.md': 'so check the comments AND the review threads, every time.\n',
-    'docs/consumer.md': 'so check the comments AND the review threads, when it matters.\n',
-  },
-  expectExit: 0,
-  needle: '1 total — 0 run to a sentence terminator, 1 stop short',
-});
+// ONE CASE PER EXCLUDED MARK, for the same reason as the three included ones.
+// The comment names `,`, `:` and `;` as clause marks, and only the comma was
+// exercised — so adding `:` or `;` to SENTENCE_END left all 65 cases green and
+// the audit boundary could regress to reporting those pins as closed. The
+// positive and negative sides of one constant both need every member.
+// Codex, #346 round 10.
+for (const mark of [',', ':', ';']) {
+  testCase(`the run counts a "${mark}"-stopping phrasing as OPEN, not terminated`, {
+    manifest: manifest([claim({
+      phrasings: [`so check the comments AND the review threads${mark}`],
+      mustNotMatch: ['so never check anything'],
+    })]),
+    files: {
+      'directives/src.md': `so check the comments AND the review threads${mark} every time.\n`,
+      'docs/consumer.md': `so check the comments AND the review threads${mark} when it matters.\n`,
+    },
+    expectExit: 0,
+    needle: '1 total — 0 run to a sentence terminator, 1 stop short',
+  });
+}
 
 // EVERY MARK IN `SENTENCE_END`, NOT JUST THE COMMON ONE. Only `.` was exercised,
 // so dropping `!` or `?` from the set left all 59 cases green and the audit
@@ -739,6 +835,28 @@ testCase('the run PRINTS what each excluded guard artifact contains', {
   // run prints about EACH artifact, so a prefix does not hold it.
   needle: 'guard artifacts excluded by identity — phrasings each happens to contain: '
     + 'claims.json 1/1, check-claims.js ?/1, check-claims-cases.js ?/1',
+});
+
+// ── a MISSING CONSUMER fails like a missing source, and does not abort ────
+// The two missing-file cases exercised the SOURCE read only, and the malformed
+// consumer cases fail before any read is attempted — so removing the consumer
+// read's try/catch left the real manifest and all 65 cases green. That `catch`
+// is the twin of the one round 1 added to the source read; a deleted or renamed
+// consumer would have gone back to killing the process without its terminal
+// summary, taking every later claim with it. Codex, #346 round 10.
+testCase('a missing CONSUMER file FAILS rather than crashing the run', {
+  manifest: manifest([claim({ consumers: ['docs/GONE.md'] })]),
+  files: FILES,
+  expectExit: 1, needle: 'cannot read consumer docs/GONE.md',
+});
+
+testCase('…and the claims after a missing consumer are still checked', {
+  manifest: manifest([
+    claim({ id: 'first', consumers: ['docs/GONE.md'] }),
+    claim({ id: 'second', consumers: ['docs/other.md'] }),
+  ]),
+  files: { ...FILES, 'docs/other.md': CONS },
+  expectExit: 1, needle: 'OK:   second → docs/other.md',
 });
 
 // ── a malformed consumer FAILS the entry, and does not abort the run ──────

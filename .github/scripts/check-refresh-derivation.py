@@ -86,7 +86,18 @@ FILTER_LINE = re.compile(r"grep -E '([^']+)'")
 DELIMITER_LINE = re.compile(r"(printf\s+'\\n'|echo)\s*>>\s*\"\$buf\"")
 
 # Form-independent: the path token anywhere in the file, whatever precedes it.
-TRUTH_RE = re.compile(r"\.github/scripts/[A-Za-z0-9_.-]+")
+# SLASH-AWARE, and that is load-bearing twice over. `templates/ui-tests/` installs
+# to `.github/scripts/ui-tests/`, so a script one directory down is a reference
+# waiting to happen. While this class excluded `/`:
+#   * a caller referencing `.github/scripts/nested/a.py` was invisible to ground
+#     truth AND truncated to `.github/scripts/nested` by the derivation, so the
+#     script was silently omitted and this guard reported OK — the same fail-open
+#     it exists to close, one directory down; and
+#   * it truncated a legitimately widened pattern's own matches, so a widening
+#     was reported as OFF-CONTRACT rather than as the note this file promises.
+# A directory reference (`.github/scripts/ui-tests/`) is still excluded, because
+# truth keeps only .js/.py endings. Found by Codex on #345 round 2.
+TRUTH_RE = re.compile(r"\.github/scripts/[A-Za-z0-9_./-]+")
 
 
 def fail(msg):
@@ -262,8 +273,9 @@ def main():
             "      It is meant to yield .js/.py under .github/scripts/. These are neither,\n"
             "      so a refresh would install them as scripts:\n\n"
             + "".join(f"      OFF-CONTRACT: {s}\n" for s in off_contract)
-            + "\n      The usual cause is an unterminated extension filter: `\\.(js|py)` with\n"
-            "      no `$` matches the `.js` inside `.json`.\n"
+            + "\n      Usual causes: an unterminated extension filter (`\\.(js|py)` with no `$`\n"
+            "      matches the `.js` inside `.json`), or a token pattern reaching a path this\n"
+            "      guard's ground truth cannot express.\n"
             f"      documented pattern: {token_pat}  then  {filter_pat}\n"
             f"      Fix the pattern in {COMMAND}, not this guard."
         )

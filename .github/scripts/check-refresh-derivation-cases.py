@@ -38,6 +38,9 @@ CHECK_REFRESH_DERIVATION_BIN, and the cases that reddened for each:
        -> "a ragged caller whose tail is not a path must NOT false-alarm"
     D  off-contract extras demoted back to a printed note
        -> "an unterminated extension filter is refused (.json)"
+    E  TRUTH_RE reverted to slash-blind (the #345 round-2 bug itself)
+       -> "a nested script is found, not truncated to its directory"
+       -> "a SLASH-FREE pattern cannot reach a nested script and is refused"
 
 C is worth reading twice. It reddens a MUST-NOT-FAIL case, and that is the point:
 with nothing ragged the guard prints "NOT EXERCISED" instead of the checked-clean
@@ -45,9 +48,18 @@ line, so the needle catches a check that stopped looking while still exiting 0.
 An exit-code-only assertion would have called that mutant caught by two cases and
 missed entirely by the third.
 
-The four pattern mutants (old prefixed form, unterminated filter, the `(?:`
-construct, and the widened char class as a green control) were run by hand
-against the live repo before this file existed; they are cases 2, 4, 5 and 8.
+E is here because the case that should have caught it WAS decorative. The green
+control was "a widened char class is a widening, not a break", and it passed
+against a fixture containing no nested path -- so it exercised the widening in
+name only, and the guard's slash-blind ground truth truncated any real nested
+match to its directory and then rejected it as off-contract. Codex found it on
+round 2. It is replaced by three cases that carry an actual nested path, in both
+pattern shapes, plus a bare-directory reference that must not false-alarm.
+
+That is the second decorative case in two PRs (#344 had one too), and both were
+found the same way: by running the case against a mutant instead of trusting a
+green line. A case built from a fixture that cannot express the condition it
+names will pass forever.
 """
 
 import os
@@ -66,7 +78,8 @@ GUARD = Path(
 
 BARE = r"\.github/scripts/[A-Za-z0-9_.-]+"
 PREFIXED = r"(node|python3) \.github/scripts/[A-Za-z0-9_.-]+"
-SLASHED = r"\.github/scripts/[A-Za-z0-9_./-]+"
+SLASHED = r"\.github/scripts/[A-Za-z0-9_./-]+"      # the shipped shape
+SLASHFREE = r"\.github/scripts/[A-Za-z0-9_.-]+"      # pre-#345-round-2
 EXT = r"\.(js|py)$"
 EXT_LOOSE = r"\.(js|py)"
 EXT_PY_ONLY = r"\.(?:js|py)$"
@@ -74,7 +87,7 @@ EXT_PY_ONLY = r"\.(?:js|py)$"
 DELIM = """  printf '\\n' >>"$buf" """.rstrip()
 
 
-def command_md(token=BARE, ext=EXT, delimited=True, token_line=True, ext_line=True):
+def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line=True):
     """Build a refresh-repo.md carrying the chosen pipeline."""
     pipe = "refs=$("
     pipe += f"grep -oE '{token}' \"$buf\"" if token_line else "rg -o 'whatever' \"$buf\""
@@ -157,6 +170,20 @@ RAGGED = {
     "templates/workflows/one.yml": "steps:\n  - run: node .github/scripts/a.js",
     "templates/actions/x/action.yml": "runs:\n  - run: python3 .github/scripts/b.py\n",
 }
+# A script one directory down — `templates/ui-tests/` installs to
+# `.github/scripts/ui-tests/`, so this shape is a reference waiting to happen.
+NESTED = {
+    "templates/workflows/one.yml": "steps:\n  - run: node .github/scripts/a.js\n",
+    "templates/actions/x/action.yml": "runs:\n  - run: python3 .github/scripts/nested/a.py\n",
+}
+# A bare DIRECTORY reference, as templates/workflows/qa.yml really carries. It is
+# not a script and must not be reported as missing or off-contract.
+DIRREF = {
+    "templates/workflows/one.yml":
+        "steps:\n  - run: cp -r kit .github/scripts/ui-tests/\n"
+        "  - run: node .github/scripts/a.js\n",
+    "templates/actions/x/action.yml": "runs:\n  - run: python3 .github/scripts/b.py\n",
+}
 # Ragged too, but the dangling token is not a script path, so nothing can be lost.
 RAGGED_SAFE = {
     "templates/workflows/one.yml": "steps:\n  - run: node .github/scripts/a.js\n  name: tail",
@@ -193,8 +220,16 @@ case("…and the delimiter fixes exactly that case",
      command_text=command_md(delimited=True), callers=RAGGED, expect_exit=0,
      needle="lack a trailing newline")
 
-case("a widened char class is a widening, not a break",
-     command_text=command_md(token=SLASHED), callers=GOOD, expect_exit=0,
+case("a nested script is found, not truncated to its directory",
+     command_text=command_md(), callers=NESTED, expect_exit=0,
+     needle=".github/scripts/nested/a.py")
+
+case("a SLASH-FREE pattern cannot reach a nested script and is refused",
+     command_text=command_md(token=SLASHFREE), callers=NESTED, expect_exit=1,
+     needle="MISSED: .github/scripts/nested/a.py")
+
+case("a bare directory reference is neither missing nor off-contract",
+     command_text=command_md(), callers=DIRREF, expect_exit=0,
      needle="referenced script(s)")
 
 case("a ragged caller whose tail is not a path must NOT false-alarm",

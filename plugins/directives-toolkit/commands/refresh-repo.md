@@ -356,13 +356,13 @@ for c in $callers; do
          rm -f "$buf"; exit 1; }
   printf '\n' >>"$buf"   # token boundary — see the third bullet below
 done
-refs=$(grep -oE '\.github/scripts/[A-Za-z0-9_.-]+' "$buf" \
+refs=$(grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' "$buf" \
        | grep -E '\.(js|py)$' | sort -u)
 rm -f "$buf"
 printf '%s\n' "$refs"
 ```
 
-Six things about that shape, each of which a shorter version got wrong:
+Seven things about that shape, each of which a shorter version got wrong:
 
 - **It matches the script PATH, never the invocation prefix.** The earlier form
   required `node ` or `python3 ` *immediately* before `.github/`, so
@@ -390,6 +390,16 @@ Six things about that shape, each of which a shorter version got wrong:
   build at step resolution. The earlier prose here said the opposite
   ("Match on the INVOCATION, not the bare path"); it was left standing when the
   pipeline was inverted, and Codex caught the contradiction on #345.
+- **The character class admits `/`, so a NESTED script is reachable.**
+  `templates/ui-tests/` installs to `.github/scripts/ui-tests/`, so a script one
+  directory down is a reference waiting to happen — and while the class excluded
+  `/`, `.github/scripts/nested/a.py` truncated to `.github/scripts/nested`, which
+  the extension filter then dropped. The script vanished, with no error: PROP6's
+  failure again, one directory down. A bare directory reference like
+  `.github/scripts/ui-tests/` is still excluded, because the extension filter is
+  anchored. Found by Codex on #345 round 2, which caught it as a guard bug — the
+  guard's own ground truth was slash-blind too, so neither scan could see it.
+
 - **The fetch loop appends a newline after every caller.** `>>` concatenates,
   and a YAML file need not end in one. Without the delimiter a caller whose last
   scalar ends in a script path merges into the next file's first word —

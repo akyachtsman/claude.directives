@@ -103,19 +103,32 @@ import { execFileSync } from 'child_process';
 // prove the rule is UNCONDITIONED at its carrier.
 //
 // ── ROUND 3 ARRIVED, AND THIS IS WHERE THE EXTENDING STOPS ─────────────────
-// It found the round-2 rule applied only to the claim it had pointed at, so
-// every phrasing with an UNAMBIGUOUS single terminating mark now carries it,
-// across all eight claims rather than one. The counts are PRINTED on every run
-// rather than written here: the two this comment used to state were both wrong
-// within a commit, which is the same defect as a comment asserting a tool's
-// output — read the run, not the prose.
+// It found the round-2 rule applied only to the claim it had pointed at, so the
+// rule was applied across all eight claims: extend a phrasing by the one
+// punctuation mark every carrier of it agrees on.
 //
-// THE REST ARE DELIBERATELY LEFT SHORT. Their next character is a space, so
-// closing them needs the END of the assertion, and a scan for it stops inside
-// `git.md` and `codex-monitor.yml`. That is sentence detection, rebuilt badly,
-// in a build script — the exact machinery #341 deleted for failing in both
-// directions. Extending those pins would reintroduce it one layer out, which is
-// the treadmill, not an escape from it.
+// ROUND 6 THEN FOUND THAT RULE ADMITTING THE WRONG MARKS. A `,`, `:` or `;` is a
+// CLAUSE mark, not a terminator: a phrasing ending at one stops mid-sentence, so
+// a condition appended after it leaves every pinned character in place. Twelve
+// of the then-21 "terminated" entries ended that way, and rewriting global.md's
+// `never instead of it,` to `never instead of it, but only after owner
+// approval,` kept this guard green while the run reported the phrasing as
+// closed. Only `.`, `!` and `?` end an assertion, and only those count now.
+// Seven of the twelve had a carrier-unanimous continuation running to a real
+// terminator and were extended through it; the rest are counted as open.
+//
+// The counts are PRINTED on every run rather than written here: three separate
+// sentences in this header describing this tool's own output have been measured
+// false — read the run, not the prose.
+//
+// THE REST ARE DELIBERATELY LEFT SHORT, for one of two reasons: the next
+// character is a space, or the continuation to a terminator is long enough that
+// pinning it turns an innocuous rewording red. Either way, closing them needs
+// the END of the assertion, and a scan for it stops inside `git.md` and
+// `codex-monitor.yml`. That is sentence detection, rebuilt badly, in a build
+// script — the exact machinery #341 deleted for failing in both directions.
+// Extending those pins would reintroduce it one layer out, which is the
+// treadmill, not an escape from it.
 //
 // So: an appended condition on a carrier whose assertion has no unambiguous
 // terminator is NOT caught, and closing it costs more than it buys. If a future
@@ -133,20 +146,28 @@ import { execFileSync } from 'child_process';
 //      authorises merging over live findings
 //   ❌ THE FIX OVER-REACHES (38, 39) — both were caused by a fix whose wording
 //      was fine and whose SCOPE silently closed a documented exit
-//   ❌ A CARRIER THAT STATES A CLAIM TWICE is pinned only as strongly as its
-//      most permissive occurrence. docs/standards/ci-triage.md states the
-//      verdict-lookup claim in two different sentences; inverting either one
-//      alone leaves this guard green, correctly — the file DOES still state the
-//      claim, from the other sentence. But the two are not equal in authority,
-//      and the guard cannot tell which one a reader will act on. wait-gate.sh
-//      was the first instance — its explanatory header comment and the message
-//      its hook DELIVERS both state the rule — and under literal pinning that
-//      one is settled: the header says "arms a check-in alongside it", the
-//      message says "ARM A CHECK-IN ALONGSIDE IT", and pinning the delivered
-//      wording pins the delivered occurrence. What remains uncovered is a file
-//      stating a claim twice in the SAME wording with one occurrence
-//      authoritative; pin that occurrence's surrounding text as its own
-//      phrasing if it ever happens.
+//   ❌ A CARRIER THAT STATES A CLAIM TWICE has ONE of its occurrences pinned,
+//      and the manifest author picks which. docs/standards/ci-triage.md states
+//      verdict-lookup in two sentences; only the step-3 procedure sentence
+//      carries an approved phrasing, so inverting THAT one turns this guard red
+//      and inverting the other — the "What not to do" restatement — leaves it
+//      green. This comment previously said inverting either one alone was
+//      green; Codex measured the opposite on #346 round 6, and both directions
+//      are now pinned by cases rather than by this paragraph.
+//      PINNING BOTH OCCURRENCES DOES NOT FIX IT AND MAKES IT WORSE. Phrasings
+//      are an OR: add a phrasing for the second sentence and the file passes on
+//      either one, so each occurrence individually becomes deletable. Measured
+//      on this branch — adding it turned the previously-red inversion of the
+//      authoritative sentence green, and the phrasing was reverted. So the rule
+//      is: pin exactly the occurrence a reader acts on, and accept that the
+//      restatement beside it is unpinned.
+//      wait-gate.sh was the first instance — its explanatory header comment and
+//      the message its hook DELIVERS both state the rule — and under literal
+//      pinning that one is settled by wording rather than by choice: the header
+//      says "arms a check-in alongside it", the message says "ARM A CHECK-IN
+//      ALONGSIDE IT", and case-sensitive matching pins the delivered
+//      occurrence. What stays uncovered is a file stating a claim twice in the
+//      SAME wording; pin that occurrence's surrounding text if it happens.
 // So: a green check-claims does NOT mean the directives are correct. It means
 // nobody dropped a pinned sentence. Anything citing this guard must say so too.
 //
@@ -170,13 +191,26 @@ import { execFileSync } from 'child_process';
 // here needs to know where a sentence ends.
 
 const MANIFEST = '.github/scripts/claims.json';
-// ONE LIST, used by the target check AND by --derive. Both must exclude the same
-// files: each quotes every claim as rationale, phrasing or fixture, so each
-// matches by construction and none is an operational carrier. They were kept as
-// two literals, and #346 found the same omission in each ONE ROUND APART — the
-// cases file missing from --derive (round 3) and then from the SELF set (round
-// 4), because round 3's fix was applied to the copy Codex pointed at. Two
-// literals are not one definition, however the commit message describes them.
+// ONE LIST, used by the target check AND by --derive. They were kept as two
+// literals, and #346 found the same omission in each ONE ROUND APART — the cases
+// file missing from --derive (round 3) and then from the SELF set (round 4),
+// because round 3's fix was applied to the copy Codex pointed at. Two literals
+// are not one definition, however the commit message describes them.
+//
+// WHY EACH IS EXCLUDED — and the reason is NOT the same for all three, which is
+// what the previous version of this comment got wrong. It said each quotes every
+// claim and therefore matches by construction. Only the manifest does:
+//   * the manifest       — IS the phrasing list; contains every phrasing, always.
+//   * check-claims-cases — quotes approved phrasings as fixtures.
+//   * check-claims.js    — quotes claim text in its header as worked examples.
+// So for two of the three, what they match is an ACCIDENT OF THE CURRENT WORDING,
+// and a header or fixture edit changes it silently in either direction. Codex
+// removed the checker from this list on #346 round 6 and --derive's output did
+// not change; the very next edit to this header quoted a phrasing and it did.
+// That is why the exclusion is by IDENTITY and can never be by a match count,
+// and why NO NUMBER APPEARS IN THIS COMMENT — the run prints them (see the tail).
+// None of the three is an operational carrier: nothing downstream reads a rule
+// out of them, so a match here would be the guard finding its own test data.
 const GUARD_ARTIFACTS = [
   MANIFEST,
   '.github/scripts/check-claims.js',
@@ -228,9 +262,9 @@ const states = (haystack, phrasings) => phrasings.some((p) => haystack.includes(
 // "Verified on the current tree: --derive reports nothing" was written here and
 // was FALSE: the scan reported check-claims-cases.js as an unlisted carrier for
 // response-is-not-a-verdict on every run, because the exclusion covered two of
-// the three guard artifacts. Codex, #346 round 3. It is true now, and the
-// exclusion is pinned by a case — a claim about the tool's own output belongs in
-// a test, not in a comment nobody re-runs.
+// the three guard artifacts. Codex, #346 round 3. No sentence replaces it —
+// every attempt to state this tool's own output in a comment has been wrong, so
+// the exclusion is pinned by a case and its effect is printed by the run.
 const DERIVE = process.argv.includes('--derive');
 // EVERY tracked file, minus binaries detected BY CONTENT. An extension
 // allowlist here would recreate the exact blindness --derive exists to end:
@@ -241,15 +275,10 @@ const DERIVE = process.argv.includes('--derive');
 const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'utf8' })
   .split('\n').filter(Boolean)
   .filter((f) => !f.includes('node_modules/'))
-  // BOTH guard artifacts, for the same reason the target validation rejects
-  // them: they quote every claim as rationale, phrasing and worked example, so
-  // they match by construction and are permanent false candidates in advisory
-  // output. Excluding only the manifest reported the checker as an unlisted
-  // carrier on every single run, which is how an advisory list gets ignored.
-  // ALL THREE guard artifacts. The cases file quotes approved phrasings as test
-  // fixtures, so it matches by construction exactly as the manifest and the
-  // guard do — and it was reported as an unlisted carrier for
-  // `response-is-not-a-verdict` on every run, which is how an advisory list gets
+  // ALL THREE guard artifacts, for the reasons set out at GUARD_ARTIFACTS. An
+  // artifact that matches is a permanent false candidate in advisory output, and
+  // one of these was reported as an unlisted carrier for
+  // `response-is-not-a-verdict` on every run — which is how an advisory list gets
   // ignored. Excluding two of three was a check present on one path and absent
   // from its twin, for the second time in this file. Codex, #346 round 3.
   .filter((f) => !GUARD_ARTIFACTS.includes(f))
@@ -424,6 +453,34 @@ for (const claim of claims) {
   }
 
   const phrasings = isRaw ? null : claim.phrasings.map(normalize);
+  // NO PHRASING MAY CONTAIN ANOTHER, and no phrasing may repeat. `states()` is a
+  // substring test over the whole set, so if phrasing A contains phrasing B then
+  // every carrier A matches, B matches too: A can never be the sole reason a file
+  // passes, and deleting A changes no verdict. That is not harmless redundancy.
+  // The run's phrasing count treats the pair as two units of coverage, and a
+  // reviewer reading the manifest sees a long specific pin that is enforced only
+  // as far as the short one inside it. `unreachable-review-test-name` carried
+  // exactly that — "its unreachable-review test, and" inside "bounds by its
+  // unreachable-review test, and", both occurring only in ci-triage.md, so the
+  // longer entry was dead audit data. Codex, #346 round 6.
+  // Same shape and same justification as the mustNotMatch containment check
+  // below: containment between two literals is a fact, not an inference, which is
+  // the only kind of reasoning #341 left in this guard.
+  if (!isRaw) {
+    const dupe = phrasings.find((p, i) => phrasings.indexOf(p) !== i);
+    if (dupe !== undefined) {
+      fail(`${id}: duplicate phrasing (identical after normalisation): ${JSON.stringify(dupe)}`);
+    }
+    for (const short of phrasings) {
+      const long = phrasings.find((p) => p !== short && p.includes(short));
+      if (long !== undefined) {
+        fail(`${id}: one phrasing CONTAINS another, so the longer one is never the sole match and pins nothing extra.\n`
+          + `      shorter: ${JSON.stringify(short)}\n`
+          + `      longer:  ${JSON.stringify(long)}\n`
+          + `      Keep whichever pins the occurrence a reader acts on, and delete the other — two entries covering one occurrence read as two, and are one.`);
+      }
+    }
+  }
   // Read a carrier exactly as the phrasings were read, or the two sides compare
   // different text — the one-path-and-not-its-twin defect this guard's own
   // review produced nine times.
@@ -559,12 +616,45 @@ for (const claim of claims) {
 
 if (failed) { console.error('check-claims: FAIL'); process.exit(1); }
 const allPhrasings = claims.flatMap((c) => c.phrasings || []);
-const terminated = allPhrasings.filter((p) => '.,:;!?'.includes(p.trimEnd().slice(-1))).length;
+// `.`, `!`, `?` ONLY — NOT `,`, `:` or `;`. A phrasing ending in a clause mark
+// stops MID-sentence, so a condition appended after that mark leaves the pin
+// intact: the carrier still contains every character the phrasing names. That is
+// the precise hole the terminator rule exists to close, and counting those
+// entries as closed overstated the coverage this line was added to report.
+// Measured: with `never instead of it,` pinned, rewriting global.md to
+// `never instead of it, but only after owner approval,` kept the guard GREEN,
+// and twelve of the then-21 "terminated" entries ended in `,` or `:`.
+// Codex, #346 round 6. The seven of those twelve whose carriers agreed on a
+// short continuation were extended through it; the rest are counted as open.
+const SENTENCE_END = '.!?';
+const isClosed = (p) => SENTENCE_END.includes(p.trimEnd().slice(-1));
+const terminated = allPhrasings.filter(isClosed).length;
 console.log(`check-claims: OK — ${claims.length} claim(s) still stated by every listed file`);
 // COUNTED, NOT ASSERTED. The header carried "14 extended / 16 short" as prose
 // and both were wrong by the next commit (really 21 and 15). A number nobody
 // recomputes is the same defect as a comment claiming a tool's output — so the
 // audit boundary for the deliberately unclosed appended-condition cases is
 // printed every run instead of written down once. Codex, #346 round 5.
-console.log(`  phrasings: ${allPhrasings.length} total — ${terminated} carry a terminator, `
-  + `${allPhrasings.length - terminated} do not (an appended condition is NOT caught on those; see the header)`);
+// MEASURED, NOT ASSERTED — the third time a sentence in this file about the
+// file's own output turned out false. What each excluded artifact actually
+// matches changes with an ordinary header or fixture edit, so the run reports it.
+// A count is not the reason for the exclusion (that is identity, see
+// GUARD_ARTIFACTS); it is the number a future comment would otherwise guess at.
+const artifactMatches = GUARD_ARTIFACTS.map((f) => {
+  let n = '?';
+  try {
+    const t = normalize(readFileSync(f, 'utf8'));
+    n = String(allPhrasings.filter((p) => t.includes(normalize(p))).length);
+  } catch { /* an unreadable artifact is already fatal above; do not add noise */ }
+  return `${f.replace(/^.*\//, '')} ${n}/${allPhrasings.length}`;
+});
+console.log(`  guard artifacts excluded by identity — phrasings each happens to contain: ${artifactMatches.join(', ')}`);
+console.log(`  phrasings: ${allPhrasings.length} total — ${terminated} run to a sentence terminator, `
+  + `${allPhrasings.length - terminated} stop short (an appended condition is NOT caught on those; see the header)`);
+if (DERIVE) {
+  for (const c of claims) {
+    for (const p of c.phrasings || []) {
+      if (!isClosed(p)) console.log(`      open: ${c.id} — ${JSON.stringify(p)}`);
+    }
+  }
+}

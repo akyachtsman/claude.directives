@@ -167,7 +167,11 @@ A directive repo must pass its own CI before it can be trusted downstream.
   count as stating it and the condition/negation inference is gone, after 24
   review rounds and 100 findings on #336 with no downward trend. Matching is
   CASE-SENSITIVE and no `mustNotMatch` string may contain a phrasing — those two
-  rules replace the whole inference layer. Plus `check-claims-cases.js` guarding
+  rules replace the whole inference layer. Two containment rules added in #346
+  round 6 keep the pins honest: no phrasing may contain another (the longer one
+  could never be the sole match, so it read as coverage and was none), and only
+  `.`/`!`/`?` count as a terminator — a phrasing stopping at a `,` or `:` is
+  mid-sentence and an appended condition survives it Plus `check-claims-cases.js` guarding
   the guard: two of the old override checks were MEASURED fail-open, #342), a
   clean-compile check over every tracked `.py`
   (`.github/scripts/check-py-warnings.py` — a guard that warns at compile time

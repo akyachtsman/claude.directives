@@ -37,7 +37,20 @@
  *      -> "a claim with no mustNotMatch is refused"
  *   E  `sourceOnly` accepted as truthy rather than boolean
  *      -> "sourceOnly must be a literal boolean"
+ *   G  the shadowed-phrasing check neutered
+ *      -> "a phrasing CONTAINED IN another is refused as dead coverage"
+ *   H  the duplicate-phrasing check neutered
+ *      -> "an exactly duplicated phrasing is refused"
+ *   I  clause marks counted as terminators again ('.,:;!?')
+ *      -> "the run counts a comma-stopping phrasing as OPEN, not terminated"
+ *   J  the excluded-artifact count line removed
+ *      -> "the run PRINTS what each excluded guard artifact contains"
+ *   K  the --derive artifact exclusion removed
+ *      -> both "--derive excludes the guard's own …" cases
  *   F  a comment reworded (control) -> nothing reddens
+ *
+ * G-K were added on #346 round 6 and each reddens EXACTLY ONE case (K, two),
+ * with no collateral — so each names a behaviour nothing else here covers.
  *
  * B is the load-bearing one. Case-sensitivity is the whole of rule 1 in the
  * guard's header, it is what makes negation and delivered-vs-header work without
@@ -479,7 +492,10 @@ testCase('--derive excludes the guard\'s own CASES FILE from its candidates', {
   manifest: manifest([claim()]),
   files: { ...FILES, '.github/scripts/check-claims-cases.js': 'fixture: so check the comments AND the review threads\n' },
   args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
-  absent: 'check-claims-cases.js',
+  // The DERIVE LISTING's own line shape, not the bare filename: the run also
+  // prints each excluded artifact's live match count, and a bare-filename
+  // absence assertion would fail on that line while the property it names holds.
+  absent: '\n         .github/scripts/check-claims-cases.js',
 });
 
 testCase('--derive excludes the guard\'s own manifest from its candidates', {
@@ -488,7 +504,104 @@ testCase('--derive excludes the guard\'s own manifest from its candidates', {
   // is how an advisory list gets ignored.
   manifest: manifest([claim()]), files: FILES,
   args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
-  absent: 'claims.json',
+  absent: '\n         .github/scripts/claims.json',
+});
+
+// ── a phrasing that shadows another pins nothing extra ────────────────────
+// `states()` ORs over the set, so a phrasing containing another can never be the
+// sole match: deleting it changes no verdict, while the printed count and a
+// reading reviewer both treat it as coverage. Found live in
+// `unreachable-review-test-name`, where both entries occurred in one carrier.
+// Codex, #346 round 6.
+testCase('a phrasing CONTAINED IN another is refused as dead coverage', {
+  manifest: manifest([claim({
+    phrasings: [
+      'check the comments AND the review threads',
+      'so check the comments AND the review threads',
+    ],
+    mustNotMatch: ['so never look at anything'],
+  })]),
+  files: FILES, expectExit: 1,
+  needle: 'one phrasing CONTAINS another',
+});
+
+testCase('…and two phrasings that merely overlap are accepted', {
+  // The discriminator for the case above: sharing words is not containment, and
+  // a rule that rejected overlap would refuse most real manifests.
+  manifest: manifest([claim({
+    phrasings: [
+      'so check the comments AND the review threads',
+      'check the review threads AND the comments',
+    ],
+    mustNotMatch: ['so never look at anything'],
+  })]),
+  files: FILES, expectExit: 0, needle: 'check-claims: OK',
+});
+
+testCase('an exactly duplicated phrasing is refused', {
+  manifest: manifest([claim({
+    phrasings: [
+      'so check the comments AND the review threads',
+      'so check the comments AND the review threads',
+    ],
+  })]),
+  files: FILES, expectExit: 1, needle: 'duplicate phrasing',
+});
+
+// ── a clause mark is NOT a terminator ─────────────────────────────────────
+// A phrasing ending in `,`, `:` or `;` stops mid-sentence, so a condition
+// appended after that mark leaves the pin matching. The count line called those
+// "terminated", overstating exactly the coverage it exists to report. Measured
+// on the real tree: `never instead of it,` survived an inserted
+// `but only after owner approval,`. Codex, #346 round 6.
+testCase('a comma-terminated phrasing does NOT survive an appended condition', {
+  manifest: manifest([claim({
+    phrasings: ['so check the comments AND the review threads, every time.'],
+    mustNotMatch: ['so never check anything'],
+  })]),
+  files: {
+    'directives/src.md': 'so check the comments AND the review threads, every time.\n',
+    // The append lands INSIDE the pinned span because the pin runs to the
+    // sentence terminator. Stop the phrasing at the comma and this passes.
+    'docs/consumer.md': 'so check the comments AND the review threads, when it matters, every time.\n',
+  },
+  expectExit: 1, needle: 'consumer no longer states the claim',
+});
+
+testCase('the run counts a comma-stopping phrasing as OPEN, not terminated', {
+  manifest: manifest([claim({
+    phrasings: ['so check the comments AND the review threads,'],
+    mustNotMatch: ['so never check anything'],
+  })]),
+  files: {
+    'directives/src.md': 'so check the comments AND the review threads, every time.\n',
+    'docs/consumer.md': 'so check the comments AND the review threads, when it matters.\n',
+  },
+  expectExit: 0,
+  needle: '1 total — 0 run to a sentence terminator, 1 stop short',
+});
+
+testCase('…and a full-stop phrasing counts as closed', {
+  manifest: manifest([claim({
+    phrasings: ['so check the comments AND the review threads.'],
+    mustNotMatch: ['so never check anything'],
+  })]),
+  files: {
+    'directives/src.md': 'so check the comments AND the review threads.\n',
+    'docs/consumer.md': 'Per the source: so check the comments AND the review threads.\n',
+  },
+  expectExit: 0,
+  needle: '1 total — 1 run to a sentence terminator, 0 stop short',
+});
+
+// ── the exclusion's effect is PRINTED, not asserted in a comment ───────────
+// Three separate sentences in this guard's header describing its own output have
+// been measured false. The counts move with an ordinary header or fixture edit,
+// so the run reports them and no comment states a number. Codex, #346 rounds 3
+// and 6.
+testCase('the run PRINTS what each excluded guard artifact contains', {
+  manifest: manifest([claim()]), files: FILES, expectExit: 0,
+  needle: 'guard artifacts excluded by identity — phrasings each happens to contain: claims.json 1/1',
 });
 
 // ── a missing SOURCE fails like a missing consumer, and does not abort ─────

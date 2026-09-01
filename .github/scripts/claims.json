@@ -148,8 +148,7 @@
       "source": "directives/git.md",
       "phrasings": [
         "the unreachable-review test.",
-        "its unreachable-review test admits,",
-        "its unreachable-review test, and",
+        "its unreachable-review test admits, stated on the PR.",
         "by a unreachable-review test.",
         "PR Lifecycle's unreachable-review test:",
         "PR Lifecycle's unreachable-review test, and",
@@ -187,7 +186,7 @@
         ". ⚠️ A unique match is not a guaranteed wake for YOUR session",
         "a unique match is not a guaranteed wake for YOUR session.",
         "a unique match is not a guaranteed wake for YOUR session:",
-        ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN,",
+        ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN, EITHER.",
         ". ⚠️ A unique match is not proof of coverage either:",
         "even a unique match is not proof of coverage,"
       ],
@@ -216,11 +215,11 @@
         "is: arm the check-in, then drop it when THAT OUTCOME is observed terminal",
         "comment instead. Arm the check-in whenever the run's SHA is not your PR's head",
         "coverage -- arm the check-in whenever the run's SHA is not your PR's head",
-        "so arm the check-in alongside the event wake, never instead of it,",
+        "so arm the check-in alongside the event wake, never instead of it, and drop it when THAT outcome is terminal.",
         "the waiting session still arms a check-in.",
         "that set, arm a check-in — that is not polling",
         "otherwise arm a check-in.",
-        "the rule: arm a check-in for any awaited outcome that can end without emitting a wake,",
+        "the rule: arm a check-in for any awaited outcome that can end without emitting a wake, and drop it when THAT outcome is terminal.",
         ". Arm a check-in rather than treating a green run",
         "so arm a check-in whenever the run's SHA is not the PR's head",
         "— and ARM A CHECK-IN ALONGSIDE IT, not instead of it:"

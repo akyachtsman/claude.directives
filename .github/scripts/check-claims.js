@@ -104,10 +104,13 @@ import { execFileSync } from 'child_process';
 //
 // ── ROUND 3 ARRIVED, AND THIS IS WHERE THE EXTENDING STOPS ─────────────────
 // It found the round-2 rule applied only to the claim it had pointed at, so
-// every phrasing with an UNAMBIGUOUS single terminating mark now carries it —
-// 14 of them, across all eight claims rather than one.
+// every phrasing with an UNAMBIGUOUS single terminating mark now carries it,
+// across all eight claims rather than one. The counts are PRINTED on every run
+// rather than written here: the two this comment used to state were both wrong
+// within a commit, which is the same defect as a comment asserting a tool's
+// output — read the run, not the prose.
 //
-// SIXTEEN ARE DELIBERATELY LEFT SHORT. Their next character is a space, so
+// THE REST ARE DELIBERATELY LEFT SHORT. Their next character is a space, so
 // closing them needs the END of the assertion, and a scan for it stops inside
 // `git.md` and `codex-monitor.yml`. That is sentence detection, rebuilt badly,
 // in a build script — the exact machinery #341 deleted for failing in both
@@ -257,6 +260,31 @@ const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'ut
     } catch { return false; }
   });
 
+// One definition, three callers. A key this guard does not read is not inert:
+// it reads as condition/negation protection that is not there.
+const CLAIM_KEYS = new Set(['id', 'why', 'source', 'sourceOnly', 'phrasings',
+  'raw', 'pattern', 'consumers', 'mustNotMatch']);
+const ROOT_KEYS = new Set(['_comment', 'claims']);
+const CONSUMER_KEYS = new Set(['file', 'why',
+  // Recognised here so the generic "unknown key" message does not pre-empt the
+  // tailored per-consumer-override refusal below, which names the replacement.
+  // A check that fails for a less useful reason is still a downgrade.
+  'phrasings', 'pattern', 'mustNotMatch']);
+
+function allowKeys(where, obj, allowed, kind) {
+  const unknown = Object.keys(obj).filter((k) => !allowed.has(k));
+  if (!unknown.length) return true;
+  fail(`${where}: unknown ${kind} key(s): ${unknown.join(', ')}\n`
+    + `      #341 removed the inference layer; a key it does not read is not inert, it reads as protection that is not there.\n`
+    + `      Known ${kind} keys: ${[...allowed].join(', ')}`);
+  return false;
+}
+
+if (!allowKeys(MANIFEST, MANIFEST_DOC, ROOT_KEYS, 'root')) {
+  console.error('check-claims: FAIL');
+  process.exit(1);
+}
+
 const seenIds = new Set();
 
 for (const claim of claims) {
@@ -266,6 +294,13 @@ for (const claim of claims) {
   // silently checking nothing — a vacuous pass is the failure mode every
   // earlier version of this class of guard died from.
   if (!id) { fail(`manifest entry with no id: ${JSON.stringify(claim).slice(0, 120)}`); continue; }
+  // AN ALLOWLIST AT EVERY LEVEL, via one helper. Round 4 added it to the claim
+  // object only, so the removed ROOT fields (negators, continuations,
+  // continuationRequired, negatorFloor) and a CONSUMER-level continuationProbe
+  // stayed silently accepted — the structural fix applied at one level and not
+  // its siblings, which is the fourth consecutive round of that shape on this
+  // PR. Levels are data now, not three hand-written checks. Codex, #346 round 5.
+  //
   // AN ALLOWLIST, not a list of the legacy fields someone remembers. #341
   // deleted continuationProbe, negatorProbe, phrase and the rest, and the
   // rewrite IGNORED them rather than refusing them — so a copied entry or a
@@ -274,15 +309,7 @@ for (const claim of claims) {
   // calls fail-open. Naming the three removed fields would leave the fourth
   // silent, so the check is inverted: anything not in the new schema is an
   // error. Codex, #346 round 4.
-  const KNOWN_KEYS = new Set(['id', 'why', 'source', 'sourceOnly', 'phrasings',
-    'raw', 'pattern', 'consumers', 'mustNotMatch']);
-  const unknown = Object.keys(claim).filter((k) => !KNOWN_KEYS.has(k));
-  if (unknown.length) {
-    fail(`${id}: unknown manifest key(s): ${unknown.join(', ')}\n`
-      + `      #341 removed the inference layer; a key it does not read is not inert, it reads as protection that is not there.\n`
-      + `      Known keys: ${[...KNOWN_KEYS].join(', ')}`);
-    continue;
-  }
+  if (!allowKeys(`${id}`, claim, CLAIM_KEYS, 'claim')) continue;
   if (seenIds.has(id)) fail(`duplicate claim id: ${id}`);
   seenIds.add(id);
   if (!why) fail(`${id}: no "why" — an entry nobody can interpret cannot be maintained`);
@@ -295,6 +322,12 @@ for (const claim of claims) {
   // green on the highest-authority copy of the rule.
   const consumerList = (Array.isArray(consumers) ? consumers : [])
     .map((c) => (typeof c === 'string' ? { file: c } : c));
+  let consumerKeysOk = true;
+  for (const c of consumerList) {
+    if (!c || typeof c !== 'object') { fail(`${id}: consumer entry is not a path or an object`); consumerKeysOk = false; continue; }
+    if (!allowKeys(`${id}: consumer ${c.file || '(no file)'}`, c, CONSUMER_KEYS, 'consumer')) consumerKeysOk = false;
+  }
+  if (!consumerKeysOk) continue;
 
   // Compare NORMALIZED paths: './directives/git.md' and
   // 'directives/../directives/git.md' name the same file, and raw-string
@@ -360,9 +393,12 @@ for (const claim of claims) {
 
   if (isRaw) {
     if (!claim.pattern) { fail(`${id}: "raw" needs "pattern"`); continue; }
-    if (claim.phrasings) { fail(`${id}: "raw" claims carry a "pattern", not "phrasings" — pick one`); continue; }
+    if (claim.phrasings !== undefined) { fail(`${id}: "raw" claims carry a "pattern", not "phrasings" — pick one`); continue; }
   } else {
-    if (claim.pattern) {
+    // PRESENCE, not truthiness. `"pattern": ""` is falsey, so a truthiness test
+    // read the field as absent and the refusal never fired — a legacy entry kept
+    // a field that looks like it influences matching and does not.
+    if (claim.pattern !== undefined) {
       fail(`${id}: "pattern" is only for "raw": true structural claims. A wording variant belongs in "phrasings" — #341 deleted the inference layer that made patterns necessary, and a non-raw pattern would silently reintroduce it.`);
       continue;
     }
@@ -419,6 +455,14 @@ for (const claim of claims) {
       continue;
     }
     const n = prep(bad);
+    // EMPTY AFTER NORMALISATION is the same as empty. "   \n\t" satisfied the
+    // non-empty test and then normalised to "", so it contained no phrasing and
+    // constrained nothing while counting as the required negative coverage.
+    // Non-raw matching runs on normalised text, so the check has to as well.
+    if (!isRaw && n === '') {
+      fail(`${id}: a mustNotMatch entry is empty after normalisation — it can constrain no phrasing, so it is coverage in name only: ${JSON.stringify(bad)}`);
+      continue;
+    }
     if (isRaw) {
       if (re.test(n)) fail(`${id}: pattern MATCHES a string it must reject: ${JSON.stringify(bad.slice(0, 140))}`);
       continue;
@@ -514,4 +558,13 @@ for (const claim of claims) {
 }
 
 if (failed) { console.error('check-claims: FAIL'); process.exit(1); }
+const allPhrasings = claims.flatMap((c) => c.phrasings || []);
+const terminated = allPhrasings.filter((p) => '.,:;!?'.includes(p.trimEnd().slice(-1))).length;
 console.log(`check-claims: OK — ${claims.length} claim(s) still stated by every listed file`);
+// COUNTED, NOT ASSERTED. The header carried "14 extended / 16 short" as prose
+// and both were wrong by the next commit (really 21 and 15). A number nobody
+// recomputes is the same defect as a comment claiming a tool's output — so the
+// audit boundary for the deliberately unclosed appended-condition cases is
+// printed every run instead of written down once. Codex, #346 round 5.
+console.log(`  phrasings: ${allPhrasings.length} total — ${terminated} carry a terminator, `
+  + `${allPhrasings.length - terminated} do not (an appended condition is NOT caught on those; see the header)`);

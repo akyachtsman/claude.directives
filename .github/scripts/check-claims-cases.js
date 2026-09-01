@@ -327,16 +327,42 @@ testCase('the guard\'s own CASES FILE cannot evidence a claim', {
   expectExit: 1, needle: "this guard's own artifact",
 });
 
+testCase('a non-raw EMPTY pattern is refused on presence, not truthiness', {
+  // `"pattern": ""` is falsey, so a truthiness test read it as absent.
+  manifest: manifest([claim({ pattern: '' })]), files: FILES,
+  expectExit: 1, needle: '"pattern" is only for "raw"',
+});
+
+testCase('a mustNotMatch entry empty after normalisation is refused', {
+  // Non-empty as a string, empty once normalised — coverage in name only.
+  manifest: manifest([claim({ mustNotMatch: ['   \n\t'] })]), files: FILES,
+  expectExit: 1, needle: 'empty after normalisation',
+});
+
+testCase('a legacy ROOT-level field is refused', {
+  // The allowlist was applied to the claim object only, so the removed
+  // top-level fields stayed silently accepted. One helper, three levels now.
+  manifest: { ...manifest([claim()]), negators: 'never|not|avoid' },
+  files: FILES, expectExit: 1, needle: 'unknown root key(s): negators',
+});
+
+testCase('a legacy CONSUMER-level field is refused', {
+  manifest: manifest([claim({
+    consumers: [{ file: 'docs/consumer.md', why: 'x', continuationProbe: { kind: 'condition' } }],
+  })]),
+  files: FILES, expectExit: 1, needle: 'unknown consumer key(s): continuationProbe',
+});
+
 testCase('a legacy inference field is refused, not ignored', {
   // continuationProbe/negatorProbe/phrase read as live condition protection and
   // do nothing. The check is an allowlist, so an unlisted key of any name fails.
   manifest: manifest([claim({ continuationProbe: { kind: 'condition', shapes: { x: '%s' } } })]),
-  files: FILES, expectExit: 1, needle: 'unknown manifest key(s): continuationProbe',
+  files: FILES, expectExit: 1, needle: 'unknown claim key(s): continuationProbe',
 });
 
 testCase('…and so is any other key the schema does not name', {
   manifest: manifest([claim({ someFutureField: true })]),
-  files: FILES, expectExit: 1, needle: 'unknown manifest key(s): someFutureField',
+  files: FILES, expectExit: 1, needle: 'unknown claim key(s): someFutureField',
 });
 
 testCase('a raw claim carrying phrasings is refused', {

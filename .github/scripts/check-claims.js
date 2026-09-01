@@ -357,7 +357,20 @@ for (const claim of claims) {
 
   // ── per-consumer override: a stricter phrasing set for one carrier ────────
   const role = 'consumer';
-  const sourceText = prep(readFileSync(source, 'utf8'));
+  // READ THE SOURCE THE SAME WAY THE CONSUMERS ARE READ. An unguarded read here
+  // threw ENOENT on a deleted, renamed or misspelled source and ABORTED the
+  // process — so a stack trace replaced the diagnostic, and every claim after it
+  // went unchecked. The consumer path below already caught this; having the
+  // check on one path and not its twin is the defect this file's own review
+  // produced nine times, and it reappeared in the rewrite that was supposed to
+  // remove the machinery it kept appearing in. Found by Codex on #346.
+  let sourceText;
+  try {
+    sourceText = prep(readFileSync(source, 'utf8'));
+  } catch (err) {
+    fail(`${id}: cannot read source ${source} — ${err.message}`);
+    continue;
+  }
   if (!holds(sourceText, phrasings)) {
     fail(`${id}: the SOURCE no longer states the claim: ${source}\n      why: ${why}`);
   } else {

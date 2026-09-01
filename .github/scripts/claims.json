@@ -183,10 +183,10 @@
       "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. Both capitalisations are listed because CLAUDE.md opens a sentence with it and the others do not.",
       "source": "docs/standards/automations.md",
       "phrasings": [
-        "A unique match is not a guaranteed wake for YOUR session",
+        ". ⚠️ A unique match is not a guaranteed wake for YOUR session",
         "a unique match is not a guaranteed wake for YOUR session",
-        "A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN",
-        "A unique match is not proof of coverage either",
+        ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN",
+        ". ⚠️ A unique match is not proof of coverage either",
         "even a unique match is not proof of coverage"
       ],
       "consumers": [
@@ -202,7 +202,8 @@
         "a green run is not a guaranteed wake",
         "a unique match is proof of coverage",
         "a unique match is not a guaranteed wake unless the owner confirms it",
-        "If the owner asks, a unique match is not a guaranteed wake"
+        "If the owner asks, a unique match is not a guaranteed wake",
+        "waits. Only if the owner asks, A unique match is not a guaranteed wake for YOUR session"
       ]
     },
     {
@@ -211,14 +212,14 @@
       "source": "directives/git.md",
       "phrasings": [
         "is: arm the check-in, then drop it when THAT OUTCOME is observed terminal",
-        "Arm the check-in whenever the run's SHA is not your PR's head",
+        ". Arm the check-in whenever the run's SHA is not your PR's head",
         "coverage -- arm the check-in whenever the run's SHA is not your PR's head",
         "so arm the check-in alongside the event wake, never instead of it",
         "the waiting session still arms a check-in",
         "that set, arm a check-in — that is not polling",
         "otherwise arm a check-in",
         "the rule: arm a check-in for any awaited outcome that can end without emitting a wake",
-        "Arm a check-in rather than treating a green run",
+        ". Arm a check-in rather than treating a green run",
         "so arm a check-in whenever the run's SHA is not the PR's head",
         "ARM A CHECK-IN ALONGSIDE IT, not instead of it"
       ],
@@ -248,6 +249,7 @@
         "doesn't arm a check-in",
         "arm the check-in unless the owner objects",
         "Only if the owner asks, arm the check-in",
+        "instead. Only if the owner asks, Arm the check-in whenever the run's SHA is not your PR's head",
         "Never arm the check-in whenever the run's SHA is not your PR's head",
         "never arm the check-in whenever the run's SHA is not your PR's head"
       ]

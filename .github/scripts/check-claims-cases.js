@@ -65,9 +65,9 @@ const SCRIPT = resolve(process.env.CHECK_CLAIMS_BIN || '.github/scripts/check-cl
 const PASS = [];
 const FAIL = [];
 
-function run(root) {
+function run(root, args = []) {
   try {
-    const out = execFileSync('node', [SCRIPT], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    const out = execFileSync('node', [SCRIPT, ...args], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
     return { code: 0, out };
   } catch (err) {
     return { code: err.status === undefined ? -1 : err.status, out: `${err.stdout || ''}${err.stderr || ''}` };
@@ -88,9 +88,17 @@ function build(manifest, files) {
   return root;
 }
 
-function testCase(name, { manifest, files, expectExit, needle }) {
+function testCase(name, { manifest, files, expectExit, needle, absent, args = [], git = false }) {
   const root = build(manifest, files);
-  const { code, out } = run(root);
+  // --derive enumerates via `git ls-files`, so a case exercising it needs a real
+  // repository with the fixtures TRACKED. Without this the scan returns nothing
+  // and the case passes for the wrong reason.
+  if (git) {
+    const q = { cwd: root, stdio: 'ignore' };
+    execFileSync('git', ['init', '-q'], q);
+    execFileSync('git', ['add', '-A'], q);
+  }
+  const { code, out } = run(root, args);
   rmSync(root, { recursive: true, force: true });
 
   const problems = [];
@@ -99,6 +107,11 @@ function testCase(name, { manifest, files, expectExit, needle }) {
   }
   if (code !== expectExit) problems.push(`expected exit ${expectExit}, got ${code}`);
   if (needle && !out.includes(needle)) problems.push(`expected ${JSON.stringify(needle)} in the output`);
+  // A case whose NAME promises an absence must assert that absence. Two of the
+  // --derive cases below originally asserted only "check-claims: OK", which any
+  // green run satisfies — they were named for a property they did not test, the
+  // third decorative case caught in three PRs.
+  if (absent && out.includes(absent)) problems.push(`expected ${JSON.stringify(absent)} to be ABSENT from the output`);
 
   if (problems.length) {
     FAIL.push(name);
@@ -293,6 +306,60 @@ testCase('…and a third list item breaks it', {
 testCase('a raw claim carrying phrasings is refused', {
   manifest: manifest([claim({ raw: true, pattern: 'outage', sourceOnly: true, consumers: [] })]),
   files: FILES, expectExit: 1, needle: 'carry a "pattern", not "phrasings"',
+});
+
+// ── --derive: retained, and its semantics CHANGED, so it needs coverage ────
+// The rewrite narrowed what --derive can find (approved wordings only) while
+// this suite stopped passing the flag at all. Codex, #346: changing a mode's
+// matching and deleting its only test in the same commit leaves regressions in
+// the `git ls-files` scan and the advisory output invisible.
+testCase('--derive names an unlisted file that states an approved phrasing', {
+  manifest: manifest([claim()]),
+  files: { ...FILES, 'docs/unlisted.md': 'Also: so check the comments AND the review threads.\n' },
+  args: ['--derive'], git: true, expectExit: 0, needle: 'docs/unlisted.md',
+});
+
+testCase('--derive is advisory: an unlisted carrier does not fail the run', {
+  manifest: manifest([claim()]),
+  files: { ...FILES, 'docs/unlisted.md': 'Also: so check the comments AND the review threads.\n' },
+  args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
+});
+
+testCase('--derive does NOT name a file stating the rule in unapproved words', {
+  // The narrowing, pinned. A regex could surface this; literal pinning cannot,
+  // and the header says so — this case is what keeps that statement honest.
+  manifest: manifest([claim()]),
+  files: { ...FILES, 'docs/unlisted.md': 'Consult the comments together with every review thread.\n' },
+  args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
+  absent: 'docs/unlisted.md',
+});
+
+testCase('--derive excludes the guard\'s own manifest from its candidates', {
+  // claims.json contains every phrasing by construction, so without the
+  // exclusion it is reported as an unlisted carrier on every single run — which
+  // is how an advisory list gets ignored.
+  manifest: manifest([claim()]), files: FILES,
+  args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
+  absent: 'claims.json',
+});
+
+// ── a missing SOURCE fails like a missing consumer, and does not abort ─────
+testCase('a missing source file FAILS rather than crashing the run', {
+  manifest: manifest([
+    claim({ id: 'first', source: 'directives/GONE.md' }),
+    claim({ id: 'second', source: 'docs/consumer.md', consumers: ['docs/other.md'] }),
+  ]),
+  files: { ...FILES, 'docs/other.md': CONS },
+  expectExit: 1, needle: 'cannot read source directives/GONE.md',
+});
+
+testCase('…and the claims after it are still checked', {
+  manifest: manifest([
+    claim({ id: 'first', source: 'directives/GONE.md' }),
+    claim({ id: 'second', source: 'docs/consumer.md', consumers: ['docs/other.md'] }),
+  ]),
+  files: { ...FILES, 'docs/other.md': CONS },
+  expectExit: 1, needle: 'second → docs/consumer.md',
 });
 
 console.log();

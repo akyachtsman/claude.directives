@@ -355,13 +355,30 @@ for c in $callers; do
     || { echo "FETCH FAILED: $c — derivation INVALID, do not use it" >&2
          rm -f "$buf"; exit 1; }
 done
-refs=$(grep -oE '(node|python3) \.github/scripts/[A-Za-z0-9_.-]+\.(js|py)' "$buf" \
-       | awk '{print $2}' | sort -u)
+refs=$(grep -oE '\.github/scripts/[A-Za-z0-9_.-]+' "$buf" \
+       | grep -E '\.(js|py)$' | sort -u)
 rm -f "$buf"
 printf '%s\n' "$refs"
 ```
 
-Three things about that shape, each of which a shorter version got wrong:
+Four things about that shape, each of which a shorter version got wrong:
+
+- **It matches the script PATH, never the invocation prefix.** The earlier form
+  required `node ` or `python3 ` *immediately* before `.github/`, so
+  `node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"` — the real
+  line in `ui-suite/action.yml` — returned **no match at all**, and the
+  derivation silently omitted the one script that composite cannot run without.
+  Reported by PROP6, 2026-09-01, and measured here before the fix. The failure is
+  invisible in outcome wherever the script already exists, and installs a red
+  build wherever it does not — `claude.insurance`'s exact situation in #321.
+  A prefix is a form; the path is the fact. Note the two-stage filter: grabbing
+  the whole token and *then* requiring a `.js`/`.py` ending is what keeps
+  `.github/scripts/package-lock.json` out, since an unterminated `\.(js|py)`
+  matches the `.js` inside `.json`. That defect was latent in the old pattern
+  too — the prefix requirement just kept it from ever being reached.
+  `check-refresh-derivation.py` now runs this exact pattern, read out of this
+  file, against every shipped caller, so the next invocation-form change fails
+  CI instead of shipping.
 
 - **Every fetch is checked individually, and a failure exits before the
   pipeline.** Putting the loop *inside* `refs=$(…)` does not work: the `exit 1`

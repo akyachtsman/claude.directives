@@ -248,6 +248,19 @@ jobs:
       - name: Check the contrast guardrail reads token files correctly
         run: node .github/scripts/check-contrast-cases.js
 
+      # /refresh-repo derives WHICH .github/scripts/* a refresh must install by
+      # grepping the callers it is installing. That pattern lives in a markdown
+      # file; the callers are YAML edited independently, so nothing tied them
+      # together — a caller changing the FORM of an invocation fell silently out
+      # of the derivation. PROP6 hit exactly that: the pattern demanded a command
+      # prefix immediately before `.github/`, and ui-suite/action.yml invokes
+      # `node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"`, so the
+      # derivation returned no match and the refresh omitted the one script that
+      # composite cannot run without. This step reads the pattern OUT of the
+      # command and runs it against every shipped caller.
+      - name: Check /refresh-repo's script derivation still finds every caller
+        run: python3 .github/scripts/check-refresh-derivation.py
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

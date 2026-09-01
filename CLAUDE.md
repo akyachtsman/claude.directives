@@ -175,7 +175,11 @@ A directive repo must pass its own CI before it can be trusted downstream.
   jobs carrying no floor must survive, #334), the exported contrast guardrail's
   own guard (`check-contrast-cases.js` — this repo ships no project token file
   for it to read, so nothing else here would notice `check-contrast.js` break,
-  #334), the
+  #334), `/refresh-repo`'s script derivation
+  (`check-refresh-derivation.py` — the derivation is a PATTERN in a markdown file
+  and the callers are YAML edited independently, so a caller changing the FORM of
+  an invocation fell silently out of it; the guard reads the shipped pattern out
+  of the command rather than copying it, PROP6 2026-09-01), the
   workflow-ref guard, and a paired-file diff check, plus a warn-only
   external-link job. It also runs
   `build-logical-map.js --check`, so a committed map that no longer matches
@@ -297,6 +301,7 @@ python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name reso
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
+python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation still matches every shipped caller — it reads the pattern OUT of refresh-repo.md, so a copy cannot drift from it (PROP6)
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree

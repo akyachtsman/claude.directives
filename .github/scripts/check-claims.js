@@ -439,7 +439,16 @@ for (const claim of claims) {
   const isRaw = claim.raw === true;
 
   if (isRaw) {
-    if (!claim.pattern) { fail(`${id}: "raw" needs "pattern"`); continue; }
+    // A STRING, not merely truthy. `new RegExp` coerces whatever it is given, so
+    // `"pattern": 123` compiled to /123/ and CERTIFIED a structural claim off a
+    // JSON type mistake — a manifest error silently becoming a matching rule.
+    // Same shape as the `"pattern": ""` finding one round earlier: the type of a
+    // field is part of its meaning, and a truthiness test reads neither end of
+    // it. Codex, #346 round 9.
+    if (typeof claim.pattern !== 'string' || claim.pattern === '') {
+      fail(`${id}: "raw" needs a non-empty string "pattern", got ${JSON.stringify(claim.pattern)} — RegExp would coerce it into a rule nobody wrote`);
+      continue;
+    }
     if (claim.phrasings !== undefined) { fail(`${id}: "raw" claims carry a "pattern", not "phrasings" — pick one`); continue; }
   } else {
     // PRESENCE, not truthiness. `"pattern": ""` is falsey, so a truthiness test

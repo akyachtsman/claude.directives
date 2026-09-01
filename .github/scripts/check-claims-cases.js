@@ -57,6 +57,16 @@
  *      -> every negative-path case, via the terminal-summary check
  *   Q  the terminator classified on the RAW phrasing instead of the normalised one
  *      -> "a terminator inside markdown emphasis still counts as closed"
+ *   R1 the failing path prints `check-claims: OK` while still exiting 1
+ *      -> every negative-path case (the summary must AGREE with the exit)
+ *   R2 a raw `pattern` accepted as a non-string and coerced by RegExp
+ *      -> "a raw \"pattern\" that is not a string is refused, not coerced"
+ *   R3 only GUARD_ARTIFACTS[0] reported in the excluded-artifact line
+ *      -> "the run PRINTS what each excluded guard artifact contains"
+ *   R4 the per-consumer `pattern` (or `mustNotMatch`) refusal dropped
+ *      -> that field's own override case; the other two stay green
+ *   R5 `!` or `?` removed from SENTENCE_END
+ *      -> that mark's own closed-count case
  *   F  a comment reworded (control) -> nothing reddens
  *
  * G-K were added on #346 round 6 and each reddens EXACTLY ONE case (K, two),
@@ -139,8 +149,22 @@ function testCase(name, { manifest, files, expectExit, needle, absent, args = []
   // immediately before terminating, so the ABSENCE of that line means the run
   // did not reach its own end — whatever was thrown, whether or not it printed,
   // and however Node chooses to report it in some later version.
-  if (!/^check-claims: (OK|FAIL)/m.test(out)) {
+  const summaries = [...out.matchAll(/^check-claims: (OK|FAIL)/gm)];
+  if (!summaries.length) {
     problems.push('the guard never reached its terminal summary — it died mid-run, so the exit code and the needle prove nothing');
+  } else {
+    // AND IT MUST AGREE WITH THE EXIT. Accepting either word made the check a
+    // liveness test only: changing the failing path to print `check-claims: OK`
+    // while still exiting 1 left all 59 cases green, so the harness would certify
+    // a guard whose human-facing verdict contradicts its own exit code — and the
+    // verdict is what a person reads in a CI log. Codex, #346 round 9.
+    // Compared against the ACTUAL exit code rather than the expected one, so this
+    // stays an invariant of the guard and not a restatement of the case.
+    const want = code === 0 ? 'OK' : 'FAIL';
+    const got = summaries[summaries.length - 1][1];
+    if (got !== want) {
+      problems.push(`the terminal summary says ${got} but the run exited ${code} — the verdict a reader sees contradicts the one CI acts on`);
+    }
   }
   if (code !== expectExit) problems.push(`expected exit ${expectExit}, got ${code}`);
   if (needle && !out.includes(needle)) problems.push(`expected ${JSON.stringify(needle)} in the output`);
@@ -312,14 +336,39 @@ testCase('a non-raw "pattern" is refused, not silently honoured', {
   expectExit: 1, needle: '"pattern" is only for "raw"',
 });
 
-testCase('a per-consumer override is refused with the reason', {
-  manifest: manifest([claim({
-    consumers: [{ file: 'docs/consumer.md', phrasings: ['so check the comments AND the review threads'], why: 'x', mustNotMatch: ['y'] }],
-  })]),
-  files: FILES, expectExit: 1, needle: 'per-consumer override, which no longer exists',
-});
+// ONE FIXTURE PER FIELD. A single fixture carrying `phrasings` AND `mustNotMatch`
+// proves only that SOME override is refused: removing the `c.pattern` test alone,
+// or the `c.mustNotMatch` test alone, left all 59 cases green because `phrasings`
+// kept firing the shared diagnostic. A bundled fixture under an `||` tests the
+// first operand and nothing else. Codex, #346 round 9 — the same shape as the
+// bundled crash check two rounds earlier.
+for (const [field, value] of [
+  ['phrasings', ['so check the comments AND the review threads']],
+  ['pattern', 'so check'],
+  ['mustNotMatch', ['y']],
+]) {
+  testCase(`a per-consumer "${field}" override is refused with the reason`, {
+    manifest: manifest([claim({
+      consumers: [{ file: 'docs/consumer.md', why: 'x', [field]: value }],
+    })]),
+    files: FILES, expectExit: 1, needle: 'per-consumer override, which no longer exists',
+  });
+}
 
 // ── raw: the one structural exception ──────────────────────────────────────
+testCase('a raw "pattern" that is not a string is refused, not coerced', {
+  // `new RegExp` coerces anything, so `"pattern": 123` compiled to /123/ and
+  // certified a structural claim off a JSON type mistake. Truthiness reads
+  // neither end of a field's meaning: `""` was the round-8 half, this is the
+  // other. Codex, #346 round 9.
+  manifest: manifest([claim({
+    raw: true, phrasings: undefined, sourceOnly: true, consumers: [],
+    pattern: 123, mustNotMatch: ['nothing like it'],
+  })]),
+  files: { 'directives/src.md': 'the list has 123 in it\n' },
+  expectExit: 1, needle: 'needs a non-empty string "pattern"',
+});
+
 testCase('a raw claim matches unnormalised structure', {
   manifest: manifest([claim({
     raw: true, phrasings: undefined, sourceOnly: true, consumers: [],
@@ -627,6 +676,26 @@ testCase('the run counts a comma-stopping phrasing as OPEN, not terminated', {
   needle: '1 total — 0 run to a sentence terminator, 1 stop short',
 });
 
+// EVERY MARK IN `SENTENCE_END`, NOT JUST THE COMMON ONE. Only `.` was exercised,
+// so dropping `!` or `?` from the set left all 59 cases green and the audit
+// boundary could regress to calling those pins open with nothing noticing. A
+// constant naming three members needs three cases for the same reason a shared
+// list needs one per member — round 8's finding, one layer down. Codex, round 9.
+for (const mark of ['.', '!', '?']) {
+  testCase(`a phrasing closed by "${mark}" counts as closed`, {
+    manifest: manifest([claim({
+      phrasings: [`so check the comments AND the review threads${mark}`],
+      mustNotMatch: ['so never check anything'],
+    })]),
+    files: {
+      'directives/src.md': `so check the comments AND the review threads${mark}\n`,
+      'docs/consumer.md': `Per the source: so check the comments AND the review threads${mark}\n`,
+    },
+    expectExit: 0,
+    needle: '1 total — 1 run to a sentence terminator, 0 stop short',
+  });
+}
+
 testCase('…and a full-stop phrasing counts as closed', {
   manifest: manifest([claim({
     phrasings: ['so check the comments AND the review threads.'],
@@ -665,7 +734,11 @@ testCase('a terminator inside markdown emphasis still counts as closed', {
 // and 6.
 testCase('the run PRINTS what each excluded guard artifact contains', {
   manifest: manifest([claim()]), files: FILES, expectExit: 0,
-  needle: 'guard artifacts excluded by identity — phrasings each happens to contain: claims.json 1/1',
+  // ALL THREE entries. Ending the needle after the first let a reporting path
+  // that mapped only `GUARD_ARTIFACTS[0]` pass — the case is named for what the
+  // run prints about EACH artifact, so a prefix does not hold it.
+  needle: 'guard artifacts excluded by identity — phrasings each happens to contain: '
+    + 'claims.json 1/1, check-claims.js ?/1, check-claims-cases.js ?/1',
 });
 
 // ── a malformed consumer FAILS the entry, and does not abort the run ──────

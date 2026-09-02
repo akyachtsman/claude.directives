@@ -1231,6 +1231,17 @@ const CASES = [
     20, 'declared mapping from before the run could not be read',
     { declaredMissing: true, runReport: true }],
 
+  // ── A VALUE IS NOT A FLAG (#347 round 16) ───────────────────────────────
+  // `--tablet-min` is a legal filename, so an accepted `report-path` can put it
+  // straight after `--report`. A whole-argv search found it there, read the
+  // following (nonexistent) token as a band bound, and NaN bounds refused at
+  // exit 14 WITHOUT EVER READING THE REPORT. The scan steps over option values
+  // now; this fixture has no such report file, so the honest answer is 15 —
+  // "could not read the report" — and 14 means the argv scan regressed.
+  ['a report path that is itself a flag name — not read as a band bound',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    15, 'could not read', { reportIsFlagName: true }],
+
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
   // (`grep` matches no title) and its exit handler then writes a report claiming
@@ -1359,6 +1370,8 @@ function runCase(files, opts) {
     // A path whose PARENT does not exist — the shipped default's shape on a
     // clean runner (#347 round 15).
     if (o.declaredNested) args.push('--declared', join(tmp, 'no', 'such', 'dir', 'declared.json'));
+    // A report path that is itself a flag name — a legal filename (#347 r16).
+    if (o.reportIsFlagName) args.push('--report', '--tablet-min');
     if (o.declaredMissing) args.push('--declared', join(tmp, 'absent.json'));
     // opts.runReport: RUN the suite first, then check its report. Since #335's
     // second design the coverage claim comes from the run's own JSON report, so

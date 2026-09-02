@@ -58,7 +58,7 @@ UNSET = object()
 # construction and prove nothing about it; spelling them again is what makes a
 # silent edit to SEQUENCE fail here.
 GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
-DECLARED = '--declared "$REPORT_PATH.declared"'
+DECLARED = '--declared "$RUNNER_TEMP/ui-viewports-declared.json"'
 CHECK_BODY = f"{GATE} --tests-dir . {DECLARED}"
 RUN_BODY = "npx playwright test"
 POST_BODY = f'{GATE} --tests-dir . {DECLARED} --report "$REPORT_PATH"'

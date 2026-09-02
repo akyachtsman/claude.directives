@@ -118,7 +118,7 @@ SHELL = "bash"
 # config that globalSetup, the tests and globalTeardown have all had a turn at.
 # Both bodies must name the same sidecar or the handoff silently degrades into
 # the re-evaluation it replaced, which is why it is pinned rather than described.
-DECLARED = '--declared "$REPORT_PATH.declared"'
+DECLARED = '--declared "$RUNNER_TEMP/ui-viewports-declared.json"'
 SEQUENCE = (
     (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL),
     (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL),

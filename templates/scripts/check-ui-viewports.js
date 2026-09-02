@@ -301,11 +301,26 @@ const EVAL_TIMEOUT_MS = 120000;
 // child is spawned with `process.argv.slice(2)` verbatim, so the two see the
 // same tokens — which is what round 11 was actually protecting: the bound comes
 // from the command line in both, never from the payload.
+// VALUES ARE NOT FLAGS. Searching the whole argv for `--tablet-min` finds it
+// wherever it appears — including as the VALUE of another option. Codex
+// reproduced it with an accepted `report-path: --tablet-min`, a legal filename:
+// the post-run command becomes `--report --tablet-min`, this read the following
+// (nonexistent) token as a band bound, and NaN bounds exited 14 without ever
+// reading the report (#347 round 16).
+//
+// So the scan walks argv in order and steps OVER the value of every option that
+// takes one. The list is explicit rather than inferred from a leading `-`,
+// because a value can look like a flag — which is the whole finding.
+const VALUE_OPTS = new Set(['--tests-dir', '--config', '--report', '--declared',
+  '--tablet-min', '--laptop-min']);
 const bandOpt = (flag, fallback) => {
-  const i = process.argv.indexOf(flag);
-  if (i >= 0) return { value: Number(process.argv[i + 1]), given: true };
-  const eq = process.argv.find(a => a.startsWith(`${flag}=`));
-  if (eq !== undefined) return { value: Number(eq.slice(flag.length + 1)), given: true };
+  for (let i = 2; i < process.argv.length; i += 1) {
+    const a = process.argv[i];
+    if (a === flag) return { value: Number(process.argv[i + 1]), given: true };
+    if (a.startsWith(`${flag}=`)) return { value: Number(a.slice(flag.length + 1)), given: true };
+    // Step over this option's value so it is never read as a flag itself.
+    if (VALUE_OPTS.has(a)) i += 1;
+  }
   return { value: fallback, given: false };
 };
 
@@ -534,10 +549,14 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
 // That is the same family as directives#349 — evidence produced by processes the
 // config runs in — and this closes the teardown half of it, not the whole.
 const declaredIdx = (() => {
-  const i = process.argv.indexOf('--declared');
-  if (i >= 0) return { path: process.argv[i + 1], given: true };
-  const eq = process.argv.find(a => a.startsWith('--declared='));
-  if (eq !== undefined) return { path: eq.slice('--declared='.length), given: true };
+  // Same value-stepping as bandOpt above: a report-path of `--declared` is a
+  // legal filename and must not be read as this flag (#347 round 16).
+  for (let i = 2; i < process.argv.length; i += 1) {
+    const a = process.argv[i];
+    if (a === '--declared') return { path: process.argv[i + 1], given: true };
+    if (a.startsWith('--declared=')) return { path: a.slice('--declared='.length), given: true };
+    if (VALUE_OPTS.has(a)) i += 1;
+  }
   return { path: undefined, given: false };
 })();
 

@@ -275,6 +275,58 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK', { extraEnv: { PW_TEST_REPORTER: 'dot' } }],
 
+  // ── THE OBSERVATION IS ITSELF OBSERVABLE (#347 round 1) ──────────────────
+  // Two P1s, both reproduced, both false greens: a config CAN notice how it is
+  // being inspected. One is now refused, the other is a stated limit, and both
+  // are pinned so neither drifts.
+  ['a reporter that branches on config.reporter — CANNOT CHECK, exit 17',
+    // Appending `['list']` is not invisible: preprocess() receives the resolved
+    // config. This reporter excludes every test only when it is the SOLE
+    // reporter, so the real run discovers nothing while the wrapped listing
+    // discovers everything — and the gate certified all three bands. Caught by
+    // comparing the plain and wrapped runs' exit status, which needs no
+    // knowledge of HOW the config noticed.
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['./sneaky.js']],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'sneaky.js': 'export default class { async preprocess({ config, suite, testRun }) '
+        + '{ if (config.reporter.length === 1) { for (const t of suite.allTests()) testRun.exclude(t); } } }\n' },
+    17, 'behaved DIFFERENTLY when a reporter was appended'],
+
+  ['a config that branches on --list is NOT caught — the documented limit',
+    // A listing carries `--list` in argv and a config may read it. This one
+    // applies a non-matching grep unless it is being listed: the real run
+    // discovers nothing, the observation discovers everything, and the gate
+    // reports OK. No arrangement of `--list` closes this, because the flag is
+    // what makes it a listing. Pinned at exit 0 in the direction of STAYING a
+    // limit — if this case ever starts failing, a mechanism nobody reviewed was
+    // added, which is the same reason #346 pins its out-of-span gate.
+    { 'playwright.config.js': `${IMPORT}const listing = process.argv.includes('--list');\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  ...(listing ? {} : { grep: /__NEVER_MATCHES__/ }),\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
+
+  // ── UNNAMED PROJECTS: the fix, and the hole the fix opened ───────────────
+  ['a project with no name is still attributed — no false failure',
+    // Playwright's list reporter prints an unnamed project's tests with no
+    // `[project] ›` prefix. Dropping those lines made the gate report a band
+    // undiscovered for a config Playwright lists in full.
+    { 'playwright.config.js': withProjects(
+      "    { use: { viewport: { width: 1440, height: 900 } } },\n" + TABLET + PHONE) },
+    0, 'laptop:(unnamed)'],
+
+  ['TWO unnamed projects — CANNOT CHECK, exit 18',
+    // Found by testing the fix above rather than shipping it. With two nameless
+    // projects an unprefixed line marks BOTH discovered, so a config whose
+    // unnamed phone project finds nothing was certified for phone by the unnamed
+    // laptop project's tests. One nameless project is unambiguous; two are not.
+    { 'playwright.config.js': withProjects(
+      "    { use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { testMatch: /__none__/, use: { viewport: { width: 390, height: 664 } } },\n"
+      + TABLET) },
+    18, 'projects have no "name"'],
+
   // ── THE OBSERVATION'S OWN FAILURES (#335) ────────────────────────────────
   // Stage two can fail in two ways, and both must be loud. This is the founding
   // rule of this file applied to the new half: a listing that did not happen is

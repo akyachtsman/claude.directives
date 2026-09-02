@@ -508,8 +508,17 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       }
       const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
       console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
+      // WHAT --report BUYS, IN THE SAME WORDS THE VERDICT USES. This line said
+      // "certify that scenarios actually ran at these widths" — the EXECUTED
+      // claim the whole gate withdrew in favour of SCHEDULED. A hook that fails
+      // before the test body starts still produces a non-skipped result, so the
+      // report cannot say a scenario ran; it says Playwright scheduled one under
+      // a project declaring that width. Missed when the contract was corrected,
+      // and re-stated when the sidecar guidance went in beside it (#347 r17).
       console.log('  (declared, not executed — pass --report <playwright json> after the run');
-      console.log('   to certify that scenarios actually ran at these widths)');
+      console.log('   for the SCHEDULED check: a non-skipped result under a project declaring');
+      console.log('   each width. That is not proof a page was rendered there — see');
+      console.log('   test.md -> UI coverage gates, and directives#348.)');
       if (declaredIdx.given) console.log(`  (mapping written for the post-run check: ${declaredIdx.path})`);
     }
   }

@@ -61,10 +61,13 @@ inputs:
       NOT establish that a page was rendered there — see test.md -> UI coverage
       gates, and directives#348. Your config must DECLARE a json reporter; this
       composite pins where it writes by exporting PLAYWRIGHT_JSON_OUTPUT_FILE,
-      so the reporter's own `outputFile` need not match. The shipped kit's
-      default is used here.
+      so the reporter's own `outputFile` need not match. Leave this empty and the
+      validator DERIVES `.agent-reports/playwright-results.json` at the workspace
+      root, expressed relative to your `tests-dir` — so it works at any depth. The
+      literal default it replaced only worked for a suite three levels down and
+      resolved outside the workspace for anything else.
     required: false
-    default: '../../../.agent-reports/playwright-results.json'
+    default: ''
   app-url:
     description: 'URL the suite targets (local server or live deploy)'
     required: true
@@ -303,8 +306,23 @@ runs:
 
     - name: Clear any stale Playwright report
       shell: bash
+      # THE SAME ENV AS THE THREE STEPS AFTER IT, and the reason is the guard
+      # rather than this step's own needs. Since #347 round 21 this step is part
+      # of `check-ui-suite-env.py` -> SEQUENCE: outside it, skipping this step,
+      # making it advisory or changing its command all left the guard green,
+      # while an uncleared report from a previous invocation satisfied the
+      # post-run gate. Folding it in gets every rule at once, and one rule over
+      # four steps beats an exemption that has to be re-argued on every read.
+      # An `rm` does not import the config, so most of this block is inert here —
+      # deliberately, and REPORT_PATH is not: it decides which file is cleared,
+      # and it must be the one the other three read and write.
       env:
+        APP_URL: ${{ inputs.app-url }}
+        TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
+        TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        APP_PAGES: ${{ inputs.app-pages }}
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
+        PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
       # `--` ENDS OPTION PARSING. A report-path beginning with `-` is a valid
       # relative filename that GNU rm reads as a flag: `rm -f "--preserve-root"`
       # exits 0 and deletes NOTHING, so the stale report survives and the

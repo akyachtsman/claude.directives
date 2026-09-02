@@ -164,7 +164,26 @@ PINNED_ENV_VALUES = (
     ("REPORT_PATH", VALIDATED_REPORT),
     ("PLAYWRIGHT_JSON_OUTPUT_FILE", VALIDATED_REPORT),
 )
+# THE CLEAR STEP IS PART OF THE SEQUENCE, not a preamble to it. It was outside
+# SEQUENCE entirely, so skipping it, making it advisory, moving it to another
+# directory or changing its command all left this guard green — and in an
+# `advisory-run` invocation where Playwright aborts before its reporter writes,
+# an UNCLEARED report from a previous invocation then satisfies the post-run gate
+# and the job stays green (Codex, #347 round 21).
+#
+# Folded into SEQUENCE rather than given its own mechanism, which means it
+# inherits every rule at once: body, `if`, `continue-on-error`, shell, working
+# directory, adjacency, and env. The env parity is the one that reads oddly on an
+# `rm` — it does not import the config and does not need APP_URL. It carries the
+# same block anyway because ONE rule over four steps is worth more than an
+# exemption that has to be argued each time it is read, and because the two
+# variables that ARE load-bearing here (REPORT_PATH, and the destination the run
+# is pinned to) must match what the other three use or this clears the wrong file.
+CLEAR_STEP = "Clear any stale Playwright report"
 SEQUENCE = (
+    (CLEAR_STEP,
+     ('rm -f -- "$REPORT_PATH" "$RUNNER_TEMP/ui-viewports-declared.json"',),
+     None, None, SHELL),
     (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL),
     (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL),
     (POST_STEP, (f'{GATE} --tests-dir . {DECLARED} --report "$REPORT_PATH"',),

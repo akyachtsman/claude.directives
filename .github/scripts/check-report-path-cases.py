@@ -143,9 +143,18 @@ CASES = [
      "inside the workspace", "r.json"),
 
     # ── EMPTINESS AND WHITESPACE ─────────────────────────────────────────────
-    ("an empty value", "", 1, "is empty", None),
+    # AN EMPTY VALUE NOW MEANS "DERIVE IT" (#347 round 21). It used to be a
+    # refusal, on the reasoning that the post-run gate would be asked for the
+    # execution check and given nothing. That reasoning still holds for the GATE
+    # — `--report ''` is exit 8 there — but the composite's input is different:
+    # it is optional, and an omitted optional input arrives here empty.
+    ("an empty value derives the default", "", 0, "no report-path given",
+     ".agent-reports/playwright-results.json", None,
+     None, "../../../.agent-reports/playwright-results.json"),
 
-    ("whitespace only", "   ", 1, "is empty", None),
+    # Whitespace is NOT empty, here or in the gate. It reaches the character
+    # rules and is refused for what it is, rather than being read as absent.
+    ("whitespace only", "   ", 1, "whitespace", None),
 
     ("a leading space", " r.json", 1, "leading or trailing whitespace", None),
 
@@ -258,6 +267,39 @@ CASES = [
     ("the tests-dir-relative base is emitted too",
      "../../../.agent-reports/playwright-results.json", 0,
      "inside the workspace", ".agent-reports/playwright-results.json"),
+
+    # ── THE DEFAULT IS DERIVED, NOT LITERAL (#347 round 21) ──────────────────
+    # The action used to default `report-path` to the literal
+    # `../../../.agent-reports/playwright-results.json`, which is correct for
+    # exactly one tests-dir -- the shipped kit's, three levels down -- and wrong
+    # for every other depth the tests-dir contract permits. Codex reproduced
+    # `tests-dir: e2e` resolving it to `/.agent-reports/...` and `tests/ui`
+    # resolving ABOVE the repository; both refused before any test ran.
+    #
+    # An empty input now means "derive it", and these four pin that the derived
+    # value lands in the SAME workspace-root file at every depth. The first is
+    # the regression guard: it must still produce exactly what the old literal
+    # produced, or every existing caller's report moves.
+    ("derived at the shipped depth — identical to the old literal",
+     "", 0, "derived '../../../.agent-reports/playwright-results.json'",
+     ".agent-reports/playwright-results.json", ".github/scripts/ui-tests", None, "../../../.agent-reports/playwright-results.json"),
+    ("derived one level down", "", 0, "derived '../.agent-reports/playwright-results.json'",
+     ".agent-reports/playwright-results.json", "e2e", None, "../.agent-reports/playwright-results.json"),
+    ("derived two levels down", "", 0, "derived '../../.agent-reports/playwright-results.json'",
+     ".agent-reports/playwright-results.json", "tests/ui", None, "../../.agent-reports/playwright-results.json"),
+    ("derived at the workspace root", "", 0, "derived '.agent-reports/playwright-results.json'",
+     ".agent-reports/playwright-results.json", ".", None, ".agent-reports/playwright-results.json"),
+    # And the derived value goes through every rule a supplied one does. Measured
+    # rather than assumed, because the answer surprised me: a glob-bearing
+    # tests-dir does NOT poison the derived default, since the derivation walks
+    # OUT of that directory and `..` cancels the offending component before
+    # anything is emitted. Round 13's finding was the other shape — a report
+    # INSIDE `suite?` — and the case below it still holds that line.
+    ("a glob-bearing tests-dir cancels out of the derived default",
+     "", 0, "no report-path given", ".agent-reports/playwright-results.json",
+     "suite?", None, "../.agent-reports/playwright-results.json"),
+    ("...but a report INSIDE that tests-dir is still refused (round 13)",
+     "results.json", 1, "the artifact uploader expands patterns", None, "suite?"),
 ]
 
 
@@ -315,9 +357,13 @@ def main():
             # BOTH BASES, every time. The steps that run from tests-dir need the
             # value in THEIR base; round 9 shipped only the other one and left
             # them on the raw input (#347 round 10).
-            if emitted.get("relative") != value:
+            # The DERIVED default is not the input, so a case may say what it
+            # expects instead (#347 round 21). Everything else still pins that
+            # `relative` is the caller's own value, verbatim.
+            want_relative = case[7] if len(case) > 7 else value
+            if emitted.get("relative") != want_relative:
                 failures.append(f"{label}\n      relative output was "
-                                f"{emitted.get('relative')!r}, expected {value!r}\n"
+                                f"{emitted.get('relative')!r}, expected {want_relative!r}\n"
                                 + "      The three sequence steps read this one; without it they"
                                 + "\n      fall back to the unvalidated action input.")
                 continue

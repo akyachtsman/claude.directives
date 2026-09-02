@@ -127,6 +127,10 @@
 //      results by project name, so one project's tests would certify another's
 //  19  RETIRED — `--forbid-only` was a probe against the listing, and a probe
 //      the config could observe. The run's report needs no probe.
+//  20  --declared was given with --report and the mapping could not be read, or
+//      could not be written on the pre-run pass (CANNOT CHECK). Re-importing the
+//      config here would restore the re-evaluation the flag exists to prevent,
+//      so a missing mapping refuses rather than falling back (#347 round 14).
 //
 // The three RETIRED codes are kept in this list rather than deleted. They were
 // documented exits of a shipped gate, and a reader meeting one in an old CI log
@@ -303,8 +307,18 @@ function readReport(reportPath) {
     ] };
   }
   let malformed = null;
+  // ONLY `undefined` IS AN OMITTED FIELD. Round 20 wrote the rule as "a present
+  // non-array is malformed" and then implemented `undefined || null` as absent,
+  // which is the old `x || []` behaviour wearing the new rule's clothes:
+  // `{"suites":[{"specs":null}]}` was read as an empty report and produced the
+  // confident exit-12 NOTHING RAN verdict — the dangerous half of the round-20
+  // family, reintroduced by the round-20 fix (Codex, #347 round 21).
+  //
+  // Playwright omits keys it has nothing for; it does not null them. So a null
+  // where an array belongs is a stale or wrong document, and saying so is the
+  // whole point of the check.
   const arr = (v, where) => {
-    if (v === undefined || v === null) return [];
+    if (v === undefined) return [];
     if (Array.isArray(v)) return v;
     if (!malformed) malformed = `${where} is ${describe(v)}, expected an array`;
     return [];
@@ -440,6 +454,17 @@ for (const [flag, why] of [
   ['--config', 'names the config to import; empty falls through to implicit discovery'],
   ['--declared', 'names the mapping carried across the run'],
   ['--report', 'asks for the execution check; empty is an unset or empty `report-path` in the ui-suite composite'],
+  // THE NUMERIC FLAGS TOO. Not reported for these, and the same construction
+  // defeats them harder: `Number('')` is 0, not NaN, so an empty bound slipped
+  // past the NaN guard and REBANDED the whole config — every positive-width
+  // phone project reclassified as tablet, reported as a missing phone
+  // declaration at exit 1 rather than a usage error (Codex, #347 round 21,
+  // filed against `--tablet-min` alone).
+  //
+  // Adding them here rather than beside the NaN check keeps one rule in one
+  // place, which is what round 20 was about.
+  ['--tablet-min', 'sets the tablet floor; `Number(\'\')` is 0, which silently rebands every project'],
+  ['--laptop-min', 'sets the laptop floor; `Number(\'\')` is 0, which silently rebands every project'],
 ]) {
   const hit = argOpt(flag);
   if (hit.given && (hit.value === undefined || hit.value === '')) {
@@ -724,7 +749,15 @@ if (!VERDICT_FILE) {
   if (declaredIdx.given && wantsReport) {
     let carried = null;
     try { carried = JSON.parse(readFileSync(declaredIdx.path, 'utf8')); } catch { /* below */ }
-    const ok = carried && Array.isArray(carried.rows) && carried.rows.every(r => r
+    // `testsDir` IS PART OF THE SHAPE, and validating only `rows` left it out.
+    // It is handed straight to `realpathSync` and `resolve()`, so a mapping with
+    // it missing or non-string produced Node's ERR_INVALID_ARG_TYPE at exit 1
+    // with a stack trace, rather than the exit-20 refusal this branch promises
+    // (Codex, #347 round 21). Validating the fields you happen to read is the
+    // same partial check as `x || []`.
+    const ok = carried && typeof carried === 'object' && !Array.isArray(carried)
+      && typeof carried.testsDir === 'string' && carried.testsDir !== ''
+      && Array.isArray(carried.rows) && carried.rows.every(r => r
       && typeof r === 'object' && !Array.isArray(r) && typeof r.name === 'string'
       && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
     if (!ok) {

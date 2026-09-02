@@ -42,6 +42,10 @@ GUARD = Path(os.environ.get("CHECK_UI_SUITE_ENV_BIN",
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIVE = REPO_ROOT / "templates/actions/ui-suite/action.yml"
 
+# The stale-report clear joined SEQUENCE in #347 round 21, so every fixture needs
+# it; without it the guard reports "no step named …" and every case fails for the
+# same uninformative reason.
+CLEAR = "Clear any stale Playwright report"
 CHECK = "Check three viewport classes are declared"
 RUN = "Run Playwright tests"
 # The post-run half of the gate (#335). It imports the config exactly as the
@@ -60,6 +64,7 @@ UNSET = object()
 GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
 DECLARED = '--declared "$RUNNER_TEMP/ui-viewports-declared.json"'
 CHECK_BODY = f"{GATE} --tests-dir . {DECLARED}"
+CLEAR_BODY = 'rm -f -- "$REPORT_PATH" "$RUNNER_TEMP/ui-viewports-declared.json"'
 RUN_BODY = "npx playwright test"
 POST_BODY = f'{GATE} --tests-dir . {DECLARED} --report "$REPORT_PATH"'
 
@@ -90,7 +95,9 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
            post_env=UNSET, post_name=POST, post_wd=TESTS_DIR, post_body=None,
            post_uses=None, between_post=None,
            post_if=IF_POST, run_coe=COE_RUN, check_if=None, post_coe=None,
-           check_shell=SHELL, run_shell=SHELL, post_shell=SHELL):
+           check_shell=SHELL, run_shell=SHELL, post_shell=SHELL,
+           clear_name=CLEAR, clear_body=None, clear_env=UNSET, clear_wd=TESTS_DIR,
+           clear_if=None, clear_coe=None, clear_shell=SHELL):
     def block(env):
         if not env:
             return ""
@@ -112,6 +119,10 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
         + decoy_yaml
+        + f"    - name: {clear_name}\n{ctl('shell', clear_shell)}{ctl('if', clear_if)}"
+        + f"{ctl('continue-on-error', clear_coe)}{wd(clear_wd)}"
+        + block(check_env if clear_env is UNSET else clear_env)
+        + body(clear_body or CLEAR_BODY)
         + f"    - name: {check_name}\n{ctl('shell', check_shell)}{ctl('if', check_if)}{wd(check_wd)}{block(check_env)}"
         + body(check_body or CHECK_BODY)
         + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
@@ -331,6 +342,44 @@ CASES = [
     ("one step moved — still reported as a mismatch against the run",
      action(dict(BOTH), dict(BOTH), check_wd="elsewhere"),
      1, "runs from a DIFFERENT working directory than the run"),
+
+    # ── THE STALE-REPORT CLEAR IS IN THE SEQUENCE (#347 round 21) ───────────
+    # It was outside SEQUENCE, so every one of these passed. The consequence is
+    # specific: in an `advisory-run` invocation where Playwright aborts before
+    # its reporter writes, an UNCLEARED report from a previous invocation
+    # satisfies the post-run gate and the job stays green.
+    ("the clear step renamed away — refused",
+     action(dict(BOTH), dict(BOTH), clear_name="Renamed"),
+     1, f'no step named "{CLEAR}"'),
+    ("the clear step made advisory — refused",
+     action(dict(BOTH), dict(BOTH), clear_coe="true"),
+     1, "has the wrong `continue-on-error:`"),
+    ("the clear step made conditional — refused",
+     action(dict(BOTH), dict(BOTH), clear_if="${{ inputs.advisory-run != 'true' }}"),
+     1, "has the wrong `if:`"),
+    ("the clear step's rm replaced — refused",
+     action(dict(BOTH), dict(BOTH), clear_body="echo skipping"),
+     1, PIN),
+    # The `--` is what makes `rm` refuse to read a leading-dash report-path as a
+    # flag (#347 round 5). Dropping it is a body change and must be caught here.
+    ("the clear step's rm loses its -- — refused",
+     action(dict(BOTH), dict(BOTH),
+            clear_body='rm -f "$REPORT_PATH" "$RUNNER_TEMP/ui-viewports-declared.json"'),
+     1, PIN),
+    # It clears the sidecar too: without that, the post-run read gets a mapping
+    # from a PREVIOUS invocation (#347 round 14).
+    ("the clear step stops clearing the declared sidecar — refused",
+     action(dict(BOTH), dict(BOTH), clear_body='rm -f -- "$REPORT_PATH"'),
+     1, PIN),
+    ("the clear step moved to another directory — refused",
+     action(dict(BOTH), dict(BOTH), clear_wd="elsewhere"),
+     1, "not the action input"),
+    ("a step inserted between the clear and the pre-run check — refused",
+     action(dict(BOTH), dict(BOTH), decoy=None, clear_name=CLEAR)
+     .replace(f"    - name: {CHECK}\n",
+              "    - name: Sneak\n      shell: bash\n      run: echo sneak\n"
+              f"    - name: {CHECK}\n", 1),
+     1, "does not run immediately after"),
 
     # ── THE POST-RUN CHECK IS THE SAME STEP AGAIN (#335) ────────────────────
     # It imports the config too, so every branch above has to hold from its side

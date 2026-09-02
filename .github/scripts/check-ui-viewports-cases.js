@@ -1386,6 +1386,61 @@ const CASES = [
       'empty-report.json': '{"suites":[]}' },
     12, 'NOTHING RAN at that width', { reportArg: 'empty-report.json' }],
 
+  // ── null IS PRESENT (#347 round 21) ─────────────────────────────────────
+  // Round 20 stated the rule as "a present non-array is malformed" and then
+  // implemented `undefined || null` as absent — the old `x || []` behaviour
+  // wearing the new rule's clothes. So the dangerous half of the round-20
+  // family came straight back: a confident exit-12 NOTHING RAN on a document
+  // that was never read. Playwright omits keys it has nothing for; it does not
+  // null them.
+  ...[
+    ['specs', '{"suites":[{"specs":null}]}'],
+    ['tests', '{"suites":[{"specs":[{"tests":null}]}]}'],
+    ['results', '{"suites":[{"specs":[{"tests":[{"results":null}]}]}]}'],
+  ].map(([field, json]) => [
+    `a report where ${field} is null — CANNOT CHECK, never a verdict`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'null-report.json': json },
+    15, 'not shaped like a Playwright report', { reportArg: 'null-report.json' },
+  ]),
+
+  // ── THE CARRIED MAPPING'S testsDir IS PART OF ITS SHAPE (#347 round 21) ──
+  // Only `rows` was validated. `testsDir` goes straight to `realpathSync` and
+  // `resolve()`, so a mapping missing it produced Node's ERR_INVALID_ARG_TYPE
+  // at exit 1 with a stack trace instead of the exit-20 refusal this branch
+  // promises. Validating the fields you happen to look at is the same partial
+  // check as `x || []`.
+  ...[
+    ['missing', JSON.stringify({ rows: [{ name: 'desktop', width: 1440 }] })],
+    ['null', JSON.stringify({ testsDir: null, rows: [{ name: 'desktop', width: 1440 }] })],
+    ['a number', JSON.stringify({ testsDir: 42, rows: [{ name: 'desktop', width: 1440 }] })],
+    ['empty', JSON.stringify({ testsDir: '', rows: [{ name: 'desktop', width: 1440 }] })],
+  ].map(([what, json]) => [
+    `a carried mapping whose testsDir is ${what} — exit 20, not a stack trace`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'declared.json': json },
+    20, 'declared mapping from before the run could not be read',
+    { declared: true, reportArg: 'report.json' },
+  ]),
+
+  // ── AN EMPTY NUMERIC BOUND (#347 round 21) ──────────────────────────────
+  // Round 20's empty-value refusal covered the four PATH flags and stopped
+  // there. The numeric ones are defeated harder by the same construction:
+  // `Number('')` is 0, not NaN, so an empty bound slipped past the NaN guard
+  // and REBANDED the config — every positive-width phone project reclassified
+  // as tablet, reported as a missing phone declaration at exit 1. Reported for
+  // `--tablet-min`; `--laptop-min` is the sibling that was not.
+  ...[['--tablet-min'], ['--laptop-min']].map(([flag]) => [
+    `${flag} with an empty value — refused, not read as 0`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    8, `${flag} was given with no value`, { extraArgs: [flag, ''] },
+  ]),
+  // The twin: a real bound still overrides, so the refusal above is about the
+  // empty VALUE and not about the flag being present.
+  ['a real --tablet-min still overrides the default',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'OVERRIDDEN on the command line', { extraArgs: ['--tablet-min', '700'] }],
+
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
   // (`grep` matches no title) and its exit handler then writes a report claiming

@@ -34,10 +34,43 @@ def refuse(reason, detail=None):
     sys.exit(1)
 
 
-if not raw.strip():
-    refuse("report-path is empty.",
-           "The post-run gate needs a report to read; an empty value would ask it "
-           "for the execution check and give it nothing.")
+# THE DEFAULT IS DERIVED HERE, NOT WRITTEN IN THE ACTION'S YAML. It used to be
+# the literal `../../../.agent-reports/playwright-results.json`, which is correct
+# for exactly one `tests-dir` -- the shipped kit's `.github/scripts/ui-tests`,
+# three levels below the workspace -- and wrong for every other depth the
+# `tests-dir` contract permits. Codex reproduced `tests-dir: e2e` resolving the
+# default to `/.agent-reports/...` and `tests-dir: tests/ui` resolving it ABOVE
+# the repository, both refused by this validator before any test ran (#347
+# round 21). A default that only works at one depth is a hidden coupling between
+# two inputs, and nothing said so.
+#
+# Deriving it keeps the `.agent-reports/` convention the rest of the toolkit
+# uses (usage-guide.md, the review agents) while depending on no depth at all:
+# this step knows both the workspace and the tests dir, which is exactly what
+# computing the relative path needs, and nowhere else in the composite does.
+#
+# The value still travels as a tests-dir-relative path, because both consumers
+# need it that way -- the gate resolves `--report` against the tests dir, and
+# PLAYWRIGHT_JSON_OUTPUT_FILE resolves against the run step's cwd, which is the
+# same directory. So it is derived and then validated exactly like a supplied
+# one: everything below this point does not know or care which it got.
+DEFAULT_REPORT = ".agent-reports/playwright-results.json"
+
+# STRICTLY EMPTY, and whitespace is NOT empty. A whitespace-only value falls
+# through to the character rules below, which refuse surrounding whitespace with
+# a diagnostic about what the caller typed. Deriving there would silently replace
+# a value someone wrote — and #347 round 20 established, on this PR, that
+# whitespace can be a path's CONTENT rather than a synonym for absent.
+if raw == "":
+    workspace_root = os.path.realpath(os.environ.get("GITHUB_WORKSPACE") or os.getcwd())
+    tests_root = os.path.realpath(os.path.join(workspace_root, tests_dir))
+    try:
+        raw = os.path.relpath(os.path.join(workspace_root, DEFAULT_REPORT), tests_root)
+    except ValueError as exc:  # different drives on Windows runners
+        refuse("report-path was not given and a default could not be derived.",
+               f"{exc}. Pass report-path explicitly.")
+    print(f"validate-report-path: no report-path given, derived {raw!r}")
+    print(f"  ({DEFAULT_REPORT} relative to tests-dir {tests_dir!r})")
 
 # THE CHARACTER RULES, FACTORED SO THEY CAN RUN TWICE. They were written against
 # `report-path` alone, but the value that reaches the consumers is `tests_dir` +

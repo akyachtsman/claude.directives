@@ -436,10 +436,14 @@ five:
   `filterOnly:false` so a stray `test.only` over-counts, it skips `globalSetup`,
   and it carries no disposition at all — a reporter calling `testRun.skip()` on
   every test lists a full inventory. Don't reintroduce it.
-  Three consequences worth knowing before you see them in CI. A suite with no
-  executed tests FAILS, where it used to pass on declared widths alone. Tests
-  that are all SKIPPED fail the same way — a skipped test is not evidence a
-  viewport was exercised. And a selection key that narrows nothing —
+  Three consequences worth knowing before you see them in CI. A suite whose
+  report carries **no non-skipped result** FAILS, where it used to pass on
+  declared widths alone. Tests that are all SKIPPED fail the same way — a skipped
+  test is not evidence of anything. Note the direction: the gate fails on the
+  ABSENCE of a non-skipped result, and passing is not the converse — hooks that
+  fail before every test body still leave non-skipped results, so a green
+  SCHEDULED verdict does not say a test executed. And a selection key that
+  narrows nothing —
   `testIgnore: []`, `grep: /(?:)/`, `shard: {current:1,total:1}` — no longer
   trips anything; the gate used to refuse those on presence because it could not
   tell.

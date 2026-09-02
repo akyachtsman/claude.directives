@@ -750,19 +750,15 @@ exists and you are about to not follow it.
 > Asking costs one sentence. Not asking costs a round trip — and sometimes the
 > owner's confidence that the instruction was heard at all.
 
-**It adds no fifth pre-work gate — and it does add a wait.** → *Escalation Rules*
-still has exactly four, all about stopping BEFORE you act; this is not one of
-them and does not extend that list. But the raising is a *question the owner must
-answer*, so work that DEPENDS on the deviation stops until it is answered.
-Everything independent of it continues, and saying so is not permission to carry
-on as though the question were rhetorical.
+**No fifth gate; dependent work waits.** → *Escalation Rules* still has exactly
+four and this adds none. It adds a wait: work depending on the deviation stops
+until the question is answered, work independent of it continues.
 
-That is the same shape as → *"Proceed" — the Standing Directive* item 7, and the
-only difference is which kind of question it is: item 7 covers one you have NOT
-answered, this covers one you have answered DIFFERENTLY from the owner. The
-second is the more dangerous, because nothing about it looks unresolved — item 7
-fires when a session notices a gap, and this has to fire when it notices no gap
-at all. Both bind under a standing authorization and under "proceed".
+**Under a standing authorization and under "proceed", raise it anyway.** A
+knowing deviation IS the *genuinely important and critical* case → *"Proceed" —
+the Standing Directive* item 2 names, not an exception to it — the owner made
+the decision and it is not being executed. Item 7 there covers a question you
+have not answered; this covers one you have answered differently.
 
 ## Standing Authorization (owner ruling, 2026-07-22)
 Escalation Rules define when to STOP; this defines the default everywhere else,

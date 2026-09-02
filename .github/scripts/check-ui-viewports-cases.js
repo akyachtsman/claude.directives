@@ -1441,6 +1441,77 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'OVERRIDDEN on the command line', { extraArgs: ['--tablet-min', '700'] }],
 
+  // ── ONLY PLAYWRIGHT'S OWN STATUSES COUNT (#347 round 22) ────────────────
+  // The predicate was `r.status && r.status !== 'skipped'`, which counts any
+  // truthy value. Codex certified three bands at exit 0 with
+  // `"not-a-playwright-status"`; measuring the family found an OBJECT does it
+  // too, and null/primitive elements were silently ignored rather than refused.
+  // An unknown status is a report this gate does not understand, and the honest
+  // answer to that is CANNOT CHECK, not a verdict.
+  ...[
+    ['a string Playwright never emits', '"not-a-playwright-status"'],
+    ['an object', '{"a":1}'],
+    ['a number', '7'],
+    ['true', 'true'],
+  ].map(([what, json]) => [
+    `a result whose status is ${what} — CANNOT CHECK, never a verdict`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'odd-status.json': `{"suites":[{"specs":[{"tests":[{"projectName":"desktop","results":[{"status":${json}}]}]}]}]}` },
+    15, 'not shaped like a Playwright report', { reportArg: 'odd-status.json' },
+  ]),
+  ['a null result element — refused, not silently skipped',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'null-el.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop","results":[null]}]}]}]}' },
+    15, 'not shaped like a Playwright report', { reportArg: 'null-el.json' }],
+  // The twin, and it is what stops the four above being satisfiable by refusing
+  // every report: every status Playwright DOES emit is still read.
+  // ── THE GATE'S OWN SIDECAR IS A DISTINGUISHER (#347 round 22, P1) ───────
+  // `--declared` exists so the post-run join uses the widths the config declared
+  // BEFORE the run (round 14). But the pre-run pass imports the config while the
+  // sidecar is ABSENT and then writes it, so Playwright imports the same config
+  // while it is PRESENT — and a config that reads it declares one thing to the
+  // check and another to the run. The carried mapping, whose whole purpose is to
+  // be the pre-run truth, becomes the lie.
+  //
+  // Round 21's gate returned the carried mapping without re-importing, so this
+  // fixture certified all three bands at exit 0. The post-run pass now imports
+  // again and the two declarations must AGREE.
+  //
+  // The widths are SHUFFLED rather than narrowed on purpose: narrowing all three
+  // to 390 is caught by the ordinary band check, which would make this case pass
+  // for a reason that has nothing to do with the cross-check.
+  ['a config that reads the --declared sidecar — caught by the cross-check',
+    { 'playwright.config.js':
+        `import fs from 'fs';\n`
+        + `${IMPORT}`
+        + `const seen = fs.existsSync(new URL('declared.json', import.meta.url));\n`
+        + `export default defineConfig({\n  testDir: './tests',\n  projects: [\n`
+        + `    { name: 'A', use: { viewport: { width: seen ? 390 : 1440, height: 900 } } },\n`
+        + `    { name: 'B', use: { viewport: { width: 810, height: 1080 } } },\n`
+        + `    { name: 'C', use: { viewport: { width: seen ? 1440 : 390, height: 664 } } },\n`
+        + `  ],\n});\n`,
+      'tests/gate.spec.js': SPEC },
+    21, 'declared different widths before and after the run',
+    { preDeclare: true, runReport: true, declared: true }],
+  // The twin: the same shape WITHOUT the state dependence must still pass, or
+  // the case above would be satisfied by refusing every carried mapping.
+  ['…and a config that does not read it still passes the cross-check',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': SPEC },
+    0, 'check-ui-viewports: OK — SCHEDULED',
+    { preDeclare: true, runReport: true, declared: true }],
+
+  ['every real Playwright status is still accepted',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'real.json': '{"suites":[{"specs":['
+        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","results":[{"status":"failed"}]}]},'
+        + '{"tests":[{"projectName":"phone","results":[{"status":"timedOut"}]}]},'
+        + '{"tests":[{"projectName":"phone","results":[{"status":"interrupted"}]}]},'
+        + '{"tests":[{"projectName":"phone","results":[{"status":"skipped"}]}]}'
+        + ']}]}' },
+    0, 'check-ui-viewports: OK — SCHEDULED', { reportArg: 'real.json' }],
+
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
   // (`grep` matches no title) and its exit handler then writes a report claiming
@@ -1581,6 +1652,15 @@ function runCase(files, opts) {
     // for a fixture whose reporters are incidental and exactly wrong for one
     // that is ABOUT a reporter. Those set opts.ownReporter and declare a json
     // reporter of their own alongside the reporter under test.
+    // opts.preDeclare: run the WHOLE composite sequence — the pre-run
+    // declaration pass, then Playwright, then the post-run check — because a
+    // config that answers differently across the run cannot be exercised by a
+    // single invocation. The sidecar's existence is the state that changes, and
+    // it changes because THIS pass writes it (#347 round 22).
+    if (o.preDeclare) {
+      spawnSync(process.execPath, [bin, '--tests-dir', target, '--declared', join(tmp, 'declared.json')],
+        { encoding: 'utf8', env, cwd: REPO_ROOT, timeout: 60000, killSignal: 'SIGKILL' });
+    }
     if (o.runReport) {
       const runArgs = o.ownReporter ? ['playwright', 'test'] : ['playwright', 'test', '--reporter=json'];
       // PLAYWRIGHT_JSON_OUTPUT_NAME rather than capturing stdout. A config is

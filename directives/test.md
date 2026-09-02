@@ -409,6 +409,19 @@ five:
   directives#349; reopen it only with a mechanism, since every candidate so far
   either lives inside the same process or is an enumeration.
 
+  **The declaration is checked twice, and the two must agree.** The pre-run pass
+  writes the widths it read; the post-run pass imports the config again and
+  compares. Where they differ the gate reports CANNOT CHECK (exit 21) rather than
+  a verdict, because the widths it would band by are not the ones the run used.
+  The verdict, when they agree, is still computed from the PRE-RUN reading.
+
+  This exists because the gate creates the difference itself: the `--declared`
+  sidecar does not exist when the pre-run pass imports your config and does exist
+  when Playwright imports it, so a config that reads the filesystem can answer
+  the two differently. Agreement proves the config answered **consistently**, not
+  that it answered **honestly** — a config that lies the same way twice is
+  believed, which is directives#349's family.
+
   **A test that sets its own viewport must still say so.** `setViewportSize()`
   inside a test overrides the project's, so that test runs at the width IT chose
   in *every* project. Push `{ type: 'viewport-override' }` onto

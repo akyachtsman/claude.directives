@@ -202,7 +202,13 @@ A directive repo must pass its own CI before it can be trusted downstream.
   own exit handler can replace the report, and a corrupted array primitive can
   forge a declaration row. Both reproduced, #347 round 11. It catches DRIFT, not
   FORGERY, and every candidate mechanism is either inside the same process or an
-  enumeration; the fixture is pinned at exit 0 in the direction of STAYING a
+  enumeration. #347 round 22 found the gate creating a distinguisher of its own —
+  the `--declared` sidecar is absent when the pre-run pass imports the config and
+  present when Playwright does, so a config reading it declared one thing to the
+  check and another to the run, and the carried mapping became the lie. The
+  post-run pass now re-imports and the two declarations must AGREE (exit 21);
+  the verdict is still computed from the PRE-RUN reading, so round 14's property
+  survives. Agreement proves CONSISTENCY, never honesty; the fixture is pinned at exit 0 in the direction of STAYING a
   limit, so if it starts being caught the case reddens and gets read. #349), job
   bounds
   (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an

@@ -131,6 +131,9 @@
 //      could not be written on the pre-run pass (CANNOT CHECK). Re-importing the
 //      config here would restore the re-evaluation the flag exists to prevent,
 //      so a missing mapping refuses rather than falling back (#347 round 14).
+//  21  the config declared different widths before and after the run, so the
+//      carried mapping is not the config the run used (CANNOT CHECK). Agreement
+//      proves consistency, never honesty — directives#349.
 //
 // The three RETIRED codes are kept in this list rather than deleted. They were
 // documented exits of a shipped gate, and a reader meeting one in an old CI log
@@ -263,6 +266,17 @@ function readReport(reportPath) {
   // one (round 5). Where they do not, the test-level list is the only evidence
   // that exists — retry scoping is unavailable on such a report because the
   // data is, not because this chose to ignore it.
+  // PLAYWRIGHT'S OWN STATUSES, AND NOTHING ELSE COUNTS. The predicate below read
+  // `r.status && r.status !== 'skipped'`, which counts ANY truthy value: a
+  // string Playwright never emits, and an object, both certified three bands at
+  // exit 0 (Codex, #347 round 22 — reproduced with `"not-a-playwright-status"`
+  // and again with `{"a":1}`). A malformed element was silently ignored rather
+  // than refused, so a report could be half-read and still produce a verdict.
+  //
+  // The list is Playwright's, not a guess: these are the values its JSON
+  // reporter emits for a result. An unknown status is a report this gate does
+  // not understand, and the only honest answer to that is CANNOT CHECK.
+  const STATUSES = new Set(['passed', 'failed', 'timedOut', 'interrupted', 'skipped']);
   const OVERRIDE = 'viewport-override';
   const overrides = (r, t) => {
     const list = Array.isArray(r.annotations) ? r.annotations
@@ -338,8 +352,18 @@ function readReport(reportPath) {
         if (!obj(t, 'a test')) continue;
         total += 1;
         const name = typeof t.projectName === 'string' ? t.projectName : '';
-        const ran = arr(t.results, 'test.results').some(r => r && r.status
-          && r.status !== 'skipped' && !overrides(r, t));
+        const ran = arr(t.results, 'test.results').some((r) => {
+          if (!obj(r, 'a result')) return false;
+          if (typeof r.status !== 'string' || !STATUSES.has(r.status)) {
+            if (!malformed) {
+              malformed = `a result has status ${describe(r.status)}`
+                + `${typeof r.status === 'string' ? ` (${JSON.stringify(r.status)})` : ''},`
+                + ' expected one of ' + [...STATUSES].join(', ');
+            }
+            return false;
+          }
+          return r.status !== 'skipped' && !overrides(r, t);
+        });
         if (ran) executed.set(name, (executed.get(name) || 0) + 1);
       }
     }
@@ -736,6 +760,10 @@ const declaredIdx = (() => {
 })();
 
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
+// The pre-run declaration, when one was carried. Set in the branch below and
+// consumed after the spawn, so the post-run pass can compare it against a fresh
+// import rather than trusting it alone (#347 round 22).
+let CARRIED = null;
 if (!VERDICT_FILE) {
   // READ THE MAPPING RATHER THAN RE-DERIVE IT. Only when a report is also being
   // read: without one this IS the pre-run invocation, whose job is to produce the
@@ -770,7 +798,38 @@ if (!VERDICT_FILE) {
       console.error('check-ui-viewports: FAIL (code 20)');
       process.exit(20);
     }
-    decideFromRows(carried.rows, carried.testsDir, 'the pre-run declaration');
+    // THE SIDECAR IS STATE THIS GATE CREATES BETWEEN THE TWO EVALUATIONS, and
+    // round 14 shipped it without noticing that. The pre-run pass imports the
+    // config while the file is ABSENT and then writes it; Playwright imports the
+    // same config while it is PRESENT. So a config that reads the sidecar
+    // declares one thing to the check and another to the run, and the carried
+    // mapping — the whole point of which is to be the pre-run truth — becomes the
+    // lie. Codex reproduced it: three projects declaring 1280/900/390 before the
+    // command and 390/390/390 during the run, an honest report naming all three,
+    // and exit 0 claiming every band (#347 round 22).
+    //
+    // This is round 1's argv finding again in a different costume, and the
+    // precedent from that round is the one to follow: when the GATE creates the
+    // distinguisher, do not document it — remove its power. Hiding the path does
+    // not work (any directory is enumerable, and the child's own argv carries it),
+    // and carrying the mapping out of band does not either: every channel GitHub
+    // Actions offers is a file the config can read or an env var the composite's
+    // parity rule puts on the run step too.
+    //
+    // So the mapping stops being trusted on its own. The post-run pass imports
+    // the config AGAIN and the two declarations must AGREE; where they do not,
+    // the config answered differently across the run and no verdict is available.
+    // Round 14's property is preserved exactly — the verdict is still computed
+    // from the PRE-RUN rows, never the post-run ones — so a config that drifts
+    // innocently is refused rather than silently re-banded, which is what round
+    // 14 was about. What is added is that drifting is now visible.
+    //
+    // ⚠️ WHAT THIS DOES NOT ESTABLISH. Agreement means the config answered the
+    // same way twice, not that it answered honestly: a config that reads the
+    // sidecar and lies CONSISTENTLY — narrow before the run and narrow after —
+    // agrees with itself and is believed. That is directives#349's family, and
+    // the gate says so rather than implying more.
+    CARRIED = { rows: carried.rows, testsDir: carried.testsDir };
   }
 
   const { spawnSync } = require('child_process');
@@ -909,6 +968,28 @@ if (!VERDICT_FILE) {
     let rows = null;
     try { rows = JSON.parse(readFileSync(`${file}.rows`, 'utf8')); } catch { /* below */ }
     if (rows && rows.nonce === nonce) {
+      if (CARRIED) {
+        // COMPARED AS A MAPPING, not as a serialisation. Key order and any field
+        // this gate does not band on are not differences, so a config is refused
+        // for changing a WIDTH, never for the report's shape.
+        const asMap = list => JSON.stringify(
+          list.map(r => [r.name, r.width]).sort((a, b) => (a[0] < b[0] ? -1 : 1)));
+        if (asMap(CARRIED.rows) !== asMap(rows.rows)) {
+          console.error('CANNOT CHECK: the config declared different widths before and after the run.');
+          console.error(`  before: ${asMap(CARRIED.rows)}`);
+          console.error(`  after:  ${asMap(rows.rows)}`);
+          console.error('  The verdict is computed from the PRE-RUN declaration, so a config that');
+          console.error('  answers differently across the run has no declaration this gate can use.');
+          console.error('  The commonest cause is a config reading state the run creates — including');
+          console.error('  this gate\'s own --declared sidecar, which exists during the run and did');
+          console.error('  not exist when the pre-run check imported the config (#347 round 22).');
+          console.error('  Agreement would not prove honesty either, only consistency: see');
+          console.error('  test.md -> UI coverage gates and directives#349.');
+          console.error('check-ui-viewports: FAIL (code 21)');
+          process.exit(21);
+        }
+        decideFromRows(CARRIED.rows, CARRIED.testsDir, 'the pre-run declaration');
+      }
       decideFromRows(rows.rows, rows.testsDir, 'the config evaluation');
     }
     console.error('CANNOT CHECK: the evaluation reported a pass its own data does not support.');

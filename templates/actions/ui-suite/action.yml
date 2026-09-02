@@ -308,7 +308,7 @@ runs:
       # exits 0 and deletes NOTHING, so the stale report survives and the
       # post-run gate certifies it (Codex, #347 round 5). Quoting stops the
       # shell from splitting it; only `--` stops rm from interpreting it.
-      run: rm -f -- "$REPORT_PATH"
+      run: rm -f -- "$REPORT_PATH" "$REPORT_PATH.declared"
       working-directory: ${{ inputs.tests-dir }}
 
     - name: Check three viewport classes are declared
@@ -345,7 +345,7 @@ runs:
         # FROM THE VALIDATED OUTPUT, never the action input — every consumer in
         # this composite now reads a value the validator accepted (#347 r10).
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
-      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir .
+      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --declared "$REPORT_PATH.declared"
 
     - name: Run Playwright tests
       shell: bash
@@ -420,7 +420,7 @@ runs:
       # quote and a shell operator would execute — the same template-injection
       # class the viewport-check step above records having been caught on once
       # already. Quoting the expression does not help; quoting the VARIABLE does.
-      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --report "$REPORT_PATH"
+      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --declared "$REPORT_PATH.declared" --report "$REPORT_PATH"
       working-directory: ${{ inputs.tests-dir }}
 
     - name: Upload test results

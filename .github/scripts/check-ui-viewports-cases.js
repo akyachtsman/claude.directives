@@ -1199,6 +1199,28 @@ const CASES = [
       + "    { name: 'c', use: { viewport: { width: 1300, height: 900 } } },\n") },
     1, 'no project declares a phone viewport'],
 
+  // ── THE DECLARED MAPPING CROSSES THE RUN (#347 round 14) ────────────────
+  // The post-run invocation used to import the config AGAIN, after globalSetup,
+  // the tests and globalTeardown had all run. Codex reproduced a config whose
+  // project C is a laptop before the run and a phone after teardown drops a
+  // marker: the run scheduled A/B/C at laptop/tablet/laptop and phone project D
+  // matched nothing, and the post-run evaluation reported `SCHEDULED … phone:C`.
+  //
+  // `--declared` carries the pre-run mapping across. These two pin the write and
+  // the refusal; the reclassification itself is exercised end-to-end by
+  // check-repo-map-ui's sibling fixture in the PR, since it needs a real run.
+  ['--declared writes the mapping on a passing declaration',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'mapping written for the post-run check', { declared: true }],
+
+  // A MISSING MAPPING REFUSES RATHER THAN RE-IMPORTING. Falling back would
+  // silently restore the re-evaluation the flag replaced — the fail-open shape
+  // this file exists to catch.
+  ['--declared with --report and no mapping — refused, not re-imported',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    20, 'declared mapping from before the run could not be read',
+    { declaredMissing: true, runReport: true }],
+
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
   // (`grep` matches no title) and its exit handler then writes a report claiming
@@ -1322,6 +1344,9 @@ function runCase(files, opts) {
     if (o.configArg) args.push('--config', o.configArgRelative ? o.configArg : join(tmp, o.configArg));
     // Extra flags verbatim, for the band-bound cases (#347 round 12).
     if (o.extraArgs) args.push(...o.extraArgs);
+    // The declared-mapping sidecar lives in the fixture dir (#347 round 14).
+    if (o.declared) args.push('--declared', join(tmp, 'declared.json'));
+    if (o.declaredMissing) args.push('--declared', join(tmp, 'absent.json'));
     // opts.runReport: RUN the suite first, then check its report. Since #335's
     // second design the coverage claim comes from the run's own JSON report, so
     // a case about execution has to produce one — nothing before the run can

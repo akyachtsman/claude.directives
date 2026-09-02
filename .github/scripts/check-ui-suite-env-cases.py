@@ -58,9 +58,10 @@ UNSET = object()
 # construction and prove nothing about it; spelling them again is what makes a
 # silent edit to SEQUENCE fail here.
 GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
-CHECK_BODY = f"{GATE} --tests-dir ."
+DECLARED = '--declared "$REPORT_PATH.declared"'
+CHECK_BODY = f"{GATE} --tests-dir . {DECLARED}"
 RUN_BODY = "npx playwright test"
-POST_BODY = f'{GATE} --tests-dir . --report "$REPORT_PATH"'
+POST_BODY = f'{GATE} --tests-dir . {DECLARED} --report "$REPORT_PATH"'
 
 # The pinned EXECUTION CONTROLS (#347 round 11). Spelled out here for the same
 # reason as the bodies: importing them from the guard would make these cases
@@ -345,6 +346,24 @@ CASES = [
 
     ("post-run check drops --report — refused",
      action(dict(BOTH), dict(BOTH), post_body=CHECK_BODY), 1, PIN),
+
+    # ── #347 round 14: THE DECLARED MAPPING MUST CROSS THE RUN ───────────────
+    # The pre-run step writes the project->width mapping and the post-run step
+    # reads it. Drop the flag from either and the post-run check goes back to
+    # importing a config that globalSetup, the tests and globalTeardown have all
+    # had a turn at — the re-evaluation the flag exists to replace.
+    ("post-run check drops --declared — refused",
+     action(dict(BOTH), dict(BOTH),
+            post_body=f'{GATE} --tests-dir . --report "$REPORT_PATH"'), 1, PIN),
+
+    ("pre-run check drops --declared — refused",
+     action(dict(BOTH), dict(BOTH),
+            check_body=f"{GATE} --tests-dir ."), 1, PIN),
+
+    ("the two steps name DIFFERENT sidecars — refused",
+     action(dict(BOTH), dict(BOTH),
+            post_body=f'{GATE} --tests-dir . --declared "other.json" --report "$REPORT_PATH"'),
+     1, PIN),
 
     # The twin: the pre-run check must NOT be required to pass --report, or the
     # requirement would be a blanket rule rather than one about this step's job.

@@ -144,7 +144,7 @@
 //   UI_TESTS_DIR=... node .github/scripts/check-ui-viewports.js
 // Options: --config <path>, --tablet-min <px> (768), --laptop-min <px> (1024)
 
-const { existsSync, statSync, mkdtempSync, writeFileSync, readFileSync, rmSync } = require('fs');
+const { existsSync, statSync, mkdtempSync, writeFileSync, readFileSync, rmSync, realpathSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
 const { resolve, join, isAbsolute, dirname } = require('path');
@@ -309,8 +309,257 @@ const bandOpt = (flag, fallback) => {
   return { value: fallback, given: false };
 };
 
+// THE BAND DECISION AND THE JOIN, IN ONE PLACE, called from two.
+//
+// Round 14 gave the post-run invocation a second way in — reading the mapping
+// carried from before the run instead of importing the config again — and two
+// callers computing the verdict separately is precisely the shape this file has
+// been burned by (two flag parsers, two escaping rules, two definitions of
+// "inside the workspace"). So there is one.
+//
+// ROWS are already structurally validated by the caller in the carried case and
+// by the nonce check in the spawned case; this validates them again because it
+// is the function that acts on them.
+function decideFromRows(ROWS, TESTS, SOURCE) {
+  const bands = ['laptop', 'tablet', 'phone'];
+  // THE PARENT COMPUTES THE BANDS. It does not read a `cover` map, because
+  // there is no longer one to read.
+  //
+  // Until round 11 the child sent both the rows and its own `cover`, and this
+  // block checked `cover[b].length > 0` — trusting exactly the arithmetic the
+  // comment two hundred lines down claimed the parent was re-doing. Codex
+  // showed the gap with `Array.prototype.filter = () => []` plus
+  // `Array.prototype.toJSON = () => ['phone']`: the LEGITIMATE child stamps the
+  // real nonce onto forged arrays, so authentication of the writer said nothing
+  // about the content, and a phone-only config printed all three bands.
+  //
+  // The nonce answers "who wrote this". This answers "is it true", and the two
+  // are different questions — conflating them is what the round-10 fix quietly
+  // did. So the payload now carries only OBSERVATIONS (a project name and the
+  // number its config gave for width) and every conclusion is drawn here, by a
+  // process that never imported the config.
+  //
+  // Band bounds are re-derived from argv rather than taken from the payload,
+  // for the same reason: a bound the child supplies is a bound the config can
+  // choose. This duplicates the parsing further down (that copy runs in the
+  // child) — two readings of one flag, deliberately, because the alternative is
+  // the child telling the parent what "laptop" means.
+  const tabletMin = bandOpt('--tablet-min', 768).value;
+  const laptopMin = bandOpt('--laptop-min', 1024).value;
+  // STRICT ROWS. Every row must be an object with a string name; `width` is
+  // optional (the UNCLASSIFIABLE rows carry none) but when present must be a
+  // finite number. A `toJSON` hook that collapses the array to strings, or an
+  // object prototype that reshapes the entries, fails here rather than
+  // arriving as a plausible-looking cover map.
+  const rowList = Array.isArray(ROWS) ? ROWS : null;
+  const rowsWellFormed = rowList !== null && rowList.every(r => r && typeof r === 'object'
+    && !Array.isArray(r) && typeof r.name === 'string'
+    && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+  const cover = { laptop: [], tablet: [], phone: [] };
+  if (rowsWellFormed && Number.isFinite(tabletMin) && Number.isFinite(laptopMin)
+      && tabletMin < laptopMin) {
+    for (const r of rowList) {
+      if (typeof r.width !== 'number' || !Number.isFinite(r.width)) continue;
+      cover[r.width >= laptopMin ? 'laptop' : r.width >= tabletMin ? 'tablet' : 'phone']
+        .push(r.name);
+    }
+  }
+  const ok = rowsWellFormed && bands.every(b => cover[b].length > 0);
+  if (ok) {
+    // ── STAGE TWO: WHAT ACTUALLY RAN ─────────────────────────────────────
+    // Only when a report is supplied. Without one this gate reports what the
+    // config DECLARES and says so plainly — that is a real check (a missing
+    // band is exit 1 and provable from the widths alone) and it is fast enough
+    // to run before the suite. The coverage claim needs the run, and the
+    // ui-suite composite invokes this again with `--report` afterwards.
+    // Read from argv directly: `opt()` is defined further down, in the section
+    // that runs in the CHILD, and this block is the parent.
+    // BOTH SPELLINGS, still. The original reason was a disagreement: round 7
+    // found check-ui-suite-env.py accepting `--report=<path>` while this
+    // parser understood only the space-separated form, so that spelling passed
+    // the guard and then got the declaration-only verdict at exit 0 — the
+    // guard certifying a command this script silently ignored.
+    //
+    // That guard no longer decides anything from the flag's spelling: since
+    // round 10 it pins the composite's command bodies verbatim, and the pinned
+    // post-run body uses the space-separated form. So the coupling is gone
+    // rather than resolved. Both spellings stay supported HERE because this
+    // script is also run by hand and from project scripts, where `--report=`
+    // is the more natural spelling, and a flag that is silently ignored is the
+    // exact failure round 7 recorded.
+    let reportIdx = process.argv.indexOf('--report');
+    let reportArg = reportIdx >= 0 ? process.argv[reportIdx + 1] : undefined;
+    if (reportIdx < 0) {
+      const eq = process.argv.findIndex(a => a.startsWith('--report='));
+      if (eq >= 0) { reportIdx = eq; reportArg = process.argv[eq].slice('--report='.length); }
+    }
+    // A PRESENT FLAG WITH NO PATH IS A USAGE ERROR, NOT A QUIETER CHECK.
+    // `--report ''` — which is what an unset REPORT_PATH expands to in the
+    // composite — used to fall through the truthiness test and print the
+    // DECLARED verdict, so the caller asked for the execution check and got
+    // silence with a passing exit (Codex, #347 round 6). Someone who passes
+    // the flag wants stage two; if the path is missing, say so.
+    if (reportIdx >= 0 && !String(reportArg || '').trim()) {
+      console.error('CANNOT CHECK: --report was given with no path.');
+      console.error('  Passing the flag asks for the execution check, so an empty value is a');
+      console.error('  usage error rather than a reason to fall back on the declaration.');
+      console.error('  In the ui-suite composite this is an unset or empty `report-path`.');
+      console.error('check-ui-viewports: FAIL (code 8)');
+      process.exit(8);
+    }
+    if (reportArg) {
+      // THE PHYSICAL TESTS DIRECTORY, NOT THE LEXICAL ONE. Playwright's own
+      // process is already INSIDE the symlink's target — `chdir` resolves
+      // symlinks — so a reporter writing `../report.json` from a suite at
+      // `real/tests` exposed as `link` lands it in `real/`. Resolving the
+      // same relative path against the lexical `link` normalises the `..`
+      // BEFORE the symlink is followed and looks beside `link` instead, so a
+      // successful run reported exit 15, report unreadable (Codex, #347 round
+      // 14). Same lesson the config resolution learned in #333 round 14, in
+      // the one place it had not been applied.
+      const testsReal = (() => { try { return realpathSync(TESTS); }
+        catch { return TESTS; } })();
+      const run = readReport(isAbsolute(reportArg) ? reportArg : resolve(testsReal, reportArg));
+      if (!run.ok) {
+        console.error('CANNOT CHECK: could not read what the run did.');
+        for (const line of run.lines) console.error(`  ${line}`);
+        console.error(`check-ui-viewports: FAIL (code ${run.code})`);
+          process.exit(run.code);
+      }
+      // ONE LABEL FOR THE EMPTY KEY, and it is only ever a LABEL. The join
+      // runs on the raw name, so a project actually named `(no name)` is a
+      // different key from a project with none — Codex reported the reverse
+      // for the old `(unnamed)` sentinel (#347 round 3), which was a real
+      // collision because the two sides of the join disagreed. They agree now
+      // (both use the empty string), and this only decides what gets printed.
+      // Without it a `declared by:` line for an unnamed project printed empty.
+      const label = n => (n === '' ? '(no name)' : n);
+      const ranIn = n => (run.executed.get(n) || 0) > 0;
+      const missing = bands.filter(b => !cover[b].some(ranIn));
+      if (missing.length) {
+        for (const b of missing) {
+          console.error(`FAIL: ${b} is declared but NOTHING RAN at that width.`);
+          console.error(`  declared by: ${cover[b].map(label).join(', ')}`);
+        }
+        const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
+        console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
+        console.error('  This is the run\'s own report, not an inference: the widths are declared');
+        console.error('  correctly and no scenario executed at them. A filter, an ignore rule, a');
+        console.error('  shard, a reporter, a focused test, a global setup — this gate does not');
+        console.error('  need to know which, because it is reading the outcome rather than');
+        console.error('  predicting it.');
+        console.error('  test.md -> UI coverage gates, fifth gate.');
+          process.exit(12);
+      }
+      const where = b => cover[b].filter(ranIn).map(label).join('/');
+      console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
+      console.log('  (a test EXECUTED in a project declaring each width. This does NOT');
+      console.log('   establish that a page was rendered at it: a test that never opens a');
+      console.log('   page, or whose body never starts, counts here. #347 rounds 5-7 tried');
+      console.log('   three mechanisms for the stronger claim and three variants of one');
+      console.log('   finding defeated all three — see test.md -> UI coverage gates.)');
+      console.log('  (evidence: the run\'s own report, written by the process the config');
+      console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
+      console.log('   drift, not forgery. directives#349.)');
+      console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) executed)`);
+    } else {
+      // THE PRE-RUN INVOCATION. Write the mapping so the post-run one joins
+      // against the widths the config declared BEFORE the suite ran, rather than
+      // importing it again afterwards (#347 round 14). Written only on a PASS:
+      // a refusal has already exited, and a mapping for a config this gate
+      // rejected is not one anything should later read.
+      if (declaredIdx.given) {
+        try {
+          writeFileSync(declaredIdx.path,
+            JSON.stringify({ rows: rowList, testsDir: TESTS }), 'utf8');
+        } catch (e) {
+          console.error('CANNOT CHECK: could not write the declared mapping.');
+          console.error(`  --declared ${declaredIdx.path}`);
+          console.error(`  ${(e && e.message) || e}`);
+          console.error('  The post-run check reads this file and refuses without it, so a');
+          console.error('  silent skip here would surface as a confusing refusal later.');
+          console.error('check-ui-viewports: FAIL (code 20)');
+          process.exit(20);
+        }
+      }
+      const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
+      console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
+      console.log('  (declared, not executed — pass --report <playwright json> after the run');
+      console.log('   to certify that scenarios actually ran at these widths)');
+      if (declaredIdx.given) console.log(`  (mapping written for the post-run check: ${declaredIdx.path})`);
+    }
+  }
+  if (!ok) {
+    console.error('CANNOT CHECK: the evaluation reported a pass its own data does not support.');
+    console.error('  Every band must be covered by at least one unrestricted project for a');
+    console.error('  pass to stand, and the reported rows do not show that.');
+    console.error(`  source: ${SOURCE}`);
+    console.error('  The child computes with whatever the config left of the runtime; this');
+    console.error('  process re-checks the conclusion with intrinsics the config never saw.');
+    console.error('check-ui-viewports: FAIL (code 14)');
+    process.exit(14);
+  }
+  process.exit(0);
+}
+
+// THE DECLARED MAPPING, CARRIED FROM BEFORE THE RUN TO AFTER IT.
+//
+// The composite invokes this gate twice, and until round 14 the SECOND
+// invocation imported the config again — after globalSetup, the tests and
+// globalTeardown had all run. A config whose project→width mapping depends on
+// state the run creates therefore gave a different answer to the join than it
+// gave to the run. Codex reproduced it with a `globalTeardown` writing a marker:
+// the run scheduled A/B/C at laptop/tablet widths with phone project D matching
+// nothing, and the post-run evaluation reclassified C as phone, so the gate
+// exited 0 with `SCHEDULED … phone:C`.
+//
+// With `--declared <path>` the mapping crosses the run instead of being
+// re-derived: the pre-run invocation WRITES it, the post-run invocation READS it
+// and does not import the config at all. The run's own evaluation happens
+// between the two, so the pre-run answer is the nearest thing to it that exists
+// outside the run.
+//
+// ⚠️ What this does NOT establish, stated because the neighbouring comment
+// already had to: a config keyed on state `globalSetup` creates still differs
+// between this gate and the run, since globalSetup executes inside the run step.
+// That is the same family as directives#349 — evidence produced by processes the
+// config runs in — and this closes the teardown half of it, not the whole.
+const declaredIdx = (() => {
+  const i = process.argv.indexOf('--declared');
+  if (i >= 0) return { path: process.argv[i + 1], given: true };
+  const eq = process.argv.find(a => a.startsWith('--declared='));
+  if (eq !== undefined) return { path: eq.slice('--declared='.length), given: true };
+  return { path: undefined, given: false };
+})();
+
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
 if (!VERDICT_FILE) {
+  // READ THE MAPPING RATHER THAN RE-DERIVE IT. Only when a report is also being
+  // read: without one this IS the pre-run invocation, whose job is to produce the
+  // mapping. `--declared` with `--report` and no readable file is a refusal, not
+  // a fallback to importing — falling back would silently restore exactly the
+  // re-evaluation this flag exists to prevent.
+  const wantsReport = process.argv.includes('--report')
+    || process.argv.some(a => a.startsWith('--report='));
+  if (declaredIdx.given && wantsReport) {
+    let carried = null;
+    try { carried = JSON.parse(readFileSync(declaredIdx.path, 'utf8')); } catch { /* below */ }
+    const ok = carried && Array.isArray(carried.rows) && carried.rows.every(r => r
+      && typeof r === 'object' && !Array.isArray(r) && typeof r.name === 'string'
+      && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+    if (!ok) {
+      console.error('CANNOT CHECK: the declared mapping from before the run could not be read.');
+      console.error(`  --declared ${declaredIdx.path}`);
+      console.error('  The pre-run invocation writes this file; the post-run one reads it so the');
+      console.error('  join uses the widths the config declared BEFORE the suite ran. Re-importing');
+      console.error('  the config here would ask a config that may depend on run state (#347');
+      console.error('  round 14), so a missing mapping refuses rather than falling back.');
+      console.error('check-ui-viewports: FAIL (code 20)');
+      process.exit(20);
+    }
+    decideFromRows(carried.rows, carried.testsDir, 'the pre-run declaration');
+  }
+
   const { spawnSync } = require('child_process');
   const { randomBytes } = require('crypto');
   const box = mkdtempSync(join(tmpdir(), 'ui-viewports-verdict-'));
@@ -446,153 +695,13 @@ if (!VERDICT_FILE) {
   if (recorded && recorded.code === 0) {
     let rows = null;
     try { rows = JSON.parse(readFileSync(`${file}.rows`, 'utf8')); } catch { /* below */ }
-    const bands = ['laptop', 'tablet', 'phone'];
-    // THE PARENT COMPUTES THE BANDS. It does not read a `cover` map, because
-    // there is no longer one to read.
-    //
-    // Until round 11 the child sent both the rows and its own `cover`, and this
-    // block checked `cover[b].length > 0` — trusting exactly the arithmetic the
-    // comment two hundred lines down claimed the parent was re-doing. Codex
-    // showed the gap with `Array.prototype.filter = () => []` plus
-    // `Array.prototype.toJSON = () => ['phone']`: the LEGITIMATE child stamps the
-    // real nonce onto forged arrays, so authentication of the writer said nothing
-    // about the content, and a phone-only config printed all three bands.
-    //
-    // The nonce answers "who wrote this". This answers "is it true", and the two
-    // are different questions — conflating them is what the round-10 fix quietly
-    // did. So the payload now carries only OBSERVATIONS (a project name and the
-    // number its config gave for width) and every conclusion is drawn here, by a
-    // process that never imported the config.
-    //
-    // Band bounds are re-derived from argv rather than taken from the payload,
-    // for the same reason: a bound the child supplies is a bound the config can
-    // choose. This duplicates the parsing further down (that copy runs in the
-    // child) — two readings of one flag, deliberately, because the alternative is
-    // the child telling the parent what "laptop" means.
-    const tabletMin = bandOpt('--tablet-min', 768).value;
-    const laptopMin = bandOpt('--laptop-min', 1024).value;
-    // STRICT ROWS. Every row must be an object with a string name; `width` is
-    // optional (the UNCLASSIFIABLE rows carry none) but when present must be a
-    // finite number. A `toJSON` hook that collapses the array to strings, or an
-    // object prototype that reshapes the entries, fails here rather than
-    // arriving as a plausible-looking cover map.
-    const rowList = rows && Array.isArray(rows.rows) ? rows.rows : null;
-    const rowsWellFormed = rowList !== null && rowList.every(r => r && typeof r === 'object'
-      && !Array.isArray(r) && typeof r.name === 'string'
-      && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
-    const cover = { laptop: [], tablet: [], phone: [] };
-    if (rowsWellFormed && Number.isFinite(tabletMin) && Number.isFinite(laptopMin)
-        && tabletMin < laptopMin) {
-      for (const r of rowList) {
-        if (typeof r.width !== 'number' || !Number.isFinite(r.width)) continue;
-        cover[r.width >= laptopMin ? 'laptop' : r.width >= tabletMin ? 'tablet' : 'phone']
-          .push(r.name);
-      }
+    if (rows && rows.nonce === nonce) {
+      decideFromRows(rows.rows, rows.testsDir, 'the config evaluation');
     }
-    const ok = rows && rows.nonce === nonce && rowsWellFormed
-      && bands.every(b => cover[b].length > 0);
-    if (ok) {
-      // ── STAGE TWO: WHAT ACTUALLY RAN ─────────────────────────────────────
-      // Only when a report is supplied. Without one this gate reports what the
-      // config DECLARES and says so plainly — that is a real check (a missing
-      // band is exit 1 and provable from the widths alone) and it is fast enough
-      // to run before the suite. The coverage claim needs the run, and the
-      // ui-suite composite invokes this again with `--report` afterwards.
-      // Read from argv directly: `opt()` is defined further down, in the section
-      // that runs in the CHILD, and this block is the parent.
-      // BOTH SPELLINGS, still. The original reason was a disagreement: round 7
-      // found check-ui-suite-env.py accepting `--report=<path>` while this
-      // parser understood only the space-separated form, so that spelling passed
-      // the guard and then got the declaration-only verdict at exit 0 — the
-      // guard certifying a command this script silently ignored.
-      //
-      // That guard no longer decides anything from the flag's spelling: since
-      // round 10 it pins the composite's command bodies verbatim, and the pinned
-      // post-run body uses the space-separated form. So the coupling is gone
-      // rather than resolved. Both spellings stay supported HERE because this
-      // script is also run by hand and from project scripts, where `--report=`
-      // is the more natural spelling, and a flag that is silently ignored is the
-      // exact failure round 7 recorded.
-      let reportIdx = process.argv.indexOf('--report');
-      let reportArg = reportIdx >= 0 ? process.argv[reportIdx + 1] : undefined;
-      if (reportIdx < 0) {
-        const eq = process.argv.findIndex(a => a.startsWith('--report='));
-        if (eq >= 0) { reportIdx = eq; reportArg = process.argv[eq].slice('--report='.length); }
-      }
-      // A PRESENT FLAG WITH NO PATH IS A USAGE ERROR, NOT A QUIETER CHECK.
-      // `--report ''` — which is what an unset REPORT_PATH expands to in the
-      // composite — used to fall through the truthiness test and print the
-      // DECLARED verdict, so the caller asked for the execution check and got
-      // silence with a passing exit (Codex, #347 round 6). Someone who passes
-      // the flag wants stage two; if the path is missing, say so.
-      if (reportIdx >= 0 && !String(reportArg || '').trim()) {
-        console.error('CANNOT CHECK: --report was given with no path.');
-        console.error('  Passing the flag asks for the execution check, so an empty value is a');
-        console.error('  usage error rather than a reason to fall back on the declaration.');
-        console.error('  In the ui-suite composite this is an unset or empty `report-path`.');
-        console.error('check-ui-viewports: FAIL (code 8)');
-        process.exit(8);
-      }
-      if (reportArg) {
-        const run = readReport(isAbsolute(reportArg) ? reportArg : resolve(rows.testsDir, reportArg));
-        if (!run.ok) {
-          console.error('CANNOT CHECK: could not read what the run did.');
-          for (const line of run.lines) console.error(`  ${line}`);
-          console.error(`check-ui-viewports: FAIL (code ${run.code})`);
-            process.exit(run.code);
-        }
-        // ONE LABEL FOR THE EMPTY KEY, and it is only ever a LABEL. The join
-        // runs on the raw name, so a project actually named `(no name)` is a
-        // different key from a project with none — Codex reported the reverse
-        // for the old `(unnamed)` sentinel (#347 round 3), which was a real
-        // collision because the two sides of the join disagreed. They agree now
-        // (both use the empty string), and this only decides what gets printed.
-        // Without it a `declared by:` line for an unnamed project printed empty.
-        const label = n => (n === '' ? '(no name)' : n);
-        const ranIn = n => (run.executed.get(n) || 0) > 0;
-        const missing = bands.filter(b => !cover[b].some(ranIn));
-        if (missing.length) {
-          for (const b of missing) {
-            console.error(`FAIL: ${b} is declared but NOTHING RAN at that width.`);
-            console.error(`  declared by: ${cover[b].map(label).join(', ')}`);
-          }
-          const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
-          console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
-          console.error('  This is the run\'s own report, not an inference: the widths are declared');
-          console.error('  correctly and no scenario executed at them. A filter, an ignore rule, a');
-          console.error('  shard, a reporter, a focused test, a global setup — this gate does not');
-          console.error('  need to know which, because it is reading the outcome rather than');
-          console.error('  predicting it.');
-          console.error('  test.md -> UI coverage gates, fifth gate.');
-            process.exit(12);
-        }
-        const where = b => cover[b].filter(ranIn).map(label).join('/');
-        console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
-        console.log('  (a test EXECUTED in a project declaring each width. This does NOT');
-        console.log('   establish that a page was rendered at it: a test that never opens a');
-        console.log('   page, or whose body never starts, counts here. #347 rounds 5-7 tried');
-        console.log('   three mechanisms for the stronger claim and three variants of one');
-        console.log('   finding defeated all three — see test.md -> UI coverage gates.)');
-        console.log('  (evidence: the run\'s own report, written by the process the config');
-        console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
-        console.log('   drift, not forgery. directives#349.)');
-        console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) executed)`);
-      } else {
-        const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
-        console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
-        console.log('  (declared, not executed — pass --report <playwright json> after the run');
-        console.log('   to certify that scenarios actually ran at these widths)');
-      }
-    }
-    if (!ok) {
-      console.error('CANNOT CHECK: the evaluation reported a pass its own data does not support.');
-      console.error('  Every band must be covered by at least one unrestricted project for a');
-      console.error('  pass to stand, and the reported rows do not show that.');
-      console.error('  The child computes with whatever the config left of the runtime; this');
-      console.error('  process re-checks the conclusion with intrinsics the config never saw.');
-      console.error('check-ui-viewports: FAIL (code 14)');
-      process.exit(14);
-    }
+    console.error('CANNOT CHECK: the evaluation reported a pass its own data does not support.');
+    console.error('  The verdict file was not stamped with this run\'s token.');
+    console.error('check-ui-viewports: FAIL (code 14)');
+    process.exit(14);
   }
   if (!recorded || !Number.isInteger(recorded.code)) {
     console.error('CANNOT CHECK: the config evaluation did not report a verdict.');

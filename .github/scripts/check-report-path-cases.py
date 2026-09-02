@@ -229,6 +229,22 @@ CASES = [
     ("a line break in tests-dir", "results.json", 1,
      "the resolved report path contains a line break", None, "ok\n/etc/passwd"),
 
+    # ── #347 round 14: WHITESPACE ON THE EMITTED VALUE ───────────────────────
+    # The uploader TRIMS each pattern before resolving it, so ` ~/.ssh/id_rsa`
+    # slipped the leading-tilde rule (first component " ~") and then became a
+    # home-directory read after trimming. The whitespace rule now runs on the
+    # emitted value as well as the raw input.
+    ("whitespace making the emitted path a tilde reference",
+     "../../../ ~/.ssh/id_rsa", 1,
+     "the resolved report path has leading or trailing whitespace", None),
+
+    # The twin, and it corrects a case I wrote wrong first: a tests-dir with an
+    # INTERNAL space emits `suite /results.json`, whose whitespace is not
+    # surrounding. The uploader trims the whole pattern, not its components, so
+    # this is a legal path and refusing it would break a real caller.
+    ("internal whitespace from tests-dir — the twin", "results.json", 0,
+     "inside the workspace", "suite /results.json", "suite "),
+
     # The twin: an ordinary tests-dir must still pass, or every caller breaks.
     ("an ordinary tests-dir — the twin", "results.json", 0,
      "inside the workspace", "templates/results.json", "templates"),

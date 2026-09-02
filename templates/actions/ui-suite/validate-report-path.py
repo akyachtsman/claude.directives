@@ -75,13 +75,23 @@ def forbid_chars(value, what):
         refuse(f"{what} contains glob metacharacters.",
                f"got {value!r} -- the artifact uploader expands patterns, so this "
                "names a set of files rather than the one report.")
+    # SURROUNDING WHITESPACE, because the uploader TRIMS each pattern before
+    # resolving it. The raw input was already checked for this, but round 13
+    # ran the character rules on the emitted value without bringing this one
+    # along -- so `../../../ ~/.ssh/id_rsa` normalised to ` ~/.ssh/id_rsa`,
+    # whose first path component is " ~" and therefore slipped the leading-tilde
+    # rule below; upload-artifact then trimmed the space and expanded the tilde
+    # to the runner's home (Codex, #347 round 14). Two rules that only work
+    # together, applied in different places, is the coupling this file keeps
+    # being caught by.
+    if value != value.strip():
+        refuse(f"{what} has leading or trailing whitespace.",
+               f"got {value!r} -- a path list trims each entry, so this is not "
+               "the path you think, and a trimmed value can mean something else "
+               "entirely.")
 
 
 forbid_chars(raw, "report-path")
-
-if raw != raw.strip():
-    refuse("report-path has leading or trailing whitespace.",
-           f"got {raw!r} -- a path list trims lines, so this is not the path you think.")
 
 if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (len(raw) > 1 and raw[1] == ":"):
     refuse("report-path is absolute.", f"got {raw!r}")

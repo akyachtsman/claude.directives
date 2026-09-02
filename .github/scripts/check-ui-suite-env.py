@@ -113,10 +113,17 @@ COE_RUN = "${{ inputs.advisory-run == 'true' }}"
 # the literal `bash` is the whole rule -- no parsing of the template, because a
 # template is a shell string and parsing those is what rounds 5-10 were.
 SHELL = "bash"
+# `--declared` carries the project->width mapping ACROSS the run (#347 round 14):
+# the pre-run step writes it, the post-run step reads it instead of importing a
+# config that globalSetup, the tests and globalTeardown have all had a turn at.
+# Both bodies must name the same sidecar or the handoff silently degrades into
+# the re-evaluation it replaced, which is why it is pinned rather than described.
+DECLARED = '--declared "$REPORT_PATH.declared"'
 SEQUENCE = (
-    (CHECK_STEP, (f"{GATE} --tests-dir .",), None, None, SHELL),
+    (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL),
     (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL),
-    (POST_STEP, (f'{GATE} --tests-dir . --report "$REPORT_PATH"',), IF_POST, None, SHELL),
+    (POST_STEP, (f'{GATE} --tests-dir . {DECLARED} --report "$REPORT_PATH"',),
+     IF_POST, None, SHELL),
 )
 
 

@@ -292,6 +292,7 @@ runs:
     # escaping rules is how one of them ends up wrong, which is the coupling
     # this composite has already been caught by twice.
     - name: Validate report-path
+      id: report-path
       shell: bash
       env:
         REPORT_PATH: ${{ inputs.report-path }}
@@ -410,17 +411,25 @@ runs:
       working-directory: ${{ inputs.tests-dir }}
 
     - name: Upload test results
-      if: ${{ always() }}
+      # always() AND the validation having passed. `always()` is what makes the
+      # artifact useful — a failing suite is exactly when someone wants the
+      # screenshots — and it is also what let a rejected report-path be uploaded
+      # anyway. Both halves are needed: run whatever else failed, but not on a
+      # path that was refused.
+      if: ${{ always() && steps.report-path.outcome == 'success' }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}
-        # DERIVED FROM THE INPUT, not hard-coded. `report-path` lets a caller
-        # move the JSON report, and the post-run gate reads it there — but this
-        # step used to collect only the default path, so a customised run passed
-        # while its artifact omitted the very report the input exists to select
-        # (Codex, #347 round 6). report-path is relative to tests-dir, so the two
-        # compose here into a workspace-relative path.
+        # FROM THE VALIDATED OUTPUT, never the raw input. `report-path` lets a
+        # caller move the JSON report and the post-run gate reads it there, so
+        # this list has to follow it (#347 round 6) — but interpolating the INPUT
+        # here left the exfiltration path open even after round 8 added the
+        # validator: this step runs under `always()`, so a refused value still
+        # reached the artifact list (Codex, #347 round 9). Two changes, either of
+        # which would have closed it, because the `if:` below is a condition
+        # someone could relax and this is a value that no longer exists to be
+        # misused.
         path: |
           .agent-reports/screenshots/
-          ${{ inputs.tests-dir }}/${{ inputs.report-path }}
+          ${{ steps.report-path.outputs.path }}
         retention-days: 7

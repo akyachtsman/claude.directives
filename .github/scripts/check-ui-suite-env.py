@@ -236,8 +236,38 @@ def main():
                     tokens.add(tok)
                     if tok.startswith('--') and '=' in tok:
                         tokens.add(tok.split('=', 1)[0])
+                # POSITION, NOT PRESENCE. A token appearing SOMEWHERE is not the
+                # command running: `echo check-ui-viewports --report` satisfies
+                # the one-line rule, the no-composer rule and both token tests,
+                # while running nothing at all (Codex, #347 round 9). Three
+                # rounds on this line have all been the same mistake — a cheap
+                # observable standing in for the property — so the check is now
+                # about WHERE each thing sits.
+                #
+                # A non-flag needle must be the script the launcher is given:
+                # `node <...path...>` or `npx playwright test`. The launcher is
+                # token 0 and the thing it runs is token 1 (or 1-2 for `npx <pkg>
+                # <subcommand>`), so a needle has to appear in the first three
+                # tokens AND the first token has to be a launcher, not `echo`.
+                argv = lines[0].split()
+                LAUNCHERS = ('node', 'npx', 'python3', 'python', 'bash', 'sh')
+                head = argv[0].rsplit('/', 1)[-1] if argv else ''
+                if head not in LAUNCHERS:
+                    problems.append(
+                        f'"{label}" does not start with a recognised launcher'
+                        + f"\n    {lines[0]}"
+                        + f"\n    first token is {head!r}; expected one of {', '.join(LAUNCHERS)}."
+                        + "\n    A body that merely MENTIONS the script — `echo"
+                        + " check-ui-viewports"
+                        + "\n    --report` — passed every other check here while running nothing"
+                        + "\n    (#347, round 9)."
+                    )
+                # The command HEAD, joined: a needle can be two words
+                # (`playwright test`), so it is matched against the first three
+                # tokens as a string rather than against any one of them.
+                head3 = ' '.join(argv[:3])
                 absent = [n for n in needles
-                          if not (n in tokens if n.startswith('-') else n in lines[0])]
+                          if not (n in tokens if n.startswith('-') else n in head3)]
                 if absent:
                     problems.append(
                         f'"{label}" does not appear to invoke what its name says'
@@ -246,6 +276,8 @@ def main():
                         + "\n    A step renamed onto a different command would otherwise satisfy"
                         + "\n    every check here (#333, round 18), and the post-run step without"
                         + "\n    --report is the declaration check twice over (#347, round 5)."
+                        + "\n    A non-flag name must be what the launcher RUNS, not a word"
+                        + "\n    somewhere in the line (#347, round 9)."
                     )
 
         run_wd = workdir_of(steps, RUN_STEP)

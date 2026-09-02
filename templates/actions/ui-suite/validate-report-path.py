@@ -50,6 +50,17 @@ if raw != raw.strip():
     refuse("report-path has leading or trailing whitespace.",
            f"got {raw!r} -- a path list trims lines, so this is not the path you think.")
 
+# GLOB METACHARACTERS, because the consumer that matters expands them.
+# `actions/upload-artifact` treats each path entry as a PATTERN, so
+# `../../../**/*` survives the containment check below -- normpath reduces it to
+# `**/*`, which is workspace-local -- and then uploads the whole workspace
+# (Codex, #347 round 9). The containment rule answers "where does this land",
+# which is the wrong question for a value that names MANY places.
+if any(ch in raw for ch in "*?[]!"):
+    refuse("report-path contains glob metacharacters.",
+           f"got {raw!r} -- the artifact uploader expands patterns, so this names "
+           "a set of files rather than the one report.")
+
 if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (len(raw) > 1 and raw[1] == ":"):
     refuse("report-path is absolute.", f"got {raw!r}")
 
@@ -61,5 +72,13 @@ landed = os.path.normpath(os.path.join(tests_dir, raw))
 if landed.startswith("..") or os.path.isabs(landed):
     refuse("report-path resolves outside the workspace.",
            f"{tests_dir!r} + {raw!r} -> {landed!r}")
+
+# HAND THE VALIDATED PATH ON, so no consumer re-reads the raw input. The upload
+# step takes this output rather than the action input, which means a rejected
+# value cannot reach the artifact list even if the step ordering changes later.
+out = os.environ.get("GITHUB_OUTPUT")
+if out:
+    with open(out, "a", encoding="utf-8") as handle:
+        handle.write(f"path={landed}\n")
 
 print(f"validate-report-path: OK -- {raw!r} resolves to {landed!r}, inside the workspace.")

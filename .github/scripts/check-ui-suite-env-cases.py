@@ -242,6 +242,30 @@ CASES = [
             post_body="./flip-the-world.sh\nnode check-ui-viewports.js --report r.json"),
      1, "must run exactly one"),
 
+    # Codex #347 round 9: a body that MENTIONS the script runs nothing. This
+    # satisfied the one-line rule, the no-composer rule and both token tests.
+    ("post-run check merely echoes the script name — refused",
+     action(dict(BOTH), dict(BOTH),
+            post_body="echo check-ui-viewports --report r.json"), 1,
+     "does not start with a recognised launcher"),
+
+    ("run step merely echoes playwright test — refused",
+     action(dict(BOTH), dict(BOTH), run_body="echo npx playwright test"), 1,
+     "does not start with a recognised launcher"),
+
+    # The needle must be what the launcher RUNS, not a word later in the line.
+    ("post-run check names the gate only in a trailing argument — refused",
+     action(dict(BOTH), dict(BOTH),
+            post_body="node ./other.js --tests-dir . --report r.json --note check-ui-viewports"), 1,
+     "does not appear to invoke what its name says"),
+
+    # The twins: the real shapes must still pass, including an absolute path and
+    # the two-word `npx playwright test`.
+    ("an absolute node invocation — must NOT trip",
+     action(dict(BOTH), dict(BOTH),
+            post_body='node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --report r.json'),
+     0, "consecutive steps"),
+
     ("post-run check invokes something else entirely",
      action(dict(BOTH), dict(BOTH), post_body="./flip-the-world.sh"), 1,
      "does not appear to invoke what its name says"),

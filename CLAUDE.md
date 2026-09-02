@@ -207,8 +207,11 @@ A directive repo must pass its own CI before it can be trusted downstream.
   present when Playwright does, so a config reading it declared one thing to the
   check and another to the run, and the carried mapping became the lie. The
   post-run pass now re-imports and the two declarations must AGREE (exit 21);
-  the verdict is still computed from the PRE-RUN reading, so round 14's property
-  survives. Agreement proves CONSISTENCY, never honesty; the fixture is pinned at exit 0 in the direction of STAYING a
+  the verdict is still computed from the PRE-RUN reading. Round 22 claimed that
+  preserved round 14's property exactly; round 23 corrected it — a second import
+  makes post-run IMPORTABILITY a prerequisite, so a suite leaving the config
+  unloadable now refuses with its widths unchanged. Kept as a refusal because a
+  fallback would certify without corroboration and is also the evasion. Agreement proves CONSISTENCY, never honesty; the fixture is pinned at exit 0 in the direction of STAYING a
   limit, so if it starts being caught the case reddens and gets read. #349), job
   bounds
   (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an

@@ -278,9 +278,20 @@ function readReport(reportPath) {
   // not understand, and the only honest answer to that is CANNOT CHECK.
   const STATUSES = new Set(['passed', 'failed', 'timedOut', 'interrupted', 'skipped']);
   const OVERRIDE = 'viewport-override';
+  // ANNOTATIONS DECIDE WHETHER A RESULT IS EXCLUDED, so a malformed one is not a
+  // detail. `Array.isArray(...) ? ... : []` read a present non-array as absent —
+  // the same `x || []` behaviour the round-20/21 work removed everywhere else,
+  // left in the one place where the value decides whether evidence counts
+  // (Codex, #347 round 23). Through `arr()` now, which distinguishes an omitted
+  // field from a present wrong one.
+  //
+  // The FALLBACK still means what round 8 established: `results[].annotations`
+  // where the report has it, `tests[].annotations` where it does not. What
+  // changes is that "does not have it" now means the key is absent, not that it
+  // holds something unusable.
   const overrides = (r, t) => {
-    const list = Array.isArray(r.annotations) ? r.annotations
-      : (Array.isArray(t.annotations) ? t.annotations : []);
+    const perResult = arr(r.annotations, 'result.annotations');
+    const list = r.annotations === undefined ? arr(t.annotations, 'test.annotations') : perResult;
     return list.some(a => a && a.type === OVERRIDE);
   };
   // PARSES IS NOT READS. `JSON.parse` succeeding says the bytes are JSON; it
@@ -352,7 +363,14 @@ function readReport(reportPath) {
         if (!obj(t, 'a test')) continue;
         total += 1;
         const name = typeof t.projectName === 'string' ? t.projectName : '';
-        const ran = arr(t.results, 'test.results').some((r) => {
+        // VALIDATE EVERY RESULT, THEN DECIDE. Round 22 put the validation inside a
+        // `some()` predicate, which short-circuits on the first qualifying
+        // element: `[{"status":"passed"}, null]` certified three bands because
+        // the null was never reached (Codex, #347 round 23). A validating pass
+        // cannot be the same pass as an early-exit search — the search is
+        // allowed to stop, the validation is not.
+        const results = arr(t.results, 'test.results');
+        const counts = results.map((r) => {
           if (!obj(r, 'a result')) return false;
           if (typeof r.status !== 'string' || !STATUSES.has(r.status)) {
             if (!malformed) {
@@ -364,6 +382,7 @@ function readReport(reportPath) {
           }
           return r.status !== 'skipped' && !overrides(r, t);
         });
+        const ran = counts.some(Boolean);
         if (ran) executed.set(name, (executed.get(name) || 0) + 1);
       }
     }
@@ -959,6 +978,32 @@ if (!VERDICT_FILE) {
     console.error('check-ui-viewports: FAIL (code 14)');
     process.exit(14);
   }
+  // POST-RUN IMPORTABILITY IS NOW A PREREQUISITE, AND THAT IS A REAL COST.
+  // Round 22 said the cross-check "preserves round 14's property exactly". That
+  // was wrong and Codex was right to call it: round 14's point was that the
+  // post-run pass depends on NOTHING the run can touch, and requiring a second
+  // import puts it back on the config still being importable afterwards. A suite
+  // that writes state making the config throw — measured, exit 5 — now refuses
+  // where round 21 would have joined the carried mapping against the report and
+  // passed.
+  //
+  // Kept as a refusal rather than a fallback, deliberately. Falling back means
+  // CERTIFYING without corroboration, and this file's rule everywhere else is
+  // that a refusal may stand on partial evidence and a certification may not —
+  // and a fallback is also the evasion: break the post-run import and the
+  // cross-check never runs. What is owed is an honest diagnostic, since a bare
+  // exit 5 sends the reader to their `projects` list for a problem that is about
+  // WHEN the config was read.
+  if (CARRIED && recorded && recorded.code !== 0) {
+    console.error('');
+    console.error('  ⚠️ This ran with --declared, so the config is imported a SECOND time after');
+    console.error('     the run and the two declarations must agree. The refusal above is that');
+    console.error('     second import; the pre-run one succeeded, or there would be no mapping.');
+    console.error('     A suite that leaves the config unimportable — a deleted fixture, a marker');
+    console.error('     a test writes, a globalTeardown — reaches this even though its widths');
+    console.error('     never changed. Behaviour change in #347 round 22; the alternative was to');
+    console.error('     certify without corroboration, which is also how the check is evaded.');
+  }
   // THE PARENT RE-DECIDES THE BAND VERDICT FROM THE CHILD'S DATA. The child's
   // own code for this can be corrupted by the config (round 18), so its answer is
   // not taken on trust where this process can compute the same thing with clean
@@ -969,6 +1014,25 @@ if (!VERDICT_FILE) {
     try { rows = JSON.parse(readFileSync(`${file}.rows`, 'utf8')); } catch { /* below */ }
     if (rows && rows.nonce === nonce) {
       if (CARRIED) {
+        // THE FRESH ROWS ARE VALIDATED BEFORE THEY ARE COMPARED. `decideFromRows`
+        // validates its input, and round 22 put this comparison in FRONT of it —
+        // so a config corrupting `Array.prototype.toJSON` only when the report
+        // exists produced a non-array `rows` and `asMap()` called `.map()` on it,
+        // crashing with an uncaught TypeError at exit 1 (Codex, #347 round 23).
+        // The payload is authenticated by the nonce, which says who wrote it, not
+        // that it is shaped like anything — round 11's lesson, and this is the
+        // first reader added since that did not apply it.
+        const wellFormed = list => Array.isArray(list) && list.every(r => r
+          && typeof r === 'object' && !Array.isArray(r) && typeof r.name === 'string'
+          && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+        if (!wellFormed(rows.rows)) {
+          console.error('CANNOT CHECK: the post-run evaluation returned rows this gate cannot read.');
+          console.error('  The carried mapping was well-formed, so the difference arrived with the');
+          console.error('  second import. A nonce says who wrote a payload, never that it is shaped');
+          console.error('  like one (#347 round 11).');
+          console.error('check-ui-viewports: FAIL (code 14)');
+          process.exit(14);
+        }
         // COMPARED AS A MAPPING, not as a serialisation. Key order and any field
         // this gate does not band on are not differences, so a config is refused
         // for changing a WIDTH, never for the report's shape.

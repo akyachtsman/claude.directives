@@ -61,6 +61,9 @@ const LAPTOP = "    { name: 'desktop', use: { viewport: { width: 1440, height: 9
 // The spec a fixture needs in order to have anything to discover. runCase()
 // writes one into tests/ by default; a case whose testDir resolves ELSEWHERE
 // (a config in its own directory, a symlinked layout) places this itself.
+// The pre-run declaration the round-23 cross-check cases carry (#347 round 23).
+const DECLARED_MAP = [{ name: 'desktop', width: 1440 }, { name: 'tablet', width: 810 },
+  { name: 'phone', width: 390 }];
 const SPEC = "import { test, expect } from '@playwright/test';\ntest('present', async () => { expect(1).toBe(1); });\n";
 
 const cfg = body => `${IMPORT}export default defineConfig({\n  testDir: './tests',\n${body}});\n`;
@@ -1501,6 +1504,75 @@ const CASES = [
     0, 'check-ui-viewports: OK — SCHEDULED',
     { preDeclare: true, runReport: true, declared: true }],
 
+  // ── ANNOTATIONS DECIDE EXCLUSION, SO THEIR SHAPE MATTERS (#347 round 23) ─
+  // `Array.isArray(x) ? x : []` read a present non-array as absent — the same
+  // `x || []` behaviour rounds 20 and 21 removed everywhere else, left in the
+  // one place where the value decides whether a result counts as evidence.
+  ...[
+    ['result', '{"status":"passed","annotations":{}}', 'result.annotations'],
+    ['test', '{"status":"passed"}', 'test.annotations'],
+  ].map(([where, result]) => [
+    `${where}-level annotations present but not an array — CANNOT CHECK`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'ann.json': `{"suites":[{"specs":[{"tests":[{"projectName":"desktop","annotations":{},"results":[${result}]}]}]}]}` },
+    15, 'not shaped like a Playwright report', { reportArg: 'ann.json' },
+  ]),
+
+  // ── A SEARCH MAY STOP EARLY; A VALIDATION MAY NOT (#347 round 23) ───────
+  // Round 22 put the result validation inside a `some()` predicate, which
+  // short-circuits on the first qualifying element — so `[passed, null]`
+  // certified three bands because the null was never reached.
+  ['a malformed result AFTER a qualifying one — still refused',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'short.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop",'
+        + '"results":[{"status":"passed"},null]}]}]}]}' },
+    15, 'not shaped like a Playwright report', { reportArg: 'short.json' }],
+
+  // ── THE CROSS-CHECK MADE POST-RUN IMPORTABILITY A PREREQUISITE (r23) ────
+  // Round 22 claimed it "preserves round 14's property exactly". It does not:
+  // round 14's point was that the post-run pass depends on nothing the run can
+  // touch, and a second import puts it back on the config still loading. A
+  // suite that leaves the config unimportable now refuses, with its widths
+  // unchanged. Kept as a refusal — a fallback would certify without
+  // corroboration AND be the evasion — but the diagnostic has to say so.
+  ['a config unimportable after the run — refused, and the diagnostic says why',
+    { 'playwright.config.js': 'throw new Error("unimportable after the run");\n',
+      'report.json': '{"suites":[{"specs":['
+        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"phone","results":[{"status":"passed"}]}]}'
+        + ']}]}' },
+    5, 'the config is imported a SECOND time after',
+    { declaredMap: DECLARED_MAP, reportArg: 'report.json' }],
+  // The control: the same carried mapping and report with an importable config
+  // reaches the verdict, so the case above is about importability alone.
+  ['…and the same mapping and report with an importable config passes',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'report.json': '{"suites":[{"specs":['
+        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"phone","results":[{"status":"passed"}]}]}'
+        + ']}]}' },
+    0, 'check-ui-viewports: OK — SCHEDULED',
+    { declaredMap: DECLARED_MAP, reportArg: 'report.json' }],
+
+  // ── THE FRESH ROWS ARE VALIDATED BEFORE THEY ARE COMPARED (r23) ────────
+  // `asMap()` ran `.map()` in front of `decideFromRows`'s own validation, so a
+  // config corrupting `Array.prototype.toJSON` crashed the comparison with an
+  // uncaught TypeError. The nonce says who wrote the payload, never that it is
+  // shaped like one — round 11's lesson, unapplied by the reader round 22 added.
+  ['a post-run payload whose rows are not an array — CANNOT CHECK, not a crash',
+    { 'playwright.config.js':
+        `Array.prototype.toJSON = () => 'not-an-array';\n`
+        + `${IMPORT}export default defineConfig({\n  testDir: './tests',\n  projects: [\n`
+        + `${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'report.json': '{"suites":[{"specs":['
+        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"phone","results":[{"status":"passed"}]}]}'
+        + ']}]}' },
+    14, 'rows this gate cannot read', { declaredMap: DECLARED_MAP, reportArg: 'report.json' }],
+
   ['every real Playwright status is still accepted',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'real.json': '{"suites":[{"specs":['
@@ -1636,7 +1708,15 @@ function runCase(files, opts) {
     // Extra flags verbatim, for the band-bound cases (#347 round 12).
     if (o.extraArgs) args.push(...o.extraArgs);
     // The declared-mapping sidecar lives in the fixture dir (#347 round 14).
-    if (o.declared) args.push('--declared', join(tmp, 'declared.json'));
+    // opts.declaredMap writes it HERE rather than in the files map, because its
+    // `testsDir` has to be the real fixture path: the post-run report is resolved
+    // against it, and a static '.' resolves against the harness's cwd instead
+    // (#347 round 23).
+    if (o.declaredMap) {
+      writeFileSync(join(tmp, 'declared.json'),
+        JSON.stringify({ testsDir: target, rows: o.declaredMap }));
+    }
+    if (o.declared || o.declaredMap) args.push('--declared', join(tmp, 'declared.json'));
     // A path whose PARENT does not exist — the shipped default's shape on a
     // clean runner (#347 round 15).
     if (o.declaredNested) args.push('--declared', join(tmp, 'no', 'such', 'dir', 'declared.json'));

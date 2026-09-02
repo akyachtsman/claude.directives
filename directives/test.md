@@ -415,6 +415,14 @@ five:
   a verdict, because the widths it would band by are not the ones the run used.
   The verdict, when they agree, is still computed from the PRE-RUN reading.
 
+  ⚠️ **This makes post-run importability a prerequisite, which it was not
+  before.** A suite that leaves the config unable to load — a deleted fixture, a
+  marker a test writes, a `globalTeardown` — now refuses even though its widths
+  never changed. That is a real cost and the opposite direction from what
+  `--declared` originally bought. It is kept because the alternative, falling back
+  to the carried mapping when the second import fails, would certify without
+  corroboration *and* be the way to evade the check.
+
   This exists because the gate creates the difference itself: the `--declared`
   sidecar does not exist when the pre-run pass imports your config and does exist
   when Playwright imports it, so a config that reads the filesystem can answer

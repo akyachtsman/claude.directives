@@ -287,6 +287,28 @@ function readReport(reportPath) {
 // the reader looking for the wrong thing.
 const EVAL_TIMEOUT_MS = 120000;
 
+// ONE READER FOR THE BAND FLAGS, USED BY BOTH PROCESSES. Round 11 gave the
+// parent its own parser so a band bound could not be taken from the child's
+// payload — right reason, wrong execution: the parent's copy also accepted
+// `--tablet-min=900` while the child's `opt()` understood only the
+// space-separated form. So a caller using the equals spelling got the parent
+// banding at 900 and the child refusing at 768, and since the parent never
+// overturns a refusal, a legitimate 850/1100/1300 config was rejected for
+// "no phone project" (Codex, #347 round 12).
+//
+// Two parsers that must agree is the coupling this file keeps being caught by,
+// so there is now one. It is still each process reading its OWN argv — the
+// child is spawned with `process.argv.slice(2)` verbatim, so the two see the
+// same tokens — which is what round 11 was actually protecting: the bound comes
+// from the command line in both, never from the payload.
+const bandOpt = (flag, fallback) => {
+  const i = process.argv.indexOf(flag);
+  if (i >= 0) return { value: Number(process.argv[i + 1]), given: true };
+  const eq = process.argv.find(a => a.startsWith(`${flag}=`));
+  if (eq !== undefined) return { value: Number(eq.slice(flag.length + 1)), given: true };
+  return { value: fallback, given: false };
+};
+
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
 if (!VERDICT_FILE) {
   const { spawnSync } = require('child_process');
@@ -447,14 +469,8 @@ if (!VERDICT_FILE) {
     // choose. This duplicates the parsing further down (that copy runs in the
     // child) — two readings of one flag, deliberately, because the alternative is
     // the child telling the parent what "laptop" means.
-    const pxOpt = (flag, fallback) => {
-      const i = process.argv.indexOf(flag);
-      const eq = process.argv.find(a => a.startsWith(`${flag}=`));
-      const raw = i >= 0 ? process.argv[i + 1] : eq ? eq.slice(flag.length + 1) : undefined;
-      return Number(raw !== undefined ? raw : fallback);
-    };
-    const tabletMin = pxOpt('--tablet-min', 768);
-    const laptopMin = pxOpt('--laptop-min', 1024);
+    const tabletMin = bandOpt('--tablet-min', 768).value;
+    const laptopMin = bandOpt('--laptop-min', 1024).value;
     // STRICT ROWS. Every row must be an object with a string name; `width` is
     // optional (the UNCLASSIFIABLE rows carry none) but when present must be a
     // finite number. A `toJSON` hook that collapses the array to strings, or an
@@ -697,11 +713,13 @@ if (!dir) { dir = '.github/scripts/ui-tests'; dirSource = 'default'; }
 // says plainly that a 1080-wide "tablet" renders the DESKTOP layout: the width is
 // what matters, the device name is a convenience. Override for a project whose
 // breakpoints differ; an override always prints, so it can never be invisible.
-const rawTablet = opt('--tablet-min');
-const rawLaptop = opt('--laptop-min');
-const TABLET_MIN = Number(rawTablet !== undefined ? rawTablet : 768);
-const LAPTOP_MIN = Number(rawLaptop !== undefined ? rawLaptop : 1024);
-const bandSource = (rawTablet !== undefined || rawLaptop !== undefined)
+// Both spellings, through the shared reader above — the parent bands with the
+// same numbers or the two disagree (#347 round 12).
+const tabletOpt = bandOpt('--tablet-min', 768);
+const laptopOpt = bandOpt('--laptop-min', 1024);
+const TABLET_MIN = tabletOpt.value;
+const LAPTOP_MIN = laptopOpt.value;
+const bandSource = (tabletOpt.given || laptopOpt.given)
   ? 'OVERRIDDEN on the command line' : 'defaults';
 if (!Number.isFinite(TABLET_MIN) || !Number.isFinite(LAPTOP_MIN) || TABLET_MIN >= LAPTOP_MIN) {
   die(8, [`CANNOT CHECK: nonsensical band bounds (tablet-min=${TABLET_MIN}, laptop-min=${LAPTOP_MIN})`]);

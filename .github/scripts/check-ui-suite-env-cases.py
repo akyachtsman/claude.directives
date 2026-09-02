@@ -67,6 +67,7 @@ POST_BODY = f'{GATE} --tests-dir . --report "$REPORT_PATH"'
 # agree with it by construction.
 IF_POST = "${{ always() && steps.report-path.outcome == 'success' }}"
 COE_RUN = "${{ inputs.advisory-run == 'true' }}"
+SHELL = "bash"
 
 # The one diagnostic every body-shape refusal now prints. Named because it is
 # asserted twenty times below and a typo in one of them would silently weaken
@@ -80,7 +81,8 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
            check_body=None, run_body=None, run_uses=None,
            post_env=UNSET, post_name=POST, post_wd="tests", post_body=None,
            post_uses=None, between_post=None,
-           post_if=IF_POST, run_coe=COE_RUN, check_if=None, post_coe=None):
+           post_if=IF_POST, run_coe=COE_RUN, check_if=None, post_coe=None,
+           check_shell=SHELL, run_shell=SHELL, post_shell=SHELL):
     def block(env):
         if not env:
             return ""
@@ -102,14 +104,14 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
         + decoy_yaml
-        + f"    - name: {check_name}\n      shell: bash\n{ctl('if', check_if)}{wd(check_wd)}{block(check_env)}"
+        + f"    - name: {check_name}\n{ctl('shell', check_shell)}{ctl('if', check_if)}{wd(check_wd)}{block(check_env)}"
         + body(check_body or CHECK_BODY)
         + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
-        + f"    - name: {run_name}\n      shell: bash\n{ctl('continue-on-error', run_coe)}{wd(run_wd)}{block(run_env)}"
+        + f"    - name: {run_name}\n{ctl('shell', run_shell)}{ctl('continue-on-error', run_coe)}{wd(run_wd)}{block(run_env)}"
         + (f"      uses: {run_uses}\n" if run_uses else body(run_body or RUN_BODY))
         + (f"    - name: {between_post}\n      shell: bash\n      run: echo between\n"
            if between_post else "")
-        + f"    - name: {post_name}\n      shell: bash\n{ctl('if', post_if)}{ctl('continue-on-error', post_coe)}{wd(post_wd)}"
+        + f"    - name: {post_name}\n{ctl('shell', post_shell)}{ctl('if', post_if)}{ctl('continue-on-error', post_coe)}{wd(post_wd)}"
         + block(run_env if post_env is UNSET else post_env)
         + (f"      uses: {post_uses}\n" if post_uses
            else body(post_body or POST_BODY))
@@ -380,6 +382,26 @@ CASES = [
     ("the run step's continue-on-error repointed at something else — refused",
      action(dict(BOTH), dict(BOTH), run_coe="true"), 1,
      'has the wrong `continue-on-error:`'),
+
+    # ── THE SHELL IS PART OF THE PIN (#347 round 12) ────────────────────────
+    # `shell:` accepts a custom COMMAND TEMPLATE where `{0}` is the generated
+    # script file, so this shape never runs the script — while the body, env,
+    # cwd, order, `if` and `continue-on-error` all still match.
+    ("post-run gate given a custom shell template that never runs the script",
+     action(dict(BOTH), dict(BOTH), post_shell="bash -c 'exit 0' {0}"), 1,
+     'has the wrong `shell:`'),
+
+    ("run step given a custom shell template", 
+     action(dict(BOTH), dict(BOTH), run_shell="bash -c 'exit 0' {0}"), 1,
+     'has the wrong `shell:`'),
+
+    ("pre-run check switched to a different real shell",
+     action(dict(BOTH), dict(BOTH), check_shell="sh"), 1,
+     'has the wrong `shell:`'),
+
+    ("a step with no shell at all — refused",
+     action(dict(BOTH), dict(BOTH), post_shell=None), 1,
+     'has the wrong `shell:`'),
 
     ("post-run check is a `uses:` step",
      action(dict(BOTH), dict(BOTH), post_uses="./some/action"), 1, "is a `uses:` step"),

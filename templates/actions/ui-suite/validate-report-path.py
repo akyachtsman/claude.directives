@@ -77,7 +77,28 @@ if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (len(raw) > 1 and
 # outside, and a workspace root that is itself a symlink would otherwise never
 # match its own children.
 workspace = os.path.realpath(os.environ.get("GITHUB_WORKSPACE") or os.getcwd())
-landed_abs = os.path.realpath(os.path.join(workspace, tests_dir, raw))
+
+# RESOLVE THE DIRECTORY, KEEP THE FILENAME LEXICAL. Round 11 resolved the whole
+# path, which resolves the FINAL component too -- and if that component is a
+# symlink the three consumers stop naming the same file. Codex reproduced
+# `report.json -> ../target.txt`: the upload got `path=target.txt` while
+# `relative` still said `report.json`, so the clear step removed the link,
+# Playwright wrote a fresh report at the link's name, and the artifact collected
+# the untouched target instead of the report (#347 round 12).
+#
+# Resolving the PARENT still catches a directory symlink pointing out of the
+# workspace, which is what round 11 added realpath for. Appending the filename
+# lexically keeps every consumer on one name.
+# os.path.dirname AND os.path.basename, not PurePosixPath().name for the second
+# half. The two disagree: for `../../../.` dirname gives `../../..` and basename
+# gives `.`, but PurePosixPath normalises the trailing dot away and reports `..`
+# — so pairing them double-counted a level and pointed the check one directory
+# too high. Caught by running the existing `..` cases against the new resolution,
+# not by reading it.
+raw_dir = os.path.dirname(raw)
+parent_abs = os.path.realpath(os.path.join(workspace, tests_dir, raw_dir) if raw_dir
+                              else os.path.join(workspace, tests_dir))
+landed_abs = os.path.join(parent_abs, os.path.basename(raw))
 try:
     contained = os.path.commonpath([landed_abs, workspace]) == workspace
 except ValueError:      # different drives on Windows runners
@@ -85,6 +106,16 @@ except ValueError:      # different drives on Windows runners
 if not contained:
     refuse("report-path resolves outside the workspace.",
            f"{tests_dir!r} + {raw!r} -> {landed_abs!r}, outside {workspace!r}")
+
+# AND REFUSE A SYMLINKED FINAL COMPONENT OUTRIGHT. Keeping the name lexical makes
+# the three consumers agree, but the link is still there when Playwright opens
+# the path for writing, and a write follows it. The `rm -f` step ahead of the run
+# removes it in the shipped ordering -- that is an ordering, not a guarantee, and
+# this file exists so no consumer has to depend on another's behaviour.
+if os.path.islink(landed_abs):
+    refuse("report-path is a symlink.",
+           f"{landed_abs!r} -- a link makes the file the gate reads, the file the "
+           "run writes and the file the uploader collects three different questions.")
 
 # A DIRECTORY IS NOT A REPORT, and the uploader treats one very differently.
 # `actions/upload-artifact` given a directory uploads it RECURSIVELY, so
@@ -108,7 +139,7 @@ if os.path.isdir(landed_abs):
 # "reports", so a path parser cannot see the thing that makes it a directory.
 # (Found by the case, not by reading the fix: the first version of this rule
 # used only the parsed name and let `reports/` through.)
-if raw.endswith("/") or raw.endswith("\\") or PurePosixPath(raw).name in ("", ".", ".."):
+if raw.endswith("/") or raw.endswith("\\") or os.path.basename(raw) in ("", ".", ".."):
     refuse("report-path does not end in a filename.", f"got {raw!r}")
 
 # The value the artifact uploader gets, which is the one the tilde rule is about.

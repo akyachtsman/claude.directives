@@ -100,10 +100,23 @@ GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
 # what keeps that from silently becoming a choice to stop checking widths.
 IF_POST = "${{ always() && steps.report-path.outcome == 'success' }}"
 COE_RUN = "${{ inputs.advisory-run == 'true' }}"
+
+# THE SHELL IS PART OF THE PIN. `shell:` accepts a custom COMMAND TEMPLATE, where
+# `{0}` is the generated script file -- so `bash -c 'exit 0' {0}` never runs the
+# script at all, and the body, env, cwd, order, `if` and `continue-on-error` all
+# still match. Codex reproduced this guard returning OK for that shape (#347
+# round 12).
+#
+# Third field in a row of the same kind: round 11 added the two execution
+# controls after learning a pinned body says nothing about a step that does not
+# run; this is the same lesson about a step that does not run its body. Pinning
+# the literal `bash` is the whole rule -- no parsing of the template, because a
+# template is a shell string and parsing those is what rounds 5-10 were.
+SHELL = "bash"
 SEQUENCE = (
-    (CHECK_STEP, (f"{GATE} --tests-dir .",), None, None),
-    (RUN_STEP, ("npx playwright test",), None, COE_RUN),
-    (POST_STEP, (f'{GATE} --tests-dir . --report "$REPORT_PATH"',), IF_POST, None),
+    (CHECK_STEP, (f"{GATE} --tests-dir .",), None, None, SHELL),
+    (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL),
+    (POST_STEP, (f'{GATE} --tests-dir . --report "$REPORT_PATH"',), IF_POST, None, SHELL),
 )
 
 
@@ -234,7 +247,7 @@ def main():
         # this used to carry (&& || ; | & $( `) is gone with the rest of the
         # parser -- an exact match rejects every one of those without enumerating
         # them, and enumerating them is what left `#` and `-c` off the list.
-        for (label, bodies, want_if, want_coe), (_, i) in zip(SEQUENCE, order):
+        for (label, bodies, want_if, want_coe, want_shell), (_, i) in zip(SEQUENCE, order):
             if i is None:
                 continue
             step = steps[i]
@@ -253,7 +266,8 @@ def main():
             # is one of the pinned strings or it is not.
             # EXECUTION CONTROLS FIRST: a step that does not run, or whose
             # failure is discarded, makes its body irrelevant.
-            for field, want in (("if", want_if), ("continue-on-error", want_coe)):
+            for field, want in (("if", want_if), ("continue-on-error", want_coe),
+                                ("shell", want_shell)):
                 got = step.get(field)
                 if got is None and want is None:
                     continue

@@ -28,7 +28,9 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-report-path-cases.py
 """
+import atexit
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -44,6 +46,27 @@ TESTS_DIR = ".github/scripts/ui-tests"
 # The repo root — every case resolves against it.
 WORKSPACE = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
+
+# A TEMPORARY WORKSPACE for the symlink shapes, built OUTSIDE the repo.
+#
+# The first version built this tree under .github/scripts/ and `git add -A`
+# staged two dangling symlinks; check-exports.js then died trying to open one.
+# That is the local gate's own rule working — stage first, then gate — and the
+# lesson is narrower than "use a temp dir": a case fixture that lives in the
+# repo is a file the repo now ships, and this one only ever needed to be inside
+# *a* workspace, not inside *this* one.
+#
+# Containment is resolved against GITHUB_WORKSPACE, so these cases pass their own.
+SYMLINK_WS = tempfile.mkdtemp(prefix="report-path-ws-")
+atexit.register(shutil.rmtree, SYMLINK_WS, True)
+_tests = os.path.join(SYMLINK_WS, "tests-dir")
+os.makedirs(_tests, exist_ok=True)
+with open(os.path.join(SYMLINK_WS, "real-target.txt"), "w", encoding="utf-8") as _h:
+    _h.write("sensitive")
+with open(os.path.join(_tests, "real.json"), "w", encoding="utf-8") as _h:
+    _h.write("{}")
+os.symlink("../real-target.txt", os.path.join(_tests, "link.json"))
+os.symlink("/etc", os.path.join(_tests, "escape"))
 
 # (label, report-path, expected exit, required substring in the output,
 #  expected `path=` output when accepted -- None when refused)
@@ -148,7 +171,11 @@ CASES = [
     # check alone would miss them on a clean checkout.
     ("a bare dot", ".", 1, "does not end in a filename", None),
 
-    ("a bare double dot", "..", 1, "names a directory, not a report file", None),
+    # `..` lands on the name rule rather than the isdir one when the tests dir
+    # does not exist (this repo has no .github/scripts/ui-tests), and both are
+    # correct refusals — pinned to the one that actually fires so the case says
+    # something true about the code rather than about a directory's existence.
+    ("a bare double dot", "..", 1, "does not end in a filename", None),
 
     ("a trailing slash", "reports/", 1, "does not end in a filename", None),
 
@@ -166,6 +193,26 @@ CASES = [
     ("an absolute tests-dir outside the workspace",
      "results.json", 1, "resolves outside the workspace", None, "/etc"),
 
+    # ── #347 round 11: A SYMLINKED FINAL COMPONENT ───────────────────────────
+    # realpath on the WHOLE path resolved the filename too, so the upload named
+    # the link's target while `relative` named the link: the clear step removed
+    # the link, Playwright wrote a fresh report at the link's name, and the
+    # artifact collected the untouched target. The parent directory is resolved
+    # (so a directory symlink out of the workspace is still caught) and the
+    # filename is kept lexical, with a symlinked final component refused outright.
+    ("a symlinked report file", "link.json", 1, "is a symlink", None,
+     "tests-dir", SYMLINK_WS),
+
+    ("an ordinary file in the same directory — the twin",
+     "real.json", 0, "inside the workspace", "tests-dir/real.json",
+     "tests-dir", SYMLINK_WS),
+
+    # The half round 11 bought and this must not lose: a DIRECTORY symlink
+    # pointing out of the workspace still resolves outside and is refused.
+    ("a directory symlink escaping the workspace",
+     "escape/passwd", 1, "resolves outside the workspace", None,
+     "tests-dir", SYMLINK_WS),
+
     # ── THE HANDOFF (#347 round 10) ──────────────────────────────────────────
     # Round 9 emitted only the workspace-relative `path`, so the three steps that
     # run from tests-dir stayed on the RAW input and the post-run gate -- which
@@ -178,7 +225,7 @@ CASES = [
 ]
 
 
-def run(value, tests_dir=None):
+def run(value, tests_dir=None, workspace=None):
     with tempfile.NamedTemporaryFile("w+", delete=False) as handle:
         out_file = handle.name
     try:
@@ -189,7 +236,7 @@ def run(value, tests_dir=None):
         # PINNED, not inherited. Containment is resolved against GITHUB_WORKSPACE
         # since #347 round 11, so a suite that let the runner's own value through
         # would pass or fail by where it happened to be checked out.
-        env["GITHUB_WORKSPACE"] = WORKSPACE
+        env["GITHUB_WORKSPACE"] = workspace or WORKSPACE
         proc = subprocess.run([sys.executable, VALIDATOR], env=env,
                               capture_output=True, text=True, timeout=30)
         with open(out_file, encoding="utf-8") as handle:
@@ -204,7 +251,8 @@ def main():
     for case in CASES:
         label, value, want_code, needle, want_path = case[:5]
         tests_dir = case[5] if len(case) > 5 else None
-        code, text, outputs = run(value, tests_dir)
+        workspace = case[6] if len(case) > 6 else None
+        code, text, outputs = run(value, tests_dir, workspace)
         if code != want_code:
             failures.append(f"{label}\n      expected exit {want_code}; got {code}.\n"
                             + "\n".join("      " + ln for ln in text.splitlines()))

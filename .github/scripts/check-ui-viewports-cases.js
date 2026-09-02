@@ -1167,6 +1167,38 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
 
+  // ── BAND BOUNDS: ONE READER, BOTH PROCESSES (#347 round 12) ──────────────
+  // Round 11 gave the parent its own band-flag parser so a bound could not come
+  // from the child's payload. That was right, but the parent's copy accepted
+  // `--tablet-min=900` and the child's `opt()` did not — so the parent banded at
+  // 900 while the child refused at 768, and since the parent never overturns a
+  // refusal, this legitimate config was rejected for "no phone project".
+  //
+  // 850/1100/1300 is phone/tablet/laptop at 900/1200 and tablet/laptop/laptop at
+  // the defaults, so the same fixture proves the bounds ARRIVED rather than
+  // merely that it passed.
+  ...[
+    ['equals spelling', ['--tablet-min=900', '--laptop-min=1200']],
+    ['space spelling', ['--tablet-min', '900', '--laptop-min', '1200']],
+  ].map(([label, extraArgs]) => [
+    `band bounds via the ${label} reach BOTH processes`,
+    { 'playwright.config.js': withProjects(
+      "    { name: 'a', use: { viewport: { width: 850, height: 900 } } },\n"
+      + "    { name: 'b', use: { viewport: { width: 1100, height: 900 } } },\n"
+      + "    { name: 'c', use: { viewport: { width: 1300, height: 900 } } },\n") },
+    0, 'OK — DECLARED laptop:c  tablet:b  phone:a', { extraArgs },
+  ]),
+
+  // The twin: at the DEFAULT bounds the same three widths leave phone undeclared.
+  // Without it the two cases above would pass against a gate that ignored the
+  // flags entirely and banded everything generously.
+  ['…and the same widths FAIL at the default bounds',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'a', use: { viewport: { width: 850, height: 900 } } },\n"
+      + "    { name: 'b', use: { viewport: { width: 1100, height: 900 } } },\n"
+      + "    { name: 'c', use: { viewport: { width: 1300, height: 900 } } },\n") },
+    1, 'no project declares a phone viewport'],
+
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
   // (`grep` matches no title) and its exit handler then writes a report claiming
@@ -1288,6 +1320,8 @@ function runCase(files, opts) {
     // the gate resolves it against, and joining it to tmp here would make it
     // absolute and test nothing.
     if (o.configArg) args.push('--config', o.configArgRelative ? o.configArg : join(tmp, o.configArg));
+    // Extra flags verbatim, for the band-bound cases (#347 round 12).
+    if (o.extraArgs) args.push(...o.extraArgs);
     // opts.runReport: RUN the suite first, then check its report. Since #335's
     // second design the coverage claim comes from the run's own JSON report, so
     // a case about execution has to produce one — nothing before the run can

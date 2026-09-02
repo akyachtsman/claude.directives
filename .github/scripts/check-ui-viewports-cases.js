@@ -1606,6 +1606,43 @@ const CASES = [
         + ']}]}]}' },
     0, 'check-ui-viewports: OK — SCHEDULED', { reportArg: 'v144.json' }],
 
+  // ── EVERY LIST, NOT THE SELECTED ONE (#347 round 26) ───────────────────
+  // Round 25 validated entries inside `overrides()`, which reads exactly ONE of
+  // the two lists. So a modern report supplying `results[].annotations` had its
+  // test-level array checked for being an array and its ENTRIES never read.
+  ['test-level annotation entries with per-result lists present — CANNOT CHECK',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'both.json': '{"suites":[{"specs":[{"tests":['
+        + '{"projectName":"desktop","annotations":[null],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"tablet","annotations":[null],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"phone","annotations":[null],"results":[{"status":"passed","annotations":[]}]}'
+        + ']}]}]}' },
+    15, 'an annotation in test.annotations is null', { reportArg: 'both.json' }],
+  // The carrier Codex did not name, found by reproducing the one it did:
+  // `overrides()` sat behind `r.status !== 'skipped' &&`, so a SKIPPED result's
+  // own annotations were never validated. Same defect, second list.
+  ['a skipped result\'s annotation entries — CANNOT CHECK',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'skipann.json': '{"suites":[{"specs":[{"tests":['
+        + '{"projectName":"desktop","annotations":[],"results":['
+        + '{"status":"skipped","annotations":[null]},{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"tablet","annotations":[],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"phone","annotations":[],"results":[{"status":"passed","annotations":[]}]}'
+        + ']}]}]}' },
+    15, 'an annotation in result.annotations is null', { reportArg: 'skipann.json' }],
+  // The twin for both: validating the unselected list must not mean REJECTING
+  // it. A well-formed non-override test-level entry beside per-result lists
+  // still certifies, so the two above are not satisfiable by refusing any
+  // report that carries test-level annotations at all.
+  ['a well-formed test-level entry beside per-result lists still certifies',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'bothok.json': '{"suites":[{"specs":[{"tests":['
+        + '{"projectName":"desktop","annotations":[{"type":"slow"}],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"tablet","annotations":[{"type":"slow"}],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"phone","annotations":[{"type":"slow"}],"results":[{"status":"passed","annotations":[]}]}'
+        + ']}]}]}' },
+    0, 'check-ui-viewports: OK — SCHEDULED', { reportArg: 'bothok.json' }],
+
   // The twin: a WELL-FORMED override annotation is still honoured, so the three
   // above are not satisfiable by refusing every annotation.
   ['a well-formed viewport-override is still honoured',

@@ -299,20 +299,38 @@ function readReport(reportPath) {
   // edge — the same one-field-at-a-time pattern this round replaced with a
   // schema. Validate every entry first, then search: a search may stop early, a
   // validation may not (round 23).
-  const overrides = (r, t) => {
-    const perResult = arr(r.annotations, 'result.annotations');
-    const list = r.annotations === undefined ? arr(t.annotations, 'test.annotations') : perResult;
-    const okEntries = list.map((a) => {
-      if (a && typeof a === 'object' && !Array.isArray(a) && typeof a.type === 'string') return true;
+  //
+  // AND EVERY LIST, not just the one the fallback selected. Round 25 validated
+  // entries inside `overrides()`, which reads exactly one of the two lists — so
+  // whenever a modern report supplied `results[].annotations`, the test-level
+  // array was checked for being an array and its ENTRIES were never read at all:
+  // `tests[].annotations: [null]` beside valid per-result lists certified three
+  // bands at exit 0 (Codex, #347 round 26). Reproducing it found a second
+  // carrier Codex did not name: `overrides()` sits behind `r.status !==
+  // 'skipped' &&`, so a SKIPPED result's own annotations were never validated
+  // either — `{"status":"skipped","annotations":[null]}` certified the same way.
+  //
+  // One defect, two carriers, and the same shape as rounds 19-25: the previous
+  // round's fix was applied to the list that was named. So validation is no
+  // longer a side effect of the search. `checkEntries` runs unconditionally on
+  // the test-level list once per test and on each result's list per result,
+  // BEFORE any short-circuit can skip it, and the search that replaced
+  // `overrides()` (`marks`) reads entries something else has already vouched
+  // for. It is a search, so it may still stop early; nothing else depends on
+  // it having looked.
+  const checkEntries = (list, where) => {
+    for (const a of list) {
+      if (a && typeof a === 'object' && !Array.isArray(a) && typeof a.type === 'string') continue;
       if (!malformed) {
-        malformed = `an annotation is ${describe(a)}`
+        malformed = `an annotation in ${where} is ${describe(a)}`
           + `${a && typeof a === 'object' && !Array.isArray(a) ? ` with type ${describe(a.type)}` : ''},`
           + ' expected an object with a string type';
       }
-      return false;
-    });
-    return list.some((a, i) => okEntries[i] && a.type === OVERRIDE);
+    }
+    return list;
   };
+  const marks = (list) => list.some((a) => a && typeof a === 'object' && !Array.isArray(a)
+    && typeof a.type === 'string' && a.type === OVERRIDE);
   // PARSES IS NOT READS. `JSON.parse` succeeding says the bytes are JSON; it
   // says nothing about the document being a Playwright report, and every level
   // below was written as `x || []`, which handles undefined and null and throws
@@ -432,10 +450,11 @@ function readReport(reportPath) {
         // cannot be the same pass as an early-exit search — the search is
         // allowed to stop, the validation is not.
         const results = need(t, 'results', 'test');
-        // Required, and read once per test rather than per result: `overrides()`
-        // falls back to it whenever a result omits its own list, which on the
-        // 1.44 floor is every result.
-        need(t, 'annotations', 'test');
+        // Required, and read once per test rather than per result: the fallback
+        // below reaches for it whenever a result omits its own list, which on
+        // the 1.44 floor is every result. Validated here, unconditionally, so
+        // that a report supplying per-result lists cannot leave it unread.
+        const testAnn = checkEntries(need(t, 'annotations', 'test'), 'test.annotations');
         const counts = results.map((r) => {
           if (!obj(r, 'a result')) return false;
           if (typeof r.status !== 'string' || !STATUSES.has(r.status)) {
@@ -446,7 +465,11 @@ function readReport(reportPath) {
             }
             return false;
           }
-          return r.status !== 'skipped' && !overrides(r, t);
+          // Both before the `skipped` test below, which used to short-circuit
+          // past the only pass that read them (#347 round 26).
+          const perResult = checkEntries(arr(r.annotations, 'result.annotations'), 'result.annotations');
+          const list = r.annotations === undefined ? testAnn : perResult;
+          return r.status !== 'skipped' && !marks(list);
         });
         const ran = counts.some(Boolean);
         if (ran) executed.set(name, (executed.get(name) || 0) + 1);

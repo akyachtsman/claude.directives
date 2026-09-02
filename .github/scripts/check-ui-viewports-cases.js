@@ -54,6 +54,13 @@ try {
 
 const FIXTURE_PKG = JSON.stringify({ name: 'ui-viewports-fixture', private: true, type: 'module' });
 const IMPORT = "import { defineConfig, devices } from '@playwright/test';\n";
+// READ FROM THE SHIPPED FILE, not retyped. These cases exist to prove the kit's
+// own evidence mechanism works; a copy here would let the two drift and the
+// cases would pass against a fixture nobody ships.
+// The key a suite sets to declare that it records the widths it renders at.
+const RENDERED_META = "  metadata: { viewportEvidence: 'rendered-at' },\n";
+const KIT_FIXTURE = readFileSync(
+  join(REPO_ROOT, 'templates', 'ui-tests', 'tests', 'fixtures.js'), 'utf8');
 const TABLET = "    { name: 'tablet', use: { viewport: { width: 810, height: 1080 } } },\n";
 const PHONE = "    { name: 'phone', use: { viewport: { width: 390, height: 664 } } },\n";
 const LAPTOP = "    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },\n";
@@ -247,7 +254,7 @@ const CASES = [
       + `  reporter: [['./quiet.js'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'quiet.js': 'export default class { }\n' },
-    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true, ownReporter: true }],
+    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true, ownReporter: true }],
 
   // PW_TEST_REPORTER reaches PLAYWRIGHT rather than the config: the runner
   // appends it whatever `reporter` says, so a config declaring only built-ins can
@@ -274,7 +281,7 @@ const CASES = [
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['list'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK — EXECUTED',
+    0, 'check-ui-viewports: OK — SCHEDULED',
     { runReport: true, ownReporter: true, extraEnv: { PW_TEST_REPORTER: 'dot' } }],
 
   // ── THE JOIN IS BY NAME, SO NAMES MUST BE TELLABLE APART (#347 round 2) ──
@@ -330,7 +337,7 @@ const CASES = [
 
   ['…and an unfocused suite is not refused — the twin',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
+    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true }],
 
   // ── WHAT A LISTING COULD NOT SEE AT ALL, AND THE REPORT CAN ──────────────
   ['a reporter that SKIPS every test — CAUGHT now, exit 12',
@@ -496,7 +503,7 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
         + "test('overrides', async () => { expect(1).toBe(1); });\n" },
-    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
+    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true }],
 
   // An annotated test alongside an ordinary one: the band is covered by the
   // ordinary one, so the override costs nothing. This is the shipped kit's own
@@ -510,7 +517,7 @@ const CASES = [
         + "test('overrides', async () => {\n"
         + "  test.info().annotations.push({ type: 'viewport-override', description: '390' });\n"
         + "  expect(1).toBe(1);\n});\n" },
-    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
+    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true }],
 
   // A RETRY'S ANNOTATION MUST NOT DISQUALIFY THE ATTEMPT BEFORE IT (#347 r5).
   // Playwright stores a retry's annotation on that result AND on the test-level
@@ -527,7 +534,79 @@ const CASES = [
         + "    test.info().annotations.push({ type: 'viewport-override', description: '390' });\n"
         + "    return;\n  }\n"
         + "  expect(test.info().retry).toBe(1);\n});\n" },
-    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
+    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true }],
+
+  // ── THE TWO TIERS (#347 round 5) ────────────────────────────────────────
+  // Codex showed that a non-skipped result proves a test was SCHEDULED in a
+  // project, not that a page was RENDERED at its width. Two fixtures, both
+  // reproduced: an expected-to-fail test whose beforeAll throws records `failed`
+  // in every project with no body starting, and an assertion-only test that
+  // never requests `page` counts the same with no browser installed.
+  //
+  // The kit's `page` fixture now records the width each page ended on, and a
+  // config that carries such a fixture DECLARES it in metadata. These cases run
+  // a real browser — unlike every other case in this file, which is why the
+  // fixture spec below actually calls page.goto().
+  ['a suite declaring rendered-at, with a page — RENDERED, exit 0',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/fixtures.js': KIT_FIXTURE,
+      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
+        + "test('renders', async ({ page }) => { await page.goto('about:blank'); expect(1).toBe(1); });\n" },
+    0, 'OK — RENDERED laptop:1440px  tablet:810px  phone:390px', { runReport: true }],
+
+  // Codex's P1-A. The body never starts, so the fixture never runs and nothing
+  // is recorded — where the SCHEDULED rule counts all three `failed` results.
+  ['expected-to-fail whose beforeAll throws — no page rendered, exit 12',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/fixtures.js': KIT_FIXTURE,
+      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
+        + "test.beforeAll(async () => { throw new Error('setup exploded'); });\n"
+        + "test('never starts', async ({ page }) => { test.fail(); expect(1).toBe(2); });\n" },
+    12, 'NO PAGE WAS RENDERED at that width', { runReport: true }],
+
+  // Codex's P1-B, and the one this file's own harness demonstrated: every other
+  // fixture here asserts without requesting `page`, and they pass with no
+  // browser present. Under the declared tier that is no longer evidence.
+  ['an assertion-only test that never opens a page — exit 12',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/fixtures.js': KIT_FIXTURE,
+      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
+        + "test('no page at all', async () => { expect(1).toBe(1); });\n" },
+    12, 'rendered NO pages at all', { runReport: true }],
+
+  // THE TIER IS DECLARED, NOT INFERRED, and this is the case that proves it
+  // matters. Same fixture as above minus the metadata: nothing rendered, no
+  // width evidence, so inferring the tier from evidence-presence would drop it
+  // to the weak claim and PASS. It gets the weak claim — that is the accepted
+  // cost of not breaking suites that predate the fixture — but the verdict SAYS
+  // so, which is the whole point of the two-tier design.
+  ['the same suite without the metadata — weak claim, and it says so',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('no page at all', async () => { expect(1).toBe(1); });\n" },
+    0, 'OK — SCHEDULED', { runReport: true }],
+
+  ['…and the SCHEDULED verdict states what it did NOT establish',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('no page at all', async () => { expect(1).toBe(1); });\n" },
+    0, 'establish that a page was rendered at it', { runReport: true }],
+
+  // A test that overrides its viewport is ATTRIBUTED, not discarded, once widths
+  // are recorded — the kit's S4 shape. It renders at 390 in all three projects,
+  // so phone is covered and the other two are not.
+  ['a viewport-overriding test under the rendered tier — attributed to phone',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/fixtures.js': KIT_FIXTURE,
+      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
+        + "test('S4 shape', async ({ page }) => {\n"
+        + "  await page.setViewportSize({ width: 390, height: 844 });\n"
+        + "  await page.goto('about:blank');\n  expect(1).toBe(1);\n});\n" },
+    12, 'the run rendered pages at: 390px', { runReport: true }],
 
   // ── THE OBSERVATION'S OWN FAILURES (#335) ────────────────────────────────
   // Stage two can fail in two ways, and both must be loud. This is the founding

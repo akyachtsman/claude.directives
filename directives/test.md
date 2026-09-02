@@ -368,15 +368,30 @@ five:
   a symlinked `testDir`, a reporter excluding every test, a `shard` set only when
   a credential is present. Each is now caught without the gate knowing the
   mechanism exists.
-  **A test that sets its own viewport must say so.** `page.setViewportSize()`
-  inside a test overrides the project's, so that test runs at the width IT chose
-  in *every* project — it is evidence for that width and no other. Push
-  `{ type: 'viewport-override' }` onto `test.info().annotations` in any such
-  test; the gate reads the annotation out of the report and stops counting the
-  result. The kit's S4 (the 390px overflow check) carries it. Skip the
-  annotation and a run that selected only viewport-overriding tests certifies
-  every band while nothing rendered at two of them — reproduced, and the reason
-  this is an obligation rather than a note.
+  **Two verdicts, and the gate tells you which one you got.** A Playwright report
+  names the PROJECT that owned each result and carries no viewport, so a report
+  alone can only establish that a test *executed in a project declaring* a width
+  — not that a page was ever that wide. Two ways past that were reproduced: a
+  test marked expected-to-fail whose `beforeAll` throws records `failed` in every
+  project without its body starting, and an assertion-only test that never
+  requests `page` counts identically with no browser installed.
+  - **RENDERED** — the strong claim. The kit's `tests/fixtures.js` extends the
+    `page` fixture to annotate each result with the viewport that page *ended
+    on*, and `playwright.config.js` declares `metadata: { viewportEvidence:
+    'rendered-at' }`. Bands are then decided from real widths and project names
+    do not enter it. Import `test` from `./fixtures.js`, not from
+    `@playwright/test`, or your widths go unrecorded.
+  - **SCHEDULED** — the weak claim, for a suite that declares nothing. It still
+    catches a band with nothing running in it at all, and the verdict says
+    plainly what it did not establish. Keep the two files together: the metadata
+    is what makes the gate hold you to the stronger claim, so removing it makes
+    the gate quietly check less.
+
+  Under RENDERED, a test that calls `setViewportSize()` is *attributed* to the
+  width it actually used rather than excluded — the kit's S4 counts as phone
+  coverage. Under SCHEDULED it would wrongly credit its project's declared width,
+  so mark such a test with `{ type: 'viewport-override' }` on
+  `test.info().annotations` if you have not adopted the fixture.
   **Your config must write that report.** The shipped kit declares
   `['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]`
   alongside its `list` reporter, and the `ui-suite` composite passes that same

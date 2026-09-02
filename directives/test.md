@@ -384,6 +384,26 @@ five:
   a signal tied to the test body starting, and Playwright does not expose one to
   a fixture; that work is filed as directives#348 rather than guessed at again.
 
+  **What this gate catches is DRIFT, not FORGERY, and that boundary is stated
+  rather than defended.** The evidence it reads — the JSON report, and the
+  project list it imports — is produced by processes the config runs in, and
+  there is no authenticated channel out of a process you do not control. A
+  config's own exit handler can replace the report after the reporter has
+  written it; a corrupted array primitive can put a forged row among the declared
+  ones. Both were reproduced (#347 round 11). Six rounds of hardening moved the
+  exit path, the timeout, the kill signal, the verdict file and the band
+  arithmetic out of the config's reach, and every one of those closed a way to
+  subvert code the gate OWNS — neither of these is that. They are the config
+  lying about itself, in the only evidence that exists about it.
+
+  So: a config that narrows silently is what this gate exists for and what it
+  catches — a shard, a `.gitignore`, a filter, a device spread overwriting a
+  literal, a project quietly deleted. A config written to deceive it defeats it,
+  as it would defeat any check that reads a run through the run's own output.
+  Do not read a green SCHEDULED verdict as a security property. Tracked as
+  directives#349; reopen it only with a mechanism, since every candidate so far
+  either lives inside the same process or is an enumeration.
+
   **A test that sets its own viewport must still say so.** `setViewportSize()`
   inside a test overrides the project's, so that test runs at the width IT chose
   in *every* project. Push `{ type: 'viewport-override' }` onto

@@ -59,6 +59,40 @@
 // listing's, which needed no dishonesty at all — a `.gitignore` or a shard was
 // enough.
 //
+// ⚠️⚠️ THE STANDING LIMIT, AND IT IS ONE LIMIT WEARING TWO FACES. This gate reads
+// the config through artifacts produced by processes the CONFIG RUNS IN, and
+// there is no authenticated channel out of a process you do not control. So:
+//
+//   * the JSON report is written by the Playwright process, and the config's own
+//     exit handler can replace it after the reporter is done. Codex reproduced a
+//     config that rewrote the report with passing results for all three projects
+//     when only phone had been scheduled (#347 round 11), and this parser
+//     accepted it.
+//   * the declaration rows are assembled in the evaluation child, and a
+//     corrupted `Array.prototype.push` can put a forged row among them before
+//     the parent ever sees one.
+//
+// Six rounds of hardening bought real ground — the exit path, the bound, the kill
+// signal, the verdict file, the nonce, and the band arithmetic all moved out of
+// the config's reach — and each of those closed a way to subvert code the gate
+// OWNS. Neither of the two above is that. They are the config lying about
+// itself, in the only evidence that exists about it.
+//
+// Nothing closes this, and the shape of the failed attempts says why: every
+// candidate mechanism (hash the report before the handler runs, watch the file
+// for a second write, capture the array primitives) either lives inside the same
+// process or is an enumeration, and every enumeration on #347 was walked around
+// within one round. What WOULD close it is an execution channel Playwright does
+// not offer.
+//
+// So the scope is stated rather than defended: THIS GATE CATCHES DRIFT, NOT
+// FORGERY. A config that narrows silently — a shard, a `.gitignore`, a filter, a
+// device spread overwriting a literal, a project quietly deleted — is what it
+// exists for and what it catches. A config written to deceive this gate defeats
+// it, and would defeat any check that reads the run through the run's own
+// output. Owner decision, 2026-09-02: ship with the limit stated here, in the
+// verdict line, and in test.md. Tracked as directives#349.
+//
 // Without `--report` this gate checks the DECLARATION only and says so in the
 // verdict line. That is still a real check — a missing band is exit 1, provable
 // from the widths alone — and it is fast enough to run before the suite.
@@ -523,6 +557,9 @@ if (!VERDICT_FILE) {
         console.log('   page, or whose body never starts, counts here. #347 rounds 5-7 tried');
         console.log('   three mechanisms for the stronger claim and three variants of one');
         console.log('   finding defeated all three — see test.md -> UI coverage gates.)');
+        console.log('  (evidence: the run\'s own report, written by the process the config');
+        console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
+        console.log('   drift, not forgery. directives#349.)');
         console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) executed)`);
       } else {
         const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');

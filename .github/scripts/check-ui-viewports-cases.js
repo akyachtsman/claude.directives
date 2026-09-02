@@ -69,6 +69,37 @@ const cfg = body => `${IMPORT}export default defineConfig({\n  testDir: './tests
 // Written out in full rather than composed, because every line of it is the
 // finding: enumerate, pick the newest, write both payloads, and clear the exit
 // code so the corroboration check sees a clean end (Codex, #347 round 10).
+// A config that selects nothing and then writes a report saying everything ran.
+// The exit handler fires inside the PLAYWRIGHT process, after its json reporter
+// has finished, so what the gate reads is not the run's account of itself.
+// directives#349 — the limit this pins, not a defect to fix here.
+//
+// PARAMETERISED, NOT STRING-SURGERY. The twin needs the same config WITHOUT the
+// handler, and my first attempt produced it by rewriting `process.on('exit'` into
+// a harmless expression — which left an unbalanced paren, so the twin would have
+// failed at exit 5 (config throws at import) while asserting exit 12. It would
+// have passed for a reason that had nothing to do with the report. Building both
+// from one function makes the two fixtures differ in exactly the handler.
+const forgedReport = (rewrite) => `${IMPORT}import { writeFileSync } from 'fs';
+${rewrite ? `process.on('exit', () => {
+  try {
+    const result = { status: 'passed', annotations: [] };
+    const tests = ['desktop', 'tablet', 'phone'].map(projectName => ({
+      projectName, annotations: [], results: [result],
+    }));
+    writeFileSync(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME || 'report.json', JSON.stringify({
+      suites: [{ specs: [{ title: 'present', tests }] }],
+    }), 'utf8');
+  } catch {}
+});` : ''}
+export default defineConfig({
+  testDir: './tests',
+  grep: /this-title-does-not-exist/,
+  projects: [
+${LAPTOP}${TABLET}${PHONE}  ],
+});
+`;
+
 const FORGE = `${IMPORT}import { readdirSync, writeFileSync, statSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -1135,6 +1166,34 @@ const CASES = [
       + `export default defineConfig({\n  testDir: './tests',\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK'],
+
+  // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
+  // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
+  // (`grep` matches no title) and its exit handler then writes a report claiming
+  // all three projects ran. The gate believes it.
+  //
+  // That is the standing limit: the report is written by the Playwright process,
+  // the config runs IN that process, and there is no authenticated channel out of
+  // a process you do not control. Every candidate mechanism either lives inside
+  // the same process (hash it first, read stdout, run as a reporter, use
+  // globalTeardown) or is an enumeration, and every enumeration on this PR was
+  // walked around within one round.
+  //
+  // Pinned in the direction of STAYING a limit, the same way #347 round 1's argv
+  // case was: if this ever starts being caught, someone added a mechanism nobody
+  // reviewed, and the case turns red so it gets read. Flipping it to a refusal is
+  // the deliverable of directives#349 — not a drive-by fix.
+  //
+  // Without the exit handler this fixture is exit 12 with all three bands named,
+  // which is the case immediately after. The pair is what makes this one mean
+  // "the rewrite was believed" rather than "the gate passed for some reason".
+  ['a config REWRITING the run report — believed, and that is the recorded limit',
+    { 'playwright.config.js': forgedReport(true), 'tests/gate.spec.js': SPEC },
+    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true }],
+
+  ['…the same config without the rewrite is exit 12, so the pass above IS the rewrite',
+    { 'playwright.config.js': forgedReport(false), 'tests/gate.spec.js': SPEC },
+    12, 'declared but NOTHING RAN', { runReport: true }],
 ];
 
 // Writes a copy of the gate with the config-evaluation child's bound replaced.

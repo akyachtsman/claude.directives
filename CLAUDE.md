@@ -195,7 +195,14 @@ A directive repo must pass its own CI before it can be trusted downstream.
   navigation — and three variants of ONE finding (a hook that throws, a hook
   that throws after requesting `page`, a hook that NAVIGATES and throws) defeated
   all three. Withdrawn rather than lost to a fourth round; #348 carries the
-  work), job bounds
+  work. ⚠️ The gate reads the config through artifacts produced by processes the
+  CONFIG RUNS IN — the JSON report, and the projects it imports — so a config's
+  own exit handler can replace the report, and a corrupted array primitive can
+  forge a declaration row. Both reproduced, #347 round 11. It catches DRIFT, not
+  FORGERY, and every candidate mechanism is either inside the same process or an
+  enumeration; the fixture is pinned at exit 0 in the direction of STAYING a
+  limit, so if it starts being caught the case reddens and gets read. #349), job
+  bounds
   (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an
   unreadable bound on a job carrying a floor must REFUSE, and the exemption for
   jobs carrying no floor must survive, #334), the exported contrast guardrail's

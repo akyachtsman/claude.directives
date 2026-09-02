@@ -285,14 +285,22 @@ if (!VERDICT_FILE) {
           rmSync(box, { recursive: true, force: true });
           process.exit(run.code);
         }
+        // ONE LABEL FOR THE EMPTY KEY, and it is only ever a LABEL. The join
+        // runs on the raw name, so a project actually named `(no name)` is a
+        // different key from a project with none — Codex reported the reverse
+        // for the old `(unnamed)` sentinel (#347 round 3), which was a real
+        // collision because the two sides of the join disagreed. They agree now
+        // (both use the empty string), and this only decides what gets printed.
+        // Without it a `declared by:` line for an unnamed project printed empty.
+        const label = n => (n === '' ? '(no name)' : n);
         const ranIn = n => (run.executed.get(n) || 0) > 0;
         const missing = bands.filter(b => !rows.cover[b].some(ranIn));
         if (missing.length) {
           for (const b of missing) {
             console.error(`FAIL: ${b} is declared but NOTHING RAN at that width.`);
-            console.error(`  declared by: ${rows.cover[b].join(', ')}`);
+            console.error(`  declared by: ${rows.cover[b].map(label).join(', ')}`);
           }
-          const ran = [...run.executed.entries()].map(([n, c]) => `${n || '(unnamed)'}:${c}`).join(', ');
+          const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
           console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
           console.error('  This is the run\'s own report, not an inference: the widths are declared');
           console.error('  correctly and no scenario executed at them. A filter, an ignore rule, a');
@@ -303,11 +311,11 @@ if (!VERDICT_FILE) {
           rmSync(box, { recursive: true, force: true });
           process.exit(12);
         }
-        const where = b => rows.cover[b].filter(ranIn).map(n => n || '(unnamed)').join('/');
+        const where = b => rows.cover[b].filter(ranIn).map(label).join('/');
         console.log(`check-ui-viewports: OK — EXECUTED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
         console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) executed)`);
       } else {
-        const shown = b => rows.cover[b].map(n => n || '(unnamed)').join('/');
+        const shown = b => rows.cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
         console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
         console.log('  (declared, not executed — pass --report <playwright json> after the run');
         console.log('   to certify that scenarios actually ran at these widths)');
@@ -789,7 +797,7 @@ console.log(`config:    ${configPath}`);
     cover[band].push(name);
   }
   for (const r of rows) {
-    console.log(`  ${String(r.name || '(unnamed)').padEnd(18)} ${String(r.w).padEnd(12)} ${r.band}`);
+    console.log(`  ${String(r.name === '' ? '(no name)' : r.name).padEnd(18)} ${String(r.w).padEnd(12)} ${r.band}`);
   }
 
   // TWO DIFFERENT VERDICTS, because they are different facts. A band with no

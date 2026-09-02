@@ -390,12 +390,74 @@ const CASES = [
 
   // ── UNNAMED PROJECTS: the fix, and the hole the fix opened ───────────────
   ['a project with no name is still attributed — no false failure',
-    // Playwright's list reporter prints an unnamed project's tests with no
-    // `[project] ›` prefix. Dropping those lines made the gate report a band
-    // undiscovered for a config Playwright lists in full.
+    // An unnamed project reports `projectName: ""`, and the declaration side
+    // keys it the same way, so the join matches. Under the listing this needed a
+    // parser rule (unprefixed lines) and produced a false FAILURE until it had
+    // one.
     { 'playwright.config.js': withProjects(
       "    { use: { viewport: { width: 1440, height: 900 } } },\n" + TABLET + PHONE) },
-    0, 'laptop:(unnamed)'],
+    0, 'laptop:(no name)', { runReport: true }],
+
+  ['an unnamed project beside one NAMED `(no name)` — distinct keys, not a collision',
+    // Codex #347 round 3, against the listing: the display sentinel was
+    // `(unnamed)`, a project could be named that literally, and BOTH SIDES of
+    // the join used the sentinel — so a phone project named `(unnamed)`
+    // certified an unnamed laptop project that ran nothing. The join now runs on
+    // the raw name (`''` for unnamed), and `(no name)` is only ever printed, so
+    // the two are different keys however the label is spelled. The laptop
+    // project here matches nothing and is named as the uncovered band.
+    { 'playwright.config.js': withProjects(
+      "    { testMatch: /__none__/, use: { viewport: { width: 1440, height: 900 } } },\n"
+      + TABLET
+      + "    { name: '(no name)', use: { viewport: { width: 390, height: 664 } } },\n") },
+    12, 'laptop is declared but NOTHING RAN at that width', { runReport: true }],
+
+  ['…and the diagnostic names the unnamed project rather than printing blank',
+    // Same fixture, pinning the OTHER half: `declared by:` used to interpolate
+    // the raw key, so an unnamed project printed an empty list — a diagnostic
+    // that names nothing is the silent-failure shape one line down.
+    { 'playwright.config.js': withProjects(
+      "    { testMatch: /__none__/, use: { viewport: { width: 1440, height: 900 } } },\n"
+      + TABLET
+      + "    { name: '(no name)', use: { viewport: { width: 390, height: 664 } } },\n") },
+    12, 'declared by: (no name)', { runReport: true }],
+
+  ['a project name containing a plain `]` — read exactly, exit 0',
+    // Codex #347 round 3, P2, against the listing: the parser captured
+    // `[^\]]+`, so `desk]top` could not be read back at all and the gate
+    // reported the laptop band undiscovered for a config Playwright runs in
+    // full. Nothing parses a name now — the report carries it as a JSON string.
+    { 'playwright.config.js': withProjects(
+      "    { name: 'desk]top', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + TABLET + PHONE) },
+    0, 'laptop:desk]top', { runReport: true }],
+
+  ['a config that PRINTS listing-shaped lines is not believed',
+    // Codex #347 round 3, against the listing: a config logging
+    // `[project] › …` lines during evaluation populated the inventory, and the
+    // gate certified three bands for a config with a non-matching root grep —
+    // user stdout outranking the reporter's own trailer. The report is a FILE
+    // the json reporter writes, so nothing a config prints reaches it, and this
+    // config's grep leaves the run empty.
+    { 'playwright.config.js': `${IMPORT}console.log('  [desktop] › a.spec.js:2:1 › present');\n`
+      + `console.log('  Total: 3 tests in 1 file');\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  grep: /__NEVER_MATCHES__/,\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    12, 'NOTHING RAN at that width', { runReport: true }],
+
+  ['globalSetup that changes what collection defines — OBSERVED, exit 12',
+    // Codex #347 round 3: list mode goes straight to createLoadTask while a run
+    // calls createGlobalSetupTasks first, so a setup whose state the specs read
+    // at collection time enumerated one suite and ran another. There is no list
+    // mode any more; the report comes from the run that DID call the setup.
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  globalSetup: './global-setup.js',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'global-setup.js': "export default async () => { process.env.NARROW = '1'; };\n",
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "if (!process.env.NARROW) { test('present', async () => { expect(1).toBe(1); }); }\n" },
+    12, 'NOTHING RAN at that width', { runReport: true }],
 
   ['TWO unnamed projects — CANNOT CHECK, exit 18',
     // Found by testing the fix above rather than shipping it. With two nameless
@@ -855,11 +917,16 @@ function runCase(files, opts) {
     // reporter of their own alongside the reporter under test.
     if (o.runReport) {
       const runArgs = o.ownReporter ? ['playwright', 'test'] : ['playwright', 'test', '--reporter=json'];
-      const run = spawnSync('npx', runArgs, {
+      // PLAYWRIGHT_JSON_OUTPUT_NAME rather than capturing stdout. A config is
+      // code and may print: a fixture that logs during evaluation lands in the
+      // captured stream ahead of the JSON and the parse fails, so the case would
+      // measure the harness instead of the gate. Playwright writes the file
+      // itself, which is also what the shipped kit's `outputFile` does — so the
+      // cases exercise the same arrangement CI uses.
+      spawnSync('npx', runArgs, {
         cwd: target, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
-        env: { ...env, PWD: target },
+        env: { ...env, PWD: target, PLAYWRIGHT_JSON_OUTPUT_NAME: 'report.json' },
       });
-      if (!o.ownReporter) writeFileSync(join(target, 'report.json'), `${run.stdout || ''}`);
       args.push('--report', 'report.json');
     }
     // opts.reportArg passes --report WITHOUT running anything: the cases that

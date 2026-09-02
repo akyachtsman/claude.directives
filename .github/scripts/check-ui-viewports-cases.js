@@ -1242,6 +1242,27 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     15, 'could not read', { reportIsFlagName: true }],
 
+  // ── THE SAME FINDING, ONE FLAG OVER (#347 round 18) ─────────────────────
+  // Round 16 fixed the band bounds and round 14's `--declared` by stepping over
+  // option values, and left `--report` on a bare `indexOf`. Codex built the
+  // identical construction against it: point `--config` at something NAMED
+  // `--report`, and the whole-argv search lands on the config's VALUE.
+  //
+  // The old code then read the token AFTER it as the report path — there is
+  // none — and exited 8 for a missing path on a command that passed no
+  // `--report` at all. The command is honest and complete, so the honest answer
+  // is the DECLARED verdict at exit 0; 8 means the scan regressed.
+  //
+  // A DIRECTORY named `--report`, which is what the harness supports and what
+  // Playwright's `--config` accepts alongside a file. The finding is about the
+  // argv token, not about how the config is stored.
+  ['a --config value named --report — not read as the report flag',
+    { '--report/playwright.config.js':
+        `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      '--report/app.spec.js': SPEC },
+    0, 'OK — DECLARED', { configArg: '--report', configArgRelative: true }],
+
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
   // (`grep` matches no title) and its exit handler then writes a report claiming

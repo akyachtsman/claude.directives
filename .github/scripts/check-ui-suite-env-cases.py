@@ -48,7 +48,7 @@ RUN = "Run Playwright tests"
 # pre-run check does, so every parity argument applies to it and it needs the
 # same cases. Its defaults mirror the run step so the fixtures written before it
 # existed keep meaning what they meant.
-POST = "Check the run actually exercised all three viewport classes"
+POST = "Check the run scheduled tests at all three viewport classes"
 UNSET = object()
 
 # THE PINNED BODIES, WRITTEN OUT HERE RATHER THAN IMPORTED. The guard now
@@ -119,7 +119,12 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
     )
 
 
-BOTH = {"APP_URL": "a", "TEST_AUTH_CREDENTIAL": "b"}
+# The two PINNED variables are in the baseline because the guard now requires
+# them by NAME, not merely in agreement (#347 round 18): parity is a relative
+# rule and three steps that all dropped a variable satisfy it perfectly. A
+# fixture without them would be testing a shape the live action cannot have.
+BOTH = {"APP_URL": "a", "TEST_AUTH_CREDENTIAL": "b",
+        "REPORT_PATH": "r.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"}
 
 CASES = [
     # The success path. Without this the guard could fail everything and the
@@ -244,8 +249,46 @@ CASES = [
     ("run step renamed away", action(dict(BOTH), dict(BOTH), run_name="Renamed"),
      1, f'no step named "{RUN}"'),
 
-    # Neither step declaring env is legitimate parity, not an excuse to skip.
-    ("neither step declares env", action({}, {}), 0, "empty"),
+    # "OR NONE OF THEM" SURVIVES, BUT ONLY FOR THE OPTIONAL VARIABLES. The parity
+    # rule always allowed three steps to declare nothing, because a variable
+    # absent everywhere cannot make the two config imports disagree. That is
+    # still true of APP_URL and its neighbours -- and it was never true of the
+    # two the pinned bodies NAME: `--report "$REPORT_PATH"` with nothing setting
+    # REPORT_PATH is the empty-path usage error, and an unpinned
+    # PLAYWRIGHT_JSON_OUTPUT_FILE leaves the report's destination to whatever the
+    # caller's job exported (#347 round 18). So an env-less sequence is refused
+    # now, and the case says which rule refuses it.
+    ("no env at all — refused, the pinned bodies name two variables",
+     action({}, {}), 1, "REPORT_PATH is not set on"),
+    ("only the two pinned variables, no optional env — still parity",
+     action({"REPORT_PATH": "r.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"},
+            {"REPORT_PATH": "r.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"}),
+     0, "same step-level env and working directory"),
+
+    # ── THE PINNED VARIABLES (#347 round 18) ────────────────────────────────
+    # Each of these is invisible to every other rule in the guard: the three
+    # steps stay in perfect agreement while the run writes its report somewhere
+    # the gate does not read.
+    ("PLAYWRIGHT_JSON_OUTPUT_FILE dropped from all three — refused",
+     action({"APP_URL": "a", "REPORT_PATH": "r.json"},
+            {"APP_URL": "a", "REPORT_PATH": "r.json"}),
+     1, "PLAYWRIGHT_JSON_OUTPUT_FILE is not set on"),
+    ("REPORT_PATH dropped from all three — refused",
+     action({"APP_URL": "a", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"},
+            {"APP_URL": "a", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"}),
+     1, "REPORT_PATH is not set on"),
+    ("PLAYWRIGHT_JSON_OUTPUT_FILE pointing somewhere else — refused",
+     action({**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "elsewhere.json"},
+            {**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "elsewhere.json"}),
+     1, "to a different value than REPORT_PATH"),
+    # The drift this last rule exists for is a value that LOOKS right. Both are
+    # `${{ }}` expressions and only one is the validated output.
+    ("PLAYWRIGHT_JSON_OUTPUT_FILE from the raw input, REPORT_PATH validated",
+     action({**BOTH, "REPORT_PATH": "${{ steps.report-path.outputs.relative }}",
+             "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"},
+            {**BOTH, "REPORT_PATH": "${{ steps.report-path.outputs.relative }}",
+             "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"}),
+     1, "to a different value than REPORT_PATH"),
 
     # ── THE POST-RUN CHECK IS THE SAME STEP AGAIN (#335) ────────────────────
     # It imports the config too, so every branch above has to hold from its side

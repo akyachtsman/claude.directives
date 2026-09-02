@@ -59,8 +59,10 @@ inputs:
       AFTER the run to check that each declared width had a test SCHEDULED
       under it: a non-skipped result in a project declaring that width. It does
       NOT establish that a page was rendered there — see test.md -> UI coverage
-      gates, and directives#348. Must match the `outputFile` of your config's
-      json reporter; the shipped kit's default is used here.
+      gates, and directives#348. Your config must DECLARE a json reporter; this
+      composite pins where it writes by exporting PLAYWRIGHT_JSON_OUTPUT_FILE,
+      so the reporter's own `outputFile` need not match. The shipped kit's
+      default is used here.
     required: false
     default: '../../../.agent-reports/playwright-results.json'
   app-url:
@@ -345,6 +347,10 @@ runs:
         # FROM THE VALIDATED OUTPUT, never the action input — every consumer in
         # this composite now reads a value the validator accepted (#347 r10).
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
+        # Same value on every step of the sequence: check-ui-suite-env.py
+        # requires identical env, and two of these steps import the config. See
+        # the run step for why this variable is pinned at all (#347 round 18).
+        PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
       run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --declared "$RUNNER_TEMP/ui-viewports-declared.json"
 
     - name: Run Playwright tests
@@ -368,6 +374,24 @@ runs:
         # FROM THE VALIDATED OUTPUT, never the action input — every consumer in
         # this composite now reads a value the validator accepted (#347 r10).
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
+        # NEUTRALISE PLAYWRIGHT'S OWN REDIRECT. `PLAYWRIGHT_JSON_OUTPUT_FILE`
+        # takes precedence over the json reporter's configured `outputFile`, so a
+        # caller whose job or workflow already exports it sends the report
+        # somewhere else and the configured file is never written at all.
+        # Measured on the shipped 1.62.1: with the variable set the config's
+        # `outputFile` produced NO file, and the post-run gate — reading the
+        # validated path — exited 15 on a run that had passed (Codex, #347
+        # round 18). Setting it to the same validated path is the fix rather
+        # than clearing it: an unset variable still leaves the destination to
+        # the config, while this pins it to the path every step here agrees on.
+        #
+        # It does NOT substitute for the config declaring a json reporter.
+        # Measured too: with no json reporter in the config, the variable writes
+        # nothing. The downstream obligation below is unchanged; what this
+        # removes is the obligation for the config's `outputFile` to MATCH.
+        # (Resolved against the process cwd, measured — which is this step's
+        # working-directory, the same base the gate resolves `--report` against.)
+        PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
       # No --reporter flag: a CLI reporter REPLACES the config's list, which
       # would drop the json reporter and leave playwright-results.json unwritten
       # while the upload step below still claims to publish it.
@@ -376,16 +400,26 @@ runs:
 
     # THE COVERAGE CLAIM COMES FROM THE RUN, not from anything predicted before
     # it. The step above certifies only that three widths are DECLARED; whether
-    # a scenario reached them depends on selection keys, .gitignore, shards,
-    # reporters, focused tests and globalSetup, and #335 measured that no
+    # the run SCHEDULED anything at them depends on selection keys, .gitignore,
+    # shards, reporters, focused tests and globalSetup, and #335 measured that no
     # pre-run observation answers it — `playwright test --list` differs from a
     # run in argv visibility, filterOnly, globalSetup and skip disposition.
     # The run's own JSON report has none of those gaps, because it is the run.
     #
+    # SCHEDULED, NOT EXECUTED, and this step's NAME has to say so. It read
+    # "Check the run actually exercised all three viewport classes" — the
+    # EXECUTED guarantee #347 withdrew — while the gate it invokes prints
+    # SCHEDULED and states in its own output that it is not proof a page was
+    # rendered. A hook that fails before the test body starts still produces a
+    # non-skipped result, so this step can pass with no page and no viewport
+    # ever reached (Codex, #347 round 18). The step name is the most prominent
+    # carrier of the claim there is: it is what a reader sees in the Actions
+    # log without opening anything. Proving the stronger thing is #348.
+    #
     # always(): a suite that failed still ran tests, and its report still says
-    # which widths were exercised. A report that is missing because the run died
-    # early is a genuine CANNOT CHECK, and says so rather than passing.
-    - name: Check the run actually exercised all three viewport classes
+    # which widths the run scheduled. A report that is missing because the run
+    # died early is a genuine CANNOT CHECK, and says so rather than passing.
+    - name: Check the run scheduled tests at all three viewport classes
       # always() AND the validation having passed — the SAME pair the upload
       # below needs, for the same reason and found the same way. Round 9 gated
       # the upload and left this step on bare `always()`, so a REFUSED
@@ -399,9 +433,9 @@ runs:
       # "ONLY the run step advisory" and this is not the run step — it is the
       # coverage gate, and making it advisory removes the guarantee exactly when
       # it matters most: a suite that exits 0 having run only desktop tests
-      # leaves the composite green with two bands unexercised (Codex, #347
+      # leaves the composite green with two bands never scheduled (Codex, #347
       # round 6). An advisory RUN is a project choosing to tolerate failing
-      # tests; it is not a choice to stop checking which widths were rendered.
+      # tests; it is not a choice to stop checking which widths were scheduled.
       env:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
@@ -415,6 +449,10 @@ runs:
         # FROM THE VALIDATED OUTPUT, never the action input — every consumer in
         # this composite now reads a value the validator accepted (#347 r10).
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
+        # Same value on every step of the sequence: check-ui-suite-env.py
+        # requires identical env, and two of these steps import the config. See
+        # the run step for why this variable is pinned at all (#347 round 18).
+        PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
       # THROUGH THE ENVIRONMENT, NOT INTERPOLATED. `${{ }}` is substituted into
       # the script source before bash parses it, so a report-path carrying a
       # quote and a shell operator would execute — the same template-injection

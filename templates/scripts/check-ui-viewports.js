@@ -99,7 +99,9 @@
 //
 // SILENCE MEANS "CHECKED AND FINE", NEVER "COULD NOT LOOK". Every failure has its
 // own exit code and its own printed line:
-//   0  three classes declared; with --report, also EXECUTED at those widths
+//   0  three classes declared; with --report, also SCHEDULED at those widths
+//      (never EXECUTED — a hook can fail before the body and still produce a
+//      non-skipped result; see the header's SCHEDULED note and directives#348)
 //   1  checked — a class is undeclared (the gate FAILED)
 //   2  tests dir not found
 //   3  no Playwright config in the tests dir
@@ -311,17 +313,34 @@ const EVAL_TIMEOUT_MS = 120000;
 // So the scan walks argv in order and steps OVER the value of every option that
 // takes one. The list is explicit rather than inferred from a leading `-`,
 // because a value can look like a flag — which is the whole finding.
+//
+// ONE SCANNER, USED BY EVERY FLAG THIS PROCESS READS. Round 16 fixed the band
+// bounds and round 14's `--declared` with the same walk written out twice, and
+// left `--report` on a bare `indexOf`. Codex found the third copy by the same
+// construction as the first: `--config --report`, with a config file literally
+// NAMED `--report`, made the whole-argv search land on the config's VALUE and
+// read the token after it as the report path — exit 8 for a missing path on a
+// command that supplied none (#347 round 18).
+//
+// That is the idiom propagating rather than a new bug: the value-stepping was
+// written twice and the third reader was not brought along. So the walk exists
+// once now and the three flags are defined in terms of it — a fourth reader
+// inherits the rule instead of re-deriving it.
 const VALUE_OPTS = new Set(['--tests-dir', '--config', '--report', '--declared',
   '--tablet-min', '--laptop-min']);
-const bandOpt = (flag, fallback) => {
+const argOpt = (flag) => {
   for (let i = 2; i < process.argv.length; i += 1) {
     const a = process.argv[i];
-    if (a === flag) return { value: Number(process.argv[i + 1]), given: true };
-    if (a.startsWith(`${flag}=`)) return { value: Number(a.slice(flag.length + 1)), given: true };
+    if (a === flag) return { value: process.argv[i + 1], given: true };
+    if (a.startsWith(`${flag}=`)) return { value: a.slice(flag.length + 1), given: true };
     // Step over this option's value so it is never read as a flag itself.
     if (VALUE_OPTS.has(a)) i += 1;
   }
-  return { value: fallback, given: false };
+  return { value: undefined, given: false };
+};
+const bandOpt = (flag, fallback) => {
+  const hit = argOpt(flag);
+  return hit.given ? { value: Number(hit.value), given: true } : { value: fallback, given: false };
 };
 
 // THE BAND DECISION AND THE JOIN, IN ONE PLACE, called from two.
@@ -381,7 +400,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
   }
   const ok = rowsWellFormed && bands.every(b => cover[b].length > 0);
   if (ok) {
-    // ── STAGE TWO: WHAT ACTUALLY RAN ─────────────────────────────────────
+    // ── STAGE TWO: WHAT THE RUN SCHEDULED ────────────────────────────────
     // Only when a report is supplied. Without one this gate reports what the
     // config DECLARES and says so plainly — that is a real check (a missing
     // band is exit 1 and provable from the widths alone) and it is fast enough
@@ -402,19 +421,18 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
     // script is also run by hand and from project scripts, where `--report=`
     // is the more natural spelling, and a flag that is silently ignored is the
     // exact failure round 7 recorded.
-    let reportIdx = process.argv.indexOf('--report');
-    let reportArg = reportIdx >= 0 ? process.argv[reportIdx + 1] : undefined;
-    if (reportIdx < 0) {
-      const eq = process.argv.findIndex(a => a.startsWith('--report='));
-      if (eq >= 0) { reportIdx = eq; reportArg = process.argv[eq].slice('--report='.length); }
-    }
+    //
+    // BOTH SPELLINGS THROUGH THE SHARED SCANNER, which is also what makes a
+    // config named `--report` stop being read as this flag (#347 round 18).
+    const reportOpt = argOpt('--report');
+    const reportArg = reportOpt.value;
     // A PRESENT FLAG WITH NO PATH IS A USAGE ERROR, NOT A QUIETER CHECK.
     // `--report ''` — which is what an unset REPORT_PATH expands to in the
     // composite — used to fall through the truthiness test and print the
     // DECLARED verdict, so the caller asked for the execution check and got
     // silence with a passing exit (Codex, #347 round 6). Someone who passes
     // the flag wants stage two; if the path is missing, say so.
-    if (reportIdx >= 0 && !String(reportArg || '').trim()) {
+    if (reportOpt.given && !String(reportArg || '').trim()) {
       console.error('CANNOT CHECK: --report was given with no path.');
       console.error('  Passing the flag asks for the execution check, so an empty value is a');
       console.error('  usage error rather than a reason to fall back on the declaration.');
@@ -558,15 +576,10 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
 // That is the same family as directives#349 — evidence produced by processes the
 // config runs in — and this closes the teardown half of it, not the whole.
 const declaredIdx = (() => {
-  // Same value-stepping as bandOpt above: a report-path of `--declared` is a
-  // legal filename and must not be read as this flag (#347 round 16).
-  for (let i = 2; i < process.argv.length; i += 1) {
-    const a = process.argv[i];
-    if (a === '--declared') return { path: process.argv[i + 1], given: true };
-    if (a.startsWith('--declared=')) return { path: a.slice('--declared='.length), given: true };
-    if (VALUE_OPTS.has(a)) i += 1;
-  }
-  return { path: undefined, given: false };
+  // Through the shared scanner: a report-path of `--declared` is a legal
+  // filename and must not be read as this flag (#347 round 16).
+  const hit = argOpt('--declared');
+  return { path: hit.value, given: hit.given };
 })();
 
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
@@ -576,8 +589,10 @@ if (!VERDICT_FILE) {
   // mapping. `--declared` with `--report` and no readable file is a refusal, not
   // a fallback to importing — falling back would silently restore exactly the
   // re-evaluation this flag exists to prevent.
-  const wantsReport = process.argv.includes('--report')
-    || process.argv.some(a => a.startsWith('--report='));
+  // Through the shared scanner too. A whole-argv `includes` said yes to
+  // `--config --report`, so a config NAMED `--report` sent this branch looking
+  // for a mapping the command never asked for (#347 round 18).
+  const wantsReport = argOpt('--report').given;
   if (declaredIdx.given && wantsReport) {
     let carried = null;
     try { carried = JSON.parse(readFileSync(declaredIdx.path, 'utf8')); } catch { /* below */ }
@@ -843,8 +858,18 @@ function die(code, lines) {
   EXIT(code);
 }
 
-const argv = process.argv.slice(2);
-const opt = name => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
+// THE FOURTH READER, brought along with the other three. Codex's round-18
+// finding was about `--report`, but the construction it used — an option VALUE
+// that is a legal filename spelled like a flag — defeats this one identically:
+// a `report-path` of `--tests-dir` (accepted by the validator, which forbids
+// globs and traversal, not a leading dash) made `--report --tests-dir` hand this
+// search the config's own flag name. Reported for one flag, fixed for every
+// flag, because the defect is the idiom and not the instance.
+//
+// `argOpt` walks `process.argv` from index 2, which is where the old local
+// slice started, so the tokens read are identical; the value-stepping is the
+// only difference, and it is the whole point.
+const opt = name => argOpt(name).value;
 
 // --- 1. Resolve the tests dir. The default is a fallback, never an assumption:
 // the resolved path AND its source print on every run, because #281's snippet died

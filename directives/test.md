@@ -411,12 +411,21 @@ five:
   result; the kit's S4 (the 390px overflow check) carries it. Skip it and a run
   selecting only viewport-overriding tests certifies every band.
 
-  **Your config must write that report.** The shipped kit declares
+  **Your config must declare a json reporter.** The shipped kit declares
   `['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]`
-  alongside its `list` reporter, and the `ui-suite` composite passes that same
-  path. A config that writes no JSON report leaves the composite's post-run check
-  unable to read one, which is CANNOT CHECK and fails the job — deliberately, so
-  that a missing report is never mistaken for a covered band.
+  alongside its `list` reporter. A config that declares no json reporter leaves
+  the composite's post-run check unable to read one, which is CANNOT CHECK and
+  fails the job — deliberately, so that a missing report is never mistaken for a
+  covered band.
+
+  The `outputFile` itself need not match `report-path`: the composite exports
+  `PLAYWRIGHT_JSON_OUTPUT_FILE` set to the validated path, and that variable
+  takes precedence over the configured `outputFile` (measured on 1.62.1 — with
+  it set, the configured file is not written at all). The composite pins it for
+  the opposite reason too: a job that already exported that variable used to
+  redirect the report away from the path the gate reads, failing an otherwise
+  valid run. Note the precedence runs one way only — the variable redirects a
+  json reporter, it does not add one, so declaring the reporter stays on you.
   A listing (`playwright test --list`) was the first design and was measured out.
   It is not the run: it announces itself in `process.argv`, it loads with
   `filterOnly:false` so a stray `test.only` over-counts, it skips `globalSetup`,

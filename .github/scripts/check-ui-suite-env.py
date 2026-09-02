@@ -53,7 +53,7 @@ RUN_STEP = "Run Playwright tests"
 # finding arriving a third time. The three steps run consecutively and share one
 # environment; RUN_STEP is the reference all of them are compared against,
 # because it is the thing being measured.
-POST_STEP = "Check the run actually exercised all three viewport classes"
+POST_STEP = "Check the run scheduled tests at all three viewport classes"
 
 # (label, the exact command bodies accepted), in the order the steps must appear.
 #
@@ -119,6 +119,21 @@ SHELL = "bash"
 # Both bodies must name the same sidecar or the handoff silently degrades into
 # the re-evaluation it replaced, which is why it is pinned rather than described.
 DECLARED = '--declared "$RUNNER_TEMP/ui-viewports-declared.json"'
+# PINNED ENV, NOT JUST MATCHING ENV. Everything else in this file compares the
+# three steps against each other, which catches a variable dropped from ONE step
+# and says nothing about one dropped from all three -- parity between three
+# absences is still parity. That is the fail-open shape this guard exists to
+# refuse, so the variables whose PRESENCE is load-bearing are named here.
+#
+# PLAYWRIGHT_JSON_OUTPUT_FILE takes precedence over the json reporter's
+# configured `outputFile` (measured, 1.62.1: with it set the configured file is
+# not written at all). Unset, a caller job that exports it redirects the report
+# away from the validated path and the post-run gate exits 15 on a run that
+# passed (Codex, #347 round 18). Its value must be the SAME expression as
+# REPORT_PATH -- the validated output -- or the run writes the report somewhere
+# the gate does not read, which is the same failure with an extra step.
+REQUIRED_ENV = ("REPORT_PATH", "PLAYWRIGHT_JSON_OUTPUT_FILE")
+SAME_VALUE_ENV = (("PLAYWRIGHT_JSON_OUTPUT_FILE", "REPORT_PATH"),)
 SEQUENCE = (
     (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL),
     (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL),
@@ -208,6 +223,28 @@ def main():
                     + "\n    a variable is ABSENT, so the step sees none and the run applies it"
                     + "\n    (#333, round 10). Give every step the same env, or none of them."
                 )
+        # THE NAMED VARIABLES MUST BE THERE AT ALL. See REQUIRED_ENV above:
+        # the comparisons before this one are relative, and three steps that all
+        # dropped a variable agree perfectly.
+        for key in REQUIRED_ENV:
+            absent = sorted(label for label, *_ in SEQUENCE if key not in envs[label][0])
+            if absent:
+                problems.append(
+                    f"{key} is not set on: " + ", ".join(f'"{a}"' for a in absent)
+                    + "\n    Every step of the sequence must set it. Parity alone cannot see"
+                    + "\n    this: three steps that all dropped it compare equal (#347 round 18)."
+                )
+        for key, mirror in SAME_VALUE_ENV:
+            for label, *_ in SEQUENCE:
+                step_env = envs[label][0]
+                if key in step_env and mirror in step_env and step_env[key] != step_env[mirror]:
+                    problems.append(
+                        f'"{label}" sets {key} to a different value than {mirror}: '
+                        + f"{step_env[key]!r} vs {step_env[mirror]!r}"
+                        + "\n    The run must write the report where the gate reads it; two"
+                        + "\n    expressions that can drift apart is how it stops doing so."
+                    )
+
         # WORKING DIRECTORY IS AN INPUT TOO. A config is code: its export can
         # depend on process.cwd() as much as on the environment (#333 round 9).
         # Both steps evaluate the config, so both must run from the same place --

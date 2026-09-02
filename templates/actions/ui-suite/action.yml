@@ -266,6 +266,25 @@ runs:
     # So: nothing may run between this step and the Playwright command that
     # changes what the config can observe. Adding a step in between is the
     # regression to watch for.
+
+    # A REPORT LEFT BY SOMETHING ELSE IS NOT EVIDENCE ABOUT THIS RUN. Playwright's
+    # json reporter writes during onEnd, so a run that aborts early — or a config
+    # that quietly stops declaring the reporter — leaves whatever was there
+    # before. In a job that invokes this composite twice, or on a runner with a
+    # warm workspace, that is a PREVIOUS run's report, and the post-run gate
+    # would certify it as this one's (Codex, #347 round 4).
+    #
+    # Deleting first turns that into the missing-report refusal it should have
+    # been: exit 15, CANNOT CHECK, naming the path. Before the sequence below,
+    # never between its steps — the three that follow must stay consecutive
+    # because two of them evaluate the config.
+    - name: Clear any stale Playwright report
+      shell: bash
+      env:
+        REPORT_PATH: ${{ inputs.report-path }}
+      run: rm -f "$REPORT_PATH"
+      working-directory: ${{ inputs.tests-dir }}
+
     - name: Check three viewport classes are declared
       shell: bash
       # SAME working-directory AND SAME env AS THE RUN STEP BELOW. Both steps
@@ -292,6 +311,12 @@ runs:
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         APP_PAGES: ${{ inputs.app-pages }}
+        # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
+        # check-ui-suite-env.py enforces exact env parity across the sequence,
+        # and that rule is not bureaucratic: two of these steps IMPORT the
+        # config, so a variable present at one evaluation and absent at another
+        # is a config that can differ between them (#333 round 10).
+        REPORT_PATH: ${{ inputs.report-path }}
       run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir .
 
     - name: Run Playwright tests
@@ -307,6 +332,12 @@ runs:
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         APP_PAGES: ${{ inputs.app-pages }}
+        # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
+        # check-ui-suite-env.py enforces exact env parity across the sequence,
+        # and that rule is not bureaucratic: two of these steps IMPORT the
+        # config, so a variable present at one evaluation and absent at another
+        # is a config that can differ between them (#333 round 10).
+        REPORT_PATH: ${{ inputs.report-path }}
       # No --reporter flag: a CLI reporter REPLACES the config's list, which
       # would drop the json reporter and leave playwright-results.json unwritten
       # while the upload step below still claims to publish it.
@@ -333,7 +364,18 @@ runs:
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         APP_PAGES: ${{ inputs.app-pages }}
-      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --report "${{ inputs.report-path }}"
+        # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
+        # check-ui-suite-env.py enforces exact env parity across the sequence,
+        # and that rule is not bureaucratic: two of these steps IMPORT the
+        # config, so a variable present at one evaluation and absent at another
+        # is a config that can differ between them (#333 round 10).
+        REPORT_PATH: ${{ inputs.report-path }}
+      # THROUGH THE ENVIRONMENT, NOT INTERPOLATED. `${{ }}` is substituted into
+      # the script source before bash parses it, so a report-path carrying a
+      # quote and a shell operator would execute — the same template-injection
+      # class the viewport-check step above records having been caught on once
+      # already. Quoting the expression does not help; quoting the VARIABLE does.
+      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --report "$REPORT_PATH"
       working-directory: ${{ inputs.tests-dir }}
 
     - name: Upload test results

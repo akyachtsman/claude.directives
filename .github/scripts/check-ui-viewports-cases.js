@@ -470,6 +470,48 @@ const CASES = [
       + TABLET) },
     18, 'two or more projects share a name'],
 
+  // ── A TEST THAT CHANGES ITS OWN VIEWPORT IS EVIDENCE FOR ONE WIDTH ──────
+  // Codex #347 round 4, and the sharpest finding on the report design: a test
+  // calling setViewportSize() runs at the width IT chose in every project, so a
+  // run that selected only such a test reports results under all three project
+  // names while nothing rendered at laptop or tablet. The shipped kit has
+  // exactly one (S4, at 390), which is what made this reachable rather than
+  // hypothetical.
+  //
+  // The report carries no viewport, so the test DECLARES the deviation and the
+  // gate reads it. Measured on 1.62.1: annotations reach the JSON report both
+  // per-test and per-result.
+  ['every executed test declares a viewport override — no band is certified',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('overrides', async () => {\n"
+        + "  test.info().annotations.push({ type: 'viewport-override', description: '390' });\n"
+        + "  expect(1).toBe(1);\n});\n" },
+    12, 'NOTHING RAN at that width', { runReport: true }],
+
+  // The twin, and the discriminator: the SAME fixture without the annotation
+  // passes. Without this pair, a gate that ignored annotations entirely and a
+  // gate that discarded every result would both look correct from one side.
+  ['…and the same test without the annotation still certifies all three',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('overrides', async () => { expect(1).toBe(1); });\n" },
+    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
+
+  // An annotated test alongside an ordinary one: the band is covered by the
+  // ordinary one, so the override costs nothing. This is the shipped kit's own
+  // shape — S4 annotated, every other scenario not — and without it the rule
+  // could be "any annotation anywhere fails the run" and still pass the pair
+  // above.
+  ['an annotated test beside an ordinary one — the ordinary one still counts',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('present', async () => { expect(1).toBe(1); });\n"
+        + "test('overrides', async () => {\n"
+        + "  test.info().annotations.push({ type: 'viewport-override', description: '390' });\n"
+        + "  expect(1).toBe(1);\n});\n" },
+    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
+
   // ── THE OBSERVATION'S OWN FAILURES (#335) ────────────────────────────────
   // Stage two can fail in two ways, and both must be loud. This is the founding
   // rule of this file applied to the new half: a report that is not there is
@@ -895,6 +937,22 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     14, 'it did not finish within 2s and was killed', { shortTimeout: 2000 }],
 
+  // A BOUND THAT THE THING BEING BOUNDED CAN INTERCEPT IS NOT A BOUND.
+  // `spawnSync`'s timeout kills with SIGTERM, and a config is arbitrary code
+  // that may install a handler for it. Codex reproduced the hang on Node 20
+  // (#347 round 4) and so did I, standalone: a 500ms bound had still not
+  // returned when an external `timeout 8` killed the parent. The gate now kills
+  // with SIGKILL, which cannot be caught.
+  //
+  // This case is why the harness above is itself bounded: a regression here does
+  // not fail slowly, it fails by never returning at all.
+  ['a config that traps SIGTERM and stays alive — the bound still holds',
+    { 'playwright.config.js': `${IMPORT}process.on('SIGTERM', () => {});\n`
+      + `setInterval(() => {}, 1000);\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    14, 'did not finish within 2s', { shortTimeout: 2000 }],
+
   // The twin, and the reason the bound cannot simply be made aggressive: an
   // ordinary config must still evaluate well inside it. The shipped kit is under
   // a second; this asserts the SAME 2s bound the two cases above trip is ample
@@ -1024,7 +1082,16 @@ function runCase(files, opts) {
     // exercise the read's own failures need a path the gate cannot use, and
     // running a suite first would only obscure which read failed.
     if (o.reportArg !== undefined) args.push('--report', o.reportArg);
-    const r = spawnSync(process.execPath, args, { encoding: 'utf8', env, cwd: REPO_ROOT });
+    // BOUNDED, AND WITH A KILL THE GATE CANNOT INTERCEPT. The thing under test
+    // is a program whose own job is to not hang; if it regresses, this suite
+    // must FAIL rather than stall a CI job to its bound and report nothing —
+    // the same shape, one level up. 60s is ~50x the slowest honest case.
+    const r = spawnSync(process.execPath, args, {
+      encoding: 'utf8', env, cwd: REPO_ROOT, timeout: 60000, killSignal: 'SIGKILL',
+    });
+    if (r.error && r.error.code === 'ETIMEDOUT') {
+      return { code: 'TIMED OUT', out: 'the gate did not return within 60s and was killed' };
+    }
     return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };
   } finally {
     // Unlink the symlink explicitly before the recursive remove — nothing about

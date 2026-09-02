@@ -368,6 +368,15 @@ five:
   a symlinked `testDir`, a reporter excluding every test, a `shard` set only when
   a credential is present. Each is now caught without the gate knowing the
   mechanism exists.
+  **A test that sets its own viewport must say so.** `page.setViewportSize()`
+  inside a test overrides the project's, so that test runs at the width IT chose
+  in *every* project — it is evidence for that width and no other. Push
+  `{ type: 'viewport-override' }` onto `test.info().annotations` in any such
+  test; the gate reads the annotation out of the report and stops counting the
+  result. The kit's S4 (the 390px overflow check) carries it. Skip the
+  annotation and a run that selected only viewport-overriding tests certifies
+  every band while nothing rendered at two of them — reproduced, and the reason
+  this is an obligation rather than a note.
   **Your config must write that report.** The shipped kit declares
   `['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]`
   alongside its `list` reporter, and the `ui-suite` composite passes that same

@@ -185,13 +185,38 @@ function readReport(reportPath) {
   // run its body — `testRun.skip()` and `test.skip()` both land here — so it is
   // no evidence that a viewport was exercised. This is the distinction a listing
   // cannot make at all, and the whole reason the observation moved here.
+  //
+  // NOR IS A TEST THAT CHANGED ITS OWN VIEWPORT. `page.setViewportSize()` inside
+  // a test overrides the project's, so such a test executes in EVERY project at
+  // the width it chose — it is evidence for that width and for no other. The
+  // shipped kit has exactly one (S4, at 390), and Codex reproduced the false
+  // green it buys: leave only S4 selected and all three project names appear in
+  // the report with results that ran, while nothing rendered at laptop or tablet
+  // width (#347 round 4).
+  //
+  // The report carries no viewport, so the TEST declares the deviation and this
+  // reads the declaration: `annotations` reaches the JSON report both per-test
+  // and per-result (measured on 1.62.1), so a test that overrides pushes
+  // { type: 'viewport-override' } and its result stops counting as evidence.
+  // That is a CONTRACT, not a prediction — the alternative is a rule about test
+  // sources, which is the family this whole file exists to avoid. A project
+  // whose only executed test is annotated has an uncovered band and is told so.
+  //
+  // The cost, stated: a project that overrides viewports and does not annotate
+  // gets the old false green. That is why test.md carries it as an obligation
+  // rather than a note, and why the shipped kit annotates its own.
+  const OVERRIDE = 'viewport-override';
+  const overrides = (t, r) => [...(Array.isArray(t.annotations) ? t.annotations : []),
+    ...(Array.isArray(r.annotations) ? r.annotations : [])]
+    .some(a => a && a.type === OVERRIDE);
   const executed = new Map();
   let total = 0;
   const walk = (suite) => {
     for (const spec of suite.specs || []) {
       for (const t of spec.tests || []) {
         total += 1;
-        const ran = (t.results || []).some(r => r && r.status && r.status !== 'skipped');
+        const ran = (t.results || []).some(r => r && r.status && r.status !== 'skipped'
+          && !overrides(t, r));
         if (!ran) continue;
         const name = typeof t.projectName === 'string' ? t.projectName : '';
         executed.set(name, (executed.get(name) || 0) + 1);
@@ -229,6 +254,19 @@ if (!VERDICT_FILE) {
     child = spawnSync(process.execPath, [__filename, ...process.argv.slice(2)], {
       stdio: 'inherit',
       timeout: EVAL_TIMEOUT_MS,
+      // SIGKILL, NOT THE DEFAULT SIGTERM. `spawnSync`'s timeout kills with
+      // SIGTERM, which a config can install a handler for — and a handler that
+      // does not exit, plus one live handle, makes the bound do nothing at all.
+      // Codex reproduced it on Node 20 (#347 round 4) and so did I: with a
+      // 500ms bound the call had still not returned when an external `timeout 8`
+      // killed it. SIGKILL cannot be caught, so the advertised bound holds
+      // against config code rather than only against honest configs. Measured
+      // after the change: returns at 507ms with ETIMEDOUT and signal SIGKILL.
+      //
+      // This is the same lesson as the rest of this file one level down — the
+      // bound was a claim about arbitrary code, resting on that code's
+      // cooperation.
+      killSignal: 'SIGKILL',
       env: { ...process.env, __UI_VIEWPORTS_VERDICT_FILE: file },
     });
   } finally {

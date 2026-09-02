@@ -391,7 +391,17 @@ const CASES = [
 
   ['…and an unfocused suite is not refused — the twin',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true }],
+    0, 'check-ui-viewports: OK — SCHEDULED', { runReport: true,
+      // THE WORD THE VERDICT WITHDREW, ASSERTED AGAINST ITS OWN OUTPUT (#347
+      // round 19). This line still read "(a test EXECUTED in a project
+      // declaring each width" — the PASSING verdict, printed on every green
+      // run, contradicting the name it prints one line above. Case-sensitive
+      // and exact: `EXECUTED` now appears nowhere in this output legitimately,
+      // and "actually exercised" is the composite's retired step name.
+      //
+      // One carrier, not the class. The prose in test.md, CLAUDE.md and the
+      // shipped config stays unpinned — see the runner's mustNotSay note.
+      mustNotSay: ['EXECUTED', 'actually exercised', 'actually ran'] }],
 
   // ── WHAT A LISTING COULD NOT SEE AT ALL, AND THE REPORT CAN ──────────────
   ['a reporter that SKIPS every test — CAUGHT now, exit 12',
@@ -1263,6 +1273,41 @@ const CASES = [
       '--report/app.spec.js': SPEC },
     0, 'OK — DECLARED', { configArg: '--report', configArgRelative: true }],
 
+  // ── A PRESENT FLAG WITH AN EMPTY VALUE (#347 round 19) ──────────────────
+  // `--report ''` has been a usage error since round 6. The options with a
+  // silent FALLBACK had not been, and that is where it costs more: Codex
+  // reproduced a wrapper running `--config "$PW_CONFIG"` with the variable
+  // unset, and the gate loaded the IMPLICIT config and returned a confident
+  // DECLARED verdict for a config the caller never named. A wrapper's unset
+  // variable inside quotes is the ordinary way this arrives.
+  ['--config with an empty value — refused, not read as absent',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    8, '--config was given with no value', { extraArgs: ['--config', ''] }],
+  // Not reported, same defect: an empty --tests-dir fell past `=== undefined`,
+  // past UI_TESTS_DIR, and landed on the hard-coded default. Fixing only the
+  // reported flag is what rounds 16 and 18 already were, twice.
+  ['--tests-dir with an empty value — refused, not fallen back from',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    8, '--tests-dir was given with no value', { env: true, extraArgs: ['--tests-dir', ''] }],
+
+  // ── BOUNDS ARE A USAGE ERROR ON THE CARRIED PATH TOO (#347 round 19) ────
+  // The child refuses nonsensical bounds at exit 8 before importing anything,
+  // and `--declared` with `--report` never reaches the child. So this command
+  // fell through to the banding guard, produced an empty cover map, and
+  // surfaced as exit 14 — "a pass its own data does not support", blaming the
+  // mapping for the caller's command line. Two paths that band rows have to
+  // refuse the same bounds or the exit code stops meaning anything.
+  ['inverted bounds on the carried-mapping path — exit 8, not 14',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'declared.json': JSON.stringify({
+        testsDir: '.',
+        rows: [{ name: 'desktop', width: 1440 }, { name: 'tablet', width: 810 },
+          { name: 'phone', width: 390 }],
+      }) },
+    8, 'nonsensical band bounds',
+    { declared: true, reportArg: 'report.json',
+      extraArgs: ['--tablet-min', '1200', '--laptop-min', '1000'] }],
+
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing
   // (`grep` matches no title) and its exit handler then writes a report claiming
@@ -1411,9 +1456,21 @@ function runCase(files, opts) {
       // measure the harness instead of the gate. Playwright writes the file
       // itself, which is also what the shipped kit's `outputFile` does — so the
       // cases exercise the same arrangement CI uses.
+      //
+      // AND _FILE OUTRANKS _NAME, so an inherited one steals every fixture's
+      // report. This is the round-18 action.yml finding pointed at the harness
+      // that measured it: a QA job or a developer shell exporting
+      // PLAYWRIGHT_JSON_OUTPUT_FILE sends all of these to that path, `report.json`
+      // is never written, and every runReport case reports exit 15 — the suite
+      // then measures the shell instead of the gate (Codex, #347 round 19).
+      // _DIR goes too: these fixtures run under `--reporter=json` with no
+      // configured `outputFile`, which is exactly the case where _DIR applies.
+      const runEnv = { ...env, PWD: target, PLAYWRIGHT_JSON_OUTPUT_NAME: 'report.json' };
+      delete runEnv.PLAYWRIGHT_JSON_OUTPUT_FILE;
+      delete runEnv.PLAYWRIGHT_JSON_OUTPUT_DIR;
       spawnSync('npx', runArgs, {
         cwd: target, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
-        env: { ...env, PWD: target, PLAYWRIGHT_JSON_OUTPUT_NAME: 'report.json' },
+        env: runEnv,
       });
       args.push('--report', 'report.json');
     }
@@ -1455,6 +1512,18 @@ for (const [label, files, expected, diagnostic, opts] of CASES) {
   } else if (!out.includes(diagnostic)) {
     failures.push(`${label}\n      exited ${code} as expected, but for the wrong stated reason.\n`
       + `      expected the output to contain: ${JSON.stringify(diagnostic)}\n      ${out}`);
+  } else if ((opts && opts.mustNotSay || []).some(bad => out.includes(bad))) {
+    // WHAT THE VERDICT MUST NOT SAY, asserted as directly as what it must.
+    // Seven rounds of this PR found a stale EXECUTED claim somewhere (3, 6, 8,
+    // 9, 17, 18, 19), and every fix so far was a person reading. This is the one
+    // carrier a machine can hold: the gate's OWN OUTPUT, checked for the word it
+    // withdrew. It does not reach the prose in test.md, CLAUDE.md or the shipped
+    // config — nothing here does, and `check-claims.js` structurally cannot,
+    // since it proves a phrasing TRAVELLED and never that no other line
+    // contradicts it. One carrier pinned is not the class closed.
+    const said = (opts.mustNotSay || []).filter(bad => out.includes(bad));
+    failures.push(`${label}\n      exited ${code} with the right reason, but the output still says`
+      + ` ${JSON.stringify(said)}.\n      ${out}`);
   } else {
     console.log(`OK:   ${label} (exit ${code})`);
   }

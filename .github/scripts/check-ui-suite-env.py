@@ -12,7 +12,7 @@ run step partitioned.
 
 THREE STEPS, NOT TWO, since #335 put the gate on both sides of the suite: the
 pre-run check (which widths are DECLARED), the run, and the post-run check with
---report (which were EXECUTED). All three are compared against the run step,
+--report (which were SCHEDULED). All three are compared against the run step,
 which is the reference because it is what the other two make claims about.
 
 The fix was to copy the run step's env onto the check step. That copy is a
@@ -47,7 +47,7 @@ RUN_STEP = "Run Playwright tests"
 # THE POST-RUN STEP IS NOT A THIRD SPECIAL CASE, it is the same step twice. Since
 # #335 the gate runs on BOTH sides of the suite: once before, reporting which
 # widths are DECLARED, and once after with --report, reporting which were
-# EXECUTED. Both invocations IMPORT the config, so both are subject to every
+# SCHEDULED. Both invocations IMPORT the config, so both are subject to every
 # argument above -- an env or a cwd that differs from the run's makes the second
 # one read a different config than the run it is certifying, which is #333's
 # finding arriving a third time. The three steps run consecutively and share one
@@ -133,7 +133,24 @@ DECLARED = '--declared "$RUNNER_TEMP/ui-viewports-declared.json"'
 # REPORT_PATH -- the validated output -- or the run writes the report somewhere
 # the gate does not read, which is the same failure with an extra step.
 REQUIRED_ENV = ("REPORT_PATH", "PLAYWRIGHT_JSON_OUTPUT_FILE")
-SAME_VALUE_ENV = (("PLAYWRIGHT_JSON_OUTPUT_FILE", "REPORT_PATH"),)
+# EQUAL TO EACH OTHER IS ANOTHER RELATIVE RULE, and it fails the same way the
+# parity rules do. Round 18 required the two variables to MATCH; three steps all
+# set to `other.json` match perfectly, while the stale-report clear and the
+# artifact upload keep reading `steps.report-path.outputs.*`. The run would then
+# write somewhere those two do not look: an aborted run leaves the previous
+# report uncleared and certifiable, and the upload publishes no report at all
+# (Codex, #347 round 19). Requiring "the same" was the same mistake one level
+# up from the one it fixed.
+#
+# So the value is pinned to the LITERAL expression, which is the only one the
+# validator produces. `${{ inputs.report-path }}` is the near-miss this refuses:
+# it is the raw input, and every consumer in this composite reads the validated
+# output instead (#347 round 10).
+VALIDATED_REPORT = "${{ steps.report-path.outputs.relative }}"
+PINNED_ENV_VALUES = (
+    ("REPORT_PATH", VALIDATED_REPORT),
+    ("PLAYWRIGHT_JSON_OUTPUT_FILE", VALIDATED_REPORT),
+)
 SEQUENCE = (
     (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL),
     (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL),
@@ -234,15 +251,17 @@ def main():
                     + "\n    Every step of the sequence must set it. Parity alone cannot see"
                     + "\n    this: three steps that all dropped it compare equal (#347 round 18)."
                 )
-        for key, mirror in SAME_VALUE_ENV:
+        for key, pinned in PINNED_ENV_VALUES:
             for label, *_ in SEQUENCE:
                 step_env = envs[label][0]
-                if key in step_env and mirror in step_env and step_env[key] != step_env[mirror]:
+                if key in step_env and step_env[key] != pinned:
                     problems.append(
-                        f'"{label}" sets {key} to a different value than {mirror}: '
-                        + f"{step_env[key]!r} vs {step_env[mirror]!r}"
-                        + "\n    The run must write the report where the gate reads it; two"
-                        + "\n    expressions that can drift apart is how it stops doing so."
+                        f'"{label}" sets {key} to {step_env[key]!r}, not the validated output'
+                        + f"\n    expected: {pinned}"
+                        + "\n    Equal to each other is not enough: the stale-report clear and the"
+                        + "\n    artifact upload read that expression directly, so three steps"
+                        + "\n    agreeing on a DIFFERENT value still writes where they do not look"
+                        + "\n    (#347 round 19)."
                     )
 
         # WORKING DIRECTORY IS AN INPUT TOO. A config is code: its export can

@@ -181,7 +181,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   so Node expands the device spreads; a static read was tried three times and
   failed twelve ways, every failure silent, #282. Since #335 it also OBSERVES:
   given `--report <playwright json>` after the run, the declared widths are
-  joined against what the run's own report says EXECUTED. A listing
+  joined against what the run's own report says was SCHEDULED — a non-skipped
+  result under a project declaring that width, which a hook failing before the
+  test body still produces. A listing
   (`playwright test --list`) was the first design and lost on four measured
   differences from a run — argv, `filterOnly`, `globalSetup`, and no disposition
   at all, so a reporter that skips every test lists a full inventory. Predicting
@@ -330,7 +332,7 @@ node .github/scripts/check-claims.js             # pinned claims still stated by
 node .github/scripts/check-claims-cases.js       # that guard's own guard — case-sensitivity and the mustNotMatch-containment rule are what replaced the inference layer, and nothing else here would notice either being dropped. Re-prove with CHECK_CLAIMS_BIN=<mutant>
 python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
 node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic. Needs the ui-tests install below: since #335 the execution cases RUN a Playwright suite, so this takes minutes rather than seconds. Re-prove discrimination with CHECK_UI_VIEWPORTS_BIN=<mutant>
-python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives BOTH viewport checks — pre-run and post-run (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8). Since #347 round 18 it also pins two variables by NAME (REPORT_PATH, PLAYWRIGHT_JSON_OUTPUT_FILE) and requires them equal — parity is relative, and three steps that all dropped a variable agree perfectly
+python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives BOTH viewport checks — pre-run and post-run (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8). Since #347 round 18 it also pins two variables by NAME (REPORT_PATH, PLAYWRIGHT_JSON_OUTPUT_FILE) — parity is relative, and three steps that all dropped a variable agree perfectly. Round 19: requiring them EQUAL was the same relative mistake one level up (three steps agreeing on `other.json` pass while the stale-report clear and the upload still read the validated output), so both are pinned to the LITERAL `${{ steps.report-path.outputs.relative }}`
 python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths (a NameError shipped in one, #333 round 11). Its rules have been rewritten four times, so re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
 python3 .github/scripts/check-report-path-cases.py # the ui-suite report-path validator's own guard — this repo does not use the composite, so nothing else here would notice it break; three of #347's rounds found defects in it. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
 node .github/scripts/check-contrast-cases.js      # the exported WCAG guardrail's own guard — this repo has no styles/tokens.css, so NOTHING else here would notice it break (#334)

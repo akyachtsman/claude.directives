@@ -123,8 +123,11 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
 # them by NAME, not merely in agreement (#347 round 18): parity is a relative
 # rule and three steps that all dropped a variable satisfy it perfectly. A
 # fixture without them would be testing a shape the live action cannot have.
+# Spelled out rather than imported from the guard, for the same reason the
+# bodies are: a fixture that agreed by construction would prove nothing.
+VALIDATED = "${{ steps.report-path.outputs.relative }}"
 BOTH = {"APP_URL": "a", "TEST_AUTH_CREDENTIAL": "b",
-        "REPORT_PATH": "r.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"}
+        "REPORT_PATH": VALIDATED, "PLAYWRIGHT_JSON_OUTPUT_FILE": VALIDATED}
 
 CASES = [
     # The success path. Without this the guard could fail everything and the
@@ -261,8 +264,8 @@ CASES = [
     ("no env at all — refused, the pinned bodies name two variables",
      action({}, {}), 1, "REPORT_PATH is not set on"),
     ("only the two pinned variables, no optional env — still parity",
-     action({"REPORT_PATH": "r.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"},
-            {"REPORT_PATH": "r.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"}),
+     action({"REPORT_PATH": VALIDATED, "PLAYWRIGHT_JSON_OUTPUT_FILE": VALIDATED},
+            {"REPORT_PATH": VALIDATED, "PLAYWRIGHT_JSON_OUTPUT_FILE": VALIDATED}),
      0, "same step-level env and working directory"),
 
     # ── THE PINNED VARIABLES (#347 round 18) ────────────────────────────────
@@ -270,25 +273,39 @@ CASES = [
     # steps stay in perfect agreement while the run writes its report somewhere
     # the gate does not read.
     ("PLAYWRIGHT_JSON_OUTPUT_FILE dropped from all three — refused",
-     action({"APP_URL": "a", "REPORT_PATH": "r.json"},
-            {"APP_URL": "a", "REPORT_PATH": "r.json"}),
+     action({"APP_URL": "a", "REPORT_PATH": VALIDATED},
+            {"APP_URL": "a", "REPORT_PATH": VALIDATED}),
      1, "PLAYWRIGHT_JSON_OUTPUT_FILE is not set on"),
     ("REPORT_PATH dropped from all three — refused",
-     action({"APP_URL": "a", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"},
-            {"APP_URL": "a", "PLAYWRIGHT_JSON_OUTPUT_FILE": "r.json"}),
+     action({"APP_URL": "a", "PLAYWRIGHT_JSON_OUTPUT_FILE": VALIDATED},
+            {"APP_URL": "a", "PLAYWRIGHT_JSON_OUTPUT_FILE": VALIDATED}),
      1, "REPORT_PATH is not set on"),
     ("PLAYWRIGHT_JSON_OUTPUT_FILE pointing somewhere else — refused",
      action({**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "elsewhere.json"},
             {**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "elsewhere.json"}),
-     1, "to a different value than REPORT_PATH"),
-    # The drift this last rule exists for is a value that LOOKS right. Both are
-    # `${{ }}` expressions and only one is the validated output.
-    ("PLAYWRIGHT_JSON_OUTPUT_FILE from the raw input, REPORT_PATH validated",
-     action({**BOTH, "REPORT_PATH": "${{ steps.report-path.outputs.relative }}",
+     1, "not the validated output"),
+
+    # ── EQUAL TO EACH OTHER IS NOT ENOUGH (#347 round 19) ───────────────────
+    # The rule round 18 shipped required the two to MATCH, which three steps all
+    # set to the same wrong value satisfy perfectly — while the stale-report
+    # clear and the artifact upload keep reading the validated output. Same
+    # relative-rule mistake, one level up from the one it fixed. These two cases
+    # are the ones a match-only rule cannot see.
+    ("both variables agreeing on the SAME WRONG value — refused",
+     action({**BOTH, "REPORT_PATH": "other.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "other.json"},
+            {**BOTH, "REPORT_PATH": "other.json", "PLAYWRIGHT_JSON_OUTPUT_FILE": "other.json"}),
+     1, "not the validated output"),
+    # The near-miss: both are `${{ }}` expressions and only one is validated.
+    ("both agreeing on the RAW INPUT rather than the validated output",
+     action({**BOTH, "REPORT_PATH": "${{ inputs.report-path }}",
              "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"},
-            {**BOTH, "REPORT_PATH": "${{ steps.report-path.outputs.relative }}",
+            {**BOTH, "REPORT_PATH": "${{ inputs.report-path }}",
              "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"}),
-     1, "to a different value than REPORT_PATH"),
+     1, "not the validated output"),
+    ("PLAYWRIGHT_JSON_OUTPUT_FILE from the raw input, REPORT_PATH validated",
+     action({**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"},
+            {**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"}),
+     1, "not the validated output"),
 
     # ── THE POST-RUN CHECK IS THE SAME STEP AGAIN (#335) ────────────────────
     # It imports the config too, so every branch above has to hold from its side

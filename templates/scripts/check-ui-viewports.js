@@ -231,10 +231,12 @@ function readReport(reportPath) {
   // mechanism was removed rather than lost to a fourth time; the reasoning is
   // in the PR and the work is filed as directives#348.
   //
-  // EXECUTED, not merely present. A test the run reports as `skipped` did not
-  // run its body — `testRun.skip()` and `test.skip()` both land here — so it is
-  // no evidence that a viewport was exercised. This is the distinction a listing
-  // cannot make at all, and the whole reason the observation moved here.
+  // NON-SKIPPED, not merely present — and non-skipped is as far as it goes. A
+  // test the run reports as `skipped` did not run its body (`testRun.skip()` and
+  // `test.skip()` both land here), so it is no evidence at all. A non-skipped
+  // result is evidence the run SCHEDULED the test, which a hook failing before
+  // the body also produces. This is the distinction a listing cannot make at
+  // all, and the whole reason the observation moved here.
   //
   // `viewport-override` marks a test that called `setViewportSize()`, which runs
   // at the width IT chose in every project and would otherwise credit its
@@ -380,6 +382,21 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
   // the child telling the parent what "laptop" means.
   const tabletMin = bandOpt('--tablet-min', 768).value;
   const laptopMin = bandOpt('--laptop-min', 1024).value;
+  // BOUNDS ARE A USAGE ERROR HERE TOO, AND THIS PATH USED TO SWALLOW THEM.
+  // The child refuses nonsensical bounds at exit 8 before importing anything.
+  // The carried-mapping path (`--declared` with `--report`) never reaches the
+  // child, so `--tablet-min 1200 --laptop-min 1000` fell through the guard on
+  // the banding loop below, produced an empty cover map, and surfaced as exit
+  // 14 — "a pass its own data does not support", which blames the mapping for
+  // the caller's command line (Codex, #347 round 19).
+  //
+  // Same numbers, same message, same exit as the child. Two paths that band
+  // rows must refuse the same bounds or the exit code stops meaning anything.
+  if (!Number.isFinite(tabletMin) || !Number.isFinite(laptopMin) || tabletMin >= laptopMin) {
+    console.error(`CANNOT CHECK: nonsensical band bounds (tablet-min=${tabletMin}, laptop-min=${laptopMin})`);
+    console.error('check-ui-viewports: FAIL (code 8)');
+    process.exit(8);
+  }
   // STRICT ROWS. Every row must be an object with a string name; `width` is
   // optional (the UNCLASSIFIABLE rows carry none) but when present must be a
   // finite number. A `toJSON` hook that collapses the array to strings, or an
@@ -477,24 +494,25 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
         const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
         console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
         console.error('  This is the run\'s own report, not an inference: the widths are declared');
-        console.error('  correctly and no scenario executed at them. A filter, an ignore rule, a');
-        console.error('  shard, a reporter, a focused test, a global setup — this gate does not');
-        console.error('  need to know which, because it is reading the outcome rather than');
-        console.error('  predicting it.');
+        console.error('  correctly and the run scheduled nothing at them. A filter, an ignore');
+        console.error('  rule, a shard, a reporter, a focused test, a global setup — this gate');
+        console.error('  does not need to know which, because it is reading the outcome');
+        console.error('  rather than predicting it.');
         console.error('  test.md -> UI coverage gates, fifth gate.');
           process.exit(12);
       }
       const where = b => cover[b].filter(ranIn).map(label).join('/');
       console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
-      console.log('  (a test EXECUTED in a project declaring each width. This does NOT');
-      console.log('   establish that a page was rendered at it: a test that never opens a');
-      console.log('   page, or whose body never starts, counts here. #347 rounds 5-7 tried');
+      console.log('  (a NON-SKIPPED result in a project declaring each width. This does NOT');
+      console.log('   establish that a page was rendered at it, or that a test body ran at');
+      console.log('   all: a test that never opens a page, or whose body never starts');
+      console.log('   because a hook threw first, counts here. #347 rounds 5-7 tried');
       console.log('   three mechanisms for the stronger claim and three variants of one');
       console.log('   finding defeated all three — see test.md -> UI coverage gates.)');
       console.log('  (evidence: the run\'s own report, written by the process the config');
       console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
       console.log('   drift, not forgery. directives#349.)');
-      console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) executed)`);
+      console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} result(s) not skipped)`);
     } else {
       // THE PRE-RUN INVOCATION. Write the mapping so the post-run one joins
       // against the widths the config declared BEFORE the suite ran, rather than
@@ -871,10 +889,33 @@ function die(code, lines) {
 // only difference, and it is the whole point.
 const opt = name => argOpt(name).value;
 
+// A PRESENT FLAG WITH AN EMPTY VALUE IS A USAGE ERROR, NOT AN ABSENT FLAG.
+// `--report` has said so since round 6; the options with a silent FALLBACK had
+// not, and that is where it costs more. Codex reproduced a wrapper invoking
+// `--config "$PW_CONFIG"` with the variable unset: `argOpt` records the flag as
+// given, the truthiness test below reads it as absent, and the gate loads the
+// implicit config and returns a confident DECLARED verdict for a config the
+// caller never named (#347 round 19).
+//
+// `--tests-dir` is here for the same reason though it was not reported: an
+// empty value falls past `=== undefined`, past UI_TESTS_DIR, and lands on the
+// hard-coded default. Fixing only the reported flag is what rounds 16 and 18
+// were, twice.
+const optRequired = (name) => {
+  const hit = argOpt(name);
+  if (hit.given && !String(hit.value || '').trim()) {
+    die(8, [`CANNOT CHECK: ${name} was given with no value.`,
+      '  Passing the flag names a specific path; an empty value is a usage error',
+      '  rather than a reason to fall back on discovery or a default. In a wrapper',
+      '  this is an unset variable inside the quotes.']);
+  }
+  return hit.value;
+};
+
 // --- 1. Resolve the tests dir. The default is a fallback, never an assumption:
 // the resolved path AND its source print on every run, because #281's snippet died
 // from a hard-coded path that exited quiet for any project that moved UI_TESTS_DIR.
-let dir = opt('--tests-dir');
+let dir = optRequired('--tests-dir');
 let dirSource = '--tests-dir';
 if (dir === undefined) { dir = process.env.UI_TESTS_DIR; dirSource = 'UI_TESTS_DIR'; }
 if (!dir) { dir = '.github/scripts/ui-tests'; dirSource = 'default'; }
@@ -955,7 +996,7 @@ try {
 const CONFIG_NAMES = ['playwright.config.ts', 'playwright.config.js', 'playwright.config.mts',
   'playwright.config.mjs', 'playwright.config.cts', 'playwright.config.cjs'];
 let configPath;
-const explicit = opt('--config');
+const explicit = optRequired('--config');
 if (explicit) {
   // Plain resolve() against the CURRENT directory, which the chdir above has
   // already made the tests directory — exactly Playwright's

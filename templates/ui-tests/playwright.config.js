@@ -15,9 +15,15 @@ export default defineConfig({
   // under it — a non-skipped result in a project declaring that width. It does
   // NOT establish that a page was rendered there: a test whose body never
   // starts still produces a result (test.md → UI coverage gates, fifth gate,
-  // and directives#348). Change this path and pass the matching `report-path`,
-  // or the check reports CANNOT CHECK and fails the job — deliberately, so a
-  // missing report is never read as a covered band.
+  // and directives#348). The `ui-suite` composite exports
+  // PLAYWRIGHT_JSON_OUTPUT_FILE set to its validated `report-path`, and that
+  // beats the `outputFile` below — so under the composite this path need not
+  // match `report-path`, and changing it changes nothing. What still matters is
+  // that a json reporter is DECLARED at all: the variable redirects one, it does
+  // not add one (measured on 1.62.1). Without it the post-run check has no
+  // report to read, reports CANNOT CHECK and fails the job — deliberately, so a
+  // missing report is never read as a covered band. Running Playwright by hand,
+  // outside the composite, this path IS where the report lands.
   // Relative to THIS directory: `../../../` is the repo root from
   // .github/scripts/ui-tests/, which is where projects install this kit.
   reporter: [['list'], ['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]],

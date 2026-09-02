@@ -361,8 +361,11 @@ five:
   attempts produced twelve findings. That half runs before the suite and answers
   what is DECLARED. Then, after the run, it is invoked again with
   `--report <playwright json>` and reads the run's own report: a band is covered
-  only when a project declared at that width has a test the run actually
-  EXECUTED. Predicting discovery from the config was tried for eight rounds and
+  only when a project declared at that width has a NON-SKIPPED result — a test
+  the run scheduled under it. That is not the same as one that ran: a hook
+  failing before the test body starts still produces a result, which is why the
+  verdict is named SCHEDULED and why proving the stronger thing is #348.
+  Predicting discovery from the config was tried for eight rounds and
   produced twenty findings, every one a rule correct for its example and wrong
   one step out: a `.gitignore` under `testDir`, a per-project `respectGitIgnore`,
   a symlinked `testDir`, a reporter excluding every test, a `shard` set only when
@@ -370,8 +373,10 @@ five:
   mechanism exists.
   **The verdict is SCHEDULED, and the word is chosen carefully.** A Playwright
   report names the PROJECT that owned each result and carries no viewport, so it
-  establishes that a test *executed in a project declaring* a width — not that a
-  page was ever that wide. The gate says exactly that and no more.
+  establishes that a test was *scheduled in a project declaring* a width — not
+  that a page was ever that wide, and not even that the test body ran, since a
+  hook failing first still leaves a non-skipped result. The gate says exactly
+  that and no more.
 
   Three mechanisms for the stronger claim were built and withdrawn across #347
   rounds 5-7: a `viewport-override` marker, a fixture recording the viewport at

@@ -6,18 +6,6 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  // DECLARES THAT THIS SUITE RECORDS THE WIDTHS IT RENDERS AT. tests/fixtures.js
-  // annotates each result with the viewport its page ended on, and
-  // check-ui-viewports.js reads THIS key to know it may hold the suite to that
-  // stronger claim. Playwright copies metadata into the JSON report verbatim.
-  //
-  // Declared rather than inferred from the annotations, because a run where
-  // nothing rendered produces no annotations — inferring would drop such a run
-  // to the weaker "a test executed in a project declaring that width" claim and
-  // pass it, which is the false green the strong claim exists to catch.
-  // Remove this key and the gate silently checks less. Keep it and fixtures.js
-  // together (directives#347 round 5).
-  metadata: { viewportEvidence: 'rendered-at' },
   timeout: 30_000,
   retries: 1,
   // ⚠️ THE `json` REPORTER IS NOT OPTIONAL, and `outputFile` is half of a pair.

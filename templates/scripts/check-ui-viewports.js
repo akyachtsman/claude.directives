@@ -181,99 +181,50 @@ function readReport(reportPath) {
       '  "the run did not report", never "nothing ran at those widths".',
     ] };
   }
-  // TWO TIERS, AND THE VERDICT LINE SAYS WHICH ONE IT IS.
+  // WHAT THIS ESTABLISHES, AND WHAT IT DOES NOT. A result proves a test was
+  // SCHEDULED in a project declaring that width. It does NOT prove a page was
+  // ever that wide, and the verdict line says so rather than implying more.
   //
-  // The strong claim is that a PAGE WAS RENDERED at a width in each band. The
-  // report does not carry viewports, so the kit's `page` fixture records one:
-  // after each test that actually used a page, it annotates the result with the
-  // viewport that page ended on. When any result in the report carries such a
-  // `rendered-at` annotation, the bands are decided from those widths and
-  // nothing else — project names do not enter it.
+  // #347 rounds 5-7 tried to close that gap by having the kit's `page` fixture
+  // record the width each page rendered at. Three variants of one finding
+  // defeated three implementations: a `beforeAll` that throws, a `beforeEach`
+  // that throws, and a `beforeEach` that NAVIGATES and then throws — each
+  // producing evidence for a test whose body never ran. Every fix was correct
+  // for the variant that motivated it and wrong one step out, which is the
+  // exact pattern #335 catalogued twenty times over for config prediction. The
+  // mechanism was removed rather than lost to a fourth time; the reasoning is
+  // in the PR and the work is filed separately.
   //
-  // The weak claim is that A TEST EXECUTED IN A PROJECT declaring that width.
-  // That is all a report without `rendered-at` can support, and it is NOT proof
-  // of rendering — Codex reproduced two ways past it (#347 round 5): an
-  // expected-to-fail test whose `beforeAll` throws records `failed` in every
-  // project with no body ever starting, and an assertion-only test that never
-  // requests `page` counts the same way with no browser installed at all.
+  // EXECUTED, not merely present. A test the run reports as `skipped` did not
+  // run its body — `testRun.skip()` and `test.skip()` both land here — so it is
+  // no evidence that a viewport was exercised. This is the distinction a listing
+  // cannot make at all, and the whole reason the observation moved here.
   //
-  // So a suite carrying no `rendered-at` evidence is not certified as EXECUTED.
-  // It gets the weaker verdict under its own name, SCHEDULED, which states what
-  // was and was not established. A project upgrades by adopting the kit's
-  // fixture. This is deliberately not a refusal: the weak claim still catches
-  // the case the gate was built for — a band with nothing running in it at all —
-  // and failing every downstream suite that predates the fixture would be a
-  // fleet outage rather than a finding.
-  //
-  // EXECUTED, not merely present, in both tiers. A test the run reports as
-  // `skipped` did not run its body — `testRun.skip()` and `test.skip()` both
-  // land here — so it is no evidence that a viewport was exercised. This is the
-  // distinction a listing cannot make at all, and the whole reason the
-  // observation moved here.
-  //
-  // `viewport-override` survives for the SCHEDULED tier only. It marks a test
-  // that called `setViewportSize()`, which under the weak claim would otherwise
-  // credit its project's declared width — the round-4 finding. In the RENDERED
-  // tier it is unnecessary by construction, because the recorded width is the
-  // one the page actually had: the kit's S4 is attributed to phone rather than
-  // discarded.
-  // PER-RESULT, NOT PER-TEST. Playwright stores a retry's annotation on that
-  // result AND on the test-level list, so merging the two made the final
-  // attempt's annotation contaminate every earlier one: an initial attempt that
-  // rendered at the project's own viewport and failed, retried with a
-  // setViewportSize(), had its honest evidence discarded and could fail a band
-  // outright (Codex, #347 round 5). Each attempt is decided by its own record.
+  // `viewport-override` marks a test that called `setViewportSize()`, which runs
+  // at the width IT chose in every project and would otherwise credit its
+  // project's declared width (#347 round 4). PER-RESULT, not per-test:
+  // Playwright stores a retry's annotation on the test-level list too, so
+  // merging them let a retry retroactively discard an honest earlier attempt
+  // (round 5).
   const OVERRIDE = 'viewport-override';
-  const RENDERED = 'rendered-at';
-  const annos = r => (Array.isArray(r.annotations) ? r.annotations : []);
-  const overrides = r => annos(r).some(a => a && a.type === OVERRIDE);
-  // `rendered-at` carries the width the page ACTUALLY had when the test ended.
-  // Parsed rather than trusted: a description this cannot read is no evidence,
-  // not a licence to guess.
-  // ALL of them, not the first: a test that navigates at two widths records two,
-  // and crediting only one would under-count coverage it genuinely provided.
-  const renderedWidths = (r) => {
-    const out = [];
-    for (const a of annos(r)) {
-      if (!a || a.type !== RENDERED) continue;
-      const m = /^(\d+)x(\d+)$/.exec(String(a.description || '').trim());
-      if (m) out.push(Number(m[1]));
-    }
-    return out;
-  };
+  const overrides = r => (Array.isArray(r.annotations) ? r.annotations : [])
+    .some(a => a && a.type === OVERRIDE);
   const executed = new Map();
-  const widths = [];
   let total = 0;
   const walk = (suite) => {
     for (const spec of suite.specs || []) {
       for (const t of spec.tests || []) {
         total += 1;
         const name = typeof t.projectName === 'string' ? t.projectName : '';
-        let counted = false;
-        for (const r of t.results || []) {
-          if (!r || !r.status || r.status === 'skipped') continue;
-          for (const w of renderedWidths(r)) widths.push(w);
-          if (!counted && !overrides(r)) { counted = true; }
-        }
-        if (counted) executed.set(name, (executed.get(name) || 0) + 1);
+        const ran = (t.results || []).some(r => r && r.status && r.status !== 'skipped'
+          && !overrides(r));
+        if (ran) executed.set(name, (executed.get(name) || 0) + 1);
       }
     }
     for (const child of suite.suites || []) walk(child);
   };
   for (const suite of doc.suites || []) walk(suite);
-  // THE TIER IS DECLARED, NOT INFERRED. Deciding it from "did any width turn up"
-  // is backwards: a run where NOTHING rendered produces no widths, which would
-  // drop it to the weak claim and pass — the exact false green the strong claim
-  // exists to catch. A config that records widths says so once, in metadata that
-  // Playwright copies verbatim into the report (measured: a custom key survives
-  // alongside Playwright's own `actualWorkers`).
-  //
-  // Width evidence ALSO promotes, because that can only ever strengthen the
-  // claim: a suite using the fixture without declaring the metadata still gets
-  // judged on what it rendered.
-  const meta = (doc.config && doc.config.metadata) || {};
-  const declaresRendered = meta.viewportEvidence === 'rendered-at';
-  return { ok: true, total, executed, widths, rendered: declaresRendered || widths.length > 0 };
+  return { ok: true, total, executed };
 }
 
 
@@ -385,8 +336,19 @@ if (!VERDICT_FILE) {
       // ui-suite composite invokes this again with `--report` afterwards.
       // Read from argv directly: `opt()` is defined further down, in the section
       // that runs in the CHILD, and this block is the parent.
-      const reportIdx = process.argv.indexOf('--report');
-      const reportArg = reportIdx >= 0 ? process.argv[reportIdx + 1] : undefined;
+      // BOTH SPELLINGS. check-ui-suite-env.py accepts `--report=<path>` as
+      // satisfying its requirement, and this parser only understood the
+      // space-separated form — so that spelling passed the guard and then got
+      // the declaration-only verdict at exit 0, which is the guard certifying a
+      // command this script silently ignores (Codex, #347 round 7). Two places
+      // that must agree about one flag is exactly the coupling this file keeps
+      // being caught by; they agree now.
+      let reportIdx = process.argv.indexOf('--report');
+      let reportArg = reportIdx >= 0 ? process.argv[reportIdx + 1] : undefined;
+      if (reportIdx < 0) {
+        const eq = process.argv.findIndex(a => a.startsWith('--report='));
+        if (eq >= 0) { reportIdx = eq; reportArg = process.argv[eq].slice('--report='.length); }
+      }
       // A PRESENT FLAG WITH NO PATH IS A USAGE ERROR, NOT A QUIETER CHECK.
       // `--report ''` — which is what an unset REPORT_PATH expands to in the
       // composite — used to fall through the truthiness test and print the
@@ -419,76 +381,31 @@ if (!VERDICT_FILE) {
         // (both use the empty string), and this only decides what gets printed.
         // Without it a `declared by:` line for an unnamed project printed empty.
         const label = n => (n === '' ? '(no name)' : n);
-        // The band bounds come from the child because a project can move them
-        // (--phone-max / --tablet-max). Unusable bounds are a refusal, not a
-        // silent fallback to the defaults: classifying rendered widths by a
-        // different definition than the declaration half used would make the two
-        // halves disagree about what "tablet" means.
-        const bnd = rows.bounds;
-        if (!bnd || !Number.isFinite(bnd.tabletMin) || !Number.isFinite(bnd.laptopMin)) {
-          console.error('CANNOT CHECK: the evaluation did not report usable band bounds.');
-          console.error('  The rendered widths are classified with the same bounds the declared');
-          console.error('  ones were, and those did not survive the hand-off.');
-          console.error('check-ui-viewports: FAIL (code 14)');
-          rmSync(box, { recursive: true, force: true });
-          process.exit(14);
-        }
-        const bandOf = w => (w >= bnd.laptopMin ? 'laptop' : w >= bnd.tabletMin ? 'tablet' : 'phone');
-        // WHICH TIER — see readReport(). Declared in the config's metadata, or
-        // promoted by the presence of width evidence. The choice is stated in
-        // the verdict line either way: a gate that silently answered a smaller
-        // question than the one it was asked is the failure this file is about.
-        const rendered = run.rendered === true;
         const ranIn = n => (run.executed.get(n) || 0) > 0;
-        // In the RENDERED tier a band is covered by a page that was actually
-        // that wide. `rows.band` is the same classifier the declaration half
-        // used, so one definition of the three bands serves both.
-        const inBand = b => run.widths.some(w => bandOf(w) === b);
-        const covered = b => (rendered ? inBand(b) : rows.cover[b].some(ranIn));
-        const missing = bands.filter(b => !covered(b));
+        const missing = bands.filter(b => !rows.cover[b].some(ranIn));
         if (missing.length) {
           for (const b of missing) {
-            console.error(rendered
-              ? `FAIL: ${b} is declared and NO PAGE WAS RENDERED at that width.`
-              : `FAIL: ${b} is declared but NOTHING RAN at that width.`);
+            console.error(`FAIL: ${b} is declared but NOTHING RAN at that width.`);
             console.error(`  declared by: ${rows.cover[b].map(label).join(', ')}`);
           }
-          if (rendered) {
-            const seen = [...new Set(run.widths)].sort((x, y) => x - y);
-            console.error(seen.length
-              ? `  the run rendered pages at: ${seen.join('px, ')}px`
-              : '  the run rendered NO pages at all — no test opened one');
-            console.error('  These are the widths the pages actually had when each test ended,');
-            console.error('  recorded by the kit\'s own `page` fixture — not the widths the');
-            console.error('  projects declare. A test can change its own viewport, and a test');
-            console.error('  that never opens a page renders nothing at all.');
-          } else {
-            const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
-            console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
-            console.error('  This is the run\'s own report, not an inference: the widths are declared');
-            console.error('  correctly and no scenario executed at them. A filter, an ignore rule, a');
-            console.error('  shard, a reporter, a focused test, a global setup — this gate does not');
-            console.error('  need to know which, because it is reading the outcome rather than');
-            console.error('  predicting it.');
-          }
+          const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
+          console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
+          console.error('  This is the run\'s own report, not an inference: the widths are declared');
+          console.error('  correctly and no scenario executed at them. A filter, an ignore rule, a');
+          console.error('  shard, a reporter, a focused test, a global setup — this gate does not');
+          console.error('  need to know which, because it is reading the outcome rather than');
+          console.error('  predicting it.');
           console.error('  test.md -> UI coverage gates, fifth gate.');
           rmSync(box, { recursive: true, force: true });
           process.exit(12);
         }
-        if (rendered) {
-          const at = b => [...new Set(run.widths.filter(w => bandOf(w) === b))]
-            .sort((x, y) => x - y).join('/');
-          console.log(`check-ui-viewports: OK — RENDERED laptop:${at('laptop')}px  tablet:${at('tablet')}px  phone:${at('phone')}px`);
-          console.log(`  (from the run's own report: pages were rendered at these widths)`);
-        } else {
-          const where = b => rows.cover[b].filter(ranIn).map(label).join('/');
-          console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
-          console.log('  (a test EXECUTED in a project declaring each width. This does NOT');
-          console.log('   establish that a page was rendered at it: a test that never opens a');
-          console.log('   page, or whose body never starts, counts here. Adopt the kit\'s `page`');
-          console.log('   fixture to record real widths and get the RENDERED verdict instead —');
-          console.log('   test.md -> UI coverage gates, fifth gate.)');
-        }
+        const where = b => rows.cover[b].filter(ranIn).map(label).join('/');
+        console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
+        console.log('  (a test EXECUTED in a project declaring each width. This does NOT');
+        console.log('   establish that a page was rendered at it: a test that never opens a');
+        console.log('   page, or whose body never starts, counts here. #347 rounds 5-7 tried');
+        console.log('   three mechanisms for the stronger claim and three variants of one');
+        console.log('   finding defeated all three — see test.md -> UI coverage gates.)');
         console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) executed)`);
       } else {
         const shown = b => rows.cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
@@ -1010,12 +927,7 @@ console.log(`config:    ${configPath}`);
   // configPath travels with the rows so the PARENT can observe discovery. The
   // parent never imports the config; it hands the path to Playwright and reads
   // what comes back, which is the whole point of #335.
-  report({ rows, cover, configPath, testsDir: TESTS_DIR,
-    // The parent classifies RENDERED widths and must use the same three
-    // bands this half used, including a project's own --phone-max /
-    // --tablet-max overrides. Two definitions of "tablet" in one program is
-    // a disagreement waiting to be discovered by a downstream project.
-    bounds: { tabletMin: TABLET_MIN, laptopMin: LAPTOP_MIN } });
+  report({ rows, cover, configPath, testsDir: TESTS_DIR });
   const bandProjects = b => rows.filter(r => r.band === b);
   const undeclared = ['laptop', 'tablet', 'phone'].filter(b => bandProjects(b).length === 0);
   if (undeclared.length) {

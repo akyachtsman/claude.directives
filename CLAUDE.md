@@ -187,7 +187,15 @@ A directive repo must pass its own CI before it can be trusted downstream.
   at all, so a reporter that skips every test lists a full inventory. Predicting
   discovery from the config cost eight rounds and twenty findings; the refusals
   that bought — root selection keys, the reporter allowlist, the `--forbid-only`
-  probe — are retired, and a key that narrows nothing now passes), job bounds
+  probe — are retired, and a key that narrows nothing now passes. The verdict is
+  **SCHEDULED**, not EXECUTED, and says so: a result proves a test ran in a
+  project DECLARING that width, never that a page was that wide. #347 rounds 5-7
+  tried three mechanisms for the stronger claim — a `viewport-override` marker,
+  a fixture recording the viewport at teardown, then one recording it at
+  navigation — and three variants of ONE finding (a hook that throws, a hook
+  that throws after requesting `page`, a hook that NAVIGATES and throws) defeated
+  all three. Withdrawn rather than lost to a fourth round; #349 carries the
+  work), job bounds
   (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an
   unreadable bound on a job carrying a floor must REFUSE, and the exemption for
   jobs carrying no floor must survive, #334), the exported contrast guardrail's
@@ -314,7 +322,6 @@ node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, 
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header). Literal phrasings, CASE-SENSITIVE; a reworded carrier is meant to turn this red, and the fix is to add the wording to `phrasings` (#341)
 node .github/scripts/check-claims-cases.js       # that guard's own guard — case-sensitivity and the mustNotMatch-containment rule are what replaced the inference layer, and nothing else here would notice either being dropped. Re-prove with CHECK_CLAIMS_BIN=<mutant>
 python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
-node .github/scripts/check-viewport-fixture.js    # the SHIPPED templates/ui-tests/tests/fixtures.js really records the width each page rendered at — needs a browser, and nothing else exercises it (#347 round 5)
 node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic. Needs the ui-tests install below: since #335 the execution cases RUN a Playwright suite, so this takes minutes rather than seconds. Re-prove discrimination with CHECK_UI_VIEWPORTS_BIN=<mutant>
 python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives BOTH viewport checks — pre-run and post-run (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8)
 python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths (a NameError shipped in one, #333 round 11)

@@ -265,22 +265,93 @@ function readReport(reportPath) {
       : (Array.isArray(t.annotations) ? t.annotations : []);
     return list.some(a => a && a.type === OVERRIDE);
   };
+  // PARSES IS NOT READS. `JSON.parse` succeeding says the bytes are JSON; it
+  // says nothing about the document being a Playwright report, and every level
+  // below was written as `x || []`, which handles undefined and null and throws
+  // on anything else. Codex reproduced `{"suites":{}}` exiting 1 with an
+  // uncaught TypeError and a stack trace — Node's generic failure, not this
+  // gate's CANNOT CHECK — so the caller sees a crash where the contract
+  // promises exit 15 (#347 round 20).
+  //
+  // Reproducing the family rather than the instance found it is worse than
+  // reported. Seven shapes, two failure modes:
+  //
+  //   {"suites":{}}                                  TypeError, exit 1
+  //   {"suites":[{"specs":{}}]}                      TypeError, exit 1
+  //   {"suites":[{"specs":[{"tests":{}}]}]}          TypeError, exit 1
+  //   {"suites":[{"specs":[{"tests":[{results:{}}]}]}]}  TypeError, exit 1
+  //   {"suites":[null]}                              TypeError, exit 1
+  //   "a string"                                     exit 12, NOTHING RAN
+  //   42                                             exit 12, NOTHING RAN
+  //
+  // The last two are the dangerous half and were NOT reported: no crash, no
+  // refusal, just a confident FAIL naming three bands as unexercised because
+  // `doc.suites` was undefined and `|| []` swallowed it. A wrong verdict reads
+  // as a real result; a stack trace at least reads as broken.
+  //
+  // So the top level is checked before anything walks it, and every nested
+  // level that must be an array is checked as it is reached. A missing key is
+  // still legitimately empty — Playwright omits `specs` on a suite that has
+  // none — but a present non-array is a malformed report, and the difference is
+  // exactly what `|| []` could not express.
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc) || !Array.isArray(doc.suites)) {
+    return { ok: false, code: 15, lines: [
+      `the file at ${reportPath} is JSON but not a Playwright run report`,
+      `  expected an object with a "suites" array; got ${describe(doc)}`,
+      '  Parsing is not reading: a stale, truncated-to-valid or simply different',
+      '  JSON file gets refused here rather than counted as a run with no tests.',
+    ] };
+  }
+  let malformed = null;
+  const arr = (v, where) => {
+    if (v === undefined || v === null) return [];
+    if (Array.isArray(v)) return v;
+    if (!malformed) malformed = `${where} is ${describe(v)}, expected an array`;
+    return [];
+  };
+  const obj = (v, where) => {
+    if (v && typeof v === 'object' && !Array.isArray(v)) return true;
+    if (!malformed) malformed = `${where} is ${describe(v)}, expected an object`;
+    return false;
+  };
   const executed = new Map();
   let total = 0;
   const walk = (suite) => {
-    for (const spec of suite.specs || []) {
-      for (const t of spec.tests || []) {
+    if (!obj(suite, 'a suite')) return;
+    for (const spec of arr(suite.specs, 'suite.specs')) {
+      if (!obj(spec, 'a spec')) continue;
+      for (const t of arr(spec.tests, 'spec.tests')) {
+        if (!obj(t, 'a test')) continue;
         total += 1;
         const name = typeof t.projectName === 'string' ? t.projectName : '';
-        const ran = (t.results || []).some(r => r && r.status && r.status !== 'skipped'
-          && !overrides(r, t));
+        const ran = arr(t.results, 'test.results').some(r => r && r.status
+          && r.status !== 'skipped' && !overrides(r, t));
         if (ran) executed.set(name, (executed.get(name) || 0) + 1);
       }
     }
-    for (const child of suite.suites || []) walk(child);
+    for (const child of arr(suite.suites, 'suite.suites')) walk(child);
   };
-  for (const suite of doc.suites || []) walk(suite);
+  for (const suite of doc.suites) walk(suite);
+  // A REFUSAL, NOT A PARTIAL COUNT. Anything malformed anywhere means the tally
+  // below is missing whatever that branch held, and a tally with a hole in it is
+  // the fail-open shape: it would name bands unexercised on the strength of data
+  // that was never read.
+  if (malformed) {
+    return { ok: false, code: 15, lines: [
+      `the run report at ${reportPath} is not shaped like a Playwright report`,
+      `  ${malformed}`,
+      '  Counting what could be walked would report bands as unexercised on the',
+      '  strength of a branch that was never read.',
+    ] };
+  }
   return { ok: true, total, executed };
+}
+
+// For the diagnostics above: what a value IS, in one word, without dumping it.
+function describe(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'an array';
+  return `a ${typeof v}`;
 }
 
 
@@ -344,6 +415,43 @@ const bandOpt = (flag, fallback) => {
   const hit = argOpt(flag);
   return hit.given ? { value: Number(hit.value), given: true } : { value: fallback, given: false };
 };
+
+// A PRESENT FLAG WITH AN EMPTY VALUE IS A USAGE ERROR — CHECKED BEFORE ANY PATH
+// SPLITS. Round 19 added this for `--config` and `--tests-dir` and put it in the
+// CHILD section, which the carried-mapping path never reaches: Codex ran
+// `--tests-dir '' --config '' --declared <map> --report <report>` and got the
+// SCHEDULED verdict at exit 0, while the same flags refused at 8 on the
+// config-import path (#347 round 20). One command, two answers, decided by which
+// branch it happened to take.
+//
+// That is the round-19 bounds finding again — a usage check on one side of a
+// split — and it recurred because I fixed the reported flags rather than moving
+// the check. So it lives here now, above `decideFromRows`, above the
+// VERDICT_FILE branch, above the spawn: every invocation passes through it.
+//
+// STRICTLY EMPTY, NOT TRIMMED-EMPTY. The first version called `.trim()`, which
+// refused a config file or directory named with spaces — a legal filename the
+// filesystem and every earlier version of this gate accept (Codex, same round).
+// A flag the caller supplied with a real value is the caller's business; the
+// only thing being refused is a flag supplied with NO value, which is what an
+// unset variable inside quotes expands to.
+for (const [flag, why] of [
+  ['--tests-dir', 'names the suite to read; empty falls through to UI_TESTS_DIR and then to a hard-coded default'],
+  ['--config', 'names the config to import; empty falls through to implicit discovery'],
+  ['--declared', 'names the mapping carried across the run'],
+  ['--report', 'asks for the execution check; empty is an unset or empty `report-path` in the ui-suite composite'],
+]) {
+  const hit = argOpt(flag);
+  if (hit.given && (hit.value === undefined || hit.value === '')) {
+    console.error(`CANNOT CHECK: ${flag} was given with no value.`);
+    console.error(`  It ${why}.`);
+    console.error('  Passing the flag names something specific, so an empty value is a usage');
+    console.error('  error rather than a reason to fall back. In a wrapper this is an unset');
+    console.error('  variable inside the quotes.');
+    console.error('check-ui-viewports: FAIL (code 8)');
+    process.exit(8);
+  }
+}
 
 // THE BAND DECISION AND THE JOIN, IN ONE PLACE, called from two.
 //
@@ -449,14 +557,8 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
     // DECLARED verdict, so the caller asked for the execution check and got
     // silence with a passing exit (Codex, #347 round 6). Someone who passes
     // the flag wants stage two; if the path is missing, say so.
-    if (reportOpt.given && !String(reportArg || '').trim()) {
-      console.error('CANNOT CHECK: --report was given with no path.');
-      console.error('  Passing the flag asks for the execution check, so an empty value is a');
-      console.error('  usage error rather than a reason to fall back on the declaration.');
-      console.error('  In the ui-suite composite this is an unset or empty `report-path`.');
-      console.error('check-ui-viewports: FAIL (code 8)');
-      process.exit(8);
-    }
+    // (`--report ''` already refused at exit 8 above the parent/child split —
+    //  round 6's rule, moved in round 20 so every path is behind it.)
     if (reportArg) {
       // THE PHYSICAL TESTS DIRECTORY, NOT THE LEXICAL ONE. Playwright's own
       // process is already INSIDE the symlink's target — `chdir` resolves
@@ -492,7 +594,15 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
           console.error(`  declared by: ${cover[b].map(label).join(', ')}`);
         }
         const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
-        console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
+        // COUNTED, NOT EXECUTED — the same correction the success verdict got.
+        // `readReport()` establishes a non-skipped result, which a hook failing
+        // before the test body also produces (Codex, #347 round 20).
+        //
+        // The line above it says NOTHING RAN, and that one stays: it claims
+        // LESS than the evidence, not more. Nothing scheduled entails nothing
+        // executed, so the negative direction is sound where the positive is
+        // not — which is the whole asymmetry this verdict is named for.
+        console.error(`  the run left ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} result(s) not skipped: ${ran || '(none)'}`);
         console.error('  This is the run\'s own report, not an inference: the widths are declared');
         console.error('  correctly and the run scheduled nothing at them. A filter, an ignore');
         console.error('  rule, a shard, a reporter, a focused test, a global setup — this gate');
@@ -889,33 +999,12 @@ function die(code, lines) {
 // only difference, and it is the whole point.
 const opt = name => argOpt(name).value;
 
-// A PRESENT FLAG WITH AN EMPTY VALUE IS A USAGE ERROR, NOT AN ABSENT FLAG.
-// `--report` has said so since round 6; the options with a silent FALLBACK had
-// not, and that is where it costs more. Codex reproduced a wrapper invoking
-// `--config "$PW_CONFIG"` with the variable unset: `argOpt` records the flag as
-// given, the truthiness test below reads it as absent, and the gate loads the
-// implicit config and returns a confident DECLARED verdict for a config the
-// caller never named (#347 round 19).
-//
-// `--tests-dir` is here for the same reason though it was not reported: an
-// empty value falls past `=== undefined`, past UI_TESTS_DIR, and lands on the
-// hard-coded default. Fixing only the reported flag is what rounds 16 and 18
-// were, twice.
-const optRequired = (name) => {
-  const hit = argOpt(name);
-  if (hit.given && !String(hit.value || '').trim()) {
-    die(8, [`CANNOT CHECK: ${name} was given with no value.`,
-      '  Passing the flag names a specific path; an empty value is a usage error',
-      '  rather than a reason to fall back on discovery or a default. In a wrapper',
-      '  this is an unset variable inside the quotes.']);
-  }
-  return hit.value;
-};
+// Empty-value refusal happens once, above the parent/child split (#347 r20).
 
 // --- 1. Resolve the tests dir. The default is a fallback, never an assumption:
 // the resolved path AND its source print on every run, because #281's snippet died
 // from a hard-coded path that exited quiet for any project that moved UI_TESTS_DIR.
-let dir = optRequired('--tests-dir');
+let dir = opt('--tests-dir');
 let dirSource = '--tests-dir';
 if (dir === undefined) { dir = process.env.UI_TESTS_DIR; dirSource = 'UI_TESTS_DIR'; }
 if (!dir) { dir = '.github/scripts/ui-tests'; dirSource = 'default'; }
@@ -996,7 +1085,7 @@ try {
 const CONFIG_NAMES = ['playwright.config.ts', 'playwright.config.js', 'playwright.config.mts',
   'playwright.config.mjs', 'playwright.config.cts', 'playwright.config.cjs'];
 let configPath;
-const explicit = optRequired('--config');
+const explicit = opt('--config');
 if (explicit) {
   // Plain resolve() against the CURRENT directory, which the chdir above has
   // already made the tests directory — exactly Playwright's

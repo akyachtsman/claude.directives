@@ -202,7 +202,19 @@ const CASES = [
   ['root shard 1 of 4 leaves a band with nothing — OBSERVED, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  shard: { current: 1, total: 4 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    12, 'NOTHING RAN at that width', { runReport: true }],
+    12, 'NOTHING RAN at that width', { runReport: true,
+      // THE FAILURE PATH NEEDS THE ASSERTION TOO. Round 19 put `mustNotSay` on
+      // the SUCCESS verdict and left the exit-12 diagnostic saying "the run
+      // executed N of M test(s)" — the same withdrawn claim, on the path a
+      // reader reaches when something is wrong (Codex, #347 round 20).
+      //
+      // A correction to the finding's stated reason, since it matters for what
+      // this now covers: the runner concatenates stdout AND stderr, so the
+      // mechanism always reached this line. What was missing was a case on this
+      // path, not the ability to see it. NOTHING RAN survives deliberately —
+      // it claims LESS than the evidence, and nothing scheduled entails nothing
+      // executed.
+      mustNotSay: ['EXECUTED', 'run executed', 'actually exercised', 'actually ran'] }],
 
   // ── testDir: BOTH HOLES CLOSED, and neither needed a predicate ───────────
   // The root redirect was deferred at round 6 of #333 after four predicates and
@@ -651,9 +663,12 @@ const CASES = [
   // fall through the truthiness test: the caller asked for the execution check
   // and got the DECLARED verdict with exit 0. Silence where a check was
   // requested is the failure this whole file is about.
+  // Round 20 folded this into ONE check above the parent/child split, so the
+  // wording is now shared with the other three path flags; the rule and the exit
+  // are unchanged, and this case is what proves that.
   ['--report given with an empty path — usage error, exit 8',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    8, '--report was given with no path', { reportArg: '' }],
+    8, '--report was given with no value', { reportArg: '' }],
 
   // BOTH SPELLINGS REACH STAGE TWO (#347 round 7). check-ui-suite-env.py accepts
   // `--report=<path>` as satisfying its requirement, and this parser understood
@@ -1307,6 +1322,69 @@ const CASES = [
     8, 'nonsensical band bounds',
     { declared: true, reportArg: 'report.json',
       extraArgs: ['--tablet-min', '1200', '--laptop-min', '1000'] }],
+
+  // ── THE EMPTY-VALUE CHECK IS ABOVE THE SPLIT NOW (#347 round 20) ────────
+  // Round 19 added it in the CHILD section, which the carried-mapping path
+  // never reaches: `--tests-dir '' --config '' --declared <map> --report <rep>`
+  // returned the SCHEDULED verdict at exit 0 while the same flags refused at 8
+  // on the config-import path. One command, two answers, decided by branch.
+  // That is round 19's OWN bounds finding repeated, and it repeated because I
+  // fixed the reported flags instead of moving the check.
+  ['empty --config on the CARRIED path — refused, not bypassed',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'declared.json': JSON.stringify({
+        testsDir: '.',
+        rows: [{ name: 'desktop', width: 1440 }, { name: 'tablet', width: 810 },
+          { name: 'phone', width: 390 }],
+      }) },
+    8, '--config was given with no value',
+    { declared: true, reportArg: 'report.json', extraArgs: ['--config', ''] }],
+  ['empty --declared — refused before the mapping read',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    8, '--declared was given with no value', { extraArgs: ['--declared', ''] }],
+
+  // ── AND IT MUST NOT REFUSE A LEGAL NAME (#347 round 20) ─────────────────
+  // The first version called `.trim()`, so a config or directory named with
+  // spaces — which the filesystem and every earlier version of this gate accept
+  // — was refused as "given with no value". Strictly empty is the rule now: the
+  // only thing being refused is a flag supplied with NO value.
+  ['a --config value of a single space is a NAME, not an empty flag',
+    { ' /playwright.config.js':
+        `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
+        + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      ' /app.spec.js': SPEC },
+    0, 'OK — DECLARED', { configArg: ' ', configArgRelative: true }],
+
+  // ── PARSES IS NOT READS (#347 round 20) ─────────────────────────────────
+  // `JSON.parse` succeeding says the bytes are JSON. Every level below was
+  // `x || []`, which handles undefined and null and THROWS on anything else:
+  // Codex reproduced `{"suites":{}}` exiting 1 with a stack trace instead of the
+  // promised CANNOT CHECK. Reproducing the family rather than the instance found
+  // seven shapes and a second, worse mode — `"a string"` and `42` produced no
+  // crash at all, just a confident exit-12 FAIL naming three bands unexercised,
+  // because `doc.suites` was undefined and `|| []` swallowed it.
+  ...[
+    ['suites is an object', '{"suites":{}}', 'not a Playwright run report'],
+    ['the document is a string', '"a string"', 'not a Playwright run report'],
+    ['the document is a number', '42', 'not a Playwright run report'],
+    ['the document is null', 'null', 'not a Playwright run report'],
+    ['a suite is null', '{"suites":[null]}', 'not shaped like a Playwright report'],
+    ['specs is an object', '{"suites":[{"specs":{}}]}', 'not shaped like a Playwright report'],
+    ['tests is an object', '{"suites":[{"specs":[{"tests":{}}]}]}', 'not shaped like a Playwright report'],
+    ['results is an object', '{"suites":[{"specs":[{"tests":[{"results":{}}]}]}]}',
+      'not shaped like a Playwright report'],
+  ].map(([what, json, diagnostic]) => [
+    `a report where ${what} — CANNOT CHECK, never a verdict`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'bad-report.json': json },
+    15, diagnostic, { reportArg: 'bad-report.json' },
+  ]),
+  // The twin: an EMPTY but well-formed report is a real answer, not a refusal.
+  // Without this the eight above are satisfiable by refusing every report.
+  ['an empty but well-formed report is exit 12, not 15',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'empty-report.json': '{"suites":[]}' },
+    12, 'NOTHING RAN at that width', { reportArg: 'empty-report.json' }],
 
   // ── THE RECORDED LIMIT, PINNED AT EXIT 0 (#347 round 11, directives#349) ──
   // THIS CASE ASSERTS A FALSE GREEN, DELIBERATELY. The config selects nothing

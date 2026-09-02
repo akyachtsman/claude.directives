@@ -147,6 +147,19 @@ REQUIRED_ENV = ("REPORT_PATH", "PLAYWRIGHT_JSON_OUTPUT_FILE")
 # it is the raw input, and every consumer in this composite reads the validated
 # output instead (#347 round 10).
 VALIDATED_REPORT = "${{ steps.report-path.outputs.relative }}"
+# THE WORKING DIRECTORY IS THE SAME KIND OF VALUE AND WAS LEFT RELATIVE. Round 19
+# pinned the env to a literal and left this comparison as "all three agree",
+# which three steps moved together to the same wrong directory satisfy. The
+# validator and the stale-report clear keep resolving from `inputs.tests-dir`,
+# so Playwright and the post-run gate would resolve the report from somewhere
+# else: with an advisory run that aborts before writing, an UNCLEARED stale
+# report in the replacement directory satisfies the post-run gate, and the
+# upload still looks where the input points (Codex, #347 round 20).
+#
+# Third instance of one mistake — parity, then equal-values, now cwd. A relative
+# rule cannot see a coordinated move, and every value here has exactly one
+# correct spelling, so each is pinned to it.
+PINNED_WORKDIR = "${{ inputs.tests-dir }}"
 PINNED_ENV_VALUES = (
     ("REPORT_PATH", VALIDATED_REPORT),
     ("PLAYWRIGHT_JSON_OUTPUT_FILE", VALIDATED_REPORT),
@@ -362,6 +375,20 @@ def main():
                 )
 
         run_wd = workdir_of(steps, RUN_STEP)
+        # PINNED, not merely shared. See PINNED_WORKDIR above: the relative check
+        # below still runs, because it is the one that explains WHY when a step
+        # drifts, but it is no longer the only thing standing here.
+        for label, *_ in SEQUENCE:
+            step_wd = workdir_of(steps, label)
+            if step_wd != PINNED_WORKDIR:
+                problems.append(
+                    f'"{label}" runs from {step_wd!r}, not the action input'
+                    + f"\n    expected: {PINNED_WORKDIR}"
+                    + "\n    Agreeing with each other is not enough: the report-path validator"
+                    + "\n    and the stale-report clear resolve from the input, so three steps"
+                    + "\n    moved together read and write a different directory than the ones"
+                    + "\n    that clear and upload the report (#347 round 20)."
+                )
         for label, *_ in SEQUENCE:
             if label == RUN_STEP:
                 continue

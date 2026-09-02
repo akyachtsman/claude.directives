@@ -76,11 +76,18 @@ SHELL = "bash"
 # is about.
 PIN = "does not run the pinned command"
 
+# Spelled out rather than imported from the guard, for the same reason the
+# bodies are: a fixture that agreed by construction would prove nothing.
+VALIDATED = "${{ steps.report-path.outputs.relative }}"
+# The working directory is pinned to the action input as of #347 round 20, so
+# the default fixture has to use the real expression rather than a stand-in.
+TESTS_DIR = "${{ inputs.tests-dir }}"
+
 
 def action(check_env, run_env, check_name=CHECK, run_name=RUN,
-           check_wd="tests", run_wd="tests", decoy=None, between=None,
+           check_wd=TESTS_DIR, run_wd=TESTS_DIR, decoy=None, between=None,
            check_body=None, run_body=None, run_uses=None,
-           post_env=UNSET, post_name=POST, post_wd="tests", post_body=None,
+           post_env=UNSET, post_name=POST, post_wd=TESTS_DIR, post_body=None,
            post_uses=None, between_post=None,
            post_if=IF_POST, run_coe=COE_RUN, check_if=None, post_coe=None,
            check_shell=SHELL, run_shell=SHELL, post_shell=SHELL):
@@ -100,7 +107,7 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
 
     decoy_yaml = ""
     if decoy:
-        decoy_yaml = (f"    - name: {decoy}\n      shell: bash\n{wd('tests')}"
+        decoy_yaml = (f"    - name: {decoy}\n      shell: bash\n{wd(TESTS_DIR)}"
                       f"{block(dict(BOTH))}      run: echo decoy\n")
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
@@ -123,9 +130,6 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
 # them by NAME, not merely in agreement (#347 round 18): parity is a relative
 # rule and three steps that all dropped a variable satisfy it perfectly. A
 # fixture without them would be testing a shape the live action cannot have.
-# Spelled out rather than imported from the guard, for the same reason the
-# bodies are: a fixture that agreed by construction would prove nothing.
-VALIDATED = "${{ steps.report-path.outputs.relative }}"
 BOTH = {"APP_URL": "a", "TEST_AUTH_CREDENTIAL": "b",
         "REPORT_PATH": VALIDATED, "PLAYWRIGHT_JSON_OUTPUT_FILE": VALIDATED}
 
@@ -306,6 +310,27 @@ CASES = [
      action({**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"},
             {**BOTH, "PLAYWRIGHT_JSON_OUTPUT_FILE": "${{ inputs.report-path }}"}),
      1, "not the validated output"),
+
+    # ── THE WORKING DIRECTORY IS PINNED TOO (#347 round 20) ─────────────────
+    # Third instance of one mistake: parity, then equal-values, now cwd. All
+    # three steps moved together satisfy every relative rule in this guard,
+    # while the report-path validator and the stale-report clear keep resolving
+    # from `inputs.tests-dir` — so the run writes and the gate reads a directory
+    # that nothing clears and nothing uploads.
+    ("all three steps moved to the SAME wrong working directory — refused",
+     action(dict(BOTH), dict(BOTH), check_wd="elsewhere", run_wd="elsewhere",
+            post_wd="elsewhere"),
+     1, "not the action input"),
+    # The near-miss again: a `${{ }}` expression that is not the pinned one.
+    ("all three on a different input expression — refused",
+     action(dict(BOTH), dict(BOTH), check_wd="${{ inputs.app-pages }}",
+            run_wd="${{ inputs.app-pages }}", post_wd="${{ inputs.app-pages }}"),
+     1, "not the action input"),
+    # And the relative rule still explains a SINGLE step drifting, which is the
+    # diagnostic a reader wants when only one moved.
+    ("one step moved — still reported as a mismatch against the run",
+     action(dict(BOTH), dict(BOTH), check_wd="elsewhere"),
+     1, "runs from a DIFFERENT working directory than the run"),
 
     # ── THE POST-RUN CHECK IS THE SAME STEP AGAIN (#335) ────────────────────
     # It imports the config too, so every branch above has to hold from its side

@@ -88,11 +88,14 @@
 //  15  the listing could not be run at all (CANNOT CHECK)
 //  16  the listing ran and produced no inventory to read (CANNOT CHECK) — a
 //      `--list` that prints nothing is "could not look", never "no tests"
-//  17  the config behaved differently when a reporter was appended to read the
-//      inventory past its own (CANNOT CHECK) — it responded to being observed
-//  18  more than one project has no "name" (CANNOT CHECK) — the listing prints
-//      an unnamed project's tests unprefixed, so two of them cannot be told
-//      apart and a band would be certified by another project's tests
+//  17  RETIRED — the wrapper that made this possible was removed; see observe()
+//  18  project names cannot be told apart in the listing (CANNOT CHECK) — more
+//      than one nameless project, a duplicate name, or a name containing the
+//      listing's own `] ›` delimiter. Each lets one project's tests certify
+//      another project's band
+//  19  the suite contains focused tests (CANNOT CHECK) — `--list` loads with
+//      filterOnly:false and a run with filterOnly:true, so the listing names
+//      bands the run will not reach. Asked via `--forbid-only`, not predicted
 //
 // The three RETIRED codes are kept in this list rather than deleted. They were
 // documented exits of a shipped gate, and a reader meeting one in an old CI log
@@ -115,7 +118,7 @@
 const { existsSync, statSync, mkdtempSync, writeFileSync, readFileSync, rmSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
-const { resolve, join, isAbsolute, dirname, basename } = require('path');
+const { resolve, join, isAbsolute, dirname } = require('path');
 const { tmpdir } = require('os');
 
 // ============================================================================
@@ -162,15 +165,14 @@ const { tmpdir } = require('os');
 //   3. NO ANSWER IS NOT A PASS. If the listing cannot run, or runs without
 //      producing its `Total:` trailer, this is CANNOT CHECK and exits loudly.
 //
-// The wrapper is written BESIDE the config, so every relative path in it —
-// testDir, reporter module paths — resolves exactly as it does for the real run,
-// and it is `.mjs` so its own module system is not in question. That last point
-// was a bug first: deriving the wrapper's format from the config's EXTENSION is
-// a prediction, and it was wrong on the first real config it met, because
-// templates/ui-tests/package.json carries "type": "module". `.mjs` is ESM under
-// every resolver rule and ESM can import a CommonJS config through its default
-// export, so one form covers CJS, ESM and TypeScript configs alike — all three
-// measured.
+// A WRAPPER CONFIG WAS TRIED AND REMOVED, and the reason is the design. To read
+// past a reporter that replaces the built-in `list` one, the gate wrote a config
+// beside the user's that re-exported it with `['list']` appended. `preprocess()`
+// receives the RESOLVED config, so appending is visible: a reporter that excludes
+// only SOME projects when it is the sole reporter cannot be caught, because the
+// unwrapped run — the only thing to compare against — produces no inventory at
+// all. See `observe()`. A config whose reporters leave nothing to read is now
+// CANNOT CHECK, with the remedy in the user's own config.
 // ============================================================================
 function observe(configPath, testsDir) {
   const { spawnSync } = require('child_process');
@@ -238,88 +240,64 @@ function observe(configPath, testsDir) {
     ] };
   }
   if (plain.total !== null) {
-    return { ok: true, total: plain.total, projects: [...plain.projects], wrapped: false };
+    // A LISTING IS NOT THE RUN WHEN THE SUITE IS FOCUSED. Playwright loads with
+    // `filterOnly: false` in list mode and `filterOnly: true` for a real run, so
+    // a `test.only` anywhere means `--list` enumerates tests that will not
+    // execute. Measured: a `.only` in a file only the desktop project matches
+    // listed 3 tests across all three projects while the run executes one.
+    //
+    // `--forbid-only` is Playwright's own answer to "is anything focused", so the
+    // question is asked rather than predicted — exit 1 with a focus violation,
+    // exit 0 otherwise. Probed only when something was listed, because an empty
+    // suite also exits 1 and the two must not be confused.
+    if (plain.total > 0) {
+      const focus = list(['--config', configPath, '--forbid-only']);
+      if (!focus.r.error && focus.r.status !== 0) {
+        return { ok: false, code: 19, lines: [
+          'the suite contains focused tests (test.only / describe.only)',
+          '  Playwright lists every test but RUNS only the focused ones, so this',
+          '  listing describes more than the run does and a band it names may',
+          '  execute nothing. Remove the focus, or accept that coverage cannot be',
+          '  attributed while it is there.',
+        ] };
+      }
+    }
+    return { ok: true, total: plain.total, projects: [...plain.projects] };
   }
 
-  // ── STEP TWO: ONLY WHEN THE CONFIG'S OWN REPORTERS HID THE ANSWER ────────
+  // ── NO INVENTORY IS "COULD NOT LOOK", AND THAT IS WHERE THIS STOPS ───────
   // A custom reporter REPLACES the built-in `list` reporter, so `--list` prints
-  // nothing — and a reporter that merely stays quiet is indistinguishable from
-  // one that excluded every test. Both silent, one of them a pass.
+  // nothing at all. This gate briefly answered that by writing a wrapper config
+  // that appended `['list']` to the user's own reporters — and the wrapper was
+  // the wrong idea, for a reason worth recording rather than repeating.
   //
-  // So, and only here, a wrapper config re-exports the user's config with
-  // `['list']` APPENDED. Appending keeps every preprocess() running while
-  // restoring an inventory to read. It is written BESIDE the config so relative
-  // paths resolve identically, and it is `.mjs` so its own module system is not
-  // in question — deriving that from the config's extension was a prediction and
-  // it was wrong on the first real config it met, because
-  // templates/ui-tests/package.json carries "type": "module".
-  const wrapper = join(dirname(configPath), `.ui-viewports-observe.${process.pid}.mjs`);
-  const rel = './' + basename(configPath);
-  // A bare string reporter is normalised to a tuple: Playwright rejects a loose
-  // string INSIDE the array form (`config.reporter[0] must be a tuple`).
-  const body = `import base from ${JSON.stringify(rel)};\n`
-    + 'const cfg = base && base.default ? base.default : base;\n'
-    + 'const r = cfg.reporter;\n'
-    + "const list = r === undefined ? [['list']]\n"
-    + "  : typeof r === 'string' ? [[r], ['list']]\n"
-    + "  : Array.isArray(r) ? [...r, ['list']]\n"
-    + "  : [r, ['list']];\n"
-    + 'export default { ...cfg, reporter: list };\n';
-  let wrapped;
-  try {
-    writeFileSync(wrapper, body, 'utf8');
-    wrapped = list(['--config', wrapper]);
-  } catch (e) {
-    return { ok: false, code: 15, lines: [`could not run the listing: ${(e && e.message) || e}`] };
-  } finally {
-    try { rmSync(wrapper, { force: true }); } catch { /* best effort; nothing reads it again */ }
-  }
-  if (wrapped.r.error) {
-    const enobufs = wrapped.r.error.code === 'ENOBUFS';
-    return { ok: false, code: 15, lines: [
-      enobufs
-        ? `the listing produced more than ${MAX_BUFFER} bytes and was truncated`
-        : `could not run the listing: ${wrapped.r.error.message}`,
-    ] };
-  }
-
-  // ── THE WRAPPER MUST NOT HAVE CHANGED THE ANSWER ─────────────────────────
-  // Appending a reporter is not invisible: `preprocess()` receives the resolved
-  // config, so a reporter can branch on `config.reporter` itself. Codex built one
-  // that excludes every test only when it is the SOLE reporter — the real run
-  // discovers nothing, the wrapped listing discovers everything, and this gate
-  // certified a suite that runs zero scenarios.
+  // `preprocess()` receives the RESOLVED config, so appending is visible and a
+  // reporter can act on it. Codex built two: one excluding every test when it is
+  // the sole reporter (caught by comparing the two runs' exit status), and then
+  // one excluding only the PHONE project's tests under the same condition. The
+  // second cannot be caught that way — both runs exit 0 — and it cannot be caught
+  // by comparing inventories either, because the whole reason the wrapper exists
+  // is that the unwrapped run HAS no inventory to compare. There is no observable
+  // that separates "the wrapper changed nothing" from "the wrapper changed part
+  // of it" when only one side can be read.
   //
-  // Comparing the two runs' EXIT STATUS catches that without knowing how the
-  // config noticed. The plain run and the wrapped run must agree about whether
-  // Playwright found anything; when they disagree, the config responded to being
-  // observed and no listing here describes the real run. That is a refusal, not a
-  // verdict — the same rule as everywhere else in this file: a thing that changed
-  // under inspection has not been inspected.
-  //
-  // The legitimate case still works: a reporter that excludes every test without
-  // branching fails BOTH runs (Playwright reports "No tests found", exit 1), the
-  // statuses agree, and the wrapped inventory reports `Total: 0` — exit 12.
-  if (plain.r.status !== wrapped.r.status) {
-    return { ok: false, code: 17, lines: [
-      'the config behaved DIFFERENTLY when a reporter was appended to it',
-      `  listing with your reporters alone: exit ${plain.r.status}`,
-      `  listing with 'list' appended:      exit ${wrapped.r.status}`,
-      '  Appending a reporter is the only way to read an inventory past a reporter',
-      '  that replaces the built-in one, and a reporter can branch on the resolved',
-      '  config it is handed. This config did something different when it was',
-      '  observed, so nothing observed here describes the run.',
-    ] };
-  }
-  if (wrapped.total === null) {
-    const err = `${wrapped.r.stderr || ''}`.trim().split('\n').slice(0, 4);
-    return { ok: false, code: 16, lines: [
-      'the listing produced no "Total:" line, so nothing was enumerated to read',
-      `  exit status: ${wrapped.r.status}${wrapped.r.signal ? ` (signal ${wrapped.r.signal})` : ''}`,
-      ...err.map(l => `  ${l}`),
-    ] };
-  }
-  return { ok: true, total: wrapped.total, projects: [...wrapped.projects], wrapped: true };
+  // So the wrapper is gone. A config whose reporters leave no inventory is a
+  // config this gate cannot observe, and it says so. That is narrower than the
+  // reporter allowlist #335 retired — that refused every reporter Playwright did
+  // not own, this refuses only reporters that ACTUALLY suppress the listing, and
+  // the remedy is concrete and in the user's hands.
+  const err = `${plain.r.stderr || ''}`.trim().split('\n').slice(0, 3);
+  return { ok: false, code: 16, lines: [
+    'the listing produced no "Total:" line, so nothing was enumerated to read',
+    `  exit status: ${plain.r.status}${plain.r.signal ? ` (signal ${plain.r.signal})` : ''}`,
+    ...err.map(l => `  ${l}`),
+    '  A reporter that replaces the built-in `list` reporter leaves nothing to',
+    '  read, and a reporter that stays quiet is indistinguishable from one that',
+    '  excluded every test — both silent, one of them a pass.',
+    '  Add a built-in `list` reporter to your config\'s own `reporter` array. That',
+    '  keeps your reporters running and restores an inventory, and it is YOUR',
+    '  config rather than something this gate appended behind your back.',
+  ] };
 }
 
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
@@ -829,23 +807,35 @@ console.log(`config:    ${configPath}`);
   // is a no-op was dropped from its band and the band reported unattributable.
   // Stage two counts a project when Playwright discovers a test for it, which
   // answers the same question by observation and needs no list of key names.
-  // AT MOST ONE PROJECT MAY BE NAMELESS. Playwright's list reporter prints an
-  // unnamed project's tests with no `[project] ›` prefix, so the observation can
-  // tell "some unnamed project discovered this" and nothing more. With one
-  // unnamed project that is unambiguous. With two, an unprefixed line marks BOTH
-  // as discovered — and a config with an unnamed laptop project and an unnamed
-  // phone project that discovers nothing was certified for both bands. Found by
-  // testing the fix for the single-unnamed case rather than shipping it: the fix
-  // was right and it opened this beside itself.
-  const nameless = projects.filter(p => !(p && p.name));
-  if (nameless.length > 1) {
+  // THE JOIN IS BY PROJECT NAME, SO THE NAMES MUST BE TELLABLE APART IN THE
+  // LISTING. Three ways they are not, all measured, all false greens where one
+  // project's tests certified another project's band:
+  //   * TWO NAMELESS PROJECTS — Playwright prints an unnamed project's tests with
+  //     no `[project] ›` prefix, so an unprefixed line marks both discovered. One
+  //     nameless project is unambiguous and passes.
+  //   * A DUPLICATE NAME — two projects called `same` in different bands, and
+  //     whichever discovers tests covers both.
+  //   * A NAME CONTAINING `] ›` — the listing's own delimiter. A phone project
+  //     named `desktop] › injected` prints as `[desktop] › injected] › …`, which
+  //     reads back as the project `desktop`, certifying a laptop band that
+  //     discovered nothing.
+  // This is a property of the observation CHANNEL rather than of Playwright: the
+  // list reporter's text format cannot encode these, so the gate refuses rather
+  // than guessing. Naming projects distinctly costs nothing and the names appear
+  // in the run's own output too.
+  const named = projects.map(p => (p && p.name) || null);
+  const nameless = named.filter(n => n === null).length;
+  const dupes = named.filter(n => n !== null).filter((n, i, a) => a.indexOf(n) !== i);
+  const delimited = named.filter(n => n !== null && n.includes('] ›'));
+  if (nameless > 1 || dupes.length || delimited.length) {
     die(18, [
-      `CANNOT CHECK: ${nameless.length} projects have no "name".`,
-      '  Playwright lists an unnamed project\'s tests without a project prefix, so',
-      '  discovery cannot be attributed to one of them rather than another, and a',
-      '  band would be certified by a different project\'s tests.',
-      '  Name them — Playwright accepts any string, and the names appear in this',
-      '  gate\'s output and in the run\'s.',
+      'CANNOT CHECK: project names cannot be told apart in Playwright\'s listing.',
+      ...(nameless > 1 ? [`  ${nameless} projects have no "name" — their tests list with no project prefix.`] : []),
+      ...(dupes.length ? [`  duplicate name(s): ${[...new Set(dupes)].join(', ')}`] : []),
+      ...(delimited.length ? [`  name(s) containing the listing delimiter "] ›": ${delimited.join(', ')}`] : []),
+      '  Discovery is attributed to a project by the name the listing prints, so',
+      '  two projects that print the same way let one certify the other\'s band.',
+      '  Give every project a distinct name that does not contain "] ›".',
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }

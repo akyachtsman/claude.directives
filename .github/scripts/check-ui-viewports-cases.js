@@ -228,23 +228,31 @@ const CASES = [
   // Measured: this reporter yields `Total: 0 tests`, and the bands go uncovered.
   // The exit-11 case that pinned the derived list's own failure is deleted with
   // the list — there is no discriminator left to guard.
-  ['a reporter that excludes every test — OBSERVED, exit 12',
+  ['a reporter that leaves no inventory — CANNOT CHECK, exit 16',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['./drop-all.js']],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'drop-all.js': 'export default class { preprocess({ testRun, suite }) '
         + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
-    12, 'discovers no test for it'],
+    16, 'no "Total:" line'],
 
-  // The negative twin, and the false alarm the allowlist used to produce: a
-  // custom reporter that removes NOTHING is now a pass. Under exit 10 this was
-  // refused for existing. It is also the case that proves the listing survives a
-  // custom reporter at all — without the appended `list`, a custom reporter
-  // replaces the built-in one and `--list` prints nothing, which is
-  // indistinguishable from excluding everything. Both silent, one a pass.
-  ['a custom reporter that excludes NOTHING — passes now, no longer refused',
+  // The twin, and the whole reason suppression is a refusal rather than a
+  // verdict: a custom reporter that removes NOTHING produces the SAME silence as
+  // one that removed everything. The gate cannot tell them apart and says so
+  // instead of guessing. The remedy is in the config — add a `list` reporter to
+  // your own array — which is why this is narrower than the reporter allowlist
+  // #335 retired: that refused every reporter Playwright did not own.
+  ['a custom reporter that excludes NOTHING — the same silence, same refusal',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  reporter: [['./quiet.js']],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'quiet.js': 'export default class { }\n' },
+    16, 'no "Total:" line'],
+
+  ['…and adding `list` to the config\'s OWN reporters clears it',
+    // The remedy the diagnostic names, pinned so it stays true.
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['./quiet.js'], ['list']],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'quiet.js': 'export default class { }\n' },
     0, 'check-ui-viewports: OK'],
@@ -267,6 +275,10 @@ const CASES = [
       // .js, so it is not picked up as a spec.
       'tests/drop-all.js': 'export default class { preprocess({ testRun, suite }) '
         + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
+    // Exit 12, not 16: this config keeps its own `list` reporter, so the
+    // inventory is still readable and the exclusion is OBSERVED rather than
+    // merely suspected. The environment variable reaches the listing exactly as
+    // it reaches the run, and no case needs to know the variable's name.
     12, 'discovers no test for it', { extraEnv: { PW_TEST_REPORTER: './drop-all.js' } }],
 
   ['PW_TEST_REPORTER names a BUILT-IN — must NOT trip',
@@ -275,11 +287,70 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
     0, 'check-ui-viewports: OK', { extraEnv: { PW_TEST_REPORTER: 'dot' } }],
 
+  // ── THE JOIN IS BY NAME, SO NAMES MUST BE TELLABLE APART (#347 round 2) ──
+  // Three shapes, all measured as false greens where one project's tests
+  // certified another project's band. All three are properties of the listing's
+  // TEXT FORMAT, not of Playwright, so the gate refuses rather than guessing.
+  ['duplicate project names — CANNOT CHECK, exit 18',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'same', testMatch: /__none__/, use: { viewport: { width: 390, height: 664 } } },\n"
+      + TABLET) },
+    18, 'duplicate name(s): same'],
+
+  ['a project name containing the listing delimiter — CANNOT CHECK, exit 18',
+    // `[desktop] › injected] › a.spec.js …` reads back as the project `desktop`,
+    // so a phone project certified the laptop band.
+    { 'playwright.config.js': withProjects(
+      "    { name: 'desktop', testMatch: /__none__/, use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'desktop] › injected', use: { viewport: { width: 390, height: 664 } } },\n"
+      + TABLET) },
+    18, 'containing the listing delimiter'],
+
+  ['distinct ordinary names still pass — the twin',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK'],
+
+  // ── A LISTING IS NOT THE RUN WHEN THE SUITE IS FOCUSED ───────────────────
+  // Playwright loads with filterOnly:false in list mode and filterOnly:true for a
+  // run, so `--list` enumerates tests a focused suite will not execute. Asked via
+  // `--forbid-only`, which is Playwright's own answer, rather than by scanning
+  // for `.only` — that would be a predicate over test files, the family #335
+  // exists to stop.
+  ['a focused test makes the listing overstate the run — CANNOT CHECK, exit 19',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test.only('focused', async () => { expect(1).toBe(1); });\n" },
+    19, 'focused tests'],
+
+  ['…and an unfocused suite is not refused — the twin',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK'],
+
+  // ── WHAT A LISTING CANNOT SEE AT ALL ─────────────────────────────────────
+  ['a reporter that SKIPS every test is NOT caught — the documented limit',
+    // testRun.skip() leaves the tests enumerated: the listing prints them and the
+    // run reports them skipped without executing a body. Measured in both output
+    // formats — `--list --reporter=json` reports status "skipped" for EVERY test
+    // even with no skipping reporter at all, because nothing runs in list mode,
+    // so the JSON carries no disposition either. A listing can see what was
+    // EXCLUDED and never what was SKIPPED.
+    //
+    // The run reports its own skips (`3 skipped`), which is where that belongs.
+    // Pinned at exit 0 in the direction of STAYING a limit: if this starts being
+    // caught, someone added a mechanism nobody reviewed.
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  reporter: [['./skipper.js'], ['list']],\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'skipper.js': 'export default class { async preprocess({ suite, testRun }) '
+        + '{ for (const t of suite.allTests()) testRun.skip(t); } }\n' },
+    0, 'check-ui-viewports: OK'],
+
   // ── THE OBSERVATION IS ITSELF OBSERVABLE (#347 round 1) ──────────────────
   // Two P1s, both reproduced, both false greens: a config CAN notice how it is
   // being inspected. One is now refused, the other is a stated limit, and both
   // are pinned so neither drifts.
-  ['a reporter that branches on config.reporter — CANNOT CHECK, exit 17',
+  ['a reporter that branches on config.reporter — CANNOT CHECK, exit 16',
     // Appending `['list']` is not invisible: preprocess() receives the resolved
     // config. This reporter excludes every test only when it is the SOLE
     // reporter, so the real run discovers nothing while the wrapped listing
@@ -291,7 +362,7 @@ const CASES = [
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'sneaky.js': 'export default class { async preprocess({ config, suite, testRun }) '
         + '{ if (config.reporter.length === 1) { for (const t of suite.allTests()) testRun.exclude(t); } } }\n' },
-    17, 'behaved DIFFERENTLY when a reporter was appended'],
+    16, 'no "Total:" line'],
 
   ['a config that branches on --list is NOT caught — the documented limit',
     // A listing carries `--list` in argv and a config may read it. This one

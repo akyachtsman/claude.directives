@@ -256,8 +256,38 @@ const EVAL_TIMEOUT_MS = 120000;
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
 if (!VERDICT_FILE) {
   const { spawnSync } = require('child_process');
+  const { randomBytes } = require('crypto');
   const box = mkdtempSync(join(tmpdir(), 'ui-viewports-verdict-'));
   const file = join(box, 'verdict.json');
+  // THE PATH IS NOT A SECRET AND CANNOT BE MADE ONE. Round 18's fix deleted the
+  // env var before the config could read it; Codex round 20 walked around it by
+  // enumerating os.tmpdir() for `ui-viewports-verdict-*`, taking the newest, and
+  // writing {"code":0} plus a three-band `.rows` from an exit listener — then
+  // setting process.exitCode = 0 so the corroboration check above saw a clean
+  // end too. Reproduced here: the gate printed its own `FAIL (code 1)` and then
+  // exited 0 with `OK — DECLARED laptop:phone tablet:phone phone:phone`.
+  //
+  // Nor would deleting the variable "harder" have helped: /proc/self/environ is
+  // a snapshot taken at exec and `delete process.env.X` does not touch it
+  // (measured — the deleted key is still there), so ANYTHING passed to the child
+  // through the environment is readable by the config no matter what this file
+  // does with it afterwards.
+  //
+  // So the file stops being the credential. The parent mints a nonce, the child
+  // stamps it into both payloads, and a payload without it is not from the child
+  // — whoever wrote it and wherever it landed. The nonce reaches the child over
+  // STDIN, which is a one-shot channel: the child consumes it before importing
+  // anything, and a later read of fd 0 returns "" (`/proc/self/fd/0` is ENXIO).
+  // That is the only channel here that a config cannot go back and re-read.
+  const nonce = randomBytes(24).toString('hex');
+  // ONE CLEANUP, ON EVERY PATH. The box used to be removed at the two exits that
+  // remembered to, and the parent has eleven. Measured while reproducing the
+  // forgery above: a scratch /tmp held 230 abandoned `ui-viewports-verdict-*`
+  // directories, every one from a refusal branch — which is also what made the
+  // forge's `readdirSync` enumeration so comfortable. An exit hook covers the
+  // refusals, the early returns and a throw alike, so a branch added later
+  // cannot forget.
+  process.on('exit', () => { try { rmSync(box, { recursive: true, force: true }); } catch {} });
   let child;
   try {
     // BOUNDED. The child IMPORTS the config, which is arbitrary code, and an
@@ -269,7 +299,6 @@ if (!VERDICT_FILE) {
     // hangs is worse than one that refuses: the refusal is a result.
     //
     child = spawnSync(process.execPath, [__filename, ...process.argv.slice(2)], {
-      stdio: 'inherit',
       timeout: EVAL_TIMEOUT_MS,
       // SIGKILL, NOT THE DEFAULT SIGTERM. `spawnSync`'s timeout kills with
       // SIGTERM, which a config can install a handler for — and a handler that
@@ -284,6 +313,10 @@ if (!VERDICT_FILE) {
       // bound was a claim about arbitrary code, resting on that code's
       // cooperation.
       killSignal: 'SIGKILL',
+      // stdin is a pipe carrying the nonce; stdout/stderr still inherit so the
+      // child's diagnostics reach the caller unchanged.
+      stdio: ['pipe', 'inherit', 'inherit'],
+      input: nonce,
       env: { ...process.env, __UI_VIEWPORTS_VERDICT_FILE: file },
     });
   } finally {
@@ -291,6 +324,21 @@ if (!VERDICT_FILE) {
   }
   let recorded = null;
   try { recorded = JSON.parse(readFileSync(file, 'utf8')); } catch { /* handled below */ }
+
+  // THE NONCE GATE. Checked before anything else looks at `recorded`, because a
+  // payload that does not carry it was not written by the child this parent
+  // spawned — and the whole point of the child is that the config's code cannot
+  // decide this outcome. A forged file lands at the same path; it cannot carry
+  // this value. Refusal, not silent fallback: a verdict this process cannot
+  // attribute is no verdict, which is exit 14's existing meaning.
+  if (recorded && recorded.nonce !== nonce) {
+    console.error('CANNOT CHECK: the recorded verdict did not come from the config evaluation.');
+    console.error('  The verdict file exists but is not stamped with this run\'s token, so');
+    console.error('  something other than the gate\'s own child process wrote it.');
+    console.error('  A verdict that cannot be attributed is not a pass.');
+    console.error('check-ui-viewports: FAIL (code 14)');
+    process.exit(14);
+  }
 
   // A RECORDED SUCCESS NEEDS A CLEAN EXIT TO CORROBORATE IT. The child writes
   // its verdict and then keeps running until the event loop drains, so a config
@@ -343,7 +391,7 @@ if (!VERDICT_FILE) {
     let rows = null;
     try { rows = JSON.parse(readFileSync(`${file}.rows`, 'utf8')); } catch { /* below */ }
     const bands = ['laptop', 'tablet', 'phone'];
-    const ok = rows && Array.isArray(rows.rows) && rows.cover
+    const ok = rows && rows.nonce === nonce && Array.isArray(rows.rows) && rows.cover
       && bands.every(b => Array.isArray(rows.cover[b]) && rows.cover[b].length > 0);
     if (ok) {
       // ── STAGE TWO: WHAT ACTUALLY RAN ─────────────────────────────────────
@@ -354,13 +402,19 @@ if (!VERDICT_FILE) {
       // ui-suite composite invokes this again with `--report` afterwards.
       // Read from argv directly: `opt()` is defined further down, in the section
       // that runs in the CHILD, and this block is the parent.
-      // BOTH SPELLINGS. check-ui-suite-env.py accepts `--report=<path>` as
-      // satisfying its requirement, and this parser only understood the
-      // space-separated form — so that spelling passed the guard and then got
-      // the declaration-only verdict at exit 0, which is the guard certifying a
-      // command this script silently ignores (Codex, #347 round 7). Two places
-      // that must agree about one flag is exactly the coupling this file keeps
-      // being caught by; they agree now.
+      // BOTH SPELLINGS, still. The original reason was a disagreement: round 7
+      // found check-ui-suite-env.py accepting `--report=<path>` while this
+      // parser understood only the space-separated form, so that spelling passed
+      // the guard and then got the declaration-only verdict at exit 0 — the
+      // guard certifying a command this script silently ignored.
+      //
+      // That guard no longer decides anything from the flag's spelling: since
+      // round 10 it pins the composite's command bodies verbatim, and the pinned
+      // post-run body uses the space-separated form. So the coupling is gone
+      // rather than resolved. Both spellings stay supported HERE because this
+      // script is also run by hand and from project scripts, where `--report=`
+      // is the more natural spelling, and a flag that is silently ignored is the
+      // exact failure round 7 recorded.
       let reportIdx = process.argv.indexOf('--report');
       let reportArg = reportIdx >= 0 ? process.argv[reportIdx + 1] : undefined;
       if (reportIdx < 0) {
@@ -379,7 +433,6 @@ if (!VERDICT_FILE) {
         console.error('  usage error rather than a reason to fall back on the declaration.');
         console.error('  In the ui-suite composite this is an unset or empty `report-path`.');
         console.error('check-ui-viewports: FAIL (code 8)');
-        rmSync(box, { recursive: true, force: true });
         process.exit(8);
       }
       if (reportArg) {
@@ -388,8 +441,7 @@ if (!VERDICT_FILE) {
           console.error('CANNOT CHECK: could not read what the run did.');
           for (const line of run.lines) console.error(`  ${line}`);
           console.error(`check-ui-viewports: FAIL (code ${run.code})`);
-          rmSync(box, { recursive: true, force: true });
-          process.exit(run.code);
+            process.exit(run.code);
         }
         // ONE LABEL FOR THE EMPTY KEY, and it is only ever a LABEL. The join
         // runs on the raw name, so a project actually named `(no name)` is a
@@ -414,8 +466,7 @@ if (!VERDICT_FILE) {
           console.error('  need to know which, because it is reading the outcome rather than');
           console.error('  predicting it.');
           console.error('  test.md -> UI coverage gates, fifth gate.');
-          rmSync(box, { recursive: true, force: true });
-          process.exit(12);
+            process.exit(12);
         }
         const where = b => rows.cover[b].filter(ranIn).map(label).join('/');
         console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
@@ -439,7 +490,6 @@ if (!VERDICT_FILE) {
       console.error('  The child computes with whatever the config left of the runtime; this');
       console.error('  process re-checks the conclusion with intrinsics the config never saw.');
       console.error('check-ui-viewports: FAIL (code 14)');
-      rmSync(box, { recursive: true, force: true });
       process.exit(14);
     }
   }
@@ -458,7 +508,6 @@ if (!VERDICT_FILE) {
     console.error('check-ui-viewports: FAIL (code 14)');
     process.exit(14);
   }
-  rmSync(box, { recursive: true, force: true });
   process.exit(recorded.code);
 }
 
@@ -476,6 +525,20 @@ if (!VERDICT_FILE) {
 // fix on this PR that has held: remove the thing rather than reason about it.
 delete process.env.__UI_VIEWPORTS_VERDICT_FILE;
 
+// ...WHICH IS NOT ENOUGH ON ITS OWN, AND THE COMMENT ABOVE USED TO STOP HERE.
+// Deleting the key does not touch /proc/self/environ, and the path is guessable
+// from os.tmpdir() regardless. So the parent also mints a nonce and sends it
+// down STDIN; this reads it once, here, before a single line of the config has
+// run. After this read fd 0 is drained — a later `readFileSync(0)` returns ""
+// and `/proc/self/fd/0` is ENXIO — so the config cannot recover it the way it
+// recovered the path. Every payload below carries it; the parent rejects any
+// that does not.
+//
+// A failed read leaves NONCE empty, which the parent treats as unattributable
+// and refuses. That is the right direction: no token, no pass.
+let NONCE = '';
+try { NONCE = readFileSync(0, 'utf8').trim(); } catch { /* parent refuses */ }
+
 // Captured before the config is imported: a corrupted JSON.stringify or a
 // corrupted writeFileSync would make the report unreadable, which the parent
 // treats as no answer — the safe direction, but worth not inviting.
@@ -485,13 +548,13 @@ const WRITE = writeFileSync;
 function record(code) {
   // Written before terminating, so the parent has an answer even if something
   // the config installed interferes with how this process ends.
-  try { WRITE(VERDICT_FILE, STRINGIFY({ code }), 'utf8'); } catch { /* parent reports */ }
+  try { WRITE(VERDICT_FILE, STRINGIFY({ code, nonce: NONCE }), 'utf8'); } catch { /* parent reports */ }
 }
 
 // The band data, for the parent to decide on. Written to a sibling of the
 // verdict file so one read tells the parent whether the child got this far.
 function report(data) {
-  try { WRITE(`${VERDICT_FILE}.rows`, STRINGIFY(data), 'utf8'); } catch { /* parent reports */ }
+  try { WRITE(`${VERDICT_FILE}.rows`, STRINGIFY({ ...data, nonce: NONCE }), 'utf8'); } catch { /* parent reports */ }
 }
 
 // CAPTURED BEFORE ANY CONFIG CODE CAN RUN. The config is arbitrary JavaScript

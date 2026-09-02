@@ -69,16 +69,43 @@ if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (len(raw) > 1 and
 # climbs out of .github/scripts/ui-tests/ to the repo root -- so the rule is
 # about where it LANDS, not whether it climbs.
 landed = os.path.normpath(os.path.join(tests_dir, raw))
-if landed.startswith("..") or os.path.isabs(landed):
+# COMPONENT, NOT PREFIX. `landed.startswith("..")` was a text test standing in
+# for a path question, and it got the answer wrong in both directions a text
+# test can: `..report.json` is an ordinary filename in the workspace and was
+# refused (Codex, #347 round 10). Splitting on the separator asks the question
+# the rule is actually about -- does the first step go UP.
+parts = landed.split(os.sep)
+if parts[0] == os.pardir or os.path.isabs(landed):
     refuse("report-path resolves outside the workspace.",
            f"{tests_dir!r} + {raw!r} -> {landed!r}")
 
-# HAND THE VALIDATED PATH ON, so no consumer re-reads the raw input. The upload
-# step takes this output rather than the action input, which means a rejected
-# value cannot reach the artifact list even if the step ordering changes later.
+# A LEADING `~` IS A THIRD PLACE THIS CAN LAND. `actions/upload-artifact`
+# expands a leading tilde to the runner's home directory, which is OUTSIDE the
+# workspace and outside everything the containment rule above reasons about:
+# `../../../~/secret.txt` normalises to `~/secret.txt`, which climbs nowhere by
+# the rule and reads the runner's home by the consumer (Codex, #347 round 10).
+# The containment check answers "where does this path point"; the tilde makes
+# that a different question for one consumer, so it is refused rather than
+# reasoned about.
+if parts[0].startswith("~"):
+    refuse("report-path resolves to a home-directory reference.",
+           f"{tests_dir!r} + {raw!r} -> {landed!r} -- the artifact uploader expands "
+           "a leading ~ to the runner's home, outside the workspace entirely.")
+
+# HAND THE VALIDATED PATH ON IN BOTH BASES, so NO consumer re-reads the raw
+# input. Round 9 did this for the upload alone and left the other three steps on
+# `${{ inputs.report-path }}`; the post-run gate runs under `always()`, so a
+# REFUSED value still reached it and `/dev/zero` blocked its read forever (Codex,
+# #347 round 10). One escaped consumer is the same defect as no validation, and
+# the reason it escaped was that there were two bases and only one output:
+#   path      -- workspace-relative, for actions/upload-artifact
+#   relative  -- tests-dir-relative, for the steps that run from tests-dir
+# `relative` is the raw value AFTER every rule above accepted it, which is what
+# makes it safe to pass on; it is not the raw input by another name.
 out = os.environ.get("GITHUB_OUTPUT")
 if out:
     with open(out, "a", encoding="utf-8") as handle:
         handle.write(f"path={landed}\n")
+        handle.write(f"relative={raw}\n")
 
 print(f"validate-report-path: OK -- {raw!r} resolves to {landed!r}, inside the workspace.")

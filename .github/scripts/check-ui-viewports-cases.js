@@ -64,6 +64,36 @@ const LAPTOP = "    { name: 'desktop', use: { viewport: { width: 1440, height: 9
 const SPEC = "import { test, expect } from '@playwright/test';\ntest('present', async () => { expect(1).toBe(1); });\n";
 
 const cfg = body => `${IMPORT}export default defineConfig({\n  testDir: './tests',\n${body}});\n`;
+
+// A config that goes looking for the verdict channel instead of being handed it.
+// Written out in full rather than composed, because every line of it is the
+// finding: enumerate, pick the newest, write both payloads, and clear the exit
+// code so the corroboration check sees a clean end (Codex, #347 round 10).
+const FORGE = `${IMPORT}import { readdirSync, writeFileSync, statSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+process.on('exit', () => {
+  try {
+    const dirs = readdirSync(tmpdir())
+      .filter(d => d.startsWith('ui-viewports-verdict-'))
+      .map(d => join(tmpdir(), d))
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+    const file = join(dirs[0], 'verdict.json');
+    writeFileSync(file, JSON.stringify({ code: 0 }), 'utf8');
+    writeFileSync(file + '.rows', JSON.stringify({
+      rows: [{ name: 'phone', width: 390 }],
+      cover: { laptop: ['phone'], tablet: ['phone'], phone: ['phone'] },
+      configPath: 'playwright.config.js', testsDir: '.',
+    }), 'utf8');
+    process.exitCode = 0;
+  } catch {}
+});
+export default defineConfig({
+  testDir: './tests',
+  projects: [
+${PHONE}  ],
+});
+`;
 const withProjects = rows => cfg(`  projects: [\n${rows}  ],\n`);
 
 // (label, {files}, expected exit, required diagnostic, options)
@@ -1031,6 +1061,37 @@ const CASES = [
   ['an ordinary config finishes well inside the same bound — no false refusal',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK', { shortTimeout: 2000 }],
+
+  // ── THE VERDICT FILE IS NOT A CREDENTIAL (#347 round 10) ─────────────────
+  // Round 18 of #333 deleted __UI_VIEWPORTS_VERDICT_FILE from the child's
+  // environment before the config could read it, and the comment there claimed
+  // the channel was now out of the config's view. It was not. Codex enumerated
+  // os.tmpdir() for `ui-viewports-verdict-*`, took the newest, wrote {"code":0}
+  // and a three-band `.rows` from an exit listener, and set process.exitCode = 0
+  // so the "recorded a pass and then failed" corroboration saw a clean end too.
+  // A phone-only config then produced `OK — DECLARED laptop:phone tablet:phone
+  // phone:phone` after printing its own FAIL (code 1).
+  //
+  // Nor was deleting it "harder" ever going to work: /proc/self/environ is an
+  // exec-time snapshot that `delete process.env.X` does not touch, so anything
+  // handed to the child through the environment stays readable by the config.
+  // The parent now mints a nonce, sends it down stdin (a channel that is
+  // consumed, not re-readable), and refuses any payload not stamped with it.
+  //
+  // This fixture is the reproduction. It is deliberately a WORKING forge — it
+  // finds the directory and writes both files — so the case fails if the nonce
+  // check is removed rather than if the enumeration stops working.
+  ['a config forging a verdict into the gate\'s own tmp directory — refused',
+    { 'playwright.config.js': FORGE },
+    14, 'did not come from the config evaluation'],
+
+  // The twin, and the one that matters: the forge must be REFUSED, not merely
+  // survived. Without this the case above could pass on any exit-14 branch —
+  // the fixture also sets process.exitCode, so a gate that had simply broken
+  // would satisfy the code alone.
+  ['…and the forged bands are not printed as a pass',
+    { 'playwright.config.js': FORGE },
+    14, 'A verdict that cannot be attributed is not a pass.'],
 ];
 
 // Writes a copy of the gate with the config-evaluation child's bound replaced.

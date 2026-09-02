@@ -251,6 +251,17 @@ jobs:
       - name: Check the composite env guard itself reports correctly
         run: python3 .github/scripts/check-ui-suite-env-cases.py
 
+      # The report-path validator is the only thing between the ui-suite's
+      # `report-path` input and three consumers, one of which is an artifact
+      # upload under always(). This repo does not use the composite, so nothing
+      # else here would notice it break — the same hole check-contrast-cases.js
+      # covers below. It is also the file with the worst record on #347: three
+      # consecutive rounds found defects in it, two of them the validator
+      # refusing or admitting the wrong value rather than the composite misusing
+      # it. Every refusal case is paired with a must-NOT-refuse twin.
+      - name: Check the report-path validator accepts and refuses correctly
+        run: python3 .github/scripts/check-report-path-cases.py
+
       # The contrast guardrail is exported, never run here — this repo has no
       # styles/tokens.css — so nothing else in this repo would notice it break.
       # #334 caught it measuring a token's SUPERSEDED value: the capture regex

@@ -302,7 +302,7 @@ runs:
     - name: Clear any stale Playwright report
       shell: bash
       env:
-        REPORT_PATH: ${{ inputs.report-path }}
+        REPORT_PATH: ${{ steps.report-path.outputs.relative }}
       # `--` ENDS OPTION PARSING. A report-path beginning with `-` is a valid
       # relative filename that GNU rm reads as a flag: `rm -f "--preserve-root"`
       # exits 0 and deletes NOTHING, so the stale report survives and the
@@ -342,7 +342,9 @@ runs:
         # and that rule is not bureaucratic: two of these steps IMPORT the
         # config, so a variable present at one evaluation and absent at another
         # is a config that can differ between them (#333 round 10).
-        REPORT_PATH: ${{ inputs.report-path }}
+        # FROM THE VALIDATED OUTPUT, never the action input — every consumer in
+        # this composite now reads a value the validator accepted (#347 r10).
+        REPORT_PATH: ${{ steps.report-path.outputs.relative }}
       run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir .
 
     - name: Run Playwright tests
@@ -363,7 +365,9 @@ runs:
         # and that rule is not bureaucratic: two of these steps IMPORT the
         # config, so a variable present at one evaluation and absent at another
         # is a config that can differ between them (#333 round 10).
-        REPORT_PATH: ${{ inputs.report-path }}
+        # FROM THE VALIDATED OUTPUT, never the action input — every consumer in
+        # this composite now reads a value the validator accepted (#347 r10).
+        REPORT_PATH: ${{ steps.report-path.outputs.relative }}
       # No --reporter flag: a CLI reporter REPLACES the config's list, which
       # would drop the json reporter and leave playwright-results.json unwritten
       # while the upload step below still claims to publish it.
@@ -382,7 +386,14 @@ runs:
     # which widths were exercised. A report that is missing because the run died
     # early is a genuine CANNOT CHECK, and says so rather than passing.
     - name: Check the run actually exercised all three viewport classes
-      if: ${{ always() }}
+      # always() AND the validation having passed — the SAME pair the upload
+      # below needs, for the same reason and found the same way. Round 9 gated
+      # the upload and left this step on bare `always()`, so a REFUSED
+      # report-path still reached it: Codex passed `/dev/zero` and the gate's
+      # readFileSync had not returned after a second (#347 round 10). A step
+      # that runs after a refusal is a step the validator does not protect,
+      # however carefully the validator is written.
+      if: ${{ always() && steps.report-path.outcome == 'success' }}
       shell: bash
       # NO continue-on-error, and advisory-run does NOT reach it. The input says
       # "ONLY the run step advisory" and this is not the run step — it is the
@@ -401,7 +412,9 @@ runs:
         # and that rule is not bureaucratic: two of these steps IMPORT the
         # config, so a variable present at one evaluation and absent at another
         # is a config that can differ between them (#333 round 10).
-        REPORT_PATH: ${{ inputs.report-path }}
+        # FROM THE VALIDATED OUTPUT, never the action input — every consumer in
+        # this composite now reads a value the validator accepted (#347 r10).
+        REPORT_PATH: ${{ steps.report-path.outputs.relative }}
       # THROUGH THE ENVIRONMENT, NOT INTERPOLATED. `${{ }}` is substituted into
       # the script source before bash parses it, so a report-path carrying a
       # quote and a shell operator would execute — the same template-injection

@@ -54,16 +54,40 @@ RUN_STEP = "Run Playwright tests"
 # environment; RUN_STEP is the reference all of them are compared against,
 # because it is the thing being measured.
 POST_STEP = "Check the run actually exercised all three viewport classes"
-# (label, everything its single command must mention), in the order they must
-# appear. The post-run step needs BOTH: naming the gate is not enough, because
-# the gate without --report reports what the config DECLARES and exits 0. Drop
-# the argument and the step still runs, still passes, and silently stops
-# checking execution altogether — a guard that reads as green while the thing it
-# guards is gone (Codex, #347 round 5).
+
+# (label, the exact command bodies accepted), in the order the steps must appear.
+#
+# THIS IS A PIN, NOT A PARSE, AND THAT IS THE POINT. Four rounds tried to decide
+# from shell TEXT whether a body runs the program it names, and each fix was
+# defeated by a shell feature the previous one had not modelled:
+#   r5   substring `--report`         -> `--reporter=json` satisfied it
+#   r6   token `--report`             -> `echo check-ui-viewports --report` did
+#   r9   launcher + first-3-tokens    -> `python3 -c "'check-ui-viewports'"
+#                                        --report r.json` did (#347 r10), and so
+#                                        did `node check-ui-viewports.js
+#                                        # --report r.json`, where whitespace
+#                                        splitting sees a token and bash sees a
+#                                        comment
+# Every one of those was a cheaper observable standing in for "this command runs
+# that program" -- the defect class this whole PR is about. A fifth parser would
+# be the same bet again, so the mechanism is REMOVED rather than patched: the
+# body must be one of a small set of exact strings, and no shell subtlety
+# (comments, -c, quoting, redirection, expansion) can matter to a comparison
+# that does not interpret anything.
+#
+# The cost is that changing a command here also means changing this list. That
+# is the intended cost: this composite is COPIED whole by downstream projects,
+# so its command bodies are not a place for local variation, and a deliberate
+# edit in two files beats a parser that can be talked around.
+#
+# The post-run body carries `--report` because the gate without it reports what
+# the config DECLARES and exits 0 -- drop the argument and the step still runs,
+# still passes, and silently stops checking execution (Codex, #347 round 5).
+GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
 SEQUENCE = (
-    (CHECK_STEP, ("check-ui-viewports",)),
-    (RUN_STEP, ("playwright test",)),
-    (POST_STEP, ("check-ui-viewports", "--report")),
+    (CHECK_STEP, (f"{GATE} --tests-dir .",)),
+    (RUN_STEP, ("npx playwright test",)),
+    (POST_STEP, (f'{GATE} --tests-dir . --report "$REPORT_PATH"',)),
 )
 
 
@@ -188,12 +212,13 @@ def main():
         # passed too. Sixth time on this PR I measured the cheap observable
         # (line count) instead of the property (what executes, and only that).
         #
-        # So each step's body must consist of exactly the invocation it exists
-        # for, with nothing composed onto it. The accepted shapes are pinned in
-        # check-ui-suite-env-cases.py; anything else is refused rather than
-        # parsed, because parsing shell is how the previous version got here.
-        COMPOSERS = ("&&", "||", ";", "|", "&", "$(", "`")
-        for (label, needles), (_, i) in zip(SEQUENCE, order):
+        # So each step's body must be EXACTLY the invocation it exists for, and
+        # "exactly" is now literal: the body is compared, character for
+        # character, against the strings pinned in SEQUENCE. The composer list
+        # this used to carry (&& || ; | & $( `) is gone with the rest of the
+        # parser -- an exact match rejects every one of those without enumerating
+        # them, and enumerating them is what left `#` and `-c` off the list.
+        for (label, bodies), (_, i) in zip(SEQUENCE, order):
             if i is None:
                 continue
             step = steps[i]
@@ -204,81 +229,25 @@ def main():
                     + "\n    other work runs between the config evaluations (#333, round 17)."
                 )
                 continue
-            lines = [ln.strip() for ln in str(step.get("run") or "").splitlines()
-                     if ln.strip() and not ln.strip().startswith("#")]
-            bad = [ln for ln in lines if any(c in ln for c in COMPOSERS)]
-            if bad:
+            # COMMENTS ARE NOT STRIPPED ANY MORE. The old reader dropped lines
+            # beginning with `#` and then split the rest on whitespace, so
+            # `node check-ui-viewports.js # --report r.json` handed the guard a
+            # `--report` token that bash treats as a comment (Codex, #347 r10).
+            # An exact comparison needs no such pre-processing: the body either
+            # is one of the pinned strings or it is not.
+            body = str(step.get("run") or "").strip()
+            if body not in bodies:
                 problems.append(
-                    f'"{label}" composes other commands onto its invocation'
-                    + f"\n    {'; '.join(bad)}"
-                    + "\n    Anything composed with && || ; | & or a substitution runs between"
-                    + "\n    the config evaluations, however few LINES the step has"
-                    + "\n    (#333, round 18)."
+                    f'"{label}" does not run the pinned command'
+                    + f"\n    got:      {body!r}"
+                    + "".join(f"\n    expected: {b!r}" for b in bodies)
+                    + "\n    These three steps must be exactly their invocations: two of them"
+                    + "\n    evaluate the config, so anything else in any body runs BETWEEN the"
+                    + "\n    evaluations (#333, round 17), and four attempts to decide that from"
+                    + "\n    shell text were each walked around by a shell feature they did not"
+                    + "\n    model (#347, rounds 5, 6, 9, 10). The bodies are pinned in"
+                    + "\n    check-ui-suite-env.py -> SEQUENCE; change both together."
                 )
-            elif len(lines) != 1:
-                problems.append(
-                    f'"{label}" runs {len(lines)} commands; it must run exactly one'
-                    + f"\n    {'; '.join(lines) if lines else '(none)'}"
-                    + "\n    Each of these steps evaluates the config, so anything else in any"
-                    + "\n    body executes between the evaluations (#333, round 17)."
-                )
-            else:
-                # TOKENS, NOT SUBSTRINGS. `--report` is contained in
-                # `--reporter=json` and in `--report-path`, both of which the
-                # viewport script ignores as unknown options while doing only its
-                # declaration check — so a rename or a typo left this guard green
-                # and execution coverage silently gone (Codex, #347 round 6).
-                # The bodies here are already refused if they compose commands,
-                # so whitespace splitting is a real tokenisation rather than a
-                # shell parser. A `--flag=value` token counts as `--flag`.
-                tokens = set()
-                for tok in lines[0].split():
-                    tokens.add(tok)
-                    if tok.startswith('--') and '=' in tok:
-                        tokens.add(tok.split('=', 1)[0])
-                # POSITION, NOT PRESENCE. A token appearing SOMEWHERE is not the
-                # command running: `echo check-ui-viewports --report` satisfies
-                # the one-line rule, the no-composer rule and both token tests,
-                # while running nothing at all (Codex, #347 round 9). Three
-                # rounds on this line have all been the same mistake — a cheap
-                # observable standing in for the property — so the check is now
-                # about WHERE each thing sits.
-                #
-                # A non-flag needle must be the script the launcher is given:
-                # `node <...path...>` or `npx playwright test`. The launcher is
-                # token 0 and the thing it runs is token 1 (or 1-2 for `npx <pkg>
-                # <subcommand>`), so a needle has to appear in the first three
-                # tokens AND the first token has to be a launcher, not `echo`.
-                argv = lines[0].split()
-                LAUNCHERS = ('node', 'npx', 'python3', 'python', 'bash', 'sh')
-                head = argv[0].rsplit('/', 1)[-1] if argv else ''
-                if head not in LAUNCHERS:
-                    problems.append(
-                        f'"{label}" does not start with a recognised launcher'
-                        + f"\n    {lines[0]}"
-                        + f"\n    first token is {head!r}; expected one of {', '.join(LAUNCHERS)}."
-                        + "\n    A body that merely MENTIONS the script — `echo"
-                        + " check-ui-viewports"
-                        + "\n    --report` — passed every other check here while running nothing"
-                        + "\n    (#347, round 9)."
-                    )
-                # The command HEAD, joined: a needle can be two words
-                # (`playwright test`), so it is matched against the first three
-                # tokens as a string rather than against any one of them.
-                head3 = ' '.join(argv[:3])
-                absent = [n for n in needles
-                          if not (n in tokens if n.startswith('-') else n in head3)]
-                if absent:
-                    problems.append(
-                        f'"{label}" does not appear to invoke what its name says'
-                        + f"\n    {lines[0]}"
-                        + f"\n    expected the command to mention {', '.join(repr(n) for n in absent)}."
-                        + "\n    A step renamed onto a different command would otherwise satisfy"
-                        + "\n    every check here (#333, round 18), and the post-run step without"
-                        + "\n    --report is the declaration check twice over (#347, round 5)."
-                        + "\n    A non-flag name must be what the launcher RUNS, not a word"
-                        + "\n    somewhere in the line (#347, round 9)."
-                    )
 
         run_wd = workdir_of(steps, RUN_STEP)
         for label, _ in SEQUENCE:

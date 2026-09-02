@@ -27,12 +27,18 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-ui-suite-env-cases.py
 """
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-GUARD = Path(__file__).resolve().parent / "check-ui-suite-env.py"
+# Overridable so a MUTANT can be pointed at, the way CHECK_UI_VIEWPORTS_BIN and
+# CHECK_CLAIMS_BIN are used elsewhere in this directory. A case that cannot be
+# shown to redden is a case nobody has measured -- and this guard's rules have
+# been rewritten four times, so "these cases still pass" says nothing on its own.
+GUARD = Path(os.environ.get("CHECK_UI_SUITE_ENV_BIN",
+                            Path(__file__).resolve().parent / "check-ui-suite-env.py"))
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIVE = REPO_ROOT / "templates/actions/ui-suite/action.yml"
 
@@ -44,6 +50,23 @@ RUN = "Run Playwright tests"
 # existed keep meaning what they meant.
 POST = "Check the run actually exercised all three viewport classes"
 UNSET = object()
+
+# THE PINNED BODIES, WRITTEN OUT HERE RATHER THAN IMPORTED. The guard now
+# compares each step's `run` against an exact string (#347 round 10, after four
+# parsers were each walked around by a shell feature they did not model). A
+# cases file that imported that constant would agree with the guard by
+# construction and prove nothing about it; spelling them again is what makes a
+# silent edit to SEQUENCE fail here.
+GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
+CHECK_BODY = f"{GATE} --tests-dir ."
+RUN_BODY = "npx playwright test"
+POST_BODY = f'{GATE} --tests-dir . --report "$REPORT_PATH"'
+
+# The one diagnostic every body-shape refusal now prints. Named because it is
+# asserted twenty times below and a typo in one of them would silently weaken
+# that case to "exit 1 for some reason" — the failure mode this suite's header
+# is about.
+PIN = "does not run the pinned command"
 
 
 def action(check_env, run_env, check_name=CHECK, run_name=RUN,
@@ -70,16 +93,16 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
         + decoy_yaml
         + f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
-        + body(check_body or "node check-ui-viewports.js --tests-dir .")
+        + body(check_body or CHECK_BODY)
         + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
         + f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
-        + (f"      uses: {run_uses}\n" if run_uses else body(run_body or "npx playwright test"))
+        + (f"      uses: {run_uses}\n" if run_uses else body(run_body or RUN_BODY))
         + (f"    - name: {between_post}\n      shell: bash\n      run: echo between\n"
            if between_post else "")
         + f"    - name: {post_name}\n      shell: bash\n{wd(post_wd)}"
         + block(run_env if post_env is UNSET else post_env)
         + (f"      uses: {post_uses}\n" if post_uses
-           else body(post_body or "node check-ui-viewports.js --tests-dir . --report r.json"))
+           else body(post_body or POST_BODY))
     )
 
 
@@ -97,40 +120,51 @@ CASES = [
     ("a command inside the run step before playwright — refused",
      action(dict(BOTH), dict(BOTH),
             run_body="./flip-the-world.sh\nnpx playwright test"),
-     1, "must run exactly one"),
+     1, PIN),
 
     ("a command inside the check step after the gate — refused",
      action(dict(BOTH), dict(BOTH),
-            check_body="node check-ui-viewports.js\n./flip-the-world.sh"),
-     1, "must run exactly one"),
+            check_body=CHECK_BODY + "\n./flip-the-world.sh"),
+     1, PIN),
 
     # Codex round 18: ONE line, two commands. The round-17 line count called this
     # adjacent. Shapes are now constrained rather than lines counted.
     ("commands composed with && on one line — refused",
      action(dict(BOTH), dict(BOTH),
             run_body="./flip-the-world.sh && npx playwright test"),
-     1, "composes other commands onto its invocation"),
+     1, PIN),
 
     ("a command substitution on the invocation line — refused",
      action(dict(BOTH), dict(BOTH),
             run_body="npx playwright test $(./flip-the-world.sh)"),
-     1, "composes other commands onto its invocation"),
+     1, PIN),
 
     # Round 18 again: the round-17 version never checked the surviving line, so a
     # step could be renamed onto an entirely different command and still pass.
     ("the run step invokes something else entirely — refused",
      action(dict(BOTH), dict(BOTH), run_body="./flip-the-world.sh"),
-     1, "does not appear to invoke what its name says"),
+     1, PIN),
 
     ("the run step is a `uses:` — refused, its internals are invisible",
      action(dict(BOTH), dict(BOTH), run_uses="./some/action"), 1, "is a `uses:` step"),
 
-    # The twin: a single invocation per step must keep passing, or this fails the
-    # fleet rather than the configs it is meant to catch.
-    ("one real invocation per step — must NOT trip",
+    # THE PIN IS A PIN. This body runs the right script with the right argument
+    # by a different path spelling, and it is refused — deliberately. The guard
+    # no longer decides what a command DOES from its text; four attempts to do
+    # that were each walked around (#347 rounds 5, 6, 9, 10). What it can decide
+    # is whether the body is the one this composite ships, and a downstream copy
+    # that edited it is a copy nothing here has checked.
+    ("a different path spelling of the same invocation — refused",
      action(dict(BOTH), dict(BOTH),
             check_body="node .github/scripts/check-ui-viewports.js --tests-dir .",
-            run_body="npx playwright test"), 0, "consecutive steps"),
+            run_body=RUN_BODY), 1, PIN),
+
+    # The twin the success case above already carries: the shipped bodies pass.
+    # Spelled out again with them passed EXPLICITLY, so a defaults change in
+    # action() cannot make the success path vacuous.
+    ("the pinned bodies, passed explicitly — must NOT trip",
+     action(dict(BOTH), dict(BOTH), check_body=CHECK_BODY,
+            run_body=RUN_BODY, post_body=POST_BODY), 0, "consecutive steps"),
 
     # Round 16: a step between the two lets the config observe a different world
     # at the gate than at the run — Codex reproduced it with `Start local server`
@@ -234,41 +268,44 @@ CASES = [
 
     ("post-run check composes another command onto its invocation",
      action(dict(BOTH), dict(BOTH),
-            post_body="./flip-the-world.sh && node check-ui-viewports.js --report r.json"),
-     1, "composes other commands onto its invocation"),
+            post_body="./flip-the-world.sh && " + POST_BODY),
+     1, PIN),
 
     ("post-run check runs two commands",
      action(dict(BOTH), dict(BOTH),
-            post_body="./flip-the-world.sh\nnode check-ui-viewports.js --report r.json"),
-     1, "must run exactly one"),
+            post_body="./flip-the-world.sh\n" + POST_BODY),
+     1, PIN),
 
     # Codex #347 round 9: a body that MENTIONS the script runs nothing. This
     # satisfied the one-line rule, the no-composer rule and both token tests.
     ("post-run check merely echoes the script name — refused",
      action(dict(BOTH), dict(BOTH),
-            post_body="echo check-ui-viewports --report r.json"), 1,
-     "does not start with a recognised launcher"),
+            post_body="echo check-ui-viewports --report r.json"), 1, PIN),
 
     ("run step merely echoes playwright test — refused",
-     action(dict(BOTH), dict(BOTH), run_body="echo npx playwright test"), 1,
-     "does not start with a recognised launcher"),
+     action(dict(BOTH), dict(BOTH), run_body="echo npx playwright test"), 1, PIN),
 
-    # The needle must be what the launcher RUNS, not a word later in the line.
     ("post-run check names the gate only in a trailing argument — refused",
      action(dict(BOTH), dict(BOTH),
-            post_body="node ./other.js --tests-dir . --report r.json --note check-ui-viewports"), 1,
-     "does not appear to invoke what its name says"),
+            post_body="node ./other.js --tests-dir . --report r.json --note check-ui-viewports"),
+     1, PIN),
 
-    # The twins: the real shapes must still pass, including an absolute path and
-    # the two-word `npx playwright test`.
-    ("an absolute node invocation — must NOT trip",
+    # ── THE TWO ROUND-10 WALKAROUNDS ─────────────────────────────────────────
+    # Both of these passed the round-9 guard, which required a launcher in token
+    # 0 and the needles inside the first three whitespace-separated tokens.
+    # Neither runs the gate. They are the reason the parser is gone rather than
+    # patched a fifth time, and they stay here as the pin's discrimination: a
+    # rewrite that goes back to reading shell text reddens on them.
+    ("`python3 -c` with the script name as a STRING — refused (#347 r10)",
      action(dict(BOTH), dict(BOTH),
-            post_body='node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --report r.json'),
-     0, "consecutive steps"),
+            post_body="python3 -c \"'check-ui-viewports'\" --report r.json"), 1, PIN),
+
+    ("`--report` sitting after a `#` comment — refused (#347 r10)",
+     action(dict(BOTH), dict(BOTH),
+            post_body="node check-ui-viewports.js # --report r.json"), 1, PIN),
 
     ("post-run check invokes something else entirely",
-     action(dict(BOTH), dict(BOTH), post_body="./flip-the-world.sh"), 1,
-     "does not appear to invoke what its name says"),
+     action(dict(BOTH), dict(BOTH), post_body="./flip-the-world.sh"), 1, PIN),
 
     # Codex #347 round 5. The post-run step exists FOR --report: without it the
     # gate reports what the config declares and exits 0, so dropping the argument
@@ -276,35 +313,31 @@ CASES = [
     # silently unchecked. Naming the script is not enough.
     # Codex #347 round 6: `--report` is a SUBSTRING of `--reporter=json` and of
     # `--report-path`, and the viewport script ignores both as unknown options
-    # while doing only its declaration check. A substring test stayed green for
-    # a command that had silently stopped checking execution.
+    # while doing only its declaration check.
+    #
+    # Under the pin these are three spellings of one thing — a body that is not
+    # the pinned body — and that is the simplification the pin buys. They stay as
+    # separate cases because each names a real way the post-run step has been
+    # observed to stop checking execution, and a case list is also a record.
     ("post-run check passes --reporter=json instead of --report — refused",
      action(dict(BOTH), dict(BOTH),
-            post_body="node check-ui-viewports.js --tests-dir . --reporter=json"), 1,
-     "'--report'"),
+            post_body=CHECK_BODY + " --reporter=json"), 1, PIN),
 
     ("post-run check passes --report-path instead of --report — refused",
      action(dict(BOTH), dict(BOTH),
-            post_body="node check-ui-viewports.js --tests-dir . --report-path r.json"), 1,
-     "'--report'"),
+            post_body=CHECK_BODY + " --report-path r.json"), 1, PIN),
 
-    # The twin: the real form must still pass, including the `--flag=value`
-    # spelling, or the tokenisation would refuse the composite it guards.
-    ("post-run check passing --report=<path> — must NOT trip",
+    ("post-run check passes --report=<path> rather than the pinned spelling — refused",
      action(dict(BOTH), dict(BOTH),
-            post_body="node check-ui-viewports.js --tests-dir . --report=r.json"), 0,
-     "consecutive steps"),
+            post_body=CHECK_BODY + " --report=r.json"), 1, PIN),
 
     ("post-run check drops --report — refused",
-     action(dict(BOTH), dict(BOTH),
-            post_body="node check-ui-viewports.js --tests-dir ."), 1,
-     "'--report'"),
+     action(dict(BOTH), dict(BOTH), post_body=CHECK_BODY), 1, PIN),
 
     # The twin: the pre-run check must NOT be required to pass --report, or the
     # requirement would be a blanket rule rather than one about this step's job.
     ("pre-run check without --report — must NOT trip",
-     action(dict(BOTH), dict(BOTH),
-            check_body="node check-ui-viewports.js --tests-dir ."), 0,
+     action(dict(BOTH), dict(BOTH), check_body=CHECK_BODY), 0,
      "consecutive steps"),
 
     ("post-run check is a `uses:` step",

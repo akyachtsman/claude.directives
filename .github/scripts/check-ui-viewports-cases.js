@@ -1213,6 +1213,16 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'mapping written for the post-run check', { declared: true }],
 
+  // THE SHIPPED DEFAULT'S SHAPE ON A CLEAN RUNNER. `report-path` defaults to
+  // `../../../.agent-reports/playwright-results.json`, and that directory does
+  // not exist until Playwright creates its output — which is AFTER this runs.
+  // Round 14 shipped the sidecar without creating the parent, so the pre-run
+  // gate exited 20 before the suite started and would have failed the composite
+  // on every fresh checkout (Codex, #347 round 15).
+  ['--declared into a directory that does not exist yet — created, not refused',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'mapping written for the post-run check', { declaredNested: true }],
+
   // A MISSING MAPPING REFUSES RATHER THAN RE-IMPORTING. Falling back would
   // silently restore the re-evaluation the flag replaced — the fail-open shape
   // this file exists to catch.
@@ -1346,6 +1356,9 @@ function runCase(files, opts) {
     if (o.extraArgs) args.push(...o.extraArgs);
     // The declared-mapping sidecar lives in the fixture dir (#347 round 14).
     if (o.declared) args.push('--declared', join(tmp, 'declared.json'));
+    // A path whose PARENT does not exist — the shipped default's shape on a
+    // clean runner (#347 round 15).
+    if (o.declaredNested) args.push('--declared', join(tmp, 'no', 'such', 'dir', 'declared.json'));
     if (o.declaredMissing) args.push('--declared', join(tmp, 'absent.json'));
     // opts.runReport: RUN the suite first, then check its report. Since #335's
     // second design the coverage claim comes from the run's own JSON report, so

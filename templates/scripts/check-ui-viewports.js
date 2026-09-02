@@ -144,7 +144,7 @@
 //   UI_TESTS_DIR=... node .github/scripts/check-ui-viewports.js
 // Options: --config <path>, --tablet-min <px> (768), --laptop-min <px> (1024)
 
-const { existsSync, statSync, mkdtempSync, writeFileSync, readFileSync, rmSync, realpathSync } = require('fs');
+const { existsSync, statSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } = require('fs');
 const { createRequire } = require('module');
 const { pathToFileURL } = require('url');
 const { resolve, join, isAbsolute, dirname } = require('path');
@@ -470,6 +470,15 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       // rejected is not one anything should later read.
       if (declaredIdx.given) {
         try {
+          // MAKE THE DIRECTORY FIRST. The shipped default report-path is
+          // `../../../.agent-reports/playwright-results.json`, and on a clean
+          // runner `.agent-reports/` does not exist yet — Playwright creates its
+          // own output directories, but it has not run when this executes. So
+          // the round-14 sidecar threw ENOENT and exited 20 BEFORE the suite
+          // started, which would have failed the shipped composite on every
+          // fresh checkout (Codex, #347 round 15). Reproduced: exit 20 on a
+          // bare tree with the default path.
+          mkdirSync(dirname(resolve(declaredIdx.path)), { recursive: true });
           writeFileSync(declaredIdx.path,
             JSON.stringify({ rows: rowList, testsDir: TESTS }), 'utf8');
         } catch (e) {

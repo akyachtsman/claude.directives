@@ -358,20 +358,34 @@ five:
   That gate works in two stages, and both are needed. It IMPORTS the config, so
   Node expands `...devices[…]` and the declared widths are read rather than
   pattern-matched — a static read does not work and is not worth retrying, three
-  attempts produced twelve findings. Then it ASKS Playwright what it discovers
-  (`playwright test --list`, with your reporters left in place) and reports a band
-  covered only when a project at that width actually turns up. Predicting
-  discovery from the config was tried for eight rounds and produced twenty
-  findings, every one a rule correct for its example and wrong one step out: a
-  `.gitignore` under `testDir`, a per-project `respectGitIgnore`, a symlinked
-  `testDir`, a reporter excluding every test, a `shard` set only when a
-  credential is present. Each is now caught without the gate knowing the
+  attempts produced twelve findings. That half runs before the suite and answers
+  what is DECLARED. Then, after the run, it is invoked again with
+  `--report <playwright json>` and reads the run's own report: a band is covered
+  only when a project declared at that width has a test the run actually
+  EXECUTED. Predicting discovery from the config was tried for eight rounds and
+  produced twenty findings, every one a rule correct for its example and wrong
+  one step out: a `.gitignore` under `testDir`, a per-project `respectGitIgnore`,
+  a symlinked `testDir`, a reporter excluding every test, a `shard` set only when
+  a credential is present. Each is now caught without the gate knowing the
   mechanism exists.
-  Two consequences worth knowing before you see them in CI. A suite with no
-  discovered tests FAILS, where it used to pass on declared widths alone. And a
-  selection key that narrows nothing — `testIgnore: []`, `grep: /(?:)/`,
-  `shard: {current:1,total:1}` — no longer trips anything; the gate used to
-  refuse those on presence because it could not tell.
+  **Your config must write that report.** The shipped kit declares
+  `['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]`
+  alongside its `list` reporter, and the `ui-suite` composite passes that same
+  path. A config that writes no JSON report leaves the composite's post-run check
+  unable to read one, which is CANNOT CHECK and fails the job — deliberately, so
+  that a missing report is never mistaken for a covered band.
+  A listing (`playwright test --list`) was the first design and was measured out.
+  It is not the run: it announces itself in `process.argv`, it loads with
+  `filterOnly:false` so a stray `test.only` over-counts, it skips `globalSetup`,
+  and it carries no disposition at all — a reporter calling `testRun.skip()` on
+  every test lists a full inventory. Don't reintroduce it.
+  Three consequences worth knowing before you see them in CI. A suite with no
+  executed tests FAILS, where it used to pass on declared widths alone. Tests
+  that are all SKIPPED fail the same way — a skipped test is not evidence a
+  viewport was exercised. And a selection key that narrows nothing —
+  `testIgnore: []`, `grep: /(?:)/`, `shard: {current:1,total:1}` — no longer
+  trips anything; the gate used to refuse those on presence because it could not
+  tell.
 
   **One spec set, one viewport source.** This kit ships a single suite —
   `tests/app.spec.js` under `playwright.config.js` — and runs it against two

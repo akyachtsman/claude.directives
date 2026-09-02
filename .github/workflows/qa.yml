@@ -200,14 +200,16 @@ jobs:
       #
       # The install is what makes the check possible, now for two reasons. The gate
       # IMPORTS the config so Node expands `...devices[…]`, which needs
-      # @playwright/test resolvable from where the config lives; and since #335 it
-      # also RUNS `playwright test --list` to observe what discovery actually
-      # yields, which needs the playwright CLI on the same install.
+      # @playwright/test resolvable from where the config lives; and since #335 the
+      # cases suite below RUNS real Playwright suites to produce the JSON reports
+      # the gate reads, which needs the playwright CLI on the same install.
       # Measured 2.4s. --ignore-scripts skips the browser download and STAYS
-      # correct: listing enumerates specs without launching anything, verified
-      # with PLAYWRIGHT_BROWSERS_PATH pointed at an empty directory — the gate and
-      # all 63 of its cases pass with no browser present. --no-package-lock writes
-      # nothing into the tree. node_modules is gitignored
+      # correct, RE-MEASURED after #335 turned listings into runs: every fixture
+      # spec asserts without requesting the `page` fixture, so no browser is ever
+      # launched. Verified with PLAYWRIGHT_BROWSERS_PATH pointed at an empty
+      # directory — the gate and all 73 of its cases pass with no browser present.
+      # A fixture that DID take `page` would break that, so don't add one.
+      # --no-package-lock writes nothing into the tree. node_modules is gitignored
       # everywhere and every validator here already skips it (check-paths.js names
       # templates/ui-tests/node_modules in its own header).
       - name: Install the UI kit's own test deps (for the viewport gate)

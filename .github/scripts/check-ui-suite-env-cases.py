@@ -14,9 +14,14 @@ is the failure this repo keeps writing guards to prevent. Every branch that can
 print gets a case here, including the ones that only fire when the guard is doing
 its job.
 
-Each case pins BOTH the exit code AND a required diagnostic substring: four
+Each case pins BOTH the exit code AND a required diagnostic substring: many
 distinct problems exit 1, so "exit 1" alone would let a case keep passing while
 the branch it was written for is broken and some other branch catches the input.
+
+Since #335 the guard reads a SEQUENCE of three steps rather than a pair, and the
+third one gets its own copy of every case. A generalisation that silently dropped
+the third entry would look identical from the two that were already covered, so
+"it is the same code path" is not evidence -- only a case that reddens is.
 
 NOT exported: .github/ is outside every EXPORTS.json category path.
 
@@ -33,11 +38,19 @@ LIVE = REPO_ROOT / "templates/actions/ui-suite/action.yml"
 
 CHECK = "Check three viewport classes are declared"
 RUN = "Run Playwright tests"
+# The post-run half of the gate (#335). It imports the config exactly as the
+# pre-run check does, so every parity argument applies to it and it needs the
+# same cases. Its defaults mirror the run step so the fixtures written before it
+# existed keep meaning what they meant.
+POST = "Check the run actually exercised all three viewport classes"
+UNSET = object()
 
 
 def action(check_env, run_env, check_name=CHECK, run_name=RUN,
            check_wd="tests", run_wd="tests", decoy=None, between=None,
-           check_body=None, run_body=None, run_uses=None):
+           check_body=None, run_body=None, run_uses=None,
+           post_env=UNSET, post_name=POST, post_wd="tests", post_body=None,
+           post_uses=None, between_post=None):
     def block(env):
         if not env:
             return ""
@@ -61,6 +74,12 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
         + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
         + f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
         + (f"      uses: {run_uses}\n" if run_uses else body(run_body or "npx playwright test"))
+        + (f"    - name: {between_post}\n      shell: bash\n      run: echo between\n"
+           if between_post else "")
+        + f"    - name: {post_name}\n      shell: bash\n{wd(post_wd)}"
+        + block(run_env if post_env is UNSET else post_env)
+        + (f"      uses: {post_uses}\n" if post_uses
+           else body(post_body or "node check-ui-viewports.js --tests-dir . --report r.json"))
     )
 
 
@@ -111,14 +130,14 @@ CASES = [
     ("one real invocation per step — must NOT trip",
      action(dict(BOTH), dict(BOTH),
             check_body="node .github/scripts/check-ui-viewports.js --tests-dir .",
-            run_body="npx playwright test"), 0, "adjacent steps"),
+            run_body="npx playwright test"), 0, "consecutive steps"),
 
     # Round 16: a step between the two lets the config observe a different world
     # at the gate than at the run — Codex reproduced it with `Start local server`
     # flipping whether APP_URL answers.
     ("a step between the check and the run — refused",
      action(dict(BOTH), dict(BOTH), between="Start local server"), 1,
-     "not immediately before the Playwright run"),
+     f'"{RUN}" does not run immediately after "{CHECK}"'),
 
     # The success message must not overclaim: it compares declared YAML env and
     # cannot see what `npx` adds (#333 round 11).
@@ -154,11 +173,11 @@ CASES = [
 
     ("different working directories — a cwd-branching config diverges",
      action(dict(BOTH), dict(BOTH), check_wd=".", run_wd="tests"), 1,
-     "DIFFERENT working directories"),
+     "DIFFERENT working directory"),
 
     ("check step declares no working directory at all",
      action(dict(BOTH), dict(BOTH), check_wd=None), 1,
-     "DIFFERENT working directories"),
+     "DIFFERENT working directory"),
 
     # Codex round 14: a DECOY step carrying a reserved name, placed before the
     # real one, made env_of() return the decoy's environment and the guard report
@@ -180,6 +199,55 @@ CASES = [
 
     # Neither step declaring env is legitimate parity, not an excuse to skip.
     ("neither step declares env", action({}, {}), 0, "empty"),
+
+    # ── THE POST-RUN CHECK IS THE SAME STEP AGAIN (#335) ────────────────────
+    # It imports the config too, so every branch above has to hold from its side
+    # as well. Generalising the guard over a SEQUENCE rather than a pair is what
+    # makes that true by construction; these cases are what prove it, because a
+    # generalisation that quietly skipped the third entry would look identical
+    # from the two that were already covered.
+    ("post-run check renamed away", action(dict(BOTH), dict(BOTH), post_name="Renamed"),
+     1, f'no step named "{POST}"'),
+
+    ("a decoy step named like the post-run check — refused",
+     action(dict(BOTH), dict(BOTH), decoy=POST), 1, f'2 steps are named "{POST}"'),
+
+    ("post-run check is missing environment the run has",
+     action(dict(BOTH), dict(BOTH), post_env={"APP_URL": "a"}), 1,
+     f'"{POST}" is missing environment the run step has'),
+
+    ("post-run check carries environment the run lacks",
+     action(dict(BOTH), {"APP_URL": "a"}, post_env=dict(BOTH)), 1,
+     f'"{POST}" carries environment the run step lacks'),
+
+    ("post-run check sets the same variable to a different value",
+     action({"APP_URL": "z"}, {"APP_URL": "z"}, post_env={"APP_URL": "a"}), 1,
+     "DIFFERENT values"),
+
+    ("post-run check runs from a different working directory",
+     action(dict(BOTH), dict(BOTH), post_wd="."), 1,
+     f'"{POST}" runs from a DIFFERENT working directory'),
+
+    ("a step between the run and the post-run check — refused",
+     action(dict(BOTH), dict(BOTH), between_post="Upload test results"), 1,
+     f'"{POST}" does not run immediately after "{RUN}"'),
+
+    ("post-run check composes another command onto its invocation",
+     action(dict(BOTH), dict(BOTH),
+            post_body="./flip-the-world.sh && node check-ui-viewports.js --report r.json"),
+     1, "composes other commands onto its invocation"),
+
+    ("post-run check runs two commands",
+     action(dict(BOTH), dict(BOTH),
+            post_body="./flip-the-world.sh\nnode check-ui-viewports.js --report r.json"),
+     1, "must run exactly one"),
+
+    ("post-run check invokes something else entirely",
+     action(dict(BOTH), dict(BOTH), post_body="./flip-the-world.sh"), 1,
+     "does not appear to invoke what its name says"),
+
+    ("post-run check is a `uses:` step",
+     action(dict(BOTH), dict(BOTH), post_uses="./some/action"), 1, "is a `uses:` step"),
 ]
 
 

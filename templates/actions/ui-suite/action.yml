@@ -52,6 +52,14 @@ inputs:
   tests-dir:
     description: 'Directory containing playwright.config.js and package.json'
     required: true
+  report-path:
+    description: >-
+      Playwright JSON report, relative to tests-dir. The viewport gate reads it
+      AFTER the run to certify that scenarios actually executed at each width —
+      a listing cannot answer that (#335). Must match the `outputFile` of your
+      config's json reporter; the shipped kit's default is used here.
+    required: false
+    default: '../../../.agent-reports/playwright-results.json'
   app-url:
     description: 'URL the suite targets (local server or live deploy)'
     required: true
@@ -303,6 +311,29 @@ runs:
       # would drop the json reporter and leave playwright-results.json unwritten
       # while the upload step below still claims to publish it.
       run: npx playwright test
+      working-directory: ${{ inputs.tests-dir }}
+
+    # THE COVERAGE CLAIM COMES FROM THE RUN, not from anything predicted before
+    # it. The step above certifies only that three widths are DECLARED; whether
+    # a scenario reached them depends on selection keys, .gitignore, shards,
+    # reporters, focused tests and globalSetup, and #335 measured that no
+    # pre-run observation answers it — `playwright test --list` differs from a
+    # run in argv visibility, filterOnly, globalSetup and skip disposition.
+    # The run's own JSON report has none of those gaps, because it is the run.
+    #
+    # always(): a suite that failed still ran tests, and its report still says
+    # which widths were exercised. A report that is missing because the run died
+    # early is a genuine CANNOT CHECK, and says so rather than passing.
+    - name: Check the run actually exercised all three viewport classes
+      if: ${{ always() }}
+      shell: bash
+      continue-on-error: ${{ inputs.advisory-run == 'true' }}
+      env:
+        APP_URL: ${{ inputs.app-url }}
+        TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
+        TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        APP_PAGES: ${{ inputs.app-pages }}
+      run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --report "${{ inputs.report-path }}"
       working-directory: ${{ inputs.tests-dir }}
 
     - name: Upload test results

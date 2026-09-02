@@ -131,7 +131,7 @@ const CASES = [
     `root ${label} empties the run — OBSERVED, exit 12`,
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + line + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    12, 'discovers no test for it']),
+    12, 'NOTHING RAN at that width', { runReport: true }]),
 
   // Sharding is its own case because it does not empty the run — it splits it,
   // and the band that survives depends on how Playwright distributes. The
@@ -141,7 +141,7 @@ const CASES = [
   ['root shard 1 of 4 leaves a band with nothing — OBSERVED, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  shard: { current: 1, total: 4 },\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    12, 'discovers no test for it'],
+    12, 'NOTHING RAN at that width', { runReport: true }],
 
   // ── testDir: BOTH HOLES CLOSED, and neither needed a predicate ───────────
   // The root redirect was deferred at round 6 of #333 after four predicates and
@@ -153,7 +153,7 @@ const CASES = [
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './other',\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'other/keep.txt': 'x\n' },
-    12, 'discovers no test for it'],
+    12, 'NOTHING RAN at that width', { runReport: true }],
 
   ['root testDir is the shipped default (must not false-alarm)',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
@@ -188,14 +188,14 @@ const CASES = [
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  respectGitIgnore: true,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'tests/.gitignore': '*.spec.js\n' },
-    12, 'discovers no test for it'],
+    12, 'NOTHING RAN at that width', { runReport: true }],
 
   ['respectGitIgnore overridden on ONE project — that band alone is caught',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  respectGitIgnore: false,\n  projects: [\n${LAPTOP}${TABLET}`
       + `    { name: 'phone', respectGitIgnore: true, use: { viewport: { width: 390, height: 664 } } },\n  ],\n});\n`,
       'tests/.gitignore': '*.spec.js\n' },
-    12, 'phone is declared but Playwright discovers no test for it'],
+    12, 'phone is declared but NOTHING RAN at that width', { runReport: true }],
 
   // REPORTER: THREE CASES, ONE PER OUTCOME. Rounds 7-8 on #333.
   //
@@ -218,55 +218,47 @@ const CASES = [
     0, 'check-ui-viewports: OK'],
 
   // The second is acceptance fixture 4 from #335, and the criterion the rewrite
-  // was set: catch it WITHOUT the special case. Until now the gate refused any
-  // reporter absent from the installed Playwright's `builtInReporters` — derived
-  // rather than hand-maintained, but still a rule about which reporters are
-  // TRUSTED, not an observation of what they DID.
+  // was set: catch it WITHOUT the special case. Two earlier designs refused a
+  // reporter — first any absent from the installed Playwright's
+  // `builtInReporters`, then any that left a listing unreadable. Both were rules
+  // about which reporters are TRUSTED rather than observations of what they DID,
+  // and both refused honest configs. The run's report needs neither: a reporter
+  // whose preprocess() excludes every test produces a run that executed nothing,
+  // and the report says so in the reporter's own words.
   //
-  // Stage two lists with the config's own reporters intact and `['list']`
-  // appended, so preprocess() still runs and the inventory is still readable.
-  // Measured: this reporter yields `Total: 0 tests`, and the bands go uncovered.
-  // The exit-11 case that pinned the derived list's own failure is deleted with
-  // the list — there is no discriminator left to guard.
-  ['a reporter that leaves no inventory — CANNOT CHECK, exit 16',
+  // These fixtures declare a `json` reporter of their OWN (opts.ownReporter), so
+  // the harness runs `playwright test` with no `--reporter` override — a CLI
+  // reporter REPLACES the config's, which would delete the very reporter under
+  // test. That is the same trap the gate's header warns about, exercised here.
+  ['a reporter that excludes every test — OBSERVED in the run, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['./drop-all.js']],\n`
+      + `  reporter: [['./drop-all.js'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'drop-all.js': 'export default class { preprocess({ testRun, suite }) '
         + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
-    16, 'no "Total:" line'],
+    12, 'NOTHING RAN at that width', { runReport: true, ownReporter: true }],
 
-  // The twin, and the whole reason suppression is a refusal rather than a
-  // verdict: a custom reporter that removes NOTHING produces the SAME silence as
-  // one that removed everything. The gate cannot tell them apart and says so
-  // instead of guessing. The remedy is in the config — add a `list` reporter to
-  // your own array — which is why this is narrower than the reporter allowlist
-  // #335 retired: that refused every reporter Playwright did not own.
-  ['a custom reporter that excludes NOTHING — the same silence, same refusal',
+  // The twin, and what the report bought: a custom reporter that removes NOTHING
+  // used to be indistinguishable from one that removed everything, because both
+  // produced the same silent listing, so both were refused. The run reports what
+  // it ran whoever else is listening, so this one simply passes.
+  ['a custom reporter that excludes NOTHING — no longer refused, it just passes',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['./quiet.js']],\n`
+      + `  reporter: [['./quiet.js'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'quiet.js': 'export default class { }\n' },
-    16, 'no "Total:" line'],
-
-  ['…and adding `list` to the config\'s OWN reporters clears it',
-    // The remedy the diagnostic names, pinned so it stays true.
-    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['./quiet.js'], ['list']],\n`
-      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
-      'quiet.js': 'export default class { }\n' },
-    0, 'check-ui-viewports: OK'],
+    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true, ownReporter: true }],
 
   // PW_TEST_REPORTER reaches PLAYWRIGHT rather than the config: the runner
   // appends it whatever `reporter` says, so a config declaring only built-ins can
   // still run arbitrary reporter code. Found at round 9 of #333, after round 8
   // had "fixed" exactly that class — a config is CODE, and what it exports
-  // depends on everything the evaluation can see. Stage two inherits the
-  // environment, so the variable reaches the listing exactly as it reaches the
-  // run, and no case needs to know the variable's name.
+  // depends on everything the evaluation can see. The gate now reads the RUN's
+  // report, so the variable reaches the thing being measured by definition and
+  // no case needs to know the variable's name.
   ['PW_TEST_REPORTER names a reporter that excludes everything — OBSERVED',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['list']],\n`
+      + `  reporter: [['list'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       // Playwright resolves PW_TEST_REPORTER relative to testDir, not to the
       // config — measured, after placing it beside the config produced
@@ -275,108 +267,126 @@ const CASES = [
       // .js, so it is not picked up as a spec.
       'tests/drop-all.js': 'export default class { preprocess({ testRun, suite }) '
         + '{ for (const t of suite.allTests()) testRun.exclude(t); } }\n' },
-    // Exit 12, not 16: this config keeps its own `list` reporter, so the
-    // inventory is still readable and the exclusion is OBSERVED rather than
-    // merely suspected. The environment variable reaches the listing exactly as
-    // it reaches the run, and no case needs to know the variable's name.
-    12, 'discovers no test for it', { extraEnv: { PW_TEST_REPORTER: './drop-all.js' } }],
+    12, 'NOTHING RAN at that width',
+    { runReport: true, ownReporter: true, extraEnv: { PW_TEST_REPORTER: './drop-all.js' } }],
 
   ['PW_TEST_REPORTER names a BUILT-IN — must NOT trip',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['list']],\n`
+      + `  reporter: [['list'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK', { extraEnv: { PW_TEST_REPORTER: 'dot' } }],
+    0, 'check-ui-viewports: OK — EXECUTED',
+    { runReport: true, ownReporter: true, extraEnv: { PW_TEST_REPORTER: 'dot' } }],
 
   // ── THE JOIN IS BY NAME, SO NAMES MUST BE TELLABLE APART (#347 round 2) ──
-  // Three shapes, all measured as false greens where one project's tests
-  // certified another project's band. All three are properties of the listing's
-  // TEXT FORMAT, not of Playwright, so the gate refuses rather than guessing.
+  // Two shapes, both measured as false greens where one project's tests
+  // certified another project's band. Collision is a property of the JOIN — the
+  // report identifies a result only by `projectName` — so the gate refuses.
   ['duplicate project names — CANNOT CHECK, exit 18',
     { 'playwright.config.js': withProjects(
       "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
       + "    { name: 'same', testMatch: /__none__/, use: { viewport: { width: 390, height: 664 } } },\n"
       + TABLET) },
-    18, 'duplicate name(s): same'],
+    18, 'two or more projects share a name'],
 
-  ['a project name containing the listing delimiter — CANNOT CHECK, exit 18',
-    // `[desktop] › injected] › a.spec.js …` reads back as the project `desktop`,
-    // so a phone project certified the laptop band.
+  // The third shape is RETIRED, and its fixture is kept as the proof. Under the
+  // listing this config was a false green: `[desktop] › injected] › a.spec.js …`
+  // read back as the project `desktop`, so the phone project's tests certified
+  // the laptop band, and the gate had to refuse every name containing `] ›`. The
+  // report carries `projectName` as a JSON string, so nothing is parsed out of
+  // prose — the injected delimiter is just part of a name, the laptop project
+  // still runs nothing, and the gate says exactly that.
+  ['a project name containing the old listing delimiter — attributed correctly now',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /__none__/, use: { viewport: { width: 1440, height: 900 } } },\n"
       + "    { name: 'desktop] › injected', use: { viewport: { width: 390, height: 664 } } },\n"
       + TABLET) },
-    18, 'containing the listing delimiter'],
+    12, 'laptop is declared but NOTHING RAN at that width', { runReport: true }],
 
   ['distinct ordinary names still pass — the twin',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'check-ui-viewports: OK'],
 
-  // ── A LISTING IS NOT THE RUN WHEN THE SUITE IS FOCUSED ───────────────────
+  // ── FOCUS: exit 19 IS RETIRED, AND THIS IS WHY ───────────────────────────
   // Playwright loads with filterOnly:false in list mode and filterOnly:true for a
-  // run, so `--list` enumerates tests a focused suite will not execute. Asked via
-  // `--forbid-only`, which is Playwright's own answer, rather than by scanning
-  // for `.only` — that would be a predicate over test files, the family #335
-  // exists to stop.
-  ['a focused test makes the listing overstate the run — CANNOT CHECK, exit 19',
-    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+  // run, so a listing enumerated tests a focused suite would never execute. The
+  // gate answered with `--forbid-only` and refused the whole config — a probe,
+  // and one more thing a config could notice.
+  //
+  // This fixture is the case that probe existed for, and it is now an ordinary
+  // observation: the laptop project is restricted to `gate.spec.js`, the `.only`
+  // lives in `focus.spec.js`, so laptop discovers a test and RUNS none. A
+  // listing would have counted `gate.spec.js` for laptop and passed. The report
+  // counts what executed, and the diagnostic names laptop without the word
+  // "focus" appearing anywhere in the gate.
+  ['a focused test elsewhere empties a band — OBSERVED, exit 12',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'desktop', testMatch: 'gate.spec.js', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + TABLET + PHONE),
       'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('present', async () => { expect(1).toBe(1); });\n",
+      'tests/focus.spec.js': "import { test, expect } from '@playwright/test';\n"
         + "test.only('focused', async () => { expect(1).toBe(1); });\n" },
-    19, 'focused tests'],
+    12, 'laptop is declared but NOTHING RAN at that width', { runReport: true }],
 
   ['…and an unfocused suite is not refused — the twin',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    0, 'check-ui-viewports: OK'],
+    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
 
-  // ── WHAT A LISTING CANNOT SEE AT ALL ─────────────────────────────────────
-  ['a reporter that SKIPS every test is NOT caught — the documented limit',
-    // testRun.skip() leaves the tests enumerated: the listing prints them and the
-    // run reports them skipped without executing a body. Measured in both output
-    // formats — `--list --reporter=json` reports status "skipped" for EVERY test
-    // even with no skipping reporter at all, because nothing runs in list mode,
-    // so the JSON carries no disposition either. A listing can see what was
-    // EXCLUDED and never what was SKIPPED.
+  // ── WHAT A LISTING COULD NOT SEE AT ALL, AND THE REPORT CAN ──────────────
+  ['a reporter that SKIPS every test — CAUGHT now, exit 12',
+    // This was the listing design's documented limit, and it is the single
+    // clearest reason the design changed. testRun.skip() leaves the tests
+    // ENUMERATED: a listing prints them all and reads as full coverage.
+    // Measured in both listing formats — `--list --reporter=json` reports status
+    // "skipped" for EVERY test even with no skipping reporter at all, because
+    // nothing runs in list mode, so the JSON carried no disposition either. A
+    // listing could see what was EXCLUDED and never what was SKIPPED.
     //
-    // The run reports its own skips (`3 skipped`), which is where that belongs.
-    // Pinned at exit 0 in the direction of STAYING a limit: if this starts being
-    // caught, someone added a mechanism nobody reviewed.
+    // A run's report carries a per-test `results[].status`, so a skipped test is
+    // a test that did not execute and the band it was supposed to certify is
+    // uncovered. Nothing in the gate knows the word "skip": it counts results
+    // whose status is anything other than "skipped", which is the same rule that
+    // catches exclusion, sharding and a focused suite.
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['./skipper.js'], ['list']],\n`
+      + `  reporter: [['./skipper.js'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'skipper.js': 'export default class { async preprocess({ suite, testRun }) '
         + '{ for (const t of suite.allTests()) testRun.skip(t); } }\n' },
-    0, 'check-ui-viewports: OK'],
+    12, 'NOTHING RAN at that width', { runReport: true, ownReporter: true }],
 
-  // ── THE OBSERVATION IS ITSELF OBSERVABLE (#347 round 1) ──────────────────
-  // Two P1s, both reproduced, both false greens: a config CAN notice how it is
-  // being inspected. One is now refused, the other is a stated limit, and both
-  // are pinned so neither drifts.
-  ['a reporter that branches on config.reporter — CANNOT CHECK, exit 16',
-    // Appending `['list']` is not invisible: preprocess() receives the resolved
-    // config. This reporter excludes every test only when it is the SOLE
-    // reporter, so the real run discovers nothing while the wrapped listing
-    // discovers everything — and the gate certified all three bands. Caught by
-    // comparing the plain and wrapped runs' exit status, which needs no
-    // knowledge of HOW the config noticed.
+  // ── THE OBSERVATION WAS ITSELF OBSERVABLE (#347 round 1) ─────────────────
+  // Two P1s, both reproduced against the listing design, both false greens: a
+  // config CAN notice how it is being inspected, and a listing announced itself
+  // twice over — an appended reporter in `config.reporter`, and `--list` in
+  // argv. Neither survives reading the run: there is nothing to notice, because
+  // the gate no longer arranges an inspection. Both fixtures are kept, and both
+  // are now caught by the same rule as everything else.
+  ['a reporter that branches on config.reporter — the run is the run, exit 12',
+    // Under the listing this excluded every test only when it was the SOLE
+    // reporter, so the real run discovered nothing while the wrapped listing
+    // discovered everything. Inverted here to keep the fixture honest against a
+    // config that carries its own `json`: it excludes when a second reporter is
+    // present, which is the shape the shipped kit has. Whatever it branches on,
+    // it branches during the run being measured.
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
-      + `  reporter: [['./sneaky.js']],\n`
+      + `  reporter: [['./sneaky.js'], ['json', { outputFile: 'report.json' }]],\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'sneaky.js': 'export default class { async preprocess({ config, suite, testRun }) '
-        + '{ if (config.reporter.length === 1) { for (const t of suite.allTests()) testRun.exclude(t); } } }\n' },
-    16, 'no "Total:" line'],
+        + '{ if (config.reporter.length > 1) { for (const t of suite.allTests()) testRun.exclude(t); } } }\n' },
+    12, 'NOTHING RAN at that width', { runReport: true, ownReporter: true }],
 
-  ['a config that branches on --list is NOT caught — the documented limit',
-    // A listing carries `--list` in argv and a config may read it. This one
-    // applies a non-matching grep unless it is being listed: the real run
-    // discovers nothing, the observation discovers everything, and the gate
-    // reports OK. No arrangement of `--list` closes this, because the flag is
-    // what makes it a listing. Pinned at exit 0 in the direction of STAYING a
-    // limit — if this case ever starts failing, a mechanism nobody reviewed was
-    // added, which is the same reason #346 pins its out-of-span gate.
+  ['a config that branches on --list — CAUGHT now, exit 12',
+    // The listing design's other documented limit. This config applies a
+    // non-matching grep unless argv contains `--list`, so the real run
+    // discovered nothing and the listing discovered everything. No arrangement
+    // of `--list` closed it, because the flag was what made it a listing.
+    // Nothing in the gate passes `--list` any more: the run takes the grep, the
+    // report is empty, and the band is named.
     { 'playwright.config.js': `${IMPORT}const listing = process.argv.includes('--list');\n`
       + `export default defineConfig({\n  testDir: './tests',\n`
       + `  ...(listing ? {} : { grep: /__NEVER_MATCHES__/ }),\n`
       + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
-    0, 'check-ui-viewports: OK'],
+    12, 'NOTHING RAN at that width', { runReport: true }],
 
   // ── UNNAMED PROJECTS: the fix, and the hole the fix opened ───────────────
   ['a project with no name is still attributed — no false failure',
@@ -396,29 +406,33 @@ const CASES = [
       "    { use: { viewport: { width: 1440, height: 900 } } },\n"
       + "    { testMatch: /__none__/, use: { viewport: { width: 390, height: 664 } } },\n"
       + TABLET) },
-    18, 'projects have no "name"'],
+    18, 'two or more projects share a name'],
 
   // ── THE OBSERVATION'S OWN FAILURES (#335) ────────────────────────────────
   // Stage two can fail in two ways, and both must be loud. This is the founding
-  // rule of this file applied to the new half: a listing that did not happen is
-  // "could not look", never "no tests" and never a pass. Without these cases the
-  // CANNOT-CHECK branches are untested code on the path that runs when the check
-  // breaks — which is how a refusal quietly becomes a certification.
-  ['the listing cannot run at all — CANNOT CHECK, exit 15',
+  // rule of this file applied to the new half: a report that is not there is
+  // "could not look", never "nothing ran" and never a pass. Without these cases
+  // the CANNOT-CHECK branch is untested code on the path that runs when the
+  // check breaks — which is how a refusal quietly becomes a certification.
+  //
+  // Both fixtures declare all three bands perfectly, so the ONLY thing between
+  // them and a green is the read. A gate that cannot read the run must not fall
+  // back on what the config says, and must not report an absence it never saw.
+  ['--report names a file that is not there — CANNOT CHECK, exit 15',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    15, 'could not observe what Playwright discovers',
-    // PATH emptied so `npx` cannot be found. The config is perfect and all three
-    // bands are declared: the point is that a gate which cannot observe must not
-    // fall back on what the config says.
-    { extraEnv: { PATH: '' } }],
+    15, "could not read the run's report",
+    // No suite is run: the path simply does not exist, which is what a failed or
+    // never-started run leaves behind. Exit 15, not exit 12.
+    { reportArg: 'no-such-report.json' }],
 
-  ['the listing runs but enumerates nothing readable — CANNOT CHECK, exit 16',
-    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    16, 'produced no "Total:" line',
-    // An unresolvable reporter: Playwright fails before listing, so there is no
-    // inventory. Distinct from "listed zero tests", which is exit 12 — the gate
-    // must not report an observed absence it never observed.
-    { extraEnv: { PW_TEST_REPORTER: './no-such-reporter.js' } }],
+  ['--report names a file that is not JSON — CANNOT CHECK, exit 15',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      // A run killed partway leaves a truncated report, and a misconfigured
+      // reporter leaves someone else's output. Both parse-fail, and neither is
+      // evidence about coverage.
+      'report.json': 'Running 3 tests using 1 worker\n' },
+    15, "could not read the run's report",
+    { reportArg: 'report.json' }],
 
   // A suite with no spec files at all. Before #335 this passed: three bands were
   // declared and nothing asked whether anything ran. It is exit 12 now, and the
@@ -426,7 +440,7 @@ const CASES = [
   // width, and the gate used to certify all three.
   ['a config declaring all three bands with NO tests to run — exit 12',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
-    12, 'discovers no test for it', { noSpec: true }],
+    12, 'NOTHING RAN at that width', { noSpec: true, runReport: true }],
 
   // cwd: Playwright evaluates the config from the tests directory; this gate was
   // invoked from the repo root, so a config branching on process.cwd() handed the
@@ -683,13 +697,13 @@ const CASES = [
       "    { name: 'desktop', testDir: './elsewhere', use: { viewport: { width: 1440, height: 900 } } },\n"
       + TABLET + PHONE),
       'elsewhere/keep.txt': 'x\n' },
-    12, 'laptop is declared but Playwright discovers no test for it'],
+    12, 'laptop is declared but NOTHING RAN at that width', { runReport: true }],
 
   ['project testMatch that matches nothing — OBSERVED, exit 12',
     { 'playwright.config.js': withProjects(
       "    { name: 'desktop', testMatch: /smoke\\.spec\\.js/, use: { viewport: { width: 1440, height: 900 } } },\n"
       + TABLET + PHONE) },
-    12, 'laptop is declared but Playwright discovers no test for it'],
+    12, 'laptop is declared but NOTHING RAN at that width', { runReport: true }],
 
   ['project no-op testIgnore: [] — passes now, no longer unattributable',
     { 'playwright.config.js': withProjects(
@@ -830,6 +844,28 @@ function runCase(files, opts) {
     // the gate resolves it against, and joining it to tmp here would make it
     // absolute and test nothing.
     if (o.configArg) args.push('--config', o.configArgRelative ? o.configArg : join(tmp, o.configArg));
+    // opts.runReport: RUN the suite first, then check its report. Since #335's
+    // second design the coverage claim comes from the run's own JSON report, so
+    // a case about execution has to produce one — nothing before the run can
+    // answer whether a scenario reached a width.
+    //
+    // `--reporter=json` REPLACES the config's reporters, which is exactly right
+    // for a fixture whose reporters are incidental and exactly wrong for one
+    // that is ABOUT a reporter. Those set opts.ownReporter and declare a json
+    // reporter of their own alongside the reporter under test.
+    if (o.runReport) {
+      const runArgs = o.ownReporter ? ['playwright', 'test'] : ['playwright', 'test', '--reporter=json'];
+      const run = spawnSync('npx', runArgs, {
+        cwd: target, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+        env: { ...env, PWD: target },
+      });
+      if (!o.ownReporter) writeFileSync(join(target, 'report.json'), `${run.stdout || ''}`);
+      args.push('--report', 'report.json');
+    }
+    // opts.reportArg passes --report WITHOUT running anything: the cases that
+    // exercise the read's own failures need a path the gate cannot use, and
+    // running a suite first would only obscure which read failed.
+    if (o.reportArg !== undefined) args.push('--report', o.reportArg);
     const r = spawnSync(process.execPath, args, { encoding: 'utf8', env, cwd: REPO_ROOT });
     return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };
   } finally {

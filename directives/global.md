@@ -750,13 +750,19 @@ exists and you are about to not follow it.
 > Asking costs one sentence. Not asking costs a round trip — and sometimes the
 > owner's confidence that the instruction was heard at all.
 
-This is not a stop gate and does not add one: → *Escalation Rules* say when to
-stop before acting, and this says what to surface once you have decided to act
-otherwise. It binds under a standing authorization and under "proceed" like every
-other rule here — → *"Proceed" — the Standing Directive* item 7 covers an OPEN
-question you must not invent an answer to; this covers a SETTLED one you have
-answered differently from the owner, which is the more dangerous of the two
-because nothing about it looks unresolved.
+**It adds no fifth pre-work gate — and it does add a wait.** → *Escalation Rules*
+still has exactly four, all about stopping BEFORE you act; this is not one of
+them and does not extend that list. But the raising is a *question the owner must
+answer*, so work that DEPENDS on the deviation stops until it is answered.
+Everything independent of it continues, and saying so is not permission to carry
+on as though the question were rhetorical.
+
+That is the same shape as → *"Proceed" — the Standing Directive* item 7, and the
+only difference is which kind of question it is: item 7 covers one you have NOT
+answered, this covers one you have answered DIFFERENTLY from the owner. The
+second is the more dangerous, because nothing about it looks unresolved — item 7
+fires when a session notices a gap, and this has to fire when it notices no gap
+at all. Both bind under a standing authorization and under "proceed".
 
 ## Standing Authorization (owner ruling, 2026-07-22)
 Escalation Rules define when to STOP; this defines the default everywhere else,

@@ -1522,6 +1522,59 @@ const CASES = [
   // Round 22 put the result validation inside a `some()` predicate, which
   // short-circuits on the first qualifying element — so `[passed, null]`
   // certified three bands because the null was never reached.
+  // ── REQUIRED IS NOT PRESENT-AND-VALID (#347 round 24) ──────────────────
+  // `arr(undefined)` read an OMITTED `specs` as a legitimately empty suite, so a
+  // malformed branch was skipped in silence beside a valid one and the gate
+  // still returned a verdict. Measured against a real 1.62.1 report: every suite
+  // carries `specs`; only nested `suites` is omitted when empty. Rounds 20-23
+  // fixed one field per round — this is the schema instead of a fifth instance.
+  ...[
+    ['a suite omits specs', '{"suites":[{},{"specs":[{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]}]}]}',
+      'suite.specs is missing'],
+    ['a spec omits tests', '{"suites":[{"specs":[{}]}]}', 'spec.tests is missing'],
+    ['a test omits results', '{"suites":[{"specs":[{"tests":[{"projectName":"desktop"}]}]}]}',
+      'test.results is missing'],
+  ].map(([what, json, needle]) => [
+    `${what} — CANNOT CHECK, never a verdict`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE), 'req.json': json },
+    15, needle, { reportArg: 'req.json' },
+  ]),
+
+  // ── THE JOIN KEY IS EVIDENCE TOO (#347 round 24) ───────────────────────
+  // A missing or non-string `projectName` was coerced to '', which is the label
+  // a legitimately UNNAMED project uses — so a malformed test could certify that
+  // project's band on a key the report never carried.
+  ...[
+    ['missing', '{"suites":[{"specs":[{"tests":[{"results":[{"status":"passed"}]}]}]}]}'],
+    ['a number', '{"suites":[{"specs":[{"tests":[{"projectName":7,"results":[{"status":"passed"}]}]}]}]}'],
+    ['null', '{"suites":[{"specs":[{"tests":[{"projectName":null,"results":[{"status":"passed"}]}]}]}]}'],
+  ].map(([what, json]) => [
+    `a test whose projectName is ${what} — CANNOT CHECK`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE), 'proj.json': json },
+    15, 'expected a string', { reportArg: 'proj.json' },
+  ]),
+
+  // ── ANNOTATION ENTRIES, NOT JUST THE CONTAINER (#347 round 24) ─────────
+  // Round 23 validated the annotations ARRAY and stopped at its edge. A `null`,
+  // a string or `{ type: 42 }` inside it read as a non-override, so a malformed
+  // annotation silently turns exclusion OFF and a passed result certifies its
+  // band. One field at a time, again — hence the schema above.
+  ...[
+    ['null', 'null'], ['a string', '"viewport-override"'], ['a non-string type', '{"type":42}'],
+  ].map(([what, entry]) => [
+    `an annotation entry that is ${what} — CANNOT CHECK`,
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'ann-el.json': `{"suites":[{"specs":[{"tests":[{"projectName":"desktop","results":[{"status":"passed","annotations":[${entry}]}]}]}]}]}` },
+    15, 'expected an object with a string type', { reportArg: 'ann-el.json' },
+  ]),
+  // The twin: a WELL-FORMED override annotation is still honoured, so the three
+  // above are not satisfiable by refusing every annotation.
+  ['a well-formed viewport-override is still honoured',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'ok-ann.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop",'
+        + '"results":[{"status":"passed","annotations":[{"type":"viewport-override"}]}]}]}]}]}' },
+    12, 'NOTHING RAN at that width', { reportArg: 'ok-ann.json' }],
+
   ['a malformed result AFTER a qualifying one — still refused',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'short.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop",'

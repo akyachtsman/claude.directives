@@ -132,7 +132,14 @@ CASES = [
 
     ("an absolute path", "/etc/passwd", 1, "is absolute", None),
 
-    ("a windows-style absolute path", "C:/secrets", 1, "is absolute", None),
+    # WAS "a windows-style absolute path", refused. #347 round 24: on the
+    # `ubuntu-latest` every shipped caller runs, `C:/secrets` is a relative path
+    # into a directory named `C:` — it resolves inside the workspace and all
+    # three consumers read it that way. The refusal was a Windows rule applied
+    # everywhere. Nothing is lost on a Windows runner: the drive form is still
+    # refused there, by the `os.name == "nt"` branch this rule now carries.
+    ("a windows drive form is RELATIVE on Linux", "C:/secrets", 0,
+     "inside the workspace", ".github/scripts/ui-tests/C:/secrets"),
 
     ("a backslash-rooted path", "\\\\server\\share", 1, "is absolute", None),
 
@@ -300,6 +307,16 @@ CASES = [
      "suite?", None, "../.agent-reports/playwright-results.json"),
     ("...but a report INSIDE that tests-dir is still refused (round 13)",
      "results.json", 1, "the artifact uploader expands patterns", None, "suite?"),
+
+    # ── A COLON IS ONLY A DRIVE ON A DRIVE-LETTERED SYSTEM (#347 round 24) ──
+    # `raw[1] == ":"` refused an ordinary Linux filename. Every shipped caller
+    # runs on ubuntu-latest, where all three consumers resolve `a:report.json`
+    # against tests-dir like any other relative name.
+    ("a colon in a Linux-relative filename", "a:report.json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/a:report.json"),
+
+    # The rule it was protecting still holds — a genuine POSIX absolute path and
+    # the backslash-rooted form are pinned above and unchanged.
 ]
 
 

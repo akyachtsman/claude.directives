@@ -126,7 +126,20 @@ def forbid_chars(value, what):
 
 forbid_chars(raw, "report-path")
 
-if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (len(raw) > 1 and raw[1] == ":"):
+# A COLON IS ONLY A DRIVE ON A DRIVE-LETTERED SYSTEM. `raw[1] == ":"` refused
+# `a:report.json`, which on the `ubuntu-latest` every shipped caller runs is an
+# ordinary relative filename all three consumers resolve against tests-dir
+# (Codex, #347 round 24). The rule was written for a Windows runner and applied
+# everywhere, which is the same over-broad shape as round 20's `trim()`: correct
+# about what it meant to refuse, wrong about how to recognise it.
+#
+# Narrowed to the actual syntax — a single ASCII letter, a colon, and then a
+# separator or nothing, which is what `C:` and `C:\path` look like — and only
+# where the platform HAS drive letters. `os.path.isabs` on Windows already covers
+# `C:\path`; this keeps the bare-drive and drive-relative forms out too.
+_drive = (len(raw) > 1 and raw[1] == ":" and raw[0].isascii() and raw[0].isalpha()
+          and (len(raw) == 2 or raw[2] in "\\/"))
+if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (os.name == "nt" and _drive):
     refuse("report-path is absolute.", f"got {raw!r}")
 
 # ── WHERE DOES IT LAND, ASKED OF REAL PATHS ──────────────────────────────────

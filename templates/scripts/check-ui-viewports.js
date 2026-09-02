@@ -40,7 +40,9 @@
 // pointing at the JSON report the suite just wrote, and a band is covered when
 // some project declared at that width has at least one test whose result status
 // is anything other than "skipped". See `readReport()` below. Declared AND
-// executed, joined by project name in the parent process.
+// SCHEDULED, joined by project name in the parent process — a non-skipped result
+// is what the run left behind, and a hook failing before the test body leaves
+// one too. Never "executed"; that is #348.
 //
 // A LISTING WAS TRIED FIRST AND IS NOT THIS. `playwright test --list` was the
 // #347 design for three rounds and lost on four measured differences from a run,
@@ -289,10 +291,27 @@ function readReport(reportPath) {
   // where the report has it, `tests[].annotations` where it does not. What
   // changes is that "does not have it" now means the key is absent, not that it
   // holds something unusable.
+  //
+  // AND THE ENTRIES, not just the container. `some(a => a && a.type === …)`
+  // treats `null`, a string or `{ type: 42 }` as a non-override, so a malformed
+  // annotation silently turns exclusion OFF and a passed result certifies its
+  // band (Codex, #347 round 24). Round 23 validated the array and stopped at its
+  // edge — the same one-field-at-a-time pattern this round replaced with a
+  // schema. Validate every entry first, then search: a search may stop early, a
+  // validation may not (round 23).
   const overrides = (r, t) => {
     const perResult = arr(r.annotations, 'result.annotations');
     const list = r.annotations === undefined ? arr(t.annotations, 'test.annotations') : perResult;
-    return list.some(a => a && a.type === OVERRIDE);
+    const okEntries = list.map((a) => {
+      if (a && typeof a === 'object' && !Array.isArray(a) && typeof a.type === 'string') return true;
+      if (!malformed) {
+        malformed = `an annotation is ${describe(a)}`
+          + `${a && typeof a === 'object' && !Array.isArray(a) ? ` with type ${describe(a.type)}` : ''},`
+          + ' expected an object with a string type';
+      }
+      return false;
+    });
+    return list.some((a, i) => okEntries[i] && a.type === OVERRIDE);
   };
   // PARSES IS NOT READS. `JSON.parse` succeeding says the bytes are JSON; it
   // says nothing about the document being a Playwright report, and every level
@@ -353,23 +372,55 @@ function readReport(reportPath) {
     if (!malformed) malformed = `${where} is ${describe(v)}, expected an object`;
     return false;
   };
+  // REQUIRED IS NOT THE SAME AS PRESENT-AND-VALID, and `arr()` only ever knew
+  // the second. An OMITTED `specs` read as a legitimately empty suite, so a
+  // malformed branch was skipped silently beside a valid one and the gate
+  // returned a verdict (Codex, #347 round 24). Rounds 20-23 fixed one field per
+  // round this way; this is the schema instead of a fifth instance.
+  //
+  // Measured against a real 1.62.1 report rather than assumed — the shapes below
+  // are what its JSON reporter actually emits:
+  //   suite   specs REQUIRED, suites OPTIONAL (absent when a suite has no children)
+  //   spec    tests REQUIRED
+  //   test    projectName REQUIRED string, results REQUIRED
+  //   result  status REQUIRED and one of STATUSES
+  //   annotations OPTIONAL at BOTH levels — absent from results on 1.44.0, which
+  //           is the floor the fallback exists for (round 8)
+  const need = (holder, key, where) => {
+    if (holder[key] !== undefined) return arr(holder[key], `${where}.${key}`);
+    if (!malformed) malformed = `${where}.${key} is missing, and Playwright always emits it`;
+    return [];
+  };
   const executed = new Map();
   let total = 0;
   const walk = (suite) => {
     if (!obj(suite, 'a suite')) return;
-    for (const spec of arr(suite.specs, 'suite.specs')) {
+    for (const spec of need(suite, 'specs', 'suite')) {
       if (!obj(spec, 'a spec')) continue;
-      for (const t of arr(spec.tests, 'spec.tests')) {
+      for (const t of need(spec, 'tests', 'spec')) {
         if (!obj(t, 'a test')) continue;
         total += 1;
-        const name = typeof t.projectName === 'string' ? t.projectName : '';
+        // THE JOIN KEY IS EVIDENCE TOO. A missing or non-string `projectName`
+        // was coerced to '', which is the label a legitimately unnamed project
+        // uses — so a malformed test could certify that project's band on a key
+        // the report never carried (Codex, #347 round 24). Playwright's
+        // JSONReportTest requires the field; an absent one is a report this gate
+        // does not understand.
+        if (typeof t.projectName !== 'string') {
+          if (!malformed) {
+            malformed = `a test has projectName ${describe(t.projectName)},`
+              + ' expected a string (an unnamed project reports "")';
+          }
+          continue;
+        }
+        const name = t.projectName;
         // VALIDATE EVERY RESULT, THEN DECIDE. Round 22 put the validation inside a
         // `some()` predicate, which short-circuits on the first qualifying
         // element: `[{"status":"passed"}, null]` certified three bands because
         // the null was never reached (Codex, #347 round 23). A validating pass
         // cannot be the same pass as an early-exit search — the search is
         // allowed to stop, the validation is not.
-        const results = arr(t.results, 'test.results');
+        const results = need(t, 'results', 'test');
         const counts = results.map((r) => {
           if (!obj(r, 'a result')) return false;
           if (typeof r.status !== 'string' || !STATUSES.has(r.status)) {
@@ -670,7 +721,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
         // LESS than the evidence, not more. Nothing scheduled entails nothing
         // executed, so the negative direction is sound where the positive is
         // not — which is the whole asymmetry this verdict is named for.
-        console.error(`  the run left ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} result(s) not skipped: ${ran || '(none)'}`);
+        console.error(`  the run left ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) with a non-skipped result: ${ran || '(none)'}`);
         console.error('  This is the run\'s own report, not an inference: the widths are declared');
         console.error('  correctly and the run scheduled nothing at them. A filter, an ignore');
         console.error('  rule, a shard, a reporter, a focused test, a global setup — this gate');
@@ -690,7 +741,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       console.log('  (evidence: the run\'s own report, written by the process the config');
       console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
       console.log('   drift, not forgery. directives#349.)');
-      console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} result(s) not skipped)`);
+      console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) with a non-skipped result)`);
     } else {
       // THE PRE-RUN INVOCATION. Write the mapping so the post-run one joins
       // against the widths the config declared BEFORE the suite ran, rather than

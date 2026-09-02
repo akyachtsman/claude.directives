@@ -204,6 +204,13 @@ function readReport(reportPath) {
 }
 
 
+// How long the config-evaluation child may take. Two minutes is far past any
+// honest evaluation (the shipped kit is well under a second) and well inside the
+// ui-suite job's own bound. Named because it appears in the spawn AND in two
+// diagnostics, and a bound whose stated value drifts from its enforced one sends
+// the reader looking for the wrong thing.
+const EVAL_TIMEOUT_MS = 120000;
+
 const VERDICT_FILE = process.env.__UI_VIEWPORTS_VERDICT_FILE;
 if (!VERDICT_FILE) {
   const { spawnSync } = require('child_process');
@@ -219,11 +226,9 @@ if (!VERDICT_FILE) {
     // producing none of the CANNOT CHECK verdicts it promises. A guard that
     // hangs is worse than one that refuses: the refusal is a result.
     //
-    // Two minutes is far past any honest config evaluation (the shipped kit is
-    // well under a second) and well inside the ui-suite job's own bound.
     child = spawnSync(process.execPath, [__filename, ...process.argv.slice(2)], {
       stdio: 'inherit',
-      timeout: 120000,
+      timeout: EVAL_TIMEOUT_MS,
       env: { ...process.env, __UI_VIEWPORTS_VERDICT_FILE: file },
     });
   } finally {
@@ -243,13 +248,33 @@ if (!VERDICT_FILE) {
   // the pass is upgraded from "was written" to "was written and nothing else went
   // wrong", which is the same asymmetry as everywhere else in this file — a
   // refusal may stand on partial evidence, a certification may not.
+  // TWO CAUSES REACH THIS BRANCH AND THEY NEED DIFFERENT ADVICE. A config that
+  // schedules a throw fails after recording; so does a config that merely leaves
+  // a HANDLE open, because the bound above then kills a child that has already
+  // written its verdict. Both are exit 14 and neither hangs, which was the whole
+  // point — but telling someone whose config holds a `setInterval` to look for
+  // "a scheduled throw" sends them hunting for a bug that is not there.
+  //
+  // Found by writing the case for Codex's #347 round-3 fixture rather than by
+  // reading the fix: the timeout diagnostic further down is UNREACHABLE for it,
+  // because the verdict was already on disk. `spawnSync` reports an expired
+  // bound as an ETIMEDOUT error alongside the kill signal, so the two are
+  // distinguishable here.
+  const timedOut = !!(child && child.error && child.error.code === 'ETIMEDOUT');
   if (recorded && recorded.code === 0 && (child.signal || child.status !== 0)) {
     console.error('CANNOT CHECK: the config evaluation recorded a pass and then failed.');
-    console.error(child.signal
-      ? `  it was killed by ${child.signal} after writing its verdict`
-      : `  it exited ${child.status} after writing its verdict`);
-    console.error('  Something in the config was still running after the gate finished —');
-    console.error('  a scheduled throw, an unhandled rejection, a handler that failed.');
+    if (timedOut) {
+      console.error(`  it wrote its verdict and then did not finish within ${EVAL_TIMEOUT_MS / 1000}s, so it was killed`);
+      console.error('  Importing the config left something running — a timer, a socket, a');
+      console.error('  watcher. Playwright will still list such a config; this gate cannot');
+      console.error('  wait for one, and a gate that hangs reports nothing at all.');
+    } else {
+      console.error(child.signal
+        ? `  it was killed by ${child.signal} after writing its verdict`
+        : `  it exited ${child.status} after writing its verdict`);
+      console.error('  Something in the config was still running after the gate finished —');
+      console.error('  a scheduled throw, an unhandled rejection, a handler that failed.');
+    }
     console.error('  A pass is only accepted when the evaluation also ended cleanly.');
     console.error('check-ui-viewports: FAIL (code 14)');
     process.exit(14);
@@ -334,8 +359,8 @@ if (!VERDICT_FILE) {
   }
   if (!recorded || !Number.isInteger(recorded.code)) {
     console.error('CANNOT CHECK: the config evaluation did not report a verdict.');
-    if (child && child.error && child.error.code === 'ETIMEDOUT') {
-      console.error('  it did not finish within 120s and was killed');
+    if (timedOut) {
+      console.error(`  it did not finish within ${EVAL_TIMEOUT_MS / 1000}s and was killed`);
       console.error('  Importing the config left something running — a timer, a socket, a');
       console.error('  watcher. Playwright will still list such a config; this gate cannot');
       console.error('  wait for one, and a gate that hangs reports nothing at all.');

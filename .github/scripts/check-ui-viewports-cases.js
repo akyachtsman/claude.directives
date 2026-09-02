@@ -18,7 +18,7 @@
 // ESM (.github/scripts/package.json declares "type": "module").
 //
 // Run: node .github/scripts/check-ui-viewports-cases.js
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, unlinkSync, lstatSync, existsSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, unlinkSync, lstatSync, existsSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import { pathToFileURL, fileURLToPath } from 'url';
@@ -839,12 +839,102 @@ const CASES = [
   ['config calling process.exit(0) at import time',
     { 'playwright.config.js': `${IMPORT}process.exit(0);\nexport default {};\n` },
     7, 'without recording a verdict'],
+
+  // ── A GATE THAT HANGS REPORTS NOTHING AT ALL (#347 round 3) ──────────────
+  // The child IMPORTS the config, which is arbitrary code, and an import that
+  // leaves a live handle never lets the child exit. Codex reproduced it with a
+  // bare `setInterval(() => {}, 1000)` at module scope — Playwright lists such a
+  // config without complaint, and this gate hung until something outside killed
+  // it, consuming the whole job's budget and producing NONE of the CANNOT CHECK
+  // verdicts it advertises. That is worse than any wrong verdict: a refusal is a
+  // result and a hang is not.
+  //
+  // opts.shortTimeout runs the case against a copy of the gate with only the
+  // bound substituted, because a case cannot wait 120 seconds. The substitution
+  // is asserted to have happened, so renaming or deleting the constant reddens
+  // this rather than silently testing an unmutated file. What is pinned is the
+  // BRANCH — its exit code and its diagnostic — not the constant's value.
+  // TWO WAYS TO HANG, AND THEY LAND ON DIFFERENT BRANCHES. Writing this case is
+  // what showed that: Codex's fixture leaves a HANDLE open, so the child records
+  // its verdict normally and is killed afterwards — the "recorded a pass and then
+  // failed" branch, not the no-verdict one. The timeout diagnostic that had been
+  // added for it was unreachable from that fixture, and the branch that DID fire
+  // told the reader to look for a scheduled throw. Both are pinned now, because
+  // "exit 14 either way" was true and still left the advice wrong.
+  ['a config leaving a live handle — killed AFTER recording, and told so',
+    { 'playwright.config.js': `${IMPORT}setInterval(() => {}, 1000);\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    14, 'wrote its verdict and then did not finish within 2s', { shortTimeout: 2000 }],
+
+  ['…and it is NOT blamed on a scheduled throw',
+    { 'playwright.config.js': `${IMPORT}setInterval(() => {}, 1000);\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    14, 'left something running — a timer, a socket', { shortTimeout: 2000 }],
+
+  // The other half: a config that blocks the thread never reaches its own
+  // export, so nothing is recorded and the no-verdict branch fires. Without this
+  // the ETIMEDOUT path there is untested code on the path that runs when the
+  // check breaks — which is how a refusal quietly becomes a certification.
+  ['a config that blocks the thread — no verdict at all, and told so',
+    { 'playwright.config.js': `${IMPORT}const end = Date.now() + 600000;\n`
+      + `while (Date.now() < end) {}\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    14, 'did not report a verdict', { shortTimeout: 2000 }],
+
+  // The stated bound is the ENFORCED one. Both diagnostics interpolate the same
+  // constant the spawn uses, so this case — running at 2s — must read 2s. A
+  // message that hardcoded 120 would pass every other assertion here and send a
+  // reader looking for a two-minute hang that never happened.
+  ['…and that one names the timeout as the cause, with the bound actually in force',
+    { 'playwright.config.js': `${IMPORT}const end = Date.now() + 600000;\n`
+      + `while (Date.now() < end) {}\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    14, 'it did not finish within 2s and was killed', { shortTimeout: 2000 }],
+
+  // The twin, and the reason the bound cannot simply be made aggressive: an
+  // ordinary config must still evaluate well inside it. The shipped kit is under
+  // a second; this asserts the SAME 2s bound the two cases above trip is ample
+  // for an honest config, so a timeout is evidence about the config rather than
+  // about the machine.
+  ['an ordinary config finishes well inside the same bound — no false refusal',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK', { shortTimeout: 2000 }],
 ];
+
+// Writes a copy of the gate with the config-evaluation child's bound replaced.
+// Kept in one place so the three cases above cannot disagree about what they are
+// running, and asserted rather than assumed: a silent no-op substitution would
+// leave them testing the shipped 120s bound and passing for the wrong reason —
+// the fail-open shape this whole file exists to catch, inside its own harness.
+function gateWithTimeout(ms) {
+  const src = readFileSync(CHECK, 'utf8');
+  const needle = 'const EVAL_TIMEOUT_MS = 120000;';
+  if (!src.includes(needle)) {
+    throw new Error(`check-ui-viewports-cases: cannot find \`${needle}\` in the gate — `
+      + 'the config-evaluation bound was renamed or removed, and the timeout cases '
+      + 'would otherwise pass without exercising it.');
+  }
+  // NOT inside the fixture directory, and NOT a `.js`. The fixture's
+  // package.json declares "type": "module" so Node would load a `.js` copy as
+  // ESM and the gate — which is CommonJS — dies on its first `require`, failing
+  // the case for a reason that has nothing to do with the branch under test.
+  // Measured, not predicted: the first attempt did exactly that.
+  const dir = mkdtempSync(join(tmpdir(), 'ui-viewports-gate-'));
+  const out = join(dir, 'gate-short-timeout.cjs');
+  writeFileSync(out, src.replace(needle, `const EVAL_TIMEOUT_MS = ${ms};`));
+  return { bin: out, dir };
+}
 
 function runCase(files, opts) {
   const o = opts || {};
   const tmp = mkdtempSync(join(tmpdir(), 'ui-viewports-'));
   const link = join(tmp, 'node_modules');
+  let bin = CHECK;
+  let binDir = null;
   try {
     writeFileSync(join(tmp, 'package.json'), FIXTURE_PKG);
     // A case may declare a nested path (tests/.gitignore); create parents rather
@@ -899,9 +989,10 @@ function runCase(files, opts) {
     // the gate chdir's into it, a relative path re-resolved against the new cwd
     // names itself twice — a defect the shipped kit caught and no case did,
     // because every other case passes an absolute path (#333 round 14).
+    if (o.shortTimeout) { const g = gateWithTimeout(o.shortTimeout); binDir = g.dir; bin = g.bin; }
     const args = o.env
-      ? [CHECK]
-      : [CHECK, '--tests-dir', o.relativeTestsDir ? relative(REPO_ROOT, target) : target];
+      ? [bin]
+      : [bin, '--tests-dir', o.relativeTestsDir ? relative(REPO_ROOT, target) : target];
     // A RELATIVE --config is left relative: the point of that case is which base
     // the gate resolves it against, and joining it to tmp here would make it
     // absolute and test nothing.
@@ -940,6 +1031,7 @@ function runCase(files, opts) {
     // this self-test should ever be able to reach the real node_modules.
     if (existsSync(link) || safeIsLink(link)) unlinkSync(link);
     rmSync(tmp, { recursive: true, force: true });
+    if (binDir) rmSync(binDir, { recursive: true, force: true });
   }
 }
 

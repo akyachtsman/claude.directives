@@ -391,8 +391,56 @@ if (!VERDICT_FILE) {
     let rows = null;
     try { rows = JSON.parse(readFileSync(`${file}.rows`, 'utf8')); } catch { /* below */ }
     const bands = ['laptop', 'tablet', 'phone'];
-    const ok = rows && rows.nonce === nonce && Array.isArray(rows.rows) && rows.cover
-      && bands.every(b => Array.isArray(rows.cover[b]) && rows.cover[b].length > 0);
+    // THE PARENT COMPUTES THE BANDS. It does not read a `cover` map, because
+    // there is no longer one to read.
+    //
+    // Until round 11 the child sent both the rows and its own `cover`, and this
+    // block checked `cover[b].length > 0` — trusting exactly the arithmetic the
+    // comment two hundred lines down claimed the parent was re-doing. Codex
+    // showed the gap with `Array.prototype.filter = () => []` plus
+    // `Array.prototype.toJSON = () => ['phone']`: the LEGITIMATE child stamps the
+    // real nonce onto forged arrays, so authentication of the writer said nothing
+    // about the content, and a phone-only config printed all three bands.
+    //
+    // The nonce answers "who wrote this". This answers "is it true", and the two
+    // are different questions — conflating them is what the round-10 fix quietly
+    // did. So the payload now carries only OBSERVATIONS (a project name and the
+    // number its config gave for width) and every conclusion is drawn here, by a
+    // process that never imported the config.
+    //
+    // Band bounds are re-derived from argv rather than taken from the payload,
+    // for the same reason: a bound the child supplies is a bound the config can
+    // choose. This duplicates the parsing further down (that copy runs in the
+    // child) — two readings of one flag, deliberately, because the alternative is
+    // the child telling the parent what "laptop" means.
+    const pxOpt = (flag, fallback) => {
+      const i = process.argv.indexOf(flag);
+      const eq = process.argv.find(a => a.startsWith(`${flag}=`));
+      const raw = i >= 0 ? process.argv[i + 1] : eq ? eq.slice(flag.length + 1) : undefined;
+      return Number(raw !== undefined ? raw : fallback);
+    };
+    const tabletMin = pxOpt('--tablet-min', 768);
+    const laptopMin = pxOpt('--laptop-min', 1024);
+    // STRICT ROWS. Every row must be an object with a string name; `width` is
+    // optional (the UNCLASSIFIABLE rows carry none) but when present must be a
+    // finite number. A `toJSON` hook that collapses the array to strings, or an
+    // object prototype that reshapes the entries, fails here rather than
+    // arriving as a plausible-looking cover map.
+    const rowList = rows && Array.isArray(rows.rows) ? rows.rows : null;
+    const rowsWellFormed = rowList !== null && rowList.every(r => r && typeof r === 'object'
+      && !Array.isArray(r) && typeof r.name === 'string'
+      && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+    const cover = { laptop: [], tablet: [], phone: [] };
+    if (rowsWellFormed && Number.isFinite(tabletMin) && Number.isFinite(laptopMin)
+        && tabletMin < laptopMin) {
+      for (const r of rowList) {
+        if (typeof r.width !== 'number' || !Number.isFinite(r.width)) continue;
+        cover[r.width >= laptopMin ? 'laptop' : r.width >= tabletMin ? 'tablet' : 'phone']
+          .push(r.name);
+      }
+    }
+    const ok = rows && rows.nonce === nonce && rowsWellFormed
+      && bands.every(b => cover[b].length > 0);
     if (ok) {
       // ── STAGE TWO: WHAT ACTUALLY RAN ─────────────────────────────────────
       // Only when a report is supplied. Without one this gate reports what the
@@ -452,11 +500,11 @@ if (!VERDICT_FILE) {
         // Without it a `declared by:` line for an unnamed project printed empty.
         const label = n => (n === '' ? '(no name)' : n);
         const ranIn = n => (run.executed.get(n) || 0) > 0;
-        const missing = bands.filter(b => !rows.cover[b].some(ranIn));
+        const missing = bands.filter(b => !cover[b].some(ranIn));
         if (missing.length) {
           for (const b of missing) {
             console.error(`FAIL: ${b} is declared but NOTHING RAN at that width.`);
-            console.error(`  declared by: ${rows.cover[b].map(label).join(', ')}`);
+            console.error(`  declared by: ${cover[b].map(label).join(', ')}`);
           }
           const ran = [...run.executed.entries()].map(([n, c]) => `${label(n)}:${c}`).join(', ');
           console.error(`  the run executed ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s): ${ran || '(none)'}`);
@@ -468,7 +516,7 @@ if (!VERDICT_FILE) {
           console.error('  test.md -> UI coverage gates, fifth gate.');
             process.exit(12);
         }
-        const where = b => rows.cover[b].filter(ranIn).map(label).join('/');
+        const where = b => cover[b].filter(ranIn).map(label).join('/');
         console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
         console.log('  (a test EXECUTED in a project declaring each width. This does NOT');
         console.log('   establish that a page was rendered at it: a test that never opens a');
@@ -477,7 +525,7 @@ if (!VERDICT_FILE) {
         console.log('   finding defeated all three — see test.md -> UI coverage gates.)');
         console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) executed)`);
       } else {
-        const shown = b => rows.cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
+        const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
         console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
         console.log('  (declared, not executed — pass --report <playwright json> after the run');
         console.log('   to certify that scenarios actually ran at these widths)');
@@ -967,7 +1015,9 @@ console.log(`config:    ${configPath}`);
       continue;
     }
     const band = vp.width >= LAPTOP_MIN ? 'laptop' : vp.width >= TABLET_MIN ? 'tablet' : 'phone';
-    rows.push({ name, w: `${vp.width}x${vp.height}`, band });
+    // `width` is the NUMBER, for the parent to band; `w` and `band` are this
+    // process's own display strings and the parent reads neither.
+    rows.push({ name, w: `${vp.width}x${vp.height}`, band, width: vp.width });
     cover[band].push(name);
   }
   for (const r of rows) {
@@ -1008,7 +1058,12 @@ console.log(`config:    ${configPath}`);
   // configPath travels with the rows so the PARENT can observe discovery. The
   // parent never imports the config; it hands the path to Playwright and reads
   // what comes back, which is the whole point of #335.
-  report({ rows, cover, configPath, testsDir: TESTS_DIR });
+  // NO `cover`. The parent bands the rows itself (#347 round 11): a map computed
+  // here is a conclusion drawn with whatever the config left of the runtime, and
+  // the nonce proves only who wrote it. `cover` is still used BELOW for this
+  // process's own refusal message, which is allowed to be wrong in the safe
+  // direction — a corrupted child refusing is not a false pass.
+  report({ rows, configPath, testsDir: TESTS_DIR });
   const bandProjects = b => rows.filter(r => r.band === b);
   const undeclared = ['laptop', 'tablet', 'phone'].filter(b => bandProjects(b).length === 0);
   if (undeclared.length) {

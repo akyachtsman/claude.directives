@@ -64,30 +64,65 @@ if any(ch in raw for ch in "*?[]!"):
 if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (len(raw) > 1 and raw[1] == ":"):
     refuse("report-path is absolute.", f"got {raw!r}")
 
-# Resolve against tests-dir the way every consumer does, and require the result
-# to stay inside the workspace. `..` is legitimate here -- the shipped default
-# climbs out of .github/scripts/ui-tests/ to the repo root -- so the rule is
-# about where it LANDS, not whether it climbs.
-landed = os.path.normpath(os.path.join(tests_dir, raw))
-# COMPONENT, NOT PREFIX. `landed.startswith("..")` was a text test standing in
-# for a path question, and it got the answer wrong in both directions a text
-# test can: `..report.json` is an ordinary filename in the workspace and was
-# refused (Codex, #347 round 10). Splitting on the separator asks the question
-# the rule is actually about -- does the first step go UP.
-parts = landed.split(os.sep)
-if parts[0] == os.pardir or os.path.isabs(landed):
+# ── WHERE DOES IT LAND, ASKED OF REAL PATHS ──────────────────────────────────
+# Rounds 8-10 answered this with string rules on the NORMALISED text, and each
+# one was right about the case that motivated it and wrong one step out:
+# `landed.startswith("..")` refused `..report.json`, and `os.path.isabs(landed)`
+# refused a workspace-local absolute `tests-dir` that the composite's
+# working-directory consumers accept (Codex, #347 rounds 10 and 11).
+#
+# So the containment question is now asked of resolved absolute paths against
+# the workspace root, which is what "inside the workspace" actually means.
+# realpath on BOTH sides: a symlink inside the workspace pointing out of it lands
+# outside, and a workspace root that is itself a symlink would otherwise never
+# match its own children.
+workspace = os.path.realpath(os.environ.get("GITHUB_WORKSPACE") or os.getcwd())
+landed_abs = os.path.realpath(os.path.join(workspace, tests_dir, raw))
+try:
+    contained = os.path.commonpath([landed_abs, workspace]) == workspace
+except ValueError:      # different drives on Windows runners
+    contained = False
+if not contained:
     refuse("report-path resolves outside the workspace.",
-           f"{tests_dir!r} + {raw!r} -> {landed!r}")
+           f"{tests_dir!r} + {raw!r} -> {landed_abs!r}, outside {workspace!r}")
+
+# A DIRECTORY IS NOT A REPORT, and the uploader treats one very differently.
+# `actions/upload-artifact` given a directory uploads it RECURSIVELY, so
+# `../../../.` — which resolves to the workspace root and passes every rule
+# above — publishes the entire workspace as an artifact. Codex walked the whole
+# path through on #347 round 11: validation succeeds, the `rm -f` step fails
+# (GNU rm refuses `.`), and the upload still runs because it is gated on the
+# VALIDATION's outcome, not the clear step's.
+#
+# Refused rather than escaped, because "which of these three consumers treats a
+# directory the way I meant" is the coupling this file exists to remove.
+if os.path.isdir(landed_abs):
+    refuse("report-path names a directory, not a report file.",
+           f"{tests_dir!r} + {raw!r} -> {landed_abs!r} -- the artifact uploader "
+           "publishes a directory recursively, so this names the whole tree.")
+
+# `.` and `..` as the FINAL component name a directory even when it does not
+# exist yet, so the check above would miss them on a clean checkout. So does a
+# TRAILING SLASH, and that one is checked on the raw string rather than through
+# PurePosixPath, which strips it -- `PurePosixPath("reports/").name` is
+# "reports", so a path parser cannot see the thing that makes it a directory.
+# (Found by the case, not by reading the fix: the first version of this rule
+# used only the parsed name and let `reports/` through.)
+if raw.endswith("/") or raw.endswith("\\") or PurePosixPath(raw).name in ("", ".", ".."):
+    refuse("report-path does not end in a filename.", f"got {raw!r}")
+
+# The value the artifact uploader gets, which is the one the tilde rule is about.
+landed = os.path.relpath(landed_abs, workspace)
 
 # A LEADING `~` IS A THIRD PLACE THIS CAN LAND. `actions/upload-artifact`
 # expands a leading tilde to the runner's home directory, which is OUTSIDE the
 # workspace and outside everything the containment rule above reasons about:
-# `../../../~/secret.txt` normalises to `~/secret.txt`, which climbs nowhere by
-# the rule and reads the runner's home by the consumer (Codex, #347 round 10).
-# The containment check answers "where does this path point"; the tilde makes
-# that a different question for one consumer, so it is refused rather than
-# reasoned about.
-if parts[0].startswith("~"):
+# `../../../~/secret.txt` resolves to a real path inside the workspace, and the
+# workspace-relative form handed to the uploader is `~/secret.txt`, which that
+# consumer reads as the runner's home (Codex, #347 round 10). The containment
+# check answers "where does this path point"; the tilde makes that a different
+# question for one consumer, so it is refused rather than reasoned about.
+if landed.split(os.sep)[0].startswith("~"):
     refuse("report-path resolves to a home-directory reference.",
            f"{tests_dir!r} + {raw!r} -> {landed!r} -- the artifact uploader expands "
            "a leading ~ to the runner's home, outside the workspace entirely.")

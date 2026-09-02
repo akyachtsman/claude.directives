@@ -1092,6 +1092,49 @@ const CASES = [
   ['…and the forged bands are not printed as a pass',
     { 'playwright.config.js': FORGE },
     14, 'A verdict that cannot be attributed is not a pass.'],
+
+  // ── THE NONCE SAYS WHO WROTE IT, NOT WHETHER IT IS TRUE (#347 round 11) ──
+  // Round 10's nonce closed the forged FILE and the comment further down claimed
+  // the parent re-decided the band verdict — but the parent read a `cover` map
+  // the CHILD had computed, so the legitimate child stamped the real nonce onto
+  // corrupted arithmetic. Codex's fixture is two prototype assignments: `filter`
+  // returns nothing (so the child's own band lists come out empty) and `toJSON`
+  // makes every array serialise as `['phone']`. A phone-only config printed all
+  // three bands and exited 0.
+  //
+  // The payload now carries only observations and the parent bands them itself,
+  // so this fixture reaches the structural check and is refused.
+  ['a config corrupting Array.prototype to forge the band map — refused',
+    { 'playwright.config.js': `${IMPORT}Array.prototype.filter = () => [];\n`
+      + `Array.prototype.toJSON = () => ['phone'];\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${PHONE}  ],\n});\n` },
+    14, 'reported a pass its own data does not support'],
+
+  // The narrower half on its own, and the sharper shape: `filter` corrupted with
+  // serialisation intact, on a PHONE-ONLY config. The child's own
+  // missing-band check runs through `filter`, so it finds nothing undeclared and
+  // records a PASS — a false verdict produced without any forged file at all
+  // (#333 round 18). The parent bands the rows and refuses.
+  ['a phone-only config corrupting Array.prototype.filter — child passes, parent refuses',
+    { 'playwright.config.js': `${IMPORT}Array.prototype.filter = () => [];\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${PHONE}  ],\n});\n` },
+    14, 'reported a pass its own data does not support'],
+
+  // THE TWIN, and it is a BEHAVIOUR CHANGE this round rather than a regression.
+  // The same corruption on an HONEST three-band config used to be refused: the
+  // child's empty `cover` map reached the parent, which saw three empty bands.
+  // Now the parent bands the rows itself, so the config's declaration is read
+  // correctly and it passes — which is the right answer, because those three
+  // widths really are declared. Pinned because the change is easy to mistake for
+  // a hole: what the parent stopped trusting is the child's ARITHMETIC, and a
+  // corrupted child can no longer manufacture a refusal any more than a pass.
+  ['…and the same corruption on an honest three-band config no longer false-alarms',
+    { 'playwright.config.js': `${IMPORT}Array.prototype.filter = () => [];\n`
+      + `export default defineConfig({\n  testDir: './tests',\n`
+      + `  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n` },
+    0, 'check-ui-viewports: OK'],
 ];
 
 // Writes a copy of the gate with the config-evaluation child's bound replaced.

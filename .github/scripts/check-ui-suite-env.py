@@ -84,10 +84,26 @@ POST_STEP = "Check the run actually exercised all three viewport classes"
 # the config DECLARES and exits 0 -- drop the argument and the step still runs,
 # still passes, and silently stops checking execution (Codex, #347 round 5).
 GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
+
+# A PINNED BODY IS NOT A PINNED STEP. Round 11: the guard read the command, the
+# env, the directory and the order, and never read either field that decides
+# whether the step RUNS or whether its failure COUNTS. So `if: ${{ false }}` on
+# the post-run gate, or `continue-on-error: true`, left this green while the
+# composite skipped the execution check or ignored its missing-band failure —
+# the same defect as a body that merely mentions the gate, one field over.
+#
+# Both fields are pinned exactly, alongside the body. `None` means the field must
+# be ABSENT: a step with no `if` always runs and a step with no
+# `continue-on-error` blocks, and those are the states the composite depends on.
+# The run step is the one exception, and it is written out rather than exempted —
+# `advisory-run` is a project's choice to tolerate failing TESTS, and this pin is
+# what keeps that from silently becoming a choice to stop checking widths.
+IF_POST = "${{ always() && steps.report-path.outcome == 'success' }}"
+COE_RUN = "${{ inputs.advisory-run == 'true' }}"
 SEQUENCE = (
-    (CHECK_STEP, (f"{GATE} --tests-dir .",)),
-    (RUN_STEP, ("npx playwright test",)),
-    (POST_STEP, (f'{GATE} --tests-dir . --report "$REPORT_PATH"',)),
+    (CHECK_STEP, (f"{GATE} --tests-dir .",), None, None),
+    (RUN_STEP, ("npx playwright test",), None, COE_RUN),
+    (POST_STEP, (f'{GATE} --tests-dir . --report "$REPORT_PATH"',), IF_POST, None),
 )
 
 
@@ -127,12 +143,12 @@ def main():
         doc = yaml.safe_load(handle)
     steps = (doc.get("runs") or {}).get("steps") or []
 
-    envs = {label: env_of(steps, label) for label, _ in SEQUENCE}
+    envs = {label: env_of(steps, label) for label, *_ in SEQUENCE}
     run_env = envs[RUN_STEP][0]
     all_found = all(count == 1 for _, count in envs.values())
 
     problems = []
-    for label, _ in SEQUENCE:
+    for label, *_ in SEQUENCE:
         count = envs[label][1]
         if count > 1:
             problems.append(
@@ -151,7 +167,7 @@ def main():
         # directions. Two comparisons rather than one since #335 put the gate on
         # both sides of the suite; the run is the reference because it is what
         # the other two make claims about.
-        for label, _ in SEQUENCE:
+        for label, *_ in SEQUENCE:
             if label == RUN_STEP:
                 continue
             step_env = envs[label][0]
@@ -183,7 +199,7 @@ def main():
         # live one at the run -- both exiting 0 on different configs. The fix was
         # to move the step; this keeps it moved, because a comment saying "do not
         # insert a step here" is not a mechanism.
-        order = [(label, index_of(steps, label)) for label, _ in SEQUENCE]
+        order = [(label, index_of(steps, label)) for label, *_ in SEQUENCE]
         for (before, i), (after, j) in zip(order, order[1:]):
             if i is None or j is None or j == i + 1:
                 continue
@@ -218,7 +234,7 @@ def main():
         # this used to carry (&& || ; | & $( `) is gone with the rest of the
         # parser -- an exact match rejects every one of those without enumerating
         # them, and enumerating them is what left `#` and `-c` off the list.
-        for (label, bodies), (_, i) in zip(SEQUENCE, order):
+        for (label, bodies, want_if, want_coe), (_, i) in zip(SEQUENCE, order):
             if i is None:
                 continue
             step = steps[i]
@@ -235,6 +251,25 @@ def main():
             # `--report` token that bash treats as a comment (Codex, #347 r10).
             # An exact comparison needs no such pre-processing: the body either
             # is one of the pinned strings or it is not.
+            # EXECUTION CONTROLS FIRST: a step that does not run, or whose
+            # failure is discarded, makes its body irrelevant.
+            for field, want in (("if", want_if), ("continue-on-error", want_coe)):
+                got = step.get(field)
+                if got is None and want is None:
+                    continue
+                if got == want:
+                    continue
+                problems.append(
+                    f'"{label}" has the wrong `{field}:`'
+                    + f"\n    got:      {got!r}"
+                    + f"\n    expected: {want!r}"
+                    + ("\n    (absent — the step must always run and must block on failure)"
+                       if want is None else "")
+                    + "\n    These two fields decide whether the step runs at all and whether"
+                    + "\n    its failure counts, so a pinned command says nothing without them"
+                    + "\n    (#347, round 11)."
+                )
+
             body = str(step.get("run") or "").strip()
             if body not in bodies:
                 problems.append(
@@ -250,7 +285,7 @@ def main():
                 )
 
         run_wd = workdir_of(steps, RUN_STEP)
-        for label, _ in SEQUENCE:
+        for label, *_ in SEQUENCE:
             if label == RUN_STEP:
                 continue
             step_wd = workdir_of(steps, label)

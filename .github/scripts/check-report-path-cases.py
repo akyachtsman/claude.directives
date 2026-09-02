@@ -41,6 +41,9 @@ VALIDATOR = os.environ.get(
     "templates/actions/ui-suite/validate-report-path.py",
 )
 TESTS_DIR = ".github/scripts/ui-tests"
+# The repo root — every case resolves against it.
+WORKSPACE = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
 
 # (label, report-path, expected exit, required substring in the output,
 #  expected `path=` output when accepted -- None when refused)
@@ -130,6 +133,39 @@ CASES = [
     ("an internal space", "my report.json", 0,
      "inside the workspace", ".github/scripts/ui-tests/my report.json"),
 
+    # ── #347 round 11: A DIRECTORY IS NOT A REPORT ───────────────────────────
+    # `actions/upload-artifact` uploads a directory RECURSIVELY. `../../../.`
+    # resolves to the workspace root, passed every round-10 rule, and would have
+    # published the whole tree — validation succeeds, so the upload runs under
+    # always() even though the `rm -f` step fails on a directory.
+    ("a path resolving to the workspace root", "../../../.", 1,
+     "names a directory, not a report file", None),
+
+    ("an existing directory inside the tests dir", "../../../templates", 1,
+     "names a directory, not a report file", None),
+
+    # `.` and `..` name a directory even where none exists yet, so the isdir
+    # check alone would miss them on a clean checkout.
+    ("a bare dot", ".", 1, "does not end in a filename", None),
+
+    ("a bare double dot", "..", 1, "names a directory, not a report file", None),
+
+    ("a trailing slash", "reports/", 1, "does not end in a filename", None),
+
+    # ── #347 round 11: WORKSPACE-LOCAL ABSOLUTE tests-dir ────────────────────
+    # `working-directory:` accepts an absolute path, and joining one to a
+    # relative report-path makes `landed` absolute — which round 10 refused
+    # outright, breaking a supported caller. Containment is now asked of resolved
+    # paths against the workspace, which is what the rule always meant.
+    ("an absolute tests-dir inside the workspace",
+     "results.json", 0, "inside the workspace", "templates/ui-tests/results.json",
+     os.path.join(WORKSPACE, "templates", "ui-tests")),
+
+    # The twin: an absolute tests-dir OUTSIDE it must still be refused, or the
+    # relaxation above would have removed the rule rather than corrected it.
+    ("an absolute tests-dir outside the workspace",
+     "results.json", 1, "resolves outside the workspace", None, "/etc"),
+
     # ── THE HANDOFF (#347 round 10) ──────────────────────────────────────────
     # Round 9 emitted only the workspace-relative `path`, so the three steps that
     # run from tests-dir stayed on the RAW input and the post-run gate -- which
@@ -142,14 +178,18 @@ CASES = [
 ]
 
 
-def run(value):
+def run(value, tests_dir=None):
     with tempfile.NamedTemporaryFile("w+", delete=False) as handle:
         out_file = handle.name
     try:
         env = dict(os.environ)
         env["REPORT_PATH"] = value
-        env["TESTS_DIR"] = TESTS_DIR
+        env["TESTS_DIR"] = tests_dir or TESTS_DIR
         env["GITHUB_OUTPUT"] = out_file
+        # PINNED, not inherited. Containment is resolved against GITHUB_WORKSPACE
+        # since #347 round 11, so a suite that let the runner's own value through
+        # would pass or fail by where it happened to be checked out.
+        env["GITHUB_WORKSPACE"] = WORKSPACE
         proc = subprocess.run([sys.executable, VALIDATOR], env=env,
                               capture_output=True, text=True, timeout=30)
         with open(out_file, encoding="utf-8") as handle:
@@ -161,8 +201,10 @@ def run(value):
 
 def main():
     failures = []
-    for label, value, want_code, needle, want_path in CASES:
-        code, text, outputs = run(value)
+    for case in CASES:
+        label, value, want_code, needle, want_path = case[:5]
+        tests_dir = case[5] if len(case) > 5 else None
+        code, text, outputs = run(value, tests_dir)
         if code != want_code:
             failures.append(f"{label}\n      expected exit {want_code}; got {code}.\n"
                             + "\n".join("      " + ln for ln in text.splitlines()))

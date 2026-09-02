@@ -62,6 +62,12 @@ CHECK_BODY = f"{GATE} --tests-dir ."
 RUN_BODY = "npx playwright test"
 POST_BODY = f'{GATE} --tests-dir . --report "$REPORT_PATH"'
 
+# The pinned EXECUTION CONTROLS (#347 round 11). Spelled out here for the same
+# reason as the bodies: importing them from the guard would make these cases
+# agree with it by construction.
+IF_POST = "${{ always() && steps.report-path.outcome == 'success' }}"
+COE_RUN = "${{ inputs.advisory-run == 'true' }}"
+
 # The one diagnostic every body-shape refusal now prints. Named because it is
 # asserted twenty times below and a typo in one of them would silently weaken
 # that case to "exit 1 for some reason" — the failure mode this suite's header
@@ -73,7 +79,8 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
            check_wd="tests", run_wd="tests", decoy=None, between=None,
            check_body=None, run_body=None, run_uses=None,
            post_env=UNSET, post_name=POST, post_wd="tests", post_body=None,
-           post_uses=None, between_post=None):
+           post_uses=None, between_post=None,
+           post_if=IF_POST, run_coe=COE_RUN, check_if=None, post_coe=None):
     def block(env):
         if not env:
             return ""
@@ -81,6 +88,9 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
 
     def wd(value):
         return f"      working-directory: {value}\n" if value is not None else ""
+
+    def ctl(field, value):
+        return f"      {field}: {value}\n" if value is not None else ""
 
     def body(text):
         return "      run: |\n" + "".join(f"        {ln}\n" for ln in text.splitlines())
@@ -92,14 +102,14 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
         + decoy_yaml
-        + f"    - name: {check_name}\n      shell: bash\n{wd(check_wd)}{block(check_env)}"
+        + f"    - name: {check_name}\n      shell: bash\n{ctl('if', check_if)}{wd(check_wd)}{block(check_env)}"
         + body(check_body or CHECK_BODY)
         + (f"    - name: {between}\n      shell: bash\n      run: echo between\n" if between else "")
-        + f"    - name: {run_name}\n      shell: bash\n{wd(run_wd)}{block(run_env)}"
+        + f"    - name: {run_name}\n      shell: bash\n{ctl('continue-on-error', run_coe)}{wd(run_wd)}{block(run_env)}"
         + (f"      uses: {run_uses}\n" if run_uses else body(run_body or RUN_BODY))
         + (f"    - name: {between_post}\n      shell: bash\n      run: echo between\n"
            if between_post else "")
-        + f"    - name: {post_name}\n      shell: bash\n{wd(post_wd)}"
+        + f"    - name: {post_name}\n      shell: bash\n{ctl('if', post_if)}{ctl('continue-on-error', post_coe)}{wd(post_wd)}"
         + block(run_env if post_env is UNSET else post_env)
         + (f"      uses: {post_uses}\n" if post_uses
            else body(post_body or POST_BODY))
@@ -339,6 +349,37 @@ CASES = [
     ("pre-run check without --report — must NOT trip",
      action(dict(BOTH), dict(BOTH), check_body=CHECK_BODY), 0,
      "consecutive steps"),
+
+    # ── EXECUTION CONTROLS (#347 round 11) ───────────────────────────────────
+    # The guard read the command, the env, the directory and the order, and never
+    # read either field deciding whether the step RUNS or whether its failure
+    # COUNTS. A pinned body says nothing about a step that is skipped.
+    ("post-run gate disabled with `if: false` — refused",
+     action(dict(BOTH), dict(BOTH), post_if="${{ false }}"), 1,
+     'has the wrong `if:`'),
+
+    ("post-run gate's `if` dropped entirely — refused",
+     action(dict(BOTH), dict(BOTH), post_if=None), 1,
+     'has the wrong `if:`'),
+
+    ("post-run gate made advisory with continue-on-error — refused",
+     action(dict(BOTH), dict(BOTH), post_coe="true"), 1,
+     'has the wrong `continue-on-error:`'),
+
+    # The pre-run check has no `if` at all, and gaining one is the same defect.
+    ("pre-run check gains a condition — refused",
+     action(dict(BOTH), dict(BOTH), check_if="${{ always() }}"), 1,
+     'has the wrong `if:`'),
+
+    # THE TWIN, and it is the one that matters most here: `advisory-run` must
+    # keep flipping the RUN step. Pinning "no continue-on-error anywhere" would
+    # have passed every case above and broken the input the composite documents.
+    ("the run step keeps its advisory-run continue-on-error — must NOT trip",
+     action(dict(BOTH), dict(BOTH), run_coe=COE_RUN), 0, "consecutive steps"),
+
+    ("the run step's continue-on-error repointed at something else — refused",
+     action(dict(BOTH), dict(BOTH), run_coe="true"), 1,
+     'has the wrong `continue-on-error:`'),
 
     ("post-run check is a `uses:` step",
      action(dict(BOTH), dict(BOTH), post_uses="./some/action"), 1, "is a `uses:` step"),

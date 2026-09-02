@@ -382,7 +382,7 @@ five:
   that motivated it and wrong one step out, which is the same pattern that made
   config-prediction unworkable in the first place. Proving a page rendered needs
   a signal tied to the test body starting, and Playwright does not expose one to
-  a fixture; that work is filed separately rather than guessed at again.
+  a fixture; that work is filed as directives#348 rather than guessed at again.
 
   **A test that sets its own viewport must still say so.** `setViewportSize()`
   inside a test overrides the project's, so that test runs at the width IT chose

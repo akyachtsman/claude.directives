@@ -193,7 +193,7 @@ function readReport(reportPath) {
   // for the variant that motivated it and wrong one step out, which is the
   // exact pattern #335 catalogued twenty times over for config prediction. The
   // mechanism was removed rather than lost to a fourth time; the reasoning is
-  // in the PR and the work is filed separately.
+  // in the PR and the work is filed as directives#348.
   //
   // EXECUTED, not merely present. A test the run reports as `skipped` did not
   // run its body — `testRun.skip()` and `test.skip()` both land here — so it is

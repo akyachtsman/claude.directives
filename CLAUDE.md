@@ -194,7 +194,7 @@ A directive repo must pass its own CI before it can be trusted downstream.
   a fixture recording the viewport at teardown, then one recording it at
   navigation — and three variants of ONE finding (a hook that throws, a hook
   that throws after requesting `page`, a hook that NAVIGATES and throws) defeated
-  all three. Withdrawn rather than lost to a fourth round; #349 carries the
+  all three. Withdrawn rather than lost to a fourth round; #348 carries the
   work), job bounds
   (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an
   unreadable bound on a job carrying a floor must REFUSE, and the exemption for

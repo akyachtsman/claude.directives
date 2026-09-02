@@ -1163,12 +1163,26 @@ const CASES = [
   //
   // The payload now carries only observations and the parent bands them itself,
   // so this fixture reaches the structural check and is refused.
+  //
+  // ⚠️ WHAT THIS CASE PROVES CHANGED IN ROUND 25, and the diagnostic moved with
+  // it. `toJSON` makes `rows` serialise as `['phone']`, and round 25 hoisted the
+  // payload shape check ahead of both `decideFromRows` callers — so the forgery
+  // is now refused THERE, one step before the corroboration check that used to
+  // catch it. Same exit, same property (a forged payload does not certify), a
+  // different path.
+  //
+  // The cost, stated rather than left implicit: this case would now stay green
+  // if the round-11 corroboration check were deleted, because the shape check
+  // fires first. It pins "a forged payload is refused", not "the corroboration
+  // check catches it". The case below — `filter` corrupted with serialisation
+  // INTACT — is the one that still exercises the round-11 path, because its
+  // payload is well-formed and only its CONTENT is a lie.
   ['a config corrupting Array.prototype to forge the band map — refused',
     { 'playwright.config.js': `${IMPORT}Array.prototype.filter = () => [];\n`
       + `Array.prototype.toJSON = () => ['phone'];\n`
       + `export default defineConfig({\n  testDir: './tests',\n`
       + `  projects: [\n${PHONE}  ],\n});\n` },
-    14, 'reported a pass its own data does not support'],
+    14, 'a payload this gate cannot read'],
 
   // The narrower half on its own, and the sharper shape: `filter` corrupted with
   // serialisation intact, on a PHONE-ONLY config. The child's own
@@ -1459,12 +1473,12 @@ const CASES = [
   ].map(([what, json]) => [
     `a result whose status is ${what} — CANNOT CHECK, never a verdict`,
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
-      'odd-status.json': `{"suites":[{"specs":[{"tests":[{"projectName":"desktop","results":[{"status":${json}}]}]}]}]}` },
+      'odd-status.json': `{"suites":[{"specs":[{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":${json}}]}]}]}]}` },
     15, 'not shaped like a Playwright report', { reportArg: 'odd-status.json' },
   ]),
   ['a null result element — refused, not silently skipped',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
-      'null-el.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop","results":[null]}]}]}]}' },
+      'null-el.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop","annotations":[],"results":[null]}]}]}]}' },
     15, 'not shaped like a Playwright report', { reportArg: 'null-el.json' }],
   // The twin, and it is what stops the four above being satisfiable by refusing
   // every report: every status Playwright DOES emit is still read.
@@ -1529,7 +1543,7 @@ const CASES = [
   // carries `specs`; only nested `suites` is omitted when empty. Rounds 20-23
   // fixed one field per round — this is the schema instead of a fifth instance.
   ...[
-    ['a suite omits specs', '{"suites":[{},{"specs":[{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]}]}]}',
+    ['a suite omits specs', '{"suites":[{},{"specs":[{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":"passed"}]}]}]}]}',
       'suite.specs is missing'],
     ['a spec omits tests', '{"suites":[{"specs":[{}]}]}', 'spec.tests is missing'],
     ['a test omits results', '{"suites":[{"specs":[{"tests":[{"projectName":"desktop"}]}]}]}',
@@ -1564,14 +1578,39 @@ const CASES = [
   ].map(([what, entry]) => [
     `an annotation entry that is ${what} — CANNOT CHECK`,
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
-      'ann-el.json': `{"suites":[{"specs":[{"tests":[{"projectName":"desktop","results":[{"status":"passed","annotations":[${entry}]}]}]}]}]}` },
+      'ann-el.json': `{"suites":[{"specs":[{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":"passed","annotations":[${entry}]}]}]}]}]}` },
     15, 'expected an object with a string type', { reportArg: 'ann-el.json' },
   ]),
+  // ── TEST-LEVEL ANNOTATIONS ARE REQUIRED (#347 round 25) ────────────────
+  // Round 24's schema said "OPTIONAL at BOTH levels" and cited round 8's
+  // measurement two lines above it, which says the opposite: on the 1.44 floor
+  // the key is absent from every RESULT while `tests[].annotations` CARRIES the
+  // marker. The fallback exists because the per-result field is missing there —
+  // the test-level one is what it falls back TO. Optional let a report omit the
+  // field carrying `viewport-override` evidence and read as an empty list.
+  ['a test omits annotations — CANNOT CHECK',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'noann.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop",'
+        + '"results":[{"status":"passed"}]}]}]}]}' },
+    15, 'test.annotations is missing', { reportArg: 'noann.json' }],
+  // The twin that keeps the requirement honest: the 1.44 SHAPE — test-level
+  // present, per-result absent — is exactly what the fallback exists for and
+  // must still read. Without this, requiring the field is satisfiable by
+  // refusing the floor this kit still supports.
+  ['the 1.44 shape still reads — test annotations present, per-result absent',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'v144.json': '{"suites":[{"specs":[{"tests":['
+        + '{"projectName":"desktop","annotations":[],"results":[{"status":"passed"}]},'
+        + '{"projectName":"tablet","annotations":[],"results":[{"status":"passed"}]},'
+        + '{"projectName":"phone","annotations":[],"results":[{"status":"passed"}]}'
+        + ']}]}]}' },
+    0, 'check-ui-viewports: OK — SCHEDULED', { reportArg: 'v144.json' }],
+
   // The twin: a WELL-FORMED override annotation is still honoured, so the three
   // above are not satisfiable by refusing every annotation.
   ['a well-formed viewport-override is still honoured',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
-      'ok-ann.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop",'
+      'ok-ann.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop","annotations":[],'
         + '"results":[{"status":"passed","annotations":[{"type":"viewport-override"}]}]}]}]}]}' },
     12, 'NOTHING RAN at that width', { reportArg: 'ok-ann.json' }],
 
@@ -1591,9 +1630,9 @@ const CASES = [
   ['a config unimportable after the run — refused, and the diagnostic says why',
     { 'playwright.config.js': 'throw new Error("unimportable after the run");\n',
       'report.json': '{"suites":[{"specs":['
-        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
-        + '{"tests":[{"projectName":"tablet","results":[{"status":"passed"}]}]},'
-        + '{"tests":[{"projectName":"phone","results":[{"status":"passed"}]}]}'
+        + '{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","annotations":[],"results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"phone","annotations":[],"results":[{"status":"passed"}]}]}'
         + ']}]}' },
     5, 'the config is imported a SECOND time after',
     { declaredMap: DECLARED_MAP, reportArg: 'report.json' }],
@@ -1602,9 +1641,9 @@ const CASES = [
   ['…and the same mapping and report with an importable config passes',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'report.json': '{"suites":[{"specs":['
-        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
-        + '{"tests":[{"projectName":"tablet","results":[{"status":"passed"}]}]},'
-        + '{"tests":[{"projectName":"phone","results":[{"status":"passed"}]}]}'
+        + '{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","annotations":[],"results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"phone","annotations":[],"results":[{"status":"passed"}]}]}'
         + ']}]}' },
     0, 'check-ui-viewports: OK — SCHEDULED',
     { declaredMap: DECLARED_MAP, reportArg: 'report.json' }],
@@ -1620,20 +1659,20 @@ const CASES = [
         + `${IMPORT}export default defineConfig({\n  testDir: './tests',\n  projects: [\n`
         + `${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
       'report.json': '{"suites":[{"specs":['
-        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
-        + '{"tests":[{"projectName":"tablet","results":[{"status":"passed"}]}]},'
-        + '{"tests":[{"projectName":"phone","results":[{"status":"passed"}]}]}'
+        + '{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","annotations":[],"results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"phone","annotations":[],"results":[{"status":"passed"}]}]}'
         + ']}]}' },
-    14, 'rows this gate cannot read', { declaredMap: DECLARED_MAP, reportArg: 'report.json' }],
+    14, 'a payload this gate cannot read', { declaredMap: DECLARED_MAP, reportArg: 'report.json' }],
 
   ['every real Playwright status is still accepted',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'real.json': '{"suites":[{"specs":['
-        + '{"tests":[{"projectName":"desktop","results":[{"status":"passed"}]}]},'
-        + '{"tests":[{"projectName":"tablet","results":[{"status":"failed"}]}]},'
-        + '{"tests":[{"projectName":"phone","results":[{"status":"timedOut"}]}]},'
-        + '{"tests":[{"projectName":"phone","results":[{"status":"interrupted"}]}]},'
-        + '{"tests":[{"projectName":"phone","results":[{"status":"skipped"}]}]}'
+        + '{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":"passed"}]}]},'
+        + '{"tests":[{"projectName":"tablet","annotations":[],"results":[{"status":"failed"}]}]},'
+        + '{"tests":[{"projectName":"phone","annotations":[],"results":[{"status":"timedOut"}]}]},'
+        + '{"tests":[{"projectName":"phone","annotations":[],"results":[{"status":"interrupted"}]}]},'
+        + '{"tests":[{"projectName":"phone","annotations":[],"results":[{"status":"skipped"}]}]}'
         + ']}]}' },
     0, 'check-ui-viewports: OK — SCHEDULED', { reportArg: 'real.json' }],
 

@@ -384,8 +384,19 @@ function readReport(reportPath) {
   //   spec    tests REQUIRED
   //   test    projectName REQUIRED string, results REQUIRED
   //   result  status REQUIRED and one of STATUSES
-  //   annotations OPTIONAL at BOTH levels — absent from results on 1.44.0, which
-  //           is the floor the fallback exists for (round 8)
+  //   test    annotations REQUIRED — see below
+  //   result  annotations OPTIONAL, and ONLY this one
+  //
+  // Round 24 wrote "OPTIONAL at BOTH levels" and cited round 8's measurement two
+  // lines above it, which says the opposite: on 1.44.0 the key is absent from
+  // every RESULT while `tests[].annotations` CARRIES THE MARKER. The fallback
+  // exists because the per-result field is missing there — the test-level one is
+  // what it falls back TO, and is emitted by 1.44 and 1.62.1 alike. Treating it
+  // as optional let a report omit the field that carries `viewport-override`
+  // evidence and read as an empty list (Codex, #347 round 25).
+  //
+  // I quoted the measurement and drew the opposite conclusion from it in the
+  // same comment. Recorded rather than silently corrected.
   const need = (holder, key, where) => {
     if (holder[key] !== undefined) return arr(holder[key], `${where}.${key}`);
     if (!malformed) malformed = `${where}.${key} is missing, and Playwright always emits it`;
@@ -421,6 +432,10 @@ function readReport(reportPath) {
         // cannot be the same pass as an early-exit search — the search is
         // allowed to stop, the validation is not.
         const results = need(t, 'results', 'test');
+        // Required, and read once per test rather than per result: `overrides()`
+        // falls back to it whenever a result omits its own list, which on the
+        // 1.44 floor is every result.
+        need(t, 'annotations', 'test');
         const counts = results.map((r) => {
           if (!obj(r, 'a result')) return false;
           if (typeof r.status !== 'string' || !STATUSES.has(r.status)) {
@@ -453,6 +468,14 @@ function readReport(reportPath) {
     ] };
   }
   return { ok: true, total, executed };
+}
+
+// For the parent's payload diagnostics: same one-word answer, at module scope,
+// because `describe` above is local to readReport() (#347 round 25).
+function describeTop(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'an array';
+  return `a ${typeof v}`;
 }
 
 // For the diagnostics above: what a value IS, in one word, without dumping it.
@@ -1064,6 +1087,33 @@ if (!VERDICT_FILE) {
     let rows = null;
     try { rows = JSON.parse(readFileSync(`${file}.rows`, 'utf8')); } catch { /* below */ }
     if (rows && rows.nonce === nonce) {
+      // THE FRESH PAYLOAD IS VALIDATED ON BOTH PATHS, not just the compared one.
+      // Round 23 added `wellFormed(rows.rows)` inside the `CARRIED` branch, so
+      // the documented direct `--report` invocation — no `--declared` — reached
+      // `decideFromRows(rows.rows, rows.testsDir, …)` with an unchecked
+      // `testsDir`. A config altering inherited JSON serialisation could leave
+      // valid rows and `testsDir: null`; `realpathSync` catches the type, and the
+      // `resolve(null, reportArg)` after it throws ERR_INVALID_ARG_TYPE — Node's
+      // generic exit 1 where this branch promises CANNOT CHECK (Codex, #347
+      // round 25).
+      //
+      // Same shape as the finding it follows: round 23 validated the carried
+      // mapping's `testsDir` and left the fresh one, round 24 validated the
+      // rows and left the sibling field. Hoisted so BOTH callers of
+      // `decideFromRows` pass through it, which is round 20's rule — put the
+      // check where every path must cross it, not in each path.
+      const wellFormed = list => Array.isArray(list) && list.every(r => r
+        && typeof r === 'object' && !Array.isArray(r) && typeof r.name === 'string'
+        && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+      if (!wellFormed(rows.rows) || typeof rows.testsDir !== 'string' || rows.testsDir === '') {
+        console.error('CANNOT CHECK: the config evaluation returned a payload this gate cannot read.');
+        console.error(`  rows: ${wellFormed(rows.rows) ? 'well-formed' : 'not a list of {name, width}'}`);
+        console.error(`  testsDir: ${typeof rows.testsDir === 'string' ? 'empty' : describeTop(rows.testsDir)}`);
+        console.error('  A nonce says who wrote a payload, never that it is shaped like one');
+        console.error('  (#347 round 11).');
+        console.error('check-ui-viewports: FAIL (code 14)');
+        process.exit(14);
+      }
       if (CARRIED) {
         // THE FRESH ROWS ARE VALIDATED BEFORE THEY ARE COMPARED. `decideFromRows`
         // validates its input, and round 22 put this comparison in FRONT of it —
@@ -1073,17 +1123,7 @@ if (!VERDICT_FILE) {
         // The payload is authenticated by the nonce, which says who wrote it, not
         // that it is shaped like anything — round 11's lesson, and this is the
         // first reader added since that did not apply it.
-        const wellFormed = list => Array.isArray(list) && list.every(r => r
-          && typeof r === 'object' && !Array.isArray(r) && typeof r.name === 'string'
-          && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
-        if (!wellFormed(rows.rows)) {
-          console.error('CANNOT CHECK: the post-run evaluation returned rows this gate cannot read.');
-          console.error('  The carried mapping was well-formed, so the difference arrived with the');
-          console.error('  second import. A nonce says who wrote a payload, never that it is shaped');
-          console.error('  like one (#347 round 11).');
-          console.error('check-ui-viewports: FAIL (code 14)');
-          process.exit(14);
-        }
+        // (the fresh payload was validated above, on the path BOTH branches cross)
         // COMPARED AS A MAPPING, not as a serialisation. Key order and any field
         // this gate does not band on are not differences, so a config is refused
         // for changing a WIDTH, never for the report's shape.

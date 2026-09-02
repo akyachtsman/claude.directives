@@ -54,11 +54,16 @@ RUN_STEP = "Run Playwright tests"
 # environment; RUN_STEP is the reference all of them are compared against,
 # because it is the thing being measured.
 POST_STEP = "Check the run actually exercised all three viewport classes"
-# (label, what its single command must mention), in the order they must appear.
+# (label, everything its single command must mention), in the order they must
+# appear. The post-run step needs BOTH: naming the gate is not enough, because
+# the gate without --report reports what the config DECLARES and exits 0. Drop
+# the argument and the step still runs, still passes, and silently stops
+# checking execution altogether — a guard that reads as green while the thing it
+# guards is gone (Codex, #347 round 5).
 SEQUENCE = (
-    (CHECK_STEP, "check-ui-viewports"),
-    (RUN_STEP, "playwright test"),
-    (POST_STEP, "check-ui-viewports"),
+    (CHECK_STEP, ("check-ui-viewports",)),
+    (RUN_STEP, ("playwright test",)),
+    (POST_STEP, ("check-ui-viewports", "--report")),
 )
 
 
@@ -188,7 +193,7 @@ def main():
         # check-ui-suite-env-cases.py; anything else is refused rather than
         # parsed, because parsing shell is how the previous version got here.
         COMPOSERS = ("&&", "||", ";", "|", "&", "$(", "`")
-        for (label, needle), (_, i) in zip(SEQUENCE, order):
+        for (label, needles), (_, i) in zip(SEQUENCE, order):
             if i is None:
                 continue
             step = steps[i]
@@ -217,14 +222,17 @@ def main():
                     + "\n    Each of these steps evaluates the config, so anything else in any"
                     + "\n    body executes between the evaluations (#333, round 17)."
                 )
-            elif needle not in lines[0]:
-                problems.append(
-                    f'"{label}" does not appear to invoke what its name says'
-                    + f"\n    {lines[0]}"
-                    + f"\n    expected the command to mention {needle!r}. A step renamed onto a"
-                    + "\n    different command would otherwise satisfy every check here"
-                    + "\n    (#333, round 18)."
-                )
+            else:
+                absent = [n for n in needles if n not in lines[0]]
+                if absent:
+                    problems.append(
+                        f'"{label}" does not appear to invoke what its name says'
+                        + f"\n    {lines[0]}"
+                        + f"\n    expected the command to mention {', '.join(repr(n) for n in absent)}."
+                        + "\n    A step renamed onto a different command would otherwise satisfy"
+                        + "\n    every check here (#333, round 18), and the post-run step without"
+                        + "\n    --report is the declaration check twice over (#347, round 5)."
+                    )
 
         run_wd = workdir_of(steps, RUN_STEP)
         for label, _ in SEQUENCE:

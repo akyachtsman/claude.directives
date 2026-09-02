@@ -512,6 +512,23 @@ const CASES = [
         + "  expect(1).toBe(1);\n});\n" },
     0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
 
+  // A RETRY'S ANNOTATION MUST NOT DISQUALIFY THE ATTEMPT BEFORE IT (#347 r5).
+  // Playwright stores a retry's annotation on that result AND on the test-level
+  // list. Reading the union made the retry's `viewport-override` retroactively
+  // discard the first attempt — which rendered at the project's own viewport and
+  // is honest evidence — so a band whose only test is flaky could fail outright.
+  // This fixture fails once at the project viewport, then overrides on the retry.
+  ['a retry that overrides — the first attempt still counts',
+    { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
+      + `  retries: 1,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('flaky then overrides', async () => {\n"
+        + "  if (test.info().retry > 0) {\n"
+        + "    test.info().annotations.push({ type: 'viewport-override', description: '390' });\n"
+        + "    return;\n  }\n"
+        + "  expect(test.info().retry).toBe(1);\n});\n" },
+    0, 'check-ui-viewports: OK — EXECUTED', { runReport: true }],
+
   // ── THE OBSERVATION'S OWN FAILURES (#335) ────────────────────────────────
   // Stage two can fail in two ways, and both must be loud. This is the founding
   // rule of this file applied to the new half: a report that is not there is

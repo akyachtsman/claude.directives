@@ -205,9 +205,14 @@ function readReport(reportPath) {
   // The cost, stated: a project that overrides viewports and does not annotate
   // gets the old false green. That is why test.md carries it as an obligation
   // rather than a note, and why the shipped kit annotates its own.
+  // PER-RESULT, NOT PER-TEST. Playwright stores a retry's annotation on that
+  // result AND on the test-level list, so merging the two made the final
+  // attempt's annotation contaminate every earlier one: an initial attempt that
+  // rendered at the project's own viewport and failed, retried with a
+  // setViewportSize(), had its honest evidence discarded and could fail a band
+  // outright (Codex, #347 round 5). Each attempt is decided by its own record.
   const OVERRIDE = 'viewport-override';
-  const overrides = (t, r) => [...(Array.isArray(t.annotations) ? t.annotations : []),
-    ...(Array.isArray(r.annotations) ? r.annotations : [])]
+  const overrides = (r) => (Array.isArray(r.annotations) ? r.annotations : [])
     .some(a => a && a.type === OVERRIDE);
   const executed = new Map();
   let total = 0;
@@ -216,7 +221,7 @@ function readReport(reportPath) {
       for (const t of spec.tests || []) {
         total += 1;
         const ran = (t.results || []).some(r => r && r.status && r.status !== 'skipped'
-          && !overrides(t, r));
+          && !overrides(r));
         if (!ran) continue;
         const name = typeof t.projectName === 'string' ? t.projectName : '';
         executed.set(name, (executed.get(name) || 0) + 1);

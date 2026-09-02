@@ -282,7 +282,12 @@ runs:
       shell: bash
       env:
         REPORT_PATH: ${{ inputs.report-path }}
-      run: rm -f "$REPORT_PATH"
+      # `--` ENDS OPTION PARSING. A report-path beginning with `-` is a valid
+      # relative filename that GNU rm reads as a flag: `rm -f "--preserve-root"`
+      # exits 0 and deletes NOTHING, so the stale report survives and the
+      # post-run gate certifies it (Codex, #347 round 5). Quoting stops the
+      # shell from splitting it; only `--` stops rm from interpreting it.
+      run: rm -f -- "$REPORT_PATH"
       working-directory: ${{ inputs.tests-dir }}
 
     - name: Check three viewport classes are declared

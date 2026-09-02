@@ -246,6 +246,22 @@ CASES = [
      action(dict(BOTH), dict(BOTH), post_body="./flip-the-world.sh"), 1,
      "does not appear to invoke what its name says"),
 
+    # Codex #347 round 5. The post-run step exists FOR --report: without it the
+    # gate reports what the config declares and exits 0, so dropping the argument
+    # leaves this guard green, the live composite green, and execution coverage
+    # silently unchecked. Naming the script is not enough.
+    ("post-run check drops --report — refused",
+     action(dict(BOTH), dict(BOTH),
+            post_body="node check-ui-viewports.js --tests-dir ."), 1,
+     "'--report'"),
+
+    # The twin: the pre-run check must NOT be required to pass --report, or the
+    # requirement would be a blanket rule rather than one about this step's job.
+    ("pre-run check without --report — must NOT trip",
+     action(dict(BOTH), dict(BOTH),
+            check_body="node check-ui-viewports.js --tests-dir ."), 0,
+     "consecutive steps"),
+
     ("post-run check is a `uses:` step",
      action(dict(BOTH), dict(BOTH), post_uses="./some/action"), 1, "is a `uses:` step"),
 ]

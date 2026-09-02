@@ -250,6 +250,27 @@ CASES = [
     # gate reports what the config declares and exits 0, so dropping the argument
     # leaves this guard green, the live composite green, and execution coverage
     # silently unchecked. Naming the script is not enough.
+    # Codex #347 round 6: `--report` is a SUBSTRING of `--reporter=json` and of
+    # `--report-path`, and the viewport script ignores both as unknown options
+    # while doing only its declaration check. A substring test stayed green for
+    # a command that had silently stopped checking execution.
+    ("post-run check passes --reporter=json instead of --report — refused",
+     action(dict(BOTH), dict(BOTH),
+            post_body="node check-ui-viewports.js --tests-dir . --reporter=json"), 1,
+     "'--report'"),
+
+    ("post-run check passes --report-path instead of --report — refused",
+     action(dict(BOTH), dict(BOTH),
+            post_body="node check-ui-viewports.js --tests-dir . --report-path r.json"), 1,
+     "'--report'"),
+
+    # The twin: the real form must still pass, including the `--flag=value`
+    # spelling, or the tokenisation would refuse the composite it guards.
+    ("post-run check passing --report=<path> — must NOT trip",
+     action(dict(BOTH), dict(BOTH),
+            post_body="node check-ui-viewports.js --tests-dir . --report=r.json"), 0,
+     "consecutive steps"),
+
     ("post-run check drops --report — refused",
      action(dict(BOTH), dict(BOTH),
             post_body="node check-ui-viewports.js --tests-dir ."), 1,

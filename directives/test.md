@@ -376,9 +376,11 @@ five:
   project without its body starting, and an assertion-only test that never
   requests `page` counts identically with no browser installed.
   - **RENDERED** — the strong claim. The kit's `tests/fixtures.js` extends the
-    `page` fixture to annotate each result with the viewport that page *ended
-    on*, and `playwright.config.js` declares `metadata: { viewportEvidence:
-    'rendered-at' }`. Bands are then decided from real widths and project names
+    `page` fixture to annotate each result with the viewport in force at every
+    main-frame *navigation*, and `playwright.config.js` declares
+    `metadata: { viewportEvidence: 'rendered-at' }`. A navigation is the moment
+    a page actually renders something, and only the test body reaches it — a
+    page created by a hook that then throws records nothing. Bands are then decided from real widths and project names
     do not enter it. Import `test` from `./fixtures.js`, not from
     `@playwright/test`, or your widths go unrecorded.
   - **SCHEDULED** — the weak claim, for a suite that declares nothing. It still

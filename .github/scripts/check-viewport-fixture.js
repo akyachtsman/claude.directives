@@ -55,7 +55,16 @@ try {
     + "test('overrides its viewport', async ({ page }) => {\n"
     + "  await page.setViewportSize({ width: 390, height: 844 });\n"
     + "  await page.goto('about:blank');\n  expect(1).toBe(1);\n});\n"
-    + "test('never opens a page', async () => { expect(1).toBe(1); });\n");
+    + "test('never opens a page', async () => { expect(1).toBe(1); });\n"
+    // Codex #347 round 6: a hook that REQUESTS `page` and then throws creates a
+    // page while the body never starts. Teardown still runs, so a fixture that
+    // read the viewport there recorded coverage for a test that rendered
+    // nothing. Evidence is a navigation now, and a hook that throws before
+    // navigating leaves none.
+    + "test.describe('hook throws', () => {\n"
+    + "  test.beforeEach(async ({ page }) => { throw new Error('hook exploded'); });\n"
+    + "  test('body never starts', async ({ page }) => { test.fail(); expect(1).toBe(2); });\n"
+    + "});\n");
   writeFileSync(join(tmp, 'playwright.config.js'),
     "import { defineConfig } from '@playwright/test';\n"
     + "export default defineConfig({\n  testDir: './tests',\n"
@@ -105,14 +114,23 @@ try {
   // THE NEGATIVE MATTERS AS MUCH. A fixture that annotated every test would make
   // the gate certify bands for suites that render nothing — the exact P1 the
   // rendered-at mechanism was added to close.
-  if (!seen.has('never opens a page')) problems.push('the run did not report the no-page test');
-  else if (seen.get('never opens a page') !== null) {
-    problems.push(`a test that never opened a page recorded ${JSON.stringify(seen.get('never opens a page'))}`);
-    problems.push('  It must record NOTHING. Annotating it would certify a width nothing rendered at.');
+  for (const [title, why] of [
+    ['never opens a page',
+      'Annotating it would certify a width nothing rendered at.'],
+    ['body never starts',
+      'Its page exists only because a failing hook asked for one; the body never ran, '
+      + 'so nothing was rendered at that width (#347 round 6).'],
+  ]) {
+    if (!seen.has(title)) { problems.push(`the run did not report a test titled "${title}"`); continue; }
+    if (seen.get(title) !== null) {
+      problems.push(`"${title}" recorded ${JSON.stringify(seen.get(title))} and must record NOTHING`);
+      problems.push(`  ${why}`);
+    }
   }
   if (problems.length) fail(problems);
   console.log('check-viewport-fixture: OK — the shipped fixture records 1440x900, '
-    + 'records 390x844 for a test that overrides, and records nothing for a test with no page.');
+    + 'records 390x844 for a test that overrides, and records NOTHING for a test with no '
+    + 'page or one whose body never started.');
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

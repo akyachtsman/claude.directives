@@ -223,7 +223,21 @@ def main():
                     + "\n    body executes between the evaluations (#333, round 17)."
                 )
             else:
-                absent = [n for n in needles if n not in lines[0]]
+                # TOKENS, NOT SUBSTRINGS. `--report` is contained in
+                # `--reporter=json` and in `--report-path`, both of which the
+                # viewport script ignores as unknown options while doing only its
+                # declaration check — so a rename or a typo left this guard green
+                # and execution coverage silently gone (Codex, #347 round 6).
+                # The bodies here are already refused if they compose commands,
+                # so whitespace splitting is a real tokenisation rather than a
+                # shell parser. A `--flag=value` token counts as `--flag`.
+                tokens = set()
+                for tok in lines[0].split():
+                    tokens.add(tok)
+                    if tok.startswith('--') and '=' in tok:
+                        tokens.add(tok.split('=', 1)[0])
+                absent = [n for n in needles
+                          if not (n in tokens if n.startswith('-') else n in lines[0])]
                 if absent:
                     problems.append(
                         f'"{label}" does not appear to invoke what its name says'

@@ -32,18 +32,37 @@ import { test as base, expect } from '@playwright/test';
 
 export const test = base.extend({
   page: async ({ page }, use, testInfo) => {
+    // EVIDENCE IS A NAVIGATION, NOT A PAGE OBJECT. A page existing proves only
+    // that something asked for one — and a `beforeEach` that requests `page`
+    // and then throws creates one while the test body never starts, which
+    // Codex reproduced against the first version of this file (#347 round 6).
+    // Reading the viewport at teardown counted that as coverage.
+    //
+    // A main-frame navigation is the moment a page actually renders something,
+    // and only the body reaches it: a hook that throws before navigating leaves
+    // nothing recorded. Nothing here knows what a hook is.
+    //
+    // Every navigation is recorded, not just the last, so a test that renders
+    // at two widths credits both. The kit's S4 sets its viewport BEFORE
+    // navigating, so it records 390 — the width it really rendered at.
+    const widths = new Set();
+    const stamp = () => {
+      try {
+        const vp = page.viewportSize();
+        if (vp && Number.isFinite(vp.width) && Number.isFinite(vp.height)) {
+          widths.add(`${vp.width}x${vp.height}`);
+        }
+      } catch { /* a closed page is no evidence, and must not throw here */ }
+    };
+    page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) stamp(); });
     await use(page);
-    // The page can be closed by the test, or by a crash. `viewportSize()` on a
-    // closed page throws, and a fixture that throws in teardown turns a passing
-    // test red — this must never be able to fail a suite it exists to measure.
-    let vp = null;
-    try { vp = page.viewportSize(); } catch { /* no evidence, not an error */ }
-    if (vp && Number.isFinite(vp.width) && Number.isFinite(vp.height)) {
-      testInfo.annotations.push({
-        type: 'rendered-at',
-        description: `${vp.width}x${vp.height}`,
-      });
-    }
+    // A fixture that throws in teardown reddens a passing test. This one must
+    // never be able to fail a suite it exists only to measure.
+    try {
+      for (const description of widths) {
+        testInfo.annotations.push({ type: 'rendered-at', description });
+      }
+    } catch { /* no evidence, not an error */ }
   },
 });
 

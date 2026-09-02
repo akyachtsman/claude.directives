@@ -620,6 +620,15 @@ const CASES = [
   // Both fixtures declare all three bands perfectly, so the ONLY thing between
   // them and a green is the read. A gate that cannot read the run must not fall
   // back on what the config says, and must not report an absence it never saw.
+  // A PRESENT FLAG WITH NO PATH IS A USAGE ERROR (#347 round 6). `--report ''`
+  // is what an unset REPORT_PATH expands to in the composite, and it used to
+  // fall through the truthiness test: the caller asked for the execution check
+  // and got the DECLARED verdict with exit 0. Silence where a check was
+  // requested is the failure this whole file is about.
+  ['--report given with an empty path — usage error, exit 8',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    8, '--report was given with no path', { reportArg: '' }],
+
   ['--report names a file that is not there — CANNOT CHECK, exit 15',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     15, "could not read the run's report",

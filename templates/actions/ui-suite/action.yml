@@ -363,7 +363,13 @@ runs:
     - name: Check the run actually exercised all three viewport classes
       if: ${{ always() }}
       shell: bash
-      continue-on-error: ${{ inputs.advisory-run == 'true' }}
+      # NO continue-on-error, and advisory-run does NOT reach it. The input says
+      # "ONLY the run step advisory" and this is not the run step — it is the
+      # coverage gate, and making it advisory removes the guarantee exactly when
+      # it matters most: a suite that exits 0 having run only desktop tests
+      # leaves the composite green with two bands unexercised (Codex, #347
+      # round 6). An advisory RUN is a project choosing to tolerate failing
+      # tests; it is not a choice to stop checking which widths were rendered.
       env:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
@@ -388,7 +394,13 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.artifact-name }}
+        # DERIVED FROM THE INPUT, not hard-coded. `report-path` lets a caller
+        # move the JSON report, and the post-run gate reads it there — but this
+        # step used to collect only the default path, so a customised run passed
+        # while its artifact omitted the very report the input exists to select
+        # (Codex, #347 round 6). report-path is relative to tests-dir, so the two
+        # compose here into a workspace-relative path.
         path: |
           .agent-reports/screenshots/
-          .agent-reports/playwright-results.json
+          ${{ inputs.tests-dir }}/${{ inputs.report-path }}
         retention-days: 7

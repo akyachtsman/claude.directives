@@ -230,13 +230,16 @@ function readReport(reportPath) {
   // `rendered-at` carries the width the page ACTUALLY had when the test ended.
   // Parsed rather than trusted: a description this cannot read is no evidence,
   // not a licence to guess.
-  const renderedWidth = (r) => {
+  // ALL of them, not the first: a test that navigates at two widths records two,
+  // and crediting only one would under-count coverage it genuinely provided.
+  const renderedWidths = (r) => {
+    const out = [];
     for (const a of annos(r)) {
       if (!a || a.type !== RENDERED) continue;
       const m = /^(\d+)x(\d+)$/.exec(String(a.description || '').trim());
-      if (m) return Number(m[1]);
+      if (m) out.push(Number(m[1]));
     }
-    return null;
+    return out;
   };
   const executed = new Map();
   const widths = [];
@@ -249,8 +252,7 @@ function readReport(reportPath) {
         let counted = false;
         for (const r of t.results || []) {
           if (!r || !r.status || r.status === 'skipped') continue;
-          const w = renderedWidth(r);
-          if (w !== null) widths.push(w);
+          for (const w of renderedWidths(r)) widths.push(w);
           if (!counted && !overrides(r)) { counted = true; }
         }
         if (counted) executed.set(name, (executed.get(name) || 0) + 1);
@@ -385,6 +387,21 @@ if (!VERDICT_FILE) {
       // that runs in the CHILD, and this block is the parent.
       const reportIdx = process.argv.indexOf('--report');
       const reportArg = reportIdx >= 0 ? process.argv[reportIdx + 1] : undefined;
+      // A PRESENT FLAG WITH NO PATH IS A USAGE ERROR, NOT A QUIETER CHECK.
+      // `--report ''` — which is what an unset REPORT_PATH expands to in the
+      // composite — used to fall through the truthiness test and print the
+      // DECLARED verdict, so the caller asked for the execution check and got
+      // silence with a passing exit (Codex, #347 round 6). Someone who passes
+      // the flag wants stage two; if the path is missing, say so.
+      if (reportIdx >= 0 && !String(reportArg || '').trim()) {
+        console.error('CANNOT CHECK: --report was given with no path.');
+        console.error('  Passing the flag asks for the execution check, so an empty value is a');
+        console.error('  usage error rather than a reason to fall back on the declaration.');
+        console.error('  In the ui-suite composite this is an unset or empty `report-path`.');
+        console.error('check-ui-viewports: FAIL (code 8)');
+        rmSync(box, { recursive: true, force: true });
+        process.exit(8);
+      }
       if (reportArg) {
         const run = readReport(isAbsolute(reportArg) ? reportArg : resolve(rows.testsDir, reportArg));
         if (!run.ok) {

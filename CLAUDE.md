@@ -384,6 +384,12 @@ the line:
 `global.md` → *Escalation Rules* apply here unchanged — all four gates, not a
 subset. No repo-specific additions.
 
+`global.md` → *A Knowing Deviation Is an Escalation* applies here too, and this
+repo is where it bites hardest: a session working on the directives themselves
+can find the record contradicting what the owner just said, and that section's
+third bullet says which one wins — raise it, quote both, fix the record in the
+same change.
+
 ## Notifications (owner ruling, 2026-08-23)
 **Keep the PR subscription until the PR merges.** Opening a PR auto-subscribes the
 session harness-side — leave it alone; the harness drops it at merge. Never

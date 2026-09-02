@@ -207,8 +207,12 @@ jobs:
       # correct, RE-MEASURED after #335 turned listings into runs: every fixture
       # spec asserts without requesting the `page` fixture, so no browser is ever
       # launched. Verified with PLAYWRIGHT_BROWSERS_PATH pointed at an empty
-      # directory — the gate and all 73 of its cases pass with no browser present.
-      # A fixture that DID take `page` would break that, so don't add one.
+      # directory — the gate and all of its cases pass with no browser present.
+      # A fixture that DID take `page` would break that, so don't add one — three
+      # were added in #347 round 5 and turned this job red within the hour. The
+      # question they were asking (does the SHIPPED page fixture record real
+      # widths?) belongs in `Repo Map UI`, which already installs chromium; see
+      # check-viewport-fixture.js there.
       # --no-package-lock writes nothing into the tree. node_modules is gitignored
       # everywhere and every validator here already skips it (check-paths.js names
       # templates/ui-tests/node_modules in its own header).
@@ -367,3 +371,23 @@ jobs:
 
       - name: Repo map UI checks (logical view)
         run: node .github/scripts/check-repo-map-ui.js
+
+      # THIS JOB, NOT `Validate Directives`, BECAUSE THIS ONE HAS A BROWSER.
+      # templates/ui-tests/tests/fixtures.js is the whole evidence channel for
+      # the fifth UI coverage gate's strong verdict: it records the width each
+      # page rendered at. Nothing else exercises it — check-ui-viewports-cases.js
+      # asks what the GATE does with that evidence and every one of its fixtures
+      # is deliberately browser-free, which is what lets the other job install
+      # the kit with --ignore-scripts. Putting browser-driving cases there
+      # turned CI red on exactly that property (#347 round 5).
+      #
+      # It needs the kit's own deps, not this job's bare `playwright` install:
+      # the fixture imports @playwright/test, which resolves from templates/
+      # ui-tests/node_modules. --ignore-scripts is right here too — the browser
+      # comes from the cached install above.
+      - name: Install the UI kit's test deps (for the fixture check)
+        run: npm install --no-package-lock --ignore-scripts
+        working-directory: templates/ui-tests
+
+      - name: Check the shipped viewport fixture records real widths
+        run: node .github/scripts/check-viewport-fixture.js

@@ -54,13 +54,20 @@ try {
 
 const FIXTURE_PKG = JSON.stringify({ name: 'ui-viewports-fixture', private: true, type: 'module' });
 const IMPORT = "import { defineConfig, devices } from '@playwright/test';\n";
-// READ FROM THE SHIPPED FILE, not retyped. These cases exist to prove the kit's
-// own evidence mechanism works; a copy here would let the two drift and the
-// cases would pass against a fixture nobody ships.
 // The key a suite sets to declare that it records the widths it renders at.
 const RENDERED_META = "  metadata: { viewportEvidence: 'rendered-at' },\n";
-const KIT_FIXTURE = readFileSync(
-  join(REPO_ROOT, 'templates', 'ui-tests', 'tests', 'fixtures.js'), 'utf8');
+// A spec that records a per-project width the way the kit's fixture would, and
+// WITHOUT A BROWSER. These cases are about what the GATE does with `rendered-at`
+// evidence; whether the shipped fixture produces it is a different question,
+// answered by check-viewport-fixture.js where a browser exists. The first cut
+// called page.goto() here and turned CI red, because qa.yml installs the kit
+// with --ignore-scripts — the very property that comment claims (#347 round 5).
+const RECORDS_WIDTH = "import { test, expect } from '@playwright/test';\n"
+  + "const W = { desktop: 1440, tablet: 810, phone: 390 };\n"
+  + "test('records', async () => {\n"
+  + "  const w = W[test.info().project.name];\n"
+  + "  test.info().annotations.push({ type: 'rendered-at', description: `${w}x800` });\n"
+  + "  expect(1).toBe(1);\n});\n";
 const TABLET = "    { name: 'tablet', use: { viewport: { width: 810, height: 1080 } } },\n";
 const PHONE = "    { name: 'phone', use: { viewport: { width: 390, height: 664 } } },\n";
 const LAPTOP = "    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },\n";
@@ -547,12 +554,10 @@ const CASES = [
   // config that carries such a fixture DECLARES it in metadata. These cases run
   // a real browser — unlike every other case in this file, which is why the
   // fixture spec below actually calls page.goto().
-  ['a suite declaring rendered-at, with a page — RENDERED, exit 0',
+  ['a suite declaring rendered-at, with recorded widths — RENDERED, exit 0',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
-      'tests/fixtures.js': KIT_FIXTURE,
-      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
-        + "test('renders', async ({ page }) => { await page.goto('about:blank'); expect(1).toBe(1); });\n" },
+      'tests/gate.spec.js': RECORDS_WIDTH },
     0, 'OK — RENDERED laptop:1440px  tablet:810px  phone:390px', { runReport: true }],
 
   // Codex's P1-A. The body never starts, so the fixture never runs and nothing
@@ -560,10 +565,9 @@ const CASES = [
   ['expected-to-fail whose beforeAll throws — no page rendered, exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
-      'tests/fixtures.js': KIT_FIXTURE,
-      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
         + "test.beforeAll(async () => { throw new Error('setup exploded'); });\n"
-        + "test('never starts', async ({ page }) => { test.fail(); expect(1).toBe(2); });\n" },
+        + "test('never starts', async () => { test.fail(); expect(1).toBe(2); });\n" },
     12, 'NO PAGE WAS RENDERED at that width', { runReport: true }],
 
   // Codex's P1-B, and the one this file's own harness demonstrated: every other
@@ -572,8 +576,7 @@ const CASES = [
   ['an assertion-only test that never opens a page — exit 12',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
-      'tests/fixtures.js': KIT_FIXTURE,
-      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
         + "test('no page at all', async () => { expect(1).toBe(1); });\n" },
     12, 'rendered NO pages at all', { runReport: true }],
 
@@ -601,11 +604,10 @@ const CASES = [
   ['a viewport-overriding test under the rendered tier — attributed to phone',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `${RENDERED_META}  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,
-      'tests/fixtures.js': KIT_FIXTURE,
-      'tests/gate.spec.js': "import { test, expect } from './fixtures.js';\n"
-        + "test('S4 shape', async ({ page }) => {\n"
-        + "  await page.setViewportSize({ width: 390, height: 844 });\n"
-        + "  await page.goto('about:blank');\n  expect(1).toBe(1);\n});\n" },
+      'tests/gate.spec.js': "import { test, expect } from '@playwright/test';\n"
+        + "test('S4 shape', async () => {\n"
+        + "  test.info().annotations.push({ type: 'rendered-at', description: '390x844' });\n"
+        + "  expect(1).toBe(1);\n});\n" },
     12, 'the run rendered pages at: 390px', { runReport: true }],
 
   // ── THE OBSERVATION'S OWN FAILURES (#335) ────────────────────────────────

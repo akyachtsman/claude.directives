@@ -39,27 +39,49 @@ if not raw.strip():
            "The post-run gate needs a report to read; an empty value would ask it "
            "for the execution check and give it nothing.")
 
-# Any vertical whitespace, not just \n: \r splits the artifact list too, and a
-# lone \r would otherwise pass a `"\n" in raw` test while still ending the line.
-if any(ch in raw for ch in "\n\r\v\f\x1c\x1d\x1e\x85  "):
-    refuse("report-path contains a line break.",
-           "It is interpolated into a MULTILINE artifact path list, where a "
-           "second line is a second file to upload.")
+# THE CHARACTER RULES, FACTORED SO THEY CAN RUN TWICE. They were written against
+# `report-path` alone, but the value that reaches the consumers is `tests_dir` +
+# `report-path`, and NOTHING validated the first half. Codex reproduced
+# `TESTS_DIR='suite?'` emitting `path=suite?/results.json`, which the uploader
+# expands as a pattern across sibling directories (#347 round 13); measuring it
+# turned up the worse sibling, a NEWLINE in tests-dir emitting a two-line `path`
+# — the artifact-list injection this whole file exists to stop, arriving through
+# the input nobody was checking.
+#
+# So the rules run on the raw input (where the diagnostics are about what the
+# caller typed) and again on the final emitted value (where they are about what
+# the consumers actually receive). Validating only the input is the same class of
+# mistake as round 9's upload interpolating a value the validator had rejected:
+# the check has to be on the thing that travels.
+LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "
+GLOB_CHARS = "*?[]!"
+
+
+def forbid_chars(value, what):
+    # Any vertical whitespace, not just \n: \r splits the artifact list too, and
+    # a lone \r would otherwise pass a `"\n" in value` test while still ending
+    # the line.
+    if any(ch in value for ch in LINE_BREAKS):
+        refuse(f"{what} contains a line break.",
+               f"got {value!r} -- it is interpolated into a MULTILINE artifact "
+               "path list, where a second line is a second file to upload.")
+    # GLOB METACHARACTERS, because the consumer that matters expands them.
+    # `actions/upload-artifact` treats each path entry as a PATTERN, so
+    # `../../../**/*` survives the containment check below -- it resolves
+    # workspace-local -- and then uploads the whole workspace (Codex, #347 round
+    # 9). Containment answers "where does this land", which is the wrong question
+    # for a value that names MANY places.
+    if any(ch in value for ch in GLOB_CHARS):
+        refuse(f"{what} contains glob metacharacters.",
+               f"got {value!r} -- the artifact uploader expands patterns, so this "
+               "names a set of files rather than the one report.")
+
+
+forbid_chars(raw, "report-path")
 
 if raw != raw.strip():
     refuse("report-path has leading or trailing whitespace.",
            f"got {raw!r} -- a path list trims lines, so this is not the path you think.")
-
-# GLOB METACHARACTERS, because the consumer that matters expands them.
-# `actions/upload-artifact` treats each path entry as a PATTERN, so
-# `../../../**/*` survives the containment check below -- normpath reduces it to
-# `**/*`, which is workspace-local -- and then uploads the whole workspace
-# (Codex, #347 round 9). The containment rule answers "where does this land",
-# which is the wrong question for a value that names MANY places.
-if any(ch in raw for ch in "*?[]!"):
-    refuse("report-path contains glob metacharacters.",
-           f"got {raw!r} -- the artifact uploader expands patterns, so this names "
-           "a set of files rather than the one report.")
 
 if PurePosixPath(raw).is_absolute() or raw.startswith("\\") or (len(raw) > 1 and raw[1] == ":"):
     refuse("report-path is absolute.", f"got {raw!r}")
@@ -168,6 +190,10 @@ if landed.split(os.sep)[0].startswith("~"):
 #   relative  -- tests-dir-relative, for the steps that run from tests-dir
 # `relative` is the raw value AFTER every rule above accepted it, which is what
 # makes it safe to pass on; it is not the raw input by another name.
+# THE VALUE THE CONSUMERS ACTUALLY GET, checked as such. `landed` carries
+# tests-dir, which no rule above has looked at (#347 round 13).
+forbid_chars(landed, "the resolved report path")
+
 out = os.environ.get("GITHUB_OUTPUT")
 if out:
     with open(out, "a", encoding="utf-8") as handle:

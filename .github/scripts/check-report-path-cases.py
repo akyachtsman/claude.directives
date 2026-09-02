@@ -213,6 +213,26 @@ CASES = [
      "escape/passwd", 1, "resolves outside the workspace", None,
      "tests-dir", SYMLINK_WS),
 
+    # ── #347 round 13: THE OTHER INPUT ───────────────────────────────────────
+    # The character rules were written against `report-path` alone, but what the
+    # consumers receive is tests-dir + report-path, and nothing validated the
+    # first half. They now run on the emitted value too.
+    ("a glob metacharacter in tests-dir", "results.json", 1,
+     "the resolved report path contains glob metacharacters", None, "suite?"),
+
+    ("a character class in tests-dir", "results.json", 1,
+     "the resolved report path contains glob metacharacters", None, "suite[12]"),
+
+    # Found by measuring the reported case rather than by reading it, and worse
+    # than the report: a newline in tests-dir emits a TWO-LINE `path`, which is
+    # the artifact-list injection the whole file exists to stop.
+    ("a line break in tests-dir", "results.json", 1,
+     "the resolved report path contains a line break", None, "ok\n/etc/passwd"),
+
+    # The twin: an ordinary tests-dir must still pass, or every caller breaks.
+    ("an ordinary tests-dir — the twin", "results.json", 0,
+     "inside the workspace", "templates/results.json", "templates"),
+
     # ── THE HANDOFF (#347 round 10) ──────────────────────────────────────────
     # Round 9 emitted only the workspace-relative `path`, so the three steps that
     # run from tests-dir stayed on the RAW input and the post-run gate -- which

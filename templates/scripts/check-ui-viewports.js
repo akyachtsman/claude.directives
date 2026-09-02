@@ -206,9 +206,27 @@ function readReport(reportPath) {
   // Playwright stores a retry's annotation on the test-level list too, so
   // merging them let a retry retroactively discard an honest earlier attempt
   // (round 5).
+  // PER-RESULT WHERE THE REPORT HAS IT, PER-TEST WHERE IT DOES NOT. Playwright
+  // only began serialising `results[].annotations` after the floor this kit
+  // declares: measured on 1.44.0, the key is ABSENT from every result while
+  // `tests[].annotations` carries the marker. Reading the result alone there
+  // made `overrides()` always false, so S4's marker was ignored and a run
+  // containing only S4 certified laptop and tablet — the round-4 false green,
+  // restored by the round-5 fix for anyone on an older Playwright (Codex, #347
+  // round 8).
+  //
+  // The FIELD'S PRESENCE is the capability signal, so nothing here reads a
+  // version number. Where results carry annotations, each attempt is judged by
+  // its own record and a retry cannot retroactively discard an honest earlier
+  // one (round 5). Where they do not, the test-level list is the only evidence
+  // that exists — retry scoping is unavailable on such a report because the
+  // data is, not because this chose to ignore it.
   const OVERRIDE = 'viewport-override';
-  const overrides = r => (Array.isArray(r.annotations) ? r.annotations : [])
-    .some(a => a && a.type === OVERRIDE);
+  const overrides = (r, t) => {
+    const list = Array.isArray(r.annotations) ? r.annotations
+      : (Array.isArray(t.annotations) ? t.annotations : []);
+    return list.some(a => a && a.type === OVERRIDE);
+  };
   const executed = new Map();
   let total = 0;
   const walk = (suite) => {
@@ -217,7 +235,7 @@ function readReport(reportPath) {
         total += 1;
         const name = typeof t.projectName === 'string' ? t.projectName : '';
         const ran = (t.results || []).some(r => r && r.status && r.status !== 'skipped'
-          && !overrides(r));
+          && !overrides(r, t));
         if (ran) executed.set(name, (executed.get(name) || 0) + 1);
       }
     }

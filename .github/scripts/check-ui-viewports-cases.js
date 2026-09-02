@@ -518,6 +518,42 @@ const CASES = [
   // discard the first attempt — which rendered at the project's own viewport and
   // is honest evidence — so a band whose only test is flaky could fail outright.
   // This fixture fails once at the project viewport, then overrides on the retry.
+  // AN OLDER PLAYWRIGHT DOES NOT SERIALISE PER-RESULT ANNOTATIONS (#347 r8).
+  // Measured on 1.44.0: `results[].annotations` is ABSENT while
+  // `tests[].annotations` carries the marker. Reading the result alone there
+  // made every override invisible, so S4's marker was ignored and a run
+  // containing only S4 certified laptop and tablet — the round-4 false green,
+  // restored for anyone below the floor. The FIELD'S PRESENCE is the capability
+  // signal; this fixture hand-writes a report in the old shape rather than
+  // installing an old Playwright, because what is under test is how the gate
+  // reads a report, not how Playwright writes one.
+  ['a report with no per-result annotations — the test-level marker still counts',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'old.json': JSON.stringify({
+        config: { version: '1.44.0' },
+        suites: [{ specs: [{ title: 'S4 shape', tests: [
+          { projectName: 'desktop', annotations: [{ type: 'viewport-override', description: '390' }],
+            results: [{ status: 'passed' }] },
+          { projectName: 'tablet', annotations: [{ type: 'viewport-override', description: '390' }],
+            results: [{ status: 'passed' }] },
+          { projectName: 'phone', annotations: [{ type: 'viewport-override', description: '390' }],
+            results: [{ status: 'passed' }] },
+        ] }] }],
+      }) },
+    12, 'NOTHING RAN at that width', { reportArg: 'old.json' }],
+
+  ['…and the same report WITHOUT the marker still certifies',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'old.json': JSON.stringify({
+        config: { version: '1.44.0' },
+        suites: [{ specs: [{ title: 'ordinary', tests: [
+          { projectName: 'desktop', annotations: [], results: [{ status: 'passed' }] },
+          { projectName: 'tablet', annotations: [], results: [{ status: 'passed' }] },
+          { projectName: 'phone', annotations: [], results: [{ status: 'passed' }] },
+        ] }] }],
+      }) },
+    0, 'check-ui-viewports: OK — SCHEDULED', { reportArg: 'old.json' }],
+
   ['a retry that overrides — the first attempt still counts',
     { 'playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: './tests',\n`
       + `  retries: 1,\n  projects: [\n${LAPTOP}${TABLET}${PHONE}  ],\n});\n`,

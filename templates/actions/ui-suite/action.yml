@@ -54,10 +54,13 @@ inputs:
     required: true
   report-path:
     description: >-
-      Playwright JSON report, relative to tests-dir. The viewport gate reads it
-      AFTER the run to certify that scenarios actually executed at each width —
-      a listing cannot answer that (#335). Must match the `outputFile` of your
-      config's json reporter; the shipped kit's default is used here.
+      Playwright JSON report, relative to tests-dir — a SINGLE relative path
+      inside the workspace, validated before use. The viewport gate reads it
+      AFTER the run to check that each declared width had a test SCHEDULED
+      under it: a non-skipped result in a project declaring that width. It does
+      NOT establish that a page was rendered there — see test.md -> UI coverage
+      gates, and directives#348. Must match the `outputFile` of your config's
+      json reporter; the shipped kit's default is used here.
     required: false
     default: '../../../.agent-reports/playwright-results.json'
   app-url:
@@ -278,6 +281,23 @@ runs:
     # been: exit 15, CANNOT CHECK, naming the path. Before the sequence below,
     # never between its steps — the three that follow must stay consecutive
     # because two of them evaluate the config.
+    # VALIDATE ONCE, BEFORE ANYTHING CONSUMES IT. `report-path` reaches a `rm`,
+    # a `--report` argument and a MULTILINE artifact `path:` list. A newline in
+    # it becomes a second entry in that list, and the upload runs under
+    # `always()` — so a caller deriving this input from untrusted workflow input
+    # could have an arbitrary runner-readable file uploaded even on a failing
+    # run (Codex, #347 round 8). `..` escaping the workspace is the same class.
+    #
+    # Refused here rather than sanitised at each use: three consumers with three
+    # escaping rules is how one of them ends up wrong, which is the coupling
+    # this composite has already been caught by twice.
+    - name: Validate report-path
+      shell: bash
+      env:
+        REPORT_PATH: ${{ inputs.report-path }}
+        TESTS_DIR: ${{ inputs.tests-dir }}
+      run: python3 "$GITHUB_ACTION_PATH/validate-report-path.py"
+
     - name: Clear any stale Playwright report
       shell: bash
       env:

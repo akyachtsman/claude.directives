@@ -8,6 +8,15 @@ export default defineConfig({
   testDir: './tests',
   timeout: 30_000,
   retries: 1,
+  // ⚠️ THE `json` REPORTER IS NOT OPTIONAL, and `outputFile` is half of a pair.
+  // The ui-suite composite re-runs check-ui-viewports.js AFTER the suite with
+  // `--report <its report-path input>`, whose default is this exact string, and
+  // that post-run check is what certifies a scenario actually executed at each
+  // width (test.md → UI coverage gates, fifth gate). Change this path and pass
+  // the matching `report-path`, or the check reports CANNOT CHECK and fails the
+  // job — deliberately, so a missing report is never read as a covered band.
+  // Relative to THIS directory: `../../../` is the repo root from
+  // .github/scripts/ui-tests/, which is where projects install this kit.
   reporter: [['list'], ['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]],
   use: {
     // REPLACE_WITH_YOUR_APP_URL — e.g. https://yourname.github.io/your-repo/

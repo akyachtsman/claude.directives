@@ -118,6 +118,21 @@ def forbid_chars(value, what):
         refuse(f"{what} contains glob metacharacters.",
                f"got {value!r} -- the artifact uploader expands patterns, so this "
                "names a set of files rather than the one report.")
+    # A BACKSLASH IS AN ESCAPE TO THE UPLOADER AND A LETTER TO EVERYONE ELSE.
+    # On the Linux runners every shipped caller uses, `foo\bar.json` is a legal
+    # filename that the quoted `rm`, Node and Playwright all address literally --
+    # but as an upload-artifact PATTERN it escapes the next character. Measured
+    # against minimatch: `minimatch('foobar.json', 'foo\bar.json')` is TRUE and
+    # the pattern does not match its own name. So the gate would verify one file
+    # and the artifact would collect a different one, or none (Codex, #347 r32).
+    #
+    # This is the same divergence the glob rules cover, not a new class: a
+    # character that means something to the consumer that expands patterns.
+    if "\\" in value:
+        refuse(f"{what} contains a backslash.",
+               f"got {value!r} -- the artifact uploader reads it as a pattern "
+               "escape while every other consumer reads it as a filename "
+               "character, so the file verified is not the file uploaded.")
     # A CHARACTER CLASS IS A `[` WITH A CLOSING `]`, not either bracket on its
     # own. minimatch treats an unmatched bracket as literal, so `report].json`
     # and `report[.json` name exactly one file and every consumer -- the quoted
@@ -286,7 +301,16 @@ landed = os.path.relpath(landed_abs, workspace)
 # consumer reads as the runner's home (Codex, #347 round 10). The containment
 # check answers "where does this path point"; the tilde makes that a different
 # question for one consumer, so it is refused rather than reasoned about.
-if landed.split(os.sep)[0].startswith("~"):
+# ...AND ONLY WHEN THE FIRST COMPONENT IS EXACTLY `~`. Measured in
+# @actions/glob's own source (internal-pattern.js `fixupPattern`): expansion
+# fires for `pattern === '~'` or `pattern.startsWith('~' + path.sep)` and nothing
+# else. So `~reports/run.json` -- and `~root/.ssh/id_rsa`, which THIS FILE HAS
+# BEEN REFUSING SINCE ROUND 10 with a case pinning it -- are ordinary literal
+# directory names the uploader never expands, already covered by containment.
+# `startswith("~")` was a text prefix standing in for the construct, which is the
+# same substitution round 10 corrected for `..` two lines of reasoning away from
+# here (Codex, #347 round 32). Seventh false refusal on this PR, and the oldest.
+if landed.split(os.sep)[0] == "~":
     refuse("report-path resolves to a home-directory reference.",
            f"{tests_dir!r} + {raw!r} -> {landed!r} -- the artifact uploader expands "
            "a leading ~ to the runner's home, outside the workspace entirely.")

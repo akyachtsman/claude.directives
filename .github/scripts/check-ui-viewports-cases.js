@@ -606,6 +606,30 @@ const CASES = [
       + "    { name: 'c', use: { viewport: { width: 820, height: 1180 } } },\n] };\n" },
     0, 'phone:b'],
 
+  // …AND EVERY OWN ENUMERABLE PROPERTY IS READ, IN ORDER (#347 round 32).
+  // `mergeObjects()` walks the whole layer, so a sibling accessor BEFORE
+  // `viewport` runs first and can change what `viewport` returns. Rounds 28-31
+  // each added one attribute of the merge to a predicate over `viewport` alone;
+  // this is the traversal itself, which subsumes all four. Measured: Playwright
+  // reports 390 in all three projects for this config.
+  ['a sibling getter before viewport runs first, as the merge runs it',
+    { 'playwright.config.js':
+      'let n = 0;\n'
+      + "export default { testDir: '.',\n"
+      + "  use: { get baseURL() { n += 1; return 'http://x'; },\n"
+      + '         get viewport() { return n >= 1 ? { width: 390, height: 800 }\n'
+      + '                                        : { width: 1440, height: 800 }; } },\n'
+      + "  projects: [ { name: 'laptop' }, { name: 'tablet' }, { name: 'phone' } ] };\n" },
+    1, 'no project declares a laptop viewport'],
+  // The twin: with no side-effecting sibling the same shape still reads the
+  // root width normally, so the traversal is not satisfied by ignoring the root.
+  ['…and a plain root viewport is still read for every project',
+    { 'playwright.config.js':
+      "export default { testDir: '.',\n"
+      + '  use: { viewport: { width: 1440, height: 900 } },\n'
+      + "  projects: [ { name: 'laptop' },\n" + TABLET + PHONE + '] };\n' },
+    0, 'laptop:laptop'],
+
   // ── A PRESENT ROOT NAME IS VALIDATED (#347 round 31) ───────────────────
   // Round 30 added root-name inheritance and coerced a non-string to '',
   // reintroducing on the root the exact defect round 27 fixed on projects.

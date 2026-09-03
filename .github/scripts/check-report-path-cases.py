@@ -91,12 +91,30 @@ CASES = [
 
     # ── #347 round 10: THE TILDE IS A THIRD DESTINATION ──────────────────────
     # This normalises to `~/secret.txt`, which climbs nowhere by the containment
-    # rule and reads the runner's home by the consumer that expands it.
+    # rule and reads the runner's home by the consumer that expands it. A first
+    # component of EXACTLY `~` is the only shape @actions/glob expands, so this
+    # is the whole of round 10's real finding — see the two cases below it, which
+    # round 32 corrected from refusing every `~`-prefixed name.
     ("a path normalising to a leading ~", "../../../~/secret.txt", 1,
      "home-directory reference", None),
 
-    ("a bare leading ~ at the workspace root", "../../../~root/.ssh/id_rsa", 1,
-     "home-directory reference", None),
+    # OVERTURNED IN #347 ROUND 32, and it had been wrong since round 10.
+    # Measured in @actions/glob's own `fixupPattern`: expansion fires only for
+    # `~` exactly or `~/...`. `~root` is a literal directory name the uploader
+    # never expands, so this case pinned a refusal no consumer needs — the
+    # seventh false refusal on this PR and the oldest. Containment still governs
+    # where it lands.
+    ("a ~user-style first component is literal", "../../../~root/.ssh/id_rsa", 0,
+     "inside the workspace", "~root/.ssh/id_rsa"),
+
+    ("a ~-prefixed directory name", "../../../~reports/run.json", 0,
+     "inside the workspace", "~reports/run.json"),
+
+    # ── #347 round 32: A BACKSLASH IS AN ESCAPE TO THE UPLOADER ──────────────
+    # Measured: `minimatch('foobar.json', 'foo\\bar.json')` is TRUE and the
+    # pattern does not match its own name, so the gate verifies one file and the
+    # artifact collects another.
+    ("a backslash in the filename", "foo\\bar.json", 1, "contains a backslash", None),
 
     # The twin: a `~` that is NOT the first component is not expanded by
     # upload-artifact, so refusing it would be a false alarm on a legal filename.
@@ -186,7 +204,11 @@ CASES = [
     ("a windows drive form is RELATIVE on Linux", "C:/secrets", 0,
      "inside the workspace", ".github/scripts/ui-tests/C:/secrets"),
 
-    ("a backslash-rooted path", "\\\\server\\share", 1, "is absolute", None),
+    # Still refused, but by the backslash rule added in round 32, which runs
+    # earlier than the absoluteness check. Same verdict, nearer cause: the
+    # uploader would read those separators as escapes whatever else is true of
+    # the path.
+    ("a backslash-rooted path", "\\\\server\\share", 1, "contains a backslash", None),
 
     # `..` IS LEGITIMATE HERE -- the shipped default climbs three levels. Pinned
     # so a future tightening that simply banned `..` reddens rather than shipping

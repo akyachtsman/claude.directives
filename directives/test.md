@@ -439,6 +439,17 @@ five:
     AND phone projects, and the JSON report carried **no annotation at all** —
     neither per-test nor per-result. Playwright does not mark it, so nothing
     downstream can infer it.
+  - `base.extend({ viewport })` — a fixture EXTENSION replacing the built-in
+    option, and any other route that replaces it. Measured the same way and with
+    the same result: 390px in all three projects, empty annotation arrays, exit 0
+    certifying every band.
+
+  The list is deliberately open-ended. Round 31 of directives#347 named
+  `setViewportSize()` and `test.use()`; round 32 found `test.extend()` the next
+  hour, because the rule was written as an enumeration of routes and Playwright
+  has more of them than an enumeration can hold. **The test to apply is the
+  property, not the list: if a test can end up at a width its project did not
+  declare, it must carry the marker.**
 
   Either way that test runs at the width IT chose in *every* project. Push
   `{ type: 'viewport-override' }` onto `test.info().annotations` in any such test

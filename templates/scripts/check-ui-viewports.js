@@ -890,6 +890,25 @@ if (!VERDICT_FILE) {
   // `--config --report`, so a config NAMED `--report` sent this branch looking
   // for a mapping the command never asked for (#347 round 18).
   const wantsReport = argOpt('--report').given;
+  // ⚠️ A REPORT VERDICT FROM `--report` ALONE RESTS ON ONE OBSERVATION, NOT TWO.
+  // Rounds 14 and 22 built the carried mapping so the widths a verdict names are
+  // read BEFORE the run and cross-checked against a fresh import after it — but
+  // only on the `--declared` path. `--report` alone imports the config once,
+  // AFTER the run, and attributes the report with whatever that import says.
+  // Measured: a config whose `globalTeardown` drops a marker declares 390/390/390
+  // before the run and 1280/900/390 after; the run prints 390 for all three and
+  // `--report report.json` returns exit 0 SCHEDULED for laptop/tablet/phone
+  // (Codex, #347 round 32). The mapping and the run are meant to be two
+  // independent observations; this path is one wearing the shape of two.
+  //
+  // NOT FIXED HERE, and the reason is measured rather than felt: refusing
+  // `--report` without `--declared` breaks 76 of this file's 186 pinned cases,
+  // because the direct flow is what the whole suite is written around. Rewriting
+  // 76 pins is not a contract tweak, and doing it in the round where three of
+  // the previous five findings were my own regressions is the mistake rounds
+  // 28-31 kept making. directives#352 carries it.
+  //
+  // The composite always passes both flags, so no shipped CI path is exposed.
   if (declaredIdx.given && wantsReport) {
     let carried = null;
     try { carried = JSON.parse(readFileSync(declaredIdx.path, 'utf8')); } catch { /* below */ }
@@ -1752,63 +1771,30 @@ console.log(`config:    ${configPath}`);
   const rows = [];
   for (const p of projects) {
     const name = keyOf(p);
-    // OWN ENUMERABLE, because that is what Playwright copies. `mergeObjects()`
-    // takes own enumerable entries only, so a `use` object that INHERITS
-    // `viewport` from its prototype — or defines it non-enumerably — hands
-    // Playwright nothing and falls through to the default, while a plain
-    // property read here saw the inherited value and published it as the
-    // declared width. Measured: three projects inheriting 1280/900/390 listed
-    // and ran normally with Playwright ignoring all three, and the gate reported
-    // exactly those widths (Codex, #347 round 28).
+    // REPRODUCE THE MERGE, DO NOT MODEL IT. Rounds 28-31 each added one more
+    // attribute of `mergeObjects()` to a predicate over `viewport` alone —
+    // which keys it sees (28), which values it copies (29), how many times it
+    // reads (30), and in what order across layers (31). Round 32 found the next
+    // one: it reads EVERY own enumerable property, in order, so a `baseURL`
+    // getter with side effects changes what the `viewport` getter returns, and a
+    // predicate that touches only `viewport` never triggers it. Measured — root
+    // 390 in the run against 1280/900/390 in the gate, certified at exit 0.
     //
-    // Ordinary JavaScript, not forgery — which is why it belongs in the merge
-    // rather than in the limits section. The gate's own claim is that its rows
-    // are what the run will use; reading a property the run cannot see breaks
-    // that claim without anyone tampering.
-    // AND NOT `undefined`, which `mergeObjects()` SKIPS. An own enumerable
-    // `viewport: undefined` is a key the merge steps over, so the layer below
-    // still supplies the value: root 1440 with `{ use: { viewport: undefined } }`
-    // runs at 1440. Round 28's own-enumerable test selected that `undefined` and
-    // called the project unclassifiable, failing a config Playwright runs
-    // (Codex, #347 round 29).
-    //
-    // That is round 28's own lesson, one round later and by my hand: the correct
-    // move is EXACT, not stricter. `propertyIsEnumerable` is the right test for
-    // WHICH keys the merge sees; it is not the whole rule, because the merge
-    // also skips undefined VALUES.
-    // READ ONCE PER LAYER, because `Object.entries()` does. Round 29's fix tested
-    // `u.viewport !== undefined` and then the selecting expression read the
-    // property AGAIN — two reads where Playwright's merge takes one. A getter
-    // returning 390 first and 1440 after made the run use 390 while the gate
-    // published 1440, and the genuine report certified it (Codex, #347 round 30).
-    //
-    // Third round running in which my own previous fix is the finding, and the
-    // same root: I modelled one aspect of the merge (enumerability, then
-    // undefined-ness) without modelling that it READS. A property is not a value
-    // until you take it, so take it once and reason about the value.
-    const takeVp = (u) => {
-      if (u === null || typeof u !== 'object') return { has: false };
-      if (!Object.prototype.propertyIsEnumerable.call(u, 'viewport')) return { has: false };
-      const value = u.viewport;
-      return value === undefined ? { has: false } : { has: true, value };
+    // Four rounds of adding conjuncts is the signal that the predicate was the
+    // wrong shape. `mergeObjects` is short and fully specified: own enumerable
+    // entries, in order, skipping undefined, layer after layer. Doing exactly
+    // that is not a prediction about Playwright — it IS the operation — and it
+    // subsumes all four previous fixes into the traversal rather than encoding
+    // each as a rule. `Object.entries` reads every property once, in order, so
+    // enumerability, undefined-skipping, read count and read order all fall out
+    // of the loop instead of being asserted around it.
+    const mergeLayer = (into, layer) => {
+      if (layer === null || typeof layer !== 'object') return into;
+      for (const [k, v] of Object.entries(layer)) if (v !== undefined) into[k] = v;
+      return into;
     };
-    // ROOT FIRST, AND ALWAYS. `mergeObjects()` reads the root layer for EVERY
-    // project before reading that project's layer, even when the project
-    // overrides it — so an accessor on the root is consumed once per project
-    // whether or not its value survives. Round 30 skipped the root read whenever
-    // the project had its own, which desynchronised a stateful root getter: the
-    // run consumed 1280 under an overridden project and used 390 for the next
-    // one, while the gate never took that read and classified the next project
-    // as laptop (Codex, #347 round 31).
-    //
-    // Fourth round in a row on this one expression. Rounds 28-30 asked which
-    // keys, which values, and how many reads; this is WHEN. Order of effects is
-    // part of the semantics being modelled, not an implementation detail of it.
-    const fromRoot = takeVp(cfg.use);
-    const fromProject = takeVp(p.use);
-    const vp = fromProject.has ? fromProject.value
-      : fromRoot.has ? fromRoot.value
-        : DEFAULT_VIEWPORT;
+    const mergedUse = mergeLayer(mergeLayer({}, cfg.use), p.use);
+    const vp = mergedUse.viewport !== undefined ? mergedUse.viewport : DEFAULT_VIEWPORT;
     // testDir IS NOT PART OF `restricted`, at the project level either. Round 10
     // fixed the spelling comparison here; round 12 defeated the fix with a
     // directory symlink — `alias -> .` makes two lexically different paths name

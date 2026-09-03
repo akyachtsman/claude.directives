@@ -573,6 +573,44 @@ const CASES = [
       "    { name: 'laptop', use: { viewport: undefined } },\n" + TABLET + PHONE) },
     0, 'check-ui-viewports: OK — DECLARED'],
 
+  // …AND READ ONCE, because `Object.entries()` does (#347 round 30). Round 29's
+  // fix tested `!== undefined` and then the selecting expression read the
+  // property AGAIN. A getter returning 390 first and a wider value after made
+  // the run use 390 while the gate published the second read.
+  ['a getter viewport is read once, as the merge reads it',
+    { 'playwright.config.js':
+      'const mk = (first, rest) => { let n = 0; return { get viewport() {\n'
+      + '  n += 1; return n === 1 ? { width: first, height: 800 }\n'
+      + '                         : { width: rest, height: 800 }; } }; };\n'
+      + "export default { testDir: '.', projects: [\n"
+      + "  { name: 'laptop', use: mk(390, 1440) },\n"
+      + "  { name: 'tablet', use: mk(390, 900) },\n"
+      + "  { name: 'phone', use: mk(390, 390) },\n] };\n" },
+    1, 'no project declares a laptop viewport'],
+
+  // ── THE ROOT `name` IS INHERITED (#347 round 30) ───────────────────────
+  // Playwright resolves a project's reported name as project.name, then the
+  // ROOT config's name, then "" — measured: a root `name: 'desktop-root'` with
+  // an unnamed project reports `[desktop-root]`. Keying it "" made the join look
+  // for a row the report never carries. Predates this PR.
+  ['an unnamed project inherits the root name for the join',
+    { 'playwright.config.js':
+      "export default { testDir: '.', name: 'desktop-root', projects: [\n"
+      + '    { use: { viewport: { width: 1440, height: 900 } } },\n'
+      + TABLET + PHONE + '] };\n',
+      'rootname.json': '{"suites":[{"specs":[{"tests":['
+        + '{"projectName":"desktop-root","annotations":[],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"tablet","annotations":[],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"phone","annotations":[],"results":[{"status":"passed","annotations":[]}]}'
+        + ']}]}]}' },
+    0, 'laptop:desktop-root', { reportArg: 'rootname.json' }],
+  // The twin: with NO root name the empty key is still correct, so the rule is
+  // not satisfied by inventing a name where Playwright reports "".
+  ['…and with no root name the empty key still attributes',
+    { 'playwright.config.js': withProjects(
+      "    { use: { viewport: { width: 1440, height: 900 } } },\n" + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK — DECLARED'],
+
   // The twin: an OWN viewport is still read, so the rule above is not satisfied
   // by ignoring viewports altogether.
   ['an own viewport is still read',

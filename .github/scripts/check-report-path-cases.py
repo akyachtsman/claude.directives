@@ -122,7 +122,18 @@ CASES = [
 
     ("a single-character wildcard", "r?.json", 1, "glob metacharacters", None),
 
-    ("a character class", "r[12].json", 1, "glob metacharacters", None),
+    ("a character class", "r[12].json", 1, "contains a character class", None),
+
+    # A CLASS IS THE CONSTRUCT, NOT ITS LETTERS (#347 round 30). minimatch reads
+    # an unmatched bracket as literal, so these name exactly one file and every
+    # consumer resolves them that way. Banning the characters was the fourth
+    # false refusal on this PR — after the colon (r24), Array.isArray (r28) and
+    # the leading `!` on the wrong value (r29).
+    ("an unmatched closing bracket", "report].json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/report].json"),
+
+    ("an unmatched opening bracket", "report[.json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/report[.json"),
 
     # THE EDGE IS THE ENTRY'S EDGE, NOT THE INPUT'S (#347 round 29). With a
     # nested tests-dir this lands as `.github/scripts/ui-tests/!r.json`, where
@@ -263,7 +274,7 @@ CASES = [
      "the resolved report path contains glob metacharacters", None, "suite?"),
 
     ("a character class in tests-dir", "results.json", 1,
-     "the resolved report path contains glob metacharacters", None, "suite[12]"),
+     "the resolved report path contains a character class", None, "suite[12]"),
 
     # Found by measuring the reported case rather than by reading it, and worse
     # than the report: a newline in tests-dir emits a TWO-LINE `path`, which is

@@ -17,6 +17,7 @@ NOT exported on its own -- it ships inside templates/actions/ui-suite/, which
 projects copy whole.
 """
 import os
+import re
 import sys
 from pathlib import PurePosixPath
 
@@ -96,7 +97,7 @@ LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "
 # rule corrected in round 24, and as the `Array.isArray` refusal round 27 put into
 # the viewport gate (Codex, #347 round 28). The leading position IS load-bearing,
 # so it is refused separately below.
-GLOB_CHARS = "*?[]"
+GLOB_CHARS = "*?"
 
 
 def forbid_chars(value, what):
@@ -117,6 +118,20 @@ def forbid_chars(value, what):
         refuse(f"{what} contains glob metacharacters.",
                f"got {value!r} -- the artifact uploader expands patterns, so this "
                "names a set of files rather than the one report.")
+    # A CHARACTER CLASS IS A `[` WITH A CLOSING `]`, not either bracket on its
+    # own. minimatch treats an unmatched bracket as literal, so `report].json`
+    # and `report[.json` name exactly one file and every consumer -- the quoted
+    # `rm`, Node's resolution, the uploader -- reads them that way. Banning the
+    # characters refused ordinary Linux filenames for a property they do not
+    # have: the fourth false refusal on this PR, after the colon (r24), the
+    # `Array.isArray` entry check (r28) and the leading `!` applied to the wrong
+    # value (r29). Detected as the construct rather than as its letters
+    # (Codex, #347 round 30).
+    if re.search(r"\[[^\[]*\]", value):
+        refuse(f"{what} contains a character class.",
+               f"got {value!r} -- `[...]` is a glob character class to the "
+               "artifact uploader, so this names a set of files rather than the "
+               "one report.")
 
 
 

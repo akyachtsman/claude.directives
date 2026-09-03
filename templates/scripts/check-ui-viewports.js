@@ -1715,7 +1715,15 @@ console.log(`config:    ${configPath}`);
       '  declared.',
     ]);
   }
-  const keyOf = p => ((p && typeof p.name === 'string') ? p.name : '');
+  // AND THE ROOT `name` IS INHERITED. Playwright resolves a project's reported
+  // name as project.name, then the ROOT config's name, then "" — measured on
+  // 1.62.1: a root `name: 'desktop-root'` with an unnamed project reports
+  // `[desktop-root]` and writes `projectName: "desktop-root"`. This keyed such a
+  // project as "" unconditionally, so the join looked for a row the report never
+  // carries and the band read as NOTHING RAN (Codex, #347 round 30). Predates
+  // this PR; the empty default was only ever correct when no root name exists.
+  const ROOT_NAME = typeof cfg.name === 'string' ? cfg.name : '';
+  const keyOf = p => ((p && typeof p.name === 'string') ? p.name : ROOT_NAME);
   const keys = projects.map(keyOf);
   const dupes = [...new Set(keys.filter((n, i2, a) => a.indexOf(n) !== i2))];
   if (dupes.length) {
@@ -1756,11 +1764,26 @@ console.log(`config:    ${configPath}`);
     // move is EXACT, not stricter. `propertyIsEnumerable` is the right test for
     // WHICH keys the merge sees; it is not the whole rule, because the merge
     // also skips undefined VALUES.
-    const ownVp = u => (u !== null && typeof u === 'object'
-      && Object.prototype.propertyIsEnumerable.call(u, 'viewport')
-      && u.viewport !== undefined);
-    const vp = ownVp(p.use) ? p.use.viewport
-      : ownVp(cfg.use) ? cfg.use.viewport
+    // READ ONCE PER LAYER, because `Object.entries()` does. Round 29's fix tested
+    // `u.viewport !== undefined` and then the selecting expression read the
+    // property AGAIN — two reads where Playwright's merge takes one. A getter
+    // returning 390 first and 1440 after made the run use 390 while the gate
+    // published 1440, and the genuine report certified it (Codex, #347 round 30).
+    //
+    // Third round running in which my own previous fix is the finding, and the
+    // same root: I modelled one aspect of the merge (enumerability, then
+    // undefined-ness) without modelling that it READS. A property is not a value
+    // until you take it, so take it once and reason about the value.
+    const takeVp = (u) => {
+      if (u === null || typeof u !== 'object') return { has: false };
+      if (!Object.prototype.propertyIsEnumerable.call(u, 'viewport')) return { has: false };
+      const value = u.viewport;
+      return value === undefined ? { has: false } : { has: true, value };
+    };
+    const fromProject = takeVp(p.use);
+    const fromRoot = fromProject.has ? { has: false } : takeVp(cfg.use);
+    const vp = fromProject.has ? fromProject.value
+      : fromRoot.has ? fromRoot.value
         : DEFAULT_VIEWPORT;
     // testDir IS NOT PART OF `restricted`, at the project level either. Round 10
     // fixed the spelling comparison here; round 12 defeated the fix with a

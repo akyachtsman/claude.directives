@@ -153,6 +153,24 @@ CASES = [
     ("an unmatched opening bracket", "report[.json", 0,
      "inside the workspace", ".github/scripts/ui-tests/report[.json"),
 
+    # A NEGATION MARKER IS NOT A MEMBER (#347 round 35). Measured with
+    # `minimatch(p, p)` on 9 and 10: `[!]` and `[^]` compile to escaped
+    # literals and self-match. Eighth false refusal on this PR and the THIRD on
+    # this one rule — round 30 banned the brackets, round 31 required a
+    # non-empty body, round 35 found the body can be a marker alone.
+    ("a negation marker with no member", "report[!].json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/report[!].json"),
+
+    ("a caret marker with no member", "report[^].json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/report[^].json"),
+
+    # …and the twins: a marker WITH a member is a real class.
+    ("a negated class with a member", "report[!a].json", 1,
+     "contains a character class", None),
+
+    ("a caret class with a member", "report[^a].json", 1,
+     "contains a character class", None),
+
     # MEASURED AGAINST minimatch, not argued (#347 round 31). `minimatch(p, p)`
     # self-matches exactly when p is literal: an EMPTY pair is literal, and a
     # pair spanning a path separator is literal because a class cannot cross a

@@ -100,6 +100,44 @@ LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "
 GLOB_CHARS = "*?"
 
 
+def _has_class(segment):
+    """True when a path SEGMENT contains a real minimatch character class.
+
+    MEASURED against minimatch 9/10 with `minimatch(p, p)`, which self-matches
+    exactly when `p` is literal:
+
+        report[].json    literal  -- an empty pair is not a class
+        report[!].json   literal  -- a negation marker with no member is not one
+        report[^].json   literal  -- likewise
+        report[!a].json  CLASS
+        report[]].json   CLASS    -- a leading `]` is a MEMBER, not the close
+        r[12].json       CLASS
+        a[/]b.json       literal  -- a class cannot span a path separator
+
+    Round 30 banned the brackets, round 31 required a non-empty body, and round
+    35 found `[!]` and `[^]` -- the eighth false refusal on this PR, and the
+    third on this one rule. Each earlier version was a shorter description of
+    the construct than the construct is. So this walks it: an opening bracket,
+    an optional negation marker, an optional leading `]` that counts as a
+    member, then a closing bracket with at least one member before it.
+    """
+    i = 0
+    while True:
+        i = segment.find("[", i)
+        if i < 0:
+            return False
+        j = i + 1
+        if j < len(segment) and segment[j] in "!^":
+            j += 1
+        members_start = j
+        if j < len(segment) and segment[j] == "]":
+            j += 1  # a `]` immediately after the marker is a member, not the close
+        close = segment.find("]", j)
+        if close >= 0 and close > members_start:
+            return True
+        i += 1
+
+
 def forbid_chars(value, what):
     # Any vertical whitespace, not just \n: \r splits the artifact list too, and
     # a lone \r would otherwise pass a `"\n" in value` test while still ending
@@ -151,7 +189,7 @@ def forbid_chars(value, what):
     # So: a non-empty body, within one segment. Round 30's `\[[^\[]*\]` allowed an
     # empty body and ignored segments -- two more false refusals, one of them
     # caught here only because this rule was measured rather than argued.
-    if any(re.search(r"\[.+?\]", seg) for seg in value.split("/")):
+    if any(_has_class(seg) for seg in value.split("/")):
         refuse(f"{what} contains a character class.",
                f"got {value!r} -- `[...]` is a glob character class to the "
                "artifact uploader, so this names a set of files rather than the "

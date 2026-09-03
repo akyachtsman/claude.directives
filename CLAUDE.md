@@ -419,6 +419,11 @@ the line:
 `global.md` → *Escalation Rules* apply here unchanged — all four gates, not a
 subset. No repo-specific additions.
 
+`global.md` → *A Knowing Deviation Is an Escalation* applies here too. Where a
+directive or rules file in this repo contradicts what the owner just said, follow
+its third bullet in order: raise the contradiction, quote both, **ask which
+stands**, and fix the record in the same change once he has answered.
+
 ## Notifications (owner ruling, 2026-08-23)
 **Keep the PR subscription until the PR merges.** Opening a PR auto-subscribes the
 session harness-side — leave it alone; the harness drops it at merge. Never

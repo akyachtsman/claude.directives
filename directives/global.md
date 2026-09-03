@@ -712,6 +712,57 @@ naming what remains open, or "nothing open" — never absent.
   not a smaller ask than doing it yourself — it is an impossible one
   (→ *A Blocked Command Is Not a Blocked Capability*).
 
+The gates above fire BEFORE the work. → *A Knowing Deviation Is an Escalation*
+covers the other direction: an instruction you have already decided not to follow.
+
+## A Knowing Deviation Is an Escalation (owner ruling, 2026-09-02)
+**When you knowingly depart from a clear instruction — overruling it, following
+only part of it, deferring it, or substituting your own judgement for it — say so
+in bold, at the top of your reply, as a question the owner must answer.** Not
+**only** in the ledger, not in the commit message, not as a caveat after the work
+is done. The ledger still carries its line — a deviation raised as a question is
+an ask, and → *Burst Intake — Multiple Asks at Once* admits no exceptions — but a
+ledger line is where the ask is TRACKED, never where it is raised.
+
+The test is whether the owner can miss it while skimming: if they can, it was not
+raised. An instruction given and never heard about again is one the owner will
+assume was followed, and they will build the next decision on that assumption.
+
+⚠️ **A note in a commit message, a PR body, or a design doc is NOT raising it.**
+Those are records — read after the fact, by someone already looking. A deviation
+is a decision the owner has not made yet, so it belongs in the conversation,
+before or alongside the work, in a form that demands a reply.
+
+⚠️ **Partial compliance and deferral are deviations.** *"I did four of the five"*,
+*"I'll do that part later"*, *"I did it a different way that gets the same
+result"* — each is a decision the owner did not make. Name which part, say why,
+and ask.
+
+⚠️ **If the repo's own record contradicts the instruction, that is the most urgent
+case, not a licence.** A design doc, comment or rules file asserting the opposite
+of what the owner said — especially one attributed to the owner — is not evidence
+they changed their mind. It is evidence the record is wrong. Do not reason from it
+and do not quietly follow it. Raise the contradiction, quote both, ask which
+stands, and fix the record in the same change.
+
+⚠️ **What is NOT a deviation:** a judgement call in a gap the instruction does not
+cover. Instructions are never exhaustive, and treating every unstated detail as an
+escalation makes the real ones invisible. This rule binds where an instruction
+exists and you are about to not follow it.
+
+> Asking costs one sentence. Not asking costs a round trip — and sometimes the
+> owner's confidence that the instruction was heard at all.
+
+**No fifth gate; dependent work waits.** → *Escalation Rules* still has exactly
+four and this adds none. It adds a wait: work depending on the deviation stops
+until the question is answered, work independent of it continues.
+
+**Under a standing authorization and under "proceed", raise it anyway.** A
+knowing deviation IS the *genuinely important and critical* case → *"Proceed" —
+the Standing Directive* item 2 names, not an exception to it — the owner made
+the decision and it is not being executed. Item 7 there covers a question you
+have not answered; this covers one you have answered differently.
+
 ## Standing Authorization (owner ruling, 2026-07-22)
 Escalation Rules define when to STOP; this defines the default everywhere else,
 which is KEEP GOING.

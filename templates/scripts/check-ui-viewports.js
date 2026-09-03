@@ -1547,7 +1547,11 @@ console.log(`config:    ${configPath}`);
   }
 
   // --- 5. Projects.
-  const projects = Array.isArray(cfg.projects) ? cfg.projects : null;
+  // ONE READ. `cfg.projects` was read twice here (the Array.isArray test, then
+  // the value), so a stateful getter could be tested on one array and used on
+  // another. See the SEQUENCE limit recorded above the row loop below.
+  const RAW_PROJECTS = cfg.projects;
+  const projects = Array.isArray(RAW_PROJECTS) ? RAW_PROJECTS : null;
   if (projects === null) {
     die(6, ['FAIL: the config declares no `projects` array.',
       '  This gate reads per-project viewports to decide which bands are DECLARED,',
@@ -1780,6 +1784,38 @@ console.log(`config:    ${configPath}`);
       '  test.md -> UI coverage gates, fifth gate.',
     ]);
   }
+  // ⚠️ THE GATE READS EACH VALUE ONCE. IT DOES NOT REPLAY PLAYWRIGHT'S ACCESS
+  // SEQUENCE, and cannot — that is a recorded limit, not an open defect.
+  //
+  // Measured against the installed 1.62.1 with a three-project config whose
+  // every field was a counting accessor:
+  //
+  //   cfg.projects   read  4 times
+  //   project.name   read  9 times   (3 per project)
+  //   project.use    read 12 times   (4 per project)
+  //   viewport.width read  0 times   in this process — the worker reads it when
+  //                                  it builds the browser context
+  //
+  // So "read it the same number of times, in the same order, and use the same
+  // one Playwright uses" means reproducing counts that depend on the project
+  // count, on which internal validation paths run, and on the version — and for
+  // `width`, reproducing a read that happens in a different process entirely.
+  // That is reimplementing Playwright's config loader and keeping it bit-exact
+  // forever; every version bump would be a fresh divergence.
+  //
+  // What is achievable, and what this does: read every config-controlled value
+  // EXACTLY ONCE and drive everything from that snapshot, so the gate cannot
+  // disagree with ITSELF — validate one value and band another, or test one
+  // array and iterate a different one. Rounds 30, 33 and 34 each found a place
+  // where it could, and those were real.
+  //
+  // What remains is a config whose accessors return DIFFERENT VALUES on
+  // successive reads. That config is not drifting, it is lying, and it is the
+  // same class directives#349 already records: the gate reads the config through
+  // artifacts produced by processes the config runs in, and there is no
+  // authenticated channel out of a process you do not control. A stateful
+  // accessor is that limit on the DECLARATION side rather than the report side.
+  // Recorded here so the next round reads the verdict instead of re-deriving it.
   const cover = { laptop: [], tablet: [], phone: [] };
   const rows = [];
   for (const [i, p] of projects.entries()) {
@@ -1845,14 +1881,20 @@ console.log(`config:    ${configPath}`);
       rows.push({ name, w: 'null', band: 'UNCLASSIFIABLE (viewport: null — no fixed viewport)' });
       continue;
     }
-    if (typeof vp !== 'object' || !Number.isFinite(vp.width)) {
+    // ONE READ OF EACH, then every use reads the local. `vp.width` was read for
+    // the validation, twice for the banding and twice more for the row — five
+    // chances for an accessor to hand the gate a different number than the one
+    // it validated (Codex, #347 round 34).
+    const width = vp === null || typeof vp !== 'object' ? undefined : vp.width;
+    const height = vp === null || typeof vp !== 'object' ? undefined : vp.height;
+    if (typeof vp !== 'object' || !Number.isFinite(width)) {
       rows.push({ name, w: JSON.stringify(vp), band: 'UNCLASSIFIABLE (malformed viewport)' });
       continue;
     }
-    const band = vp.width >= LAPTOP_MIN ? 'laptop' : vp.width >= TABLET_MIN ? 'tablet' : 'phone';
+    const band = width >= LAPTOP_MIN ? 'laptop' : width >= TABLET_MIN ? 'tablet' : 'phone';
     // `width` is the NUMBER, for the parent to band; `w` and `band` are this
     // process's own display strings and the parent reads neither.
-    rows.push({ name, w: `${vp.width}x${vp.height}`, band, width: vp.width });
+    rows.push({ name, w: `${width}x${height}`, band, width });
     cover[band].push(name);
   }
   for (const r of rows) {

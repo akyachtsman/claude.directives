@@ -283,6 +283,27 @@ def check_upload(steps, problems):
             + "\n    `${{ inputs.report-path }}` here is the raw input the validator"
             + "\n    refused values from, and an extra entry is an extra file (#347 r9)."
         )
+    # AND IT MUST STILL BLOCK. Round 11 added the two execution controls to the
+    # SEQUENCE and this consumer was left with none, so `continue-on-error: true`
+    # on the upload passed every pin above — the action, the `if`, the exact path
+    # list, the hidden-file flag — while an upload failure vanished behind a green
+    # job (Codex, #347 round 36). Reproduced: the guard returned OK for that shape.
+    #
+    # Pinned by PROPERTY, not by absence. The sequence pins whole step bodies
+    # verbatim, so there `None` means the field must be absent; this step is pinned
+    # as a consumer by its attributes, and an explicit `false` blocks exactly as
+    # absence does. Refusing it would be the eighth false refusal's shape — a text
+    # form standing in for the behaviour. An EXPRESSION is refused: it can evaluate
+    # true, and nothing here can tell whether it will.
+    coe = step.get("continue-on-error")
+    if coe is not None and coe is not False:
+        problems.append(
+            f'"{UPLOAD_STEP}" does not block on failure'
+            + f"\n    got `continue-on-error:` {coe!r}; expected it absent or false"
+            + "\n    The composite promises the coverage check stays blocking even under"
+            + "\n    `advisory-run`; an advisory UPLOAD hides the report that check reads"
+            + "\n    and leaves the guard green either way (#347 round 36)."
+        )
     if with_block.get("include-hidden-files") is not True:
         problems.append(
             f'"{UPLOAD_STEP}" does not set `include-hidden-files: true`'

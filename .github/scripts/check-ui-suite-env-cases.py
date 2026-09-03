@@ -112,7 +112,7 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
            val_if=None, val_coe=None, val_shell=SHELL, val_id=VALIDATE_ID,
            between_val=None,
            upload_name=UPLOAD, upload_uses=UPLOAD_USES, upload_if=IF_POST,
-           upload_path=UPLOAD_PATH, upload_hidden=True, upload=True,
+           upload_path=UPLOAD_PATH, upload_hidden=True, upload=True, upload_coe=None,
            check_wd=TESTS_DIR, run_wd=TESTS_DIR, decoy=None, between=None,
            check_body=None, run_body=None, run_uses=None,
            post_env=UNSET, post_name=POST, post_wd=TESTS_DIR, post_body=None,
@@ -168,6 +168,7 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
         + ("" if not upload else (
             f"    - name: {upload_name}\n"
             + ctl("if", upload_if)
+            + ctl("continue-on-error", upload_coe)
             + (f"      uses: {upload_uses}\n" if upload_uses else "")
             + "      with:\n"
             + ("        path: |\n"
@@ -680,6 +681,25 @@ CASES = [
     ("include-hidden-files turned off — refused",
      action(dict(BOTH), dict(BOTH), upload_hidden=False), 1,
      "include-hidden-files"),
+    # THE UPLOAD MUST STILL BLOCK (#347 round 36). Every pin above passed with
+    # `continue-on-error: true` on this step, so an upload failure vanished behind
+    # a green job while the guard stayed green — the round-11 defect, one step
+    # outside the sequence that round fixed.
+    ("the upload made advisory — refused",
+     action(dict(BOTH), dict(BOTH), upload_coe="true"), 1,
+     "does not block on failure"),
+    # ...AND AN EXPLICIT `false` IS ACCEPTED. The rule is the BEHAVIOUR, not the
+    # text: `false` blocks exactly as absence does, and refusing it would be the
+    # form-for-construct substitution that produced all eight false refusals on
+    # this PR. This case is the one that would redden if the pin were ever
+    # tightened to "must be absent".
+    ("the upload blocking via an explicit false — accepted",
+     action(dict(BOTH), dict(BOTH), upload_coe="false"), 0, "consecutive steps"),
+    # An EXPRESSION is refused: it can evaluate true and nothing here can tell.
+    ("the upload gated on an expression — refused",
+     action(dict(BOTH), dict(BOTH),
+            upload_coe="${{ inputs.advisory-run == 'true' }}"), 1,
+     "does not block on failure"),
     ("the upload switched to another action — refused",
      action(dict(BOTH), dict(BOTH), upload_uses="actions/upload-artifact@v3"), 1,
      "not 'actions/upload-artifact@v4'"),

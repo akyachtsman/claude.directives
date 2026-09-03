@@ -67,13 +67,13 @@ against the CURRENT upstream template, regardless of delta:
 ```bash
 repo="akyachtsman/claude.directives"
 raw="https://raw.githubusercontent.com/$repo/main"
-for f in .github/workflows/*.yml .github/actions/*/action.yml \
+for f in .github/workflows/*.yml .github/actions/*/* \
          .claude/hooks/session-start.sh; do
   [ -f "$f" ] || continue
   case "$f" in
     .github/workflows/*) t="templates/workflows/$(basename "$f")";;
     .claude/hooks/*)     t="templates/claude-hooks/$(basename "$f")";;
-    *)                   t="templates/actions/$(basename "$(dirname "$f")")/action.yml";;
+    *)                   t="templates/actions/$(basename "$(dirname "$f")")/$(basename "$f")";;
   esac
   tmpl=$(curl -fsSL "$raw/$t") \
     || { echo "NO-TEMPLATE: $f (project-specific — skip)"; continue; }
@@ -82,6 +82,14 @@ done
 ```
 (raw.githubusercontent.com is CDN-served and works from remote sessions; a
 failed fetch is "cannot verify", never DRIFT.)
+
+`.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
+`ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
+step — so a locally corrupted sibling next to an unmodified `action.yml` is
+exactly the invisible-drift case this pass exists for. The copy row below moved
+to whole directories in #347 round 35; this scan did not, and round 36 caught
+the half that was left. Same shape as the miss it corrected: a fix applied at
+one level and not the one under it.
 
 **`DRIFT` is a question, not a verdict — and it is what makes a curated
 exception list unnecessary.** This pass already knows, per file, whether the
@@ -327,7 +335,8 @@ already establishes, over **every caller this refresh INSTALLS** — not a fixed
 list (that is the mistake one level up), and **not only the changed ones**:
 
 ⚠️ **The installed set is WIDER than the delta, and the gap is exactly where
-#321 lives.** The composites row above installs `templates/actions/*/action.yml`
+#321 lives.** The composites row above installs `templates/actions/*/**` — the
+whole directory since round 35, `action.yml` and every sibling it runs —
 **with any qa workflow update**, so a refresh whose delta touches only `qa.yml`
 still installs an *unchanged* `ui-suite/action.yml` — and `ui-suite` is the only
 caller that names `check-ui-viewports.js`. Scope the derivation to the delta and

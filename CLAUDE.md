@@ -179,7 +179,41 @@ A directive repo must pass its own CI before it can be trusted downstream.
   the shipped Playwright config (`check-ui-viewports.js`, plus
   `check-ui-viewports-cases.js` guarding the gate itself — it IMPORTS the config
   so Node expands the device spreads; a static read was tried three times and
-  failed twelve ways, every failure silent, #282), job bounds
+  failed twelve ways, every failure silent, #282. Since #335 it also OBSERVES:
+  given `--report <playwright json>` after the run, the declared widths are
+  joined against what the run's own report says was SCHEDULED — a non-skipped
+  result under a project declaring that width, which a hook failing before the
+  test body still produces. A listing
+  (`playwright test --list`) was the first design and lost on four measured
+  differences from a run — argv, `filterOnly`, `globalSetup`, and no disposition
+  at all, so a reporter that skips every test lists a full inventory. Predicting
+  discovery from the config cost eight rounds and twenty findings; the refusals
+  that bought — root selection keys, the reporter allowlist, the `--forbid-only`
+  probe — are retired, and a key that narrows nothing now passes. The verdict is
+  **SCHEDULED**, not EXECUTED, and says so: a result proves a test ran in a
+  project DECLARING that width, never that a page was that wide. #347 rounds 5-7
+  tried three mechanisms for the stronger claim — a `viewport-override` marker,
+  a fixture recording the viewport at teardown, then one recording it at
+  navigation — and three variants of ONE finding (a hook that throws, a hook
+  that throws after requesting `page`, a hook that NAVIGATES and throws) defeated
+  all three. Withdrawn rather than lost to a fourth round; #348 carries the
+  work. ⚠️ The gate reads the config through artifacts produced by processes the
+  CONFIG RUNS IN — the JSON report, and the projects it imports — so a config's
+  own exit handler can replace the report, and a corrupted array primitive can
+  forge a declaration row. Both reproduced, #347 round 11. It catches DRIFT, not
+  FORGERY, and every candidate mechanism is either inside the same process or an
+  enumeration. #347 round 22 found the gate creating a distinguisher of its own —
+  the `--declared` sidecar is absent when the pre-run pass imports the config and
+  present when Playwright does, so a config reading it declared one thing to the
+  check and another to the run, and the carried mapping became the lie. The
+  post-run pass now re-imports and the two declarations must AGREE (exit 21);
+  the verdict is still computed from the PRE-RUN reading. Round 22 claimed that
+  preserved round 14's property exactly; round 23 corrected it — a second import
+  makes post-run IMPORTABILITY a prerequisite, so a suite leaving the config
+  unloadable now refuses with its widths unchanged. Kept as a refusal because a
+  fallback would certify without corroboration and is also the evasion. Agreement proves CONSISTENCY, never honesty; the fixture is pinned at exit 0 in the direction of STAYING a
+  limit, so if it starts being caught the case reddens and gets read. #349), job
+  bounds
   (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an
   unreadable bound on a job carrying a floor must REFUSE, and the exemption for
   jobs carrying no floor must survive, #334), the exported contrast guardrail's
@@ -306,11 +340,13 @@ node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, 
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header). Literal phrasings, CASE-SENSITIVE; a reworded carrier is meant to turn this red, and the fix is to add the wording to `phrasings` (#341)
 node .github/scripts/check-claims-cases.js       # that guard's own guard — case-sensitivity and the mustNotMatch-containment rule are what replaced the inference layer, and nothing else here would notice either being dropped. Re-prove with CHECK_CLAIMS_BIN=<mutant>
 python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
-node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic
-python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives its viewport check the SAME env as the Playwright run — the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8)
-python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths (a NameError shipped in one, #333 round 11)
+(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts)   # RUN THIS FIRST: BOTH viewport checks below resolve @playwright/test from templates/ui-tests, and on a clean tree the cases exit 1 with "CANNOT RUN" before a single case runs (#347 round 36). One-time ~2.4s network step; node_modules/ is gitignored and no lockfile is written
+node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic. Needs the ui-tests install ABOVE: since #335 the execution cases RUN a Playwright suite, so this takes minutes rather than seconds. Re-prove discrimination with CHECK_UI_VIEWPORTS_BIN=<mutant>
+python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives BOTH viewport checks — pre-run and post-run (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8). Since #347 round 18 it also pins two variables by NAME (REPORT_PATH, PLAYWRIGHT_JSON_OUTPUT_FILE) — parity is relative, and three steps that all dropped a variable agree perfectly. Round 19: requiring them EQUAL was the same relative mistake one level up (three steps agreeing on `other.json` pass while the stale-report clear and the upload still read the validated output), so both are pinned to the LITERAL `${{ steps.report-path.outputs.relative }}`. Round 20: the same mistake a third time, on `working-directory` — three steps moved together satisfied every relative rule while the validator and the stale-report clear still resolved from the input — so each guarded step's cwd is pinned to the literal `${{ inputs.tests-dir }}` too. Round 21: the stale-report CLEAR step joined the sequence — it was outside it, so skipping it, making it advisory or changing its `rm` all left the guard green while an uncleared report satisfied the post-run gate. Round 36: the artifact UPLOAD was pinned by four attributes and no execution control, so `continue-on-error: true` on it passed every one of them while an upload failure vanished behind a green job — the round-11 defect, one step outside the sequence round 11 fixed. Pinned by PROPERTY there (absent or `false`), not by absence, since an explicit `false` blocks identically and refusing it would be another form-for-construct false refusal
+python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths (a NameError shipped in one, #333 round 11). Its rules have been rewritten four times, so re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
+python3 .github/scripts/check-report-path-cases.py # the ui-suite report-path validator's own guard — this repo does not use the composite, so nothing else here would notice it break; three of #347's rounds found defects in it. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
 node .github/scripts/check-contrast-cases.js      # the exported WCAG guardrail's own guard — this repo has no styles/tokens.css, so NOTHING else here would notice it break (#334)
-(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts) && node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone; the install is a one-time ~2.4s network step (node_modules/ is gitignored, no lockfile written)
+node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it

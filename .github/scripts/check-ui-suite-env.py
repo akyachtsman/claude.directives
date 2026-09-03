@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Guard: the ui-suite composite's viewport check and its Playwright run must see
+"""Guard: the ui-suite composite's viewport checks and its Playwright run must see
 the SAME environment.
 
 WHY THIS EXISTS. `check-ui-viewports.js` IMPORTS the Playwright config, so it
-evaluates whatever that config computes from process.env. If the check step is
+evaluates whatever that config computes from process.env. If a check step is
 given a thinner environment than the step that actually runs the suite, the two
 read DIFFERENT configs: a selection key set only when TEST_AUTH_CREDENTIAL is
 present is invisible to the check and active in the run. Codex reproduced exactly
 that on #333 (a config setting `shard` under that condition) -- check step exit 0,
 run step partitioned.
+
+THREE STEPS, NOT TWO, since #335 put the gate on both sides of the suite: the
+pre-run check (which widths are DECLARED), the run, and the post-run check with
+--report (which were SCHEDULED). All three are compared against the run step,
+which is the reference because it is what the other two make claims about.
 
 The fix was to copy the run step's env onto the check step. That copy is a
 hand-maintained coupling held together by a comment, which is the enumerate-vs-
@@ -39,6 +44,273 @@ import yaml
 ACTION = sys.argv[1] if len(sys.argv) > 1 else "templates/actions/ui-suite/action.yml"
 CHECK_STEP = "Check three viewport classes are declared"
 RUN_STEP = "Run Playwright tests"
+# THE POST-RUN STEP IS NOT A THIRD SPECIAL CASE, it is the same step twice. Since
+# #335 the gate runs on BOTH sides of the suite: once before, reporting which
+# widths are DECLARED, and once after with --report, reporting which were
+# SCHEDULED. Both invocations IMPORT the config, so both are subject to every
+# argument above -- an env or a cwd that differs from the run's makes the second
+# one read a different config than the run it is certifying, which is #333's
+# finding arriving a third time. The three steps run consecutively and share one
+# environment; RUN_STEP is the reference all of them are compared against,
+# because it is the thing being measured.
+POST_STEP = "Check the run scheduled tests at all three viewport classes"
+
+# (label, the exact command bodies accepted), in the order the steps must appear.
+#
+# THIS IS A PIN, NOT A PARSE, AND THAT IS THE POINT. Four rounds tried to decide
+# from shell TEXT whether a body runs the program it names, and each fix was
+# defeated by a shell feature the previous one had not modelled:
+#   r5   substring `--report`         -> `--reporter=json` satisfied it
+#   r6   token `--report`             -> `echo check-ui-viewports --report` did
+#   r9   launcher + first-3-tokens    -> `python3 -c "'check-ui-viewports'"
+#                                        --report r.json` did (#347 r10), and so
+#                                        did `node check-ui-viewports.js
+#                                        # --report r.json`, where whitespace
+#                                        splitting sees a token and bash sees a
+#                                        comment
+# Every one of those was a cheaper observable standing in for "this command runs
+# that program" -- the defect class this whole PR is about. A fifth parser would
+# be the same bet again, so the mechanism is REMOVED rather than patched: the
+# body must be one of a small set of exact strings, and no shell subtlety
+# (comments, -c, quoting, redirection, expansion) can matter to a comparison
+# that does not interpret anything.
+#
+# The cost is that changing a command here also means changing this list. That
+# is the intended cost: this composite is COPIED whole by downstream projects,
+# so its command bodies are not a place for local variation, and a deliberate
+# edit in two files beats a parser that can be talked around.
+#
+# The post-run body carries `--report` because the gate without it reports what
+# the config DECLARES and exits 0 -- drop the argument and the step still runs,
+# still passes, and silently stops checking execution (Codex, #347 round 5).
+GATE = 'node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"'
+
+# A PINNED BODY IS NOT A PINNED STEP. Round 11: the guard read the command, the
+# env, the directory and the order, and never read either field that decides
+# whether the step RUNS or whether its failure COUNTS. So `if: ${{ false }}` on
+# the post-run gate, or `continue-on-error: true`, left this green while the
+# composite skipped the execution check or ignored its missing-band failure —
+# the same defect as a body that merely mentions the gate, one field over.
+#
+# Both fields are pinned exactly, alongside the body. `None` means the field must
+# be ABSENT: a step with no `if` always runs and a step with no
+# `continue-on-error` blocks, and those are the states the composite depends on.
+# The run step is the one exception, and it is written out rather than exempted —
+# `advisory-run` is a project's choice to tolerate failing TESTS, and this pin is
+# what keeps that from silently becoming a choice to stop checking widths.
+IF_POST = "${{ always() && steps.report-path.outcome == 'success' }}"
+COE_RUN = "${{ inputs.advisory-run == 'true' }}"
+
+# THE SHELL IS PART OF THE PIN. `shell:` accepts a custom COMMAND TEMPLATE, where
+# `{0}` is the generated script file -- so `bash -c 'exit 0' {0}` never runs the
+# script at all, and the body, env, cwd, order, `if` and `continue-on-error` all
+# still match. Codex reproduced this guard returning OK for that shape (#347
+# round 12).
+#
+# Third field in a row of the same kind: round 11 added the two execution
+# controls after learning a pinned body says nothing about a step that does not
+# run; this is the same lesson about a step that does not run its body. Pinning
+# the literal `bash` is the whole rule -- no parsing of the template, because a
+# template is a shell string and parsing those is what rounds 5-10 were.
+SHELL = "bash"
+# `--declared` carries the project->width mapping ACROSS the run (#347 round 14):
+# the pre-run step writes it, the post-run step reads it instead of importing a
+# config that globalSetup, the tests and globalTeardown have all had a turn at.
+# Both bodies must name the same sidecar or the handoff silently degrades into
+# the re-evaluation it replaced, which is why it is pinned rather than described.
+DECLARED = '--declared "$RUNNER_TEMP/ui-viewports-declared.json"'
+# PINNED ENV, NOT JUST MATCHING ENV. Everything else in this file compares the
+# three steps against each other, which catches a variable dropped from ONE step
+# and says nothing about one dropped from all three -- parity between three
+# absences is still parity. That is the fail-open shape this guard exists to
+# refuse, so the variables whose PRESENCE is load-bearing are named here.
+#
+# PLAYWRIGHT_JSON_OUTPUT_FILE takes precedence over the json reporter's
+# configured `outputFile` (measured, 1.62.1: with it set the configured file is
+# not written at all). Unset, a caller job that exports it redirects the report
+# away from the validated path and the post-run gate exits 15 on a run that
+# passed (Codex, #347 round 18). Its value must be the SAME expression as
+# REPORT_PATH -- the validated output -- or the run writes the report somewhere
+# the gate does not read, which is the same failure with an extra step.
+REQUIRED_ENV = ("REPORT_PATH", "PLAYWRIGHT_JSON_OUTPUT_FILE")
+# EQUAL TO EACH OTHER IS ANOTHER RELATIVE RULE, and it fails the same way the
+# parity rules do. Round 18 required the two variables to MATCH; three steps all
+# set to `other.json` match perfectly, while the stale-report clear and the
+# artifact upload keep reading `steps.report-path.outputs.*`. The run would then
+# write somewhere those two do not look: an aborted run leaves the previous
+# report uncleared and certifiable, and the upload publishes no report at all
+# (Codex, #347 round 19). Requiring "the same" was the same mistake one level
+# up from the one it fixed.
+#
+# So the value is pinned to the LITERAL expression, which is the only one the
+# validator produces. `${{ inputs.report-path }}` is the near-miss this refuses:
+# it is the raw input, and every consumer in this composite reads the validated
+# output instead (#347 round 10).
+VALIDATED_REPORT = "${{ steps.report-path.outputs.relative }}"
+# THE WORKING DIRECTORY IS THE SAME KIND OF VALUE AND WAS LEFT RELATIVE. Round 19
+# pinned the env to a literal and left this comparison as "all three agree",
+# which three steps moved together to the same wrong directory satisfy. The
+# validator and the stale-report clear keep resolving from `inputs.tests-dir`,
+# so Playwright and the post-run gate would resolve the report from somewhere
+# else: with an advisory run that aborts before writing, an UNCLEARED stale
+# report in the replacement directory satisfies the post-run gate, and the
+# upload still looks where the input points (Codex, #347 round 20).
+#
+# Third instance of one mistake — parity, then equal-values, now cwd. A relative
+# rule cannot see a coordinated move, and every value here has exactly one
+# correct spelling, so each is pinned to it.
+PINNED_WORKDIR = "${{ inputs.tests-dir }}"
+PINNED_ENV_VALUES = (
+    ("REPORT_PATH", VALIDATED_REPORT),
+    ("PLAYWRIGHT_JSON_OUTPUT_FILE", VALIDATED_REPORT),
+)
+# THE CLEAR STEP IS PART OF THE SEQUENCE, not a preamble to it. It was outside
+# SEQUENCE entirely, so skipping it, making it advisory, moving it to another
+# directory or changing its command all left this guard green — and in an
+# `advisory-run` invocation where Playwright aborts before its reporter writes,
+# an UNCLEARED report from a previous invocation then satisfies the post-run gate
+# and the job stays green (Codex, #347 round 21).
+#
+# Folded into SEQUENCE rather than given its own mechanism, which means it
+# inherits every rule at once: body, `if`, `continue-on-error`, shell, working
+# directory, adjacency, and env. The env parity is the one that reads oddly on an
+# `rm` — it does not import the config and does not need APP_URL. It carries the
+# same block anyway because ONE rule over four steps is worth more than an
+# exemption that has to be argued each time it is read, and because the two
+# variables that ARE load-bearing here (REPORT_PATH, and the destination the run
+# is pinned to) must match what the other three use or this clears the wrong file.
+CLEAR_STEP = "Clear any stale Playwright report"
+# AND THE STEP THAT PRODUCES THE VALUE THE OTHER FOUR ARE PINNED TO. Round 21
+# folded the clear step in for exactly this reason and stopped at the step it was
+# looking at; `Validate report-path` stayed outside SEQUENCE, so making it
+# skippable (`if: ${{ false }}`) or replacing its command left this guard green.
+# The post-run gate is guarded by `steps.report-path.outcome == 'success'`, which
+# is FALSE for a skipped step — so the clear, the declaration check and the run
+# all execute, the post-run coverage gate is skipped, and under `advisory-run`
+# the composite finishes green having validated neither the path nor the
+# scheduled coverage (Codex, #347 round 27).
+#
+# That is round 21's finding one step to the left, and round 26's lesson about
+# the shape of these fixes: the rule was applied to the carrier that was named.
+# So membership is no longer what a step's rules depend on. Every step in
+# SEQUENCE carries its OWN env policy and working directory, and the validator
+# joins as an ordinary member with the policy its role requires — it cannot
+# consume `steps.report-path.outputs.*`, being the step that produces it, and it
+# resolves `tests-dir` from an env variable rather than by running inside it.
+#
+# `PARITY` means "the same env as the run, plus the pinned values" — the rule the
+# other four live under. An explicit mapping means "exactly this", which is the
+# stronger rule, and the validator gets it because both of its variables are the
+# raw inputs whose repointing is the whole attack: validate one path, use another.
+PARITY = object()
+VALIDATE_STEP = "Validate report-path"
+# The id is load-bearing in a way no other step's name is: five later steps and
+# two `if:` guards read `steps.report-path.*`. Renaming the id silently detaches
+# every one of them, and the `if:` guards then evaluate against a step that does
+# not exist — which is the skipped-step path above, reached by a different route.
+PINNED_IDS = {VALIDATE_STEP: "report-path"}
+SEQUENCE = (
+    (VALIDATE_STEP, ('python3 "$GITHUB_ACTION_PATH/validate-report-path.py"',),
+     None, None, SHELL,
+     {"REPORT_PATH": "${{ inputs.report-path }}",
+      "TESTS_DIR": "${{ inputs.tests-dir }}"}, None),
+    (CLEAR_STEP,
+     ('rm -f -- "$REPORT_PATH" "$RUNNER_TEMP/ui-viewports-declared.json"',),
+     None, None, SHELL, PARITY, PINNED_WORKDIR),
+    (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL,
+     PARITY, PINNED_WORKDIR),
+    (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL,
+     PARITY, PINNED_WORKDIR),
+    (POST_STEP, (f'{GATE} --tests-dir . {DECLARED} --report "$REPORT_PATH"',),
+     IF_POST, None, SHELL, PARITY, PINNED_WORKDIR),
+)
+PARITY_STEPS = tuple(e[0] for e in SEQUENCE if e[5] is PARITY)
+
+# THE VALIDATED PATH HAS A CONSUMER OUTSIDE THE SEQUENCE, and it is the one the
+# validator exists for. `Upload test results` interpolates the report path into
+# a MULTILINE artifact list under `always()`; round 9 of #347 found that
+# interpolating the RAW INPUT there left the exfiltration path open even after
+# round 8 added the validator. Round 27 pinned the producer and stopped at the
+# post-run gate, so re-pointing this step at `${{ inputs.report-path }}` or
+# dropping its `steps.report-path.outcome` guard left this guard green — the
+# regression suite staying quiet exactly where the protection detaches (Codex,
+# #347 round 28).
+#
+# It cannot join SEQUENCE: it is a `uses:` step, which SEQUENCE refuses
+# categorically because a composite action's internals are not visible here. So
+# it is pinned as what it is — a CONSUMER: its `if:`, the exact entries of its
+# path list, and `include-hidden-files`, which round 16 added because a report
+# under a dot directory is silently omitted without it.
+UPLOAD_STEP = "Upload test results"
+UPLOAD_USES = "actions/upload-artifact@v4"
+UPLOAD_IF = IF_POST
+UPLOAD_PATH = (".agent-reports/screenshots/",
+               "${{ steps.report-path.outputs.path }}")
+
+
+def check_upload(steps, problems):
+    matches = [s for s in steps if s.get("name") == UPLOAD_STEP]
+    if len(matches) != 1:
+        problems.append(
+            f'{len(matches)} steps are named "{UPLOAD_STEP}" in {ACTION}'
+            + "\n    This step consumes the validated report path; without exactly one,"
+            + "\n    nothing here can say what the artifact list contains (#347 round 28)."
+        )
+        return
+    step = matches[0]
+    if step.get("uses") != UPLOAD_USES:
+        problems.append(
+            f'"{UPLOAD_STEP}" uses {step.get("uses")!r}, not {UPLOAD_USES!r}'
+            + "\n    The path rules below are about upload-artifact's pattern list; a"
+            + "\n    different action makes them claims about something else."
+        )
+    if step.get("if") != UPLOAD_IF:
+        problems.append(
+            f'"{UPLOAD_STEP}" has the wrong `if:`'
+            + f"\n    got:      {step.get('if')!r}"
+            + f"\n    expected: {UPLOAD_IF!r}"
+            + "\n    It runs under `always()`, so without the outcome guard a REFUSED"
+            + "\n    path still reaches the artifact list (#347 rounds 9 and 28)."
+        )
+    with_block = step.get("with") or {}
+    got_path = tuple(ln.strip() for ln in str(with_block.get("path") or "").splitlines()
+                     if ln.strip())
+    if got_path != UPLOAD_PATH:
+        problems.append(
+            f'"{UPLOAD_STEP}" does not upload the pinned path list'
+            + f"\n    got:      {list(got_path)!r}"
+            + f"\n    expected: {list(UPLOAD_PATH)!r}"
+            + "\n    `${{ inputs.report-path }}` here is the raw input the validator"
+            + "\n    refused values from, and an extra entry is an extra file (#347 r9)."
+        )
+    # AND IT MUST STILL BLOCK. Round 11 added the two execution controls to the
+    # SEQUENCE and this consumer was left with none, so `continue-on-error: true`
+    # on the upload passed every pin above — the action, the `if`, the exact path
+    # list, the hidden-file flag — while an upload failure vanished behind a green
+    # job (Codex, #347 round 36). Reproduced: the guard returned OK for that shape.
+    #
+    # Pinned by PROPERTY, not by absence. The sequence pins whole step bodies
+    # verbatim, so there `None` means the field must be absent; this step is pinned
+    # as a consumer by its attributes, and an explicit `false` blocks exactly as
+    # absence does. Refusing it would be the eighth false refusal's shape — a text
+    # form standing in for the behaviour. An EXPRESSION is refused: it can evaluate
+    # true, and nothing here can tell whether it will.
+    coe = step.get("continue-on-error")
+    if coe is not None and coe is not False:
+        problems.append(
+            f'"{UPLOAD_STEP}" does not block on failure'
+            + f"\n    got `continue-on-error:` {coe!r}; expected it absent or false"
+            + "\n    The composite promises the coverage check stays blocking even under"
+            + "\n    `advisory-run`; an advisory UPLOAD hides the report that check reads"
+            + "\n    and leaves the guard green either way (#347 round 36)."
+        )
+    if with_block.get("include-hidden-files") is not True:
+        problems.append(
+            f'"{UPLOAD_STEP}" does not set `include-hidden-files: true`'
+            + f"\n    got: {with_block.get('include-hidden-files')!r}"
+            + "\n    A report under a dot directory — which the shipped tests-dir"
+            + "\n    produces — is silently omitted without it (#347 round 16)."
+        )
 
 
 def env_of(steps, name):
@@ -77,48 +349,111 @@ def main():
         doc = yaml.safe_load(handle)
     steps = (doc.get("runs") or {}).get("steps") or []
 
-    check_env, check_n = env_of(steps, CHECK_STEP)
-    run_env, run_n = env_of(steps, RUN_STEP)
-    check_found = check_n == 1
-    run_found = run_n == 1
+    envs = {label: env_of(steps, label) for label, *_ in SEQUENCE}
+    run_env = envs[RUN_STEP][0]
+    all_found = all(count == 1 for _, count in envs.values())
 
     problems = []
-    for label, count in ((CHECK_STEP, check_n), (RUN_STEP, run_n)):
+    check_upload(steps, problems)
+    for label, *_ in SEQUENCE:
+        count = envs[label][1]
         if count > 1:
             problems.append(
                 f'{count} steps are named "{label}" in {ACTION}'
-                + "\n    This guard identifies both steps by name, so a duplicate makes it"
+                + "\n    This guard identifies each step by name, so a duplicate makes it"
                 + "\n    unable to say which one runs -- and taking the first silently"
                 + "\n    disabled it (#333, round 14)."
             )
-    # A renamed step is not a pass. Without this the whole guard reads two empty
-    # sets, finds them equal, and reports OK -- the fail-open shape it guards.
-    if check_n == 0:
-        problems.append(f'no step named "{CHECK_STEP}" in {ACTION}')
-    if run_n == 0:
-        problems.append(f'no step named "{RUN_STEP}" in {ACTION}')
+        # A renamed step is not a pass. Without this the whole guard reads empty
+        # sets, finds them equal, and reports OK -- the fail-open shape it guards.
+        if count == 0:
+            problems.append(f'no step named "{label}" in {ACTION}')
 
-    if check_found and run_found:
-        missing = sorted(k for k in run_env if k not in check_env)
-        extra = sorted(k for k in check_env if k not in run_env)
-        differing = sorted(
-            k for k in run_env if k in check_env and check_env[k] != run_env[k]
-        )
-        if missing:
-            problems.append(
-                "the viewport check step is missing environment the run step has: "
-                + ", ".join(missing)
-                + "\n    The check IMPORTS the config, so a selection key conditional on one"
-                + "\n    of these is invisible to it and active in the run (#333, round 8)."
-            )
-        if extra:
-            problems.append(
-                "the viewport check step carries environment the run step lacks: "
-                + ", ".join(extra)
-                + "\n    This direction hides a filter too: a config can declare one only when"
-                + "\n    a variable is ABSENT, so the check sees none and the run applies it"
-                + "\n    (#333, round 10). Give both steps the same env, or neither."
-            )
+    if all_found:
+        # EVERY viewport step is compared against the RUN step, in both
+        # directions. Two comparisons rather than one since #335 put the gate on
+        # both sides of the suite; the run is the reference because it is what
+        # the other two make claims about.
+        for label in PARITY_STEPS:
+            if label == RUN_STEP:
+                continue
+            step_env = envs[label][0]
+            missing = sorted(k for k in run_env if k not in step_env)
+            extra = sorted(k for k in step_env if k not in run_env)
+            if missing:
+                problems.append(
+                    f'"{label}" is missing environment the run step has: '
+                    + ", ".join(missing)
+                    + "\n    It IMPORTS the config, so a selection key conditional on one of"
+                    + "\n    these is invisible to it and active in the run (#333, round 8)."
+                )
+            if extra:
+                problems.append(
+                    f'"{label}" carries environment the run step lacks: '
+                    + ", ".join(extra)
+                    + "\n    This direction hides a filter too: a config can declare one only when"
+                    + "\n    a variable is ABSENT, so the step sees none and the run applies it"
+                    + "\n    (#333, round 10). Give every step the same env, or none of them."
+                )
+        # THE NAMED VARIABLES MUST BE THERE AT ALL. See REQUIRED_ENV above:
+        # the comparisons before this one are relative, and three steps that all
+        # dropped a variable agree perfectly.
+        for key in REQUIRED_ENV:
+            absent = sorted(label for label in PARITY_STEPS if key not in envs[label][0])
+            if absent:
+                problems.append(
+                    f"{key} is not set on: " + ", ".join(f'"{a}"' for a in absent)
+                    + "\n    Every step of the sequence must set it. Parity alone cannot see"
+                    + "\n    this: three steps that all dropped it compare equal (#347 round 18)."
+                )
+        for key, pinned in PINNED_ENV_VALUES:
+            for label in PARITY_STEPS:
+                step_env = envs[label][0]
+                if key in step_env and step_env[key] != pinned:
+                    problems.append(
+                        f'"{label}" sets {key} to {step_env[key]!r}, not the validated output'
+                        + f"\n    expected: {pinned}"
+                        + "\n    Equal to each other is not enough: the stale-report clear and the"
+                        + "\n    artifact upload read that expression directly, so three steps"
+                        + "\n    agreeing on a DIFFERENT value still writes where they do not look"
+                        + "\n    (#347 round 19)."
+                    )
+        # A STEP OUTSIDE PARITY IS PINNED EXACTLY, not left unchecked. The
+        # validator's two variables are the RAW inputs, and repointing either is
+        # the whole attack this composite exists to refuse: validate one path and
+        # use another. Parity cannot express that — it has no peer to compare to
+        # — so the mapping is pinned whole, and an extra variable is a problem
+        # too, since a config-reading step gaining env is how #333 rounds 8 and
+        # 10 both went.
+        for label, _b, _i, _c, _s, policy, _w in SEQUENCE:
+            if policy is PARITY:
+                continue
+            got = envs[label][0]
+            if got != policy:
+                problems.append(
+                    f'"{label}" does not carry its pinned environment'
+                    + f"\n    got:      {got!r}"
+                    + f"\n    expected: {policy!r}"
+                    + "\n    This step VALIDATES the path the other four are pinned to, so a"
+                    + "\n    repointed variable here validates one path while they use another"
+                    + "\n    (#347 round 27)."
+                )
+        # AND ITS ID, which five later steps and two `if:` guards read as
+        # `steps.report-path.*`. A renamed id detaches every one of them, and the
+        # guards then evaluate against a step that does not exist — the skipped
+        # step of round 27 by another route.
+        for label, want_id in PINNED_IDS.items():
+            i = index_of(steps, label)
+            got_id = steps[i].get("id") if i is not None else None
+            if got_id != want_id:
+                problems.append(
+                    f'"{label}" has id {got_id!r}, not {want_id!r}'
+                    + "\n    `steps.report-path.outputs.relative` is read by the clear, the run,"
+                    + "\n    both gates and the upload, and `steps.report-path.outcome` guards"
+                    + "\n    the post-run gate. A rename makes all of them read an empty value"
+                    + "\n    or skip outright (#347 round 27)."
+                )
+
         # WORKING DIRECTORY IS AN INPUT TOO. A config is code: its export can
         # depend on process.cwd() as much as on the environment (#333 round 9).
         # Both steps evaluate the config, so both must run from the same place --
@@ -130,18 +465,18 @@ def main():
         # live one at the run -- both exiting 0 on different configs. The fix was
         # to move the step; this keeps it moved, because a comment saying "do not
         # insert a step here" is not a mechanism.
-        check_i = index_of(steps, CHECK_STEP)
-        run_i = index_of(steps, RUN_STEP)
-        if check_i is not None and run_i is not None and run_i != check_i + 1:
-            between = [steps[i].get("name") for i in range(min(check_i, run_i) + 1,
-                                                           max(check_i, run_i))]
+        order = [(label, index_of(steps, label)) for label, *_ in SEQUENCE]
+        for (before, i), (after, j) in zip(order, order[1:]):
+            if i is None or j is None or j == i + 1:
+                continue
+            between = [steps[k].get("name") for k in range(min(i, j) + 1, max(i, j))]
             problems.append(
-                "the viewport check is not immediately before the Playwright run"
+                f'"{after}" does not run immediately after "{before}"'
                 + (f"\n    between them: {', '.join(str(b) for b in between)}" if between else "")
-                + (f"\n    (the check is at index {check_i}, the run at {run_i})")
-                + "\n    Both steps evaluate the config. Anything in between can change what"
-                + "\n    the config observes, so the gate checks one config and the run uses"
-                + "\n    another (#333, round 16)."
+                + (f"\n    (\"{before}\" is at index {i}, \"{after}\" at {j})")
+                + "\n    All three steps evaluate the config. Anything in between can change"
+                + "\n    what the config observes, so the gate checks one config and the run"
+                + "\n    uses another (#333, round 16)."
             )
 
         # INDEX ADJACENCY IS NOT EXECUTION ADJACENCY. Two consecutive steps can
@@ -159,13 +494,13 @@ def main():
         # passed too. Sixth time on this PR I measured the cheap observable
         # (line count) instead of the property (what executes, and only that).
         #
-        # So each step's body must consist of exactly the invocation it exists
-        # for, with nothing composed onto it. The accepted shapes are pinned in
-        # check-ui-suite-env-cases.py; anything else is refused rather than
-        # parsed, because parsing shell is how the previous version got here.
-        COMPOSERS = ("&&", "||", ";", "|", "&", "$(", "`")
-        for label, i, needle in ((CHECK_STEP, check_i, "check-ui-viewports"),
-                                 (RUN_STEP, run_i, "playwright test")):
+        # So each step's body must be EXACTLY the invocation it exists for, and
+        # "exactly" is now literal: the body is compared, character for
+        # character, against the strings pinned in SEQUENCE. The composer list
+        # this used to carry (&& || ; | & $( `) is gone with the rest of the
+        # parser -- an exact match rejects every one of those without enumerating
+        # them, and enumerating them is what left `#` and `-c` off the list.
+        for (label, bodies, want_if, want_coe, want_shell, _p, _w), (_, i) in zip(SEQUENCE, order):
             if i is None:
                 continue
             step = steps[i]
@@ -173,56 +508,90 @@ def main():
                 problems.append(
                     f'"{label}" is a `uses:` step'
                     + "\n    Its internals are not visible here, so nothing can establish that no"
-                    + "\n    other work runs between the two config evaluations (#333, round 17)."
+                    + "\n    other work runs between the config evaluations (#333, round 17)."
                 )
                 continue
-            lines = [ln.strip() for ln in str(step.get("run") or "").splitlines()
-                     if ln.strip() and not ln.strip().startswith("#")]
-            bad = [ln for ln in lines if any(c in ln for c in COMPOSERS)]
-            if bad:
+            # COMMENTS ARE NOT STRIPPED ANY MORE. The old reader dropped lines
+            # beginning with `#` and then split the rest on whitespace, so
+            # `node check-ui-viewports.js # --report r.json` handed the guard a
+            # `--report` token that bash treats as a comment (Codex, #347 r10).
+            # An exact comparison needs no such pre-processing: the body either
+            # is one of the pinned strings or it is not.
+            # EXECUTION CONTROLS FIRST: a step that does not run, or whose
+            # failure is discarded, makes its body irrelevant.
+            for field, want in (("if", want_if), ("continue-on-error", want_coe),
+                                ("shell", want_shell)):
+                got = step.get(field)
+                if got is None and want is None:
+                    continue
+                if got == want:
+                    continue
                 problems.append(
-                    f'"{label}" composes other commands onto its invocation'
-                    + f"\n    {'; '.join(bad)}"
-                    + "\n    Anything composed with && || ; | & or a substitution runs between the"
-                    + "\n    two config evaluations, however few LINES the step has"
-                    + "\n    (#333, round 18)."
-                )
-            elif len(lines) != 1:
-                problems.append(
-                    f'"{label}" runs {len(lines)} commands; it must run exactly one'
-                    + f"\n    {'; '.join(lines) if lines else '(none)'}"
-                    + "\n    Each of these steps evaluates the config, so anything else in either"
-                    + "\n    body executes between the two evaluations (#333, round 17)."
-                )
-            elif needle not in lines[0]:
-                problems.append(
-                    f'"{label}" does not appear to invoke what its name says'
-                    + f"\n    {lines[0]}"
-                    + f"\n    expected the command to mention {needle!r}. A step renamed onto a"
-                    + "\n    different command would otherwise satisfy every check here"
-                    + "\n    (#333, round 18)."
+                    f'"{label}" has the wrong `{field}:`'
+                    + f"\n    got:      {got!r}"
+                    + f"\n    expected: {want!r}"
+                    + ("\n    (absent — the step must always run and must block on failure)"
+                       if want is None else "")
+                    + "\n    These two fields decide whether the step runs at all and whether"
+                    + "\n    its failure counts, so a pinned command says nothing without them"
+                    + "\n    (#347, round 11)."
                 )
 
-        check_wd = workdir_of(steps, CHECK_STEP)
-        run_wd = workdir_of(steps, RUN_STEP)
-        if check_wd != run_wd:
-            problems.append(
-                "the two steps run from DIFFERENT working directories: "
-                f"check={check_wd!r} run={run_wd!r}"
-                + "\n    A config branching on process.cwd() then exports one thing to the"
-                + "\n    gate and another to the run (#333, rounds 9-12)."
-            )
-        if differing:
-            problems.append(
-                "the two steps set the same variable to DIFFERENT values: "
-                + ", ".join(differing)
-                + "\n    "
-                + "; ".join(
-                    f"{k}: check={check_env[k]!r} run={run_env[k]!r}" for k in differing
+            body = str(step.get("run") or "").strip()
+            if body not in bodies:
+                problems.append(
+                    f'"{label}" does not run the pinned command'
+                    + f"\n    got:      {body!r}"
+                    + "".join(f"\n    expected: {b!r}" for b in bodies)
+                    + "\n    These three steps must be exactly their invocations: two of them"
+                    + "\n    evaluate the config, so anything else in any body runs BETWEEN the"
+                    + "\n    evaluations (#333, round 17), and four attempts to decide that from"
+                    + "\n    shell text were each walked around by a shell feature they did not"
+                    + "\n    model (#347, rounds 5, 6, 9, 10). The bodies are pinned in"
+                    + "\n    check-ui-suite-env.py -> SEQUENCE; change both together."
                 )
-                + "\n    Matching names are not matching inputs. A config conditional on the"
-                + "\n    VALUE then reads one thing here and another in the run (round 9)."
+
+        run_wd = workdir_of(steps, RUN_STEP)
+        # PINNED, not merely shared. See PINNED_WORKDIR above: the relative check
+        # below still runs, because it is the one that explains WHY when a step
+        # drifts, but it is no longer the only thing standing here.
+        for label, _b, _i, _c, _s, _p, want_wd in SEQUENCE:
+            step_wd = workdir_of(steps, label)
+            if step_wd != want_wd:
+                problems.append(
+                    f'"{label}" runs from {step_wd!r}, not its pinned directory'
+                    + f"\n    expected: {want_wd}"
+                    + "\n    Agreeing with each other is not enough: the report-path validator"
+                    + "\n    and the stale-report clear resolve from the input, so three steps"
+                    + "\n    moved together read and write a different directory than the ones"
+                    + "\n    that clear and upload the report (#347 round 20)."
+                )
+        for label in PARITY_STEPS:
+            if label == RUN_STEP:
+                continue
+            step_wd = workdir_of(steps, label)
+            if step_wd != run_wd:
+                problems.append(
+                    f'"{label}" runs from a DIFFERENT working directory than the run: '
+                    f"step={step_wd!r} run={run_wd!r}"
+                    + "\n    A config branching on process.cwd() then exports one thing to the"
+                    + "\n    gate and another to the run (#333, rounds 9-12)."
+                )
+            step_env = envs[label][0]
+            differing = sorted(
+                k for k in run_env if k in step_env and step_env[k] != run_env[k]
             )
+            if differing:
+                problems.append(
+                    f'"{label}" and the run step set the same variable to DIFFERENT values: '
+                    + ", ".join(differing)
+                    + "\n    "
+                    + "; ".join(
+                        f"{k}: step={step_env[k]!r} run={run_env[k]!r}" for k in differing
+                    )
+                    + "\n    Matching names are not matching inputs. A config conditional on the"
+                    + "\n    VALUE then reads one thing here and another in the run (round 9)."
+                )
 
     if problems:
         print("check-ui-suite-env: FAILED")
@@ -241,8 +610,8 @@ def main():
     # recorded on #335.
     shared = sorted(run_env)
     print(
-        "check-ui-suite-env: OK -- adjacent steps, same step-level env and working directory "
-        f"({', '.join(shared) if shared else 'empty'})"
+        f"check-ui-suite-env: OK -- {len(SEQUENCE)} consecutive steps, same step-level "
+        f"env and working directory ({', '.join(shared) if shared else 'empty'})"
     )
     print(
         "  (declared env only: the launchers differ -- `node` vs `npx` -- and the"

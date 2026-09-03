@@ -1756,6 +1756,15 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => 
   // verdict), which cost +40s and pushed ~179s against the previous 180_000.
   // 300_000, same as S2 and CTRL — one number for one shared preamble.
   test.setTimeout(300_000);
+  // DECLARE THE OVERRIDE. This test sets its own viewport, so it runs at 390 in
+  // EVERY project — it is evidence for the phone band and for no other. Without
+  // this annotation, a run that selected only S4 (a stray `.only`, a grep, a
+  // quarantine reporter) reports a result in the laptop and tablet projects too,
+  // and check-ui-viewports.js would certify widths nothing rendered at. It reads
+  // this annotation out of the JSON report and stops counting the result.
+  // test.md → UI coverage gates, fifth gate. Any test you add that calls
+  // setViewportSize() needs the same line.
+  test.info().annotations.push({ type: 'viewport-override', description: '390' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./');
   // LOAD_SETTLE_MS: scrollWidth is read below as a VERDICT. Content that renders

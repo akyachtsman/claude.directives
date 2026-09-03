@@ -58,6 +58,13 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/action.yml \
   -o .github/actions/ui-suite/action.yml
+
+# The ui-suite composite runs a SIBLING script by path. Install it WITH the
+# YAML — the composite's first step is `python3
+# "$GITHUB_ACTION_PATH/validate-report-path.py"`, so without this file every UI
+# job dies at that step with "No such file".
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/validate-report-path.py \
+  -o .github/actions/ui-suite/validate-report-path.py
 ```
 
 ⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
@@ -532,6 +539,7 @@ Required repository variables:
 - [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
 - [ ] `.github/workflows/cron-notify.yml` present (projects with scheduled jobs); `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
+- [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
 - [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it

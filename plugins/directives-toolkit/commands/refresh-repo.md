@@ -67,13 +67,13 @@ against the CURRENT upstream template, regardless of delta:
 ```bash
 repo="akyachtsman/claude.directives"
 raw="https://raw.githubusercontent.com/$repo/main"
-for f in .github/workflows/*.yml .github/actions/*/action.yml \
+for f in .github/workflows/*.yml .github/actions/*/* \
          .claude/hooks/session-start.sh; do
   [ -f "$f" ] || continue
   case "$f" in
     .github/workflows/*) t="templates/workflows/$(basename "$f")";;
     .claude/hooks/*)     t="templates/claude-hooks/$(basename "$f")";;
-    *)                   t="templates/actions/$(basename "$(dirname "$f")")/action.yml";;
+    *)                   t="templates/actions/$(basename "$(dirname "$f")")/$(basename "$f")";;
   esac
   tmpl=$(curl -fsSL "$raw/$t") \
     || { echo "NO-TEMPLATE: $f (project-specific — skip)"; continue; }
@@ -82,6 +82,14 @@ done
 ```
 (raw.githubusercontent.com is CDN-served and works from remote sessions; a
 failed fetch is "cannot verify", never DRIFT.)
+
+`.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
+`ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
+step — so a locally corrupted sibling next to an unmodified `action.yml` is
+exactly the invisible-drift case this pass exists for. The copy row below moved
+to whole directories in #347 round 35; this scan did not, and round 36 caught
+the half that was left. Same shape as the miss it corrected: a fix applied at
+one level and not the one under it.
 
 **`DRIFT` is a question, not a verdict — and it is what makes a curated
 exception list unnecessary.** This pass already knows, per file, whether the
@@ -271,7 +279,7 @@ project** — map each to its installed location before dispositioning:
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
 | `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ **EXCEPT `pages-retry.yml`, whose ABSENCE can be deliberate — never batch-install it.** An Actions-source project is required to delete it (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered deploy on a visibility flip. Decide it in both branches rather than as a single condition: **branch-source** → install it and restore its `REQUIRED` entry in the same edit; **Actions-source** → leave it absent, **unless** the project has taken W3's idempotent exception, in which case it carries a repointed copy whose `REQUIRED` entry names the project's own deploy — never overwrite that with the template or drop that entry. This row is the reason that deletion needs a rule at all: without it, the first refresh that touches the retry template undoes the fix silently. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
-| `templates/actions/<a>/action.yml` | `.github/actions/<a>/action.yml` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution) |
+| `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: `claude.insurance` was told exactly that on 2026-08-26 and diffing first is the only reason their `LIVE_TARGET` reachability split survived — a locally-defined guard, absent upstream, without which three scenarios would have run against a backend-less server on a blocking job. A kit file a project extended is invisible to whoever wrote the instruction |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow or composite action you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. A hand-list here has now fallen behind its own general form twice: `check-ui-viewports.js` was missing when `claude.insurance` refreshed, and every UI job there would have died at step resolution had they applied this row literally (directives#321) |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
@@ -327,7 +335,8 @@ already establishes, over **every caller this refresh INSTALLS** — not a fixed
 list (that is the mistake one level up), and **not only the changed ones**:
 
 ⚠️ **The installed set is WIDER than the delta, and the gap is exactly where
-#321 lives.** The composites row above installs `templates/actions/*/action.yml`
+#321 lives.** The composites row above installs `templates/actions/*/**` — the
+whole directory since round 35, `action.yml` and every sibling it runs —
 **with any qa workflow update**, so a refresh whose delta touches only `qa.yml`
 still installs an *unchanged* `ui-suite/action.yml` — and `ui-suite` is the only
 caller that names `check-ui-viewports.js`. Scope the derivation to the delta and

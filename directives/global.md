@@ -718,8 +718,11 @@ covers the other direction: an instruction you have already decided not to follo
 ## A Knowing Deviation Is an Escalation (owner ruling, 2026-09-02)
 **When you knowingly depart from a clear instruction — overruling it, following
 only part of it, deferring it, or substituting your own judgement for it — say so
-in bold, at the top of your reply, as a question the owner must answer.** Not in
-the ledger, not in the commit message, not as a caveat after the work is done.
+in bold, at the top of your reply, as a question the owner must answer.** Not
+**only** in the ledger, not in the commit message, not as a caveat after the work
+is done. The ledger still carries its line — a deviation raised as a question is
+an ask, and → *Burst Intake — Multiple Asks at Once* admits no exceptions — but a
+ledger line is where the ask is TRACKED, never where it is raised.
 
 The test is whether the owner can miss it while skimming: if they can, it was not
 raised. An instruction given and never heard about again is one the owner will

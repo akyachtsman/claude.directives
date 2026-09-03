@@ -87,7 +87,16 @@ if raw == "":
 # mistake as round 9's upload interpolating a value the validator had rejected:
 # the check has to be on the thing that travels.
 LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "
-GLOB_CHARS = "*?[]!"
+# `!` IS NOT IN HERE, because it is not a metacharacter where it appears. In an
+# upload-artifact path list `!` negates a pattern only as the FIRST character of
+# an entry; inside a filename it is an ordinary character, and `reports/run!1.json`
+# is a perfectly good Linux filename that the quoted `rm`, Node's path resolution
+# and the uploader all address as one file. Banning it everywhere refused a config
+# every consumer handles correctly — the same false-refusal shape as the colon
+# rule corrected in round 24, and as the `Array.isArray` refusal round 27 put into
+# the viewport gate (Codex, #347 round 28). The leading position IS load-bearing,
+# so it is refused separately below.
+GLOB_CHARS = "*?[]"
 
 
 def forbid_chars(value, what):
@@ -108,6 +117,16 @@ def forbid_chars(value, what):
         refuse(f"{what} contains glob metacharacters.",
                f"got {value!r} -- the artifact uploader expands patterns, so this "
                "names a set of files rather than the one report.")
+    # THE ONE POSITION WHERE `!` CHANGES THE PATTERN. As an entry's first
+    # character it makes the line an EXCLUSION, so the report is subtracted from
+    # the upload set rather than added to it -- and every other rule here would
+    # pass. Checked by position rather than by presence, so an ordinary filename
+    # carrying a `!` is not refused for a property it does not have.
+    if value.startswith("!"):
+        refuse(f"{what} starts with '!'.",
+               f"got {value!r} -- a leading '!' in an artifact path entry NEGATES "
+               "the pattern, so this subtracts the report from the upload instead "
+               "of naming it.")
     # SURROUNDING WHITESPACE, because the uploader TRIMS each pattern before
     # resolving it. The raw input was already checked for this, but round 13
     # ran the character rules on the emitted value without bringing this one

@@ -1323,7 +1323,30 @@ if (!Number.isFinite(TABLET_MIN) || !Number.isFinite(LAPTOP_MIN) || TABLET_MIN >
 // against ITSELF. Caught immediately by the shipped kit (it looked for
 // templates/ui-tests/templates/ui-tests) but NOT by any case, because the cases
 // harness passes an absolute --tests-dir — so a relative one is now pinned too.
-const TESTS_DIR = resolve(dir);
+// RESOLVED AGAINST THE SHELL'S LOGICAL CWD, not Node's physical one. Round 15
+// set `process.env.PWD = TESTS_DIR` and justified it with "TESTS_DIR is
+// resolve()d, which does NOT follow symlinks, so it is the same logical path the
+// shell would export". That is true only when `dir` is ABSOLUTE. For a RELATIVE
+// one — and the shipped composite passes `--tests-dir .` — `resolve()`'s base is
+// `process.cwd()`, which Node reports PHYSICALLY. So under a symlinked tests-dir
+// the gate recovered the real target, exported it as PWD, and read the config in
+// an environment the run never has: Playwright inherits the shell's LOGICAL PWD.
+// Measured — a config branching on a PWD ending in /link declared phone-only to
+// the run and laptop+tablet+phone to the gate, and the genuine report still
+// certified (Codex, #347 round 28).
+//
+// A shell resolves a relative path against its own logical PWD, so this does the
+// same, and only when that PWD is real: absolute, and naming the same directory
+// Node is standing in. Anything else falls back to `process.cwd()`, which is
+// what a shell without a valid PWD also does.
+const shellCwd = () => {
+  const p = process.env.PWD;
+  try {
+    if (p && isAbsolute(p) && realpathSync(p) === realpathSync(process.cwd())) return p;
+  } catch { /* an unreadable PWD is not a usable base */ }
+  return process.cwd();
+};
+const TESTS_DIR = isAbsolute(dir) ? resolve(dir) : resolve(shellCwd(), dir);
 console.log(`tests dir: ${TESTS_DIR}  (source: ${dirSource})`);
 console.log(`bands (${bandSource}): phone <${TABLET_MIN}px | tablet ${TABLET_MIN}-${LAPTOP_MIN - 1}px | laptop >=${LAPTOP_MIN}px`);
 
@@ -1642,7 +1665,15 @@ console.log(`config:    ${configPath}`);
   // gate INVENTED an unnamed laptop project and certified that band from a
   // report row for `projectName: ""`. A fabricated declaration, not merely a
   // wrong one — checked here because it is the same coercion on the same line.
-  const badEntry = projects.findIndex(p => !p || typeof p !== 'object' || Array.isArray(p));
+  // ARRAYS ARE OBJECTS, and Playwright's check is `typeof x === 'object'` with a
+  // null guard — nothing more. Round 27 added `Array.isArray` here and I called
+  // it "Playwright's own rule rather than an approximation" in the same breath;
+  // it was an approximation, and a stricter one. An array carrying `name` and
+  // `use` is LISTED normally by 1.62.1 (measured), so refusing it blocks a config
+  // the run accepts (Codex, #347 round 28). A gate that refuses what the run
+  // accepts is the same defect as one that certifies what the run refuses — it
+  // just fails loudly, which is why it survived a round.
+  const badEntry = projects.findIndex(p => !p || typeof p !== 'object');
   if (badEntry !== -1) {
     die(5, [
       `CANNOT CHECK: project ${badEntry} is ${describeTop(projects[badEntry])}, not an object.`,
@@ -1664,6 +1695,26 @@ console.log(`config:    ${configPath}`);
       '  Omit `name` for an unnamed project; anything else must be a string.',
     ]);
   }
+  //
+  // AND `use`, one level down from the entry — the same coercion again, found by
+  // Codex in round 28 immediately after round 27 fixed the two above it.
+  // `use: null` (or a primitive) was accepted here, and the viewport fallback
+  // then read it as an OMITTED viewport and assigned the root or default width —
+  // a declaration from a config Playwright refuses outright
+  // ("config.projects[0].use must be an object", measured on 1.62.1).
+  const badUse = [
+    ...(cfg.use !== undefined ? [['the root config', cfg.use]] : []),
+    ...projects.flatMap((p, i) => (p.use !== undefined ? [[`project ${i}`, p.use]] : [])),
+  ].find(([, u]) => !u || typeof u !== 'object');
+  if (badUse) {
+    die(5, [
+      `CANNOT CHECK: ${badUse[0]} has a \`use\` that is ${describeTop(badUse[1])}, not an object.`,
+      '  Playwright refuses this config itself ("use must be an object"), so no run',
+      '  can have produced results for it. Read as a project, an unusable `use`',
+      '  falls through to the root or default viewport — a width this config never',
+      '  declared.',
+    ]);
+  }
   const keyOf = p => ((p && typeof p.name === 'string') ? p.name : '');
   const keys = projects.map(keyOf);
   const dupes = [...new Set(keys.filter((n, i2, a) => a.indexOf(n) !== i2))];
@@ -1681,8 +1732,23 @@ console.log(`config:    ${configPath}`);
   const rows = [];
   for (const p of projects) {
     const name = keyOf(p);
-    const vp = p && p.use && p.use.viewport !== undefined ? p.use.viewport
-      : cfg.use && cfg.use.viewport !== undefined ? cfg.use.viewport
+    // OWN ENUMERABLE, because that is what Playwright copies. `mergeObjects()`
+    // takes own enumerable entries only, so a `use` object that INHERITS
+    // `viewport` from its prototype — or defines it non-enumerably — hands
+    // Playwright nothing and falls through to the default, while a plain
+    // property read here saw the inherited value and published it as the
+    // declared width. Measured: three projects inheriting 1280/900/390 listed
+    // and ran normally with Playwright ignoring all three, and the gate reported
+    // exactly those widths (Codex, #347 round 28).
+    //
+    // Ordinary JavaScript, not forgery — which is why it belongs in the merge
+    // rather than in the limits section. The gate's own claim is that its rows
+    // are what the run will use; reading a property the run cannot see breaks
+    // that claim without anyone tampering.
+    const ownVp = u => (u !== null && typeof u === 'object'
+      && Object.prototype.propertyIsEnumerable.call(u, 'viewport'));
+    const vp = ownVp(p.use) ? p.use.viewport
+      : ownVp(cfg.use) ? cfg.use.viewport
         : DEFAULT_VIEWPORT;
     // testDir IS NOT PART OF `restricted`, at the project level either. Round 10
     // fixed the spelling comparison here; round 12 defeated the fix with a

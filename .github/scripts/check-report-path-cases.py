@@ -124,7 +124,16 @@ CASES = [
 
     ("a character class", "r[12].json", 1, "glob metacharacters", None),
 
-    ("an exclusion pattern", "!r.json", 1, "glob metacharacters", None),
+    # A LEADING `!` still refuses — that position negates the whole entry — but
+    # the diagnostic is now about the position, not about the character.
+    ("an exclusion pattern", "!r.json", 1, "starts with '!'", None),
+
+    # The twin, and the reason the rule moved (#347 round 28): `!` inside a
+    # filename is literal to the uploader, to `rm` and to Node, so refusing it
+    # blocked an ordinary Linux filename every consumer handles. Same
+    # false-refusal shape as the colon rule corrected in round 24.
+    ("an exclamation mark inside the filename", "reports/run!1.json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/reports/run!1.json"),
 
     # ── CONTAINMENT ──────────────────────────────────────────────────────────
     ("a path climbing out of the workspace", "../../../../etc/passwd", 1,

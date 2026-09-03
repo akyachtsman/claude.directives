@@ -497,12 +497,97 @@ const CASES = [
   // certified the LAPTOP band from a `projectName: ""` row — a declaration the
   // config never made. Playwright refuses these too ("config.projects[0] must be
   // an object", measured on 1.62.1).
-  ...[['null', 'null'], ['a number', '7'], ['a string', "'laptop'"], ['an array', '[]']]
+  // `['an array', '[]']` WAS PINNED HERE IN ROUND 27 AND IS GONE IN ROUND 28.
+  // Arrays are objects to Playwright, which accepts and runs them; the case
+  // asserted a refusal this gate should never have made. Overturning a case I
+  // shipped one round earlier, recorded here rather than quietly dropped — the
+  // twin above now pins the opposite, that an array carrying name and use is
+  // ACCEPTED.
+  ...[['null', 'null'], ['a number', '7'], ['a string', "'laptop'"]]
     .map(([what, value]) => [
       `a project entry that is ${what} — CANNOT CHECK`,
       { 'playwright.config.js': withProjects(`    ${value},\n` + TABLET + PHONE) },
       5, 'not an object',
     ]),
+
+  // ── ROUND 27'S ENTRY RULE WAS STRICTER THAN PLAYWRIGHT'S (#347 round 28) ──
+  // `Array.isArray` was not Playwright's check. An array carrying `name` and
+  // `use` is LISTED and RUN normally by 1.62.1 (measured), so refusing it blocked
+  // a config the run accepts. A gate that refuses what the run accepts is the
+  // same defect as one that certifies what the run refuses — it just fails
+  // loudly, which is how it survived a round.
+  ['an array carrying name and use — accepted, as Playwright does',
+    { 'playwright.config.js':
+      "const p = [];\np.name = 'laptop';\np.use = { viewport: { width: 1440, height: 900 } };\n"
+      + 'export default { testDir: \'.\', projects: [p,\n' + TABLET + PHONE + '] };\n' },
+    0, 'check-ui-viewports: OK — DECLARED'],
+
+  // ── `use` IS THE SAME COERCION ONE LEVEL DOWN (#347 round 28) ──────────
+  // `use: null` was accepted and read as an OMITTED viewport, so the project took
+  // the root or default width — a declaration from a config Playwright refuses
+  // ("config.projects[0].use must be an object", measured).
+  ...[['null', 'null'], ['a number', '7'], ['a string', "'wide'"]]
+    .map(([what, value]) => [
+      `a project whose use is ${what} — CANNOT CHECK`,
+      { 'playwright.config.js': withProjects(
+        `    { name: 'laptop', use: ${value} },\n` + TABLET + PHONE) },
+      5, 'not an object',
+    ]),
+  ['a root-level use that is not an object — CANNOT CHECK',
+    { 'playwright.config.js':
+      "export default { testDir: '.', use: null, projects: [\n" + LAPTOP + TABLET + PHONE + '] };\n' },
+    5, 'not an object'],
+
+  // ── PLAYWRIGHT MERGES OWN ENUMERABLE ENTRIES ONLY (#347 round 28) ──────
+  // `mergeObjects()` copies own enumerable keys, so a `use` that INHERITS
+  // `viewport` hands Playwright nothing and falls through to the default — while
+  // a plain property read saw the inherited value and published it as declared.
+  // Measured: three projects inheriting 1280/900/390 ran with Playwright ignoring
+  // all three. Ordinary JavaScript, not forgery.
+  ['inherited viewports are not what the run uses — FAIL, not a false certificate',
+    { 'playwright.config.js':
+      'const mk = w => Object.create({ viewport: { width: w, height: 800 } });\n'
+      + "export default { testDir: '.', projects: [\n"
+      + "  { name: 'laptop', use: mk(1440) },\n"
+      + "  { name: 'tablet', use: mk(900) },\n"
+      + "  { name: 'phone', use: mk(390) },\n] };\n" },
+    1, 'no project declares a tablet viewport'],
+  // The twin: an OWN viewport is still read, so the rule above is not satisfied
+  // by ignoring viewports altogether.
+  ['an own viewport is still read',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK — DECLARED'],
+
+  // ── THE SHELL'S LOGICAL CWD, NOT NODE'S PHYSICAL ONE (#347 round 28) ──
+  // Round 15 exported PWD = TESTS_DIR and argued TESTS_DIR was already the
+  // logical path because `resolve()` does not follow symlinks. True for an
+  // ABSOLUTE argument; the shipped composite passes `--tests-dir .`, whose base
+  // is `process.cwd()` — which Node reports PHYSICALLY. So under a symlinked
+  // tests-dir the gate read the config with PWD pointing at the real target
+  // while Playwright inherited the shell's link path. Measured: a config
+  // branching on a PWD ending in the link declared phone-only to the run and all
+  // three bands to the gate, and the genuine report certified.
+  ['a config branching on a symlinked PWD reads as the RUN reads it',
+    { 'playwright.config.js':
+      "const logical = (process.env.PWD || '').endsWith('-link');\n"
+      + 'const w = logical ? [390, 390, 390] : [1440, 900, 390];\n'
+      + "export default { testDir: '.', projects: [\n"
+      + "  { name: 'laptop', use: { viewport: { width: w[0], height: 800 } } },\n"
+      + "  { name: 'tablet', use: { viewport: { width: w[1], height: 800 } } },\n"
+      + "  { name: 'phone', use: { viewport: { width: w[2], height: 800 } } },\n] };\n" },
+    1, 'no project declares a laptop viewport', { symlinkCwd: true }],
+  // The twin: entered by its REAL path, the same config declares all three and
+  // certifies — so the case above pins WHICH path is read, not a blanket failure
+  // under symlinks.
+  ['…and entered by its real path the same config certifies',
+    { 'playwright.config.js':
+      "const logical = (process.env.PWD || '').endsWith('-link');\n"
+      + 'const w = logical ? [390, 390, 390] : [1440, 900, 390];\n'
+      + "export default { testDir: '.', projects: [\n"
+      + "  { name: 'laptop', use: { viewport: { width: w[0], height: 800 } } },\n"
+      + "  { name: 'tablet', use: { viewport: { width: w[1], height: 800 } } },\n"
+      + "  { name: 'phone', use: { viewport: { width: w[2], height: 800 } } },\n] };\n" },
+    0, 'check-ui-viewports: OK — DECLARED'],
 
   ['a project with no name is still attributed — no false failure',
     // An unnamed project reports `projectName: ""`, and the declaration side
@@ -1801,6 +1886,7 @@ function runCase(files, opts) {
   const link = join(tmp, 'node_modules');
   let bin = CHECK;
   let binDir = null;
+  const cleanupLinks = [];
   try {
     writeFileSync(join(tmp, 'package.json'), FIXTURE_PKG);
     // A case may declare a nested path (tests/.gitignore); create parents rather
@@ -1856,7 +1942,7 @@ function runCase(files, opts) {
     // names itself twice — a defect the shipped kit caught and no case did,
     // because every other case passes an absolute path (#333 round 14).
     if (o.shortTimeout) { const g = gateWithTimeout(o.shortTimeout); binDir = g.dir; bin = g.bin; }
-    const args = o.env
+    let args = o.env
       ? [bin]
       : [bin, '--tests-dir', o.relativeTestsDir ? relative(REPO_ROOT, target) : target];
     // A RELATIVE --config is left relative: the point of that case is which base
@@ -1935,8 +2021,26 @@ function runCase(files, opts) {
     // is a program whose own job is to not hang; if it regresses, this suite
     // must FAIL rather than stall a CI job to its bound and report nothing —
     // the same shape, one level up. 60s is ~50x the slowest honest case.
+    // A SYMLINKED TESTS DIRECTORY, ENTERED LOGICALLY — what a shell does and what
+    // every other case here cannot express, because the harness passes an
+    // ABSOLUTE --tests-dir and the composite passes `.`. Node reports cwd
+    // PHYSICALLY, so `resolve('.')` recovered the real target while Playwright
+    // inherited the shell's logical PWD, and the two read different configs
+    // (#347 round 28). Spawning with cwd set to the LINK and PWD exported to it
+    // is exactly the shell's state.
+    let spawnCwd = REPO_ROOT;
+    let spawnEnv = env;
+    if (o.symlinkCwd) {
+      const logical = `${tmp}-link`;
+      symlinkSync(tmp, logical, 'dir');
+      cleanupLinks.push(logical);
+      spawnCwd = logical;
+      spawnEnv = { ...env, PWD: logical };
+      args = args.map(a => (a === tmp ? '.' : a));
+    }
     const r = spawnSync(process.execPath, args, {
-      encoding: 'utf8', env, cwd: REPO_ROOT, timeout: 60000, killSignal: 'SIGKILL',
+      encoding: 'utf8', env: spawnEnv, cwd: spawnCwd, timeout: 60000,
+      killSignal: 'SIGKILL',
     });
     if (r.error && r.error.code === 'ETIMEDOUT') {
       return { code: 'TIMED OUT', out: 'the gate did not return within 60s and was killed' };
@@ -1946,6 +2050,7 @@ function runCase(files, opts) {
     // Unlink the symlink explicitly before the recursive remove — nothing about
     // this self-test should ever be able to reach the real node_modules.
     if (existsSync(link) || safeIsLink(link)) unlinkSync(link);
+    for (const l of cleanupLinks) { try { unlinkSync(l); } catch { /* already gone */ } }
     rmSync(tmp, { recursive: true, force: true });
     if (binDir) rmSync(binDir, { recursive: true, force: true });
   }

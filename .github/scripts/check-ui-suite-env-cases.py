@@ -96,6 +96,12 @@ VALIDATE_BODY = 'python3 "$GITHUB_ACTION_PATH/validate-report-path.py"'
 # use another. Spelled out here rather than imported, like every other pin.
 VALIDATE_ENV = {"REPORT_PATH": "${{ inputs.report-path }}",
                 "TESTS_DIR": "${{ inputs.tests-dir }}"}
+# The artifact upload — the validated path's consumer OUTSIDE the sequence, and
+# the one the validator exists for (#347 rounds 9 and 28). Spelled out here
+# rather than imported, like every other pin in this file.
+UPLOAD = "Upload test results"
+UPLOAD_USES = "actions/upload-artifact@v4"
+UPLOAD_PATH = ".agent-reports/screenshots/\n${{ steps.report-path.outputs.path }}"
 # The working directory is pinned to the action input as of #347 round 20, so
 # the default fixture has to use the real expression rather than a stand-in.
 TESTS_DIR = "${{ inputs.tests-dir }}"
@@ -105,6 +111,8 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
            val_name=VALIDATE, val_body=None, val_env=UNSET, val_wd=None,
            val_if=None, val_coe=None, val_shell=SHELL, val_id=VALIDATE_ID,
            between_val=None,
+           upload_name=UPLOAD, upload_uses=UPLOAD_USES, upload_if=IF_POST,
+           upload_path=UPLOAD_PATH, upload_hidden=True, upload=True,
            check_wd=TESTS_DIR, run_wd=TESTS_DIR, decoy=None, between=None,
            check_body=None, run_body=None, run_uses=None,
            post_env=UNSET, post_name=POST, post_wd=TESTS_DIR, post_body=None,
@@ -157,6 +165,16 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
         + block(run_env if post_env is UNSET else post_env)
         + (f"      uses: {post_uses}\n" if post_uses
            else body(post_body or POST_BODY))
+        + ("" if not upload else (
+            f"    - name: {upload_name}\n"
+            + ctl("if", upload_if)
+            + (f"      uses: {upload_uses}\n" if upload_uses else "")
+            + "      with:\n"
+            + ("        path: |\n"
+               + "".join(f"          {ln}\n" for ln in upload_path.splitlines())
+               if upload_path is not None else "")
+            + (f"        include-hidden-files: {str(upload_hidden).lower()}\n"
+               if upload_hidden is not None else "")))
     )
 
 
@@ -637,6 +655,44 @@ CASES = [
     ("a decoy validator before the real one — refused",
      action(dict(BOTH), dict(BOTH), decoy=VALIDATE), 1,
      'are named "Validate report-path"'),
+
+
+    # ── THE UPLOAD IS A VALIDATED-PATH CONSUMER (#347 round 28) ───────────
+    # Round 27 pinned the PRODUCER and stopped at the post-run gate, so the step
+    # the validator actually exists for stayed unguarded: re-pointing it at the
+    # raw input or dropping its outcome guard left the suite green exactly where
+    # the protection detaches. It is a `uses:` step, so it cannot join SEQUENCE
+    # (which refuses those categorically); it is pinned as what it is.
+    ("the upload repointed at the raw input — refused",
+     action(dict(BOTH), dict(BOTH),
+            upload_path=".agent-reports/screenshots/\n${{ inputs.report-path }}"),
+     1, "does not upload the pinned path list"),
+    ("the upload losing its outcome guard — refused",
+     action(dict(BOTH), dict(BOTH), upload_if="${{ always() }}"), 1,
+     "wrong `if:`"),
+    ("the upload gaining an extra path entry — refused",
+     action(dict(BOTH), dict(BOTH),
+            upload_path=".agent-reports/screenshots/\n${{ steps.report-path.outputs.path }}\n/etc/passwd"),
+     1, "does not upload the pinned path list"),
+    ("the upload dropping include-hidden-files — refused",
+     action(dict(BOTH), dict(BOTH), upload_hidden=None), 1,
+     "include-hidden-files"),
+    ("include-hidden-files turned off — refused",
+     action(dict(BOTH), dict(BOTH), upload_hidden=False), 1,
+     "include-hidden-files"),
+    ("the upload switched to another action — refused",
+     action(dict(BOTH), dict(BOTH), upload_uses="actions/upload-artifact@v3"), 1,
+     "not 'actions/upload-artifact@v4'"),
+    ("the upload removed entirely — refused",
+     action(dict(BOTH), dict(BOTH), upload=False), 1,
+     '0 steps are named "Upload test results"'),
+    ("a duplicate upload step — refused",
+     action(dict(BOTH), dict(BOTH)).replace(
+         "    - name: Upload test results\n",
+         "    - name: Upload test results\n      uses: actions/upload-artifact@v4\n"
+         "      with:\n        path: |\n          /etc/passwd\n"
+         "    - name: Upload test results\n", 1),
+     1, '2 steps are named "Upload test results"'),
 
 ]
 

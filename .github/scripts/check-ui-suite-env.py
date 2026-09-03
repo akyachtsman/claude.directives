@@ -226,6 +226,71 @@ SEQUENCE = (
 )
 PARITY_STEPS = tuple(e[0] for e in SEQUENCE if e[5] is PARITY)
 
+# THE VALIDATED PATH HAS A CONSUMER OUTSIDE THE SEQUENCE, and it is the one the
+# validator exists for. `Upload test results` interpolates the report path into
+# a MULTILINE artifact list under `always()`; round 9 of #347 found that
+# interpolating the RAW INPUT there left the exfiltration path open even after
+# round 8 added the validator. Round 27 pinned the producer and stopped at the
+# post-run gate, so re-pointing this step at `${{ inputs.report-path }}` or
+# dropping its `steps.report-path.outcome` guard left this guard green — the
+# regression suite staying quiet exactly where the protection detaches (Codex,
+# #347 round 28).
+#
+# It cannot join SEQUENCE: it is a `uses:` step, which SEQUENCE refuses
+# categorically because a composite action's internals are not visible here. So
+# it is pinned as what it is — a CONSUMER: its `if:`, the exact entries of its
+# path list, and `include-hidden-files`, which round 16 added because a report
+# under a dot directory is silently omitted without it.
+UPLOAD_STEP = "Upload test results"
+UPLOAD_USES = "actions/upload-artifact@v4"
+UPLOAD_IF = IF_POST
+UPLOAD_PATH = (".agent-reports/screenshots/",
+               "${{ steps.report-path.outputs.path }}")
+
+
+def check_upload(steps, problems):
+    matches = [s for s in steps if s.get("name") == UPLOAD_STEP]
+    if len(matches) != 1:
+        problems.append(
+            f'{len(matches)} steps are named "{UPLOAD_STEP}" in {ACTION}'
+            + "\n    This step consumes the validated report path; without exactly one,"
+            + "\n    nothing here can say what the artifact list contains (#347 round 28)."
+        )
+        return
+    step = matches[0]
+    if step.get("uses") != UPLOAD_USES:
+        problems.append(
+            f'"{UPLOAD_STEP}" uses {step.get("uses")!r}, not {UPLOAD_USES!r}'
+            + "\n    The path rules below are about upload-artifact's pattern list; a"
+            + "\n    different action makes them claims about something else."
+        )
+    if step.get("if") != UPLOAD_IF:
+        problems.append(
+            f'"{UPLOAD_STEP}" has the wrong `if:`'
+            + f"\n    got:      {step.get('if')!r}"
+            + f"\n    expected: {UPLOAD_IF!r}"
+            + "\n    It runs under `always()`, so without the outcome guard a REFUSED"
+            + "\n    path still reaches the artifact list (#347 rounds 9 and 28)."
+        )
+    with_block = step.get("with") or {}
+    got_path = tuple(ln.strip() for ln in str(with_block.get("path") or "").splitlines()
+                     if ln.strip())
+    if got_path != UPLOAD_PATH:
+        problems.append(
+            f'"{UPLOAD_STEP}" does not upload the pinned path list'
+            + f"\n    got:      {list(got_path)!r}"
+            + f"\n    expected: {list(UPLOAD_PATH)!r}"
+            + "\n    `${{ inputs.report-path }}` here is the raw input the validator"
+            + "\n    refused values from, and an extra entry is an extra file (#347 r9)."
+        )
+    if with_block.get("include-hidden-files") is not True:
+        problems.append(
+            f'"{UPLOAD_STEP}" does not set `include-hidden-files: true`'
+            + f"\n    got: {with_block.get('include-hidden-files')!r}"
+            + "\n    A report under a dot directory — which the shipped tests-dir"
+            + "\n    produces — is silently omitted without it (#347 round 16)."
+        )
+
 
 def env_of(steps, name):
     """Return the step's env MAPPING, not just its keys.
@@ -268,6 +333,7 @@ def main():
     all_found = all(count == 1 for _, count in envs.values())
 
     problems = []
+    check_upload(steps, problems)
     for label, *_ in SEQUENCE:
         count = envs[label][1]
         if count > 1:

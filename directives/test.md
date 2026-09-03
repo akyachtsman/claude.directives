@@ -430,12 +430,28 @@ five:
   that it answered **honestly** — a config that lies the same way twice is
   believed, which is directives#349's family.
 
-  **A test that sets its own viewport must still say so.** `setViewportSize()`
-  inside a test overrides the project's, so that test runs at the width IT chose
-  in *every* project. Push `{ type: 'viewport-override' }` onto
-  `test.info().annotations` in any such test and the gate stops counting the
-  result; the kit's S4 (the 390px overflow check) carries it. Skip it and a run
-  selecting only viewport-overriding tests certifies every band.
+  **A test that sets its own viewport must still say so — by EITHER route.**
+  Two things replace the project's viewport, and the rule named only one of them
+  until directives#347 round 31:
+  - `setViewportSize()` inside the test body.
+  - `test.use({ viewport })` at file or `describe` scope — the fixture form.
+    Measured on 1.62.1: a spec carrying it ran at 390px in the laptop, tablet
+    AND phone projects, and the JSON report carried **no annotation at all** —
+    neither per-test nor per-result. Playwright does not mark it, so nothing
+    downstream can infer it.
+
+  Either way that test runs at the width IT chose in *every* project. Push
+  `{ type: 'viewport-override' }` onto `test.info().annotations` in any such test
+  and the gate stops counting the result; the kit's S4 (the 390px overflow check)
+  carries it. Skip it and a run selecting only viewport-overriding tests
+  certifies every band.
+
+  This is the marker rule doing the work the verdict cannot. The gate's verdict
+  is **SCHEDULED** — a non-skipped result in a project *declaring* that width —
+  and it says so; it has never established that a page was rendered at it
+  (directives#348). The marker is how an author states the one thing the report
+  does not carry, so a rule that names only half the ways to override it leaves
+  the other half silent.
 
   **Your config must declare a json reporter.** The shipped kit declares
   `['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]`

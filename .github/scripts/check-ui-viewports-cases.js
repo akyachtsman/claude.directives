@@ -588,6 +588,36 @@ const CASES = [
       + "  { name: 'phone', use: mk(390, 390) },\n] };\n" },
     1, 'no project declares a laptop viewport'],
 
+  // …AND THE ROOT LAYER IS READ FOR EVERY PROJECT, before that project's own
+  // (#347 round 31). `mergeObjects()` takes the root even when the project
+  // overrides it, so round 30's skip desynchronised a stateful root getter: the
+  // run consumed 1280 under an overridden project and used 390 for the next.
+  // Project `b` here has no viewport of its own, so it takes the root's SECOND
+  // read (390 = phone) — measured against a real run, which reports b at 390.
+  ['the root layer is read once per project, even when overridden',
+    { 'playwright.config.js':
+      'let n = 0;\n'
+      + "export default { testDir: '.',\n"
+      + '  use: { get viewport() { n += 1;\n'
+      + '    return n === 1 ? { width: 1280, height: 800 } : { width: 390, height: 800 }; } },\n'
+      + '  projects: [\n'
+      + "    { name: 'a', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'b' },\n"
+      + "    { name: 'c', use: { viewport: { width: 820, height: 1180 } } },\n] };\n" },
+    0, 'phone:b'],
+
+  // ── A PRESENT ROOT NAME IS VALIDATED (#347 round 31) ───────────────────
+  // Round 30 added root-name inheritance and coerced a non-string to '',
+  // reintroducing on the root the exact defect round 27 fixed on projects.
+  ...[['a number', '42'], ['null', 'null'], ['an object', '{}']]
+    .map(([what, value]) => [
+      `a root name that is ${what} — CANNOT CHECK`,
+      { 'playwright.config.js':
+        `export default { testDir: '.', name: ${value}, projects: [\n`
+        + LAPTOP + TABLET + PHONE + '] };\n' },
+      5, "root config's name is",
+    ]),
+
   // ── THE ROOT `name` IS INHERITED (#347 round 30) ───────────────────────
   // Playwright resolves a project's reported name as project.name, then the
   // ROOT config's name, then "" — measured: a root `name: 'desktop-root'` with

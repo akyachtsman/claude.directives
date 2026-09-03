@@ -135,6 +135,22 @@ CASES = [
     ("an unmatched opening bracket", "report[.json", 0,
      "inside the workspace", ".github/scripts/ui-tests/report[.json"),
 
+    # MEASURED AGAINST minimatch, not argued (#347 round 31). `minimatch(p, p)`
+    # self-matches exactly when p is literal: an EMPTY pair is literal, and a
+    # pair spanning a path separator is literal because a class cannot cross a
+    # segment. Round 30's regex allowed an empty body and ignored segments —
+    # the fifth and sixth false refusals on this PR, and the sixth was caught
+    # only because the rule was measured before shipping.
+    ("an empty bracket pair", "report[].json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/report[].json"),
+
+    ("a bracket pair spanning a path separator", "a[/]b.json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/a[/]b.json"),
+
+    # …and the shape minimatch DOES read as a class, whose first member is `]`.
+    ("a class whose first member is a closing bracket", "report[]].json", 1,
+     "contains a character class", None),
+
     # THE EDGE IS THE ENTRY'S EDGE, NOT THE INPUT'S (#347 round 29). With a
     # nested tests-dir this lands as `.github/scripts/ui-tests/!r.json`, where
     # the `!` is interior and literal to every consumer — so refusing the RAW

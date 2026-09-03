@@ -1722,6 +1722,18 @@ console.log(`config:    ${configPath}`);
   // project as "" unconditionally, so the join looked for a row the report never
   // carries and the band read as NOTHING RAN (Codex, #347 round 30). Predates
   // this PR; the empty default was only ever correct when no root name exists.
+  // AND A PRESENT ROOT NAME IS VALIDATED LIKE A PROJECT NAME. Round 30 added the
+  // inheritance and coerced a non-string to '' — reintroducing, on the root, the
+  // exact defect round 27 fixed on projects. Playwright refuses `config.name`
+  // that is not a string, so nothing could have run (Codex, #347 round 31).
+  if (cfg.name !== undefined && typeof cfg.name !== 'string') {
+    die(5, [
+      `CANNOT CHECK: the root config's name is ${describeTop(cfg.name)}, not a string.`,
+      '  Playwright refuses this config itself ("config.name must be a string"),',
+      '  so no run can have produced results for it. Coercing it to the empty key',
+      '  would let a report from a nameless project certify these bands.',
+    ]);
+  }
   const ROOT_NAME = typeof cfg.name === 'string' ? cfg.name : '';
   const keyOf = p => ((p && typeof p.name === 'string') ? p.name : ROOT_NAME);
   const keys = projects.map(keyOf);
@@ -1780,8 +1792,20 @@ console.log(`config:    ${configPath}`);
       const value = u.viewport;
       return value === undefined ? { has: false } : { has: true, value };
     };
+    // ROOT FIRST, AND ALWAYS. `mergeObjects()` reads the root layer for EVERY
+    // project before reading that project's layer, even when the project
+    // overrides it — so an accessor on the root is consumed once per project
+    // whether or not its value survives. Round 30 skipped the root read whenever
+    // the project had its own, which desynchronised a stateful root getter: the
+    // run consumed 1280 under an overridden project and used 390 for the next
+    // one, while the gate never took that read and classified the next project
+    // as laptop (Codex, #347 round 31).
+    //
+    // Fourth round in a row on this one expression. Rounds 28-30 asked which
+    // keys, which values, and how many reads; this is WHEN. Order of effects is
+    // part of the semantics being modelled, not an implementation detail of it.
+    const fromRoot = takeVp(cfg.use);
     const fromProject = takeVp(p.use);
-    const fromRoot = fromProject.has ? { has: false } : takeVp(cfg.use);
     const vp = fromProject.has ? fromProject.value
       : fromRoot.has ? fromRoot.value
         : DEFAULT_VIEWPORT;

@@ -127,7 +127,16 @@ def forbid_chars(value, what):
     # `Array.isArray` entry check (r28) and the leading `!` applied to the wrong
     # value (r29). Detected as the construct rather than as its letters
     # (Codex, #347 round 30).
-    if re.search(r"\[[^\[]*\]", value):
+    # MEASURED AGAINST minimatch ITSELF, not reasoned about. `minimatch(p, p)`
+    # self-matches exactly when `p` is literal:
+    #   report[].json   literal  -- an EMPTY pair is not a class (round 31)
+    #   report[]].json  CLASS    -- a `]` may be the class's first member
+    #   a[/]b.json      literal  -- a class cannot span a path separator
+    #   r[12].json      CLASS
+    # So: a non-empty body, within one segment. Round 30's `\[[^\[]*\]` allowed an
+    # empty body and ignored segments -- two more false refusals, one of them
+    # caught here only because this rule was measured rather than argued.
+    if any(re.search(r"\[.+?\]", seg) for seg in value.split("/")):
         refuse(f"{what} contains a character class.",
                f"got {value!r} -- `[...]` is a glob character class to the "
                "artifact uploader, so this names a set of files rather than the "

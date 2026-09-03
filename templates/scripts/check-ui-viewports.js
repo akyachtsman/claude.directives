@@ -1702,11 +1702,23 @@ console.log(`config:    ${configPath}`);
       '  a laptop-band declaration this config never made.',
     ]);
   }
-  const badName = projects.findIndex(p => p.name !== undefined && typeof p.name !== 'string');
+  // ONE READ PER NAME, CACHED — the accessor problem again, on the join key.
+  // `keyOf` read `p.name` twice (the typeof test, then the return) and was called
+  // twice per project (duplicate detection, then row construction), so a stateful
+  // `name` getter could hold `laptop-empty` through Playwright's resolution and
+  // return `phone` on the gate's LAST read. Measured: the laptop project matched
+  // no tests, the real phone and tablet ran, and the gate emitted the laptop row
+  // under `phone` and certified from a genuine report (Codex, #347 round 33).
+  //
+  // Playwright validates the accessor and then stores the resolved name, so it
+  // reads once. This does the same: the read happens here, and every later use —
+  // the refusal below, the duplicate check, the join — reads this array.
+  const RAW_NAMES = projects.map(p => p.name);
+  const badName = RAW_NAMES.findIndex(n => n !== undefined && typeof n !== 'string');
   if (badName !== -1) {
     die(5, [
       `CANNOT CHECK: project ${badName} has a name that is not a string.`,
-      `  name: ${describeTop(projects[badName].name)}`,
+      `  name: ${describeTop(RAW_NAMES[badName])}`,
       '  Playwright refuses this config itself ("config.projects[N].name must be a',
       '  string"), so no run can have produced results for it. Coercing it to the',
       '  empty key would join it against a legitimately UNNAMED project\'s results',
@@ -1745,17 +1757,18 @@ console.log(`config:    ${configPath}`);
   // inheritance and coerced a non-string to '' — reintroducing, on the root, the
   // exact defect round 27 fixed on projects. Playwright refuses `config.name`
   // that is not a string, so nothing could have run (Codex, #347 round 31).
-  if (cfg.name !== undefined && typeof cfg.name !== 'string') {
+  // The root name is read ONCE for the same reason as the project names above.
+  const RAW_ROOT_NAME = cfg.name;
+  if (RAW_ROOT_NAME !== undefined && typeof RAW_ROOT_NAME !== 'string') {
     die(5, [
-      `CANNOT CHECK: the root config's name is ${describeTop(cfg.name)}, not a string.`,
+      `CANNOT CHECK: the root config's name is ${describeTop(RAW_ROOT_NAME)}, not a string.`,
       '  Playwright refuses this config itself ("config.name must be a string"),',
       '  so no run can have produced results for it. Coercing it to the empty key',
       '  would let a report from a nameless project certify these bands.',
     ]);
   }
-  const ROOT_NAME = typeof cfg.name === 'string' ? cfg.name : '';
-  const keyOf = p => ((p && typeof p.name === 'string') ? p.name : ROOT_NAME);
-  const keys = projects.map(keyOf);
+  const ROOT_NAME = typeof RAW_ROOT_NAME === 'string' ? RAW_ROOT_NAME : '';
+  const keys = RAW_NAMES.map(n => (typeof n === 'string' ? n : ROOT_NAME));
   const dupes = [...new Set(keys.filter((n, i2, a) => a.indexOf(n) !== i2))];
   if (dupes.length) {
     die(18, [
@@ -1769,8 +1782,8 @@ console.log(`config:    ${configPath}`);
   }
   const cover = { laptop: [], tablet: [], phone: [] };
   const rows = [];
-  for (const p of projects) {
-    const name = keyOf(p);
+  for (const [i, p] of projects.entries()) {
+    const name = keys[i];
     // REPRODUCE THE MERGE, DO NOT MODEL IT. Rounds 28-31 each added one more
     // attribute of `mergeObjects()` to a predicate over `viewport` alone —
     // which keys it sees (28), which values it copies (29), how many times it
@@ -1788,12 +1801,30 @@ console.log(`config:    ${configPath}`);
     // each as a rule. `Object.entries` reads every property once, in order, so
     // enumerability, undefined-skipping, read count and read order all fall out
     // of the loop instead of being asserted around it.
-    const mergeLayer = (into, layer) => {
-      if (layer === null || typeof layer !== 'object') return into;
-      for (const [k, v] of Object.entries(layer)) if (v !== undefined) into[k] = v;
-      return into;
-    };
-    const mergedUse = mergeLayer(mergeLayer({}, cfg.use), p.use);
+    // THE TWO LAYERS ARE NOT MERGED THE SAME WAY, and round 32 treated them as if
+    // they were. Read out of the installed 1.62.1 rather than reasoned about:
+    //
+    //   function mergeObjects(a, b, c) {
+    //     const result = { ...a };
+    //     for (const x of [b, c].filter(Boolean))
+    //       for (const [name, value] of Object.entries(x))
+    //         if (!Object.is(value, void 0)) result[name] = value;
+    //   }
+    //
+    // The FIRST layer is a SPREAD — which evaluates enumerable SYMBOL properties
+    // and copies `undefined` through — and only the later layers go through
+    // `Object.entries`, which is string-keyed and skips undefined. Round 32 sent
+    // both through `Object.entries`, so a root symbol accessor with side effects
+    // never fired here and did fire in the run: measured, Playwright ran the
+    // laptop project at 390px while both gate imports read 1440 and a genuine
+    // report certified (Codex, #347 round 33).
+    //
+    // Performing the operation was the right move; performing it from the source
+    // rather than from a description of it is the part I had not done.
+    const mergedUse = { ...cfg.use };
+    if (p.use !== null && typeof p.use === 'object') {
+      for (const [k, v] of Object.entries(p.use)) if (!Object.is(v, undefined)) mergedUse[k] = v;
+    }
     const vp = mergedUse.viewport !== undefined ? mergedUse.viewport : DEFAULT_VIEWPORT;
     // testDir IS NOT PART OF `restricted`, at the project level either. Round 10
     // fixed the spelling comparison here; round 12 defeated the fix with a

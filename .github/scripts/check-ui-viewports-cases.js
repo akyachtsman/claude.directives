@@ -630,6 +630,43 @@ const CASES = [
       + "  projects: [ { name: 'laptop' },\n" + TABLET + PHONE + '] };\n' },
     0, 'laptop:laptop'],
 
+  // …AND THE FIRST LAYER IS A SPREAD, NOT `Object.entries` (#347 round 33).
+  // Read out of 1.62.1's `mergeObjects`: `const result = { ...a }` for the first
+  // layer, `Object.entries` only for the later ones. A spread evaluates
+  // enumerable SYMBOL properties; `Object.entries` does not. Round 32 sent both
+  // layers through entries, so a root symbol accessor with side effects never
+  // fired in the gate and did fire in the run.
+  ['a root symbol accessor fires, as the spread fires it',
+    { 'playwright.config.js':
+      'let n = 0;\n'
+      + "const S = Symbol('s');\n"
+      + 'const root = { get viewport() {\n'
+      + '  return n >= 1 ? { width: 390, height: 800 } : { width: 1440, height: 800 }; } };\n'
+      + 'Object.defineProperty(root, S, { enumerable: true, get() { n += 1; return 1; } });\n'
+      + "export default { testDir: '.', use: root, projects: [\n"
+      + "  { name: 'a', use: { viewport: { width: 820, height: 1180 } } },\n"
+      + "  { name: 'laptop' },\n"
+      + "  { name: 'phone', use: { viewport: { width: 390, height: 844 } } },\n] };\n" },
+    1, 'no project declares a laptop viewport'],
+
+  // ── THE JOIN KEY IS READ ONCE PER PROJECT (#347 round 33) ──────────────
+  // `keyOf` read `p.name` twice and ran twice per project — duplicate detection,
+  // then row construction — so a stateful accessor could hold one name through
+  // Playwright's resolution and return another on the gate's last read, moving a
+  // project's row onto a different project's results.
+  ['a stateful name accessor cannot move the join key',
+    { 'playwright.config.js':
+      'let reads = 0;\n'
+      + "const laptop = { use: { viewport: { width: 1440, height: 900 } } };\n"
+      + "Object.defineProperty(laptop, 'name', { enumerable: true,\n"
+      + "  get() { reads += 1; return reads >= 3 ? 'phone' : 'laptop-empty'; } });\n"
+      + "export default { testDir: '.', projects: [laptop,\n" + TABLET + PHONE + '] };\n',
+      'flip.json': '{"suites":[{"specs":[{"tests":['
+        + '{"projectName":"tablet","annotations":[],"results":[{"status":"passed","annotations":[]}]},'
+        + '{"projectName":"phone","annotations":[],"results":[{"status":"passed","annotations":[]}]}'
+        + ']}]}]}' },
+    12, 'declared by: laptop-empty', { reportArg: 'flip.json' }],
+
   // ── A PRESENT ROOT NAME IS VALIDATED (#347 round 31) ───────────────────
   // Round 30 added root-name inheritance and coerced a non-string to '',
   // reintroducing on the root the exact defect round 27 fixed on projects.

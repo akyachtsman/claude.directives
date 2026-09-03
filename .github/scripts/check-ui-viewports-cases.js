@@ -475,6 +475,35 @@ const CASES = [
     12, 'NOTHING RAN at that width', { runReport: true }],
 
   // ── UNNAMED PROJECTS: the fix, and the hole the fix opened ───────────────
+  // ── AN EXPLICIT NON-STRING NAME IS NOT "unnamed" (#347 round 27) ───────
+  // `typeof p.name === 'string' ? p.name : ''` coerced these to the SAME key a
+  // legitimately unnamed project uses, so a leftover report carrying
+  // `projectName: ""` joined against them and certified at exit 0 — while
+  // Playwright 1.62.1 refuses the config outright (`config.projects[0].name must
+  // be a string`, measured), so no run could have produced those results at all.
+  // Round 24 made the REPORT's projectName refuse a non-string and left the
+  // CONFIG's key coercing one: the same defect on the other side of the join.
+  ...[['a number', '42'], ['null', 'null'], ['an array', "['a']"], ['an object', '{}']]
+    .map(([what, value]) => [
+      `a project whose name is ${what} — CANNOT CHECK`,
+      { 'playwright.config.js': withProjects(
+        `    { name: ${value}, use: { viewport: { width: 1440, height: 900 } } },\n`
+        + TABLET + PHONE) },
+      5, 'has a name that is not a string',
+    ]),
+
+  // The sibling, found by sweeping the line rather than the finding: a non-object
+  // ENTRY was read as an unnamed project at Playwright's default 1280x720 and
+  // certified the LAPTOP band from a `projectName: ""` row — a declaration the
+  // config never made. Playwright refuses these too ("config.projects[0] must be
+  // an object", measured on 1.62.1).
+  ...[['null', 'null'], ['a number', '7'], ['a string', "'laptop'"], ['an array', '[]']]
+    .map(([what, value]) => [
+      `a project entry that is ${what} — CANNOT CHECK`,
+      { 'playwright.config.js': withProjects(`    ${value},\n` + TABLET + PHONE) },
+      5, 'not an object',
+    ]),
+
   ['a project with no name is still attributed — no false failure',
     // An unnamed project reports `projectName: ""`, and the declaration side
     // keys it the same way, so the join matches. Under the listing this needed a

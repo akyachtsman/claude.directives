@@ -180,15 +180,51 @@ PINNED_ENV_VALUES = (
 # variables that ARE load-bearing here (REPORT_PATH, and the destination the run
 # is pinned to) must match what the other three use or this clears the wrong file.
 CLEAR_STEP = "Clear any stale Playwright report"
+# AND THE STEP THAT PRODUCES THE VALUE THE OTHER FOUR ARE PINNED TO. Round 21
+# folded the clear step in for exactly this reason and stopped at the step it was
+# looking at; `Validate report-path` stayed outside SEQUENCE, so making it
+# skippable (`if: ${{ false }}`) or replacing its command left this guard green.
+# The post-run gate is guarded by `steps.report-path.outcome == 'success'`, which
+# is FALSE for a skipped step — so the clear, the declaration check and the run
+# all execute, the post-run coverage gate is skipped, and under `advisory-run`
+# the composite finishes green having validated neither the path nor the
+# scheduled coverage (Codex, #347 round 27).
+#
+# That is round 21's finding one step to the left, and round 26's lesson about
+# the shape of these fixes: the rule was applied to the carrier that was named.
+# So membership is no longer what a step's rules depend on. Every step in
+# SEQUENCE carries its OWN env policy and working directory, and the validator
+# joins as an ordinary member with the policy its role requires — it cannot
+# consume `steps.report-path.outputs.*`, being the step that produces it, and it
+# resolves `tests-dir` from an env variable rather than by running inside it.
+#
+# `PARITY` means "the same env as the run, plus the pinned values" — the rule the
+# other four live under. An explicit mapping means "exactly this", which is the
+# stronger rule, and the validator gets it because both of its variables are the
+# raw inputs whose repointing is the whole attack: validate one path, use another.
+PARITY = object()
+VALIDATE_STEP = "Validate report-path"
+# The id is load-bearing in a way no other step's name is: five later steps and
+# two `if:` guards read `steps.report-path.*`. Renaming the id silently detaches
+# every one of them, and the `if:` guards then evaluate against a step that does
+# not exist — which is the skipped-step path above, reached by a different route.
+PINNED_IDS = {VALIDATE_STEP: "report-path"}
 SEQUENCE = (
+    (VALIDATE_STEP, ('python3 "$GITHUB_ACTION_PATH/validate-report-path.py"',),
+     None, None, SHELL,
+     {"REPORT_PATH": "${{ inputs.report-path }}",
+      "TESTS_DIR": "${{ inputs.tests-dir }}"}, None),
     (CLEAR_STEP,
      ('rm -f -- "$REPORT_PATH" "$RUNNER_TEMP/ui-viewports-declared.json"',),
-     None, None, SHELL),
-    (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL),
-    (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL),
+     None, None, SHELL, PARITY, PINNED_WORKDIR),
+    (CHECK_STEP, (f"{GATE} --tests-dir . {DECLARED}",), None, None, SHELL,
+     PARITY, PINNED_WORKDIR),
+    (RUN_STEP, ("npx playwright test",), None, COE_RUN, SHELL,
+     PARITY, PINNED_WORKDIR),
     (POST_STEP, (f'{GATE} --tests-dir . {DECLARED} --report "$REPORT_PATH"',),
-     IF_POST, None, SHELL),
+     IF_POST, None, SHELL, PARITY, PINNED_WORKDIR),
 )
+PARITY_STEPS = tuple(e[0] for e in SEQUENCE if e[5] is PARITY)
 
 
 def env_of(steps, name):
@@ -251,7 +287,7 @@ def main():
         # directions. Two comparisons rather than one since #335 put the gate on
         # both sides of the suite; the run is the reference because it is what
         # the other two make claims about.
-        for label, *_ in SEQUENCE:
+        for label in PARITY_STEPS:
             if label == RUN_STEP:
                 continue
             step_env = envs[label][0]
@@ -276,7 +312,7 @@ def main():
         # the comparisons before this one are relative, and three steps that all
         # dropped a variable agree perfectly.
         for key in REQUIRED_ENV:
-            absent = sorted(label for label, *_ in SEQUENCE if key not in envs[label][0])
+            absent = sorted(label for label in PARITY_STEPS if key not in envs[label][0])
             if absent:
                 problems.append(
                     f"{key} is not set on: " + ", ".join(f'"{a}"' for a in absent)
@@ -284,7 +320,7 @@ def main():
                     + "\n    this: three steps that all dropped it compare equal (#347 round 18)."
                 )
         for key, pinned in PINNED_ENV_VALUES:
-            for label, *_ in SEQUENCE:
+            for label in PARITY_STEPS:
                 step_env = envs[label][0]
                 if key in step_env and step_env[key] != pinned:
                     problems.append(
@@ -295,6 +331,41 @@ def main():
                         + "\n    agreeing on a DIFFERENT value still writes where they do not look"
                         + "\n    (#347 round 19)."
                     )
+        # A STEP OUTSIDE PARITY IS PINNED EXACTLY, not left unchecked. The
+        # validator's two variables are the RAW inputs, and repointing either is
+        # the whole attack this composite exists to refuse: validate one path and
+        # use another. Parity cannot express that — it has no peer to compare to
+        # — so the mapping is pinned whole, and an extra variable is a problem
+        # too, since a config-reading step gaining env is how #333 rounds 8 and
+        # 10 both went.
+        for label, _b, _i, _c, _s, policy, _w in SEQUENCE:
+            if policy is PARITY:
+                continue
+            got = envs[label][0]
+            if got != policy:
+                problems.append(
+                    f'"{label}" does not carry its pinned environment'
+                    + f"\n    got:      {got!r}"
+                    + f"\n    expected: {policy!r}"
+                    + "\n    This step VALIDATES the path the other four are pinned to, so a"
+                    + "\n    repointed variable here validates one path while they use another"
+                    + "\n    (#347 round 27)."
+                )
+        # AND ITS ID, which five later steps and two `if:` guards read as
+        # `steps.report-path.*`. A renamed id detaches every one of them, and the
+        # guards then evaluate against a step that does not exist — the skipped
+        # step of round 27 by another route.
+        for label, want_id in PINNED_IDS.items():
+            i = index_of(steps, label)
+            got_id = steps[i].get("id") if i is not None else None
+            if got_id != want_id:
+                problems.append(
+                    f'"{label}" has id {got_id!r}, not {want_id!r}'
+                    + "\n    `steps.report-path.outputs.relative` is read by the clear, the run,"
+                    + "\n    both gates and the upload, and `steps.report-path.outcome` guards"
+                    + "\n    the post-run gate. A rename makes all of them read an empty value"
+                    + "\n    or skip outright (#347 round 27)."
+                )
 
         # WORKING DIRECTORY IS AN INPUT TOO. A config is code: its export can
         # depend on process.cwd() as much as on the environment (#333 round 9).
@@ -342,7 +413,7 @@ def main():
         # this used to carry (&& || ; | & $( `) is gone with the rest of the
         # parser -- an exact match rejects every one of those without enumerating
         # them, and enumerating them is what left `#` and `-c` off the list.
-        for (label, bodies, want_if, want_coe, want_shell), (_, i) in zip(SEQUENCE, order):
+        for (label, bodies, want_if, want_coe, want_shell, _p, _w), (_, i) in zip(SEQUENCE, order):
             if i is None:
                 continue
             step = steps[i]
@@ -397,18 +468,18 @@ def main():
         # PINNED, not merely shared. See PINNED_WORKDIR above: the relative check
         # below still runs, because it is the one that explains WHY when a step
         # drifts, but it is no longer the only thing standing here.
-        for label, *_ in SEQUENCE:
+        for label, _b, _i, _c, _s, _p, want_wd in SEQUENCE:
             step_wd = workdir_of(steps, label)
-            if step_wd != PINNED_WORKDIR:
+            if step_wd != want_wd:
                 problems.append(
-                    f'"{label}" runs from {step_wd!r}, not the action input'
-                    + f"\n    expected: {PINNED_WORKDIR}"
+                    f'"{label}" runs from {step_wd!r}, not its pinned directory'
+                    + f"\n    expected: {want_wd}"
                     + "\n    Agreeing with each other is not enough: the report-path validator"
                     + "\n    and the stale-report clear resolve from the input, so three steps"
                     + "\n    moved together read and write a different directory than the ones"
                     + "\n    that clear and upload the report (#347 round 20)."
                 )
-        for label, *_ in SEQUENCE:
+        for label in PARITY_STEPS:
             if label == RUN_STEP:
                 continue
             step_wd = workdir_of(steps, label)

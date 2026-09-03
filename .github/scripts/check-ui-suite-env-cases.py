@@ -53,6 +53,12 @@ RUN = "Run Playwright tests"
 # same cases. Its defaults mirror the run step so the fixtures written before it
 # existed keep meaning what they meant.
 POST = "Check the run scheduled tests at all three viewport classes"
+# The step that PRODUCES the value the other four are pinned to. It joined
+# SEQUENCE in #347 round 27: outside it, making it skippable or replacing its
+# command left the guard green while the post-run gate — guarded by
+# `steps.report-path.outcome == 'success'`, false for a skipped step — never ran.
+VALIDATE = "Validate report-path"
+VALIDATE_ID = "report-path"
 UNSET = object()
 
 # THE PINNED BODIES, WRITTEN OUT HERE RATHER THAN IMPORTED. The guard now
@@ -84,12 +90,21 @@ PIN = "does not run the pinned command"
 # Spelled out rather than imported from the guard, for the same reason the
 # bodies are: a fixture that agreed by construction would prove nothing.
 VALIDATED = "${{ steps.report-path.outputs.relative }}"
+VALIDATE_BODY = 'python3 "$GITHUB_ACTION_PATH/validate-report-path.py"'
+# The validator's env is pinned EXACTLY rather than by parity: both variables are
+# the RAW inputs, and repointing either validates one path while the other four
+# use another. Spelled out here rather than imported, like every other pin.
+VALIDATE_ENV = {"REPORT_PATH": "${{ inputs.report-path }}",
+                "TESTS_DIR": "${{ inputs.tests-dir }}"}
 # The working directory is pinned to the action input as of #347 round 20, so
 # the default fixture has to use the real expression rather than a stand-in.
 TESTS_DIR = "${{ inputs.tests-dir }}"
 
 
 def action(check_env, run_env, check_name=CHECK, run_name=RUN,
+           val_name=VALIDATE, val_body=None, val_env=UNSET, val_wd=None,
+           val_if=None, val_coe=None, val_shell=SHELL, val_id=VALIDATE_ID,
+           between_val=None,
            check_wd=TESTS_DIR, run_wd=TESTS_DIR, decoy=None, between=None,
            check_body=None, run_body=None, run_uses=None,
            post_env=UNSET, post_name=POST, post_wd=TESTS_DIR, post_body=None,
@@ -119,6 +134,14 @@ def action(check_env, run_env, check_name=CHECK, run_name=RUN,
     return (
         "name: 'fixture'\nruns:\n  using: composite\n  steps:\n"
         + decoy_yaml
+        + f"    - name: {val_name}\n"
+        + (f"      id: {val_id}\n" if val_id is not None else "")
+        + f"{ctl('shell', val_shell)}{ctl('if', val_if)}"
+        + f"{ctl('continue-on-error', val_coe)}{wd(val_wd)}"
+        + block(dict(VALIDATE_ENV) if val_env is UNSET else val_env)
+        + body(val_body or VALIDATE_BODY)
+        + (f"    - name: {between_val}\n      shell: bash\n      run: echo between\n"
+           if between_val else "")
         + f"    - name: {clear_name}\n{ctl('shell', clear_shell)}{ctl('if', clear_if)}"
         + f"{ctl('continue-on-error', clear_coe)}{wd(clear_wd)}"
         + block(check_env if clear_env is UNSET else clear_env)
@@ -331,12 +354,12 @@ CASES = [
     ("all three steps moved to the SAME wrong working directory — refused",
      action(dict(BOTH), dict(BOTH), check_wd="elsewhere", run_wd="elsewhere",
             post_wd="elsewhere"),
-     1, "not the action input"),
+     1, "not its pinned directory"),
     # The near-miss again: a `${{ }}` expression that is not the pinned one.
     ("all three on a different input expression — refused",
      action(dict(BOTH), dict(BOTH), check_wd="${{ inputs.app-pages }}",
             run_wd="${{ inputs.app-pages }}", post_wd="${{ inputs.app-pages }}"),
-     1, "not the action input"),
+     1, "not its pinned directory"),
     # And the relative rule still explains a SINGLE step drifting, which is the
     # diagnostic a reader wants when only one moved.
     ("one step moved — still reported as a mismatch against the run",
@@ -373,7 +396,7 @@ CASES = [
      1, PIN),
     ("the clear step moved to another directory — refused",
      action(dict(BOTH), dict(BOTH), clear_wd="elsewhere"),
-     1, "not the action input"),
+     1, "not its pinned directory"),
     ("a step inserted between the clear and the pre-run check — refused",
      action(dict(BOTH), dict(BOTH), decoy=None, clear_name=CLEAR)
      .replace(f"    - name: {CHECK}\n",
@@ -558,6 +581,63 @@ CASES = [
 
     ("post-run check is a `uses:` step",
      action(dict(BOTH), dict(BOTH), post_uses="./some/action"), 1, "is a `uses:` step"),
+
+    # ── THE VALIDATOR IS A SEQUENCE MEMBER (#347 round 27) ────────────────
+    # Round 21 folded the CLEAR step in for exactly this reason and stopped
+    # there. `Validate report-path` stayed outside, so each of these left the
+    # guard green while the post-run gate — guarded by
+    # `steps.report-path.outcome == 'success'`, FALSE for a skipped step — never
+    # ran, and `advisory-run` carried the composite to green having validated
+    # neither the path nor the scheduled coverage.
+    ("the validator made skippable — refused",
+     action(dict(BOTH), dict(BOTH), val_if="${{ false }}"), 1, "wrong `if:`"),
+    ("the validator made advisory — refused",
+     action(dict(BOTH), dict(BOTH), val_coe="true"), 1, "wrong `continue-on-error:`"),
+    ("the validator's command replaced — refused",
+     action(dict(BOTH), dict(BOTH), val_body="echo skipped"), 1, PIN),
+    ("a command before the validator's, in its body — refused",
+     action(dict(BOTH), dict(BOTH),
+            val_body='./widen.sh\npython3 "$GITHUB_ACTION_PATH/validate-report-path.py"'),
+     1, PIN),
+    ("the validator renamed — refused",
+     action(dict(BOTH), dict(BOTH), val_name="Check the path"), 1,
+     'no step named "Validate report-path"'),
+    # The id, not the name: five later steps and two `if:` guards read
+    # `steps.report-path.*`, so a rename detaches all of them while every other
+    # rule here still passes.
+    ("the validator's id renamed — refused",
+     action(dict(BOTH), dict(BOTH), val_id="rp"), 1, "has id 'rp'"),
+    ("the validator's id removed — refused",
+     action(dict(BOTH), dict(BOTH), val_id=None), 1, "has id None"),
+    # Its env is pinned EXACTLY, not by parity: both variables are the raw
+    # inputs, so repointing either validates one path while the other four use
+    # another — the exact substitution this composite exists to refuse.
+    ("the validator pointed at the validated output — refused",
+     action(dict(BOTH), dict(BOTH),
+            val_env={"REPORT_PATH": VALIDATED, "TESTS_DIR": TESTS_DIR}),
+     1, "does not carry its pinned environment"),
+    ("the validator's tests-dir repointed — refused",
+     action(dict(BOTH), dict(BOTH),
+            val_env={"REPORT_PATH": "${{ inputs.report-path }}",
+                     "TESTS_DIR": "${{ inputs.app-pages }}"}),
+     1, "does not carry its pinned environment"),
+    ("the validator given extra env — refused",
+     action(dict(BOTH), dict(BOTH),
+            val_env=dict(VALIDATE_ENV, APP_URL="a")),
+     1, "does not carry its pinned environment"),
+    # It runs from the workspace root and resolves tests-dir from TESTS_DIR, so
+    # its pin is "no working-directory" — a different pin from the other four,
+    # which is why membership had to carry a per-step policy rather than one
+    # shared rule.
+    ("the validator given a working directory — refused",
+     action(dict(BOTH), dict(BOTH), val_wd=TESTS_DIR), 1, "not its pinned directory"),
+    ("a step between the validator and the clear — refused",
+     action(dict(BOTH), dict(BOTH), between_val="Fetch something"), 1,
+     'does not run immediately after "Validate report-path"'),
+    ("a decoy validator before the real one — refused",
+     action(dict(BOTH), dict(BOTH), decoy=VALIDATE), 1,
+     'are named "Validate report-path"'),
+
 ]
 
 

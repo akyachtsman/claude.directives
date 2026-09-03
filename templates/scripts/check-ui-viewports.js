@@ -1619,6 +1619,51 @@ console.log(`config:    ${configPath}`);
   // projects called `same` do — one rule covers both. The listing-era rule about
   // names containing `] ›` is gone with the listing: the report carries the name
   // as a JSON string, so nothing has to be parsed back out of prose.
+  //
+  // AND AN EXPLICIT NON-STRING NAME IS NOT "unnamed". `typeof p.name === 'string'
+  // ? p.name : ''` coerced `name: 42` to the SAME key a legitimately unnamed
+  // project uses, so a config Playwright refuses outright — measured on 1.62.1:
+  // `config.projects[0].name must be a string` — was joined against a leftover
+  // report carrying `projectName: ""` and certified at exit 0. Nothing could
+  // have run against that config; the run that produced the report was a
+  // different one (Codex, #347 round 27).
+  //
+  // This is round 24's `projectName` finding on the OTHER side of the join. That
+  // round made the report's key refuse a non-string and left the config's key
+  // coercing one, which is the round-26 pattern again: the fix reached the
+  // carrier that was named. Absent still means unnamed — Playwright allows it
+  // and reports `""` — but present-and-not-a-string is a config this gate will
+  // not pretend to understand.
+  //
+  // AND THE ENTRY ITSELF, found by sweeping the line rather than the finding.
+  // `projects: [null]` is refused by Playwright too ("config.projects[0] must be
+  // an object"), and here it was worse than a mis-keyed name: `keyOf(null)` gave
+  // it the empty key, `p && p.use` fell through to the DEFAULT 1280x720, and the
+  // gate INVENTED an unnamed laptop project and certified that band from a
+  // report row for `projectName: ""`. A fabricated declaration, not merely a
+  // wrong one — checked here because it is the same coercion on the same line.
+  const badEntry = projects.findIndex(p => !p || typeof p !== 'object' || Array.isArray(p));
+  if (badEntry !== -1) {
+    die(5, [
+      `CANNOT CHECK: project ${badEntry} is ${describeTop(projects[badEntry])}, not an object.`,
+      '  Playwright refuses this config itself ("config.projects[N] must be an',
+      '  object"), so no run can have produced results for it. Read as a project,',
+      '  it would take the empty key and Playwright\'s default 1280x720 viewport —',
+      '  a laptop-band declaration this config never made.',
+    ]);
+  }
+  const badName = projects.findIndex(p => p.name !== undefined && typeof p.name !== 'string');
+  if (badName !== -1) {
+    die(5, [
+      `CANNOT CHECK: project ${badName} has a name that is not a string.`,
+      `  name: ${describeTop(projects[badName].name)}`,
+      '  Playwright refuses this config itself ("config.projects[N].name must be a',
+      '  string"), so no run can have produced results for it. Coercing it to the',
+      '  empty key would join it against a legitimately UNNAMED project\'s results',
+      '  — a different run\'s report certifying this one.',
+      '  Omit `name` for an unnamed project; anything else must be a string.',
+    ]);
+  }
   const keyOf = p => ((p && typeof p.name === 'string') ? p.name : '');
   const keys = projects.map(keyOf);
   const dupes = [...new Set(keys.filter((n, i2, a) => a.indexOf(n) !== i2))];

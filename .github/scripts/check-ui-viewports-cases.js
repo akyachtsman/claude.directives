@@ -552,6 +552,27 @@ const CASES = [
       + "  { name: 'tablet', use: mk(900) },\n"
       + "  { name: 'phone', use: mk(390) },\n] };\n" },
     1, 'no project declares a tablet viewport'],
+  // …AND `mergeObjects()` SKIPS UNDEFINED VALUES, which round 28's
+  // own-enumerable test did not. `{ use: { viewport: undefined } }` is an own
+  // enumerable key the merge steps over, so the ROOT width still applies and
+  // Playwright runs the project at 1440 — while the gate selected the
+  // `undefined`, called the project unclassifiable and FAILED a config the run
+  // accepts (Codex, #347 round 29). Round 28's own lesson, one round later:
+  // exact, not stricter.
+  ['an undefined project viewport falls through to the root width',
+    { 'playwright.config.js':
+      "export default { testDir: '.', use: { viewport: { width: 1440, height: 900 } },\n"
+      + '  projects: [\n'
+      + "    { name: 'laptop', use: { viewport: undefined } },\n"
+      + TABLET + PHONE + '] };\n' },
+    0, 'check-ui-viewports: OK — DECLARED'],
+  // The twin for THAT: with no root viewport to fall through to, the same shape
+  // takes the documented default rather than being read as a declaration.
+  ['…and with no root viewport it takes the 1280x720 default',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'laptop', use: { viewport: undefined } },\n" + TABLET + PHONE) },
+    0, 'check-ui-viewports: OK — DECLARED'],
+
   // The twin: an OWN viewport is still read, so the rule above is not satisfied
   // by ignoring viewports altogether.
   ['an own viewport is still read',

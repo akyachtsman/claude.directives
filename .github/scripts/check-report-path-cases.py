@@ -124,9 +124,18 @@ CASES = [
 
     ("a character class", "r[12].json", 1, "glob metacharacters", None),
 
-    # A LEADING `!` still refuses — that position negates the whole entry — but
-    # the diagnostic is now about the position, not about the character.
-    ("an exclusion pattern", "!r.json", 1, "starts with '!'", None),
+    # THE EDGE IS THE ENTRY'S EDGE, NOT THE INPUT'S (#347 round 29). With a
+    # nested tests-dir this lands as `.github/scripts/ui-tests/!r.json`, where
+    # the `!` is interior and literal to every consumer — so refusing the RAW
+    # value was refusing a property it does not have. Round 28 put the rule in
+    # the wrong place; it now runs on the resolved entry.
+    ("an exclusion pattern that lands mid-entry", "!r.json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/!r.json"),
+
+    # …and the shape that DOES reach the edge: normalising out of tests-dir so
+    # the `!` becomes the entry's first character.
+    ("a leading ! on the RESOLVED entry", "../../../!r.json", 1,
+     "starts with '!'", None),
 
     # The twin, and the reason the rule moved (#347 round 28): `!` inside a
     # filename is literal to the uploader, to `rm` and to Node, so refusing it
@@ -172,8 +181,16 @@ CASES = [
     # rules and is refused for what it is, rather than being read as absent.
     ("whitespace only", "   ", 1, "whitespace", None),
 
-    ("a leading space", " r.json", 1, "leading or trailing whitespace", None),
+    # Same correction: the uploader trims the whole ENTRY, so a space at the raw
+    # value's edge is interior once the tests-dir prefix is prepended.
+    ("a leading space that lands mid-entry", " r.json", 0,
+     "inside the workspace", ".github/scripts/ui-tests/ r.json"),
 
+    ("leading whitespace on the RESOLVED entry", "../../../ r.json", 1,
+     "leading or trailing whitespace", None),
+
+    # A TRAILING space is at the entry's edge either way — the prefix is
+    # prepended, so nothing follows it.
     ("a trailing space", "r.json ", 1, "leading or trailing whitespace", None),
 
     # The twin: an INTERNAL space is a legal filename character and a path list

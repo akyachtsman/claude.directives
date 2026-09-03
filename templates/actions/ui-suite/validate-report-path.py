@@ -117,25 +117,37 @@ def forbid_chars(value, what):
         refuse(f"{what} contains glob metacharacters.",
                f"got {value!r} -- the artifact uploader expands patterns, so this "
                "names a set of files rather than the one report.")
-    # THE ONE POSITION WHERE `!` CHANGES THE PATTERN. As an entry's first
-    # character it makes the line an EXCLUSION, so the report is subtracted from
-    # the upload set rather than added to it -- and every other rule here would
-    # pass. Checked by position rather than by presence, so an ordinary filename
-    # carrying a `!` is not refused for a property it does not have.
+
+
+
+def forbid_edges(value, what):
+    """Rules about an entry's EDGES -- applied to the resolved entry only.
+
+    THE ARTIFACT ENTRY IS `landed`, NOT THE INPUT. Round 28 put the leading-`!`
+    rule in forbid_chars(), which runs on the RAW tests-dir-relative value too --
+    so with a nested tests-dir, `!report.json` (which the uploader receives as
+    `templates/ui-tests/!report.json`, where the `!` is interior and literal) was
+    refused for a property it does not have. Same for surrounding whitespace: the
+    uploader trims the whole ENTRY, so a space at the edge of the raw input is
+    interior once the prefix is prepended (Codex, #347 round 29).
+
+    Both rules are about the uploader's whole-entry semantics -- negation and
+    trimming -- so they belong where the entry exists and nowhere else. The
+    position-independent rules in forbid_chars() still run on both values,
+    because a line break or a glob metacharacter is one wherever it sits.
+    """
+    # As an entry's FIRST character `!` makes the line an EXCLUSION, subtracting
+    # the report from the upload set rather than adding it -- and every other
+    # rule here would pass.
     if value.startswith("!"):
         refuse(f"{what} starts with '!'.",
                f"got {value!r} -- a leading '!' in an artifact path entry NEGATES "
                "the pattern, so this subtracts the report from the upload instead "
                "of naming it.")
     # SURROUNDING WHITESPACE, because the uploader TRIMS each pattern before
-    # resolving it. The raw input was already checked for this, but round 13
-    # ran the character rules on the emitted value without bringing this one
-    # along -- so `../../../ ~/.ssh/id_rsa` normalised to ` ~/.ssh/id_rsa`,
-    # whose first path component is " ~" and therefore slipped the leading-tilde
-    # rule below; upload-artifact then trimmed the space and expanded the tilde
-    # to the runner's home (Codex, #347 round 14). Two rules that only work
-    # together, applied in different places, is the coupling this file keeps
-    # being caught by.
+    # resolving it: `../../../ ~/.ssh/id_rsa` lands as ` ~/.ssh/id_rsa`, whose
+    # first component is " ~" and so slips the leading-tilde rule, and then gets
+    # trimmed and expanded to the runner's home (Codex, #347 round 14).
     if value != value.strip():
         refuse(f"{what} has leading or trailing whitespace.",
                f"got {value!r} -- a path list trims each entry, so this is not "
@@ -268,6 +280,7 @@ if landed.split(os.sep)[0].startswith("~"):
 # THE VALUE THE CONSUMERS ACTUALLY GET, checked as such. `landed` carries
 # tests-dir, which no rule above has looked at (#347 round 13).
 forbid_chars(landed, "the resolved report path")
+forbid_edges(landed, "the resolved report path")
 
 out = os.environ.get("GITHUB_OUTPUT")
 if out:

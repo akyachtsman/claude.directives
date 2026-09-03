@@ -1745,8 +1745,20 @@ console.log(`config:    ${configPath}`);
     // rather than in the limits section. The gate's own claim is that its rows
     // are what the run will use; reading a property the run cannot see breaks
     // that claim without anyone tampering.
+    // AND NOT `undefined`, which `mergeObjects()` SKIPS. An own enumerable
+    // `viewport: undefined` is a key the merge steps over, so the layer below
+    // still supplies the value: root 1440 with `{ use: { viewport: undefined } }`
+    // runs at 1440. Round 28's own-enumerable test selected that `undefined` and
+    // called the project unclassifiable, failing a config Playwright runs
+    // (Codex, #347 round 29).
+    //
+    // That is round 28's own lesson, one round later and by my hand: the correct
+    // move is EXACT, not stricter. `propertyIsEnumerable` is the right test for
+    // WHICH keys the merge sees; it is not the whole rule, because the merge
+    // also skips undefined VALUES.
     const ownVp = u => (u !== null && typeof u === 'object'
-      && Object.prototype.propertyIsEnumerable.call(u, 'viewport'));
+      && Object.prototype.propertyIsEnumerable.call(u, 'viewport')
+      && u.viewport !== undefined);
     const vp = ownVp(p.use) ? p.use.viewport
       : ownVp(cfg.use) ? cfg.use.viewport
         : DEFAULT_VIEWPORT;

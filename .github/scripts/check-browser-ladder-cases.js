@@ -40,7 +40,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const LADDER = process.env.BROWSER_LADDER_BIN
   || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
-  INSTALL_MAX_BUFFER } = require(LADDER);
+  INSTALL_MAX_BUFFER, parseArgs, DEFAULT_TESTS_DIR } = require(LADDER);
 import { tmpdir } from 'os';
 import { mkdtempSync, realpathSync } from 'fs';
 
@@ -320,16 +320,25 @@ function eq(actual, expected, what) {
   // Browser.close() catches TargetClosedError and resolves, so a browser that
   // starts and dies immediately closed "successfully" and reported ok:true --
   // the exact start-then-die case the code claimed to catch.
-  await check('a browser that disconnects before use is a failure, not a pass', async () => {
-    const stub = { chromium: { launch: async () => ({ isConnected: () => false, close: async () => {} }) } };
+  // Round 1 answered this with `isConnected()` before the close. Round 3
+  // replaced that with actually USING the browser: a flag sampled at an instant
+  // still passed a process that died between the sample and the close. These two
+  // cases now exercise the probe, which is what the code does.
+  await check('a browser that dies before it can be used is a failure, not a pass', async () => {
+    const stub = { chromium: { launch: async () => ({
+      isConnected: () => false,
+      newContext: async () => { throw new Error('Target closed'); },
+      close: async () => {},
+    }) } };
     const result = await realLaunch('chromium', '.', stub)();
-    eq(result.ok, false, 'a disconnected browser must not pass');
-    if (!/disconnected/.test(result.error)) throw new Error(`error must say why: ${result.error}`);
+    eq(result.ok, false, 'a dead browser must not pass');
+    if (!/could not be used/.test(result.error)) throw new Error(`error must say why: ${result.error}`);
   });
 
-  await check('a connected browser passes even if closing it throws', async () => {
+  await check('a usable browser passes even if closing it throws', async () => {
     const stub = { chromium: { launch: async () => ({
       isConnected: () => true,
+      newContext: async () => ({ close: async () => {} }),
       close: async () => { throw new Error('close blew up'); },
     }) } };
     const result = await realLaunch('chromium', '.', stub)();
@@ -347,27 +356,103 @@ function eq(actual, expected, what) {
   // that: one failed loudly, and the other PASSED, because it only asserted the
   // output was not the process cwd and warning text satisfies that. A case that
   // cannot fail for the right reason is worse than no case.
-  const CWD_PROBE = ['node', '-e', 'process.stdout.write(process.cwd())'];
+  // DELIMITED, because npm writes warnings to stderr and `realInstall` merges
+  // both streams. In a proxy-configured environment `npm warn Unknown env config
+  // "http-proxy"` rode along and BOTH cwd cases failed on an exact comparison --
+  // the child had run in the right directory the whole time (Codex, #355).
+  // My "21 cases green" was true here and false elsewhere: a suite that depends
+  // on the absence of unrelated diagnostics is measuring its environment.
+  const CWD_PROBE = ['node', '-e',
+    'process.stdout.write("<<CWD:" + process.cwd() + ":CWD>>")'];
+  const readCwd = (out) => {
+    const m = /<<CWD:([\s\S]*?):CWD>>/.exec(out);
+    return m ? m[1] : null;
+  };
 
   await check('the installer runs in the directory it is given', () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-cwd-')));
     const out = realInstall(CWD_PROBE, dir);
-    if (out.output.trim() !== dir) {
-      throw new Error(`installer ran in ${JSON.stringify(out.output.trim())}, expected ${dir}`);
+    const seen = readCwd(out.output);
+    if (seen !== dir) {
+      throw new Error(`installer ran in ${JSON.stringify(seen)}, expected ${dir}`);
     }
   });
 
   await check('and it does NOT silently fall back to the process cwd', () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-cwd2-')));
     const out = realInstall(CWD_PROBE, dir);
+    const seen = readCwd(out.output);
     // Positive assertion, not a negative one: the output must BE the given
     // directory. `!== process.cwd()` was satisfied by any noise at all.
-    if (out.output.trim() !== dir) {
+    if (seen !== dir) {
       throw new Error('the cwd argument was ignored — this is the round-1 defect');
     }
-    if (out.output.trim() === process.cwd()) {
+    if (seen === process.cwd()) {
       throw new Error('installer ran in the process cwd despite being given another');
     }
+  });
+
+  // ── #355 round 3 ────────────────────────────────────────────────────────
+  await check('an interrupted install stops the ladder without a browser verdict', async () => {
+    const s = scripted([
+      { launch: fail('nope') },
+      { installCode: -1, installOutput: 'cut short', launch: OK },
+    ]);
+    // The stub's second rung WOULD launch; an interrupted install must stop
+    // before that, because a browser never fetched cannot support a verdict.
+    s.install = () => ({ code: -1, output: 'cut short', interrupted: true });
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, false, 'verdict');
+    eq(out.interrupted, true, 'flagged as interrupted');
+    const lines = [];
+    eq(report('chromium', out, (l) => lines.push(l)), 2, 'exit 2, not a ceiling');
+    if (lines.join('\n').includes('CEILING')) throw new Error('must not report a ceiling');
+  });
+
+  await check('a browser that cannot open a context is not launching', async () => {
+    const stub = { chromium: { launch: async () => ({
+      isConnected: () => true,
+      newContext: async () => { throw new Error('Target closed'); },
+      close: async () => {},
+    }) } };
+    const result = await realLaunch('chromium', '.', stub)();
+    eq(result.ok, false, 'a browser that cannot be used has not launched');
+    if (!/could not be used/.test(result.error)) throw new Error(`error must say why: ${result.error}`);
+  });
+
+  await check('a usable browser passes', async () => {
+    const stub = { chromium: { launch: async () => ({
+      isConnected: () => true,
+      newContext: async () => ({ close: async () => {} }),
+      close: async () => {},
+    }) } };
+    eq((await realLaunch('chromium', '.', stub)()).ok, true, 'verdict');
+  });
+
+  // ── #355 round 3: argument parsing, which had NO cases and held a P1 ────
+  // `browser-ladder.js firefox` ran CHROMIUM for two rounds. The mutant that
+  // restores that filter reddens nothing without these, because the parsing
+  // lived inside main() where no case could reach it.
+  await check('the browser argument survives when --tests-dir is absent', () => {
+    eq(parseArgs(['firefox']).browser, 'firefox', 'browser');
+    eq(parseArgs(['webkit']).browser, 'webkit', 'browser');
+    eq(parseArgs([]).browser, 'chromium', 'default browser');
+    eq(parseArgs([]).testsDir, DEFAULT_TESTS_DIR, 'default tests dir');
+  });
+
+  await check('the browser argument survives in either order with --tests-dir', () => {
+    eq(parseArgs(['firefox', '--tests-dir', 'x']).browser, 'firefox', 'browser after');
+    eq(parseArgs(['--tests-dir', 'x', 'firefox']).browser, 'firefox', 'browser before');
+    eq(parseArgs(['--tests-dir', 'x', 'firefox']).testsDir, 'x', 'tests dir');
+    eq(parseArgs(['firefox', '--tests-dir=x']).testsDir, 'x', '--tests-dir=x form');
+    eq(parseArgs(['firefox', '--tests-dir=x']).browser, 'firefox', 'browser with = form');
+  });
+
+  await check('an explicitly supplied --tests-dir is distinguishable from the default', () => {
+    // `testsDirArg` is what lets a typo refuse while an omitted flag falls back;
+    // collapsing the two is the fail-open this round closed.
+    eq(parseArgs(['chromium']).testsDirArg, null, 'omitted');
+    eq(parseArgs(['chromium', '--tests-dir', 'x']).testsDirArg, 'x', 'supplied');
   });
 
   if (failures.length) {

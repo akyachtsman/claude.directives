@@ -96,6 +96,15 @@ async function ladder({ browser, install, launch, log = () => {} }) {
       // answer, and defect 3 was letting the dependency phase's failure end the
       // ladder before anything was ever launched.
       log(`    install exited ${installed.code} (context, not a verdict)`);
+      // AN INTERRUPTED INSTALL IS NOT A RUNG THAT HAPPENED. round 2 learned to
+      // DETECT a spawn the ladder cut short and then carried on as though the
+      // rung had completed -- so a launch failing for want of a browser this
+      // ladder never finished fetching was still reported as a CEILING. Detecting
+      // it and not acting on it is the same defect one step later (Codex, #355).
+      if (installed.interrupted) {
+        attempts.push({ rung: rung.name, install: installed, launch: null });
+        return { ok: false, harness: true, interrupted: true, rung: null, attempts };
+      }
     } else {
       log(`  rung "${rung.name}": no install, launching what is already here`);
     }
@@ -141,6 +150,16 @@ function report(browser, outcome, print = console.log) {
   // CANNOT CHECK IS NOT A CEILING. Saying "this browser will not start here" when
   // the truth is "this ladder could not load Playwright" records a limit about
   // the wrong thing, and `test.md` asks projects to write these limits down.
+  if (outcome.interrupted) {
+    const last = outcome.attempts[outcome.attempts.length - 1];
+    print('browser-ladder: CANNOT CHECK — this ladder could not run the installer to completion');
+    print('');
+    for (const line of String(last.install.output || '').split('\n').slice(0, 10)) print(`  ${line}`);
+    print('');
+    print('  No launch was attempted after it, because a browser this ladder never');
+    print('  finished fetching cannot support a verdict either way.');
+    return 2;
+  }
   if (outcome.harness) {
     print(`browser-ladder: CANNOT CHECK — Playwright itself could not be loaded`);
     print('');
@@ -278,11 +297,21 @@ function realLaunch(browser, testsDir, injected) {
       // directly, and the close is then only cleanup.
       return browserType.launch()
         .then(async (b) => {
-          const alive = b.isConnected();
+          // USE IT, do not merely ask whether it is connected. `isConnected()` is
+          // a flag sampled at an instant, and a browser that dies between that
+          // sample and the close still passed -- the start-then-die window round
+          // 1 claimed to have closed (Codex, #355). Opening a context is the
+          // cheapest operation that requires the process to still be answering,
+          // which is the property "it launched" is supposed to mean.
+          let error = null;
+          try {
+            const context = await b.newContext();
+            await context.close();
+          } catch (err) {
+            error = `the browser started but could not be used: ${(err && err.message) || err}`;
+          }
           try { await b.close(); } catch { /* cleanup, not the verdict */ }
-          return alive
-            ? { ok: true, error: null }
-            : { ok: false, error: 'the browser started and then disconnected before it could be used' };
+          return error ? { ok: false, error } : { ok: true, error: null };
         })
         .catch((err) => ({ ok: false, error: err && err.message ? err.message : String(err) }));
     } catch (err) {
@@ -291,11 +320,35 @@ function realLaunch(browser, testsDir, injected) {
   };
 }
 
+// EXPORTED AND TESTED. This lived inline in main(), which no case exercised --
+// so the round-3 mutant that restored the broken filter reddened NOTHING, and the
+// most user-visible bug of that round (`browser-ladder.js firefox` silently
+// running chromium) had no case at all. Untested argument parsing is where that
+// bug lived for two rounds.
+function parseArgs(argv) {
+  // WALK THE ARGUMENTS. The first version filtered on `i !== flag + 1`, and with
+  // no `--tests-dir` present `flag` is -1, so `flag + 1` is 0 and the filter
+  // dropped argv[0] -- the browser (Codex, #355). An index computed from a
+  // not-found result is the bug; walking the list cannot produce one.
+  const positional = [];
+  let testsDirArg = null;
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--tests-dir') { testsDirArg = argv[i + 1] || null; i += 1; continue; }
+    if (argv[i].startsWith('--tests-dir=')) {
+      testsDirArg = argv[i].slice('--tests-dir='.length) || null;
+      continue;
+    }
+    positional.push(argv[i]);
+  }
+  return {
+    browser: positional[0] || 'chromium',
+    testsDir: testsDirArg || DEFAULT_TESTS_DIR,
+    testsDirArg,
+  };
+}
+
 async function main(argv) {
-  const flag = argv.indexOf('--tests-dir');
-  const testsDir = flag >= 0 && argv[flag + 1] ? argv[flag + 1] : DEFAULT_TESTS_DIR;
-  const positional = argv.filter((a, i) => a !== '--tests-dir' && i !== flag + 1);
-  const browser = positional[0] || 'chromium';
+  const { browser, testsDir, testsDirArg } = parseArgs(argv);
   if (!BROWSERS.includes(browser)) {
     console.error(`browser-ladder: unknown browser "${browser}" — expected one of ${BROWSERS.join(', ')}`);
     return 2;
@@ -307,9 +360,22 @@ async function main(argv) {
   // ONE implementation. main() wires the real effects into the same `ladder()`
   // the cases file drives with stubs; if it looped over RUNGS itself, the tested
   // logic and the shipped logic would be two things that merely look alike.
+  // A DIRECTORY THE CALLER NAMED AND THAT DOES NOT EXIST IS A TYPO, NOT A
+  // FALLBACK. Silently dropping to the working directory meant a mistyped
+  // --tests-dir installed into, and reported on, a DIFFERENT harness than the
+  // one asked for -- an invalid pass or an invalid ceiling, either way about
+  // the wrong tree (Codex, #355). The fallback survives only for the default,
+  // which is a guess this file makes rather than something the caller asserted.
+  if (testsDirArg && !existsSync(resolve(testsDirArg))) {
+    console.error(`browser-ladder: CANNOT CHECK — --tests-dir ${testsDirArg} does not exist`);
+    console.error(`  resolved: ${resolve(testsDirArg)}`);
+    console.error('  This says nothing about the browser. Point it at the directory holding');
+    console.error("  the UI kit's node_modules, or omit it to use the shipped default.");
+    return 2;
+  }
   // THE SAME DIRECTORY FOR BOTH. An installer and a launcher pointed at different
-  // trees is the mismatch this round fixes; passing one value to both is what
-  // keeps them from drifting apart again.
+  // trees is the mismatch round 2 fixed; passing one value to both is what keeps
+  // them from drifting apart again.
   const base = existsSync(resolve(testsDir)) ? resolve(testsDir) : process.cwd();
   const outcome = await ladder({
     browser,
@@ -321,7 +387,7 @@ async function main(argv) {
 }
 
 module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, realLaunch,
-  resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER };
+  resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER, parseArgs, DEFAULT_TESTS_DIR };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then((code) => process.exit(code));

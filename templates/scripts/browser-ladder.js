@@ -162,8 +162,19 @@ function firstLine(text) {
 function report(browser, outcome, print = console.log) {
   if (outcome.ok) {
     print(`browser-ladder: LAUNCHES — ${browser} started at rung "${outcome.rung}"`);
-    print('  No ceiling for this browser. A failure in your suite is about your');
-    print('  code or your app, not about the browser being missing here.');
+    // SAY ONLY WHAT WAS TESTED. These two lines used to read "a failure in your
+    // suite is about your code or your app" -- which contradicts this file's own
+    // header three screens up. A browser that opens an empty context proves
+    // nothing about egress, DNS, TLS, the filesystem, or any other runner
+    // constraint, so a suite failing on one of those would have been reported
+    // here as an application regression (Codex, #355). An instrument that
+    // over-claims in its PASS is the same defect as one that over-claims in its
+    // failure; this one just reads as reassurance.
+    print('  No ceiling for BROWSER STARTUP. That is the only thing this tested:');
+    print('  the browser process came up and answered. If your suite fails, browser');
+    print('  startup is not the demonstrated cause — but network egress, DNS, TLS,');
+    print('  filesystem limits and every other sandbox constraint are all still');
+    print('  open questions, and this says nothing about any of them.');
     return 0;
   }
 
@@ -243,6 +254,22 @@ function report(browser, outcome, print = console.log) {
 // spawn that never started.
 const INSTALL_MAX_BUFFER = 64 * 1024 * 1024;
 
+// AND BOUND IT IN TIME. `spawnSync` waits forever by default, so an installer
+// stalled on a network blackhole, a package-manager lock or a hung child blocked
+// the ladder before any launch or any report could run -- and a ladder whose
+// whole purpose is diagnosing restricted egress is exactly the one that meets
+// blackholes (Codex, #355). A timeout kills the child and Node reports
+// `status: null, signal: 'SIGTERM', error.code: 'ETIMEDOUT'` (measured), which
+// `classifyInstall` already reads as an interruption -- so a stall becomes
+// CANNOT CHECK rather than a hang or a manufactured ceiling.
+//
+// TEN MINUTES, not one. A browser download on a slow link, and `--with-deps`
+// fetching apt packages, legitimately take minutes; a bound tight enough to trip
+// on a slow network would turn every slow machine into CANNOT CHECK, which is
+// safe in direction and useless in practice. This is a bound on HUNG, not on
+// SLOW.
+const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+
 // Split out so the overflow branch is testable. The command is always `npx`,
 // which exists, so a genuine spawn error here is almost always ENOBUFS -- and
 // that is precisely the branch worth pinning, because it is the one that
@@ -283,6 +310,7 @@ function realInstall(argv, cwd) {
   return classifyInstall(spawnSync('npx', argv, {
     encoding: 'utf8',
     maxBuffer: INSTALL_MAX_BUFFER,
+    timeout: INSTALL_TIMEOUT_MS,
     cwd,
   }));
 }
@@ -301,8 +329,17 @@ function realInstall(argv, cwd) {
 // never a launch failure.
 const DEFAULT_TESTS_DIR = '.github/scripts/ui-tests';
 
-function resolvePlaywright(testsDir) {
-  const bases = [resolve(testsDir), process.cwd()];
+// AN EXPLICIT DIRECTORY IS AUTHORITATIVE FOR RESOLUTION, NOT ONLY FOR EXISTENCE.
+// main() already refuses a --tests-dir the caller named that does not exist. This
+// fallback quietly undid half of that: a named directory that EXISTS but holds no
+// Playwright resolved from the working directory instead, while the installer
+// still ran in the named one -- so the ladder installed into one tree and
+// launched from another, and a version or browser-revision mismatch between them
+// came out as a CEILING (Codex, #355). The cwd fallback survives only for the
+// DEFAULT, which is a guess this file makes rather than something the caller
+// asserted.
+function resolvePlaywright(testsDir, explicit) {
+  const bases = explicit ? [resolve(testsDir)] : [resolve(testsDir), process.cwd()];
   const tried = [];
   for (const base of bases) {
     try {
@@ -314,9 +351,9 @@ function resolvePlaywright(testsDir) {
   return { mod: null, tried };
 }
 
-function realLaunch(browser, testsDir, injected) {
+function realLaunch(browser, testsDir, injected, explicit) {
   return () => {
-    const found = injected ? { mod: injected } : resolvePlaywright(testsDir);
+    const found = injected ? { mod: injected } : resolvePlaywright(testsDir, explicit);
     if (!found.mod) {
       return { ok: false, harness: true,
                error: `playwright could not be resolved:\n    ${found.tried.join('\n    ')}` };
@@ -440,15 +477,22 @@ async function main(argv) {
   const outcome = await ladder({
     browser,
     install: (argv) => realInstall(argv, base),
-    launch: realLaunch(browser, testsDir),
+    launch: realLaunch(browser, testsDir, undefined, testsDirArg != null),
     log: (line) => console.log(line),
   });
   return report(browser, outcome);
 }
 
 module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, realLaunch,
-  resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER, parseArgs, DEFAULT_TESTS_DIR };
+  resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs,
+  DEFAULT_TESTS_DIR };
 
 if (require.main === module) {
-  main(process.argv.slice(2)).then((code) => process.exit(code));
+  // `process.exit()` TERMINATES BEFORE A PIPE DRAINS. When stdout is redirected
+  // it is asynchronous, and this file's whole output is evidence a reader is
+  // meant to keep -- quoted installer output and launch errors, neither of which
+  // is length-bounded. Exiting immediately could truncate exactly the material
+  // the CANNOT CHECK and CEILING reports exist to preserve (Codex, #355).
+  // Setting `exitCode` lets Node leave once the streams are flushed.
+  main(process.argv.slice(2)).then((code) => { process.exitCode = code; });
 }

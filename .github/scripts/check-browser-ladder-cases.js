@@ -40,9 +40,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const LADDER = process.env.BROWSER_LADDER_BIN
   || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
-  INSTALL_MAX_BUFFER, parseArgs, DEFAULT_TESTS_DIR } = require(LADDER);
+  INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
+  resolvePlaywright } = require(LADDER);
 import { tmpdir } from 'os';
-import { mkdtempSync, realpathSync } from 'fs';
+import { mkdtempSync, mkdirSync, realpathSync, writeFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 
 const OK = { ok: true, error: null };
@@ -581,6 +582,127 @@ function eq(actual, expected, what) {
   await check('a whitespace-only --tests-dir is carried through, not trimmed away', () => {
     eq(parseArgs(['chromium', '--tests-dir', '  ']).testsDirArg, '  ', 'preserved verbatim');
     eq(parseArgs(['chromium', '--tests-dir', '  ']).testsDir, '  ', 'and used as given');
+  });
+
+  // ── #355 round 6: four pre-existing defects, none from round 5 ───────────
+
+  // A PASS THAT OVER-CLAIMS IS THE SAME DEFECT AS A FAILURE THAT DOES. The
+  // success report used to say a suite failure "is about your code or your app",
+  // contradicting this file's own header: a browser that opens an empty context
+  // proves nothing about egress, DNS, TLS or the filesystem, so an environmental
+  // limit would have been reported as an application regression.
+  await check('the LAUNCHES report claims only that startup worked', async () => {
+    const s = scripted([{ launch: OK }]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    const lines = [];
+    eq(report('chromium', out, (l) => lines.push(l)), 0, 'exit 0');
+    const text = lines.join('\n');
+    if (/about your\s+code or your app/.test(text)) {
+      throw new Error('the pass must not attribute a suite failure to the application');
+    }
+    for (const must of ['BROWSER STARTUP', 'egress', 'says nothing']) {
+      if (!text.includes(must)) throw new Error(`the pass must still name its limits: ${must}`);
+    }
+  });
+
+  // An explicitly named directory is authoritative for RESOLUTION, not only for
+  // existence. main() already refuses one that does not exist; this fallback
+  // quietly undid half of that, resolving from the cwd while the installer ran in
+  // the named directory -- two different trees, and the mismatch came out as a
+  // CEILING.
+  await check('an explicit --tests-dir does not fall back to the cwd', () => {
+    const found = resolvePlaywright('/nonexistent-tests-dir-for-cases', true);
+    eq(found.mod, null, 'unresolved');
+    eq(found.tried.length, 1, 'exactly one base was tried');
+    if (found.tried[0].includes(process.cwd())) {
+      throw new Error('the working directory must not be consulted for an explicit --tests-dir');
+    }
+  });
+
+  // ...and the complement, so the rule is not bought by refusing the fallback
+  // outright: the DEFAULT is a guess this file makes, so it may still fall back.
+  await check('the DEFAULT tests dir may still fall back to the cwd', () => {
+    const found = resolvePlaywright('/nonexistent-tests-dir-for-cases', false);
+    // ASSERT THE PROPERTY, NOT ONE OUTCOME OF IT. Whether `playwright` resolves
+    // from this repo's own working directory depends on whether node_modules
+    // happens to be installed -- a machine with it takes the success branch and
+    // has no `tried` list at all, so pinning `tried.length` passed here and threw
+    // elsewhere. What the case is actually about is that the cwd WAS consulted.
+    const consultedCwd = found.mod
+      ? found.base === process.cwd()
+      : found.tried.length === 2 && found.tried[1].includes(process.cwd());
+    if (!consultedCwd) {
+      throw new Error(`the working directory must still be a fallback for the default: ${JSON.stringify(found.tried || found.base)}`);
+    }
+  });
+
+  // A ladder whose purpose is diagnosing restricted egress is exactly the one
+  // that meets a blackhole. spawnSync waits forever by default.
+  await check('the installer is bounded in time, and a timeout is an interruption', () => {
+    if (!INSTALL_TIMEOUT_MS || INSTALL_TIMEOUT_MS > 30 * 60 * 1000) {
+      throw new Error(`installer timeout is ${INSTALL_TIMEOUT_MS}; an unbounded install hangs the ladder`);
+    }
+    // Ten minutes is a bound on HUNG, not on SLOW: a browser download on a slow
+    // link legitimately takes minutes, and a tighter bound would turn every slow
+    // machine into CANNOT CHECK.
+    if (INSTALL_TIMEOUT_MS < 5 * 60 * 1000) {
+      throw new Error(`installer timeout is ${INSTALL_TIMEOUT_MS}; a slow download is not a hang`);
+    }
+    // The shape Node actually produces on a timeout, measured rather than assumed.
+    const out = classifyInstall({
+      status: null, signal: 'SIGTERM', stdout: 'downloading', stderr: '',
+      error: Object.assign(new Error('spawnSync npx ETIMEDOUT'), { code: 'ETIMEDOUT' }),
+    });
+    if (!out.interrupted) throw new Error('a timed-out installer must read as interrupted');
+  });
+
+  // The real thing, end to end: a child that outlives the bound is killed and
+  // classified, rather than hanging the ladder.
+  await check('a real installer that outruns its bound is killed, not waited on', () => {
+    const started = Date.now();
+    const proc = spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'],
+                           { encoding: 'utf8', timeout: 500 });
+    const out = classifyInstall(proc);
+    if (Date.now() - started > 30000) throw new Error('the bound did not apply');
+    if (!out.interrupted) throw new Error('a killed child must read as interrupted');
+  });
+
+  // `process.exit()` TERMINATES BEFORE A REDIRECTED STDOUT DRAINS, and this
+  // file's output IS the evidence a reader is meant to keep.
+  //
+  // ⚠️ MY FIRST VERSION OF THIS CASE COULD NOT FAIL. It called `report()` in a
+  // child and set `process.exitCode` itself, so it never ran the CLI's exit line
+  // -- the mutant restoring `process.exit()` reddened NOTHING. The defect lives
+  // in the module tail, so the case has to drive the module tail.
+  //
+  // That needs the real `main()` to reach the CEILING report without a browser
+  // or a network: a stub `playwright` package under the named --tests-dir whose
+  // launch throws one enormous SINGLE-LINE error (the report caps line COUNT, so
+  // only line LENGTH gets past it), and a fake `npx` first on PATH so the two
+  // install rungs return instantly.
+  await check('the CLI does not truncate its own output into a pipe', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-pipe-')));
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      "module.exports = { chromium: { launch: async () => "
+      + "{ throw new Error('E'.repeat(200000)); } } };\n");
+    writeFileSync(join(dir, 'bin', 'npx'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    eq(proc.status, 1, 'a CEILING is exit 1');
+    if (!/EEEEE/.test(proc.stdout)) throw new Error('the launch error never reached the pipe');
+    // The LAST line is the one an early exit loses.
+    if (!/what would make it wrong/.test(proc.stdout)) {
+      throw new Error(`the report was truncated: ${proc.stdout.length} bytes, no closing line`);
+    }
   });
 
   if (failures.length) {

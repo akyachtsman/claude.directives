@@ -136,6 +136,12 @@
 //  21  the config declared different widths before and after the run, so the
 //      carried mapping is not the config the run used (CANNOT CHECK). Agreement
 //      proves consistency, never honesty — directives#349.
+//  22  --report was given without --declared (CANNOT CHECK). A report verdict
+//      rests on TWO independent observations — the widths read BEFORE the run
+//      and a fresh import after — and that machinery lives only on the
+//      --declared path. `--report` alone imports once, AFTER the run, and
+//      attributes the report with whatever that single import says, so a config
+//      that answers differently across the run certifies itself (#352).
 //
 // The three RETIRED codes are kept in this list rather than deleted. They were
 // documented exits of a shipped gate, and a reader meeting one in an old CI log
@@ -901,14 +907,32 @@ if (!VERDICT_FILE) {
   // (Codex, #347 round 32). The mapping and the run are meant to be two
   // independent observations; this path is one wearing the shape of two.
   //
-  // NOT FIXED HERE, and the reason is measured rather than felt: refusing
-  // `--report` without `--declared` breaks 76 of this file's 186 pinned cases,
-  // because the direct flow is what the whole suite is written around. Rewriting
-  // 76 pins is not a contract tweak, and doing it in the round where three of
-  // the previous five findings were my own regressions is the mistake rounds
-  // 28-31 kept making. directives#352 carries it.
+  // FIXED IN #352, by refusing rather than by degrading. The two candidate
+  // remedies were: report a weaker verdict on this path, or refuse it. A weaker
+  // verdict still prints SCHEDULED and still gets read as coverage — the whole
+  // subject of this gate is that a cheap observable standing in for the property
+  // is indistinguishable from the property — so the path that cannot make the
+  // claim does not make it.
   //
-  // The composite always passes both flags, so no shipped CI path is exposed.
+  // Nothing is lost that was ever sound: the composite has always passed both
+  // flags, and `check-ui-suite-env.py` pins that, so no shipped CI path changes.
+  // What changes is the DIRECT invocation documented in test.md, which now names
+  // both flags because a single import after the run cannot corroborate itself.
+  if (wantsReport && !declaredIdx.given) {
+    console.error('CANNOT CHECK: --report was given without --declared.');
+    console.error('  A report verdict rests on TWO independent observations: the widths the');
+    console.error('  config declared BEFORE the run, and a fresh import after it. Reading the');
+    console.error('  config once, after the run, is one observation wearing the shape of two —');
+    console.error('  a config whose globalTeardown changes what it declares then certifies');
+    console.error('  itself (measured: declares 390/390/390 before, 1280/900/390 after, and');
+    console.error('  --report alone returned exit 0 SCHEDULED for all three bands).');
+    console.error('  Run the pre-run pass first, then pass its mapping back:');
+    console.error('    node check-ui-viewports.js --tests-dir <d> --declared <map>');
+    console.error('    npx playwright test');
+    console.error('    node check-ui-viewports.js --tests-dir <d> --declared <map> --report <json>');
+    console.error('check-ui-viewports: FAIL (code 22)');
+    process.exit(22);
+  }
   if (declaredIdx.given && wantsReport) {
     let carried = null;
     try { carried = JSON.parse(readFileSync(declaredIdx.path, 'utf8')); } catch { /* below */ }

@@ -1660,6 +1660,26 @@ const CASES = [
       'bad-report.json': json },
     15, diagnostic, { reportArg: 'bad-report.json' },
   ]),
+  // ── #352: A REPORT VERDICT NEEDS TWO OBSERVATIONS, SO ONE FLAG IS REFUSED ──
+  // Everything else in this file now reaches the gate the way the composite does,
+  // with both flags. That is the arrangement CI has always used -- but it means
+  // NOTHING here would exercise the refusal itself, and an unpinned refusal is
+  // one nobody notices being deleted. `noDeclared` opts this case out of the
+  // harness's composite sequence so it can hand the gate the shape #352 is about.
+  ['--report without --declared is refused — one observation, exit 22',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'empty-report.json': '{"suites":[]}' },
+    22, '--report was given without --declared',
+    { reportArg: 'empty-report.json', noDeclared: true }],
+  // THE TWIN, and it is what makes the case above mean anything: the SAME config
+  // and the SAME report, with the mapping supplied, reaches a real verdict. So
+  // exit 22 is caused by the missing flag and not by the fixture.
+  ['…the same report WITH a declared mapping reaches a verdict, not a refusal',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'empty-report.json': '{"suites":[]}' },
+    12, 'NOTHING RAN at that width',
+    { reportArg: 'empty-report.json', declaredMap: DECLARED_MAP }],
+
   // The twin: an EMPTY but well-formed report is a real answer, not a refusal.
   // Without this the eight above are satisfiable by refusing every report.
   ['an empty but well-formed report is exit 12, not 15',
@@ -2131,9 +2151,37 @@ function runCase(files, opts) {
     // config that answers differently across the run cannot be exercised by a
     // single invocation. The sidecar's existence is the state that changes, and
     // it changes because THIS pass writes it (#347 round 22).
-    if (o.preDeclare) {
+    //
+    // SINCE #352, `--report` REQUIRES `--declared`, so a case that checks a
+    // report runs the composite's own three-step sequence by default: the
+    // pre-run declaration pass, Playwright, then the post-run check. That is not
+    // a concession to the new rule — it is the arrangement CI has always used,
+    // and the old `--report`-only invocation was a shape no shipped caller had.
+    //
+    // opts.noDeclared opts out, for the cases that are ABOUT the mapping being
+    // absent or unreadable. Those must keep reaching their own refusals rather
+    // than being rewritten into the happy path.
+    // EVERY case that hands the gate a report, not just the ones that RUN one.
+    // The synthetic-report cases -- the malformed shapes, the status table, the
+    // annotation entries -- pass `--report` with a hand-written file, which is
+    // the same unsupported shape. They get their mapping from the pre-run pass
+    // over their OWN config rather than from a shared literal, because several
+    // of them declare non-standard project names on purpose and a hardcoded
+    // mapping would silently join against the wrong ones.
+    const bearsReport = o.runReport || o.reportArg !== undefined
+      || o.reportEq !== undefined || o.reportIsFlagName;
+    // `o.declared` is excluded too: a case setting it is SUPPLYING its own
+    // mapping -- often a deliberately broken one, written through the files map
+    // to reach the exit-20 refusal. Running the pre-run pass over those would
+    // overwrite the fixture with a valid mapping and quietly retarget the case.
+    const composite = bearsReport && !o.noDeclared && !o.declared && !o.declaredMap
+      && !o.declaredMissing && !o.declaredNested;
+    if (o.preDeclare || composite) {
       spawnSync(process.execPath, [bin, '--tests-dir', target, '--declared', join(tmp, 'declared.json')],
         { encoding: 'utf8', env, cwd: REPO_ROOT, timeout: 60000, killSignal: 'SIGKILL' });
+      if (composite && !args.includes('--declared')) {
+        args.push('--declared', join(tmp, 'declared.json'));
+      }
     }
     if (o.runReport) {
       const runArgs = o.ownReporter ? ['playwright', 'test'] : ['playwright', 'test', '--reporter=json'];

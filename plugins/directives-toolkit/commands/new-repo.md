@@ -116,10 +116,24 @@ Execute in order:
    bootstrap). Rules: `docs/standards/automations.md` → *Watcher Rules*.
 
    **Composite actions (required by the qa workflows).** Copy
-   `claude.directives/templates/actions/` (`secret-scan/action.yml`,
-   `ui-suite/action.yml`) into `.github/actions/` — the qa workflows reference
-   them as `./.github/actions/*`; without them every qa run fails at step
-   resolution.
+   `claude.directives/templates/actions/<a>/**` → `.github/actions/<a>/**` —
+   **the whole directory, every file, not just `action.yml`.** The
+   `claude.directives/` prefix is load-bearing: this command runs with the
+   brand-new project as its working tree, where `templates/actions/` does not
+   exist, so a bare path names nothing and the actions never get installed
+   (Codex, #354). Every other source in these bootstrap steps is written the
+   same way, or as a raw URL. The qa workflows reference
+   the actions as `./.github/actions/*` and without them every qa run fails at
+   step resolution; and a composite can run a SIBLING by path — `ui-suite`
+   runs `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` at its
+   `Validate report-path` step — so a YAML-only copy leaves that step naming a
+   file that was never brought across, and every UI job dies there after
+   spending minutes on Node setup, dependencies and the browser download. This instruction listed the two
+   `action.yml` files by name until #354; that parenthetical was the hand-list
+   #353 exists because of. Nothing enforces this row — `check-action-siblings.py`
+   checks only that a composite's siblings are tracked, not that any carrier
+   installs them, because that is not decidable from prose (#354). Keeping this
+   correct is a review responsibility.
 
    **Scheduled-job scripts.** Copy `claude.directives/templates/scripts/`
    (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `package.json`) into

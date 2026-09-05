@@ -300,6 +300,27 @@ jobs:
       - name: Check the derivation guard enforces what it claims
         run: python3 .github/scripts/check-refresh-derivation-cases.py
 
+      # A composite can run a SIBLING by path, and both install carriers once
+      # copied only action.yml — every UI job downstream died at that step
+      # (#353, from #347 round 35). Not the FIRST step: `Validate report-path`
+      # is step 6 of 11, so the failure lands after Node setup, dependencies and
+      # the browser download. Late and expensive, not early. The
+      # referenced-script derivation cannot see this class at all: it enumerates
+      # .github/scripts/* by construction.
+      #
+      # The rule is "every file under templates/actions/*/ is tracked" and reads
+      # no shell. Two designs that DID read text — matching install carriers, then
+      # deriving references from run bodies — produced defects in seven rounds
+      # between them; the header records what each round found.
+      - name: Check nothing in an action directory is left untracked
+        run: python3 .github/scripts/check-action-siblings.py
+
+      # Everything in templates/actions/ is tracked, so the guard above prints
+      # the same OK whether its rule works or does nothing at all. Drive a
+      # mutated copy with CHECK_ACTION_SIBLINGS_BIN to re-prove discrimination.
+      - name: Check the sibling guard enforces what it claims
+        run: python3 .github/scripts/check-action-siblings-cases.py
+
       # The exported browser ladder (#332). Nothing else in this repo runs it —
       # the map suite drives chromium directly — and its branches worth pinning
       # are the FAILING ones (no privileges, a blocked download, a binary that

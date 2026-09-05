@@ -359,7 +359,14 @@ five:
   Node expands `...devices[…]` and the declared widths are read rather than
   pattern-matched — a static read does not work and is not worth retrying, three
   attempts produced twelve findings. That half runs before the suite and answers
-  what is DECLARED. Then, after the run, it is invoked again with
+  what is DECLARED — and it writes that reading to a `--declared` mapping, which
+  the post-run invocation passes back. **Both flags, every time: `--report`
+  without `--declared` is refused (exit 22).** A verdict rests on two independent
+  observations — the widths declared before the run, and a fresh import after —
+  and a single import taken after the run is one observation wearing the shape of
+  two, so a config that changes what it declares during the run certifies itself
+  (measured: 390/390/390 before, 1280/900/390 after, exit 0 for all three bands).
+  Then, after the run, it is invoked again with
   `--report <playwright json>` and reads the run's own report: a band is covered
   only when a project declared at that width has a NON-SKIPPED result — a test
   the run scheduled under it. That is not the same as one that ran: a hook

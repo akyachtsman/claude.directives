@@ -343,7 +343,7 @@ function eq(actual, expected, what) {
     eq(out.ok, false, 'verdict');
     eq(out.interrupted, true, 'interrupted');
     eq(out.attempts.length, 2, 'the as-is rung, then the interrupted install');
-    eq(out.attempts[1].launch, null, 'no launch was attempted after the interruption');
+    eq(out.attempts[1].launch.ok, false, 'the launch was attempted and failed');
     eq(report('chromium', out, () => {}), 2, 'CANNOT CHECK exit code');
   });
 
@@ -430,20 +430,69 @@ function eq(actual, expected, what) {
   });
 
   // ── #355 round 3 ────────────────────────────────────────────────────────
-  await check('an interrupted install stops the ladder without a browser verdict', async () => {
-    const s = scripted([
-      { launch: fail('nope') },
-      { installCode: -1, installOutput: 'cut short', launch: OK },
-    ]);
-    // The stub's second rung WOULD launch; an interrupted install must stop
-    // before that, because a browser never fetched cannot support a verdict.
+  // ⚠️ THIS CASE USED TO ASSERT THE OPPOSITE, and it was wrong. Round 3 returned
+  // from the interrupted branch BEFORE the launch, so the install result decided
+  // the outcome -- defect 2 wearing the other sleeve. A signal arriving after the
+  // download actually landed then produced CANNOT CHECK for a browser that starts
+  // fine, and the old case pinned exactly that: its second rung WOULD have
+  // launched (Codex, #355 round 5). The rule has no exception. Both directions
+  // are now pinned.
+  await check('an interrupted install still ends in a launch — and a launch is a pass', async () => {
+    const s = scripted([{ launch: fail('nope') }, { launch: OK }]);
+    s.install = () => ({ code: -1, output: 'cut short', interrupted: true });
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, true, 'verdict');
+    eq(out.rung, 'install', 'the rung whose install was cut short');
+    eq(out.interrupted, undefined, 'a pass is not an interruption');
+    eq(report('chromium', out, () => {}), 0, 'exit 0');
+  });
+
+  await check('an interrupted install whose launch FAILS is CANNOT CHECK, never a ceiling', async () => {
+    const s = scripted([{ launch: fail('nope') }, { launch: fail("Executable doesn't exist") }]);
     s.install = () => ({ code: -1, output: 'cut short', interrupted: true });
     const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
     eq(out.ok, false, 'verdict');
     eq(out.interrupted, true, 'flagged as interrupted');
+    eq(out.attempts.length, 2, 'the as-is rung, then the interrupted one');
     const lines = [];
     eq(report('chromium', out, (l) => lines.push(l)), 2, 'exit 2, not a ceiling');
-    if (lines.join('\n').includes('CEILING')) throw new Error('must not report a ceiling');
+    const text = lines.join('\n');
+    if (text.includes('CEILING')) throw new Error('must not report a ceiling');
+    // The launch DID happen, and its error is evidence the reader needs.
+    if (!text.includes("Executable doesn't exist")) {
+      throw new Error('the launch error must be quoted, not swallowed');
+    }
+    if (!text.includes('cut short')) throw new Error('the install output must be quoted too');
+  });
+
+  // The ladder must not climb PAST an interrupted rung: a further install is more
+  // of the instrument that has already shown it cannot run one to completion.
+  await check('an interrupted rung whose launch fails stops the ladder there', async () => {
+    const installs = [];
+    const out = await ladder({
+      browser: 'chromium',
+      install: (argv) => { installs.push(argv.join(' ')); return { code: -1, output: 'cut short', interrupted: true }; },
+      launch: () => fail('nope'),
+    });
+    eq(out.interrupted, true, 'interrupted');
+    eq(installs, ['playwright install chromium'], '--with-deps was never attempted');
+  });
+
+  // A harness failure after an interrupted install keeps ITS OWN diagnosis: the
+  // Playwright-not-loadable message is actionable, the interrupted one is not.
+  await check('a harness failure after an interrupted install reports the harness', async () => {
+    const out = await ladder({
+      browser: 'chromium',
+      install: () => ({ code: -1, output: 'cut short', interrupted: true }),
+      launch: () => ({ ok: false, harness: true, error: 'playwright could not be resolved' }),
+    });
+    eq(out.interrupted, undefined, 'not folded into the interrupted verdict');
+    eq(out.harness, true, 'harness');
+    const lines = [];
+    eq(report('chromium', out, (l) => lines.push(l)), 2, 'exit 2');
+    if (!lines.join('\n').includes('Playwright itself could not be loaded')) {
+      throw new Error('the harness diagnosis is the more specific one and must survive');
+    }
   });
 
   await check('a browser that cannot open a context is not launching', async () => {

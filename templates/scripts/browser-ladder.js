@@ -96,13 +96,35 @@ async function ladder({ browser, install, launch, log = () => {} }) {
       // answer, and defect 3 was letting the dependency phase's failure end the
       // ladder before anything was ever launched.
       log(`    install exited ${installed.code} (context, not a verdict)`);
-      // AN INTERRUPTED INSTALL IS NOT A RUNG THAT HAPPENED. round 2 learned to
-      // DETECT a spawn the ladder cut short and then carried on as though the
-      // rung had completed -- so a launch failing for want of a browser this
-      // ladder never finished fetching was still reported as a CEILING. Detecting
-      // it and not acting on it is the same defect one step later (Codex, #355).
+      // AN INTERRUPTED INSTALL CANNOT SUPPORT A CEILING -- BUT IT STILL ENDS IN A
+      // LAUNCH. Round 2 learned to DETECT a spawn the ladder cut short and then
+      // carried on as though the rung had completed, so a launch failing for want
+      // of a browser this ladder never finished fetching was reported as a
+      // CEILING. Round 3 fixed that by returning before the launch -- and
+      // overshot: the install result then decided the outcome, which is defect 2
+      // wearing the other sleeve, and a signal arriving after the download
+      // actually landed produced CANNOT CHECK for a browser that starts fine
+      // (Codex, #355).
+      //
+      // The rule does not have an exception. EVERY RUNG ENDS IN A LAUNCH, and a
+      // browser that starts, launched -- however the installer ended. What the
+      // interruption costs is only the ability to read a FAILURE: after one, a
+      // launch that fails cannot be told apart from a browser this ladder never
+      // finished fetching, so that direction is CANNOT CHECK and never a ceiling.
       if (installed.interrupted) {
-        attempts.push({ rung: rung.name, install: installed, launch: null });
+        const result = await launch();
+        attempts.push({ rung: rung.name, install: installed, launch: result });
+        if (result.ok) {
+          log(`    LAUNCHED (despite an interrupted install -- a launch is a launch)`);
+          return { ok: true, rung: rung.name, attempts };
+        }
+        // A harness failure is the more specific diagnosis and has its own
+        // report, so it is not folded into the interrupted one.
+        if (result.harness) {
+          log(`    cannot check: ${firstLine(result.error)}`);
+          return { ok: false, harness: true, rung: null, attempts };
+        }
+        log(`    launch failed after an install this ladder cut short -- not a ceiling`);
         return { ok: false, harness: true, interrupted: true, rung: null, attempts };
       }
     } else {
@@ -156,8 +178,16 @@ function report(browser, outcome, print = console.log) {
     print('');
     for (const line of String(last.install.output || '').split('\n').slice(0, 10)) print(`  ${line}`);
     print('');
-    print('  No launch was attempted after it, because a browser this ladder never');
-    print('  finished fetching cannot support a verdict either way.');
+    print('  The launch was attempted anyway, and failed:');
+    for (const line of String(last.launch.error || '(no message)').split('\n').slice(0, 8)) {
+      print(`    ${line}`);
+    }
+    print('');
+    print('  That failure is NOT read as a ceiling. A browser this ladder never');
+    print('  finished fetching fails to start for a reason this ladder caused, and');
+    print('  nothing here can tell that apart from a browser that genuinely will');
+    print('  not run. Had it launched, that would have been a pass — a launch is a');
+    print('  launch however the installer ended.');
     return 2;
   }
   if (outcome.harness) {

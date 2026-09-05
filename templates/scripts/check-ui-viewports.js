@@ -706,10 +706,7 @@ for (const [flag, why] of [
 // ROWS are already structurally validated by the caller in the carried case and
 // by the nonce check in the spawned case; this validates them again because it
 // is the function that acts on them.
-// DUPES is the child's OBSERVATION that two projects share a name -- carried,
-// not decided, because whether that matters depends on the report this function
-// is about to read (directives#351).
-function decideFromRows(ROWS, TESTS, SOURCE, DUPES) {
+function decideFromRows(ROWS, TESTS, SOURCE) {
   const bands = ['laptop', 'tablet', 'phone'];
   // THE PARENT COMPUTES THE BANDS. It does not read a `cover` map, because
   // there is no longer one to read.
@@ -767,14 +764,23 @@ function decideFromRows(ROWS, TESTS, SOURCE, DUPES) {
   if (rowsWellFormed && Number.isFinite(tabletMin) && Number.isFinite(laptopMin)
       && tabletMin < laptopMin) {
     for (const r of rowList) {
+      // THE ORDINAL COUNTS EVERY ROW, INCLUDING THE ONES SKIPPED BELOW. It is a
+      // position in the CONFIG's project list, and the report's project table is
+      // that same list -- so a row this gate cannot classify (a `viewport: null`,
+      // say) still occupies a slot in it. Advancing only for classifiable rows
+      // shifted every later row of the same name down by one and mapped it onto
+      // the WRONG project's id: measured as a laptop project that matched no
+      // tests being certified by an earlier `same` project's results, exit 0
+      // (Codex, directives#357).
+      const nth = seen.get(r.name) || 0;
+      seen.set(r.name, nth + 1);
       if (typeof r.width !== 'number' || !Number.isFinite(r.width)) continue;
       // The name AND the row's ordinal among rows sharing it. Two projects
       // called `same` are two entries here, distinguishable, where before they
       // were one key twice over -- which is why they had to be refused
       // (directives#351).
       cover[r.width >= laptopMin ? 'laptop' : r.width >= tabletMin ? 'tablet' : 'phone']
-        .push({ name: r.name, nth: seen.set(r.name, (seen.get(r.name) || 0)).get(r.name) });
-      seen.set(r.name, seen.get(r.name) + 1);
+        .push({ name: r.name, nth });
     }
   }
   const ok = rowsWellFormed && bands.every(b => cover[b].length > 0);
@@ -845,16 +851,28 @@ function decideFromRows(ROWS, TESTS, SOURCE, DUPES) {
       // WITHIN ITS NAME GROUP. Both sides are in config order, so the Nth
       // declared project named X is the Nth report entry named X. Nothing here
       // reproduces Playwright's id rule; the ids are read, never derived.
+      // THREE OUTCOMES, NOT TWO. `null` means the report carries no project table
+      // at all, so the name join is the only thing available. `undefined` means
+      // the table IS present and this declared row is not in it -- which is "not
+      // run", and must NOT fall back to the name.
+      //
+      // Collapsing those two into `undefined` was a fail-open I introduced with
+      // the id join: a table holding only the first of two `same` projects let
+      // the second fall back to the shared name, and its sibling's results
+      // certified it -- exit 0 for a project that never ran (Codex,
+      // directives#357). The comment beside the return even said "not run"; the
+      // caller did the opposite.
+      const NO_TABLE = null;
       const idFor = (entry) => {
-        if (!run.projects) return undefined;
+        if (!run.projects) return NO_TABLE;
         let k = 0;
         for (const p of run.projects) {
           if (p.name !== entry.name) continue;
           if (k === entry.nth) return p.id;
           k += 1;
         }
-        return undefined;   // declared but absent from the run: not run, which
-                            // is already the correct verdict for it.
+        return undefined;   // declared, and the run's own table does not list
+                            // it: not run.
       };
       // TWO PROJECTS SHARING A NAME ARE ONLY A PROBLEM WHEN THEY CANNOT BE TOLD
       // APART. With a report carrying per-project ids they can be, and refusing
@@ -862,12 +880,39 @@ function decideFromRows(ROWS, TESTS, SOURCE, DUPES) {
       // report, or a project table this gate could not read -- the results are
       // keyed by name alone and one project's tests would certify the other's
       // band, so that case still refuses (directives#351).
-      const duplicates = Array.isArray(DUPES) ? DUPES : [];
-      if (duplicates.length && !run.projects) {
-        console.error('CANNOT CHECK: two or more projects share a name, and this run report');
-        console.error('  does not identify results by project id.');
-        console.error(`  ${duplicates.map(n => (n === '' ? '(no name)' : n)).join(', ')}`);
-        console.error('  Results are keyed by project NAME alone here, so tests belonging to');
+      // DERIVED HERE, FROM THE VALIDATED ROWS, WITH THIS PROCESS'S INTRINSICS.
+      // The first version had the CHILD compute this with `Array.prototype
+      // .filter` and carried the answer out. Config code runs in that child and
+      // can replace `filter`, so a config could report "no duplicates" while
+      // emitting rows that had them, and the parent would skip the refusal and
+      // let one result certify two bands (Codex, directives#357). This repo
+      // already treats child intrinsics as poisonable -- round 11 is the whole
+      // reason the payload carries observations and the parent does the
+      // arithmetic -- and I had put arithmetic back in the child.
+      //
+      // Deriving it here also deletes the carrying: no `dupes` in the payload,
+      // in the sidecar, or in its validation.
+      const classOf = (r) => ((typeof r.width !== 'number' || !Number.isFinite(r.width))
+        ? 'unclassifiable'
+        : (r.width >= laptopMin ? 'laptop' : r.width >= tabletMin ? 'tablet' : 'phone'));
+      const classesByName = new Map();
+      for (const r of rowList) {
+        if (!classesByName.has(r.name)) classesByName.set(r.name, new Set());
+        classesByName.get(r.name).add(classOf(r));
+      }
+      // ONLY THE GROUPS THAT SPAN CLASSES. A name shared by two projects that
+      // declare the SAME band cannot move evidence between bands -- whichever
+      // ran, the band it certifies is the band both declare -- and this gate's
+      // claim is per band. Refusing those was a false refusal on top of the one
+      // this PR removes (Codex, directives#357). A group mixing a classifiable
+      // row with an unclassifiable one spans classes and still refuses.
+      const ambiguous = [...classesByName.entries()]
+        .filter(([, kinds]) => kinds.size > 1).map(([name]) => name);
+      if (ambiguous.length && !run.projects) {
+        console.error('CANNOT CHECK: projects sharing a name declare different width bands,');
+        console.error('  and this run report does not identify results by project id.');
+        console.error(`  ${ambiguous.map(n => (n === '' ? '(no name)' : n)).join(', ')}`);
+        console.error('  Results are keyed by project NAME alone here, so a test belonging to');
         console.error('  one of them would certify the other\'s band. Playwright reports a');
         console.error('  per-project `id` from 1.62.1 on, which tells them apart; on an older');
         console.error('  report, give every project a distinct name.');
@@ -876,9 +921,9 @@ function decideFromRows(ROWS, TESTS, SOURCE, DUPES) {
       }
       const ranIn = (entry) => {
         const id = idFor(entry);
-        return id === undefined
-          ? (run.executed.get(entry.name) || 0) > 0
-          : (run.executedById.get(id) || 0) > 0;
+        if (id === NO_TABLE) return (run.executed.get(entry.name) || 0) > 0;
+        if (id === undefined) return false;
+        return (run.executedById.get(id) || 0) > 0;
       };
       const missing = bands.filter(b => !cover[b].some(ranIn));
       if (missing.length) {
@@ -934,11 +979,8 @@ function decideFromRows(ROWS, TESTS, SOURCE, DUPES) {
           // fresh checkout (Codex, #347 round 15). Reproduced: exit 20 on a
           // bare tree with the default path.
           mkdirSync(dirname(resolve(declaredIdx.path)), { recursive: true });
-          // `dupes` rides along, so the post-run pass knows what the PRE-RUN
-          // config declared about shared names rather than re-deriving it from
-          // a config that may have changed across the run (#347 round 14).
           writeFileSync(declaredIdx.path,
-            JSON.stringify({ rows: rowList, testsDir: TESTS, dupes: DUPES || [] }), 'utf8');
+            JSON.stringify({ rows: rowList, testsDir: TESTS }), 'utf8');
         } catch (e) {
           console.error('CANNOT CHECK: could not write the declared mapping.');
           console.error(`  --declared ${declaredIdx.path}`);
@@ -1114,17 +1156,7 @@ if (!VERDICT_FILE) {
     // sidecar and lies CONSISTENTLY — narrow before the run and narrow after —
     // agrees with itself and is believed. That is directives#349's family, and
     // the gate says so rather than implying more.
-    // `dupes` is carried too, and VALIDATED like everything else: the shape is
-    // rebuilt from named fields rather than passed through, so an unvalidated
-    // key cannot ride along. An absent or malformed list reads as "no duplicates
-    // observed", which is the safe direction -- it can only cost a refusal the
-    // post-run pass would otherwise make, never buy a certification.
-    CARRIED = {
-      rows: carried.rows,
-      testsDir: carried.testsDir,
-      dupes: Array.isArray(carried.dupes) && carried.dupes.every(d => typeof d === 'string')
-        ? carried.dupes : [],
-    };
+    CARRIED = { rows: carried.rows, testsDir: carried.testsDir };
   }
 
   const { spawnSync } = require('child_process');
@@ -1345,9 +1377,9 @@ if (!VERDICT_FILE) {
           console.error('check-ui-viewports: FAIL (code 21)');
           process.exit(21);
         }
-        decideFromRows(CARRIED.rows, CARRIED.testsDir, 'the pre-run declaration', CARRIED.dupes);
+        decideFromRows(CARRIED.rows, CARRIED.testsDir, 'the pre-run declaration');
       }
-      decideFromRows(rows.rows, rows.testsDir, 'the config evaluation', rows.dupes);
+      decideFromRows(rows.rows, rows.testsDir, 'the config evaluation');
     }
     console.error('CANNOT CHECK: the evaluation reported a pass its own data does not support.');
     console.error('  The verdict file was not stamped with this run\'s token.');
@@ -1933,13 +1965,13 @@ console.log(`config:    ${configPath}`);
   }
   const ROOT_NAME = typeof RAW_ROOT_NAME === 'string' ? RAW_ROOT_NAME : '';
   const keys = RAW_NAMES.map(n => (typeof n === 'string' ? n : ROOT_NAME));
-  // THE CHILD NO LONGER REFUSES DUPLICATES; IT REPORTS THEM. Whether two
-  // projects sharing a name can be told apart depends on something this process
-  // cannot see -- whether the parent was given a run report, and whether that
-  // report carries per-project ids. The child observes, the parent decides,
-  // which is round 11's rule applied to the join instead of to the bands
-  // (directives#351).
-  const dupes = [...new Set(keys.filter((n, i2, a) => a.indexOf(n) !== i2))];
+  // THE CHILD NEITHER REFUSES NOR REPORTS DUPLICATES. Whether two projects
+  // sharing a name matter depends on what this process cannot see -- whether the
+  // parent was given a report and whether that report carries per-project ids --
+  // and the parent can derive the sharing itself from the rows it already
+  // validates. So nothing about it is computed here: config code runs in this
+  // process and can replace the intrinsics any such computation would use
+  // (directives#351, #357).
   // ⚠️ THE GATE READS EACH VALUE ONCE. IT DOES NOT REPLAY PLAYWRIGHT'S ACCESS
   // SEQUENCE, and cannot — that is a recorded limit, not an open defect.
   //
@@ -2096,9 +2128,7 @@ console.log(`config:    ${configPath}`);
   // the nonce proves only who wrote it. `cover` is still used BELOW for this
   // process's own refusal message, which is allowed to be wrong in the safe
   // direction — a corrupted child refusing is not a false pass.
-  // `dupes` travels as an OBSERVATION. The parent refuses on it only when it
-  // cannot attribute results -- no report, or a report without per-project ids.
-  report({ rows, configPath, testsDir: TESTS_DIR, dupes });
+  report({ rows, configPath, testsDir: TESTS_DIR });
   const bandProjects = b => rows.filter(r => r.band === b);
   const undeclared = ['laptop', 'tablet', 'phone'].filter(b => bandProjects(b).length === 0);
   if (undeclared.length) {

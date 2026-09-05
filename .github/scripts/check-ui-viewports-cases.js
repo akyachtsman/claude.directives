@@ -844,6 +844,51 @@ const CASES = [
 
   // The twin, and the whole point of the change: the SAME duplicate names, both
   // projects actually running, certify all three bands instead of being refused.
+  // ── #357 round 1: three fail-opens and a false refusal, all mine ────────
+  // A PRESENT table that omits a declared row must read as NOT RUN. Falling back
+  // to the name let the omitted project's sibling certify it — the very
+  // cross-certification the id join exists to prevent, reintroduced by the join.
+  ['a project absent from the report\'s table is not run, not name-joined',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'same', use: { viewport: { width: 810, height: 1080 } } },\n"
+      + PHONE),
+      'partial.json': JSON.stringify({
+        config: { projects: [{ id: 'same', name: 'same' }, { id: 'phone', name: 'phone' }] },
+        suites: [{ specs: [{ tests: [
+          { projectId: 'same', projectName: 'same', annotations: [], results: [{ status: 'passed', annotations: [] }] },
+          { projectId: 'phone', projectName: 'phone', annotations: [], results: [{ status: 'passed', annotations: [] }] }] }] }] }) },
+    12, 'NOTHING RAN at that width', { reportArg: 'partial.json' }],
+
+  // THE ORDINAL COUNTS EVERY ROW. An unclassifiable project of the same name
+  // occupies a slot in the config list and therefore in the report's table;
+  // skipping it shifted the next same-named row onto the wrong id, and a laptop
+  // project that matched nothing was certified by its predecessor's results.
+  ['an unclassifiable row still consumes its ordinal',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'same', use: { viewport: null } },\n"
+      + "    { name: 'same', testMatch: /__none__/, use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'tab', use: { viewport: { width: 810, height: 1080 } } },\n"
+      + "    { name: 'ph', use: { viewport: { width: 390, height: 664 } } },\n") },
+    12, 'NOTHING RAN at that width', { runReport: true }],
+
+  // DUPLICATES THAT DO NOT SPAN BANDS ARE NOT AMBIGUOUS. Two projects sharing a
+  // name and a band cannot move evidence between bands, and this gate's claim is
+  // per band — so refusing them was a false refusal stacked on the one this PR
+  // removes. No project table here, so the name join is in force and the
+  // refusal would otherwise fire.
+  ['same-named projects in the SAME band, no id table — no refusal',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'same', use: { viewport: { width: 1280, height: 800 } } },\n"
+      + "    { name: 'tab', use: { viewport: { width: 810, height: 1080 } } },\n"
+      + "    { name: 'ph', use: { viewport: { width: 390, height: 664 } } },\n"),
+      'old.json': JSON.stringify({ suites: [{ specs: [{ tests: [
+        { projectName: 'same', annotations: [], results: [{ status: 'passed', annotations: [] }] },
+        { projectName: 'tab', annotations: [], results: [{ status: 'passed', annotations: [] }] },
+        { projectName: 'ph', annotations: [], results: [{ status: 'passed', annotations: [] }] }] }] }] }) },
+    0, 'SCHEDULED', { reportArg: 'old.json' }],
+
   // AND THE FALLBACK STILL REFUSES. A report with no project table -- an older
   // Playwright, or one this gate could not read -- keys results by name alone,
   // and there one project's tests really would certify the other's band. The

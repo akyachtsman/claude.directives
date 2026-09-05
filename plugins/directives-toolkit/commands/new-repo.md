@@ -196,6 +196,20 @@ Execute in order:
    - `tests/app.spec.js`
    - `package.json`
 
+   Then copy TWO scripts from `claude.directives/templates/scripts/` into
+   `.github/scripts/`, both of which serve this kit and neither of which arrives
+   with it:
+   - `check-ui-viewports.js` — the `ui-suite` composite names it by path, so
+     **every UI job fails at step resolution without it**. This is the #321
+     failure, and it was found by a downstream project's red CI rather than here.
+   - `browser-ladder.js` — `directives/test.md` → *Sandboxed local runs* tells
+     every project to re-derive its agent-sandbox ceiling by running this file.
+     A directive is fetched live and a script is copied, so without this line a
+     freshly bootstrapped project reads the instruction and gets
+     `MODULE_NOT_FOUND` (Codex, #355). `/refresh-repo` now installs it for
+     EXISTING projects; this is the same delivery gap on the other carrier, which
+     is the two-carriers-one-fixed shape #353 exists for.
+
    The template kit ships no lockfile on purpose — run `npm install`
    inside `.github/scripts/ui-tests/` to generate a fresh one **and commit it**.
    `qa.yml`'s `cache: npm` step hard-fails at `setup-node` without a committed

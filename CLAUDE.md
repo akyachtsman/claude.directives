@@ -355,6 +355,7 @@ python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script de
 python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — 2 of its 3 checks never fire against THIS repo (no ragged caller, no missed match), so nothing else would notice them break
 python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT — present-and-unshipped looks identical to correct on the machine that wrote it (#325, #353). It asks git by performing the operation, not by reading the index: `ls-files -s`/`-t`/`-v` print a `git add -N` entry identically to a real one, and round 4's empty-blob heuristic passed a genuinely zero-byte one (#354 r5). Reads NO shell: two designs that read text (matching install carriers, then deriving references from run bodies) produced defects across seven rounds, so the question changed to one with no syntax to miss. It does NOT check that carriers install these files, nor that a composite names a file that exists — both stated in its own passing verdict
 python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — everything in templates/actions/ ships, so the guard prints the same OK whether its rule works or does nothing. Real `git init` fixtures, because most cases turn on states no directory of loose files can express: a `git add -N` placeholder (in `ls-files`, absent from the tree), a directory SYMLINK (`os.walk` puts it in `dirnames` and never lists it — and one NAMED `__pycache__`, since what a path IS decides before what it is CALLED), a filename that is not valid UTF-8, an unreadable directory (run as `nobody`, because permission bits do not apply to root), and an index mid-merge that `write-tree` cannot build at all. Each refusal has its accepting complement, so none can be bought by over-tightening. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
+node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — nothing else here runs it, and its FAILING branches (no privileges, blocked download, a binary that will not start) cannot be produced on demand, so the two effects are injected and every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
@@ -396,7 +397,13 @@ before pushing rather than pushing and fixing on the PR. The Playwright UI
 check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
 local skip is fine for non-map changes.
 
-**This repo's agent-sandbox ceiling: NONE, measured 2026-08-26.**
+**This repo's agent-sandbox ceiling: NONE, measured 2026-08-26, re-derived
+2026-09-05 with the ladder** — `templates/scripts/browser-ladder.js`, run as
+`node <that path> chromium` from `templates/ui-tests`: **LAUNCHES at rung
+"as-is"** — chromium starts
+here with no install at all. The ladder is the instrument to re-derive this line
+with from now on; it grades on the launch and quotes the error when there is one,
+which is what `test.md` asks the record to carry.
 `test.md` → *Sandboxed local runs* asks every project to record its own limit with
 the date, the causes and what would make it wrong. Ours: `check-repo-map-ui.js`
 **PASS, all cases, exit 0**. `docs/site/logical-map.html` loads no external

@@ -587,10 +587,26 @@ Two things that repeatedly get this wrong, both measured on this PR:
   (`claude.insurance`'s green read 24 passed **12 skipped** 0 failed — a skipped
   case and a passing case produce the same green).
 - **Absent is not unavailable.** A browser missing from the image may be
-  installable — `ui-suite/action.yml` installs browsers as a normal step. The
-  install ladder and its failure branches are specified with a script and a test
-  in #332, deliberately not in prose here: four attempts to state it as prose
-  produced four defects, each introduced by the fix for the one before.
+  installable — `ui-suite/action.yml` installs browsers as a normal step. Run the
+  ladder rather than judging by eye:
+
+  ```
+  node .github/scripts/browser-ladder.js chromium
+  ```
+
+  It tries each rung — the browser already present, a plain `playwright install`,
+  then `install --with-deps` — and **launches after every one**. Exit 0 means it
+  starts here and there is no ceiling for that browser; exit 1 quotes the launch
+  error, which is the evidence the record needs.
+
+  The ladder is a script and not a paragraph because four attempts to state it as
+  prose produced four defects, each introduced by the fix for the one before
+  (#332). The rule that survived all four is the one it encodes: **grade on
+  whether the browser LAUNCHES — never on an install's exit code, and never let a
+  dependency-phase abort stand in for "unavailable."** `--with-deps` installs
+  system packages *before* downloading, so without privileges it aborts having
+  fetched nothing; a ladder that tried it first would then record a ceiling it
+  had manufactured. That is why the plain install comes first.
 
 Before blaming the code, **falsify any bound you just added** — a timeout or limit
 introduced in the same change is the likeliest culprit and the cheapest to

@@ -115,6 +115,7 @@
         "templates/actions/ui-suite/",
         "templates/ui-tests/",
         "templates/scripts/check-ui-viewports.js",
+        "templates/scripts/browser-ladder.js",
         "plugins/directives-toolkit/agents/ui-tester.md"
       ],
       "live": [
@@ -290,7 +291,8 @@
         "templates/scripts/workflow-ref-guard.py",
         "templates/scripts/check-job-bounds.py",
         "templates/scripts/check-py-warnings.py",
-        "templates/scripts/check-ui-viewports.js"
+        "templates/scripts/check-ui-viewports.js",
+        "templates/scripts/browser-ladder.js"
       ]
     },
     "artifact": {

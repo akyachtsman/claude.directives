@@ -76,6 +76,18 @@ import os
 import subprocess
 import sys
 
+# PRINTING A PATH IS ALSO A BYTES PROBLEM. A name that is not valid UTF-8 comes
+# back from `os.walk` surrogate-escaped, and writing that to a strict stdout
+# raises UnicodeEncodeError -- so the guard would crash while REPORTING the file
+# rather than while reading it. Whether it does depends on the locale, which is
+# exactly the kind of environment-dependence this file has already been bitten
+# by, so it is pinned here instead of left to chance.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="surrogateescape")
+    except (AttributeError, ValueError):  # pragma: no cover - not a text stream
+        pass
+
 ROOT = (
     os.path.abspath(sys.argv[1]) if len(sys.argv) > 1
     else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -93,6 +105,21 @@ def git(*args):
     return subprocess.run(
         ["git", "-C", ROOT, *args],
         check=True, capture_output=True, text=True,
+    ).stdout
+
+
+def git_bytes(*args):
+    """Git output as BYTES.
+
+    A path is not text. Git and every Linux filesystem accept a filename holding
+    a byte that is not valid UTF-8, and `text=True` decodes strictly -- so a
+    tracked `bad-\xff.sh` made the guard raise `UnicodeDecodeError` instead of
+    producing a verdict (Codex, #354). `os.fsdecode` applies the same
+    surrogateescape round-trip `os.walk` uses, so the two sides compare equal.
+    """
+    return subprocess.run(
+        ["git", "-C", ROOT, *args],
+        check=True, capture_output=True,
     ).stdout
 
 
@@ -114,21 +141,31 @@ def shipped_paths():
         tree = git("write-tree").strip()
     except subprocess.CalledProcessError as err:
         return None, (err.stderr or err.stdout or "").strip()
-    out = git("ls-tree", "-r", "--name-only", "-z", tree, "--", ACTIONS_DIR)
-    return {p for p in out.split("\0") if p}, None
+    out = git_bytes("ls-tree", "-r", "--name-only", "-z", tree, "--", ACTIONS_DIR)
+    return {os.fsdecode(p) for p in out.split(b"\0") if p}, None
 
 
 def files_on_disk():
-    """Every real file under the action directories, ignoring build artefacts."""
+    """Every real file under the action directories, ignoring build artefacts.
+
+    Returns `(paths, errors)`. A DIRECTORY THIS CANNOT READ IS NOT AN EMPTY
+    DIRECTORY. `os.walk` swallows every error it meets unless given `onerror`,
+    so an unreadable subdirectory made its whole subtree vanish from the listing
+    and the guard reported that every file ships -- measured, exit 0, with an
+    untracked helper inside it (Codex, #354). A guard whose answer is a
+    comparison against what it found must refuse when it could not finish
+    finding; that is the same fail-open family (#323) as `write-tree` above.
+    """
     base = os.path.join(ROOT, ACTIONS_DIR)
     if not os.path.isdir(base):
-        return []
+        return [], []
     found = []
+    errors = []
 
     def rel(full):
         return os.path.relpath(full, ROOT).replace(os.sep, "/")
 
-    for dirpath, dirnames, filenames in os.walk(base):
+    for dirpath, dirnames, filenames in os.walk(base, onerror=errors.append):
         keep = []
         for name in dirnames:
             if name in IGNORED_DIRS:
@@ -147,11 +184,20 @@ def files_on_disk():
         dirnames[:] = keep
         for name in filenames:
             found.append(rel(os.path.join(dirpath, name)))
-    return sorted(found)
+    return sorted(found), errors
 
 
 def main():
-    disk = files_on_disk()
+    disk, walk_errors = files_on_disk()
+    if walk_errors:
+        print("check-action-siblings: CANNOT CHECK")
+        print(f"  - {ACTIONS_DIR}/ could not be listed completely, so what is in it")
+        print("    is unknown. An unreadable directory is not an empty one, and a")
+        print("    pass computed from a partial listing is a pass that did not look.")
+        for err in walk_errors:
+            print(f"      {err.filename}: {err.strerror}")
+        return 1
+
     if not disk:
         print("check-action-siblings: FAILED")
         print(f"  - {ACTIONS_DIR}/ holds no files")

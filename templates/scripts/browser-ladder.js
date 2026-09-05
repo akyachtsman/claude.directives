@@ -40,6 +40,31 @@
 // network, render your app, or pass your suite. It answers one question --
 // does it start -- because that is the question the four prose attempts kept
 // getting wrong.
+//
+// ⚠️ WHAT IT DOES NOT SUPERVISE -- two recorded limits, not oversights. Both are
+// tracked in #358; the owner's ruling (2026-09-05) was to keep this file's scope
+// at "does the browser launch" rather than grow a process-supervision layer,
+// because five consecutive review rounds showed each lifecycle fix exposing the
+// next one. Read #358 before adding either, and read this paragraph before
+// assuming they are bugs nobody noticed.
+//
+//   1. THE PARENT'S OWN DEATH. The installer runs `detached`, which is what lets
+//      a timeout kill its whole process group -- but that also puts it OUTSIDE
+//      this process's foreground group, so a Ctrl-C aimed at the ladder does not
+//      reach it. Nothing here registers SIGINT/SIGTERM cleanup, so interrupting
+//      the ladder mid-install can leave `playwright install` (and, on the
+//      --with-deps rung, apt) running. If you interrupt it, check for
+//      stragglers.
+//
+//   2. AN UNREAD PIPE HANGS THE EXIT. `flushThenExit` waits for every stream to
+//      drain and that wait is UNBOUNDED, so a consumer that opens stdout as a
+//      pipe and never reads it, with a report past the ~64 KiB pipe buffer, hangs
+//      instead of exiting. Measured: a 5 MB launch error with an unread stdout
+//      pipe was still running after 4 s. This is a REGRESSION I introduced in
+//      round 9 while fixing a truncation, and it is recorded as such rather than
+//      dressed up as a pre-existing limit -- it turned a truncated report into a
+//      hung one. It does not arise at a terminal (writes are synchronous there)
+//      or under a consumer that drains, which is every caller this repo ships.
 
 'use strict';
 

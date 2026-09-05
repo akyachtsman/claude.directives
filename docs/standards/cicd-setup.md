@@ -131,18 +131,6 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/scripts/check-ui-viewports.js
 ```
 
-Take the browser ladder alongside it. No workflow invokes it — `test.md` does,
-when a sandbox run fails and you need to know whether the browser is the reason:
-
-```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/browser-ladder.js \
-  -o .github/scripts/browser-ladder.js
-```
-
-It grades on whether the browser LAUNCHES, never on an install's exit code, and
-reports `CANNOT CHECK` rather than a ceiling when Playwright itself cannot be
-loaded. Point `--tests-dir` at the directory holding the kit's `node_modules`.
-
 It reads `UI_TESTS_DIR` (or `--tests-dir`, which the composite passes), so a
 project that moved its test directory needs no edit. It imports
 `playwright.config.js` and fails the build when the `projects` list does not
@@ -152,6 +140,22 @@ throwing config, an absent `node_modules` and zero projects each say so rather
 than passing quiet. Bands default to phone <768 / tablet 768–1023 / laptop
 >=1024 and print on every run; `--tablet-min` / `--laptop-min` override them for
 a project whose breakpoints differ.
+
+**A separate script, for a different question.** `browser-ladder.js` answers
+whether this machine can LAUNCH a browser at all — `test.md` calls for it when a
+sandbox run fails and you need to know whether the browser is the reason. No
+workflow invokes it, so take it deliberately:
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/browser-ladder.js \
+  -o .github/scripts/browser-ladder.js
+```
+
+Unlike the viewport gate above it reads no `UI_TESTS_DIR`, and no composite
+passes it arguments: point `--tests-dir` at the directory holding the kit's
+`node_modules` yourself. It grades on whether the browser launches, never on an
+install's exit code, and reports `CANNOT CHECK` rather than a ceiling when
+Playwright itself cannot be loaded.
 
 Then generate and **commit** the lockfile — required: `qa.yml`, `qa-live.yml`, and
 `qa-response.yml` key setup-node's npm cache to `package-lock.json`, and setup-node

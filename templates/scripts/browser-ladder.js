@@ -220,10 +220,21 @@ const INSTALL_MAX_BUFFER = 64 * 1024 * 1024;
 function classifyInstall(proc) {
   const output = `${proc.stdout || ''}${proc.stderr || ''}`.trim();
   const code = proc.status == null ? -1 : proc.status;
-  if (proc.error) {
+  // A SIGNAL IS AN INTERRUPTION EVEN WITHOUT AN `error`. Node reports a
+  // signal-terminated child as `status: null, signal: 'SIGTERM'` and sets NO
+  // `proc.error` -- so keying only on `error` classified an installer the OS (or
+  // a CI job timeout, or the maxBuffer kill on a Node build that does not
+  // populate `error`) cut short as a rung that completed with code -1. The
+  // launch then failed for want of a browser this ladder never finished
+  // fetching, and that was reported as a CEILING: defect 3 again, arriving
+  // through the one door round 3 left open (Codex, #355).
+  const reason = proc.error ? proc.error.message
+    : proc.signal != null ? `the installer was terminated by ${proc.signal}`
+    : null;
+  if (reason) {
     return {
       code,
-      output: `${output}\n[this ladder could not run the installer to completion: ${proc.error.message}]`.trim(),
+      output: `${output}\n[this ladder could not run the installer to completion: ${reason}]`.trim(),
       interrupted: true,
     };
   }
@@ -330,19 +341,27 @@ function parseArgs(argv) {
   // no `--tests-dir` present `flag` is -1, so `flag + 1` is 0 and the filter
   // dropped argv[0] -- the browser (Codex, #355). An index computed from a
   // not-found result is the bug; walking the list cannot produce one.
+  // SUPPLIED-BUT-EMPTY IS NOT OMITTED. `|| null` collapsed a trailing
+  // `--tests-dir` and a bare `--tests-dir=` into the same value the omitted case
+  // produces, so the caller's malformed option silently became the shipped
+  // default -- the ladder then installed into and reported on a directory the
+  // caller never named, which is the mistyped-directory defect round 3 refused,
+  // reached by a different route (Codex, #355). `null` now means OMITTED and
+  // nothing else; an empty string means the flag was there with no usable value,
+  // and main() refuses it.
   const positional = [];
   let testsDirArg = null;
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--tests-dir') { testsDirArg = argv[i + 1] || null; i += 1; continue; }
+    if (argv[i] === '--tests-dir') { testsDirArg = argv[i + 1] == null ? '' : argv[i + 1]; i += 1; continue; }
     if (argv[i].startsWith('--tests-dir=')) {
-      testsDirArg = argv[i].slice('--tests-dir='.length) || null;
+      testsDirArg = argv[i].slice('--tests-dir='.length);
       continue;
     }
     positional.push(argv[i]);
   }
   return {
     browser: positional[0] || 'chromium',
-    testsDir: testsDirArg || DEFAULT_TESTS_DIR,
+    testsDir: testsDirArg == null ? DEFAULT_TESTS_DIR : testsDirArg,
     testsDirArg,
   };
 }
@@ -366,6 +385,17 @@ async function main(argv) {
   // one asked for -- an invalid pass or an invalid ceiling, either way about
   // the wrong tree (Codex, #355). The fallback survives only for the default,
   // which is a guess this file makes rather than something the caller asserted.
+  // ONLY the truly empty value is refused here. A directory whose name is
+  // whitespace is legal on POSIX and resolves to a real path, so trimming before
+  // this test would refuse a directory the OS accepts -- an over-broad refusal
+  // where the existence check below already gives the right answer.
+  if (testsDirArg === '') {
+    console.error('browser-ladder: CANNOT CHECK — --tests-dir was given with no value');
+    console.error('  A trailing "--tests-dir" or a bare "--tests-dir=" names no directory,');
+    console.error('  and falling back to the default would install into and report on a tree');
+    console.error('  you did not ask for. Pass a directory, or omit the flag entirely.');
+    return 2;
+  }
   if (testsDirArg && !existsSync(resolve(testsDirArg))) {
     console.error(`browser-ladder: CANNOT CHECK — --tests-dir ${testsDirArg} does not exist`);
     console.error(`  resolved: ${resolve(testsDirArg)}`);

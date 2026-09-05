@@ -43,6 +43,7 @@ const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, parseArgs, DEFAULT_TESTS_DIR } = require(LADDER);
 import { tmpdir } from 'os';
 import { mkdtempSync, realpathSync } from 'fs';
+import { spawnSync } from 'child_process';
 
 const OK = { ok: true, error: null };
 const fail = (msg) => ({ ok: false, error: msg });
@@ -310,6 +311,42 @@ function eq(actual, expected, what) {
     }
   });
 
+  // ── #355 round 4: a signal is an interruption even with no `error` ────────
+  // Node reports a signal-terminated child as `status: null, signal: 'SIGTERM'`
+  // and sets NO `proc.error`. Keying `interrupted` on `error` alone therefore let
+  // a killed installer through as a completed rung with code -1, and the launch
+  // that failed for want of the browser it never fetched was reported as a
+  // CEILING -- defect 3 through the one door round 3 left open.
+  await check('an installer killed by a signal is interrupted even without proc.error', () => {
+    const out = classifyInstall({ status: null, signal: 'SIGTERM', stdout: 'half a download', stderr: '' });
+    if (!out.interrupted) throw new Error('a signal-terminated install must not read as a completed rung');
+    if (!/SIGTERM/.test(out.output)) throw new Error(`the signal must be named, got: ${out.output}`);
+    eq(out.code, -1, 'status null still reports -1');
+  });
+
+  // The complement, so the rule cannot be satisfied by marking everything
+  // interrupted: a plain non-zero exit is still a rung that HAPPENED, and the
+  // ladder must climb past it rather than stop with CANNOT CHECK.
+  await check('a non-zero install with no signal and no error is NOT interrupted', () => {
+    const out = classifyInstall({ status: 1, signal: null, stdout: '', stderr: 'permission denied' });
+    eq(out.interrupted, undefined, 'a plain failure is context, not an interruption');
+    eq(out.code, 1, 'exit code');
+  });
+
+  // And the interruption must actually END the ladder, not merely be labelled.
+  await check('a signal-killed installer stops the ladder with CANNOT CHECK', async () => {
+    const out = await ladder({
+      browser: 'chromium',
+      install: () => classifyInstall({ status: null, signal: 'SIGKILL', stdout: '', stderr: '' }),
+      launch: () => fail('Executable does not exist'),
+    });
+    eq(out.ok, false, 'verdict');
+    eq(out.interrupted, true, 'interrupted');
+    eq(out.attempts.length, 2, 'the as-is rung, then the interrupted install');
+    eq(out.attempts[1].launch, null, 'no launch was attempted after the interruption');
+    eq(report('chromium', out, () => {}), 2, 'CANNOT CHECK exit code');
+  });
+
   await check('the install buffer is large enough that apt output cannot trip it', () => {
     if (INSTALL_MAX_BUFFER < 16 * 1024 * 1024) {
       throw new Error(`buffer is ${INSTALL_MAX_BUFFER}; Node's ~1 MiB default is what killed the installer`);
@@ -453,6 +490,48 @@ function eq(actual, expected, what) {
     // collapsing the two is the fail-open this round closed.
     eq(parseArgs(['chromium']).testsDirArg, null, 'omitted');
     eq(parseArgs(['chromium', '--tests-dir', 'x']).testsDirArg, 'x', 'supplied');
+  });
+
+  // ── #355 round 4: supplied-but-empty is not omitted ──────────────────────
+  // A trailing `--tests-dir` or a bare `--tests-dir=` collapsed to `null` through
+  // `|| null`, so a malformed option became the shipped DEFAULT silently -- the
+  // ladder then installed into and reported on a tree the caller never named.
+  // Round 3 refused a mistyped directory; this is the same defect reached by a
+  // route that produced no string to mistype.
+  await check('an empty --tests-dir value is distinguishable from an omitted flag', () => {
+    eq(parseArgs(['chromium', '--tests-dir']).testsDirArg, '', 'trailing flag');
+    eq(parseArgs(['chromium', '--tests-dir=']).testsDirArg, '', 'bare = form');
+    eq(parseArgs(['chromium']).testsDirArg, null, 'omitted is still null');
+    // AND it must not silently become the default, which is what made it invisible.
+    eq(parseArgs(['chromium', '--tests-dir']).testsDir, '', 'no fallback for an empty value');
+    eq(parseArgs(['chromium']).testsDir, DEFAULT_TESTS_DIR, 'the default is still reached when omitted');
+  });
+
+  // The refusal itself lives in main(), which is not exported -- so it is pinned
+  // through the CLI, which is what a caller actually runs. It returns before any
+  // rung, so this costs no network and no browser.
+  await check('the CLI refuses an empty --tests-dir with CANNOT CHECK, exit 2', () => {
+    for (const argv of [['chromium', '--tests-dir'], ['chromium', '--tests-dir=']]) {
+      const proc = spawnSync(process.execPath, [LADDER, ...argv], { encoding: 'utf8' });
+      eq(proc.status, 2, `exit code for ${argv.join(' ')}`);
+      if (!/CANNOT CHECK/.test(proc.stderr)) {
+        throw new Error(`must say CANNOT CHECK, got: ${proc.stderr || proc.stdout}`);
+      }
+      if (/CEILING/.test(proc.stdout)) {
+        throw new Error('a malformed option must never be reported as a browser ceiling');
+      }
+    }
+  });
+
+  // A whitespace-only value is NOT refused here: a directory named with spaces is
+  // legal on POSIX and resolves to a real path, so trimming first would refuse
+  // something the OS accepts. The existence check gives the right answer instead
+  // -- CANNOT CHECK, but for the reason that is true. An over-broad refusal and a
+  // false certification are not symmetric defects, and this is the side where the
+  // over-broad one would be the bug.
+  await check('a whitespace-only --tests-dir is carried through, not trimmed away', () => {
+    eq(parseArgs(['chromium', '--tests-dir', '  ']).testsDirArg, '  ', 'preserved verbatim');
+    eq(parseArgs(['chromium', '--tests-dir', '  ']).testsDir, '  ', 'and used as given');
   });
 
   if (failures.length) {

@@ -93,19 +93,30 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
     # An index `git write-tree` cannot turn into a tree. The guard's question is
     # "what would this index commit", and mid-merge there is no answer -- so it
     # must refuse rather than report a pass it did not compute.
+    #
+    # THE UNMERGED ENTRIES ARE WRITTEN DIRECTLY, not produced by running a merge
+    # and hoping it conflicts. The first version did that and passed on git
+    # 2.43.0 while the merge resolved cleanly on the runner's 2.55.0, so the
+    # case reported a pass against a repository that was never conflicted --
+    # a fixture that stopped constructing the state it tests, silently. A state
+    # a case depends on is asserted below, not inferred from an operation's
+    # side effect.
     if conflicted:
-        def run(*args):
-            subprocess.run(["git", *args], cwd=root, check=True,
-                           capture_output=True, text=True)
-        run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base")
-        run("checkout", "-q", "-b", "other")
-        write("templates/actions/ui-suite/action.yml", COMPOSITE + "# other\n")
-        run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "other")
-        run("checkout", "-q", "-")
-        write("templates/actions/ui-suite/action.yml", COMPOSITE + "# mine\n")
-        run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "mine")
-        subprocess.run(["git", "merge", "other"], cwd=root,
-                       capture_output=True, text=True)
+        def out(*args):
+            return subprocess.run(["git", *args], cwd=root, check=True,
+                                  capture_output=True, text=True).stdout
+
+        entry = "templates/actions/ui-suite/action.yml"
+        stages = []
+        for stage, text in enumerate(("base\n", "ours\n", "theirs\n"), start=1):
+            blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=root,
+                                  check=True, capture_output=True, text=True,
+                                  input=text).stdout.strip()
+            stages.append(f"100644 {blob} {stage}\t{entry}")
+        subprocess.run(["git", "update-index", "--index-info"], cwd=root, check=True,
+                       capture_output=True, text=True, input="\n".join(stages) + "\n")
+        if not out("ls-files", "-u").strip():
+            raise AssertionError("fixture did not produce an unmerged index")
     return root
 
 

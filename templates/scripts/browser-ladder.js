@@ -45,7 +45,7 @@
 
 const { spawnSync } = require('child_process');
 const { createRequire } = require('module');
-const { join, resolve } = require('path');
+const { dirname, join, resolve } = require('path');
 const { existsSync } = require('fs');
 
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
@@ -187,6 +187,11 @@ function report(browser, outcome, print = console.log) {
     const last = outcome.attempts[outcome.attempts.length - 1];
     print('browser-ladder: CANNOT CHECK — this ladder could not run the installer to completion');
     print('');
+    // FIRST, and outside the truncation: this is the only line that says WHICH
+    // way the installer was cut short.
+    print(`  WHY: ${last.install.reason || '(reason not recorded)'}`);
+    print('');
+    print('  What the installer had said before that (first 10 lines):');
     for (const line of String(last.install.output || '').split('\n').slice(0, 10)) print(`  ${line}`);
     print('');
     print('  The launch was attempted anyway, and failed:');
@@ -289,8 +294,16 @@ function classifyInstall(proc) {
     : proc.signal != null ? `the installer was terminated by ${proc.signal}`
     : null;
   if (reason) {
+    // THE REASON IS A FIELD. It used to be appended to the END of the captured
+    // output, and `report()` prints the FIRST ten lines -- so any installer that
+    // had already said ten lines (a download, an apt run: routinely more) lost
+    // the one sentence saying whether it timed out, overflowed its buffer or was
+    // signalled. The actionable cause vanished from the report written to carry
+    // it (Codex, #355). Text that must survive cannot live inside text that gets
+    // truncated.
     return {
       code,
+      reason,
       output: `${output}\n[this ladder could not run the installer to completion: ${reason}]`.trim(),
       interrupted: true,
     };
@@ -306,11 +319,17 @@ function classifyInstall(proc) {
 // rung launches, and the launch failure that follows gets reported as a ceiling
 // (Codex, #355). Round 1 fixed where Playwright is RESOLVED and left where the
 // installer RUNS -- half a fix, which is how the same defect arrived twice.
-function realInstall(argv, cwd) {
-  return classifyInstall(spawnSync('npx', argv, {
+// `spawn` and `timeout` are injectable so the SHIPPED call can be inspected. The
+// first case for the bound called `spawnSync` itself with its own 500 ms
+// timeout, which proved that Node honours a timeout -- a fact about Node, not
+// about this file. Deleting `timeout: INSTALL_TIMEOUT_MS` from the line below
+// left all 42 cases green (Codex measured it, #355). A case that tests a COPY of
+// the call cannot notice the call changing.
+function realInstall(argv, cwd, { spawn = spawnSync, timeout = INSTALL_TIMEOUT_MS } = {}) {
+  return classifyInstall(spawn('npx', argv, {
     encoding: 'utf8',
     maxBuffer: INSTALL_MAX_BUFFER,
-    timeout: INSTALL_TIMEOUT_MS,
+    timeout,
     cwd,
   }));
 }
@@ -338,14 +357,41 @@ const DEFAULT_TESTS_DIR = '.github/scripts/ui-tests';
 // came out as a CEILING (Codex, #355). The cwd fallback survives only for the
 // DEFAULT, which is a guess this file makes rather than something the caller
 // asserted.
+// THE BASE WE ASKED FROM IS NOT THE BASE IT CAME FROM. `createRequire` walks
+// EVERY ancestor's `node_modules`, so resolution succeeds from a directory that
+// does not exist -- and the first version of this returned that directory as the
+// installer's cwd, which `spawnSync` would have rejected with ENOENT while the
+// banner announced it as the tree in use. Caught by this file's own case, which
+// is the reason the case asserts the announced directory rather than only the
+// exit code (#355 round 7).
+//
+// `npx` walks ancestors the same way, so the nearest EXISTING ancestor of the
+// requested base resolves through exactly the chain `createRequire` used: the
+// directories that do not exist contribute nothing to either search.
+function nearestExisting(dir) {
+  let current = resolve(dir);
+  for (;;) {
+    if (existsSync(current)) return current;
+    const up = dirname(current);
+    if (up === current) return process.cwd();
+    current = up;
+  }
+}
+
 function resolvePlaywright(testsDir, explicit) {
   const bases = explicit ? [resolve(testsDir)] : [resolve(testsDir), process.cwd()];
   const tried = [];
-  for (const base of bases) {
+  for (const asked of bases) {
     try {
-      return { mod: createRequire(join(base, 'noop.js'))('playwright'), base };
+      const require_ = createRequire(join(asked, 'noop.js'));
+      const mod = require_('playwright');
+      // Where the module ACTUALLY came from, reported alongside the working
+      // directory so a reader can see both rather than infer one from the other.
+      let packagePath = null;
+      try { packagePath = require_.resolve('playwright'); } catch { /* informational only */ }
+      return { mod, asked, base: nearestExisting(asked), packagePath };
     } catch (err) {
-      tried.push(`${base}: ${err.message.split('\n')[0]}`);
+      tried.push(`${asked}: ${err.message.split('\n')[0]}`);
     }
   }
   return { mod: null, tried };
@@ -440,8 +486,13 @@ async function main(argv) {
     return 2;
   }
   console.log(`browser-ladder: ${browser} — grading on whether it LAUNCHES`);
-  console.log(`  resolving playwright from ${testsDir} (then the working directory)`);
-  console.log(`  running any installer from ${existsSync(resolve(testsDir)) ? resolve(testsDir) : process.cwd()}`);
+  // NOT "running any installer from <predicted>". That line re-derived the
+  // installer's directory from the existence rule the code no longer uses, so it
+  // would have announced one tree while the run used another -- a banner that
+  // lies quietly. The real base is printed below, after it is decided, by the
+  // code that decides it.
+  console.log(`  looking for playwright under ${testsDir}`
+    + `${testsDirArg == null ? ', then the working directory' : ' (explicitly named — no fallback)'}`);
 
   // ONE implementation. main() wires the real effects into the same `ladder()`
   // the cases file drives with stubs; if it looped over RUNGS itself, the tested
@@ -470,14 +521,43 @@ async function main(argv) {
     console.error("  the UI kit's node_modules, or omit it to use the shipped default.");
     return 2;
   }
-  // THE SAME DIRECTORY FOR BOTH. An installer and a launcher pointed at different
-  // trees is the mismatch round 2 fixed; passing one value to both is what keeps
-  // them from drifting apart again.
-  const base = existsSync(resolve(testsDir)) ? resolve(testsDir) : process.cwd();
+  // ONE RESOLUTION, ONE BASE — and that is why this happens HERE rather than at
+  // launch time. The previous version chose the installer's directory by
+  // EXISTENCE and let the launcher resolve Playwright INDEPENDENTLY, under a
+  // comment claiming "the same directory for both". Two computations, and for
+  // the default they disagree exactly when it matters: a default directory that
+  // exists but holds no Playwright made `npx` install into it while every launch
+  // used the working directory's Playwright, so the browser revision fetched was
+  // not the one launched and the mismatch came out as a CEILING (Codex, #355).
+  // Round 6 fixed this for an EXPLICIT --tests-dir and left the default branch —
+  // a rule applied to one of the two places it governs, which is how it came
+  // back a round later.
+  //
+  // So the tree is resolved once, and the base it resolved FROM is what the
+  // installer runs in. There are no longer two values to keep in step.
+  const found = resolvePlaywright(testsDir, testsDirArg != null);
+  if (!found.mod) {
+    // A MISSING HARNESS IS NOT A BROWSER CEILING. Reported through the shipped
+    // report so there is one wording, not two.
+    return report(browser, {
+      ok: false,
+      harness: true,
+      rung: null,
+      attempts: [{
+        rung: 'as-is',
+        install: null,
+        launch: { ok: false, harness: true,
+                  error: `playwright could not be resolved:\n    ${found.tried.join('\n    ')}` },
+      }],
+    });
+  }
+  console.log(`  playwright resolved from ${found.packagePath || '(path unavailable)'}`);
+  console.log(`  the installer runs in ${found.base}, the same tree that resolution used`);
+
   const outcome = await ladder({
     browser,
-    install: (argv) => realInstall(argv, base),
-    launch: realLaunch(browser, testsDir, undefined, testsDirArg != null),
+    install: (argv) => realInstall(argv, found.base),
+    launch: realLaunch(browser, testsDir, found.mod),
     log: (line) => console.log(line),
   });
   return report(browser, outcome);

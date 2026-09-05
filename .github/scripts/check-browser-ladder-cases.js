@@ -43,7 +43,7 @@ const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
   resolvePlaywright } = require(LADDER);
 import { tmpdir } from 'os';
-import { mkdtempSync, mkdirSync, realpathSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, realpathSync, writeFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 
 const OK = { ok: true, error: null };
@@ -636,35 +636,66 @@ function eq(actual, expected, what) {
     }
   });
 
-  // A ladder whose purpose is diagnosing restricted egress is exactly the one
-  // that meets a blackhole. spawnSync waits forever by default.
-  await check('the installer is bounded in time, and a timeout is an interruption', () => {
+  // ⚠️ THE FIRST VERSION OF THIS CASE TESTED A COPY OF THE CALL. It ran
+  // `spawnSync` itself with its own 500 ms timeout, which proves Node honours a
+  // timeout -- a fact about Node, not about this file. Codex measured the
+  // consequence: deleting `timeout: INSTALL_TIMEOUT_MS` from `realInstall` left
+  // all 42 cases green (#355 round 7). The case now inspects the SHIPPED call.
+  await check('realInstall passes the module bound to the installer it spawns', () => {
+    let seen = null;
+    realInstall(['playwright', 'install', 'chromium'], '/tmp',
+      { spawn: (cmd, argv, opts) => { seen = { cmd, argv, opts }; return { status: 0, stdout: '', stderr: '' }; } });
+    eq(seen.cmd, 'npx', 'the command');
+    eq(seen.argv, ['playwright', 'install', 'chromium'], 'the argv');
+    eq(seen.opts.timeout, INSTALL_TIMEOUT_MS, 'the bound actually reaches the child');
+    eq(seen.opts.maxBuffer, INSTALL_MAX_BUFFER, 'and so does the buffer');
+    eq(seen.opts.cwd, '/tmp', 'and the directory it was given');
+  });
+
+  await check('the bound is finite, and long enough that a slow download is not a hang', () => {
     if (!INSTALL_TIMEOUT_MS || INSTALL_TIMEOUT_MS > 30 * 60 * 1000) {
       throw new Error(`installer timeout is ${INSTALL_TIMEOUT_MS}; an unbounded install hangs the ladder`);
     }
-    // Ten minutes is a bound on HUNG, not on SLOW: a browser download on a slow
-    // link legitimately takes minutes, and a tighter bound would turn every slow
-    // machine into CANNOT CHECK.
+    // A browser download on a slow link legitimately takes minutes, so this is a
+    // bound on HUNG, not on SLOW.
     if (INSTALL_TIMEOUT_MS < 5 * 60 * 1000) {
       throw new Error(`installer timeout is ${INSTALL_TIMEOUT_MS}; a slow download is not a hang`);
     }
-    // The shape Node actually produces on a timeout, measured rather than assumed.
-    const out = classifyInstall({
-      status: null, signal: 'SIGTERM', stdout: 'downloading', stderr: '',
-      error: Object.assign(new Error('spawnSync npx ETIMEDOUT'), { code: 'ETIMEDOUT' }),
-    });
-    if (!out.interrupted) throw new Error('a timed-out installer must read as interrupted');
   });
 
-  // The real thing, end to end: a child that outlives the bound is killed and
-  // classified, rather than hanging the ladder.
-  await check('a real installer that outruns its bound is killed, not waited on', () => {
+  // And the whole path end to end, through realInstall rather than beside it:
+  // a real child that outruns the bound is killed and classified.
+  await check('a real installer that outruns realInstall\'s bound is killed and classified', () => {
     const started = Date.now();
-    const proc = spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'],
-                           { encoding: 'utf8', timeout: 500 });
-    const out = classifyInstall(proc);
+    const out = realInstall(['-e', 'setTimeout(() => {}, 60000)'], process.cwd(),
+      { spawn: (cmd, argv, opts) => spawnSync(process.execPath, argv, opts), timeout: 500 });
     if (Date.now() - started > 30000) throw new Error('the bound did not apply');
     if (!out.interrupted) throw new Error('a killed child must read as interrupted');
+    if (!out.reason) throw new Error('and it must record WHY it was cut short');
+  });
+
+  // ── the interruption reason must survive truncation ──────────────────────
+  // `classifyInstall` appended it to the END of the captured output, and the
+  // report prints the FIRST ten lines -- so any installer that had already said
+  // ten lines (a download, an apt run) lost the one sentence saying whether it
+  // timed out, overflowed, or was signalled (Codex, #355 round 7).
+  await check('the CANNOT CHECK report names the interruption reason above the output', async () => {
+    const noisy = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n');
+    const out = await ladder({
+      browser: 'chromium',
+      install: () => classifyInstall({ status: null, signal: 'SIGTERM', stdout: noisy, stderr: '' }),
+      launch: () => fail('Executable does not exist'),
+    });
+    const lines = [];
+    eq(report('chromium', out, (l) => lines.push(l)), 2, 'CANNOT CHECK');
+    const text = lines.join('\n');
+    if (!/WHY: .*SIGTERM/.test(text)) {
+      throw new Error(`the reason must be stated outside the truncated output, got:\n${text}`);
+    }
+    // ...and it must come BEFORE the output it explains.
+    if (text.indexOf('WHY:') > text.indexOf('line 0')) {
+      throw new Error('the reason must precede the installer output, not trail it');
+    }
   });
 
   // `process.exit()` TERMINATES BEFORE A REDIRECTED STDOUT DRAINS, and this
@@ -702,6 +733,112 @@ function eq(actual, expected, what) {
     // The LAST line is the one an early exit loses.
     if (!/what would make it wrong/.test(proc.stdout)) {
       throw new Error(`the report was truncated: ${proc.stdout.length} bytes, no closing line`);
+    }
+  });
+
+  // ── #355 round 7: one resolution, one base ───────────────────────────────
+  // The installer's directory was chosen by EXISTENCE while the launcher
+  // resolved Playwright INDEPENDENTLY, under a comment claiming "the same
+  // directory for both". For the DEFAULT they disagree exactly when it matters:
+  // a default directory that exists but holds no Playwright made `npx` install
+  // into it while every launch used the cwd's Playwright. Round 6 fixed the
+  // EXPLICIT branch and left this one.
+  //
+  // Driven through the CLI, because the divergence lived in main(): a tests-dir
+  // that EXISTS and is EMPTY, with a stub playwright resolvable only from the
+  // cwd. The old code installed into the empty directory; the new code refuses
+  // to resolve at all for an explicit dir, and for the default announces the
+  // base it actually resolved from.
+  await check('the installer runs in a REAL directory, the one resolution used', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-base-')));
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      'module.exports = { chromium: { launch: async () => ({ '
+      + 'newContext: async () => ({ close: async () => {} }), close: async () => {} }) } };\n');
+    writeFileSync(join(dir, 'bin', 'npx'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+
+    // The shipped default `.github/scripts/ui-tests` does NOT exist here, and
+    // `createRequire` walks ancestors — so resolution succeeds from a base that
+    // is not a directory. The first version of the fix reported that base as the
+    // installer's cwd; `spawnSync` would have rejected it with ENOENT while the
+    // banner announced it as the tree in use.
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium'], {
+      encoding: 'utf8',
+      cwd: dir,
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    eq(proc.status, 0, 'the stub browser launches');
+    const announced = /the installer runs in (.*), the same tree/.exec(proc.stdout);
+    if (!announced) throw new Error(`the run must name the installer's directory:\n${proc.stdout}`);
+    if (!existsSync(announced[1])) {
+      throw new Error(`the announced installer directory does not exist: ${announced[1]}`);
+    }
+    if (!proc.stdout.includes(join(pkg, 'index.js'))) {
+      throw new Error(`the run must name where playwright actually came from:\n${proc.stdout}`);
+    }
+  });
+
+  // A tests directory named explicitly, with playwright in NO ancestor, is
+  // CANNOT CHECK — never a silent fallback to whatever the cwd happens to hold.
+  // (The stub lives in a separate tree, because `createRequire` walks ancestors:
+  // an "empty" directory under one that has playwright resolves perfectly well,
+  // and `npx` run there would find the same package — so that is not a mismatch
+  // and must not be refused.)
+  await check('an explicit --tests-dir with no playwright anywhere above it is CANNOT CHECK', () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-cwd-')));
+    const away = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-away-')));
+    const pkg = join(home, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      'module.exports = { chromium: { launch: async () => ({ '
+      + 'newContext: async () => ({ close: async () => {} }), close: async () => {} }) } };\n');
+
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', away],
+      { encoding: 'utf8', cwd: home });
+    eq(proc.status, 2, 'CANNOT CHECK');
+    // MATCH THE VERDICT, NOT THE WORD. The banner line says "grading on whether
+    // it LAUNCHES", so a bare /LAUNCHES/ matches every run this file makes --
+    // the case failed on the banner rather than on a verdict, which is failing
+    // for the wrong reason.
+    if (/browser-ladder: (CEILING|LAUNCHES)/.test(proc.stdout)) {
+      throw new Error('a harness that could not be resolved is neither a ceiling nor a pass');
+    }
+    if (proc.stdout.includes(`${home}:`)) {
+      throw new Error('the cwd must not appear among the bases tried for an explicit directory');
+    }
+  });
+
+  // The complement: an explicit directory whose ANCESTOR holds playwright still
+  // works, because `npx` run there finds the same package. Refusing it would be
+  // an over-broad refusal bought to make the case above pass.
+  await check('an explicit --tests-dir resolving through an ancestor is accepted', () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-anc-')));
+    const nested = join(home, 'tests');
+    mkdirSync(nested, { recursive: true });
+    const pkg = join(home, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(home, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      'module.exports = { chromium: { launch: async () => ({ '
+      + 'newContext: async () => ({ close: async () => {} }), close: async () => {} }) } };\n');
+    writeFileSync(join(home, 'bin', 'npx'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', nested], {
+      encoding: 'utf8',
+      cwd: home,
+      env: { ...process.env, PATH: `${join(home, 'bin')}:${process.env.PATH}` },
+    });
+    eq(proc.status, 0, 'accepted');
+    if (!proc.stdout.includes(`the installer runs in ${nested}`)) {
+      throw new Error(`the installer must run in the named directory, which exists:\n${proc.stdout}`);
     }
   });
 

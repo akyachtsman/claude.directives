@@ -118,15 +118,18 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
             return subprocess.run(["git", *args], cwd=root, check=True,
                                   capture_output=True, text=True).stdout
 
-        entry = "templates/actions/ui-suite/action.yml"
+        entry = conflicted if isinstance(conflicted, str) else "templates/actions/ui-suite/action.yml"
         stages = []
         for stage, text in enumerate(("base\n", "ours\n", "theirs\n"), start=1):
             blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=root,
                                   check=True, capture_output=True, text=True,
                                   input=text).stdout.strip()
             stages.append(f"100644 {blob} {stage}\t{entry}")
+        # Written as BYTES: one case conflicts a path whose name is not valid
+        # UTF-8, and that is the whole point of it.
         subprocess.run(["git", "update-index", "--index-info"], cwd=root, check=True,
-                       capture_output=True, text=True, input="\n".join(stages) + "\n")
+                       capture_output=True,
+                       input=os.fsencode("\n".join(stages) + "\n"))
         if not out("ls-files", "-u").strip():
             raise AssertionError("fixture did not produce an unmerged index")
 
@@ -155,7 +158,7 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
     return root
 
 
-def run(root, unprivileged=False):
+def run(root, unprivileged=False, env_overrides=None):
     """Drive the real guard.
 
     `unprivileged` matters for exactly one case. Permission bits do not apply to
@@ -167,6 +170,7 @@ def run(root, unprivileged=False):
     """
     argv = [sys.executable, GUARD, root]
     env = dict(os.environ)
+    env.update(env_overrides or {})
     if unprivileged and os.geteuid() == 0:
         # ⚠️ COPY THE GUARD SOMEWHERE THE DROPPED IDENTITY CAN READ IT.
         # CHECK_ACTION_SIBLINGS_BIN points at a mutant in a 0700 temp directory,
@@ -298,6 +302,53 @@ def main():
                   unreadable_case=True),
              1, "could not be listed completely"),
 
+            # ── #354 round 7: what a path IS decides before what it is CALLED ──
+            # The IGNORED_DIRS filter ran BEFORE the symlink test, so an
+            # untracked `__pycache__ -> tools` link was discarded as generated
+            # directory contents and the guard exited 0 — measured. The name
+            # excuses generated CONTENTS; a symlink is one path git tracks, and
+            # its name says nothing about that.
+            ("an untracked symlink NAMED like a cache directory — refused",
+             dict(files={"templates/actions/ui-suite/tools/helper.sh": "ok\n"},
+                  unstaged_symlinks={"templates/actions/ui-suite/__pycache__": "tools"}),
+             1, "__pycache__"),
+
+            # The complement, so the fix is not bought by dropping the filter: a
+            # REAL __pycache__ directory is still ignored. (Pinned again below in
+            # its original case; kept adjacent here because the two rules are one
+            # ordering decision.)
+            ("...while a real __pycache__ DIRECTORY is still ignored",
+             dict(files={"templates/actions/ui-suite/validate-report-path.py": "ok\n"},
+                  unstaged={"templates/actions/ui-suite/__pycache__/x.pyc": "junk\n"}),
+             0, "every one in the tree"),
+
+            # ── a strict ASCII stdout must not eat the verdict ──────────────
+            # Setting `errors` without `encoding` left the encoding at whatever
+            # the locale picked; under LC_ALL=C that is ASCII, which cannot
+            # encode the em dash in this guard's own success line. Measured: the
+            # PASS path raised UnicodeEncodeError before returning a verdict.
+            ("the verdict survives a C-locale, ASCII stdout",
+             dict(files={"templates/actions/ui-suite/validate-report-path.py": "ok\n"},
+                  env={"LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0",
+                       "PYTHONCOERCECLOCALE": "0", "PYTHONIOENCODING": ""}),
+             0, "every one in the tree"),
+
+            ("...and so does a refusal naming a non-UTF-8 path",
+             dict(raw_files={b"templates/actions/ui-suite/keep-\xff.sh": b"ok\n"},
+                  unstaged={"templates/actions/ui-suite/plain.sh": "ok\n"},
+                  env={"LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0",
+                       "PYTHONCOERCECLOCALE": "0", "PYTHONIOENCODING": ""}),
+             1, "would NOT be committed"),
+
+            # ── the CANNOT CHECK message must survive its own subject ───────
+            # `write-tree` kept text=True after `ls-tree` was converted, and git
+            # echoes the offending filename in stderr — so a conflicted index
+            # holding a non-UTF-8 name raised while producing the message
+            # written for exactly that situation.
+            ("an unbuildable index whose conflicted path is not UTF-8 — CANNOT CHECK",
+             dict(conflicted="templates/actions/ui-suite/bad-\udcff.yml"),
+             1, "CANNOT CHECK"),
+
             # ── a guard that cannot look must not print a pass (#323) ──────
             # `write-tree` is the whole answer, so an index it cannot build a
             # tree from leaves the question unanswered. Nothing else here
@@ -332,8 +383,9 @@ def main():
 
         for label, kwargs, expected, needle in cases:
             unprivileged = bool(kwargs.pop("unreadable_case", False))
+            env_overrides = kwargs.pop("env", None)
             root = build(tmp, **kwargs)
-            code, out = run(root, unprivileged=unprivileged)
+            code, out = run(root, unprivileged=unprivileged, env_overrides=env_overrides)
             if code != expected:
                 failures.append(
                     f"{label}\n      expected exit {expected}; got {code}.\n      {out.strip()}"

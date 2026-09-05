@@ -82,9 +82,17 @@ import sys
 # rather than while reading it. Whether it does depends on the locale, which is
 # exactly the kind of environment-dependence this file has already been bitten
 # by, so it is pinned here instead of left to chance.
+#
+# BOTH HALVES, NOT JUST THE ERROR HANDLER. Setting `errors` alone left the
+# ENCODING at whatever the locale picked, and under `LC_ALL=C PYTHONUTF8=0` that
+# is ASCII -- which cannot encode the em dash in this file's own success line,
+# let alone a valid non-ASCII filename (which is not surrogate-escaped and so is
+# not rescued by the error handler either). Measured: the live-repo pass path
+# raised UnicodeEncodeError at the verdict (Codex, #354). UTF-8 encodes every
+# real character; surrogateescape carries the bytes that are not characters.
 for _stream in (sys.stdout, sys.stderr):
     try:
-        _stream.reconfigure(errors="surrogateescape")
+        _stream.reconfigure(encoding="utf-8", errors="surrogateescape")
     except (AttributeError, ValueError):  # pragma: no cover - not a text stream
         pass
 
@@ -101,26 +109,31 @@ ACTIONS_DIR = "templates/actions"
 IGNORED_DIRS = ("__pycache__", ".pytest_cache")
 
 
-def git(*args):
-    return subprocess.run(
-        ["git", "-C", ROOT, *args],
-        check=True, capture_output=True, text=True,
-    ).stdout
-
-
 def git_bytes(*args):
-    """Git output as BYTES.
+    """Git output as BYTES. **The only way this file runs git.**
 
     A path is not text. Git and every Linux filesystem accept a filename holding
     a byte that is not valid UTF-8, and `text=True` decodes strictly -- so a
     tracked `bad-\xff.sh` made the guard raise `UnicodeDecodeError` instead of
-    producing a verdict (Codex, #354). `os.fsdecode` applies the same
-    surrogateescape round-trip `os.walk` uses, so the two sides compare equal.
+    producing a verdict (Codex, #354).
+
+    THE FIRST FIX CONVERTED ONE CALL SITE AND LEFT THE OTHER. `write-tree` kept
+    `text=True`, and git echoes the offending filename in its stderr -- so a
+    conflicted index holding a non-UTF-8 name raised while producing the CANNOT
+    CHECK message written for exactly that situation (Codex, #354, the round
+    after). A rule enforced call-site by call-site gets one site every round, so
+    there is now no text-mode git call left to forget: everything goes through
+    here, and `git_text` is the only decoder.
     """
     return subprocess.run(
         ["git", "-C", ROOT, *args],
         check=True, capture_output=True,
     ).stdout
+
+
+def git_text(*args):
+    """Git output decoded the way the filesystem decodes: never strictly."""
+    return os.fsdecode(git_bytes(*args))
 
 
 def shipped_paths():
@@ -138,9 +151,9 @@ def shipped_paths():
     report OK because it could not look (#323).
     """
     try:
-        tree = git("write-tree").strip()
+        tree = git_text("write-tree").strip()
     except subprocess.CalledProcessError as err:
-        return None, (err.stderr or err.stdout or "").strip()
+        return None, os.fsdecode(err.stderr or err.stdout or b"").strip()
     out = git_bytes("ls-tree", "-r", "--name-only", "-z", tree, "--", ACTIONS_DIR)
     return {os.fsdecode(p) for p in out.split(b"\0") if p}, None
 
@@ -168,8 +181,6 @@ def files_on_disk():
     for dirpath, dirnames, filenames in os.walk(base, onerror=errors.append):
         keep = []
         for name in dirnames:
-            if name in IGNORED_DIRS:
-                continue
             full = os.path.join(dirpath, name)
             # A SYMLINK TO A DIRECTORY IS A PATH GIT STORES, and `os.walk` puts
             # it in `dirnames` and neither descends into it nor lists it -- so an
@@ -177,8 +188,17 @@ def files_on_disk():
             # through the local link (Codex, #354). Record the LINK, and do not
             # follow it: git stores the link, not what it points at, so
             # enumerating the target would demand paths git never keeps.
+            #
+            # ⚠️ THIS TEST COMES FIRST, BEFORE THE NAME FILTER. `IGNORED_DIRS`
+            # excuses GENERATED DIRECTORY CONTENTS; a symlink is a single path
+            # git tracks, and its NAME says nothing about that. With the filter
+            # first, an untracked `__pycache__ -> tools` link was discarded and
+            # the guard exited 0 (Codex, #354). What a path IS decides before
+            # what it is CALLED.
             if os.path.islink(full):
                 found.append(rel(full))
+                continue
+            if name in IGNORED_DIRS:
                 continue
             keep.append(name)
         dirnames[:] = keep

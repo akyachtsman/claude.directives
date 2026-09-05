@@ -41,6 +41,8 @@ const LADDER = process.env.BROWSER_LADDER_BIN
   || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER } = require(LADDER);
+import { tmpdir } from 'os';
+import { mkdtempSync, realpathSync } from 'fs';
 
 const OK = { ok: true, error: null };
 const fail = (msg) => ({ ok: false, error: msg });
@@ -332,6 +334,40 @@ function eq(actual, expected, what) {
     }) } };
     const result = await realLaunch('chromium', '.', stub)();
     eq(result.ok, true, 'the close is cleanup, not the verdict');
+  });
+
+  // ── #355 round 2: the installer must run where the harness lives ────────
+  // npx resolves the package from its cwd, and the kit installs Playwright under
+  // the UI-test directory -- so an installer run from a repository root fetches
+  // a different Playwright than the suite uses, or none, and the launch failure
+  // that follows reads as a ceiling. Round 1 fixed where Playwright is RESOLVED
+  // and left where the installer RUNS.
+  // `npx node -e …` — NOT `npx -e …`, which npx eats as its own `--before` flag
+  // and answers with a config warning. The first version of these two cases did
+  // that: one failed loudly, and the other PASSED, because it only asserted the
+  // output was not the process cwd and warning text satisfies that. A case that
+  // cannot fail for the right reason is worse than no case.
+  const CWD_PROBE = ['node', '-e', 'process.stdout.write(process.cwd())'];
+
+  await check('the installer runs in the directory it is given', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-cwd-')));
+    const out = realInstall(CWD_PROBE, dir);
+    if (out.output.trim() !== dir) {
+      throw new Error(`installer ran in ${JSON.stringify(out.output.trim())}, expected ${dir}`);
+    }
+  });
+
+  await check('and it does NOT silently fall back to the process cwd', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-cwd2-')));
+    const out = realInstall(CWD_PROBE, dir);
+    // Positive assertion, not a negative one: the output must BE the given
+    // directory. `!== process.cwd()` was satisfied by any noise at all.
+    if (out.output.trim() !== dir) {
+      throw new Error('the cwd argument was ignored — this is the round-1 defect');
+    }
+    if (out.output.trim() === process.cwd()) {
+      throw new Error('installer ran in the process cwd despite being given another');
+    }
   });
 
   if (failures.length) {

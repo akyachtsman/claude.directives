@@ -46,6 +46,7 @@
 const { spawnSync } = require('child_process');
 const { createRequire } = require('module');
 const { join, resolve } = require('path');
+const { existsSync } = require('fs');
 
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
 
@@ -210,10 +211,19 @@ function classifyInstall(proc) {
   return { code, output };
 }
 
-function realInstall(argv) {
+// RUN THE INSTALLER WHERE THE HARNESS LIVES. `npx` resolves the package from its
+// working directory, and the shipped kit installs Playwright under the UI-test
+// directory -- so running from a repository root either cannot find it (offline:
+// `npm exec playwright` fails ENOTCACHED) or fetches a DIFFERENT Playwright than
+// the suite uses. Either way the browser it installs is not the browser the next
+// rung launches, and the launch failure that follows gets reported as a ceiling
+// (Codex, #355). Round 1 fixed where Playwright is RESOLVED and left where the
+// installer RUNS -- half a fix, which is how the same defect arrived twice.
+function realInstall(argv, cwd) {
   return classifyInstall(spawnSync('npx', argv, {
     encoding: 'utf8',
     maxBuffer: INSTALL_MAX_BUFFER,
+    cwd,
   }));
 }
 
@@ -292,13 +302,18 @@ async function main(argv) {
   }
   console.log(`browser-ladder: ${browser} — grading on whether it LAUNCHES`);
   console.log(`  resolving playwright from ${testsDir} (then the working directory)`);
+  console.log(`  running any installer from ${existsSync(resolve(testsDir)) ? resolve(testsDir) : process.cwd()}`);
 
   // ONE implementation. main() wires the real effects into the same `ladder()`
   // the cases file drives with stubs; if it looped over RUNGS itself, the tested
   // logic and the shipped logic would be two things that merely look alike.
+  // THE SAME DIRECTORY FOR BOTH. An installer and a launcher pointed at different
+  // trees is the mismatch this round fixes; passing one value to both is what
+  // keeps them from drifting apart again.
+  const base = existsSync(resolve(testsDir)) ? resolve(testsDir) : process.cwd();
   const outcome = await ladder({
     browser,
-    install: realInstall,
+    install: (argv) => realInstall(argv, base),
     launch: realLaunch(browser, testsDir),
     log: (line) => console.log(line),
   });

@@ -353,16 +353,25 @@ const CASES = [
     0, 'check-ui-viewports: OK — SCHEDULED',
     { runReport: true, ownReporter: true, extraEnv: { PW_TEST_REPORTER: 'dot' } }],
 
-  // ── THE JOIN IS BY NAME, SO NAMES MUST BE TELLABLE APART (#347 round 2) ──
-  // Two shapes, both measured as false greens where one project's tests
-  // certified another project's band. Collision is a property of the JOIN — the
-  // report identifies a result only by `projectName` — so the gate refuses.
-  ['duplicate project names — CANNOT CHECK, exit 18',
+  // ── DUPLICATE NAMES ARE ONLY A PROBLEM WHERE THEY CANNOT BE TOLD APART ──
+  // Round 2 of #347 measured two false greens here — one project's tests
+  // certifying another's band — and the gate refused outright, on the stated
+  // ground that "the report identifies a result only by `projectName`".
+  //
+  // THAT PREMISE WAS FALSE. Measured on 1.62.1 against a real run of exactly
+  // this config: `config.projects[]` carries `id`, every test carries
+  // `projectId`, and two projects called `same` report as `same` and `same1`.
+  // So the run does tell them apart and the refusal was a false refusal
+  // (directives#351). What follows pins BOTH directions.
+  //
+  // Declaration-only: no join is attempted and no coverage is claimed, so
+  // sharing a name costs nothing and refusing would be the false refusal again.
+  ['duplicate project names, declaration only — no join, no refusal',
     { 'playwright.config.js': withProjects(
       "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
       + "    { name: 'same', testMatch: /__none__/, use: { viewport: { width: 390, height: 664 } } },\n"
       + TABLET) },
-    18, 'two or more projects share a name'],
+    0, 'DECLARED'],
 
   // The third shape is RETIRED, and its fixture is kept as the proof. Under the
   // listing this config was a false green: `[desktop] › injected] › a.spec.js …`
@@ -818,7 +827,42 @@ const CASES = [
       "    { use: { viewport: { width: 1440, height: 900 } } },\n"
       + "    { testMatch: /__none__/, use: { viewport: { width: 390, height: 664 } } },\n"
       + TABLET) },
-    18, 'two or more projects share a name'],
+    0, 'DECLARED'],
+
+  // ── #351: THE JOIN, BOTH DIRECTIONS, AGAINST A REAL RUN ─────────────────
+  // The one that matters. Two projects share a name and the SECOND matches
+  // nothing, so its band must fail — certified only by its own results, never
+  // by its twin's. Before the id join this exact shape was the false green that
+  // motivated the refusal; the refusal then made it unreachable. Now it is
+  // reachable and it must FAIL.
+  ['duplicate names where one ran nothing — its band still fails',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'same', testMatch: /__none__/, use: { viewport: { width: 810, height: 1080 } } },\n"
+      + PHONE) },
+    12, 'NOTHING RAN at that width', { runReport: true }],
+
+  // The twin, and the whole point of the change: the SAME duplicate names, both
+  // projects actually running, certify all three bands instead of being refused.
+  // AND THE FALLBACK STILL REFUSES. A report with no project table -- an older
+  // Playwright, or one this gate could not read -- keys results by name alone,
+  // and there one project's tests really would certify the other's band. The
+  // refusal is not deleted, it is narrowed to the case that still needs it.
+  ['duplicate names with a report carrying no project ids — exit 18',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'same', use: { viewport: { width: 810, height: 1080 } } },\n"
+      + PHONE),
+      'old-report.json': JSON.stringify({ suites: [{ specs: [{ tests: [
+        { projectName: 'same', annotations: [], results: [{ status: 'passed', annotations: [] }] }] }] }] }) },
+    18, 'does not identify results by project id', { reportArg: 'old-report.json' }],
+
+  ['duplicate names that both ran — certified, not refused',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'same', use: { viewport: { width: 1440, height: 900 } } },\n"
+      + "    { name: 'same', use: { viewport: { width: 810, height: 1080 } } },\n"
+      + PHONE) },
+    0, 'SCHEDULED', { runReport: true }],
 
   // ── A TEST THAT CHANGES ITS OWN VIEWPORT IS EVIDENCE FOR ONE WIDTH ──────
   // Codex #347 round 4, and the sharpest finding on the report design: a test

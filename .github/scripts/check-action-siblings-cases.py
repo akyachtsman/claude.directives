@@ -35,7 +35,9 @@ GUARD = os.environ.get(
     os.path.join(ROOT, ".github", "scripts", "check-action-siblings.py"),
 )
 
-# A composite whose first step runs a sibling -- the shape that motivated #353.
+# A composite that runs a sibling -- the shape that motivated #353. (In the real
+# ui-suite this is step 6 of 11, not the first; the fixture is minimal, not a
+# claim about ordering.)
 COMPOSITE = """\
 name: 'ui-suite'
 runs:
@@ -58,7 +60,8 @@ runs:
 """
 
 
-def build(tmp, *, composite=COMPOSITE, sibling="ok\n", track_sibling=True, extra=None):
+def build(tmp, *, composite=COMPOSITE, sibling="ok\n", track_sibling=True, extra=None,
+          worktree_composite=None):
     """Write a fixture repo and return its path. `None` for a file omits it."""
     root = tempfile.mkdtemp(dir=tmp)
 
@@ -83,6 +86,10 @@ def build(tmp, *, composite=COMPOSITE, sibling="ok\n", track_sibling=True, extra
         write("templates/actions/ui-suite/validate-report-path.py", sibling)
         if track_sibling:
             subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    # Written after the last `git add`, so the INDEX and the WORKING TREE hold
+    # different manifests -- the only way to tell which one the guard reads.
+    if worktree_composite is not None:
+        write("templates/actions/ui-suite/action.yml", worktree_composite)
     return root
 
 
@@ -158,6 +165,84 @@ runs:
             ("a manifest that is not YAML — refused, never OK",
              dict(composite="runs: [this: is: not: yaml\n"),
              1, "not readable as YAML"),
+
+            # ── #354 round 3: six more, four of them pre-existing ───────────
+            # `>` ends a filename. `helper.py>out` is a file that cannot exist,
+            # so the gate refused a composite whose helper WAS tracked.
+            ("a no-space redirection does not become part of the filename",
+             dict(composite=COMPOSITE.replace(
+                 'python3 "$GITHUB_ACTION_PATH/validate-report-path.py"',
+                 'python3 $GITHUB_ACTION_PATH/validate-report-path.py>out')),
+             0, "each tracked"),
+
+            # A binding can hold the DIRECTORY, not the whole path. Scanning the
+            # two strings independently finds a complete reference in neither.
+            ("a directory-valued env binding is joined with its use",
+             dict(composite="""\
+name: 'ui-suite'
+runs:
+  using: composite
+  steps:
+    - name: Validate report-path
+      shell: bash
+      env:
+        ACTION_DIR: "${{ github.action_path }}"
+      run: python3 "$ACTION_DIR/validate-report-path.py"
+""", sibling=None),
+             1, "is not tracked"),
+
+            # A comment inside a `run: |` block survives YAML parsing, and the
+            # shell never evaluates it.
+            ("a stale example in a SHELL comment is not a reference",
+             dict(composite="""\
+name: 'ui-suite'
+runs:
+  using: composite
+  steps:
+    - name: Validate report-path
+      shell: bash
+      run: |
+        # once ran $GITHUB_ACTION_PATH/removed.py
+        python3 "$GITHUB_ACTION_PATH/validate-report-path.py"
+"""),
+             0, "each tracked"),
+
+            # A shell this file cannot parse must REFUSE, not report
+            # NOT EXERCISED — a pass for a shape it cannot see is fail-open.
+            ("a pwsh step refuses rather than passing unread",
+             dict(composite="""\
+name: 'ui-suite'
+runs:
+  using: composite
+  steps:
+    - name: Validate report-path
+      shell: pwsh
+      run: python3 "$env:GITHUB_ACTION_PATH\\helper.ps1"
+""", sibling=None),
+             1, "cannot read"),
+
+            # THE INDEX, NOT THE WORKING TREE. The staged manifest references
+            # `missing.py`; an unstaged edit removes that reference. Reading the
+            # working tree finds no reference and exits 0 NOT EXERCISED, so the
+            # dangling staged manifest commits clean. Reading the index refuses.
+            # (The first version of this case set no worktree copy at all and so
+            # could not tell the two readings apart — it passed either way.)
+            ("the manifest is read from the index, not the working tree",
+             dict(composite=COMPOSITE.replace(
+                      'validate-report-path.py"', 'missing.py"'),
+                  sibling=None,
+                  worktree_composite=PLAIN_COMPOSITE),
+             1, "is not tracked"),
+
+            # git C-quotes non-ASCII paths by default, so a tracked `café.py`
+            # came back as `"caf\303\251.py"` and never matched the name derived
+            # from the manifest — a refusal for a file that IS tracked.
+            ("a non-ASCII sibling name is matched, not mangled by git quoting",
+             dict(composite=COMPOSITE.replace(
+                      "validate-report-path.py", "caf\u00e9.py"),
+                  sibling=None,
+                  extra={"templates/actions/ui-suite/caf\u00e9.py": "ok\n"}),
+             0, "each tracked"),
 
             # ── honest about what was not exercised ─────────────────────────
             ("a composite with no sibling reference — accepted, and says so",

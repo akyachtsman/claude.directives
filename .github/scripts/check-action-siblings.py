@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 r"""Guard: every file a composite runs by path is tracked and ships with it.
 
-WHY IT EXISTS (#353, from #347 round 35). `ui-suite/action.yml` opens with
+WHY IT EXISTS (#353, from #347 round 35). `ui-suite/action.yml` runs, at its
+`Validate report-path` step,
 
     run: python3 "$GITHUB_ACTION_PATH/validate-report-path.py"
 
 and both documented install carriers copied only `action.yml`. Every project
 installing or refreshing the composite got a directory holding the YAML alone,
-so every UI job would have died on its FIRST step. The composite was correct,
+so every UI job would have died at that step -- after Node setup, dependency
+install and the browser download, which is minutes of CI spent to reach a
+missing file. (An earlier version of this comment said "its first step"; it is
+step 6 of 11. The failure is not first, it is late and expensive.) The
+composite was correct,
 the file was committed, and it reached nobody.
 
 Nothing else catches that class: `check-refresh-derivation.py` derives the
@@ -71,15 +76,51 @@ ACTIONS_DIR = "templates/actions"
 # quoted before the slash) and the expression context `${{ github.action_path }}`.
 # Deriving only the first left a sibling referenced the other way invisible, with
 # the guard reporting NOT EXERCISED and exiting 0 (Codex, #354).
+#
+# `<` and `>` end the name too: `python $GITHUB_ACTION_PATH/helper.py>out` is
+# ordinary Bash, and without them the capture was `helper.py>out` -- a file that
+# cannot exist, so the gate refused a composite whose helper WAS tracked
+# (Codex, #354). A false refusal, and this repo has produced nine of them.
 REFERENCE = re.compile(
     r"""(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})"""
-    r"""["']?/([^\s"';|)&]+)"""
+    r"""["']?/([^\s"';|)&<>]+)"""
 )
 
 # GitHub accepts both manifest spellings. Filtering to one meant a composite
 # using the other was skipped, and because another `action.yml` existed the
 # empty-set refusal did not fire either (Codex, #354).
 MANIFESTS = ("action.yml", "action.yaml")
+
+# The reference syntaxes above are POSIX-shell. A `pwsh` step spells the same
+# dependency `$env:GITHUB_ACTION_PATH\helper.ps1` or
+# `${{ github.action_path }}\helper.ps1` -- a backslash separator and a different
+# variable syntax, neither of which this file parses. Rather than report
+# NOT EXERCISED and pass (fail-open for a shape it simply cannot read), a step
+# using one of these refuses. This repo ships no such composite; the refusal
+# exists so that adding one is a decision somebody makes, not a silent gap
+# (Codex, #354).
+UNPARSED_SHELLS = ("pwsh", "powershell", "cmd")
+
+# Marks a step this file cannot read. Carried out of run_values() rather than
+# raised, so the caller reports it as a refusal with the composite named.
+UNPARSED = object()
+
+
+def strip_shell_comments(body):
+    """Drop whole-line `#` comments from a run block.
+
+    A `run: |` block keeps its comments in the parsed string, so a stale example
+    in one still matched and the gate demanded a file the shell never touches
+    (Codex, #354) -- the same defect the raw-YAML fix addressed, one level in.
+
+    WHOLE-LINE ONLY. A trailing `#` can sit inside a quoted string or a URL
+    fragment, and deciding that needs a shell parser; dropping only lines whose
+    first non-space character is `#` is exactly what those lines are, and claims
+    nothing about the rest.
+    """
+    return "\n".join(
+        line for line in body.split("\n") if not line.lstrip().startswith("#")
+    )
 
 
 def run_values(manifest):
@@ -104,11 +145,27 @@ def run_values(manifest):
     for step in steps:
         if not isinstance(step, dict):
             continue
+        shell = step.get("shell")
+        if isinstance(shell, str) and shell.split()[0].lower() in UNPARSED_SHELLS:
+            out.append(UNPARSED)
+            continue
+        env = step.get("env") if isinstance(step.get("env"), dict) else {}
+        env = {k: v for k, v in env.items() if isinstance(v, str)}
+        out.extend(env.values())
         if isinstance(step.get("run"), str):
-            out.append(step["run"])
-        env = step.get("env")
-        if isinstance(env, dict):
-            out.extend(v for v in env.values() if isinstance(v, str))
+            # SUBSTITUTE THE STEP'S OWN env FIRST. A binding can hold the
+            # DIRECTORY rather than the whole path --
+            # `ACTION_DIR: ${{ github.action_path }}` with
+            # `run: python "$ACTION_DIR/helper.py"` -- and scanning the two
+            # strings independently finds a complete reference in neither, so the
+            # guard passed with `helper.py` untracked (Codex, #354). Round 2 added
+            # env values to the scan and stopped there; joining them is what makes
+            # the dependency visible.
+            body = strip_shell_comments(step["run"])
+            for name, value in env.items():
+                for form in (f"${{{name}}}", f'"${name}"', f"${name}"):
+                    body = body.replace(form, value)
+            out.append(body)
     return out
 
 
@@ -120,11 +177,15 @@ def tracked_files():
     project can receive. `__pycache__` beside a shipped validator is the everyday
     version of this.
     """
+    # `-z`, because git C-QUOTES non-ASCII paths by default: a tracked `café.py`
+    # comes back as `"caf\303\251.py"`, which never equals the Unicode name
+    # derived from the manifest, and the gate refuses a file that IS tracked
+    # (Codex, #354). NUL-delimited output is the raw bytes, no quoting to undo.
     out = subprocess.run(
-        ["git", "-C", ROOT, "ls-files"],
+        ["git", "-C", ROOT, "ls-files", "-z"],
         check=True, capture_output=True, text=True,
     ).stdout
-    return set(out.splitlines())
+    return set(p for p in out.split("\0") if p)
 
 
 def main():
@@ -148,8 +209,25 @@ def main():
         # The directory HOLDING the manifest, indexed from the right: an index
         # from the left silently reads `actions` out of the path prefix.
         action = composite.split("/")[-2]
-        with open(os.path.join(ROOT, composite), encoding="utf-8") as handle:
-            body = handle.read()
+        # FROM THE INDEX, NOT THE WORKING TREE. `git ls-files` answers what is
+        # STAGED, and the documented local gate runs after `git add` -- so
+        # reading the manifest with open() mixed two git states: a staged
+        # manifest referencing `missing.py` could be committed clean because an
+        # unstaged edit had already removed the reference (Codex, #354). One
+        # state for both inputs, or the check is about a tree that exists
+        # nowhere.
+        try:
+            body = subprocess.run(
+                ["git", "-C", ROOT, "show", f":{composite}"],
+                check=True, capture_output=True, text=True,
+            ).stdout
+        except subprocess.CalledProcessError as exc:
+            problems.append(
+                f"{composite} is tracked but could not be read from the index: {exc}"
+                + "\n    Reading it from the working tree instead would check a different"
+                + "\n    git state than the membership test above; that is CANNOT CHECK."
+            )
+            continue
 
         try:
             manifest = yaml.safe_load(body)
@@ -162,8 +240,22 @@ def main():
             continue
 
         refs = set()
+        unreadable = False
         for value in run_values(manifest):
+            if value is UNPARSED:
+                unreadable = True
+                continue
             refs.update(REFERENCE.findall(value))
+        if unreadable:
+            problems.append(
+                f"{composite} has a step whose shell this guard cannot read"
+                + f"\n    ({', '.join(UNPARSED_SHELLS)} spell an action-path reference with a"
+                + "\n    backslash separator and `$env:` syntax, which the derivation does not"
+                + "\n    parse). Reporting NOT EXERCISED here would be a pass for a shape this"
+                + "\n    file simply cannot see, so it refuses instead. Teach the derivation"
+                + "\n    that syntax, or keep composite steps on a POSIX shell."
+            )
+            continue
 
         for name in sorted(refs):
             found.append((action, name))

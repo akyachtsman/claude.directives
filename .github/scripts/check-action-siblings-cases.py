@@ -46,12 +46,16 @@ runs:
 """
 
 
-def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=False):
+def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=False,
+          symlinks=None, unstaged_symlinks=None, conflicted=False):
     """A fixture repo.
 
-    `files`         written and staged
-    `unstaged`      written after the add, so present on disk and absent from git
-    `intent_to_add` written, then registered with `git add -N` only
+    `files`             written and staged
+    `unstaged`          written after the add, so present on disk and absent from git
+    `intent_to_add`     written, then registered with `git add -N` only
+    `symlinks`          {link: target} created BEFORE the add, so git stores them
+    `unstaged_symlinks` {link: target} created after, so git does not
+    `conflicted`        left mid-merge, so `git write-tree` cannot run
     """
     root = tempfile.mkdtemp(dir=tmp)
 
@@ -61,21 +65,47 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(text)
 
+    def link(rel, target):
+        path = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        os.symlink(target, path)
+
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     if not empty_actions:
         write("templates/actions/ui-suite/action.yml", COMPOSITE)
     for rel, text in (files or {}).items():
         write(rel, text)
+    for rel, target in (symlinks or {}).items():
+        link(rel, target)
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
 
     for rel, text in (unstaged or {}).items():
         write(rel, text)
+    for rel, target in (unstaged_symlinks or {}).items():
+        link(rel, target)
 
     # Present on disk, and in `git ls-files` -- but staged against the EMPTY
     # blob, so its content is not in the tree that gets committed.
     for rel, text in (intent_to_add or {}).items():
         write(rel, text)
         subprocess.run(["git", "add", "-N", rel], cwd=root, check=True)
+
+    # An index `git write-tree` cannot turn into a tree. The guard's question is
+    # "what would this index commit", and mid-merge there is no answer -- so it
+    # must refuse rather than report a pass it did not compute.
+    if conflicted:
+        def run(*args):
+            subprocess.run(["git", *args], cwd=root, check=True,
+                           capture_output=True, text=True)
+        run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base")
+        run("checkout", "-q", "-b", "other")
+        write("templates/actions/ui-suite/action.yml", COMPOSITE + "# other\n")
+        run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "other")
+        run("checkout", "-q", "-")
+        write("templates/actions/ui-suite/action.yml", COMPOSITE + "# mine\n")
+        run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "mine")
+        subprocess.run(["git", "merge", "other"], cwd=root,
+                       capture_output=True, text=True)
     return root
 
 
@@ -93,20 +123,20 @@ def main():
             # ── the shipped shape ────────────────────────────────────────────
             ("a composite whose files are all tracked — accepted",
              dict(files={"templates/actions/ui-suite/validate-report-path.py": "ok\n"}),
-             0, "every one tracked"),
+             0, "every one in the tree"),
 
             # ── the defect this exists for (#325, #353) ─────────────────────
             # Present, working locally, and shipping to nobody.
             ("an untracked sibling — refused",
              dict(unstaged={"templates/actions/ui-suite/validate-report-path.py": "ok\n"}),
-             1, "is not tracked"),
+             1, "would NOT be committed"),
 
             # An untracked file NOTHING references is caught too. The derivation
             # this replaced could not see it, and a half-finished change is
             # exactly how one gets left behind.
             ("an untracked file nothing references — refused",
              dict(unstaged={"templates/actions/ui-suite/scratch.py": "ok\n"}),
-             1, "is not tracked"),
+             1, "would NOT be committed"),
 
             # Every action is in scope, not only the one with a reference.
             ("an untracked file in another action — refused",
@@ -114,15 +144,65 @@ def main():
              1, "secret-scan/helper.sh"),
 
             # ── intent-to-add is in ls-files and still does not ship ────────
-            ("a `git add -N` sibling — refused, and named as intent-to-add",
+            ("a `git add -N` sibling — refused",
              dict(intent_to_add={"templates/actions/ui-suite/validate-report-path.py": "ok\n"}),
-             1, "INTENT-TO-ADD"),
+             1, "would NOT be committed"),
+
+            # ⚠️ THE ROUND-4 RULE PASSED THIS ONE. It read the staged blob and
+            # called the empty blob a placeholder only when the file on disk was
+            # non-empty -- and `git add -N` on a GENUINELY zero-byte file gives
+            # the empty blob AND a zero-byte working tree, so both halves agreed
+            # it was fine while `write-tree` omitted it (Codex, #354 round 5).
+            # It is the whole reason the rule stopped inspecting the index.
+            ("a `git add -N` sibling that is GENUINELY ZERO BYTES — refused",
+             dict(intent_to_add={"templates/actions/ui-suite/validate-report-path.py": ""}),
+             1, "would NOT be committed"),
+
+            # The complement, so the fix above cannot be bought by refusing every
+            # empty file: a zero-byte file staged for real DOES ship, and git
+            # stores it against the same empty blob.
+            ("a zero-byte sibling staged for real — accepted",
+             dict(files={"templates/actions/ui-suite/validate-report-path.py": ""}),
+             0, "every one in the tree"),
+
+            # ── a directory symlink is a path git stores, and os.walk hides it ──
+            # `os.walk` puts it in `dirnames` and does not follow it by default,
+            # so it was never enumerated -- a composite could use `tools/helper.sh`
+            # through the local link while the guard reported OK and downstream
+            # copies got nothing (Codex, #354 round 5).
+            ("an untracked symlink to a directory — refused",
+             dict(files={"templates/actions/ui-suite/tools/helper.sh": "ok\n"},
+                  unstaged_symlinks={"templates/actions/ui-suite/toolslink": "tools"}),
+             1, "toolslink"),
+
+            # And the complement: a TRACKED directory symlink passes. Refusing
+            # every symlink would buy the case above with a false refusal, which
+            # is the shape that produced eight findings on #347.
+            ("a tracked symlink to a directory — accepted",
+             dict(files={"templates/actions/ui-suite/tools/helper.sh": "ok\n"},
+                  symlinks={"templates/actions/ui-suite/toolslink": "tools"}),
+             0, "every one in the tree"),
+
+            # A symlink to a FILE lands in `filenames`, so it was already
+            # enumerated -- pinned so the walk rewrite cannot lose it.
+            ("an untracked symlink to a file — refused",
+             dict(files={"templates/actions/ui-suite/helper.sh": "ok\n"},
+                  unstaged_symlinks={"templates/actions/ui-suite/alias.sh": "helper.sh"}),
+             1, "alias.sh"),
 
             # ── build artefacts are not the maintainer's mistake ────────────
             ("__pycache__ beside a validator is ignored",
              dict(files={"templates/actions/ui-suite/validate-report-path.py": "ok\n"},
                   unstaged={"templates/actions/ui-suite/__pycache__/x.pyc": "junk\n"}),
-             0, "every one tracked"),
+             0, "every one in the tree"),
+
+            # ── a guard that cannot look must not print a pass (#323) ──────
+            # `write-tree` is the whole answer, so an index it cannot build a
+            # tree from leaves the question unanswered. Nothing else here
+            # exercises that branch, and a silent 0 there is the fail-open
+            # family inside the fix for it.
+            ("an index `git write-tree` cannot build — CANNOT CHECK, never a pass",
+             dict(conflicted=True), 1, "CANNOT CHECK"),
 
             # ── nothing to look at is not a pass ───────────────────────────
             ("no files under templates/actions — refused, never a vacuous pass",
@@ -145,7 +225,7 @@ def main():
             ("a composite naming a file that does not exist — ACCEPTED (the trade)",
              dict(files={"templates/actions/ui-suite/action.yml":
                          COMPOSITE.replace("validate-report-path.py", "never-created.py")}),
-             0, "every one tracked"),
+             0, "every one in the tree"),
         ]
 
         for label, kwargs, expected, needle in cases:

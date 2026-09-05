@@ -81,7 +81,17 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
         with open(path, "wb") as handle:
             handle.write(data)
 
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    # ONE GIT HELPER, BYTES ONLY — the same discipline the guard adopted, applied
+    # here too. It was applied to the GUARD and not to this file, and the leak was
+    # found one round later: with `core.quotePath=false` git emits a path's raw
+    # bytes unquoted, so a `text=True` read of `ls-files -u` aborted the whole
+    # suite with UnicodeDecodeError before the guard ever ran (Codex, #354).
+    # A rule enforced in one file is a rule that leaks into the next one.
+    def git(*args, **kwargs):
+        return subprocess.run(["git", *args], cwd=root, check=True,
+                              capture_output=True, **kwargs).stdout
+
+    git("init", "-q")
     if not empty_actions:
         write("templates/actions/ui-suite/action.yml", COMPOSITE)
     for rel, text in (files or {}).items():
@@ -90,7 +100,7 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
         link(rel, target)
     for rel_bytes, data in (raw_files or {}).items():
         write_raw(rel_bytes, data)
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    git("add", "-A")
 
     for rel, text in (unstaged or {}).items():
         write(rel, text)
@@ -103,7 +113,7 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
     # blob, so its content is not in the tree that gets committed.
     for rel, text in (intent_to_add or {}).items():
         write(rel, text)
-        subprocess.run(["git", "add", "-N", rel], cwd=root, check=True)
+        git("add", "-N", rel)
 
     # An index `git write-tree` cannot turn into a tree. The guard's question is
     # "what would this index commit", and mid-merge there is no answer -- so it
@@ -117,23 +127,20 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
     # a case depends on is asserted below, not inferred from an operation's
     # side effect.
     if conflicted:
-        def out(*args):
-            return subprocess.run(["git", *args], cwd=root, check=True,
-                                  capture_output=True, text=True).stdout
-
         entry = conflicted if isinstance(conflicted, str) else "templates/actions/ui-suite/action.yml"
         stages = []
         for stage, text in enumerate(("base\n", "ours\n", "theirs\n"), start=1):
-            blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=root,
-                                  check=True, capture_output=True, text=True,
-                                  input=text).stdout.strip()
+            # A blob id is ASCII by construction, so decoding it is safe; the
+            # PATH it is paired with is not, which is why the record below is
+            # assembled and sent as bytes.
+            blob = git("hash-object", "-w", "--stdin",
+                       input=text.encode()).decode().strip()
             stages.append(f"100644 {blob} {stage}\t{entry}")
-        # Written as BYTES: one case conflicts a path whose name is not valid
-        # UTF-8, and that is the whole point of it.
-        subprocess.run(["git", "update-index", "--index-info"], cwd=root, check=True,
-                       capture_output=True,
-                       input=os.fsencode("\n".join(stages) + "\n"))
-        if not out("ls-files", "-u").strip():
+        git("update-index", "--index-info", input=os.fsencode("\n".join(stages) + "\n"))
+        # ASSERTED IN BYTES. `ls-files -u` prints the conflicted path, and with
+        # `core.quotePath=false` it prints the raw bytes -- so reading this as
+        # text aborts the suite on the one fixture it exists to build.
+        if not git("ls-files", "-u").strip():
             raise AssertionError("fixture did not produce an unmerged index")
 
     # Made unreadable LAST, so everything above could still be written. The whole
@@ -287,10 +294,17 @@ def main():
              dict(raw_files={b"templates/actions/ui-suite/bad-\xff.sh": b"ok\n"}),
              0, "every one in the tree"),
 
+            # ⚠️ THE FIFTH CASE THIS PR THAT DID NOT TEST ITS LABEL. It created
+            # only the ASCII `plain.sh`, so it duplicated the plain untracked
+            # coverage above and never printed a surrogate-escaped name at all.
+            # The C-locale variant further down was fixed last round; this one --
+            # the ordinary-locale complement, one screen away -- was not, which is
+            # the same "applied to some of the places it governs" that produced
+            # rounds 6 and 7 (Codex, #354 round 9).
             ("...and an UNTRACKED one with such a name is still refused",
              dict(files={"templates/actions/ui-suite/validate-report-path.py": "ok\n"},
-                  unstaged={"templates/actions/ui-suite/plain.sh": "ok\n"}),
-             1, "would NOT be committed"),
+                  raw_unstaged={b"templates/actions/ui-suite/vanish-\xff.sh": b"ok\n"}),
+             1, "vanish-\udcff.sh would NOT be committed"),
 
             # ── an unreadable directory is not an empty one ─────────────────
             # `os.walk` swallows every error unless given `onerror`, so the

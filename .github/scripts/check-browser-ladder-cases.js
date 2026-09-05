@@ -39,7 +39,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // rather than asserted.
 const LADDER = process.env.BROWSER_LADDER_BIN
   || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
-const { ladder, report, RUNGS } = require(LADDER);
+const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
+  INSTALL_MAX_BUFFER } = require(LADDER);
 
 const OK = { ok: true, error: null };
 const fail = (msg) => ({ ok: false, error: msg });
@@ -245,6 +246,92 @@ function eq(actual, expected, what) {
     const text = lines.join('\n');
     if (!text.includes('LAUNCHES')) throw new Error('report must say LAUNCHES');
     if (!text.includes('as-is')) throw new Error('report must name the rung');
+  });
+
+  // ── #355 round 1: a harness failure is CANNOT CHECK, never a ceiling ──────
+  // The shipped kit installs @playwright/test under the UI-test directory, so
+  // resolving from a repository root finds nothing even when the browser is
+  // healthy. Every rung then failed identically and the run ended in CEILING --
+  // a limit recorded about the wrong thing.
+  await check('a harness failure ends the ladder without a verdict', async () => {
+    const s = scripted([
+      { launch: { ok: false, harness: true, error: 'playwright could not be resolved' } },
+      { launch: OK },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, false, 'verdict');
+    eq(out.harness, true, 'flagged as a harness problem');
+    eq(out.attempts.length, 1, 'it stopped at the first rung');
+    eq(s.installs, [], 'and installed nothing for a Playwright it cannot load');
+  });
+
+  await check('CANNOT CHECK reports exit 2 and claims nothing about the browser', async () => {
+    const s = scripted([{ launch: { ok: false, harness: true, error: 'no playwright here' } }]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    const lines = [];
+    const code = report('chromium', out, (l) => lines.push(l));
+    const text = lines.join('\n');
+    eq(code, 2, 'exit code — distinct from both LAUNCHES (0) and CEILING (1)');
+    if (!text.includes('CANNOT CHECK')) throw new Error('must say CANNOT CHECK');
+    if (text.includes('CEILING')) throw new Error('must NOT report a ceiling');
+    if (!text.includes('says nothing about whether the browser works')) {
+      throw new Error('must disclaim any browser conclusion');
+    }
+  });
+
+  // ── #355 round 1: the ladder must not kill the installer it is measuring ──
+  // spawnSync's default maxBuffer is ~1 MiB and `--with-deps` apt output exceeds
+  // it routinely; on overflow Node SIGTERMs the child, so the install is cut off
+  // and the launch fails for a reason the ladder caused.
+  await check('a noisy installer is not truncated or killed by the ladder', async () => {
+    // ~4 MiB on stdout — comfortably past the old default, well inside the new.
+    const out = realInstall(['node', '-e', "process.stdout.write('x'.repeat(4*1024*1024))"]);
+    eq(out.code, 0, 'the child ran to completion');
+    eq(out.interrupted, undefined, 'and was not interrupted');
+    if (out.output.length < 4 * 1024 * 1024) {
+      throw new Error(`output was truncated: ${out.output.length} bytes`);
+    }
+  });
+
+  // An ENOBUFS kill is what the raised buffer exists to avoid, and it cannot be
+  // provoked on demand without a 64 MiB installer -- so the CLASSIFICATION is
+  // pinned against a synthetic spawnSync result instead. This tests the shipped
+  // branch, not a copy of it.
+  await check('an install the ladder cut short is marked interrupted, not just non-zero', () => {
+    const out = classifyInstall({
+      status: null, stdout: 'partial output', stderr: '',
+      error: Object.assign(new Error('spawnSync npx ENOBUFS'), { code: 'ENOBUFS' }),
+    });
+    if (!out.interrupted) throw new Error('an overflow kill must be distinguishable from an exit code');
+    if (!/could not run the installer to completion/.test(out.output)) {
+      throw new Error(`the reason must be stated, got: ${out.output}`);
+    }
+  });
+
+  await check('the install buffer is large enough that apt output cannot trip it', () => {
+    if (INSTALL_MAX_BUFFER < 16 * 1024 * 1024) {
+      throw new Error(`buffer is ${INSTALL_MAX_BUFFER}; Node's ~1 MiB default is what killed the installer`);
+    }
+  });
+
+  // ── #355 round 1: a clean close is not a healthy browser ─────────────────
+  // Browser.close() catches TargetClosedError and resolves, so a browser that
+  // starts and dies immediately closed "successfully" and reported ok:true --
+  // the exact start-then-die case the code claimed to catch.
+  await check('a browser that disconnects before use is a failure, not a pass', async () => {
+    const stub = { chromium: { launch: async () => ({ isConnected: () => false, close: async () => {} }) } };
+    const result = await realLaunch('chromium', '.', stub)();
+    eq(result.ok, false, 'a disconnected browser must not pass');
+    if (!/disconnected/.test(result.error)) throw new Error(`error must say why: ${result.error}`);
+  });
+
+  await check('a connected browser passes even if closing it throws', async () => {
+    const stub = { chromium: { launch: async () => ({
+      isConnected: () => true,
+      close: async () => { throw new Error('close blew up'); },
+    }) } };
+    const result = await realLaunch('chromium', '.', stub)();
+    eq(result.ok, true, 'the close is cleanup, not the verdict');
   });
 
   if (failures.length) {

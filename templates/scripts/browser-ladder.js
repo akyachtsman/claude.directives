@@ -45,7 +45,7 @@
 
 const { spawnSync } = require('child_process');
 const { createRequire } = require('module');
-const { join } = require('path');
+const { join, resolve } = require('path');
 
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
 
@@ -108,6 +108,14 @@ async function ladder({ browser, install, launch, log = () => {} }) {
       log(`    LAUNCHED`);
       return { ok: true, rung: rung.name, attempts };
     }
+    // A HARNESS FAILURE ENDS THE LADDER WITHOUT A VERDICT. Climbing further
+    // installs browsers for a Playwright that cannot be loaded, and the rungs
+    // then all fail identically -- which reads exactly like a ceiling and is not
+    // one (Codex, #355).
+    if (result.harness) {
+      log(`    cannot check: ${firstLine(result.error)}`);
+      return { ok: false, harness: true, rung: null, attempts };
+    }
     log(`    launch failed: ${firstLine(result.error)}`);
   }
 
@@ -128,6 +136,21 @@ function report(browser, outcome, print = console.log) {
   }
 
   const last = outcome.attempts[outcome.attempts.length - 1];
+
+  // CANNOT CHECK IS NOT A CEILING. Saying "this browser will not start here" when
+  // the truth is "this ladder could not load Playwright" records a limit about
+  // the wrong thing, and `test.md` asks projects to write these limits down.
+  if (outcome.harness) {
+    print(`browser-ladder: CANNOT CHECK — Playwright itself could not be loaded`);
+    print('');
+    for (const line of String(last.launch.error || '').split('\n')) print(`  ${line}`);
+    print('');
+    print('  This says nothing about whether the browser works. Install the UI kit\'s');
+    print('  dependencies, or point --tests-dir at the directory that holds them:');
+    print('    node browser-ladder.js chromium --tests-dir <dir with node_modules>');
+    return 2;
+  }
+
   print(`browser-ladder: CEILING — ${browser} did not launch after ${outcome.attempts.length} rung(s)`);
   print('');
   print('  THE EVIDENCE IS THE LAUNCH ERROR, quoted verbatim so you can judge it:');
@@ -157,29 +180,78 @@ function report(browser, outcome, print = console.log) {
   return 1;
 }
 
-function realInstall(argv) {
-  const proc = spawnSync('npx', argv, { encoding: 'utf8' });
-  return {
-    code: proc.status == null ? -1 : proc.status,
-    output: `${proc.stdout || ''}${proc.stderr || ''}`.trim(),
-  };
+// A LADDER THAT KILLS ITS OWN INSTALLER MANUFACTURES THE CEILING IT REPORTS.
+// spawnSync's default maxBuffer is ~1 MiB; `playwright install`, and especially
+// the apt/dpkg output of `--with-deps`, exceeds that routinely. On overflow Node
+// terminates the child with SIGTERM and sets `proc.error` (ENOBUFS) -- so the
+// install is cut off part-way, the browser is half-fetched, and the launch below
+// fails for a reason THIS FUNCTION CAUSED. That is defect 3 wearing different
+// clothes: a ceiling that is an artefact of the ladder (Codex, #355).
+//
+// The buffer is raised, and an overflow is reported as what it is rather than
+// folded into the exit code -- `code: -1` alone is indistinguishable from a
+// spawn that never started.
+const INSTALL_MAX_BUFFER = 64 * 1024 * 1024;
+
+// Split out so the overflow branch is testable. The command is always `npx`,
+// which exists, so a genuine spawn error here is almost always ENOBUFS -- and
+// that is precisely the branch worth pinning, because it is the one that
+// silently turns a truncated install into a reported ceiling.
+function classifyInstall(proc) {
+  const output = `${proc.stdout || ''}${proc.stderr || ''}`.trim();
+  const code = proc.status == null ? -1 : proc.status;
+  if (proc.error) {
+    return {
+      code,
+      output: `${output}\n[this ladder could not run the installer to completion: ${proc.error.message}]`.trim(),
+      interrupted: true,
+    };
+  }
+  return { code, output };
 }
 
-function realLaunch(browser) {
-  return () => {
-    let playwright;
+function realInstall(argv) {
+  return classifyInstall(spawnSync('npx', argv, {
+    encoding: 'utf8',
+    maxBuffer: INSTALL_MAX_BUFFER,
+  }));
+}
+
+// A MISSING HARNESS IS NOT A BROWSER CEILING, and it must not be reported as
+// one. The shipped kit installs `@playwright/test` under the UI-test directory
+// -- `.github/scripts/ui-tests/node_modules` -- because that is the composite's
+// `working-directory`. Node does not search a nested sibling directory, so
+// resolving from the repository root finds nothing even when the browser is
+// installed and healthy, and every rung then fails identically and the run ends
+// in CEILING (Codex, #355). Two separate defects in one line: the wrong search
+// base, and a harness problem classified as a browser problem.
+//
+// So the base is the tests directory, defaulting to the shipped kit's location,
+// and an unresolvable harness is its own outcome -- CANNOT CHECK, exit 2 --
+// never a launch failure.
+const DEFAULT_TESTS_DIR = '.github/scripts/ui-tests';
+
+function resolvePlaywright(testsDir) {
+  const bases = [resolve(testsDir), process.cwd()];
+  const tried = [];
+  for (const base of bases) {
     try {
-      // Resolved from the PROJECT, not from this file. The script is copied into
-      // a project's .github/scripts/, where `require('playwright')` would look
-      // beside the copy and find nothing -- the dependency belongs to the project
-      // being tested, which is where the suite's own Playwright lives.
-      playwright = createRequire(join(process.cwd(), 'noop.js'))('playwright');
+      return { mod: createRequire(join(base, 'noop.js'))('playwright'), base };
     } catch (err) {
-      // Not a ceiling of the browser -- the harness itself is missing, and
-      // saying "the browser will not start" here would be a false ceiling of
-      // exactly the kind defect 3 produced.
-      return { ok: false, error: `playwright is not installed in this project: ${err.message}` };
+      tried.push(`${base}: ${err.message.split('\n')[0]}`);
     }
+  }
+  return { mod: null, tried };
+}
+
+function realLaunch(browser, testsDir, injected) {
+  return () => {
+    const found = injected ? { mod: injected } : resolvePlaywright(testsDir);
+    if (!found.mod) {
+      return { ok: false, harness: true,
+               error: `playwright could not be resolved:\n    ${found.tried.join('\n    ')}` };
+    }
+    const playwright = found.mod;
     try {
       const browserType = playwright[browser];
       if (!browserType) return { ok: false, error: `playwright exposes no "${browser}"` };
@@ -187,8 +259,21 @@ function realLaunch(browser) {
       // awaits this promise. A launch that starts and immediately dies still
       // counts as a failure, which is why the browser is closed rather than
       // leaked -- close throwing is a browser that did not really come up.
+      // CHECK IT IS STILL CONNECTED BEFORE CLOSING IT. `Browser.close()` treats an
+      // already-closed target as an idempotent success -- it catches
+      // TargetClosedError and resolves -- so a browser that starts and dies
+      // immediately produced `ok: true` from a clean close, which is exactly the
+      // case the comment above claims to catch (Codex, #355). A successful
+      // cleanup is not a health signal; `isConnected()` asks the question
+      // directly, and the close is then only cleanup.
       return browserType.launch()
-        .then((b) => b.close().then(() => ({ ok: true, error: null })))
+        .then(async (b) => {
+          const alive = b.isConnected();
+          try { await b.close(); } catch { /* cleanup, not the verdict */ }
+          return alive
+            ? { ok: true, error: null }
+            : { ok: false, error: 'the browser started and then disconnected before it could be used' };
+        })
         .catch((err) => ({ ok: false, error: err && err.message ? err.message : String(err) }));
     } catch (err) {
       return { ok: false, error: err && err.message ? err.message : String(err) };
@@ -197,12 +282,16 @@ function realLaunch(browser) {
 }
 
 async function main(argv) {
-  const browser = argv[0] || 'chromium';
+  const flag = argv.indexOf('--tests-dir');
+  const testsDir = flag >= 0 && argv[flag + 1] ? argv[flag + 1] : DEFAULT_TESTS_DIR;
+  const positional = argv.filter((a, i) => a !== '--tests-dir' && i !== flag + 1);
+  const browser = positional[0] || 'chromium';
   if (!BROWSERS.includes(browser)) {
     console.error(`browser-ladder: unknown browser "${browser}" — expected one of ${BROWSERS.join(', ')}`);
     return 2;
   }
   console.log(`browser-ladder: ${browser} — grading on whether it LAUNCHES`);
+  console.log(`  resolving playwright from ${testsDir} (then the working directory)`);
 
   // ONE implementation. main() wires the real effects into the same `ladder()`
   // the cases file drives with stubs; if it looped over RUNGS itself, the tested
@@ -210,13 +299,14 @@ async function main(argv) {
   const outcome = await ladder({
     browser,
     install: realInstall,
-    launch: realLaunch(browser),
+    launch: realLaunch(browser, testsDir),
     log: (line) => console.log(line),
   });
   return report(browser, outcome);
 }
 
-module.exports = { ladder, report, RUNGS, BROWSERS, firstLine };
+module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, realLaunch,
+  resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then((code) => process.exit(code));

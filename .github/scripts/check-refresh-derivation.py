@@ -71,7 +71,12 @@ import sys
 from pathlib import Path
 
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")
-CALLER_GLOBS = ("templates/workflows/*.yml", "templates/actions/*/action.yml")
+# directives/*.md joined the set in directives#355: `test.md` names
+# `.github/scripts/browser-ladder.js`, which no workflow or composite invokes,
+# so a YAML-only caller set derived nothing for it and a refresh shipped the
+# directive without the script it tells you to run.
+CALLER_GLOBS = ("templates/workflows/*.yml", "templates/actions/*/action.yml",
+                "directives/*.md")
 
 # The two-stage shape the command documents: grab the whole path token, then
 # keep only .js/.py endings. Captured as two regexes so the extension filter is

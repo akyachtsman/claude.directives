@@ -354,9 +354,9 @@ So: **changed callers ∪ callers co-installed unchanged by the rules above.**
 repo="akyachtsman/claude.directives"
 head="…the SHA Phase 2 classified…"   # NOT main — that ref moves under you
 raw="https://raw.githubusercontent.com/$repo/$head"
-callers="…EVERY templates/workflows/*.yml and templates/actions/*/action.yml
-         path this refresh INSTALLS — the changed ones AND the ones
-         co-installed unchanged by the rules above…"
+callers="…EVERY templates/workflows/*.yml, templates/actions/*/action.yml
+         and directives/*.md path this refresh INSTALLS — the changed ones
+         AND the ones co-installed unchanged by the rules above…"
 
 buf=$(mktemp)
 for c in $callers; do
@@ -370,6 +370,16 @@ refs=$(grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' "$buf" \
 rm -f "$buf"
 printf '%s\n' "$refs"
 ```
+
+**THE DIRECTIVES ARE CALLERS TOO.** A script is not reachable only from a
+workflow: `test.md` tells a session to run `.github/scripts/browser-ladder.js`,
+which no workflow or composite invokes. Scoped to the two YAML globs, the
+derivation returned nothing for it, so a refresh installed a directive naming a
+file it had not delivered and the documented command died with MODULE_NOT_FOUND
+(Codex, directives#355). Same class as #321 and #353 a third time: a script
+something we install references BY PATH, invisible to the set that decides what
+gets installed. The remedy is the same one — widen the derivation, never
+hand-list the file.
 
 Seven things about that shape, each of which a shorter version got wrong:
 

@@ -131,6 +131,18 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/scripts/check-ui-viewports.js
 ```
 
+Take the browser ladder alongside it. No workflow invokes it — `test.md` does,
+when a sandbox run fails and you need to know whether the browser is the reason:
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/browser-ladder.js \
+  -o .github/scripts/browser-ladder.js
+```
+
+It grades on whether the browser LAUNCHES, never on an install's exit code, and
+reports `CANNOT CHECK` rather than a ceiling when Playwright itself cannot be
+loaded. Point `--tests-dir` at the directory holding the kit's `node_modules`.
+
 It reads `UI_TESTS_DIR` (or `--tests-dir`, which the composite passes), so a
 project that moved its test directory needs no edit. It imports
 `playwright.config.js` and fails the build when the `projects` list does not

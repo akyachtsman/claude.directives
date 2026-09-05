@@ -1,0 +1,256 @@
+#!/usr/bin/env node
+// check-browser-ladder-cases.js — the browser ladder's own guard.
+//
+// WHY IT EXISTS. `templates/scripts/browser-ladder.js` encodes the one rule that
+// survived four failed attempts to state it in prose (#332): grade on whether
+// the browser LAUNCHES, never on an install's exit code, and never let a
+// dependency-phase abort stand in for "unavailable". Nothing else in this repo
+// runs it -- this repo's own suite drives chromium directly -- so without these
+// cases it is shipped, exported, and unexercised.
+//
+// It also cannot be exercised the obvious way. Actually running the ladder needs
+// a network and up to three browser downloads, and the branches worth pinning
+// are the FAILING ones: no privileges, a blocked download, a binary that will
+// not start. Those cannot be produced on demand in CI.
+//
+// So the two effects -- install and launch -- are injected, and every case
+// drives the SHIPPED `ladder()` that the CLI itself calls. The logic under test
+// is the logic that runs.
+//
+// WHAT THAT DOES NOT PROVE, stated because a stub is a claim about the world:
+// these cases prove the ladder REACTS correctly to a given install/launch
+// outcome. They do not prove `npx playwright install` behaves as the stubs say,
+// nor that `--with-deps` really orders installDeps first. Those are facts about
+// Playwright, cited in the script's header from its source, and a change there
+// would leave every case here green. The rung ORDER is pinned as a literal for
+// exactly that reason: if the fact changes, the pin is what gets re-read.
+
+// `.github/scripts/package.json` declares "type": "module", while the shipped
+// ladder is CommonJS like every other file in `templates/scripts/`. createRequire
+// loads it as the CJS module it is, rather than converting the shipped file to
+// suit its own test.
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const require = createRequire(import.meta.url);
+const HERE = dirname(fileURLToPath(import.meta.url));
+// BROWSER_LADDER_BIN drives a mutated copy, so discrimination is re-proved
+// rather than asserted.
+const LADDER = process.env.BROWSER_LADDER_BIN
+  || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
+const { ladder, report, RUNGS } = require(LADDER);
+
+const OK = { ok: true, error: null };
+const fail = (msg) => ({ ok: false, error: msg });
+
+/** Build stubs whose launch outcome depends on which rungs have run. */
+function scripted(launchResults) {
+  const installs = [];
+  let i = 0;
+  return {
+    installs,
+    install: (argv) => {
+      const planned = launchResults[i] || {};
+      installs.push(argv.join(' '));
+      return { code: planned.installCode == null ? 0 : planned.installCode,
+               output: planned.installOutput || '' };
+    },
+    launch: () => {
+      const planned = launchResults[i] || {};
+      i += 1;
+      return planned.launch || fail('no launch planned');
+    },
+  };
+}
+
+const cases = [];
+const failures = [];
+
+async function check(label, fn) {
+  cases.push(label);
+  try {
+    // AWAITED. Without this an async case's thrown assertion arrives as an
+    // unhandled rejection after `OK` has already been printed, so every failing
+    // case reports as a passing one -- the fail-open family (#323) inside the
+    // very harness meant to catch it. Found by this file's own first run.
+    await fn();
+    console.log(`OK:   ${label}`);
+  } catch (err) {
+    failures.push(`${label}\n      ${err.message}`);
+  }
+}
+
+function eq(actual, expected, what) {
+  const a = JSON.stringify(actual);
+  const e = JSON.stringify(expected);
+  if (a !== e) throw new Error(`${what}: expected ${e}, got ${a}`);
+}
+
+(async () => {
+  // ── the rung order is the fix for defect 3, so it is pinned literally ───────
+  // A plain install must precede `--with-deps`. Reversed, a privilege failure in
+  // the dependency phase aborts BEFORE the download, and the launch that follows
+  // fails because nothing was ever fetched -- a ceiling manufactured by the
+  // ladder itself. This is the single most reversible line in the file and the
+  // one whose reversal is hardest to notice.
+  await check('the rungs are as-is, then plain install, then --with-deps', () => {
+    eq(RUNGS.map((r) => r.name), ['as-is', 'install', 'install --with-deps'], 'rung order');
+    eq(RUNGS[0].argv, null, 'first rung installs nothing');
+    eq(RUNGS[1].argv('chromium'), ['playwright', 'install', 'chromium'], 'second rung');
+    eq(RUNGS[2].argv('chromium'), ['playwright', 'install', '--with-deps', 'chromium'],
+       'third rung');
+  });
+
+  // ── issue branch 1: already in the image ───────────────────────────────────
+  await check('branch 1 — a browser already present launches with NO install', async () => {
+    const s = scripted([{ launch: OK }]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, true, 'verdict');
+    eq(out.rung, 'as-is', 'rung');
+    eq(s.installs, [], 'no install was attempted');
+  });
+
+  // ── issue branch 2: absent, download works, libraries sufficient ───────────
+  await check('branch 2 — absent, plain install is enough', async () => {
+    const s = scripted([
+      { launch: fail("Executable doesn't exist at /root/.cache/ms-playwright/...") },
+      { launch: OK },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, true, 'verdict');
+    eq(out.rung, 'install', 'rung');
+    eq(s.installs, ['playwright install chromium'], 'only the plain install ran');
+  });
+
+  // ── issue branch 3: libraries missing, privileges available ───────────────
+  await check('branch 3 — libraries missing, --with-deps rescues it', async () => {
+    const s = scripted([
+      { launch: fail("Executable doesn't exist") },
+      { launch: fail('error while loading shared libraries: libnss3.so') },
+      { launch: OK },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, true, 'verdict');
+    eq(out.rung, 'install --with-deps', 'rung');
+    eq(s.installs, ['playwright install chromium', 'playwright install --with-deps chromium'],
+       'plain install ran BEFORE --with-deps');
+  });
+
+  // ── issue branch 4: libraries missing, NO privileges ──────────────────────
+  // The defect-3 case, and the reason for the whole ordering. `--with-deps`
+  // aborts in its dependency phase without downloading anything -- but the plain
+  // rung already fetched the binary, so the final launch error is the REAL one
+  // (missing libraries) rather than "executable doesn't exist".
+  await check('branch 4 — no privileges: the ceiling quotes the library error, not the abort', async () => {
+    const s = scripted([
+      { launch: fail("Executable doesn't exist") },
+      { launch: fail('error while loading shared libraries: libnss3.so') },
+      { installCode: 1,
+        installOutput: 'Installing dependencies...\nERROR: must be run as root',
+        launch: fail('error while loading shared libraries: libnss3.so') },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, false, 'verdict');
+    const last = out.attempts[out.attempts.length - 1];
+    if (!/libnss3/.test(last.launch.error)) {
+      throw new Error(`the evidence must be the launch error, got ${last.launch.error}`);
+    }
+    if (/must be run as root/.test(last.launch.error)) {
+      throw new Error('the dependency-phase abort must not stand in for the launch error');
+    }
+  });
+
+  // ── issue branch 5: download blocked ──────────────────────────────────────
+  await check('branch 5 — download blocked is a ceiling, and every rung still launched', async () => {
+    const blocked = { installCode: 1, installOutput: 'Error: connect ECONNREFUSED cdn.playwright.dev',
+                      launch: fail("Executable doesn't exist at /root/.cache/ms-playwright") };
+    const s = scripted([{ launch: fail("Executable doesn't exist") }, blocked, blocked]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, false, 'verdict');
+    eq(out.attempts.length, 3, 'every rung was attempted');
+    eq(out.attempts.map((a) => a.launch.ok), [false, false, false], 'each rung ended in a launch');
+  });
+
+  // ── issue branch 6: present but will not start ────────────────────────────
+  await check('branch 6 — installed but will not launch is a ceiling', async () => {
+    const wont = fail('Target page, context or browser has been closed');
+    const s = scripted([{ launch: wont }, { launch: wont }, { launch: wont }]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, false, 'verdict');
+  });
+
+  // ── the rule itself, in both directions ──────────────────────────────────
+  // Defect 2 was reading an install's exit code as the answer. These two cases
+  // are the rule stated as a test: a failing install whose launch works is a
+  // PASS, and a succeeding install whose launch fails is a CEILING.
+  await check('an install that FAILS but whose launch works is not a ceiling', async () => {
+    const s = scripted([
+      { launch: fail("Executable doesn't exist") },
+      { installCode: 1, installOutput: 'some warning on stderr', launch: OK },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, true, 'a non-zero install must not decide the verdict');
+    eq(out.rung, 'install', 'rung');
+  });
+
+  await check('an install that SUCCEEDS but whose launch fails is a ceiling', async () => {
+    const s = scripted([
+      { launch: fail('no browser') },
+      { installCode: 0, launch: fail('still no browser') },
+      { installCode: 0, launch: fail('still no browser') },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, false, 'exit 0 from install must not buy a pass');
+  });
+
+  // ── a non-zero install never short-circuits the ladder ───────────────────
+  await check('a failing install does not stop the ladder before the launch', async () => {
+    const s = scripted([
+      { launch: fail('nope') },
+      { installCode: 127, installOutput: 'npx: command not found', launch: fail('nope') },
+      { installCode: 127, launch: OK },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    eq(out.ok, true, 'the ladder continued past two failed installs');
+    eq(out.rung, 'install --with-deps', 'rung');
+  });
+
+  // ── the report is the human-facing half, so pin what it says ─────────────
+  await check('the CEILING report quotes the launch error and labels install codes as context', async () => {
+    const s = scripted([
+      { launch: fail('first') },
+      { installCode: 1, installOutput: 'ERROR: must be run as root', launch: fail('second') },
+      { installCode: 1, installOutput: 'ERROR: must be run as root', launch: fail('libnss3 missing') },
+    ]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    const lines = [];
+    const code = report('chromium', out, (l) => lines.push(l));
+    const text = lines.join('\n');
+    eq(code, 1, 'exit code');
+    if (!text.includes('CEILING')) throw new Error('report must say CEILING');
+    if (!text.includes('libnss3 missing')) throw new Error('report must quote the LAST launch error');
+    if (!/context, never the verdict|CONTEXT, never the verdict/.test(text)) {
+      throw new Error('report must label install exit codes as context');
+    }
+    if (!text.includes("CLAUDE.md")) throw new Error('report must say where to record the limit');
+  });
+
+  await check('the LAUNCHES report names the rung and claims nothing more', async () => {
+    const s = scripted([{ launch: OK }]);
+    const out = await ladder({ browser: 'chromium', install: s.install, launch: s.launch });
+    const lines = [];
+    const code = report('chromium', out, (l) => lines.push(l));
+    eq(code, 0, 'exit code');
+    const text = lines.join('\n');
+    if (!text.includes('LAUNCHES')) throw new Error('report must say LAUNCHES');
+    if (!text.includes('as-is')) throw new Error('report must name the rung');
+  });
+
+  if (failures.length) {
+    console.log('\ncheck-browser-ladder-cases: FAILED');
+    for (const f of failures) console.log(`  - ${f}`);
+    process.exit(1);
+  }
+  console.log(`\ncheck-browser-ladder-cases: OK — ${cases.length} pinned ladder outcomes.`);
+})();

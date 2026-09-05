@@ -353,6 +353,7 @@ python3 .github/scripts/check-job-bounds.py --include-templates  # every job bou
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
 python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation still matches every shipped caller — it reads the pattern OUT of refresh-repo.md, so a copy cannot drift from it (PROP6)
 python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — 2 of its 3 checks never fire against THIS repo (no ragged caller, no missed match), so nothing else would notice them break
+node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — nothing else here runs it, and its FAILING branches (no privileges, blocked download, a binary that will not start) cannot be produced on demand, so the two effects are injected and every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree
@@ -394,7 +395,13 @@ before pushing rather than pushing and fixing on the PR. The Playwright UI
 check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
 local skip is fine for non-map changes.
 
-**This repo's agent-sandbox ceiling: NONE, measured 2026-08-26.**
+**This repo's agent-sandbox ceiling: NONE, measured 2026-08-26, re-derived
+2026-09-05 with the ladder** — `templates/scripts/browser-ladder.js`, run as
+`node <that path> chromium` from `templates/ui-tests`: **LAUNCHES at rung
+"as-is"** — chromium starts
+here with no install at all. The ladder is the instrument to re-derive this line
+with from now on; it grades on the launch and quotes the error when there is one,
+which is what `test.md` asks the record to carry.
 `test.md` → *Sandboxed local runs* asks every project to record its own limit with
 the date, the causes and what would make it wrong. Ours: `check-repo-map-ui.js`
 **PASS, all cases, exit 0**. `docs/site/logical-map.html` loads no external

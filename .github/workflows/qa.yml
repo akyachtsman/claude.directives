@@ -300,6 +300,15 @@ jobs:
       - name: Check the derivation guard enforces what it claims
         run: python3 .github/scripts/check-refresh-derivation-cases.py
 
+      # The exported browser ladder (#332). Nothing else in this repo runs it —
+      # the map suite drives chromium directly — and its branches worth pinning
+      # are the FAILING ones (no privileges, a blocked download, a binary that
+      # will not start), which cannot be produced on demand in CI. So install and
+      # launch are injected and every case drives the SHIPPED ladder function the
+      # CLI itself calls. Drive a mutated copy with BROWSER_LADDER_BIN.
+      - name: Check the browser ladder enforces what it claims
+        run: node .github/scripts/check-browser-ladder-cases.js
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

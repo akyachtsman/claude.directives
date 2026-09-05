@@ -353,6 +353,8 @@ python3 .github/scripts/check-job-bounds.py --include-templates  # every job bou
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
 python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation still matches every shipped caller — it reads the pattern OUT of refresh-repo.md, so a copy cannot drift from it (PROP6)
 python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — 2 of its 3 checks never fire against THIS repo (no ragged caller, no missed match), so nothing else would notice them break
+python3 .github/scripts/check-action-siblings.py   # a composite can run a SIBLING by path, and BOTH install carriers once copied only action.yml — every downstream UI job would die on its FIRST step (#353). The referenced-script derivation cannot see this class: it enumerates `.github/scripts/*` by construction, so an action-path sibling is not in that set
+python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — this repo has exactly ONE such sibling, so the guard prints the same OK whether its rules work or do nothing at all. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline: verifies against the working tree

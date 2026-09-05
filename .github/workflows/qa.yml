@@ -300,6 +300,19 @@ jobs:
       - name: Check the derivation guard enforces what it claims
         run: python3 .github/scripts/check-refresh-derivation-cases.py
 
+      # A composite can run a SIBLING by path, and both install carriers once
+      # copied only action.yml — every UI job downstream would have died on its
+      # first step (#353, from #347 round 35). The referenced-script derivation
+      # cannot see this class: it enumerates .github/scripts/* by construction.
+      - name: Check composite siblings ship with their action
+        run: python3 .github/scripts/check-action-siblings.py
+
+      # This repo has exactly ONE such sibling, so the guard above prints the
+      # same OK whether its rules work or do nothing at all. Drive a mutated copy
+      # with CHECK_ACTION_SIBLINGS_BIN to re-prove discrimination.
+      - name: Check the sibling guard enforces what it claims
+        run: python3 .github/scripts/check-action-siblings-cases.py
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

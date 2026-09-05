@@ -116,10 +116,16 @@ Execute in order:
    bootstrap). Rules: `docs/standards/automations.md` → *Watcher Rules*.
 
    **Composite actions (required by the qa workflows).** Copy
-   `claude.directives/templates/actions/` (`secret-scan/action.yml`,
-   `ui-suite/action.yml`) into `.github/actions/` — the qa workflows reference
-   them as `./.github/actions/*`; without them every qa run fails at step
-   resolution.
+   `templates/actions/<a>/**` → `.github/actions/<a>/**` — **the whole
+   directory, every file, not just `action.yml`.** The qa workflows reference
+   the actions as `./.github/actions/*` and without them every qa run fails at
+   step resolution; and a composite can run a SIBLING by path — `ui-suite`
+   opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — so a
+   YAML-only copy leaves the first step naming a file that was never brought
+   across and every UI job dies there. This instruction listed the two
+   `action.yml` files by name until #354; the parenthetical was the hand-list,
+   and `check-action-siblings.py` now fails the build if any carrier drifts back
+   to one.
 
    **Scheduled-job scripts.** Copy `claude.directives/templates/scripts/`
    (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `package.json`) into

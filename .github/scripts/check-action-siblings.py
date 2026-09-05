@@ -52,6 +52,8 @@ import re
 import subprocess
 import sys
 
+import yaml
+
 # An optional argv[1] repoints the whole check at another tree. That is what
 # lets `check-action-siblings-cases.py` run the REAL guard against fixture
 # repositories instead of re-implementing its rules -- a cases file that copies
@@ -65,10 +67,51 @@ ROOT = (
 ACTIONS_DIR = "templates/actions"
 INSTALL_DIR = ".github/actions"
 
-# A reference looks like `$GITHUB_ACTION_PATH/<file>` or `${GITHUB_ACTION_PATH}/<file>`,
-# in any quoting. The filename stops at whitespace or a closing quote -- a path
-# SEGMENT, so a nested `dir/file.py` is captured whole and checked as written.
-REFERENCE = re.compile(r"\$\{?GITHUB_ACTION_PATH\}?/([^\s\"';|)&]+)")
+# A composite can name its own directory two ways, and they mean the same thing:
+# the environment variable `$GITHUB_ACTION_PATH` (any bracing) and the expression
+# context `${{ github.action_path }}`. Deriving only the first left a sibling
+# referenced the second way absent from git and from every carrier, with the
+# guard reporting NOT EXERCISED and exiting 0 (Codex, #354).
+REFERENCE = re.compile(
+    r"(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})/([^\s\"';|)&]+)")
+
+# Both manifest spellings. GitHub accepts `action.yml` and `action.yaml`; filtering
+# to one meant a composite using the other was skipped, and because another
+# `action.yml` existed the empty-set refusal did not fire either -- so its
+# siblings passed unnoticed (Codex, #354).
+MANIFESTS = ("action.yml", "action.yaml")
+
+# Shell control operators. A "logical line" can hold several commands, so pairing
+# a source and a destination anywhere in it matched
+# `curl <src> -o /tmp/x; rm -f <dst>` -- where the only command naming the
+# destination DELETES it (Codex, #354). An install is one command.
+#
+# A SINGLE `|` is not a separator here, on purpose. These carriers are prose, and
+# one states its installs as a markdown TABLE whose column separator is `|`;
+# splitting on it tore each row's source from its destination and refused a
+# carrier that was correct. The hazard above needs `;`, `&&` or `&` -- a pipe
+# feeds output onward, it does not introduce an unrelated destination.
+COMMAND_SPLIT = re.compile(r"(?:\|\||&&|[;&\n])")
+
+
+def commands(line):
+    return [part.strip() for part in COMMAND_SPLIT.split(line) if part.strip()]
+
+
+def names_path(command, path):
+    """True when `command` names exactly this path, not something starting with it.
+
+    A plain substring test accepted a line naming `<path>.bak` as installing
+    `<path>` -- the file that actually ships is never copied and the guard is
+    green (Codex, #354). The boundary is the construct: a path token ends where a
+    filename character stops.
+
+    `/` is deliberately NOT a left boundary. The setup doc names its source
+    inside a raw URL, so `…/main/templates/actions/…` is the ordinary form; a
+    stricter lookbehind refused all three carriers, which is the false refusal
+    this rule was being tightened to avoid.
+    """
+    return re.search(rf"(?<![\w.-]){re.escape(path)}(?![\w.-])", command) is not None
 
 # Carriers: the files that tell somebody how to install a composite. Listed, not
 # derived -- see the module docstring for why this list is not the hand-list the
@@ -76,12 +119,33 @@ REFERENCE = re.compile(r"\$\{?GITHUB_ACTION_PATH\}?/([^\s\"';|)&]+)")
 CARRIERS = (
     "docs/standards/cicd-setup.md",
     "plugins/directives-toolkit/commands/refresh-repo.md",
+    # /new-repo bootstraps a project independently of the setup doc, so a
+    # regression there ships every NEW project a composite without its sibling
+    # while the other two carriers stay correct (Codex, #354).
+    "plugins/directives-toolkit/commands/new-repo.md",
 )
 
 # A wholesale install names the DIRECTORY. The action name may be spelled out or
 # stand in as a placeholder -- the refresh row ships `templates/actions/<a>/**`,
 # where `<a>` covers every action -- so a placeholder counts for every action.
 PLACEHOLDER = r"(?:<[^/>]+>|\*)"
+
+
+def run_values(manifest):
+    """Every `run:` string a composite executes, in order.
+
+    Only `runs.steps[].run` -- that is what the action executes. `uses`, `with`,
+    `description` and comments are not executed, and treating them as executed is
+    how a stale example in prose became a hard failure.
+    """
+    if not isinstance(manifest, dict):
+        return []
+    runs = manifest.get("runs")
+    steps = runs.get("steps") if isinstance(runs, dict) else None
+    if not isinstance(steps, list):
+        return []
+    return [s["run"] for s in steps
+            if isinstance(s, dict) and isinstance(s.get("run"), str)]
 
 
 def tracked_files():
@@ -126,28 +190,52 @@ def logical_lines(text):
 
 
 def installs_file(lines, action, name):
-    """True when one logical line names this file as BOTH source and destination.
+    """True when ONE COMMAND names this file as both source and destination.
 
     Either half alone is not an install: a source with no destination fetches
     nothing anybody can find, and a destination with no source is a path the
-    carrier never fills.
+    carrier never fills. And both halves in one logical LINE is not enough
+    either -- a line can hold several commands.
     """
     src = f"{ACTIONS_DIR}/{action}/{name}"
     dst = f"{INSTALL_DIR}/{action}/{name}"
-    return any(src in ln and dst in ln for ln in lines)
+    return any(names_path(cmd, src) and names_path(cmd, dst)
+               for ln in lines for cmd in commands(ln))
 
 
 def installs_directory(lines, action):
-    """True when one logical line takes the whole action directory.
+    """True when ONE COMMAND takes the whole action directory.
 
-    `templates/actions/<a>/**` -> `.github/actions/<a>/**` covers every sibling
-    including ones added later, which is why it is accepted in place of naming
-    each file -- and why the refresh row was moved to it in round 35.
+    Taking the directory covers every sibling, including ones added later, which
+    is why it is accepted in place of naming each file -- and why the refresh row
+    moved to it in #347 round 35.
+
+    RECOGNISED AS A PROPERTY, NOT AS A COMMAND LIST. The first version required
+    the documentation's own `/**` glob, so `cp -R templates/actions/ui-suite/.
+    .github/actions/ui-suite/` -- which copies every sibling -- was refused
+    (Codex, #354). Listing `cp -R`, `rsync -a`, `cp -a`, … would be the same
+    mistake with a longer list: a text form standing in for the construct, which
+    is the shape of every false refusal this family of guards has produced.
+
+    So the rule is what the command NAMES: the action directory as a source and
+    the install directory as a destination, each as a DIRECTORY rather than as
+    one file inside it. `templates/actions/<a>/**`, `.../ui-suite/.`,
+    `.../ui-suite/` and a bare `.../ui-suite` all qualify; a path continuing into
+    a filename does not.
     """
     esc = re.escape(action)
-    src = re.compile(rf"{re.escape(ACTIONS_DIR)}/(?:{esc}|{PLACEHOLDER})/\*\*")
-    dst = re.compile(rf"{re.escape(INSTALL_DIR)}/(?:{esc}|{PLACEHOLDER})/\*\*")
-    return any(src.search(ln) and dst.search(ln) for ln in lines)
+    # A directory reference: the path ENDS there, or ends with a separator
+    # followed by only `.`, `*` or `**`. Spelled as an explicit alternation
+    # because an optional tail with a `(?![\w.-])` lookahead also matched the
+    # DIRECTORY PREFIX of a longer file path -- `templates/actions/ui-suite` out
+    # of `templates/actions/ui-suite/action.yml` -- so a carrier naming only
+    # `action.yml` counted as taking the whole directory and four cases that
+    # should have refused passed instead. Found by the cases, not by reading.
+    tail = r"(?:(?![\w.\-/])|/(?:\.|\*\*?)?(?![\w.\-/]))"
+    src = re.compile(rf"(?<![\w.-]){re.escape(ACTIONS_DIR)}/(?:{esc}|{PLACEHOLDER}){tail}")
+    dst = re.compile(rf"(?<![\w.-]){re.escape(INSTALL_DIR)}/(?:{esc}|{PLACEHOLDER}){tail}")
+    return any(src.search(cmd) and dst.search(cmd)
+               for ln in lines for cmd in commands(ln))
 
 
 def main():
@@ -156,10 +244,12 @@ def main():
 
     composites = sorted(
         p for p in tracked
-        if p.startswith(f"{ACTIONS_DIR}/") and p.endswith("/action.yml")
+        if p.startswith(f"{ACTIONS_DIR}/")
+        and any(p.endswith(f"/{m}") for m in MANIFESTS)
     )
     if not composites:
-        print(f"check-action-siblings: FAILED\n  - no {ACTIONS_DIR}/*/action.yml is tracked")
+        print("check-action-siblings: FAILED\n  - no "
+              f"{ACTIONS_DIR}/*/{{{','.join(MANIFESTS)}}} is tracked")
         print("    The reference set is derived from the composites; with none")
         print("    found this check has nothing to look at and must not pass.")
         return 1
@@ -198,7 +288,25 @@ def main():
         with open(os.path.join(ROOT, composite), encoding="utf-8") as handle:
             body = handle.read()
 
-        for name in sorted(set(REFERENCE.findall(body))):
+        # FROM WHAT THE ACTION RUNS, not from its text. Scanning the raw manifest
+        # made a comment or a description holding an obsolete example -- say
+        # `$GITHUB_ACTION_PATH/removed.py` -- into a required sibling, failing the
+        # gate over a file the composite never runs and blocking unrelated
+        # documentation edits (Codex, #354).
+        refs = set()
+        try:
+            manifest = yaml.safe_load(body)
+        except yaml.YAMLError as exc:
+            problems.append(
+                f"{composite} is not readable as YAML: {exc}"
+                + "\n    The reference set is derived from what the action RUNS, so a"
+                + "\n    manifest this cannot parse is CANNOT CHECK, never OK."
+            )
+            manifest = None
+        for run in run_values(manifest):
+            refs.update(REFERENCE.findall(run))
+
+        for name in sorted(refs):
             found.append((action, name))
 
             sibling = f"{ACTIONS_DIR}/{action}/{name}"

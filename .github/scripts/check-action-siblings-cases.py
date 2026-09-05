@@ -78,8 +78,14 @@ REFRESH_DOC = """\
 """
 
 
+NEW_REPO_DOC = """\
+Copy `templates/actions/<a>/**` into `.github/actions/<a>/**` — the whole
+directory, not just `action.yml`.
+"""
+
+
 def build(tmp, *, composite=COMPOSITE, setup=SETUP_DOC, refresh=REFRESH_DOC,
-          sibling="ok\n", track_sibling=True, extra=None):
+          newrepo=NEW_REPO_DOC, sibling="ok\n", track_sibling=True, extra=None):
     """Write a fixture repo and return its path. `None` for a file omits it."""
     root = tempfile.mkdtemp(dir=tmp)
     def write(rel, text):
@@ -94,6 +100,8 @@ def build(tmp, *, composite=COMPOSITE, setup=SETUP_DOC, refresh=REFRESH_DOC,
         write("docs/standards/cicd-setup.md", setup)
     if refresh is not None:
         write("plugins/directives-toolkit/commands/refresh-repo.md", refresh)
+    if newrepo is not None:
+        write("plugins/directives-toolkit/commands/new-repo.md", newrepo)
     for rel, text in (extra or {}).items():
         write(rel, text)
 
@@ -209,6 +217,75 @@ def main():
             ("a composite with no sibling reference — accepted, and says so",
              dict(composite=PLAIN_COMPOSITE, sibling=None),
              0, "NOT EXERCISED"),
+
+            # ── #354 round 1: seven findings, every one about MATCHING ───────
+            # A path token ends where a filename character stops. A substring
+            # test read a line naming `<file>.bak` as installing `<file>`, so a
+            # carrier that copies a backup and nothing else passed.
+            ("a carrier naming only a .bak of the sibling — refused",
+             dict(setup=SETUP_DOC.replace("validate-report-path.py", "validate-report-path.py.bak")),
+             1, "does not install"),
+
+            # An install is ONE COMMAND. `curl <src> -o /tmp/x; rm -f <dst>` has
+            # both halves on one logical line, and the only command naming the
+            # destination deletes it.
+            ("source and destination in two commands on one line — refused",
+             dict(setup="```bash\ncurl https://x/templates/actions/ui-suite/validate-report-path.py -o /tmp/x; rm -f .github/actions/ui-suite/validate-report-path.py\n```\n"),
+             1, "does not install"),
+
+            # …but a `|` is NOT a command separator here: one carrier states its
+            # installs as a markdown table, and splitting on the column
+            # separator refused a carrier that was correct. This case is the
+            # regression I introduced fixing the one above.
+            ("a markdown table row is one install, not two commands — accepted",
+             dict(refresh="| `templates/actions/<a>/**` | `.github/actions/<a>/**` | notes |\n"),
+             0, "each tracked and installed"),
+
+            # A whole-directory copy is recognised by WHAT IT NAMES, not by the
+            # command. Requiring the documentation's `/**` refused `cp -R`,
+            # which copies every sibling — a text form standing in for the
+            # construct, the shape of every false refusal in this family.
+            ("a recursive cp of the action directory — accepted",
+             dict(setup="```bash\ncp -R templates/actions/ui-suite/. .github/actions/ui-suite/\n```\n"),
+             0, "each tracked and installed"),
+            ("an rsync of the action directory — accepted",
+             dict(setup="```bash\nrsync -a templates/actions/ui-suite/ .github/actions/ui-suite/\n```\n"),
+             0, "each tracked and installed"),
+
+            # The context form means the same thing as the environment variable.
+            # Deriving only the latter left a sibling referenced this way absent
+            # from git and every carrier, with the guard exiting 0.
+            ("a ${{ github.action_path }} reference is derived too",
+             dict(composite=COMPOSITE.replace(
+                 '"$GITHUB_ACTION_PATH/validate-report-path.py"',
+                 '"${{ github.action_path }}/validate-report-path.py"'),
+                 sibling=None),
+             1, "is not tracked"),
+
+            # GitHub accepts action.yaml; filtering to action.yml skipped such a
+            # composite, and because another action.yml existed the empty-set
+            # refusal did not fire either.
+            ("an action.yaml manifest is read like an action.yml",
+             dict(composite=None, sibling=None,
+                  extra={"templates/actions/other/action.yaml": COMPOSITE}),
+             1, "is not tracked"),
+
+            # References come from what the action RUNS. Scanning raw text made
+            # an obsolete example in a comment into a required sibling, failing
+            # the gate over a file the composite never runs.
+            ("a stale example in a comment is not a reference",
+             dict(composite=COMPOSITE + "\n# once ran $GITHUB_ACTION_PATH/removed.py\n"),
+             0, "each tracked and installed"),
+            ("a manifest that is not YAML — refused, never OK",
+             dict(composite="runs: [this: is: not: yaml\n"),
+             1, "not readable as YAML"),
+
+            # The third carrier. /new-repo bootstraps projects independently, so
+            # a regression there ships every NEW project a broken composite
+            # while the other two carriers stay correct.
+            ("the new-repo carrier naming only action.yml — refused",
+             dict(newrepo="Copy `templates/actions/<a>/action.yml` to `.github/actions/<a>/action.yml`.\n"),
+             1, "new-repo.md does not install"),
 
             # ── nothing to check at all is not a pass ────────────────────────
             ("no composite is tracked — refused",

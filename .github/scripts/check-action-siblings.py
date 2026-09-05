@@ -1,68 +1,64 @@
 #!/usr/bin/env python3
-r"""Guard: every file a composite runs by path is tracked and ships with it.
+r"""Guard: nothing in a composite action's directory is left behind.
 
 WHY IT EXISTS (#353, from #347 round 35). `ui-suite/action.yml` runs, at its
-`Validate report-path` step,
+`Validate report-path` step, a file that lives beside it:
 
     run: python3 "$GITHUB_ACTION_PATH/validate-report-path.py"
 
 and both documented install carriers copied only `action.yml`. Every project
 installing or refreshing the composite got a directory holding the YAML alone,
-so every UI job would have died at that step -- after Node setup, dependency
-install and the browser download, which is minutes of CI spent to reach a
-missing file. (An earlier version of this comment said "its first step"; it is
-step 6 of 11. The failure is not first, it is late and expensive.) The
-composite was correct,
-the file was committed, and it reached nobody.
+so every UI job died at that step -- after Node setup, dependency install and
+the browser download, which is minutes of CI spent to reach a missing file. The
+composite was correct, the file was committed, and it reached nobody.
 
 Nothing else catches that class: `check-refresh-derivation.py` derives the
 referenced-script set as `.github/scripts/*`, and an action-path sibling is not
-in that set by construction. It is #321 one level in -- there a script the
-WORKFLOW named went missing on a downstream refresh; here a script the COMPOSITE
-names.
+in that set by construction. It is #321 one level in.
 
-WHAT IT CHECKS. For every `$GITHUB_ACTION_PATH/<file>` this DERIVES from the
-shipped composites, the file must be TRACKED at `templates/actions/<a>/<file>`.
-Tracked, not merely present: an untracked file passes an existence check on the
-machine that wrote it and ships to nobody -- the gate's own fail-open family
-(#325, where `git ls-files` not listing untracked paths meant the gate reported
-OK for the one file just added).
+WHAT IT CHECKS, AND WHY IT NO LONGER READS SHELL
+------------------------------------------------
+Every file inside `templates/actions/<a>/` must be TRACKED. That is the whole
+rule. It reads no `run:` bodies, resolves no variables, and knows nothing about
+shells.
 
-WHAT IT DELIBERATELY DOES NOT CHECK, AND WHY THAT IS THE POINT
---------------------------------------------------------------
-An earlier version also read the install carriers -- `cicd-setup.md`,
-`refresh-repo.md`, `new-repo.md` -- and tried to decide whether each *installs*
-the derived sibling. That half was removed on the owner's ruling after producing
-defects in three consecutive review rounds:
+Two earlier designs did read them, and both failed the same way:
 
-    round 1  seven findings, five of them one shape: a text form standing in
-             for the construct it stands for
-    round 2  seven more, six of them defects round 1 introduced --
-             a reversed `cp` direction accepted; `/` missing from a path
-             boundary so `<file>/backup` matched; `*` accepted as wholesale
-             though it omits dotfiles; env-bound references invisible because
-             the scan had been narrowed to `run:` values
+    the CARRIER half   asked "does this English paragraph install this file?"
+                       -- three rounds, fourteen findings, removed on the
+                       owner's ruling
+    the DERIVATION     asked "which files does this shell command name?"
+                       -- four rounds. Round 4 alone: `$TOOL` corrupting
+                       `$TOOL_DIR` during substitution; `working-directory:
+                       ${{ github.action_path }}` with a bare relative command;
+                       `"$GITHUB_ACTION_PATH/x.py".bak` concatenation; `shell:
+                       pwsh.exe {0}` slipping past a three-token allowlist;
+                       `$GITHUB_ACTION_PATH/./x.py` refused though tracked; and
+                       an UNUSED env binding inventing a dependency
 
-The question it was asking -- *"does this English paragraph install this
-file?"* -- has no reliable answer from text. Each fix bought the next false
-accept or false refusal, and a guard that is sometimes wrong in the CERTIFYING
-direction is worse than no guard, because it is read as coverage.
+Both are the same question in different clothes -- *what does this text mean?* --
+and every answer bought the next false accept or false refusal. So the question
+changed. "Is every file in this directory tracked" needs no parser, has no
+syntax to miss, and cannot be defeated by a spelling nobody thought of. It is
+also STRICTLY BROADER than the derivation was: a sibling nothing references yet
+is caught too, and that is the state a half-finished change leaves behind.
 
-So this file now asserts only what it can establish exactly. Whether a carrier
-installs the sibling is left to review, and the two questions differ in kind:
-"is this file in git" is decidable; "does this prose install it" is not.
+WHAT THAT COSTS, STATED PLAINLY. It no longer notices a composite naming a file
+that was never created at all. That failure is loud on the first run of the
+composite; the failure this guard exists for -- a file that exists, works
+locally, and silently never ships -- is the quiet one, and it is the one still
+covered. A whole class of parser defects traded for the early warning on a
+failure that announces itself. That is the deal, made deliberately.
 
-If that half is ever rebuilt, the lesson to carry is not "match more forms" --
-that was tried twice. It is that carrier text is the wrong input, and the right
-one would be an observable artefact of an install actually happening.
+INTENT-TO-ADD IS NOT TRACKED. `git add -N` records that a path WILL be added and
+puts it in `git ls-files`, while its content is absent from the tree that gets
+committed -- so the advertised post-`git add` gate would pass a sibling that
+still does not ship (Codex, #354). The index's staged blob is read instead.
 """
 
 import os
-import re
 import subprocess
 import sys
-
-import yaml
 
 ROOT = (
     os.path.abspath(sys.argv[1]) if len(sys.argv) > 1
@@ -71,202 +67,85 @@ ROOT = (
 
 ACTIONS_DIR = "templates/actions"
 
-# A composite names its own directory two ways, and they mean the same thing:
-# the environment variable `$GITHUB_ACTION_PATH` (any bracing, and optionally
-# quoted before the slash) and the expression context `${{ github.action_path }}`.
-# Deriving only the first left a sibling referenced the other way invisible, with
-# the guard reporting NOT EXERCISED and exiting 0 (Codex, #354).
-#
-# `<` and `>` end the name too: `python $GITHUB_ACTION_PATH/helper.py>out` is
-# ordinary Bash, and without them the capture was `helper.py>out` -- a file that
-# cannot exist, so the gate refused a composite whose helper WAS tracked
-# (Codex, #354). A false refusal, and this repo has produced nine of them.
-REFERENCE = re.compile(
-    r"""(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})"""
-    r"""["']?/([^\s"';|)&<>]+)"""
-)
-
-# GitHub accepts both manifest spellings. Filtering to one meant a composite
-# using the other was skipped, and because another `action.yml` existed the
-# empty-set refusal did not fire either (Codex, #354).
-MANIFESTS = ("action.yml", "action.yaml")
-
-# The reference syntaxes above are POSIX-shell. A `pwsh` step spells the same
-# dependency `$env:GITHUB_ACTION_PATH\helper.ps1` or
-# `${{ github.action_path }}\helper.ps1` -- a backslash separator and a different
-# variable syntax, neither of which this file parses. Rather than report
-# NOT EXERCISED and pass (fail-open for a shape it simply cannot read), a step
-# using one of these refuses. This repo ships no such composite; the refusal
-# exists so that adding one is a decision somebody makes, not a silent gap
-# (Codex, #354).
-UNPARSED_SHELLS = ("pwsh", "powershell", "cmd")
-
-# Marks a step this file cannot read. Carried out of run_values() rather than
-# raised, so the caller reports it as a refusal with the composite named.
-UNPARSED = object()
+# Not shipped, and not anybody's mistake: build artefacts that appear beside a
+# validator when it runs. Named because they are the everyday reason a directory
+# scan would otherwise be noisy -- not as an exception to the rule.
+IGNORED_DIRS = ("__pycache__", ".pytest_cache")
 
 
-def strip_shell_comments(body):
-    """Drop whole-line `#` comments from a run block.
-
-    A `run: |` block keeps its comments in the parsed string, so a stale example
-    in one still matched and the gate demanded a file the shell never touches
-    (Codex, #354) -- the same defect the raw-YAML fix addressed, one level in.
-
-    WHOLE-LINE ONLY. A trailing `#` can sit inside a quoted string or a URL
-    fragment, and deciding that needs a shell parser; dropping only lines whose
-    first non-space character is `#` is exactly what those lines are, and claims
-    nothing about the rest.
-    """
-    return "\n".join(
-        line for line in body.split("\n") if not line.lstrip().startswith("#")
-    )
-
-
-def run_values(manifest):
-    """Every string a composite EXECUTES: `runs.steps[].run`, plus the step `env`
-    values those commands can read.
-
-    Derived from what the action runs, not from its text. Scanning the raw
-    manifest made an obsolete example in a comment into a required sibling,
-    failing the gate over a file the composite never runs. But narrowing to `run`
-    alone then missed a step binding `HELPER: ${{ github.action_path }}/x.py` and
-    running `python "$HELPER"` -- an executable dependency the scan could not see
-    (Codex, #354). Both are executable inputs; neither comments nor `description`
-    are.
-    """
-    if not isinstance(manifest, dict):
-        return []
-    runs = manifest.get("runs")
-    steps = runs.get("steps") if isinstance(runs, dict) else None
-    if not isinstance(steps, list):
-        return []
-    out = []
-    for step in steps:
-        if not isinstance(step, dict):
-            continue
-        shell = step.get("shell")
-        if isinstance(shell, str) and shell.split()[0].lower() in UNPARSED_SHELLS:
-            out.append(UNPARSED)
-            continue
-        env = step.get("env") if isinstance(step.get("env"), dict) else {}
-        env = {k: v for k, v in env.items() if isinstance(v, str)}
-        out.extend(env.values())
-        if isinstance(step.get("run"), str):
-            # SUBSTITUTE THE STEP'S OWN env FIRST. A binding can hold the
-            # DIRECTORY rather than the whole path --
-            # `ACTION_DIR: ${{ github.action_path }}` with
-            # `run: python "$ACTION_DIR/helper.py"` -- and scanning the two
-            # strings independently finds a complete reference in neither, so the
-            # guard passed with `helper.py` untracked (Codex, #354). Round 2 added
-            # env values to the scan and stopped there; joining them is what makes
-            # the dependency visible.
-            body = strip_shell_comments(step["run"])
-            for name, value in env.items():
-                for form in (f"${{{name}}}", f'"${name}"', f"${name}"):
-                    body = body.replace(form, value)
-            out.append(body)
-    return out
-
-
-def tracked_files():
-    """Every path git knows about. NOT a directory walk.
-
-    A walk sees the file you just created and have not staged; the carriers fetch
-    from the REPOSITORY, so a path git does not track is a path no downstream
-    project can receive. `__pycache__` beside a shipped validator is the everyday
-    version of this.
-    """
-    # `-z`, because git C-QUOTES non-ASCII paths by default: a tracked `café.py`
-    # comes back as `"caf\303\251.py"`, which never equals the Unicode name
-    # derived from the manifest, and the gate refuses a file that IS tracked
-    # (Codex, #354). NUL-delimited output is the raw bytes, no quoting to undo.
-    out = subprocess.run(
-        ["git", "-C", ROOT, "ls-files", "-z"],
+def git(*args):
+    return subprocess.run(
+        ["git", "-C", ROOT, *args],
         check=True, capture_output=True, text=True,
     ).stdout
-    return set(p for p in out.split("\0") if p)
+
+
+def staged_blobs():
+    """Path -> staged blob id, for everything in the index.
+
+    `ls-files -s` prints the blob each path is staged with. An intent-to-add
+    entry (`git add -N`) is recorded against the EMPTY blob, so it shows up here
+    as the placeholder it is rather than as a file that will ship.
+
+    `-z`, because git C-quotes non-ASCII paths by default: a tracked `café.py`
+    comes back as `"caf\303\251.py"` and never equals the name on disk.
+    """
+    out = git("ls-files", "-s", "-z")
+    blobs = {}
+    for entry in out.split("\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition("\t")
+        parts = meta.split()
+        if len(parts) >= 2 and path:
+            blobs[path] = parts[1]
+    return blobs
+
+
+def files_on_disk():
+    """Every real file under the action directories, ignoring build artefacts."""
+    base = os.path.join(ROOT, ACTIONS_DIR)
+    if not os.path.isdir(base):
+        return []
+    found = []
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS]
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            found.append(os.path.relpath(full, ROOT).replace(os.sep, "/"))
+    return sorted(found)
 
 
 def main():
-    tracked = tracked_files()
-    problems = []
-
-    composites = sorted(
-        p for p in tracked
-        if p.startswith(f"{ACTIONS_DIR}/")
-        and any(p.endswith(f"/{m}") for m in MANIFESTS)
-    )
-    if not composites:
+    disk = files_on_disk()
+    if not disk:
         print("check-action-siblings: FAILED")
-        print(f"  - no {ACTIONS_DIR}/*/{{{','.join(MANIFESTS)}}} is tracked")
-        print("    The reference set is derived from the composites; with none found")
-        print("    this check has nothing to look at and must not pass.")
+        print(f"  - {ACTIONS_DIR}/ holds no files")
+        print("    This exists to notice a file left behind there; with the directory")
+        print("    empty it has nothing to look at, and that is not a pass.")
         return 1
 
-    found = []
-    for composite in composites:
-        # The directory HOLDING the manifest, indexed from the right: an index
-        # from the left silently reads `actions` out of the path prefix.
-        action = composite.split("/")[-2]
-        # FROM THE INDEX, NOT THE WORKING TREE. `git ls-files` answers what is
-        # STAGED, and the documented local gate runs after `git add` -- so
-        # reading the manifest with open() mixed two git states: a staged
-        # manifest referencing `missing.py` could be committed clean because an
-        # unstaged edit had already removed the reference (Codex, #354). One
-        # state for both inputs, or the check is about a tree that exists
-        # nowhere.
-        try:
-            body = subprocess.run(
-                ["git", "-C", ROOT, "show", f":{composite}"],
-                check=True, capture_output=True, text=True,
-            ).stdout
-        except subprocess.CalledProcessError as exc:
-            problems.append(
-                f"{composite} is tracked but could not be read from the index: {exc}"
-                + "\n    Reading it from the working tree instead would check a different"
-                + "\n    git state than the membership test above; that is CANNOT CHECK."
-            )
-            continue
+    blobs = staged_blobs()
+    empty_blob = git("hash-object", "-t", "blob", os.devnull).strip()
 
-        try:
-            manifest = yaml.safe_load(body)
-        except yaml.YAMLError as exc:
+    problems = []
+    for path in disk:
+        blob = blobs.get(path)
+        if blob is None:
             problems.append(
-                f"{composite} is not readable as YAML: {exc}"
-                + "\n    The reference set is derived from what the action RUNS, so a"
-                + "\n    manifest this cannot parse is CANNOT CHECK, never OK."
+                f"{path} is not tracked"
+                + "\n    It sits in a composite's directory, so a carrier copying that"
+                + "\n    directory expects to find it -- but it ships to nobody. Present"
+                + "\n    and untracked looks identical to correct on the machine that"
+                + "\n    wrote it (#325, #353). `git add` it, or delete it."
             )
-            continue
-
-        refs = set()
-        unreadable = False
-        for value in run_values(manifest):
-            if value is UNPARSED:
-                unreadable = True
-                continue
-            refs.update(REFERENCE.findall(value))
-        if unreadable:
+        elif blob == empty_blob and os.path.getsize(os.path.join(ROOT, path)) > 0:
             problems.append(
-                f"{composite} has a step whose shell this guard cannot read"
-                + f"\n    ({', '.join(UNPARSED_SHELLS)} spell an action-path reference with a"
-                + "\n    backslash separator and `$env:` syntax, which the derivation does not"
-                + "\n    parse). Reporting NOT EXERCISED here would be a pass for a shape this"
-                + "\n    file simply cannot see, so it refuses instead. Teach the derivation"
-                + "\n    that syntax, or keep composite steps on a POSIX shell."
+                f"{path} is INTENT-TO-ADD, not tracked"
+                + "\n    `git add -N` records that the path will be added; its content is"
+                + "\n    not in the tree that gets committed, so the file still does not"
+                + "\n    ship. Stage it properly (Codex, #354)."
             )
-            continue
-
-        for name in sorted(refs):
-            found.append((action, name))
-            sibling = f"{ACTIONS_DIR}/{action}/{name}"
-            if sibling not in tracked:
-                problems.append(
-                    f"{composite} runs $GITHUB_ACTION_PATH/{name}, but {sibling} is not tracked"
-                    + "\n    Present-but-untracked ships to nobody and looks identical to"
-                    + "\n    correct on the machine that wrote it. `git add` it, or fix the"
-                    + "\n    reference."
-                )
 
     if problems:
         print("check-action-siblings: FAILED")
@@ -274,22 +153,16 @@ def main():
             print(f"  - {problem}")
         return 1
 
-    if not found:
-        print(
-            f"check-action-siblings: OK — {len(composites)} composite(s), "
-            "none references a $GITHUB_ACTION_PATH sibling"
-        )
-        print("  NOT EXERCISED: the rule stands for the first composite that adds one.")
-        return 0
-
+    actions = sorted({p.split("/")[2] for p in disk if len(p.split("/")) > 2})
     print(
-        f"check-action-siblings: OK — {len(found)} sibling(s) derived from "
-        f"{len(composites)} composite(s), each tracked"
+        f"check-action-siblings: OK — {len(disk)} file(s) across {len(actions)} "
+        "action(s), every one tracked"
     )
-    print("  (tracked only. Whether a carrier INSTALLS them is not checked here —")
-    print("   that question is not decidable from carrier prose; see this file's header.)")
-    for action, name in found:
-        print(f"  {ACTIONS_DIR}/{action}/{name}")
+    print("  (tracked only. This reads no `run:` bodies and resolves no variables:")
+    print("   whether a carrier INSTALLS these, and whether a composite names a file")
+    print("   that does not exist, are both outside it — see this file's header.)")
+    for path in disk:
+        print(f"  {path}")
     return 0
 
 

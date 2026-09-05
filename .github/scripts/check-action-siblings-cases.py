@@ -49,7 +49,7 @@ runs:
 
 def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=False,
           symlinks=None, unstaged_symlinks=None, conflicted=False,
-          raw_files=None, unreadable=None):
+          raw_files=None, raw_unstaged=None, unreadable=None):
     """A fixture repo.
 
     `files`             written and staged
@@ -58,7 +58,8 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
     `symlinks`          {link: target} created BEFORE the add, so git stores them
     `unstaged_symlinks` {link: target} created after, so git does not
     `conflicted`        left mid-merge, so `git write-tree` cannot run
-    `raw_files`         {bytes path: bytes} — a name Python cannot hold as str
+    `raw_files`         {bytes path: bytes} — a name Python cannot hold as str, STAGED
+    `raw_unstaged`      the same, written after the add, so git never sees it
     `unreadable`        directory paths chmod'd 000 after everything else
     """
     root = tempfile.mkdtemp(dir=tmp)
@@ -95,6 +96,8 @@ def build(tmp, *, files=None, unstaged=None, intent_to_add=None, empty_actions=F
         write(rel, text)
     for rel, target in (unstaged_symlinks or {}).items():
         link(rel, target)
+    for rel_bytes, data in (raw_unstaged or {}).items():
+        write_raw(rel_bytes, data)
 
     # Present on disk, and in `git ls-files` -- but staged against the EMPTY
     # blob, so its content is not in the tree that gets committed.
@@ -333,12 +336,22 @@ def main():
                        "PYTHONCOERCECLOCALE": "0", "PYTHONIOENCODING": ""}),
              0, "every one in the tree"),
 
-            ("...and so does a refusal naming a non-UTF-8 path",
-             dict(raw_files={b"templates/actions/ui-suite/keep-\xff.sh": b"ok\n"},
-                  unstaged={"templates/actions/ui-suite/plain.sh": "ok\n"},
+            # ⚠️ THIS CASE PROVED NOTHING AS FIRST WRITTEN. The non-UTF-8 file was
+            # written before `git add -A`, so it was TRACKED, and the only
+            # untracked path in the refusal was an ordinary ASCII `plain.sh` —
+            # the surrogate-escaped name never reached the output at all, and the
+            # behaviour the label names went unexercised. Asserting only "would
+            # NOT be committed" hid that (Codex, #354 round 8).
+            #
+            # The non-UTF-8 file is the UNTRACKED one now, and the assertion is
+            # the byte itself: this is the path that has to survive being printed
+            # to a strict ASCII stdout, and nothing else in the message would.
+            ("...and so does a refusal that must PRINT a non-UTF-8 path",
+             dict(files={"templates/actions/ui-suite/validate-report-path.py": "ok\n"},
+                  raw_unstaged={b"templates/actions/ui-suite/gone-\xff.sh": b"ok\n"},
                   env={"LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0",
                        "PYTHONCOERCECLOCALE": "0", "PYTHONIOENCODING": ""}),
-             1, "would NOT be committed"),
+             1, "gone-\udcff.sh would NOT be committed"),
 
             # ── the CANNOT CHECK message must survive its own subject ───────
             # `write-tree` kept text=True after `ls-tree` was converted, and git

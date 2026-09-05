@@ -41,10 +41,11 @@ const LADDER = process.env.BROWSER_LADDER_BIN
   || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
-  resolvePlaywright } = require(LADDER);
+  resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf } = require(LADDER);
 import { tmpdir } from 'os';
-import { existsSync, mkdtempSync, mkdirSync, realpathSync, writeFileSync } from 'fs';
-import { spawnSync } from 'child_process';
+import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'fs';
+import { spawn as spawnProcess, spawnSync } from 'child_process';
+import { EventEmitter } from 'events';
 
 const OK = { ok: true, error: null };
 const fail = (msg) => ({ ok: false, error: msg });
@@ -289,7 +290,7 @@ function eq(actual, expected, what) {
   // and the launch fails for a reason the ladder caused.
   await check('a noisy installer is not truncated or killed by the ladder', async () => {
     // ~4 MiB on stdout — comfortably past the old default, well inside the new.
-    const out = realInstall(['node', '-e', "process.stdout.write('x'.repeat(4*1024*1024))"]);
+    const out = await realInstall(['node', '-e', "process.stdout.write('x'.repeat(4*1024*1024))"]);
     eq(out.code, 0, 'the child ran to completion');
     eq(out.interrupted, undefined, 'and was not interrupted');
     if (out.output.length < 4 * 1024 * 1024) {
@@ -407,18 +408,18 @@ function eq(actual, expected, what) {
     return m ? m[1] : null;
   };
 
-  await check('the installer runs in the directory it is given', () => {
+  await check('the installer runs in the directory it is given', async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-cwd-')));
-    const out = realInstall(CWD_PROBE, dir);
+    const out = await realInstall(CWD_PROBE, dir);
     const seen = readCwd(out.output);
     if (seen !== dir) {
       throw new Error(`installer ran in ${JSON.stringify(seen)}, expected ${dir}`);
     }
   });
 
-  await check('and it does NOT silently fall back to the process cwd', () => {
+  await check('and it does NOT silently fall back to the process cwd', async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-cwd2-')));
-    const out = realInstall(CWD_PROBE, dir);
+    const out = await realInstall(CWD_PROBE, dir);
     const seen = readCwd(out.output);
     // Positive assertion, not a negative one: the output must BE the given
     // directory. `!== process.cwd()` was satisfied by any noise at all.
@@ -641,15 +642,51 @@ function eq(actual, expected, what) {
   // timeout -- a fact about Node, not about this file. Codex measured the
   // consequence: deleting `timeout: INSTALL_TIMEOUT_MS` from `realInstall` left
   // all 42 cases green (#355 round 7). The case now inspects the SHIPPED call.
-  await check('realInstall passes the module bound to the installer it spawns', () => {
+  await check('realInstall spawns npx detached, in the directory it was given', async () => {
     let seen = null;
-    realInstall(['playwright', 'install', 'chromium'], '/tmp',
-      { spawn: (cmd, argv, opts) => { seen = { cmd, argv, opts }; return { status: 0, stdout: '', stderr: '' }; } });
+    await realInstall(['playwright', 'install', 'chromium'], '/tmp', {
+      spawn: (cmd, argv, opts) => {
+        seen = { cmd, argv, opts };
+        const child = new EventEmitter();
+        child.pid = 4242;
+        child.stdout = null;
+        child.stderr = null;
+        setImmediate(() => child.emit('close', 0, null));
+        return child;
+      },
+    });
     eq(seen.cmd, 'npx', 'the command');
     eq(seen.argv, ['playwright', 'install', 'chromium'], 'the argv');
-    eq(seen.opts.timeout, INSTALL_TIMEOUT_MS, 'the bound actually reaches the child');
-    eq(seen.opts.maxBuffer, INSTALL_MAX_BUFFER, 'and so does the buffer');
-    eq(seen.opts.cwd, '/tmp', 'and the directory it was given');
+    eq(seen.opts.cwd, '/tmp', 'the directory it was given');
+    // DETACHED IS THE MECHANISM, not a detail: without its own process group
+    // there is nothing to kill but the direct child, and `--with-deps` spawns
+    // apt beneath it.
+    eq(seen.opts.detached, true, 'the installer gets its own process group');
+  });
+
+  // THE BOUND MUST REACH THE GROUP, and only a real child can show that. The
+  // fake `npx` below leaves a grandchild that outlives it; before this round it
+  // wrote its marker two seconds AFTER realInstall had returned "interrupted"
+  // and the ladder had climbed on (Codex, #355).
+  await check('a timed-out installer takes its whole process tree with it', async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-group-')));
+    const marker = join(dir, 'orphan.txt');
+    const fake = join(dir, 'npx');
+    writeFileSync(fake, `#!/bin/sh\n( sleep 2; echo alive > ${marker} ) &\nsleep 30\n`, { mode: 0o755 });
+
+    const started = Date.now();
+    const out = await realInstall(['ignored'], dir, {
+      spawn: (cmd, argv, opts) => spawnProcess(fake, argv, opts),
+      timeout: 400,
+    });
+    if (Date.now() - started > 20000) throw new Error('the bound did not apply');
+    if (!out.interrupted) throw new Error('a killed installer must read as interrupted');
+
+    // Long enough that the orphan WOULD have written by now.
+    await new Promise((r) => setTimeout(r, 3000));
+    if (existsSync(marker)) {
+      throw new Error('a descendant of the installer outlived the bound that killed it');
+    }
   });
 
   await check('the bound is finite, and long enough that a slow download is not a hang', () => {
@@ -665,10 +702,10 @@ function eq(actual, expected, what) {
 
   // And the whole path end to end, through realInstall rather than beside it:
   // a real child that outruns the bound is killed and classified.
-  await check('a real installer that outruns realInstall\'s bound is killed and classified', () => {
+  await check('a real installer that outruns realInstall\'s bound is killed and classified', async () => {
     const started = Date.now();
-    const out = realInstall(['-e', 'setTimeout(() => {}, 60000)'], process.cwd(),
-      { spawn: (cmd, argv, opts) => spawnSync(process.execPath, argv, opts), timeout: 500 });
+    const out = await realInstall(['-e', 'setTimeout(() => {}, 60000)'], process.cwd(),
+      { spawn: (cmd, argv, opts) => spawnProcess(process.execPath, argv, opts), timeout: 500 });
     if (Date.now() - started > 30000) throw new Error('the bound did not apply');
     if (!out.interrupted) throw new Error('a killed child must read as interrupted');
     if (!out.reason) throw new Error('and it must record WHY it was cut short');
@@ -837,9 +874,108 @@ function eq(actual, expected, what) {
       env: { ...process.env, PATH: `${join(home, 'bin')}:${process.env.PATH}` },
     });
     eq(proc.status, 0, 'accepted');
-    if (!proc.stdout.includes(`the installer runs in ${nested}`)) {
-      throw new Error(`the installer must run in the named directory, which exists:\n${proc.stdout}`);
+    // THE INSTALLER RUNS IN THE PACKAGE'S TREE, not in the directory named.
+    // `npx` there finds `node_modules/.bin/playwright` with no search at all,
+    // and it is the same tree resolution used — which is the whole point, and
+    // the only way the symlink case can be made to agree.
+    if (!proc.stdout.includes(`the installer runs in ${home}`)) {
+      throw new Error(`the installer must run in the tree that owns the package:\n${proc.stdout}`);
     }
+    if (!proc.stdout.includes(`looking for playwright under ${nested}`)) {
+      throw new Error('the directory the caller named must still be where the search starts');
+    }
+  });
+
+  // ── #355 round 8: a symlinked --tests-dir must not split the trees ──────
+  // `createRequire` searches the ancestors of the LEXICAL path it is handed,
+  // while a process spawned with that path as `cwd` sees the CANONICAL target
+  // and searches ITS ancestors. Round 7's "one resolution, one base" still
+  // diverged there. Deriving the base from the resolved package makes both sides
+  // canonical by construction (Codex, #355).
+  await check('a symlinked --tests-dir resolves and installs on ONE tree', () => {
+    const real = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-real-')));
+    const lex = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-lex-')));
+    // ⚠️ THE PACKAGE LIVES IN THE SYMLINK'S *LEXICAL* TREE. I built this
+    // backwards the first time — package in the canonical tree — and got a
+    // CANNOT CHECK, which is a safe outcome and proves nothing. The divergence
+    // only exists this way round: `createRequire` searches the lexical
+    // ancestors and FINDS it, while a process given that path as `cwd` sees the
+    // canonical target and searches ancestors that do not have it.
+    const pkg = join(lex, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(real, 'tests'), { recursive: true });
+    mkdirSync(join(lex, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      'module.exports = { chromium: { launch: async () => ({ '
+      + 'newContext: async () => ({ close: async () => {} }), close: async () => {} }) } };\n');
+    writeFileSync(join(lex, 'bin', 'npx'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    // ...reached through a symlink pointing OUT of that tree.
+    const link = join(lex, 'tests-link');
+    symlinkSync(join(real, 'tests'), link);
+
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', link], {
+      encoding: 'utf8',
+      cwd: lex,
+      env: { ...process.env, PATH: `${join(lex, 'bin')}:${process.env.PATH}` },
+    });
+    eq(proc.status, 0, 'the stub browser launches');
+    const announced = /the installer runs in (.*), the same tree/.exec(proc.stdout);
+    if (!announced) throw new Error(`the run must name the installer's directory:\n${proc.stdout}`);
+    // The announced base must be the tree the package is really in. Handing the
+    // symlink itself to `npx` sends it to the canonical target, whose ancestors
+    // hold no playwright at all.
+    eq(announced[1], lex, 'the installer base is the tree the package is in');
+    if (!proc.stdout.includes(join(pkg, 'index.js'))) {
+      throw new Error(`the run must name where playwright actually came from:\n${proc.stdout}`);
+    }
+  });
+
+  // ── the probe is bounded, so a browser that stops answering cannot hang ──
+  // Playwright sends newContext() and close() with kNoTimeout, so bounding the
+  // INSTALLER did not make the ladder bounded (Codex, #355).
+  // ⚠️ THIS CASE MUST BOUND ITSELF, or it does not test a bound. The first
+  // version simply awaited `realLaunch` -- so against a mutant that removes the
+  // bound it HUNG TOO, and because a never-settling promise holds no handle, the
+  // whole suite exited 0 with no summary and the mutant reddened NOTHING.
+  // A case that shares the defect cannot detect it. The race below is the
+  // instrument; its timer is deliberately left ref'd so the failure is loud.
+  await check('a browser that never answers is a failure, not a hang', async () => {
+    const stub = { chromium: { launch: async () => ({
+      newContext: () => new Promise(() => {}),   // never settles
+      close: async () => {},
+    }) } };
+    const started = Date.now();
+    const raced = await Promise.race([
+      realLaunch('chromium', '.', stub)().then((out) => ({ out })),
+      new Promise((r) => setTimeout(() => r({ hung: true }), PROBE_TIMEOUT_MS + 10000)),
+    ]);
+    if (raced.hung) {
+      throw new Error(`realLaunch never returned — the probe is not bounded (${Date.now() - started} ms)`);
+    }
+    eq(raced.out.ok, false, 'verdict');
+    if (!/stopped answering/.test(raced.out.error)) {
+      throw new Error(`the reason must say it stopped answering, got: ${raced.out.error}`);
+    }
+  });
+
+  await check('the probe bound is finite and not so tight it fails a healthy browser', () => {
+    if (!PROBE_TIMEOUT_MS || PROBE_TIMEOUT_MS > 5 * 60 * 1000) {
+      throw new Error(`probe bound is ${PROBE_TIMEOUT_MS}; an unbounded probe hangs the ladder`);
+    }
+    if (PROBE_TIMEOUT_MS < 5 * 1000) {
+      throw new Error(`probe bound is ${PROBE_TIMEOUT_MS}; opening a context is local but not instant`);
+    }
+  });
+
+  // treeRootOf is the whole of fix 3, so it is pinned directly as well.
+  await check('treeRootOf names the tree a package lives in', () => {
+    eq(treeRootOf('/x/y/node_modules/playwright/index.js'), '/x/y', 'plain');
+    eq(treeRootOf('/x/node_modules/a/node_modules/playwright/index.js'), '/x/node_modules/a', 'nested');
+    eq(treeRootOf('/no/modules/here.js'), null, 'no node_modules — no answer');
+    eq(treeRootOf(''), null, 'empty');
+    eq(treeRootOf(null), null, 'absent');
   });
 
   if (failures.length) {

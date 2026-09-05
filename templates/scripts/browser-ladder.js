@@ -43,9 +43,9 @@
 
 'use strict';
 
-const { spawnSync } = require('child_process');
+const { spawn: spawnProcess, spawnSync } = require('child_process');
 const { createRequire } = require('module');
-const { dirname, join, resolve } = require('path');
+const { dirname, join, resolve, sep } = require('path');
 const { existsSync } = require('fs');
 
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
@@ -90,7 +90,7 @@ async function ladder({ browser, install, launch, log = () => {} }) {
     if (rung.argv) {
       const argv = rung.argv(browser);
       log(`  rung "${rung.name}": ${argv.join(' ')}`);
-      installed = install(argv);
+      installed = await install(argv);
       // DELIBERATELY NOT A BRANCH. A non-zero install is recorded and the ladder
       // continues to the launch: defect 2 was reading this exit code as the
       // answer, and defect 3 was letting the dependency phase's failure end the
@@ -319,19 +319,83 @@ function classifyInstall(proc) {
 // rung launches, and the launch failure that follows gets reported as a ceiling
 // (Codex, #355). Round 1 fixed where Playwright is RESOLVED and left where the
 // installer RUNS -- half a fix, which is how the same defect arrived twice.
+// A BOUND THAT LEAVES THE INSTALLER RUNNING IS NOT A BOUND. `spawnSync`'s
+// `timeout` kills the direct child only, and `playwright install --with-deps`
+// spawns apt (and sudo) beneath it -- so the ladder returned "interrupted",
+// climbed on and launched while a PRIVILEGED package manager was still
+// modifying the system and holding dpkg's locks. Measured here: `realInstall`
+// returned after 402 ms and an orphaned grandchild wrote its marker two seconds
+// later (Codex, #355).
+//
+// So the installer is started `detached`, which on POSIX gives it its own
+// process group, and the bound kills the GROUP with a signal it cannot catch.
+// That requires the asynchronous `spawn` -- `spawnSync` gives no handle to kill
+// while it is blocking -- so this returns a promise, and `ladder()` awaits it.
+//
 // `spawn` and `timeout` are injectable so the SHIPPED call can be inspected. The
 // first case for the bound called `spawnSync` itself with its own 500 ms
 // timeout, which proved that Node honours a timeout -- a fact about Node, not
-// about this file. Deleting `timeout: INSTALL_TIMEOUT_MS` from the line below
-// left all 42 cases green (Codex measured it, #355). A case that tests a COPY of
-// the call cannot notice the call changing.
-function realInstall(argv, cwd, { spawn = spawnSync, timeout = INSTALL_TIMEOUT_MS } = {}) {
-  return classifyInstall(spawn('npx', argv, {
-    encoding: 'utf8',
-    maxBuffer: INSTALL_MAX_BUFFER,
-    timeout,
-    cwd,
-  }));
+// about this file. Deleting the bound from the call left all 42 cases green
+// (Codex measured it, #355). A case that tests a COPY of the call cannot notice
+// the call changing.
+function killGroup(child) {
+  // The group id equals the pid of a detached leader. Falling back to the pid
+  // alone is strictly better than nothing when the platform has no groups.
+  try { process.kill(-child.pid, 'SIGKILL'); return; } catch { /* fall through */ }
+  try { child.kill('SIGKILL'); } catch { /* already gone */ }
+}
+
+function realInstall(argv, cwd, { spawn = spawnProcess, timeout = INSTALL_TIMEOUT_MS } = {}) {
+  return new Promise((settle) => {
+    let child;
+    try {
+      child = spawn('npx', argv, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (err) {
+      settle(classifyInstall({ status: null, signal: null, stdout: '', stderr: '', error: err }));
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+    let cause = null;
+    let done = false;
+
+    const collect = (stream, onto) => {
+      if (!stream) return;
+      stream.setEncoding('utf8');
+      stream.on('data', (chunk) => {
+        if (onto === 'out') stdout += chunk; else stderr += chunk;
+        // The buffer is a bound too, and overflowing it is an interruption
+        // rather than a truncation: a browser half-fetched cannot support a
+        // verdict either way.
+        if (stdout.length + stderr.length > INSTALL_MAX_BUFFER && !cause) {
+          cause = new Error(`the installer produced more than ${INSTALL_MAX_BUFFER} bytes`);
+          killGroup(child);
+        }
+      });
+    };
+    collect(child.stdout, 'out');
+    collect(child.stderr, 'err');
+
+    const timer = setTimeout(() => {
+      if (!cause) {
+        cause = Object.assign(
+          new Error(`the installer exceeded ${timeout} ms and its process group was killed`),
+          { code: 'ETIMEDOUT' },
+        );
+      }
+      killGroup(child);
+    }, timeout);
+
+    const finish = (status, signal, err) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      settle(classifyInstall({ status, signal, stdout, stderr, error: cause || err || null }));
+    };
+    child.on('error', (err) => finish(null, null, err));
+    child.on('close', (status, signal) => finish(status, signal, null));
+  });
 }
 
 // A MISSING HARNESS IS NOT A BROWSER CEILING, and it must not be reported as
@@ -347,6 +411,45 @@ function realInstall(argv, cwd, { spawn = spawnSync, timeout = INSTALL_TIMEOUT_M
 // and an unresolvable harness is its own outcome -- CANNOT CHECK, exit 2 --
 // never a launch failure.
 const DEFAULT_TESTS_DIR = '.github/scripts/ui-tests';
+
+// THE PROBE NEEDS ITS OWN BOUND. Playwright sends `newContext()` and
+// `context.close()` with `kNoTimeout`, so a browser that starts and then stops
+// answering the protocol -- alive, but not responding -- hangs this file
+// forever, before the next rung and before any verdict is printed. Bounding the
+// INSTALLER did not make the ladder bounded (Codex, #355); the launch side needs
+// the same treatment, and a diagnostic that can hang is not a diagnostic.
+//
+// Thirty seconds: opening an empty context is a local operation with no network
+// in it, so a browser that has not answered in that time is not slow, it has
+// stopped answering.
+const PROBE_TIMEOUT_MS = 30 * 1000;
+
+/**
+ * Resolve to `{ value }`, `{ error }` or `{ timedOut: true }`.
+ *
+ * WHAT THIS CANNOT DO, said plainly: cancel the underlying call. A `kNoTimeout`
+ * protocol request stays outstanding, and its handle can keep Node alive after
+ * the verdict is printed -- which is why the CLI flushes and then exits rather
+ * than waiting for the loop to drain. The bound buys a REPORT, not a clean
+ * teardown, and those are different things.
+ */
+function bounded(promise, ms) {
+  let timer = null;
+  const stop = () => { if (timer) clearTimeout(timer); };
+  return Promise.race([
+    Promise.resolve(promise).then(
+      (value) => { stop(); return { value }; },
+      (error) => { stop(); return { error }; },
+    ),
+    // ⚠️ NOT `unref()`ed. An unref'd timer does not keep Node alive, so if the
+    // awaited call is the only thing outstanding -- exactly the hang this bound
+    // exists for -- the process exits BEFORE the bound fires, with code 0 and no
+    // verdict. Measured: it ended this file's own case suite silently, mid-run.
+    // A bound that cannot fire is not a bound; the timer is cleared on every
+    // settled path instead, which is what keeps it from holding the loop open.
+    new Promise((res) => { timer = setTimeout(() => res({ timedOut: true }), ms); }),
+  ]);
+}
 
 // AN EXPLICIT DIRECTORY IS AUTHORITATIVE FOR RESOLUTION, NOT ONLY FOR EXISTENCE.
 // main() already refuses a --tests-dir the caller named that does not exist. This
@@ -368,6 +471,24 @@ const DEFAULT_TESTS_DIR = '.github/scripts/ui-tests';
 // `npx` walks ancestors the same way, so the nearest EXISTING ancestor of the
 // requested base resolves through exactly the chain `createRequire` used: the
 // directories that do not exist contribute nothing to either search.
+// THE TREE THE PACKAGE LIVES IN, derived from the package itself.
+// `/x/y/node_modules/playwright/index.js` -> `/x/y`. This is the directory whose
+// `node_modules` holds the module, so `npx` run there finds the same package's
+// local CLI -- no search, no ambiguity, and no second computation to diverge.
+//
+// It also closes the symlink case. `createRequire` searches the ancestors of the
+// LEXICAL path it is given, while a process spawned with that path as `cwd`
+// observes the CANONICAL target and searches ITS ancestors -- two different
+// trees again, and a Playwright resolved from one while the installer fetched
+// another (Codex, #355). `require.resolve` returns a real path, so the tree
+// derived from it is canonical by construction and both sides agree.
+function treeRootOf(packagePath) {
+  const parts = String(packagePath || '').split(sep);
+  const marker = parts.lastIndexOf('node_modules');
+  if (marker <= 0) return null;
+  return parts.slice(0, marker).join(sep) || sep;
+}
+
 function nearestExisting(dir) {
   let current = resolve(dir);
   for (;;) {
@@ -389,7 +510,10 @@ function resolvePlaywright(testsDir, explicit) {
       // directory so a reader can see both rather than infer one from the other.
       let packagePath = null;
       try { packagePath = require_.resolve('playwright'); } catch { /* informational only */ }
-      return { mod, asked, base: nearestExisting(asked), packagePath };
+      // The package's own tree when it can be derived; the nearest existing
+      // ancestor of what we asked for only when it cannot.
+      const base = treeRootOf(packagePath) || nearestExisting(asked);
+      return { mod, asked, base, packagePath };
     } catch (err) {
       tried.push(`${asked}: ${err.message.split('\n')[0]}`);
     }
@@ -428,13 +552,22 @@ function realLaunch(browser, testsDir, injected, explicit) {
           // cheapest operation that requires the process to still be answering,
           // which is the property "it launched" is supposed to mean.
           let error = null;
-          try {
-            const context = await b.newContext();
-            await context.close();
-          } catch (err) {
-            error = `the browser started but could not be used: ${(err && err.message) || err}`;
+          const opened = await bounded(b.newContext(), PROBE_TIMEOUT_MS);
+          if (opened.timedOut) {
+            error = `the browser started but stopped answering: no context after ${PROBE_TIMEOUT_MS} ms`;
+          } else if (opened.error) {
+            error = `the browser started but could not be used: ${(opened.error && opened.error.message) || opened.error}`;
+          } else {
+            const closed = await bounded(opened.value.close(), PROBE_TIMEOUT_MS);
+            if (closed.timedOut) {
+              error = `the browser started but stopped answering: the context would not close within ${PROBE_TIMEOUT_MS} ms`;
+            }
+            // A close that THROWS is still a browser that answered, so it is
+            // cleanup rather than the verdict -- unchanged from round 3.
           }
-          try { await b.close(); } catch { /* cleanup, not the verdict */ }
+          // Best effort, and bounded for the same reason: cleanup must not be
+          // able to outlast the thing it is cleaning up after.
+          await bounded(Promise.resolve().then(() => b.close()).catch(() => {}), PROBE_TIMEOUT_MS);
           return error ? { ok: false, error } : { ok: true, error: null };
         })
         .catch((err) => ({ ok: false, error: err && err.message ? err.message : String(err) }));
@@ -565,14 +698,26 @@ async function main(argv) {
 
 module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, realLaunch,
   resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs,
-  DEFAULT_TESTS_DIR };
+  DEFAULT_TESTS_DIR, PROBE_TIMEOUT_MS, bounded, treeRootOf, killGroup };
 
 if (require.main === module) {
-  // `process.exit()` TERMINATES BEFORE A PIPE DRAINS. When stdout is redirected
-  // it is asynchronous, and this file's whole output is evidence a reader is
-  // meant to keep -- quoted installer output and launch errors, neither of which
-  // is length-bounded. Exiting immediately could truncate exactly the material
-  // the CANNOT CHECK and CEILING reports exist to preserve (Codex, #355).
-  // Setting `exitCode` lets Node leave once the streams are flushed.
-  main(process.argv.slice(2)).then((code) => { process.exitCode = code; });
+  // FLUSH, THEN EXIT — both halves are load-bearing and they were learned one
+  // round apart.
+  //
+  // `process.exit()` alone TERMINATES BEFORE A PIPE DRAINS, and this file's
+  // output is the evidence a reader keeps: quoted installer output and launch
+  // errors, neither length-bounded. A bare exit truncated exactly the material
+  // the CANNOT CHECK and CEILING reports exist to preserve.
+  //
+  // But `exitCode` alone does not guarantee LEAVING. The probe's bound cannot
+  // cancel a `kNoTimeout` protocol call, so its handle can hold the loop open
+  // after the verdict is printed -- a ladder that reports and then hangs is
+  // still a ladder that hangs.
+  //
+  // Writing an empty string queues a callback BEHIND everything already written,
+  // so it fires once the pipe has drained; exiting there gets both.
+  main(process.argv.slice(2)).then((code) => {
+    process.exitCode = code;
+    process.stdout.write('', () => process.exit(code));
+  });
 }

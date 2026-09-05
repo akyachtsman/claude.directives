@@ -387,6 +387,22 @@ function realInstall(argv, cwd, { spawn = spawnProcess, timeout = INSTALL_TIMEOU
       killGroup(child);
     }, timeout);
 
+    // THE GROUP IS REAPED WHEN THE LEADER EXITS — one handler, every cause.
+    //
+    // The bound killed the group; a leader terminated by an EXTERNAL signal (an
+    // admin, a runner shutting down, the OS) did not, so its descendants kept
+    // running after `realInstall` returned. Measured (Codex, #355). That is the
+    // timeout fix's own rule, applied to one branch and not the other.
+    //
+    // ⚠️ AND IT CANNOT BE DONE ON `close`. `close` fires when the child's STDIO
+    // has closed, and a grandchild INHERITS those pipes -- so with a descendant
+    // still running, `close` waits for the descendant. Measured: reaping in the
+    // settle path returned after 10 006 ms, exactly when the orphan finished on
+    // its own, and the marker was written anyway. `exit` fires when the LEADER
+    // dies, which is the moment the group becomes orphaned and the only moment
+    // early enough to matter.
+    child.on('exit', () => killGroup(child));
+
     const finish = (status, signal, err) => {
       if (done) return;
       done = true;
@@ -696,28 +712,52 @@ async function main(argv) {
   return report(browser, outcome);
 }
 
+// FLUSH, THEN EXIT — and flush EVERY stream this file writes to.
+//
+// `process.exit()` alone TERMINATES BEFORE A PIPE DRAINS, and this file's output
+// is the evidence a reader keeps: quoted installer output and launch errors,
+// neither length-bounded. A bare exit truncated exactly the material the CANNOT
+// CHECK and CEILING reports exist to preserve.
+//
+// But `exitCode` alone does not guarantee LEAVING. The probe's bound cannot
+// cancel a `kNoTimeout` protocol call, so its handle can hold the loop open
+// after the verdict is printed -- a ladder that reports and then hangs is still a
+// ladder that hangs.
+//
+// Writing an empty string queues a callback BEHIND everything already written,
+// so it fires once that stream has drained. The first version waited for STDOUT
+// ONLY, while every refusal in this file -- the unknown browser, the empty
+// --tests-dir, the missing one -- goes to STDERR (Codex, #355). ⚠️ I could NOT
+// reproduce the truncation here: ten runs on Node 22.22.2 with a 100,000-char
+// argument returned all 100,079 stderr bytes every time. Node documents pipe
+// writes as asynchronous on POSIX, so the report is credible and the fix is
+// strictly more correct either way -- but the case below pins the MECHANISM
+// (every stream is awaited), because a completeness assertion is green on this
+// machine with or without the fix and would prove nothing.
+const FLUSHED_STREAMS = [process.stdout, process.stderr];
+
+function flushThenExit(code, streams = FLUSHED_STREAMS, exit = process.exit) {
+  let pending = streams.length;
+  if (!pending) { exit(code); return; }
+  const settled = () => { pending -= 1; if (pending === 0) exit(code); };
+  for (const stream of streams) {
+    try {
+      stream.write('', settled);
+    } catch {
+      // A stream that cannot be written to cannot be waited for either.
+      settled();
+    }
+  }
+}
+
 module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, realLaunch,
   resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs,
-  DEFAULT_TESTS_DIR, PROBE_TIMEOUT_MS, bounded, treeRootOf, killGroup };
+  DEFAULT_TESTS_DIR, PROBE_TIMEOUT_MS, bounded, treeRootOf, killGroup,
+  flushThenExit, FLUSHED_STREAMS };
 
 if (require.main === module) {
-  // FLUSH, THEN EXIT — both halves are load-bearing and they were learned one
-  // round apart.
-  //
-  // `process.exit()` alone TERMINATES BEFORE A PIPE DRAINS, and this file's
-  // output is the evidence a reader keeps: quoted installer output and launch
-  // errors, neither length-bounded. A bare exit truncated exactly the material
-  // the CANNOT CHECK and CEILING reports exist to preserve.
-  //
-  // But `exitCode` alone does not guarantee LEAVING. The probe's bound cannot
-  // cancel a `kNoTimeout` protocol call, so its handle can hold the loop open
-  // after the verdict is printed -- a ladder that reports and then hangs is
-  // still a ladder that hangs.
-  //
-  // Writing an empty string queues a callback BEHIND everything already written,
-  // so it fires once the pipe has drained; exiting there gets both.
   main(process.argv.slice(2)).then((code) => {
     process.exitCode = code;
-    process.stdout.write('', () => process.exit(code));
+    flushThenExit(code);
   });
 }

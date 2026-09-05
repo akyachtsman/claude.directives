@@ -41,7 +41,8 @@ const LADDER = process.env.BROWSER_LADDER_BIN
   || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
-  resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf } = require(LADDER);
+  resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf, flushThenExit,
+  FLUSHED_STREAMS } = require(LADDER);
 import { tmpdir } from 'os';
 import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'fs';
 import { spawn as spawnProcess, spawnSync } from 'child_process';
@@ -976,6 +977,93 @@ function eq(actual, expected, what) {
     eq(treeRootOf('/no/modules/here.js'), null, 'no node_modules — no answer');
     eq(treeRootOf(''), null, 'empty');
     eq(treeRootOf(null), null, 'absent');
+  });
+
+  // ── #355 round 9: the same rule, the branch it did not cover ────────────
+
+  // The BOUND killed the group; a leader terminated by an EXTERNAL signal did
+  // not, so its descendants outlived the rung. Reproduced: the orphan wrote its
+  // marker after realInstall had already returned "interrupted".
+  await check('an externally signalled installer still takes its tree with it', async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-sig-')));
+    const marker = join(dir, 'orphan.txt');
+    const fake = join(dir, 'npx');
+    // The orphan waits TEN seconds, so it is still alive when realInstall
+    // returns -- otherwise the case cannot fail for the right reason: an orphan
+    // that finished on its own before the return proves nothing about reaping.
+    // `exec` makes the leader itself the thing a signal kills, promptly.
+    writeFileSync(fake, `#!/bin/sh\n( sleep 10; echo alive > ${marker} ) &\nexec sleep 30\n`,
+                  { mode: 0o755 });
+
+    const started = Date.now();
+    const out = await realInstall(['ignored'], dir, {
+      // No bound in play: 60s, and the leader is signalled from outside at 300ms.
+      timeout: 60000,
+      spawn: (cmd, argv, opts) => {
+        const child = spawnProcess(fake, argv, opts);
+        setTimeout(() => { try { process.kill(child.pid, 'SIGTERM'); } catch { /* gone */ } }, 300);
+        return child;
+      },
+    });
+    const took = Date.now() - started;
+    if (!out.interrupted) throw new Error('a signalled installer must read as interrupted');
+    // Reaping on `close` instead of `exit` returned only when the orphan
+    // finished by itself, ~10s in. Returning promptly is part of the property.
+    if (took > 5000) {
+      throw new Error(`realInstall waited ${took} ms — it is waiting on the descendant's stdio`);
+    }
+    await new Promise((r) => setTimeout(r, 11000));
+    if (existsSync(marker)) {
+      throw new Error('a descendant outlived a leader that was signalled from outside');
+    }
+  });
+
+  // ── the exit path flushes EVERY stream, not just stdout ──────────────────
+  // ⚠️ PINNED AS A MECHANISM, DELIBERATELY. The reported symptom -- a truncated
+  // stderr -- did not reproduce here: ten runs on Node 22.22.2 with a
+  // 100,000-char argument returned all 100,079 bytes every time. A completeness
+  // assertion would therefore be green with AND without the fix, which is the
+  // "cannot fail for the right reason" trap this PR has hit six times. So the
+  // two things the fix actually consists of are pinned instead.
+  await check('flushThenExit waits for every stream it is given', () => {
+    const drained = [];
+    let exited = null;
+    const fake = (name) => ({ write: (_s, cb) => { drained.push(name); setImmediate(cb); } });
+    flushThenExit(7, [fake('a'), fake('b')], (code) => { exited = code; });
+    return new Promise((resolve, reject) => setTimeout(() => {
+      try {
+        eq(drained, ['a', 'b'], 'both streams were written to');
+        eq(exited, 7, 'and the exit code is carried through');
+        resolve();
+      } catch (err) { reject(err); }
+    }, 20));
+  });
+
+  await check('...and it does NOT exit before the last of them drains', () => {
+    let exited = null;
+    let release = null;
+    const slow = { write: (_s, cb) => { release = cb; } };
+    const fast = { write: (_s, cb) => setImmediate(cb) };
+    flushThenExit(3, [fast, slow], (code) => { exited = code; });
+    return new Promise((resolve, reject) => setTimeout(() => {
+      try {
+        eq(exited, null, 'the fast stream alone must not be enough');
+        release();
+        setTimeout(() => {
+          try { eq(exited, 3, 'and the slow one releases it'); resolve(); }
+          catch (err) { reject(err); }
+        }, 20);
+      } catch (err) { reject(err); }
+    }, 20));
+  });
+
+  await check('the CLI flushes stdout AND stderr', () => {
+    // The list the module tail actually passes — not a copy of it.
+    if (FLUSHED_STREAMS.length !== 2
+        || !FLUSHED_STREAMS.includes(process.stdout)
+        || !FLUSHED_STREAMS.includes(process.stderr)) {
+      throw new Error('every refusal in this file goes to stderr; it must be flushed too');
+    }
   });
 
   if (failures.length) {

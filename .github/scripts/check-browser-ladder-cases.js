@@ -43,7 +43,8 @@ const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
   resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf, flushThenExit,
   FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS, CLEANUP_SIGNALS,
-  NOT_OUR_SIGNALS, STOP_SIGNALS, boundReportLine, MAX_REPORT_LINE } = require(LADDER);
+  NOT_OUR_SIGNALS, STOP_SIGNALS, boundReportLine, MAX_REPORT_LINE_BYTES,
+  cleanupSignalsFor } = require(LADDER);
 import { tmpdir } from 'os';
 import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'fs';
 import { spawn as spawnProcess, spawnSync } from 'child_process';
@@ -1220,45 +1221,77 @@ function eq(actual, expected, what) {
   // The deny-list is the part still written by hand, so its contents are pinned.
   // Each entry has a reason in the source; this asserts the reasons were acted
   // on, and that the derivation did not quietly become an allow-list again.
-  await check('the derived set covers the platform minus a stated deny-list', () => {
-    const platform = Object.keys(require('os').constants.signals);
-
-    // Nothing is handled that the deny-list excludes...
+  await check('only signals with an ESTABLISHED terminate-default are handled', () => {
+    // Nothing is handled that the deny-list excludes.
     for (const signal of CLEANUP_SIGNALS) {
       if (NOT_OUR_SIGNALS.has(signal)) {
         throw new Error(`${signal} is both handled and denied`);
       }
     }
-    // ...and nothing the platform offers is silently dropped. This is the
-    // assertion that fails when someone re-writes CLEANUP_SIGNALS as a literal:
-    // every omission must be a DELIBERATE deny-list entry.
-    for (const signal of platform) {
-      if (!CLEANUP_SIGNALS.includes(signal) && !NOT_OUR_SIGNALS.has(signal)) {
-        throw new Error(`${signal} is neither handled nor excluded with a reason; `
-          + 'the set has drifted back to a hand-written list');
-      }
-    }
-    // The two the kernel will not deliver must never be attempted.
+    // The two the kernel will not deliver must never be attempted. LITERAL, not
+    // the module's own lists — reading an expectation out of the thing under
+    // test is what made an earlier version of this case self-defeating.
     for (const signal of ['SIGKILL', 'SIGSTOP']) {
       if (CLEANUP_SIGNALS.includes(signal)) {
         throw new Error(`${signal} cannot be caught; handling it is a false promise`);
       }
     }
-    // And the family whose default action is to suspend, not terminate.
-    // LITERAL, not the module's own STOP_SIGNALS. Reading the deny-list out of
-    // the thing under test made this assertion self-defeating: emptying
-    // STOP_SIGNALS moved those signals into the handled set AND emptied the loop
-    // that was supposed to catch it, so the mutant passed here. Measured — a
-    // fail-open case inside the case file, which is the defect this PR is about.
+    // The family whose default action is to suspend, not terminate.
     for (const signal of ['SIGTSTP', 'SIGTTIN', 'SIGTTOU']) {
       if (CLEANUP_SIGNALS.includes(signal)) {
         throw new Error(`${signal} suspends rather than terminates; reaping on it `
           + 'destroys an install the user intends to resume');
       }
     }
-    // A signal Codex actually found missing, named so the regression is explicit.
-    if (!CLEANUP_SIGNALS.includes('SIGQUIT')) {
-      throw new Error('SIGQUIT is unhandled — this is the exact #359 finding');
+    // The signals Codex found missing across rounds 2 and 3, named so each
+    // regression is explicit rather than implied by a count.
+    for (const signal of ['SIGQUIT', 'SIGHUP', 'SIGINT', 'SIGTERM']) {
+      if (!CLEANUP_SIGNALS.includes(signal)) {
+        throw new Error(`${signal} is unhandled; an installer leaks on it`);
+      }
+    }
+  });
+
+  // THE CASE THAT COULD NOT HAVE BEEN WRITTEN ON THIS MACHINE BEFORE ROUND 3.
+  // The SIGINFO defect only exists on macOS/BSD — the signal is absent from
+  // os.constants.signals here — so a rule checked only against the local
+  // platform could not see it at all. `cleanupSignalsFor` takes the signal table
+  // as an argument precisely so the question can be asked about another OS.
+  await check('a foreign platform table cannot introduce an unestablished signal', () => {
+    // macOS's table, including the two extras that are not POSIX.
+    const darwin = {
+      SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGILL: 4, SIGTRAP: 5, SIGABRT: 6,
+      SIGEMT: 7, SIGFPE: 8, SIGKILL: 9, SIGBUS: 10, SIGSEGV: 11, SIGSYS: 12,
+      SIGPIPE: 13, SIGALRM: 14, SIGTERM: 15, SIGURG: 16, SIGSTOP: 17,
+      SIGTSTP: 18, SIGCONT: 19, SIGCHLD: 20, SIGTTIN: 21, SIGTTOU: 22,
+      SIGIO: 23, SIGXCPU: 24, SIGXFSZ: 25, SIGVTALRM: 26, SIGPROF: 27,
+      SIGWINCH: 28, SIGINFO: 29, SIGUSR1: 30, SIGUSR2: 31,
+    };
+    const handled = cleanupSignalsFor(darwin);
+
+    // THE FINDING. SIGINFO's default action is to be IGNORED, and Ctrl-T is how
+    // a user asks a long install how it is going. Handling it reaped the install
+    // and then re-raised a signal the OS discards — so the ladder stayed alive
+    // having destroyed the work, because someone asked for a progress report.
+    if (handled.includes('SIGINFO')) {
+      throw new Error('SIGINFO would be handled on macOS; its default is IGNORE, so a '
+        + 'Ctrl-T progress request would reap the install and leave the ladder running');
+    }
+    // The general rule behind it: a platform extra whose default action is not
+    // established is left alone. SIGEMT is the second one macOS ships.
+    if (handled.includes('SIGEMT')) {
+      throw new Error('SIGEMT is not an established terminate-default; handling it guesses');
+    }
+    // ...and the rule must not have been bought by handling nothing.
+    for (const signal of ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGTERM', 'SIGXCPU']) {
+      if (!handled.includes(signal)) {
+        throw new Error(`${signal} must still be handled on macOS; the exclusion `
+          + 'has been over-applied and the installer leaks everywhere');
+      }
+    }
+    // A signal the platform does not have is never handled, however established.
+    if (cleanupSignalsFor({ SIGINT: 2 }).length !== 1) {
+      throw new Error('a signal absent from the platform table must not be handled');
     }
   });
 
@@ -1356,64 +1389,116 @@ function eq(actual, expected, what) {
 
   // ── #359: the deadline is only safe because the report is bounded ────────
 
-  await check('every report line is bounded, and the truncation announces itself', () => {
-    const short = 'a'.repeat(MAX_REPORT_LINE);
+  await check('every report line is bounded in BYTES, and says how much it dropped', () => {
+    const short = 'a'.repeat(MAX_REPORT_LINE_BYTES);
     eq(boundReportLine(short), short, 'a line within the cap must pass through untouched');
 
-    const long = boundReportLine('b'.repeat(MAX_REPORT_LINE + 5000));
-    if (long.length > MAX_REPORT_LINE + 200) {
-      throw new Error(`a bounded line is still ${long.length} characters`);
+    const long = boundReportLine('b'.repeat(MAX_REPORT_LINE_BYTES + 5000));
+    if (Buffer.byteLength(long, 'utf8') > MAX_REPORT_LINE_BYTES + 200) {
+      throw new Error(`a bounded line is still ${Buffer.byteLength(long, 'utf8')} bytes`);
     }
-    // SILENT shortening is its own defect: a reader given a cut-off error message
-    // with no marker chases the wrong cause.
-    if (!/truncated: 5000 more characters on this line/.test(long)) {
+    // SILENT shortening is its own defect: a reader given a cut-off error
+    // message with no marker chases the wrong cause.
+    if (!/truncated: 5000 more bytes on this line/.test(long)) {
       throw new Error(`the cap must say how much it dropped, got: ${JSON.stringify(long.slice(-80))}`);
+    }
+
+    // THE UNIT. A JS string length counts UTF-16 code units; stdout drains
+    // UTF-8. A character cap let 2,000 CJK characters through as ~6,000 bytes,
+    // so the byte ceiling the flush deadline rests on was overstated threefold
+    // on any non-ASCII output — and the old case, which measured `.length`,
+    // could not see it (Codex, #359).
+    for (const [label, sample] of [['CJK', '観'], ['emoji', '👩‍🚀'], ['accented', 'é']]) {
+      const bounded = boundReportLine(sample.repeat(5000));
+      const bytes = Buffer.byteLength(bounded, 'utf8');
+      if (bytes > MAX_REPORT_LINE_BYTES + 200) {
+        throw new Error(`a bounded ${label} line is ${bytes} bytes; the cap counts characters, `
+          + 'not the bytes the ceiling is stated in');
+      }
+      // Cutting mid-sequence would emit U+FFFD and corrupt the very error text
+      // the report exists to preserve.
+      if (bounded.includes('\uFFFD')) {
+        throw new Error(`bounding a ${label} line split a multi-byte sequence`);
+      }
     }
   });
 
   // THE CASE THAT CARRIES THE DEADLINE'S SAFETY. An elapsed-time bound cannot
-  // tell a slow reader from a stopped one — at any value — UNLESS the thing being
-  // drained has a known maximum. So the maximum is measured here, through the
-  // CLI, with both text channels flooded: a single-line 5 MB launch error (the
-  // shape Codex used, #359) and an installer emitting 200 lines of 20,000
-  // characters. Before the bound this produced 15,769,172 bytes.
+  // tell a slow reader from a stopped one — at any value — UNLESS the thing
+  // being drained has a known maximum. So the maximum is MEASURED here, through
+  // the CLI, on every path that prints. Before the bound: 15,769,172 bytes.
   //
-  // It fails if the report ever grows past what the deadline can deliver, which
-  // is the only thing that would make the ten seconds unsafe again.
-  await check('a flooded report stays small enough for the deadline to be safe', () => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-ceiling-')));
-    const pkg = join(dir, 'node_modules', 'playwright');
-    mkdirSync(pkg, { recursive: true });
-    mkdirSync(join(dir, 'bin'), { recursive: true });
-    writeFileSync(join(pkg, 'package.json'),
-      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
-    writeFileSync(join(pkg, 'index.js'),
-      "const big = ('E'.repeat(5 * 1024 * 1024) + '\\n').repeat(3);\n"
-      + "module.exports = { chromium: { launch: async () => { throw new Error(big); } } };\n");
-    writeFileSync(join(dir, 'bin', 'npx'),
-      "#!/bin/sh\nawk 'BEGIN{for(i=0;i<200;i++){s=\"\";for(j=0;j<20000;j++)s=s\"X\";print s}}'\nexit 1\n",
-      { mode: 0o755 });
+  // It OBSERVES real output rather than checking that `boundReportLine` is
+  // called, because the rule has now escaped through three different channels
+  // in three rounds — report(), the progress log, and main()'s own refusals
+  // (Codex, #359). A check that names call sites finds one site per round; this
+  // one does not care how a line is produced, only that it came out bounded.
+  //
+  // Each scenario floods a DIFFERENT channel, and the argv ones are the round-3
+  // finding: an accepted 115,000-character browser name delivered 102,400 of
+  // 115,081 bytes to a slow reader.
+  for (const [label, build] of [
+    ['a flooded report', (dir) => {
+      const pkg = join(dir, 'node_modules', 'playwright');
+      mkdirSync(pkg, { recursive: true });
+      writeFileSync(join(pkg, 'package.json'),
+        '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+      writeFileSync(join(pkg, 'index.js'),
+        "const big = ('E'.repeat(5 * 1024 * 1024) + '\\n').repeat(3);\n"
+        + "module.exports = { chromium: { launch: async () => { throw new Error(big); } } };\n");
+      writeFileSync(join(dir, 'bin', 'npx'),
+        "#!/bin/sh\nawk 'BEGIN{for(i=0;i<200;i++){s=\"\";for(j=0;j<20000;j++)s=s\"X\";print s}}'\nexit 1\n",
+        { mode: 0o755 });
+      return ['chromium', '--tests-dir', dir];
+    }],
+    ['a multibyte flooded report', (dir) => {
+      const pkg = join(dir, 'node_modules', 'playwright');
+      mkdirSync(pkg, { recursive: true });
+      writeFileSync(join(pkg, 'package.json'),
+        '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+      // The same flood in CJK: three bytes per character, so a character-based
+      // cap passes this while the byte ceiling silently triples.
+      writeFileSync(join(pkg, 'index.js'),
+        "const big = ('観'.repeat(2 * 1024 * 1024) + '\\n').repeat(3);\n"
+        + "module.exports = { chromium: { launch: async () => { throw new Error(big); } } };\n");
+      writeFileSync(join(dir, 'bin', 'npx'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+      return ['chromium', '--tests-dir', dir];
+    }],
+    ['an enormous browser argument', () => ['z'.repeat(115000)]],
+    ['an enormous --tests-dir', (dir) => ['chromium', '--tests-dir', join(dir, 'q'.repeat(115000))]],
+  ]) {
+    await check(`${label} stays small enough for the deadline to be safe`, () => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-ceiling-')));
+      mkdirSync(join(dir, 'bin'), { recursive: true });
+      const argv = build(dir);
 
-    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
-      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
-      maxBuffer: 512 * 1024 * 1024,
-      encoding: 'utf8',
+      const proc = spawnSync(process.execPath, [LADDER, ...argv], {
+        env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+        maxBuffer: 512 * 1024 * 1024,
+        encoding: 'utf8',
+      });
+      const out = `${proc.stdout || ''}${proc.stderr || ''}`;
+      const longest = Math.max(...out.split('\n').map((line) => Buffer.byteLength(line, 'utf8')));
+
+      // The per-line cap, in BYTES, observed on real output.
+      if (longest > MAX_REPORT_LINE_BYTES + 200) {
+        throw new Error(`${label}: a line reached ${longest} bytes; the cap is not applied `
+          + 'on every channel that carries text the ladder did not write');
+      }
+      // The ceiling the deadline's arithmetic rests on. 250 KB over ten seconds
+      // is 25 KB/s — still far below any reader this could plausibly cut short.
+      const bytes = Buffer.byteLength(out, 'utf8');
+      if (bytes > 250 * 1024) {
+        throw new Error(`${label}: output is ${bytes} bytes; too large for `
+          + `${FLUSH_TIMEOUT_MS} ms to deliver to a slow reader`);
+      }
+      // ...and the refusal still has to SAY something, or the bound could be
+      // satisfied by printing nothing at all.
+      if (!out.trim()) {
+        throw new Error(`${label}: produced no output; a bound met by silence is not a bound`);
+      }
     });
-    const out = `${proc.stdout || ''}${proc.stderr || ''}`;
-    const longest = Math.max(...out.split('\n').map((line) => line.length));
-
-    // The per-line cap, observed on real output rather than on the helper.
-    if (longest > MAX_REPORT_LINE + 200) {
-      throw new Error(`a report line reached ${longest} characters; the cap is not applied `
-        + 'on every channel that carries text the ladder did not write');
-    }
-    // The ceiling the deadline's arithmetic rests on. 250 KB over ten seconds is
-    // 25 KB/s — still far below any reader this could plausibly cut short.
-    if (out.length > 250 * 1024) {
-      throw new Error(`a flooded report is ${out.length} bytes; too large for `
-        + `${FLUSH_TIMEOUT_MS} ms to deliver to a slow reader`);
-    }
-  });
+  }
 
   // The whole path, through the CLI: a large report to a reader that DRAINS
   // still arrives complete. This is the round-9 case, re-asserted against the

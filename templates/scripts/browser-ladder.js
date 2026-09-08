@@ -57,25 +57,35 @@
 //      minus a stated deny-list, because the first version listed three from
 //      memory and missed SIGQUIT (#359).
 //
-//   2. THE FLUSH IS BOUNDED, BY PROGRESS. Waiting for every stream to drain
-//      turned a truncated report into a HANG when a consumer opened a pipe and
-//      never read it, which also defeated the forced exit that escapes an
+//   2. THE FLUSH IS BOUNDED, AND SO IS THE OUTPUT. Waiting for every stream to
+//      drain turned a truncated report into a HANG when a consumer opened a pipe
+//      and never read it, which also defeated the forced exit that escapes an
 //      uncancellable Playwright handle. The ordering is deliberate -- A TRUNCATED
-//      REPORT BEATS A HANG -- but the first bound was ten seconds of ELAPSED
-//      time, which truncated a slow, healthy reader just as readily (#359). The
-//      deadline now measures bytes moving, so only a reader that has stopped
-//      reading ends the wait.
+//      REPORT BEATS A HANG -- but ten seconds of ELAPSED time truncated a slow,
+//      healthy reader just as readily (#359). A progress-based deadline was
+//      tried and cannot work; see flushThenExit. What works is bounding every
+//      line this file prints, in BYTES, so the deadline is arithmetic over a
+//      measured ceiling instead of a guess about readers.
 //
-// ⚠️ STILL NOT PROMISED. A `SIGKILL` to the ladder runs no handler at all -- the
-// OS does not deliver it -- so an installer can outlive the ladder that way and
-// nothing in this file can change that. If you `kill -9` a run mid-install,
-// check for stragglers. This is the ONLY remaining route, and it is stated that
-// way only because SIGKILL and SIGSTOP are the two signals a process cannot
-// catch; every other signal the platform defines is either handled or excluded
-// with a reason at CLEANUP_SIGNALS. An earlier version of this paragraph made
-// the same claim while three signals were handled, which is how SIGQUIT was
-// missed -- so read it as a consequence of that derivation, not as a promise
-// standing on its own.
+//      ⚠️ This paragraph described the progress deadline for one round AFTER it
+//      was abandoned (Codex, #359) -- a header pointing maintainers at a design
+//      the code deliberately rejected.
+//
+// ⚠️ STILL NOT PROMISED, BY THREE ROUTES -- and the count has been wrong twice,
+// so treat it as a list to check rather than a reassurance.
+//
+//   a. `SIGKILL`. The OS does not deliver it, so no handler runs. Unfixable here.
+//   b. A FAULT signal -- SIGSEGV, SIGABRT and the rest of FAULT_SIGNALS. These
+//      are deliberately excluded (a handler there is unreliable and can hang the
+//      process), so they leak the installer exactly as SIGKILL does. Saying
+//      "SIGKILL is the only route" was false while that list existed, and it
+//      gave operators wrong cleanup guidance after a crash (Codex, #359).
+//   c. Any signal whose terminate-default is not ESTABLISHED -- see
+//      CLEANUP_SIGNALS. Left unhandled on purpose: leaking is this file's old,
+//      documented limit, while wrongly handling one destroys a live install.
+//
+// After any of these, check for stragglers: `pgrep -f "playwright install"`, and
+// on the --with-deps rung an apt that may still hold dpkg's locks.
 'use strict';
 
 const { spawn: spawnProcess, spawnSync } = require('child_process');
@@ -195,26 +205,61 @@ function firstLine(text) {
 }
 
 /** Render the verdict. Separated from `ladder` so the cases file can pin both. */
-// EVERY REPORT LINE IS BOUNDED (#359). The line COUNTS here were always capped
-// -- ten lines of installer output, eight of the launch error -- but a single
-// line was not, and a launch error is whatever the browser chose to throw. That
-// left the report unbounded in bytes while looking bounded, which is what made
-// the flush deadline below unprovable: for any elapsed-time bound there is a
-// report large enough to truncate a reader that is working perfectly (Codex,
-// #359; reproduced at 5 MB on one line, losing 1.9 MB to a healthy consumer).
+// EVERY REPORT LINE IS BOUNDED (#359), IN BYTES. The line COUNTS here were
+// always capped -- ten lines of installer output, eight of the launch error --
+// but a single line was not, and a launch error is whatever the browser chose
+// to throw. That left the report unbounded in bytes while looking bounded,
+// which is what made the flush deadline unprovable: for any elapsed-time bound
+// there is a report large enough to truncate a reader that is working perfectly
+// (Codex, #359; reproduced at 5 MB on one line, losing 1.9 MB to a healthy
+// consumer).
 //
-// Capping the line closes that at the source and is worth doing on its own: a
-// multi-megabyte single line in a CI log is not a diagnostic anyone can read.
+// ⚠️ THE FIRST CAP COUNTED CHARACTERS AND THE CEILING IS IN BYTES. A JavaScript
+// string length is UTF-16 code units; stdout drains UTF-8. So 2,000 characters
+// of CJK text is ~6,000 bytes, and the measured worst case understated itself
+// threefold on any non-ASCII output -- which Playwright emits as soon as a path
+// or a browser message is localised. Codex caught it; the cap and the ceiling
+// case are both in bytes now, so they are the same unit as the arithmetic they
+// support.
+//
+// Cutting is done by CODE POINT, accumulating encoded size, so the cap can
+// never split a multi-byte sequence into a replacement character -- and a
+// surrogate pair stays whole because `for...of` iterates code points.
+//
 // The cap ANNOUNCES itself, because silently shortening an error message is how
 // a reader is sent chasing the wrong cause.
-const MAX_REPORT_LINE = 2000;
+const MAX_REPORT_LINE_BYTES = 2000;
 
 function boundReportLine(line) {
   const text = String(line);
-  if (text.length <= MAX_REPORT_LINE) return text;
-  const dropped = text.length - MAX_REPORT_LINE;
-  return `${text.slice(0, MAX_REPORT_LINE)}… [truncated: ${dropped} more characters on this line]`;
+  const total = Buffer.byteLength(text, 'utf8');
+  if (total <= MAX_REPORT_LINE_BYTES) return text;
+
+  let kept = '';
+  let bytes = 0;
+  for (const char of text) {
+    const size = Buffer.byteLength(char, 'utf8');
+    if (bytes + size > MAX_REPORT_LINE_BYTES) break;
+    kept += char;
+    bytes += size;
+  }
+  return `${kept}… [truncated: ${total - bytes} more bytes on this line]`;
 }
+
+// THE ONLY TWO WAYS THIS FILE WRITES A LINE (#359). The bound was applied to
+// report() first, then to the progress log when a 5 MB line survived, then --
+// Codex, round 3 -- to main()'s own refusals, which quote a browser name and a
+// --tests-dir straight from argv: an accepted 115,000-character argument
+// delivered 102,400 of 115,081 bytes to a slow reader, so the ceiling the flush
+// deadline rests on did not hold.
+//
+// Three rounds, three sites, one rule: that is the shape this repo calls "a rule
+// enforced call-site by call-site gets one site every round". So the call sites
+// are gone. Everything goes through these, and the ceiling case OBSERVES real
+// CLI output on the refusal paths too -- a check that does not care how a future
+// line gets written, only that it came out bounded.
+const say = (line = '') => console.log(boundReportLine(line));
+const warn = (line = '') => console.error(boundReportLine(line));
 
 function report(browser, outcome, print = console.log) {
   const emit = (line = '') => print(boundReportLine(line));
@@ -277,7 +322,11 @@ function report(browser, outcome, print = console.log) {
 
   emit(`browser-ladder: CEILING — ${browser} did not launch after ${outcome.attempts.length} rung(s)`);
   emit('');
-  emit('  THE EVIDENCE IS THE LAUNCH ERROR, quoted verbatim so you can judge it:');
+  // NOT "verbatim": emit() bounds each line, so a long error arrives as a
+  // marked excerpt. Claiming verbatim while truncating invites a reader to
+  // treat a partial message as the whole one (Codex, #359).
+  emit('  THE EVIDENCE IS THE LAUNCH ERROR, quoted as far as the per-line bound');
+  emit('  allows — any cut is marked inline — so you can judge it:');
   for (const line of String(last.launch.error || '(no message)').split('\n').slice(0, 12)) {
     emit(`    ${line}`);
   }
@@ -418,35 +467,58 @@ function killGroup(child) {
 // them -- and a process that merely REQUIRES this file gets none at all.
 const ACTIVE_INSTALLS = new Set();
 
-// THE SET IS DERIVED, NOT LISTED (#359). The first version named three signals
-// -- SIGINT, SIGTERM, SIGHUP -- and Codex found SIGQUIT missing: Ctrl-\\ killed
-// the ladder with status 131 and the installer group survived. That is an
-// enumeration written from memory, and the next omission would be found the
-// same way. So the direction is inverted: handle EVERY signal the platform
-// reports, minus a deny-list where each entry states why.
+// WHICH SIGNALS ARE CLEANED UP, and why the rule is what it is (#359).
 //
-// The inversion is what makes it safe, and the reason is the re-raise below.
-// Because a handler cleans up and then re-sends the same signal, covering a
-// signal that needed no cleanup costs nothing -- the default action still runs.
-// So a gap in the DENY-list means one harmless extra handler, where a gap in
-// the old ALLOW-list meant a silently leaked installer. The failure mode is
-// flipped, which is the whole point; it is not a claim that the deny-list is
-// beyond question.
+// Version 1 named SIGINT/SIGTERM/SIGHUP from memory. Codex found SIGQUIT
+// missing: Ctrl-\\ killed the ladder at status 131 and the installer survived.
 //
-// The one family where over-coverage would NOT be harmless is the stop signals:
-// reaping on a Ctrl-Z the user means to resume from would destroy the install.
-// That exclusion is pinned by a case, not just by this comment.
+// Version 2 inverted it -- every signal the platform reports, minus a deny-list
+// -- and argued the inversion was safe because the handler re-raises, so
+// covering a signal that needed no cleanup "costs nothing". CODEX DISPROVED
+// THAT ARGUMENT with SIGINFO: macOS puts it in os.constants.signals, its
+// default action is to be IGNORED, and Ctrl-T is how a user asks a long install
+// for a progress report. Under version 2 that reaped the install and then
+// re-raised a signal the OS discards -- so the ladder carried on alive, having
+// destroyed the thing it was installing, because someone asked how it was
+// going. Over-coverage is NOT harmless. It is harmless only for signals whose
+// default action TERMINATES, and that is a property of the signal which no
+// runtime API exposes.
+//
+// So version 3 asks the question that can actually be answered: is this
+// signal's terminate-default ESTABLISHED? POSIX answers it for the standard
+// signals, and a platform extra is added only with its own citation. Anything
+// unestablished -- SIGINFO and SIGEMT on the BSDs, whatever a future platform
+// adds -- is simply not handled.
+//
+// THE FAILURE MODES ARE NOT SYMMETRIC, and that is the whole basis for the
+// direction. An unhandled signal leaks the installer: the ORIGINAL, documented
+// limit of this file, unchanged for that signal. A wrongly handled one destroys
+// a healthy install. Reverting to the older failure beats inventing a new one,
+// so an unknown signal is left alone rather than guessed at.
+const POSIX_TERMINATING = [
+  'SIGABRT', 'SIGALRM', 'SIGBUS', 'SIGFPE', 'SIGHUP', 'SIGILL', 'SIGINT',
+  'SIGKILL', 'SIGPIPE', 'SIGPOLL', 'SIGPROF', 'SIGQUIT', 'SIGSEGV', 'SIGSYS',
+  'SIGTERM', 'SIGTRAP', 'SIGUSR1', 'SIGUSR2', 'SIGVTALRM', 'SIGXCPU', 'SIGXFSZ',
+];
+// Platform signals whose terminate-default is established individually. SIGPWR
+// is Linux's "system going down"; it terminates by default and is exactly the
+// case where an installer must not be left holding dpkg's locks. SIGINFO is
+// deliberately NOT here -- it is the signal that proved the rule.
+const PLATFORM_TERMINATING = ['SIGPWR'];
+
 const UNCATCHABLE = ['SIGKILL', 'SIGSTOP'];
 // Default action is STOP, not terminate -- nothing is ending, and a reap here
-// would throw away an install the user intends to resume.
+// would throw away an install the user intends to resume with `fg`.
 const STOP_SIGNALS = ['SIGTSTP', 'SIGTTIN', 'SIGTTOU'];
-// Default action is ignore/continue, so there is no termination to clean up
-// before -- and these ARRIVE in normal operation: SIGCHLD on every installer
-// exit, SIGWINCH on every terminal resize.
-const NON_TERMINATING = ['SIGCHLD', 'SIGCONT', 'SIGURG', 'SIGWINCH', 'SIGPIPE'];
+// Node/libuv ignores SIGPIPE rather than dying on it, so it never reaches the
+// termination path POSIX describes. The rest never terminate anywhere.
+const NON_TERMINATING = ['SIGCHLD', 'SIGCONT', 'SIGURG', 'SIGWINCH', 'SIGPIPE', 'SIGINFO'];
 // Fault signals. Node documents handlers for these as unreliable and able to
 // hang the process, and by the time one arrives the runtime is already in an
 // undefined state -- a best-effort reap is not worth an unkillable ladder.
+// ⚠️ These therefore LEAK the installer, exactly as SIGKILL does. Said in the
+// header too, because "SIGKILL is the only route" was false while this list
+// existed (Codex, #359).
 const FAULT_SIGNALS = ['SIGSEGV', 'SIGBUS', 'SIGILL', 'SIGFPE', 'SIGABRT',
   'SIGIOT', 'SIGTRAP', 'SIGSTKFLT', 'SIGSYS'];
 // Claimed by the runtime: SIGUSR1 starts Node's debugger, SIGPROF drives V8's
@@ -458,8 +530,17 @@ const NOT_OUR_SIGNALS = new Set([
   ...FAULT_SIGNALS, ...RESERVED_SIGNALS,
 ]);
 
-const CLEANUP_SIGNALS = Object.keys(osConstants.signals)
-  .filter((signal) => !NOT_OUR_SIGNALS.has(signal));
+// A PURE FUNCTION OF A SIGNAL TABLE, so a case can hand it macOS's table on
+// Linux and check what it would do there. The bug this replaces could not be
+// reproduced on the machine that shipped it -- SIGINFO does not exist here --
+// and a rule that can only be checked on the platform it breaks is not checked.
+function cleanupSignalsFor(available) {
+  const established = [...POSIX_TERMINATING, ...PLATFORM_TERMINATING];
+  return established.filter((signal) => Object.prototype.hasOwnProperty.call(available, signal)
+    && !NOT_OUR_SIGNALS.has(signal));
+}
+
+const CLEANUP_SIGNALS = cleanupSignalsFor(osConstants.signals);
 
 function reapActiveInstalls() {
   for (const child of ACTIVE_INSTALLS) killGroup(child);
@@ -787,16 +868,16 @@ function parseArgs(argv) {
 async function main(argv) {
   const { browser, testsDir, testsDirArg } = parseArgs(argv);
   if (!BROWSERS.includes(browser)) {
-    console.error(`browser-ladder: unknown browser "${browser}" — expected one of ${BROWSERS.join(', ')}`);
+    warn(`browser-ladder: unknown browser "${browser}" — expected one of ${BROWSERS.join(', ')}`);
     return 2;
   }
-  console.log(`browser-ladder: ${browser} — grading on whether it LAUNCHES`);
+  say(`browser-ladder: ${browser} — grading on whether it LAUNCHES`);
   // NOT "running any installer from <predicted>". That line re-derived the
   // installer's directory from the existence rule the code no longer uses, so it
   // would have announced one tree while the run used another -- a banner that
   // lies quietly. The real base is printed below, after it is decided, by the
   // code that decides it.
-  console.log(`  looking for playwright under ${testsDir}`
+  say(`  looking for playwright under ${testsDir}`
     + `${testsDirArg == null ? ', then the working directory' : ' (explicitly named — no fallback)'}`);
 
   // ONE implementation. main() wires the real effects into the same `ladder()`
@@ -813,17 +894,17 @@ async function main(argv) {
   // this test would refuse a directory the OS accepts -- an over-broad refusal
   // where the existence check below already gives the right answer.
   if (testsDirArg === '') {
-    console.error('browser-ladder: CANNOT CHECK — --tests-dir was given with no value');
-    console.error('  A trailing "--tests-dir" or a bare "--tests-dir=" names no directory,');
-    console.error('  and falling back to the default would install into and report on a tree');
-    console.error('  you did not ask for. Pass a directory, or omit the flag entirely.');
+    warn('browser-ladder: CANNOT CHECK — --tests-dir was given with no value');
+    warn('  A trailing "--tests-dir" or a bare "--tests-dir=" names no directory,');
+    warn('  and falling back to the default would install into and report on a tree');
+    warn('  you did not ask for. Pass a directory, or omit the flag entirely.');
     return 2;
   }
   if (testsDirArg && !existsSync(resolve(testsDirArg))) {
-    console.error(`browser-ladder: CANNOT CHECK — --tests-dir ${testsDirArg} does not exist`);
-    console.error(`  resolved: ${resolve(testsDirArg)}`);
-    console.error('  This says nothing about the browser. Point it at the directory holding');
-    console.error("  the UI kit's node_modules, or omit it to use the shipped default.");
+    warn(`browser-ladder: CANNOT CHECK — --tests-dir ${testsDirArg} does not exist`);
+    warn(`  resolved: ${resolve(testsDirArg)}`);
+    warn('  This says nothing about the browser. Point it at the directory holding');
+    warn("  the UI kit's node_modules, or omit it to use the shipped default.");
     return 2;
   }
   // ONE RESOLUTION, ONE BASE — and that is why this happens HERE rather than at
@@ -856,18 +937,18 @@ async function main(argv) {
       }],
     });
   }
-  console.log(`  playwright resolved from ${found.packagePath || '(path unavailable)'}`);
-  console.log(`  the installer runs in ${found.base}, the same tree that resolution used`);
+  say(`  playwright resolved from ${found.packagePath || '(path unavailable)'}`);
+  say(`  the installer runs in ${found.base}, the same tree that resolution used`);
 
   const outcome = await ladder({
     browser,
     install: (argv) => realInstall(argv, found.base),
     launch: realLaunch(browser, testsDir, found.mod),
-    // BOUNDED TOO. This is the OTHER channel carrying text the ladder did not
-    // write -- the progress lines quote `firstLine(error)`, and the first line
-    // of a single-line 5 MB error is the whole 5 MB. Measured: bounding only
-    // report() left a 5,242,899-character line on stdout (#359).
-    log: (line) => console.log(boundReportLine(line)),
+    // The progress lines quote `firstLine(error)`, and the first line of a
+    // single-line 5 MB error is the whole 5 MB -- so this channel needs the
+    // bound as much as the report does. `say` carries it; double-wrapping it
+    // here would just be a second place to forget.
+    log: say,
   });
   return report(browser, outcome);
 }
@@ -978,7 +1059,8 @@ module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, real
   DEFAULT_TESTS_DIR, PROBE_TIMEOUT_MS, bounded, treeRootOf, killGroup,
   flushThenExit, FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS,
   CLEANUP_SIGNALS, reapActiveInstalls, NOT_OUR_SIGNALS, STOP_SIGNALS,
-  boundReportLine, MAX_REPORT_LINE };
+  cleanupSignalsFor, POSIX_TERMINATING,
+  boundReportLine, MAX_REPORT_LINE_BYTES, say, warn };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then((code) => {

@@ -86,6 +86,39 @@
 //
 // After any of these, check for stragglers: `pgrep -f "playwright install"`, and
 // on the --with-deps rung an apt that may still hold dpkg's locks.
+//
+// ── KNOWN, CONFIRMED, AND DELIBERATELY NOT FIXED HERE ─────────────────────
+// Owner ruling 2026-09-08: ship what is verified and record the rest, rather
+// than spend a fifth review round. All three were found by Codex on #359,
+// confirmed against this code, and are tracked in #360. They are
+// written here rather than only in the tracker because this file is what a
+// person reads when the tool misbehaves.
+//
+// Each is a REAL defect, not a caveat. None is reachable on the platform this
+// fleet runs (Linux, ASCII output), which is the whole reason they were ranked
+// below the cost of another round -- and is exactly what would stop being true
+// if someone runs this on a Mac.
+//
+//   1. SIGPWR IS NOT GATED ON LINUX. It is listed in PLATFORM_TERMINATING
+//      because it terminates on Linux, but `cleanupSignalsFor` matches on the
+//      NAME only. On SunOS/illumos, where SIGPWR's default is to be ignored,
+//      a power signal would reap a HEALTHY installer and then be discarded --
+//      the ladder carries on having destroyed the install. Same shape as the
+//      SIGINFO defect one round earlier, in the fix for it.
+//
+//   2. THE RE-RAISE CAN BE SWALLOWED BY SOMEONE ELSE'S LISTENER.
+//      `disarmParentCleanup` removes only THIS file's handlers, so if Playwright
+//      still holds a SIGTERM/SIGHUP listener from an earlier probe, the
+//      re-raised signal is caught again instead of terminating. Reproduced by
+//      Codex: the installer was reaped, but the CLI exited 2 rather than dying
+//      of SIGTERM.
+//
+//   3. INSTALL_MAX_BUFFER COUNTS UTF-16 CODE UNITS, NOT BYTES, while its own
+//      message says "bytes". Multibyte installer output can therefore reach
+//      roughly 3x the nominal 64 MiB before the bound fires -- an OOM instead
+//      of the intended classified interruption. This is the SAME unit bug fixed
+//      in boundReportLine the round before, in a place the fix did not sweep.
+
 'use strict';
 
 const { spawn: spawnProcess, spawnSync } = require('child_process');

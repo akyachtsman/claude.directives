@@ -1245,7 +1245,12 @@ function eq(actual, expected, what) {
       }
     }
     // And the family whose default action is to suspend, not terminate.
-    for (const signal of STOP_SIGNALS) {
+    // LITERAL, not the module's own STOP_SIGNALS. Reading the deny-list out of
+    // the thing under test made this assertion self-defeating: emptying
+    // STOP_SIGNALS moved those signals into the handled set AND emptied the loop
+    // that was supposed to catch it, so the mutant passed here. Measured — a
+    // fail-open case inside the case file, which is the defect this PR is about.
+    for (const signal of ['SIGTSTP', 'SIGTTIN', 'SIGTTOU']) {
       if (CLEANUP_SIGNALS.includes(signal)) {
         throw new Error(`${signal} suspends rather than terminates; reaping on it `
           + 'destroys an install the user intends to resume');

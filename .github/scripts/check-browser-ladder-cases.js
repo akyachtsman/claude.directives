@@ -42,7 +42,7 @@ const LADDER = process.env.BROWSER_LADDER_BIN
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
   resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf, flushThenExit,
-  FLUSHED_STREAMS } = require(LADDER);
+  FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS, CLEANUP_SIGNALS } = require(LADDER);
 import { tmpdir } from 'os';
 import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'fs';
 import { spawn as spawnProcess, spawnSync } from 'child_process';
@@ -1063,6 +1063,174 @@ function eq(actual, expected, what) {
         || !FLUSHED_STREAMS.includes(process.stdout)
         || !FLUSHED_STREAMS.includes(process.stderr)) {
       throw new Error('every refusal in this file goes to stderr; it must be flushed too');
+    }
+  });
+
+  // ── #358: the ladder's own death must reap the installer ────────────────
+
+  // THE END-TO-END CASE, and it pins BOTH halves at once. Reaping is worthless
+  // if the fix also swallows the signal: a handler that only cleans up replaces
+  // Node's default action and leaves Ctrl-C not stopping the ladder, trading a
+  // leaked installer for an unkillable diagnostic. So the assertion is "no
+  // descendant survived AND the ladder itself died of the signal".
+  await check('SIGINT on the ladder reaps the installer AND still kills the ladder', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-parent-')));
+    const marker = join(dir, 'orphan.txt');
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    // Never launches, so the ladder reaches the install rung and stays there.
+    writeFileSync(join(pkg, 'index.js'),
+      "module.exports = { chromium: { launch: async () => "
+      + "{ throw new Error('needs install'); } } };\n");
+    // A grandchild that outlives the signal unless the GROUP is reaped, and a
+    // leader `exec`d so the signal reaches something that dies promptly.
+    writeFileSync(join(dir, 'bin', 'npx'),
+      `#!/bin/sh\n( sleep 12; echo alive > ${marker} ) &\nexec sleep 60\n`, { mode: 0o755 });
+
+    const proc = spawnProcess(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    proc.stdout.resume();
+    proc.stderr.resume();
+
+    return new Promise((resolve, reject) => {
+      setTimeout(() => { try { process.kill(proc.pid, 'SIGINT'); } catch { /* gone */ } }, 2500);
+      proc.on('exit', (code, signal) => {
+        setTimeout(() => {
+          try {
+            // HALF ONE: the signal was not swallowed.
+            if (signal !== 'SIGINT') {
+              throw new Error(`the ladder must still die of SIGINT, got code=${code} signal=${signal}`);
+            }
+            // HALF TWO: nothing of the installer survived it.
+            if (existsSync(marker)) {
+              throw new Error('the installer group outlived the ladder that spawned it');
+            }
+            resolve();
+          } catch (err) { reject(err); }
+        }, 12000);
+      });
+    });
+  });
+
+  // Handlers are armed only while an install is in flight. A three-rung ladder
+  // must not accumulate three of them, and a process that merely REQUIRES this
+  // file must carry none — otherwise the fix leaks listeners instead of
+  // processes.
+  await check('parent handlers are armed during an install and removed after', async () => {
+    const baseline = CLEANUP_SIGNALS.map((sig) => process.listenerCount(sig));
+    const exitBaseline = process.listenerCount('exit');
+    let during = null;
+
+    await realInstall(['ignored'], process.cwd(), {
+      spawn: () => {
+        const child = new EventEmitter();
+        child.pid = -1;                       // never signalled; killGroup swallows it
+        child.stdout = null;
+        child.stderr = null;
+        setImmediate(() => {
+          during = {
+            signals: CLEANUP_SIGNALS.map((sig) => process.listenerCount(sig)),
+            exit: process.listenerCount('exit'),
+            tracked: ACTIVE_INSTALLS.size,
+          };
+          child.emit('close', 0, null);
+        });
+        return child;
+      },
+    });
+
+    eq(during.tracked, 1, 'the install is tracked while it runs');
+    for (const [i, sig] of CLEANUP_SIGNALS.entries()) {
+      if (during.signals[i] !== baseline[i] + 1) {
+        throw new Error(`${sig} was not armed during the install`);
+      }
+      if (process.listenerCount(sig) !== baseline[i]) {
+        throw new Error(`${sig} handler survived the install — the ladder leaks listeners`);
+      }
+    }
+    eq(during.exit, exitBaseline + 1, 'exit cleanup armed too');
+    eq(process.listenerCount('exit'), exitBaseline, 'and removed after');
+    eq(ACTIVE_INSTALLS.size, 0, 'and the install is no longer tracked');
+  });
+
+  // ── #358: the flush is bounded, and the ordering is the point ────────────
+
+  // An undrained pipe used to hang forever. A truncated report beats a hang.
+  await check('an unread output pipe exits at the deadline instead of hanging', () => {
+    let exited = null;
+    const stuck = { write: () => { /* callback never invoked */ } };
+    const started = Date.now();
+    flushThenExit(4, [stuck], (code) => { exited = code; }, 300);
+    return new Promise((resolve, reject) => setTimeout(() => {
+      try {
+        eq(exited, 4, 'the exit happened, with its code');
+        if (Date.now() - started > 5000) throw new Error('the deadline did not apply');
+        resolve();
+      } catch (err) { reject(err); }
+    }, 600));
+  });
+
+  // ...and the complement, so the bound is not bought by giving up on draining:
+  // a stream that DOES drain must still be waited for, which is the round-9
+  // property this must not undo.
+  await check('a draining stream is still waited for, not cut short by the bound', () => {
+    let exited = null;
+    let release = null;
+    const slow = { write: (_s, cb) => { release = cb; } };
+    flushThenExit(5, [slow], (code) => { exited = code; }, 60000);
+    return new Promise((resolve, reject) => setTimeout(() => {
+      try {
+        eq(exited, null, 'not exited while the stream is still draining');
+        release();
+        setTimeout(() => {
+          try { eq(exited, 5, 'and it exits as soon as the stream drains'); resolve(); }
+          catch (err) { reject(err); }
+        }, 20);
+      } catch (err) { reject(err); }
+    }, 50));
+  });
+
+  await check('the flush deadline is finite, and generous enough for a real reader', () => {
+    if (!FLUSH_TIMEOUT_MS || FLUSH_TIMEOUT_MS > 60 * 1000) {
+      throw new Error(`flush deadline is ${FLUSH_TIMEOUT_MS}; an unbounded flush hangs the ladder`);
+    }
+    // A consumer reading at any ordinary rate drains megabytes in well under a
+    // second, so this bounds a reader that is NOT reading — it must not be tight
+    // enough to cut short one that is.
+    if (FLUSH_TIMEOUT_MS < 2 * 1000) {
+      throw new Error(`flush deadline is ${FLUSH_TIMEOUT_MS}; too tight to let a real reader finish`);
+    }
+  });
+
+  // The whole path, through the CLI: a large report to a reader that DRAINS
+  // still arrives complete. This is the round-9 case, re-asserted against the
+  // bound that could have quietly re-truncated it.
+  await check('a drained pipe still receives the complete report', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-drain-')));
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      "module.exports = { chromium: { launch: async () => "
+      + "{ throw new Error('E'.repeat(200000)); } } };\n");
+    writeFileSync(join(dir, 'bin', 'npx'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    eq(proc.status, 1, 'a CEILING is exit 1');
+    if (!/EEEEE/.test(proc.stdout)) throw new Error('the launch error never reached the pipe');
+    if (!/what would make it wrong/.test(proc.stdout)) {
+      throw new Error(`the report was truncated: ${proc.stdout.length} bytes, no closing line`);
     }
   });
 

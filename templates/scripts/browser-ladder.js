@@ -41,31 +41,30 @@
 // does it start -- because that is the question the four prose attempts kept
 // getting wrong.
 //
-// ⚠️ WHAT IT DOES NOT SUPERVISE -- two recorded limits, not oversights. Both are
-// tracked in #358; the owner's ruling (2026-09-05) was to keep this file's scope
-// at "does the browser launch" rather than grow a process-supervision layer,
-// because five consecutive review rounds showed each lifecycle fix exposing the
-// next one. Read #358 before adding either, and read this paragraph before
-// assuming they are bugs nobody noticed.
+// WHAT IT SUPERVISES, and what that still does not promise (#358, closed
+// 2026-09-08). Two lifecycle gaps were recorded here as limits under the owner's
+// 2026-09-05 ruling, and are now fixed:
 //
-//   1. THE PARENT'S OWN DEATH. The installer runs `detached`, which is what lets
-//      a timeout kill its whole process group -- but that also puts it OUTSIDE
-//      this process's foreground group, so a Ctrl-C aimed at the ladder does not
-//      reach it. Nothing here registers SIGINT/SIGTERM cleanup, so interrupting
-//      the ladder mid-install can leave `playwright install` (and, on the
-//      --with-deps rung, apt) running. If you interrupt it, check for
-//      stragglers.
+//   1. THE LADDER'S OWN DEATH reaps the installer. `detached` is what lets a
+//      timeout kill the installer's whole process group, and it also puts that
+//      group outside this process's foreground group -- so a Ctrl-C aimed at the
+//      ladder did not reach it, and `playwright install` (with apt beneath it on
+//      the --with-deps rung) kept running. Parent-side SIGINT/SIGTERM/SIGHUP and
+//      exit cleanup now reap the group, armed only while an install is in flight.
+//      The signal is RE-RAISED rather than swallowed, so Ctrl-C still stops the
+//      ladder: a handler that only cleaned up would have traded a leaked
+//      installer for an unkillable diagnostic.
 //
-//   2. AN UNREAD PIPE HANGS THE EXIT. `flushThenExit` waits for every stream to
-//      drain and that wait is UNBOUNDED, so a consumer that opens stdout as a
-//      pipe and never reads it, with a report past the ~64 KiB pipe buffer, hangs
-//      instead of exiting. Measured: a 5 MB launch error with an unread stdout
-//      pipe was still running after 4 s. This is a REGRESSION I introduced in
-//      round 9 while fixing a truncation, and it is recorded as such rather than
-//      dressed up as a pre-existing limit -- it turned a truncated report into a
-//      hung one. It does not arise at a terminal (writes are synchronous there)
-//      or under a consumer that drains, which is every caller this repo ships.
-
+//   2. THE FLUSH IS BOUNDED. Waiting for every stream to drain turned a truncated
+//      report into a HANG when a consumer opened a pipe and never read it, which
+//      also defeated the forced exit that escapes an uncancellable Playwright
+//      handle. The wait now has a deadline, and the ordering is deliberate: A
+//      TRUNCATED REPORT BEATS A HANG.
+//
+// ⚠️ STILL NOT PROMISED. A `SIGKILL` to the ladder runs no handler at all -- the
+// OS does not deliver it -- so an installer can outlive the ladder that way and
+// nothing in this file can change that. If you `kill -9` a run mid-install,
+// check for stragglers.
 'use strict';
 
 const { spawn: spawnProcess, spawnSync } = require('child_process');
@@ -370,6 +369,55 @@ function killGroup(child) {
   try { child.kill('SIGKILL'); } catch { /* already gone */ }
 }
 
+// THE LADDER'S OWN DEATH MUST REAP THE INSTALLER TOO (#358).
+//
+// `detached` is what lets a timeout kill the installer's whole process group --
+// and it also puts that group OUTSIDE this process's foreground group, so a
+// Ctrl-C aimed at the ladder never reaches it. Reaping when the LEADER dies
+// covers every way the installer ends; it does not cover the ladder being
+// killed while the installer is healthy. Measured before the fix: terminating
+// the parent left `playwright install` running, and on the --with-deps rung
+// that is an apt still holding dpkg's locks.
+//
+// Handlers are armed only while an install is in flight and removed as soon as
+// the last one finishes, so a three-rung ladder does not accumulate three of
+// them -- and a process that merely REQUIRES this file gets none at all.
+const ACTIVE_INSTALLS = new Set();
+const CLEANUP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+
+function reapActiveInstalls() {
+  for (const child of ACTIVE_INSTALLS) killGroup(child);
+  ACTIVE_INSTALLS.clear();
+}
+
+// ⚠️ RE-RAISE, DO NOT SWALLOW. Adding a SIGINT listener REPLACES Node's default
+// action, so a handler that only cleans up would leave Ctrl-C not stopping the
+// ladder -- trading a leaked installer for an unkillable diagnostic, which is a
+// worse defect than the one being fixed. Removing the listener and re-sending
+// the same signal restores the default path and the right exit status (128+n).
+function onCleanupSignal(signal) {
+  reapActiveInstalls();
+  disarmParentCleanup();
+  process.kill(process.pid, signal);
+}
+
+const SIGNAL_HANDLERS = new Map(
+  CLEANUP_SIGNALS.map((signal) => [signal, () => onCleanupSignal(signal)]),
+);
+
+function armParentCleanup() {
+  if (ACTIVE_INSTALLS.size !== 1) return;   // already armed for an earlier rung
+  for (const [signal, handler] of SIGNAL_HANDLERS) process.on(signal, handler);
+  // A plain `process.exit()` elsewhere, or a normal end, still owes the group a
+  // kill. `exit` handlers must be synchronous, and `process.kill` is.
+  process.on('exit', reapActiveInstalls);
+}
+
+function disarmParentCleanup() {
+  for (const [signal, handler] of SIGNAL_HANDLERS) process.removeListener(signal, handler);
+  process.removeListener('exit', reapActiveInstalls);
+}
+
 function realInstall(argv, cwd, { spawn = spawnProcess, timeout = INSTALL_TIMEOUT_MS } = {}) {
   return new Promise((settle) => {
     let child;
@@ -428,10 +476,17 @@ function realInstall(argv, cwd, { spawn = spawnProcess, timeout = INSTALL_TIMEOU
     // early enough to matter.
     child.on('exit', () => killGroup(child));
 
+    // Registered AFTER the spawn succeeded, so a spawn that threw leaves nothing
+    // armed, and released on every settle path below.
+    ACTIVE_INSTALLS.add(child);
+    armParentCleanup();
+
     const finish = (status, signal, err) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      ACTIVE_INSTALLS.delete(child);
+      if (ACTIVE_INSTALLS.size === 0) disarmParentCleanup();
       settle(classifyInstall({ status, signal, stdout, stderr, error: cause || err || null }));
     };
     child.on('error', (err) => finish(null, null, err));
@@ -761,10 +816,41 @@ async function main(argv) {
 // machine with or without the fix and would prove nothing.
 const FLUSHED_STREAMS = [process.stdout, process.stderr];
 
-function flushThenExit(code, streams = FLUSHED_STREAMS, exit = process.exit) {
+// AND THE WAIT ITSELF IS BOUNDED (#358). Waiting for every stream turned a
+// truncated report into a HANG: a consumer that opens stdout as a pipe and never
+// reads it leaves the callback queued forever, so `pending` never reaches zero
+// and the process never exits. Measured before the fix: a 5 MB launch error with
+// an unread stdout pipe was still running after 4 s. That also defeated the
+// forced exit itself, which exists to escape a Playwright handle the probe's
+// bound cannot cancel -- so an unbounded flush unbounded the whole ladder.
+//
+// THE ORDERING IS THE POINT, and it is the opposite of what the flush fix
+// assumed: A TRUNCATED REPORT BEATS A HANG. A report cut short still tells the
+// reader something and the exit status still arrives; a diagnostic that never
+// returns tells them nothing and blocks whatever ran it.
+//
+// Ten seconds, and NOT `unref`ed. A consumer reading at any ordinary rate drains
+// megabytes in well under a second, so this cannot cut short a healthy reader --
+// it only ends a wait on a reader that is not reading. Unref'ing it would be the
+// round-9 mistake again: a bound that cannot fire when the thing it is bounding
+// is the only work left is not a bound. The pending write keeps the loop alive
+// either way, and every settled path clears the timer.
+const FLUSH_TIMEOUT_MS = 10 * 1000;
+
+function flushThenExit(code, streams = FLUSHED_STREAMS, exit = process.exit,
+                       timeout = FLUSH_TIMEOUT_MS) {
+  let done = false;
+  const leave = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    exit(code);
+  };
+  const timer = setTimeout(leave, timeout);
+
   let pending = streams.length;
-  if (!pending) { exit(code); return; }
-  const settled = () => { pending -= 1; if (pending === 0) exit(code); };
+  if (!pending) { leave(); return; }
+  const settled = () => { pending -= 1; if (pending === 0) leave(); };
   for (const stream of streams) {
     try {
       stream.write('', settled);
@@ -778,7 +864,8 @@ function flushThenExit(code, streams = FLUSHED_STREAMS, exit = process.exit) {
 module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, realLaunch,
   resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs,
   DEFAULT_TESTS_DIR, PROBE_TIMEOUT_MS, bounded, treeRootOf, killGroup,
-  flushThenExit, FLUSHED_STREAMS };
+  flushThenExit, FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS,
+  CLEANUP_SIGNALS, reapActiveInstalls };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then((code) => {

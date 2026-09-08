@@ -42,7 +42,9 @@ const LADDER = process.env.BROWSER_LADDER_BIN
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
   resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf, flushThenExit,
-  FLUSHED_STREAMS } = require(LADDER);
+  FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS, CLEANUP_SIGNALS,
+  NOT_OUR_SIGNALS, STOP_SIGNALS, boundReportLine, MAX_REPORT_LINE_BYTES,
+  cleanupSignalsFor } = require(LADDER);
 import { tmpdir } from 'os';
 import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'fs';
 import { spawn as spawnProcess, spawnSync } from 'child_process';
@@ -1063,6 +1065,465 @@ function eq(actual, expected, what) {
         || !FLUSHED_STREAMS.includes(process.stdout)
         || !FLUSHED_STREAMS.includes(process.stderr)) {
       throw new Error('every refusal in this file goes to stderr; it must be flushed too');
+    }
+  });
+
+  // ── #358: the ladder's own death must reap the installer ────────────────
+
+  // THE END-TO-END CASE, and it pins BOTH halves at once. Reaping is worthless
+  // if the fix also swallows the signal: a handler that only cleans up replaces
+  // Node's default action and leaves Ctrl-C not stopping the ladder, trading a
+  // leaked installer for an unkillable diagnostic. So the assertion is "no
+  // descendant survived AND the ladder itself died of the signal".
+  await check('SIGINT on the ladder reaps the installer AND still kills the ladder', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-parent-')));
+    const marker = join(dir, 'orphan.txt');
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    // Never launches, so the ladder reaches the install rung and stays there.
+    writeFileSync(join(pkg, 'index.js'),
+      "module.exports = { chromium: { launch: async () => "
+      + "{ throw new Error('needs install'); } } };\n");
+    // A grandchild that outlives the signal unless the GROUP is reaped, and a
+    // leader `exec`d so the signal reaches something that dies promptly.
+    writeFileSync(join(dir, 'bin', 'npx'),
+      `#!/bin/sh\n( sleep 12; echo alive > ${marker} ) &\nexec sleep 60\n`, { mode: 0o755 });
+
+    const proc = spawnProcess(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    proc.stdout.resume();
+    proc.stderr.resume();
+
+    return new Promise((resolve, reject) => {
+      setTimeout(() => { try { process.kill(proc.pid, 'SIGINT'); } catch { /* gone */ } }, 2500);
+      proc.on('exit', (code, signal) => {
+        setTimeout(() => {
+          try {
+            // HALF ONE: the signal was not swallowed.
+            if (signal !== 'SIGINT') {
+              throw new Error(`the ladder must still die of SIGINT, got code=${code} signal=${signal}`);
+            }
+            // HALF TWO: nothing of the installer survived it.
+            if (existsSync(marker)) {
+              throw new Error('the installer group outlived the ladder that spawned it');
+            }
+            resolve();
+          } catch (err) { reject(err); }
+        }, 12000);
+      });
+    });
+  });
+
+  // ── #359: the signal set is DERIVED, not listed ─────────────────────────
+
+  // THE FINDING ITSELF, end to end. The first version listed SIGINT/SIGTERM/
+  // SIGHUP from memory; Codex sent SIGQUIT and the installer group survived
+  // (status 131, orphan alive). Reproduced here before the fix.
+  //
+  // Both halves are asserted, as with SIGINT: reaping is worthless if the fix
+  // also swallows the signal.
+  for (const signal of ['SIGQUIT', 'SIGXCPU']) {
+    // SIGXCPU is the case that proves DERIVATION rather than a longer list. It
+    // is named nowhere in the ladder — it arrives only because the set is
+    // computed from the platform minus the deny-list — and a `ulimit -t` kill in
+    // CI is exactly how it turns up in real life. A mutant that reverts to any
+    // hand-written list reddens this even if it remembers SIGQUIT.
+    await check(`${signal} on the ladder reaps the installer AND still kills the ladder`, () => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-sig-')));
+      const marker = join(dir, 'orphan.txt');
+      const pkg = join(dir, 'node_modules', 'playwright');
+      mkdirSync(pkg, { recursive: true });
+      mkdirSync(join(dir, 'bin'), { recursive: true });
+      writeFileSync(join(pkg, 'package.json'),
+        '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+      writeFileSync(join(pkg, 'index.js'),
+        "module.exports = { chromium: { launch: async () => "
+        + "{ throw new Error('needs install'); } } };\n");
+      writeFileSync(join(dir, 'bin', 'npx'),
+        `#!/bin/sh\n( sleep 12; echo alive > ${marker} ) &\nexec sleep 60\n`, { mode: 0o755 });
+
+      const proc = spawnProcess(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+      });
+      proc.stdout.resume();
+      proc.stderr.resume();
+
+      return new Promise((resolve, reject) => {
+        setTimeout(() => { try { process.kill(proc.pid, signal); } catch { /* gone */ } }, 2500);
+        proc.on('exit', (code, sig) => {
+          setTimeout(() => {
+            try {
+              if (sig !== signal) {
+                throw new Error(`the ladder must still die of ${signal}, got code=${code} signal=${sig}`);
+              }
+              if (existsSync(marker)) {
+                throw new Error(`the installer group outlived a ${signal} to the ladder`);
+              }
+              resolve();
+            } catch (err) { reject(err); }
+          }, 12000);
+        });
+      });
+    });
+  }
+
+  // THE COMPLEMENT, so the derivation cannot be bought by handling everything.
+  // A stop signal's default action SUSPENDS; reaping there would destroy an
+  // install the user means to resume with `fg`. This is the one family where
+  // over-coverage is not harmless, so it is pinned rather than left to a comment.
+  await check('a stop signal suspends the ladder and does NOT reap the installer', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-stop-')));
+    const marker = join(dir, 'orphan.txt');
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      "module.exports = { chromium: { launch: async () => "
+      + "{ throw new Error('needs install'); } } };\n");
+    // Writes its marker while the ladder is SUSPENDED — so the marker existing
+    // is the proof the installer was left alone.
+    writeFileSync(join(dir, 'bin', 'npx'),
+      `#!/bin/sh\n( sleep 3; echo alive > ${marker} ) &\nexec sleep 60\n`, { mode: 0o755 });
+
+    const proc = spawnProcess(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    proc.stdout.resume();
+    proc.stderr.resume();
+
+    return new Promise((resolve, reject) => {
+      setTimeout(() => { try { process.kill(proc.pid, 'SIGTSTP'); } catch { /* gone */ } }, 2000);
+      setTimeout(() => {
+        try {
+          if (!existsSync(marker)) {
+            throw new Error('SIGTSTP reaped the installer; a suspend the user resumes from '
+              + 'must leave the install running');
+          }
+          resolve();
+        } catch (err) { reject(err); }
+        finally {
+          try { process.kill(proc.pid, 'SIGCONT'); } catch { /* gone */ }
+          try { process.kill(proc.pid, 'SIGKILL'); } catch { /* gone */ }
+        }
+      }, 7000);
+    });
+  });
+
+  // The deny-list is the part still written by hand, so its contents are pinned.
+  // Each entry has a reason in the source; this asserts the reasons were acted
+  // on, and that the derivation did not quietly become an allow-list again.
+  await check('only signals with an ESTABLISHED terminate-default are handled', () => {
+    // Nothing is handled that the deny-list excludes.
+    for (const signal of CLEANUP_SIGNALS) {
+      if (NOT_OUR_SIGNALS.has(signal)) {
+        throw new Error(`${signal} is both handled and denied`);
+      }
+    }
+    // The two the kernel will not deliver must never be attempted. LITERAL, not
+    // the module's own lists — reading an expectation out of the thing under
+    // test is what made an earlier version of this case self-defeating.
+    for (const signal of ['SIGKILL', 'SIGSTOP']) {
+      if (CLEANUP_SIGNALS.includes(signal)) {
+        throw new Error(`${signal} cannot be caught; handling it is a false promise`);
+      }
+    }
+    // The family whose default action is to suspend, not terminate.
+    for (const signal of ['SIGTSTP', 'SIGTTIN', 'SIGTTOU']) {
+      if (CLEANUP_SIGNALS.includes(signal)) {
+        throw new Error(`${signal} suspends rather than terminates; reaping on it `
+          + 'destroys an install the user intends to resume');
+      }
+    }
+    // The signals Codex found missing across rounds 2 and 3, named so each
+    // regression is explicit rather than implied by a count.
+    for (const signal of ['SIGQUIT', 'SIGHUP', 'SIGINT', 'SIGTERM']) {
+      if (!CLEANUP_SIGNALS.includes(signal)) {
+        throw new Error(`${signal} is unhandled; an installer leaks on it`);
+      }
+    }
+  });
+
+  // THE CASE THAT COULD NOT HAVE BEEN WRITTEN ON THIS MACHINE BEFORE ROUND 3.
+  // The SIGINFO defect only exists on macOS/BSD — the signal is absent from
+  // os.constants.signals here — so a rule checked only against the local
+  // platform could not see it at all. `cleanupSignalsFor` takes the signal table
+  // as an argument precisely so the question can be asked about another OS.
+  await check('a foreign platform table cannot introduce an unestablished signal', () => {
+    // macOS's table, including the two extras that are not POSIX.
+    const darwin = {
+      SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGILL: 4, SIGTRAP: 5, SIGABRT: 6,
+      SIGEMT: 7, SIGFPE: 8, SIGKILL: 9, SIGBUS: 10, SIGSEGV: 11, SIGSYS: 12,
+      SIGPIPE: 13, SIGALRM: 14, SIGTERM: 15, SIGURG: 16, SIGSTOP: 17,
+      SIGTSTP: 18, SIGCONT: 19, SIGCHLD: 20, SIGTTIN: 21, SIGTTOU: 22,
+      SIGIO: 23, SIGXCPU: 24, SIGXFSZ: 25, SIGVTALRM: 26, SIGPROF: 27,
+      SIGWINCH: 28, SIGINFO: 29, SIGUSR1: 30, SIGUSR2: 31,
+    };
+    const handled = cleanupSignalsFor(darwin);
+
+    // THE FINDING. SIGINFO's default action is to be IGNORED, and Ctrl-T is how
+    // a user asks a long install how it is going. Handling it reaped the install
+    // and then re-raised a signal the OS discards — so the ladder stayed alive
+    // having destroyed the work, because someone asked for a progress report.
+    if (handled.includes('SIGINFO')) {
+      throw new Error('SIGINFO would be handled on macOS; its default is IGNORE, so a '
+        + 'Ctrl-T progress request would reap the install and leave the ladder running');
+    }
+    // The general rule behind it: a platform extra whose default action is not
+    // established is left alone. SIGEMT is the second one macOS ships.
+    if (handled.includes('SIGEMT')) {
+      throw new Error('SIGEMT is not an established terminate-default; handling it guesses');
+    }
+    // ...and the rule must not have been bought by handling nothing.
+    for (const signal of ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGTERM', 'SIGXCPU']) {
+      if (!handled.includes(signal)) {
+        throw new Error(`${signal} must still be handled on macOS; the exclusion `
+          + 'has been over-applied and the installer leaks everywhere');
+      }
+    }
+    // A signal the platform does not have is never handled, however established.
+    if (cleanupSignalsFor({ SIGINT: 2 }).length !== 1) {
+      throw new Error('a signal absent from the platform table must not be handled');
+    }
+  });
+
+  // Handlers are armed only while an install is in flight. A three-rung ladder
+  // must not accumulate three of them, and a process that merely REQUIRES this
+  // file must carry none — otherwise the fix leaks listeners instead of
+  // processes.
+  await check('parent handlers are armed during an install and removed after', async () => {
+    const baseline = CLEANUP_SIGNALS.map((sig) => process.listenerCount(sig));
+    const exitBaseline = process.listenerCount('exit');
+    let during = null;
+
+    await realInstall(['ignored'], process.cwd(), {
+      spawn: () => {
+        const child = new EventEmitter();
+        child.pid = -1;                       // never signalled; killGroup swallows it
+        child.stdout = null;
+        child.stderr = null;
+        setImmediate(() => {
+          during = {
+            signals: CLEANUP_SIGNALS.map((sig) => process.listenerCount(sig)),
+            exit: process.listenerCount('exit'),
+            tracked: ACTIVE_INSTALLS.size,
+          };
+          child.emit('close', 0, null);
+        });
+        return child;
+      },
+    });
+
+    eq(during.tracked, 1, 'the install is tracked while it runs');
+    for (const [i, sig] of CLEANUP_SIGNALS.entries()) {
+      if (during.signals[i] !== baseline[i] + 1) {
+        throw new Error(`${sig} was not armed during the install`);
+      }
+      if (process.listenerCount(sig) !== baseline[i]) {
+        throw new Error(`${sig} handler survived the install — the ladder leaks listeners`);
+      }
+    }
+    eq(during.exit, exitBaseline + 1, 'exit cleanup armed too');
+    eq(process.listenerCount('exit'), exitBaseline, 'and removed after');
+    eq(ACTIVE_INSTALLS.size, 0, 'and the install is no longer tracked');
+  });
+
+  // ── #358: the flush is bounded, and the ordering is the point ────────────
+
+  // An undrained pipe used to hang forever. A truncated report beats a hang.
+  await check('an unread output pipe exits at the deadline instead of hanging', () => {
+    let exited = null;
+    const stuck = { write: () => { /* callback never invoked */ } };
+    const started = Date.now();
+    flushThenExit(4, [stuck], (code) => { exited = code; }, 300);
+    return new Promise((resolve, reject) => setTimeout(() => {
+      try {
+        eq(exited, 4, 'the exit happened, with its code');
+        if (Date.now() - started > 5000) throw new Error('the deadline did not apply');
+        resolve();
+      } catch (err) { reject(err); }
+    }, 600));
+  });
+
+  // ...and the complement, so the bound is not bought by giving up on draining:
+  // a stream that DOES drain must still be waited for, which is the round-9
+  // property this must not undo.
+  await check('a draining stream is still waited for, not cut short by the bound', () => {
+    let exited = null;
+    let release = null;
+    const slow = { write: (_s, cb) => { release = cb; } };
+    flushThenExit(5, [slow], (code) => { exited = code; }, 60000);
+    return new Promise((resolve, reject) => setTimeout(() => {
+      try {
+        eq(exited, null, 'not exited while the stream is still draining');
+        release();
+        setTimeout(() => {
+          try { eq(exited, 5, 'and it exits as soon as the stream drains'); resolve(); }
+          catch (err) { reject(err); }
+        }, 20);
+      } catch (err) { reject(err); }
+    }, 50));
+  });
+
+  await check('the flush deadline is finite, and generous enough for a real reader', () => {
+    if (!FLUSH_TIMEOUT_MS || FLUSH_TIMEOUT_MS > 60 * 1000) {
+      throw new Error(`flush deadline is ${FLUSH_TIMEOUT_MS}; an unbounded flush hangs the ladder`);
+    }
+    // The old version of this comment claimed the deadline "cannot cut short a
+    // healthy reader". It could, and did — see the ceiling case below, which is
+    // what now carries that claim. This case only pins the value as finite and
+    // not absurdly tight; the SAFETY of the value is arithmetic over the report
+    // ceiling, not a property of the number on its own.
+    if (FLUSH_TIMEOUT_MS < 2 * 1000) {
+      throw new Error(`flush deadline is ${FLUSH_TIMEOUT_MS}; too tight to let a real reader finish`);
+    }
+  });
+
+  // ── #359: the deadline is only safe because the report is bounded ────────
+
+  await check('every report line is bounded in BYTES, and says how much it dropped', () => {
+    const short = 'a'.repeat(MAX_REPORT_LINE_BYTES);
+    eq(boundReportLine(short), short, 'a line within the cap must pass through untouched');
+
+    const long = boundReportLine('b'.repeat(MAX_REPORT_LINE_BYTES + 5000));
+    if (Buffer.byteLength(long, 'utf8') > MAX_REPORT_LINE_BYTES + 200) {
+      throw new Error(`a bounded line is still ${Buffer.byteLength(long, 'utf8')} bytes`);
+    }
+    // SILENT shortening is its own defect: a reader given a cut-off error
+    // message with no marker chases the wrong cause.
+    if (!/truncated: 5000 more bytes on this line/.test(long)) {
+      throw new Error(`the cap must say how much it dropped, got: ${JSON.stringify(long.slice(-80))}`);
+    }
+
+    // THE UNIT. A JS string length counts UTF-16 code units; stdout drains
+    // UTF-8. A character cap let 2,000 CJK characters through as ~6,000 bytes,
+    // so the byte ceiling the flush deadline rests on was overstated threefold
+    // on any non-ASCII output — and the old case, which measured `.length`,
+    // could not see it (Codex, #359).
+    for (const [label, sample] of [['CJK', '観'], ['emoji', '👩‍🚀'], ['accented', 'é']]) {
+      const bounded = boundReportLine(sample.repeat(5000));
+      const bytes = Buffer.byteLength(bounded, 'utf8');
+      if (bytes > MAX_REPORT_LINE_BYTES + 200) {
+        throw new Error(`a bounded ${label} line is ${bytes} bytes; the cap counts characters, `
+          + 'not the bytes the ceiling is stated in');
+      }
+      // Cutting mid-sequence would emit U+FFFD and corrupt the very error text
+      // the report exists to preserve.
+      if (bounded.includes('\uFFFD')) {
+        throw new Error(`bounding a ${label} line split a multi-byte sequence`);
+      }
+    }
+  });
+
+  // THE CASE THAT CARRIES THE DEADLINE'S SAFETY. An elapsed-time bound cannot
+  // tell a slow reader from a stopped one — at any value — UNLESS the thing
+  // being drained has a known maximum. So the maximum is MEASURED here, through
+  // the CLI, on every path that prints. Before the bound: 15,769,172 bytes.
+  //
+  // It OBSERVES real output rather than checking that `boundReportLine` is
+  // called, because the rule has now escaped through three different channels
+  // in three rounds — report(), the progress log, and main()'s own refusals
+  // (Codex, #359). A check that names call sites finds one site per round; this
+  // one does not care how a line is produced, only that it came out bounded.
+  //
+  // Each scenario floods a DIFFERENT channel, and the argv ones are the round-3
+  // finding: an accepted 115,000-character browser name delivered 102,400 of
+  // 115,081 bytes to a slow reader.
+  for (const [label, build] of [
+    ['a flooded report', (dir) => {
+      const pkg = join(dir, 'node_modules', 'playwright');
+      mkdirSync(pkg, { recursive: true });
+      writeFileSync(join(pkg, 'package.json'),
+        '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+      writeFileSync(join(pkg, 'index.js'),
+        "const big = ('E'.repeat(5 * 1024 * 1024) + '\\n').repeat(3);\n"
+        + "module.exports = { chromium: { launch: async () => { throw new Error(big); } } };\n");
+      writeFileSync(join(dir, 'bin', 'npx'),
+        "#!/bin/sh\nawk 'BEGIN{for(i=0;i<200;i++){s=\"\";for(j=0;j<20000;j++)s=s\"X\";print s}}'\nexit 1\n",
+        { mode: 0o755 });
+      return ['chromium', '--tests-dir', dir];
+    }],
+    ['a multibyte flooded report', (dir) => {
+      const pkg = join(dir, 'node_modules', 'playwright');
+      mkdirSync(pkg, { recursive: true });
+      writeFileSync(join(pkg, 'package.json'),
+        '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+      // The same flood in CJK: three bytes per character, so a character-based
+      // cap passes this while the byte ceiling silently triples.
+      writeFileSync(join(pkg, 'index.js'),
+        "const big = ('観'.repeat(2 * 1024 * 1024) + '\\n').repeat(3);\n"
+        + "module.exports = { chromium: { launch: async () => { throw new Error(big); } } };\n");
+      writeFileSync(join(dir, 'bin', 'npx'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+      return ['chromium', '--tests-dir', dir];
+    }],
+    ['an enormous browser argument', () => ['z'.repeat(115000)]],
+    ['an enormous --tests-dir', (dir) => ['chromium', '--tests-dir', join(dir, 'q'.repeat(115000))]],
+  ]) {
+    await check(`${label} stays small enough for the deadline to be safe`, () => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-ceiling-')));
+      mkdirSync(join(dir, 'bin'), { recursive: true });
+      const argv = build(dir);
+
+      const proc = spawnSync(process.execPath, [LADDER, ...argv], {
+        env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+        maxBuffer: 512 * 1024 * 1024,
+        encoding: 'utf8',
+      });
+      const out = `${proc.stdout || ''}${proc.stderr || ''}`;
+      const longest = Math.max(...out.split('\n').map((line) => Buffer.byteLength(line, 'utf8')));
+
+      // The per-line cap, in BYTES, observed on real output.
+      if (longest > MAX_REPORT_LINE_BYTES + 200) {
+        throw new Error(`${label}: a line reached ${longest} bytes; the cap is not applied `
+          + 'on every channel that carries text the ladder did not write');
+      }
+      // The ceiling the deadline's arithmetic rests on. 250 KB over ten seconds
+      // is 25 KB/s — still far below any reader this could plausibly cut short.
+      const bytes = Buffer.byteLength(out, 'utf8');
+      if (bytes > 250 * 1024) {
+        throw new Error(`${label}: output is ${bytes} bytes; too large for `
+          + `${FLUSH_TIMEOUT_MS} ms to deliver to a slow reader`);
+      }
+      // ...and the refusal still has to SAY something, or the bound could be
+      // satisfied by printing nothing at all.
+      if (!out.trim()) {
+        throw new Error(`${label}: produced no output; a bound met by silence is not a bound`);
+      }
+    });
+  }
+
+  // The whole path, through the CLI: a large report to a reader that DRAINS
+  // still arrives complete. This is the round-9 case, re-asserted against the
+  // bound that could have quietly re-truncated it.
+  await check('a drained pipe still receives the complete report', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-drain-')));
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      "module.exports = { chromium: { launch: async () => "
+      + "{ throw new Error('E'.repeat(200000)); } } };\n");
+    writeFileSync(join(dir, 'bin', 'npx'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    eq(proc.status, 1, 'a CEILING is exit 1');
+    if (!/EEEEE/.test(proc.stdout)) throw new Error('the launch error never reached the pipe');
+    if (!/what would make it wrong/.test(proc.stdout)) {
+      throw new Error(`the report was truncated: ${proc.stdout.length} bytes, no closing line`);
     }
   });
 

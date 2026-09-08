@@ -42,7 +42,8 @@ const LADDER = process.env.BROWSER_LADDER_BIN
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
   resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf, flushThenExit,
-  FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS, CLEANUP_SIGNALS } = require(LADDER);
+  FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS, CLEANUP_SIGNALS,
+  NOT_OUR_SIGNALS, STOP_SIGNALS, boundReportLine, MAX_REPORT_LINE } = require(LADDER);
 import { tmpdir } from 'os';
 import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'fs';
 import { spawn as spawnProcess, spawnSync } from 'child_process';
@@ -1117,6 +1118,145 @@ function eq(actual, expected, what) {
     });
   });
 
+  // ── #359: the signal set is DERIVED, not listed ─────────────────────────
+
+  // THE FINDING ITSELF, end to end. The first version listed SIGINT/SIGTERM/
+  // SIGHUP from memory; Codex sent SIGQUIT and the installer group survived
+  // (status 131, orphan alive). Reproduced here before the fix.
+  //
+  // Both halves are asserted, as with SIGINT: reaping is worthless if the fix
+  // also swallows the signal.
+  for (const signal of ['SIGQUIT', 'SIGXCPU']) {
+    // SIGXCPU is the case that proves DERIVATION rather than a longer list. It
+    // is named nowhere in the ladder — it arrives only because the set is
+    // computed from the platform minus the deny-list — and a `ulimit -t` kill in
+    // CI is exactly how it turns up in real life. A mutant that reverts to any
+    // hand-written list reddens this even if it remembers SIGQUIT.
+    await check(`${signal} on the ladder reaps the installer AND still kills the ladder`, () => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-sig-')));
+      const marker = join(dir, 'orphan.txt');
+      const pkg = join(dir, 'node_modules', 'playwright');
+      mkdirSync(pkg, { recursive: true });
+      mkdirSync(join(dir, 'bin'), { recursive: true });
+      writeFileSync(join(pkg, 'package.json'),
+        '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+      writeFileSync(join(pkg, 'index.js'),
+        "module.exports = { chromium: { launch: async () => "
+        + "{ throw new Error('needs install'); } } };\n");
+      writeFileSync(join(dir, 'bin', 'npx'),
+        `#!/bin/sh\n( sleep 12; echo alive > ${marker} ) &\nexec sleep 60\n`, { mode: 0o755 });
+
+      const proc = spawnProcess(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+      });
+      proc.stdout.resume();
+      proc.stderr.resume();
+
+      return new Promise((resolve, reject) => {
+        setTimeout(() => { try { process.kill(proc.pid, signal); } catch { /* gone */ } }, 2500);
+        proc.on('exit', (code, sig) => {
+          setTimeout(() => {
+            try {
+              if (sig !== signal) {
+                throw new Error(`the ladder must still die of ${signal}, got code=${code} signal=${sig}`);
+              }
+              if (existsSync(marker)) {
+                throw new Error(`the installer group outlived a ${signal} to the ladder`);
+              }
+              resolve();
+            } catch (err) { reject(err); }
+          }, 12000);
+        });
+      });
+    });
+  }
+
+  // THE COMPLEMENT, so the derivation cannot be bought by handling everything.
+  // A stop signal's default action SUSPENDS; reaping there would destroy an
+  // install the user means to resume with `fg`. This is the one family where
+  // over-coverage is not harmless, so it is pinned rather than left to a comment.
+  await check('a stop signal suspends the ladder and does NOT reap the installer', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-stop-')));
+    const marker = join(dir, 'orphan.txt');
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      "module.exports = { chromium: { launch: async () => "
+      + "{ throw new Error('needs install'); } } };\n");
+    // Writes its marker while the ladder is SUSPENDED — so the marker existing
+    // is the proof the installer was left alone.
+    writeFileSync(join(dir, 'bin', 'npx'),
+      `#!/bin/sh\n( sleep 3; echo alive > ${marker} ) &\nexec sleep 60\n`, { mode: 0o755 });
+
+    const proc = spawnProcess(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+    });
+    proc.stdout.resume();
+    proc.stderr.resume();
+
+    return new Promise((resolve, reject) => {
+      setTimeout(() => { try { process.kill(proc.pid, 'SIGTSTP'); } catch { /* gone */ } }, 2000);
+      setTimeout(() => {
+        try {
+          if (!existsSync(marker)) {
+            throw new Error('SIGTSTP reaped the installer; a suspend the user resumes from '
+              + 'must leave the install running');
+          }
+          resolve();
+        } catch (err) { reject(err); }
+        finally {
+          try { process.kill(proc.pid, 'SIGCONT'); } catch { /* gone */ }
+          try { process.kill(proc.pid, 'SIGKILL'); } catch { /* gone */ }
+        }
+      }, 7000);
+    });
+  });
+
+  // The deny-list is the part still written by hand, so its contents are pinned.
+  // Each entry has a reason in the source; this asserts the reasons were acted
+  // on, and that the derivation did not quietly become an allow-list again.
+  await check('the derived set covers the platform minus a stated deny-list', () => {
+    const platform = Object.keys(require('os').constants.signals);
+
+    // Nothing is handled that the deny-list excludes...
+    for (const signal of CLEANUP_SIGNALS) {
+      if (NOT_OUR_SIGNALS.has(signal)) {
+        throw new Error(`${signal} is both handled and denied`);
+      }
+    }
+    // ...and nothing the platform offers is silently dropped. This is the
+    // assertion that fails when someone re-writes CLEANUP_SIGNALS as a literal:
+    // every omission must be a DELIBERATE deny-list entry.
+    for (const signal of platform) {
+      if (!CLEANUP_SIGNALS.includes(signal) && !NOT_OUR_SIGNALS.has(signal)) {
+        throw new Error(`${signal} is neither handled nor excluded with a reason; `
+          + 'the set has drifted back to a hand-written list');
+      }
+    }
+    // The two the kernel will not deliver must never be attempted.
+    for (const signal of ['SIGKILL', 'SIGSTOP']) {
+      if (CLEANUP_SIGNALS.includes(signal)) {
+        throw new Error(`${signal} cannot be caught; handling it is a false promise`);
+      }
+    }
+    // And the family whose default action is to suspend, not terminate.
+    for (const signal of STOP_SIGNALS) {
+      if (CLEANUP_SIGNALS.includes(signal)) {
+        throw new Error(`${signal} suspends rather than terminates; reaping on it `
+          + 'destroys an install the user intends to resume');
+      }
+    }
+    // A signal Codex actually found missing, named so the regression is explicit.
+    if (!CLEANUP_SIGNALS.includes('SIGQUIT')) {
+      throw new Error('SIGQUIT is unhandled — this is the exact #359 finding');
+    }
+  });
+
   // Handlers are armed only while an install is in flight. A three-rung ladder
   // must not accumulate three of them, and a process that merely REQUIRES this
   // file must carry none — otherwise the fix leaks listeners instead of
@@ -1199,11 +1339,74 @@ function eq(actual, expected, what) {
     if (!FLUSH_TIMEOUT_MS || FLUSH_TIMEOUT_MS > 60 * 1000) {
       throw new Error(`flush deadline is ${FLUSH_TIMEOUT_MS}; an unbounded flush hangs the ladder`);
     }
-    // A consumer reading at any ordinary rate drains megabytes in well under a
-    // second, so this bounds a reader that is NOT reading — it must not be tight
-    // enough to cut short one that is.
+    // The old version of this comment claimed the deadline "cannot cut short a
+    // healthy reader". It could, and did — see the ceiling case below, which is
+    // what now carries that claim. This case only pins the value as finite and
+    // not absurdly tight; the SAFETY of the value is arithmetic over the report
+    // ceiling, not a property of the number on its own.
     if (FLUSH_TIMEOUT_MS < 2 * 1000) {
       throw new Error(`flush deadline is ${FLUSH_TIMEOUT_MS}; too tight to let a real reader finish`);
+    }
+  });
+
+  // ── #359: the deadline is only safe because the report is bounded ────────
+
+  await check('every report line is bounded, and the truncation announces itself', () => {
+    const short = 'a'.repeat(MAX_REPORT_LINE);
+    eq(boundReportLine(short), short, 'a line within the cap must pass through untouched');
+
+    const long = boundReportLine('b'.repeat(MAX_REPORT_LINE + 5000));
+    if (long.length > MAX_REPORT_LINE + 200) {
+      throw new Error(`a bounded line is still ${long.length} characters`);
+    }
+    // SILENT shortening is its own defect: a reader given a cut-off error message
+    // with no marker chases the wrong cause.
+    if (!/truncated: 5000 more characters on this line/.test(long)) {
+      throw new Error(`the cap must say how much it dropped, got: ${JSON.stringify(long.slice(-80))}`);
+    }
+  });
+
+  // THE CASE THAT CARRIES THE DEADLINE'S SAFETY. An elapsed-time bound cannot
+  // tell a slow reader from a stopped one — at any value — UNLESS the thing being
+  // drained has a known maximum. So the maximum is measured here, through the
+  // CLI, with both text channels flooded: a single-line 5 MB launch error (the
+  // shape Codex used, #359) and an installer emitting 200 lines of 20,000
+  // characters. Before the bound this produced 15,769,172 bytes.
+  //
+  // It fails if the report ever grows past what the deadline can deliver, which
+  // is the only thing that would make the ten seconds unsafe again.
+  await check('a flooded report stays small enough for the deadline to be safe', () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-ceiling-')));
+    const pkg = join(dir, 'node_modules', 'playwright');
+    mkdirSync(pkg, { recursive: true });
+    mkdirSync(join(dir, 'bin'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'),
+      '{"name":"playwright","version":"0.0.0","main":"index.js"}');
+    writeFileSync(join(pkg, 'index.js'),
+      "const big = ('E'.repeat(5 * 1024 * 1024) + '\\n').repeat(3);\n"
+      + "module.exports = { chromium: { launch: async () => { throw new Error(big); } } };\n");
+    writeFileSync(join(dir, 'bin', 'npx'),
+      "#!/bin/sh\nawk 'BEGIN{for(i=0;i<200;i++){s=\"\";for(j=0;j<20000;j++)s=s\"X\";print s}}'\nexit 1\n",
+      { mode: 0o755 });
+
+    const proc = spawnSync(process.execPath, [LADDER, 'chromium', '--tests-dir', dir], {
+      env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` },
+      maxBuffer: 512 * 1024 * 1024,
+      encoding: 'utf8',
+    });
+    const out = `${proc.stdout || ''}${proc.stderr || ''}`;
+    const longest = Math.max(...out.split('\n').map((line) => line.length));
+
+    // The per-line cap, observed on real output rather than on the helper.
+    if (longest > MAX_REPORT_LINE + 200) {
+      throw new Error(`a report line reached ${longest} characters; the cap is not applied `
+        + 'on every channel that carries text the ladder did not write');
+    }
+    // The ceiling the deadline's arithmetic rests on. 250 KB over ten seconds is
+    // 25 KB/s — still far below any reader this could plausibly cut short.
+    if (out.length > 250 * 1024) {
+      throw new Error(`a flooded report is ${out.length} bytes; too large for `
+        + `${FLUSH_TIMEOUT_MS} ms to deliver to a slow reader`);
     }
   });
 

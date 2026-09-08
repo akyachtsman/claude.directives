@@ -49,28 +49,40 @@
 //      timeout kill the installer's whole process group, and it also puts that
 //      group outside this process's foreground group -- so a Ctrl-C aimed at the
 //      ladder did not reach it, and `playwright install` (with apt beneath it on
-//      the --with-deps rung) kept running. Parent-side SIGINT/SIGTERM/SIGHUP and
-//      exit cleanup now reap the group, armed only while an install is in flight.
-//      The signal is RE-RAISED rather than swallowed, so Ctrl-C still stops the
-//      ladder: a handler that only cleaned up would have traded a leaked
-//      installer for an unkillable diagnostic.
+//      the --with-deps rung) kept running. Parent-side signal and exit cleanup
+//      now reap the group, armed only while an install is in flight. The signal
+//      is RE-RAISED rather than swallowed, so Ctrl-C still stops the ladder: a
+//      handler that only cleaned up would have traded a leaked installer for an
+//      unkillable diagnostic. The signals covered are DERIVED from the platform
+//      minus a stated deny-list, because the first version listed three from
+//      memory and missed SIGQUIT (#359).
 //
-//   2. THE FLUSH IS BOUNDED. Waiting for every stream to drain turned a truncated
-//      report into a HANG when a consumer opened a pipe and never read it, which
-//      also defeated the forced exit that escapes an uncancellable Playwright
-//      handle. The wait now has a deadline, and the ordering is deliberate: A
-//      TRUNCATED REPORT BEATS A HANG.
+//   2. THE FLUSH IS BOUNDED, BY PROGRESS. Waiting for every stream to drain
+//      turned a truncated report into a HANG when a consumer opened a pipe and
+//      never read it, which also defeated the forced exit that escapes an
+//      uncancellable Playwright handle. The ordering is deliberate -- A TRUNCATED
+//      REPORT BEATS A HANG -- but the first bound was ten seconds of ELAPSED
+//      time, which truncated a slow, healthy reader just as readily (#359). The
+//      deadline now measures bytes moving, so only a reader that has stopped
+//      reading ends the wait.
 //
 // ⚠️ STILL NOT PROMISED. A `SIGKILL` to the ladder runs no handler at all -- the
 // OS does not deliver it -- so an installer can outlive the ladder that way and
 // nothing in this file can change that. If you `kill -9` a run mid-install,
-// check for stragglers.
+// check for stragglers. This is the ONLY remaining route, and it is stated that
+// way only because SIGKILL and SIGSTOP are the two signals a process cannot
+// catch; every other signal the platform defines is either handled or excluded
+// with a reason at CLEANUP_SIGNALS. An earlier version of this paragraph made
+// the same claim while three signals were handled, which is how SIGQUIT was
+// missed -- so read it as a consequence of that derivation, not as a promise
+// standing on its own.
 'use strict';
 
 const { spawn: spawnProcess, spawnSync } = require('child_process');
 const { createRequire } = require('module');
 const { dirname, join, resolve, sep } = require('path');
 const { existsSync } = require('fs');
+const { constants: osConstants } = require('os');
 
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
 
@@ -183,9 +195,31 @@ function firstLine(text) {
 }
 
 /** Render the verdict. Separated from `ladder` so the cases file can pin both. */
+// EVERY REPORT LINE IS BOUNDED (#359). The line COUNTS here were always capped
+// -- ten lines of installer output, eight of the launch error -- but a single
+// line was not, and a launch error is whatever the browser chose to throw. That
+// left the report unbounded in bytes while looking bounded, which is what made
+// the flush deadline below unprovable: for any elapsed-time bound there is a
+// report large enough to truncate a reader that is working perfectly (Codex,
+// #359; reproduced at 5 MB on one line, losing 1.9 MB to a healthy consumer).
+//
+// Capping the line closes that at the source and is worth doing on its own: a
+// multi-megabyte single line in a CI log is not a diagnostic anyone can read.
+// The cap ANNOUNCES itself, because silently shortening an error message is how
+// a reader is sent chasing the wrong cause.
+const MAX_REPORT_LINE = 2000;
+
+function boundReportLine(line) {
+  const text = String(line);
+  if (text.length <= MAX_REPORT_LINE) return text;
+  const dropped = text.length - MAX_REPORT_LINE;
+  return `${text.slice(0, MAX_REPORT_LINE)}… [truncated: ${dropped} more characters on this line]`;
+}
+
 function report(browser, outcome, print = console.log) {
+  const emit = (line = '') => print(boundReportLine(line));
   if (outcome.ok) {
-    print(`browser-ladder: LAUNCHES — ${browser} started at rung "${outcome.rung}"`);
+    emit(`browser-ladder: LAUNCHES — ${browser} started at rung "${outcome.rung}"`);
     // SAY ONLY WHAT WAS TESTED. These two lines used to read "a failure in your
     // suite is about your code or your app" -- which contradicts this file's own
     // header three screens up. A browser that opens an empty context proves
@@ -194,11 +228,11 @@ function report(browser, outcome, print = console.log) {
     // here as an application regression (Codex, #355). An instrument that
     // over-claims in its PASS is the same defect as one that over-claims in its
     // failure; this one just reads as reassurance.
-    print('  No ceiling for BROWSER STARTUP. That is the only thing this tested:');
-    print('  the browser process came up and answered. If your suite fails, browser');
-    print('  startup is not the demonstrated cause — but network egress, DNS, TLS,');
-    print('  filesystem limits and every other sandbox constraint are all still');
-    print('  open questions, and this says nothing about any of them.');
+    emit('  No ceiling for BROWSER STARTUP. That is the only thing this tested:');
+    emit('  the browser process came up and answered. If your suite fails, browser');
+    emit('  startup is not the demonstrated cause — but network egress, DNS, TLS,');
+    emit('  filesystem limits and every other sandbox constraint are all still');
+    emit('  open questions, and this says nothing about any of them.');
     return 0;
   }
 
@@ -209,64 +243,64 @@ function report(browser, outcome, print = console.log) {
   // the wrong thing, and `test.md` asks projects to write these limits down.
   if (outcome.interrupted) {
     const last = outcome.attempts[outcome.attempts.length - 1];
-    print('browser-ladder: CANNOT CHECK — this ladder could not run the installer to completion');
-    print('');
+    emit('browser-ladder: CANNOT CHECK — this ladder could not run the installer to completion');
+    emit('');
     // FIRST, and outside the truncation: this is the only line that says WHICH
     // way the installer was cut short.
-    print(`  WHY: ${last.install.reason || '(reason not recorded)'}`);
-    print('');
-    print('  What the installer had said before that (first 10 lines):');
-    for (const line of String(last.install.output || '').split('\n').slice(0, 10)) print(`  ${line}`);
-    print('');
-    print('  The launch was attempted anyway, and failed:');
+    emit(`  WHY: ${last.install.reason || '(reason not recorded)'}`);
+    emit('');
+    emit('  What the installer had said before that (first 10 lines):');
+    for (const line of String(last.install.output || '').split('\n').slice(0, 10)) emit(`  ${line}`);
+    emit('');
+    emit('  The launch was attempted anyway, and failed:');
     for (const line of String(last.launch.error || '(no message)').split('\n').slice(0, 8)) {
-      print(`    ${line}`);
+      emit(`    ${line}`);
     }
-    print('');
-    print('  That failure is NOT read as a ceiling. A browser this ladder never');
-    print('  finished fetching fails to start for a reason this ladder caused, and');
-    print('  nothing here can tell that apart from a browser that genuinely will');
-    print('  not run. Had it launched, that would have been a pass — a launch is a');
-    print('  launch however the installer ended.');
+    emit('');
+    emit('  That failure is NOT read as a ceiling. A browser this ladder never');
+    emit('  finished fetching fails to start for a reason this ladder caused, and');
+    emit('  nothing here can tell that apart from a browser that genuinely will');
+    emit('  not run. Had it launched, that would have been a pass — a launch is a');
+    emit('  launch however the installer ended.');
     return 2;
   }
   if (outcome.harness) {
-    print(`browser-ladder: CANNOT CHECK — Playwright itself could not be loaded`);
-    print('');
-    for (const line of String(last.launch.error || '').split('\n')) print(`  ${line}`);
-    print('');
-    print('  This says nothing about whether the browser works. Install the UI kit\'s');
-    print('  dependencies, or point --tests-dir at the directory that holds them:');
-    print('    node browser-ladder.js chromium --tests-dir <dir with node_modules>');
+    emit(`browser-ladder: CANNOT CHECK — Playwright itself could not be loaded`);
+    emit('');
+    for (const line of String(last.launch.error || '').split('\n')) emit(`  ${line}`);
+    emit('');
+    emit('  This says nothing about whether the browser works. Install the UI kit\'s');
+    emit('  dependencies, or point --tests-dir at the directory that holds them:');
+    emit('    node browser-ladder.js chromium --tests-dir <dir with node_modules>');
     return 2;
   }
 
-  print(`browser-ladder: CEILING — ${browser} did not launch after ${outcome.attempts.length} rung(s)`);
-  print('');
-  print('  THE EVIDENCE IS THE LAUNCH ERROR, quoted verbatim so you can judge it:');
+  emit(`browser-ladder: CEILING — ${browser} did not launch after ${outcome.attempts.length} rung(s)`);
+  emit('');
+  emit('  THE EVIDENCE IS THE LAUNCH ERROR, quoted verbatim so you can judge it:');
   for (const line of String(last.launch.error || '(no message)').split('\n').slice(0, 12)) {
-    print(`    ${line}`);
+    emit(`    ${line}`);
   }
-  print('');
-  print('  What each rung did (install exit codes are CONTEXT, never the verdict):');
+  emit('');
+  emit('  What each rung did (install exit codes are CONTEXT, never the verdict):');
   for (const attempt of outcome.attempts) {
     const code = attempt.install ? `install exit ${attempt.install.code}` : 'no install attempted';
-    print(`    ${attempt.rung.padEnd(20)} ${code} -> launch failed`);
+    emit(`    ${attempt.rung.padEnd(20)} ${code} -> launch failed`);
   }
   for (const attempt of outcome.attempts) {
     if (attempt.install && attempt.install.output && attempt.install.code !== 0) {
-      print('');
-      print(`  Install output from "${attempt.rung}", for diagnosis only — this text is`);
-      print('  NOT classified here, because a rule that pattern-matches an error string');
-      print('  is a rule about a message rather than about what happened:');
+      emit('');
+      emit(`  Install output from "${attempt.rung}", for diagnosis only — this text is`);
+      emit('  NOT classified here, because a rule that pattern-matches an error string');
+      emit('  is a rule about a message rather than about what happened:');
       for (const line of String(attempt.install.output).split('\n').slice(0, 8)) {
-        print(`    ${line}`);
+        emit(`    ${line}`);
       }
     }
   }
-  print('');
-  print('  Record this in the project\'s CLAUDE.md per test.md -> Sandboxed local');
-  print('  runs: the DATE, the causes above, and what would make it wrong.');
+  emit('');
+  emit('  Record this in the project\'s CLAUDE.md per test.md -> Sandboxed local');
+  emit('  runs: the DATE, the causes above, and what would make it wrong.');
   return 1;
 }
 
@@ -383,7 +417,49 @@ function killGroup(child) {
 // the last one finishes, so a three-rung ladder does not accumulate three of
 // them -- and a process that merely REQUIRES this file gets none at all.
 const ACTIVE_INSTALLS = new Set();
-const CLEANUP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+
+// THE SET IS DERIVED, NOT LISTED (#359). The first version named three signals
+// -- SIGINT, SIGTERM, SIGHUP -- and Codex found SIGQUIT missing: Ctrl-\\ killed
+// the ladder with status 131 and the installer group survived. That is an
+// enumeration written from memory, and the next omission would be found the
+// same way. So the direction is inverted: handle EVERY signal the platform
+// reports, minus a deny-list where each entry states why.
+//
+// The inversion is what makes it safe, and the reason is the re-raise below.
+// Because a handler cleans up and then re-sends the same signal, covering a
+// signal that needed no cleanup costs nothing -- the default action still runs.
+// So a gap in the DENY-list means one harmless extra handler, where a gap in
+// the old ALLOW-list meant a silently leaked installer. The failure mode is
+// flipped, which is the whole point; it is not a claim that the deny-list is
+// beyond question.
+//
+// The one family where over-coverage would NOT be harmless is the stop signals:
+// reaping on a Ctrl-Z the user means to resume from would destroy the install.
+// That exclusion is pinned by a case, not just by this comment.
+const UNCATCHABLE = ['SIGKILL', 'SIGSTOP'];
+// Default action is STOP, not terminate -- nothing is ending, and a reap here
+// would throw away an install the user intends to resume.
+const STOP_SIGNALS = ['SIGTSTP', 'SIGTTIN', 'SIGTTOU'];
+// Default action is ignore/continue, so there is no termination to clean up
+// before -- and these ARRIVE in normal operation: SIGCHLD on every installer
+// exit, SIGWINCH on every terminal resize.
+const NON_TERMINATING = ['SIGCHLD', 'SIGCONT', 'SIGURG', 'SIGWINCH', 'SIGPIPE'];
+// Fault signals. Node documents handlers for these as unreliable and able to
+// hang the process, and by the time one arrives the runtime is already in an
+// undefined state -- a best-effort reap is not worth an unkillable ladder.
+const FAULT_SIGNALS = ['SIGSEGV', 'SIGBUS', 'SIGILL', 'SIGFPE', 'SIGABRT',
+  'SIGIOT', 'SIGTRAP', 'SIGSTKFLT', 'SIGSYS'];
+// Claimed by the runtime: SIGUSR1 starts Node's debugger, SIGPROF drives V8's
+// CPU profiler under `node --prof`. Taking either would break a tool, not a bug.
+const RESERVED_SIGNALS = ['SIGUSR1', 'SIGPROF'];
+
+const NOT_OUR_SIGNALS = new Set([
+  ...UNCATCHABLE, ...STOP_SIGNALS, ...NON_TERMINATING,
+  ...FAULT_SIGNALS, ...RESERVED_SIGNALS,
+]);
+
+const CLEANUP_SIGNALS = Object.keys(osConstants.signals)
+  .filter((signal) => !NOT_OUR_SIGNALS.has(signal));
 
 function reapActiveInstalls() {
   for (const child of ACTIVE_INSTALLS) killGroup(child);
@@ -787,7 +863,11 @@ async function main(argv) {
     browser,
     install: (argv) => realInstall(argv, found.base),
     launch: realLaunch(browser, testsDir, found.mod),
-    log: (line) => console.log(line),
+    // BOUNDED TOO. This is the OTHER channel carrying text the ladder did not
+    // write -- the progress lines quote `firstLine(error)`, and the first line
+    // of a single-line 5 MB error is the whole 5 MB. Measured: bounding only
+    // report() left a 5,242,899-character line on stdout (#359).
+    log: (line) => console.log(boundReportLine(line)),
   });
   return report(browser, outcome);
 }
@@ -829,12 +909,44 @@ const FLUSHED_STREAMS = [process.stdout, process.stderr];
 // reader something and the exit status still arrives; a diagnostic that never
 // returns tells them nothing and blocks whatever ran it.
 //
-// Ten seconds, and NOT `unref`ed. A consumer reading at any ordinary rate drains
-// megabytes in well under a second, so this cannot cut short a healthy reader --
-// it only ends a wait on a reader that is not reading. Unref'ing it would be the
-// round-9 mistake again: a bound that cannot fire when the thing it is bounding
-// is the only work left is not a bound. The pending write keeps the loop alive
-// either way, and every settled path clears the timer.
+// AND THE WAIT IS BOUNDED (#358), BY A DEADLINE THE REPORT'S SIZE JUSTIFIES
+// (#359). Waiting for every stream to drain turned a truncated report into a
+// HANG: a consumer that opens stdout as a pipe and never reads it leaves the
+// callback queued forever. Measured before the fix: a 5 MB launch error with an
+// unread stdout pipe was still running after 4 s. That also defeated the forced
+// exit itself, which exists to escape a Playwright handle the probe's bound
+// cannot cancel -- so an unbounded flush unbounded the whole ladder.
+//
+// THE ORDERING IS THE POINT: A TRUNCATED REPORT BEATS A HANG. A report cut short
+// still tells the reader something and the exit status still arrives; a
+// diagnostic that never returns tells them nothing and blocks whatever ran it.
+//
+// ⚠️ THE FIRST VERSION OF THIS COMMENT ASSERTED that ten seconds "cannot cut
+// short a healthy reader". That was false and Codex disproved it: a consumer
+// draining 100 KB every 300 ms, never once idle, received 3,276,800 bytes of a
+// 5 MB report and lost the rest. An elapsed-time bound cannot tell a slow reader
+// from a stopped one -- at ANY value, given a large enough report.
+//
+// So the report was bounded instead, at MAX_REPORT_LINE above, on BOTH channels
+// that carry text this file did not write; the deadline is only defensible as
+// ARITHMETIC over a known maximum. Measured worst case -- a 5 MB single-line
+// launch error and an installer emitting 200 lines of 20,000 characters --
+// 46,628 bytes, down from 15,769,172 before the bound. Ten seconds therefore
+// truncates nothing draining faster than ~4.7 KB/s, and a case pins the ceiling
+// so the arithmetic stays true. That is a claim about a measured maximum rather
+// than about which readers are "realistic", which is what the old comment got
+// wrong. Verified end to end at ~13 KB/s: the report arrived complete in 3.9 s.
+//
+// A PROGRESS-BASED DEADLINE WAS TRIED FIRST AND DOES NOT WORK -- recorded so it
+// is not re-attempted. Resetting the clock whenever bytes moved is the right
+// idea and Node exposes no signal for it: a single large `write` is ONE libuv
+// request, so `writableLength` sat at 5,242,880 for the entire drain and
+// `bytesWritten` counted bytes ACCEPTED, not delivered. Measured -- both were
+// constant while the reader was actively reading, so the poll read a healthy
+// drain as idle and truncated at exactly the same byte count as no fix at all.
+//
+// NOT `unref`ed, for the round-9 reason: a bound that cannot fire when the thing
+// it bounds is the only work left is not a bound.
 const FLUSH_TIMEOUT_MS = 10 * 1000;
 
 function flushThenExit(code, streams = FLUSHED_STREAMS, exit = process.exit,
@@ -865,7 +977,8 @@ module.exports = { ladder, report, RUNGS, BROWSERS, firstLine, realInstall, real
   resolvePlaywright, classifyInstall, INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs,
   DEFAULT_TESTS_DIR, PROBE_TIMEOUT_MS, bounded, treeRootOf, killGroup,
   flushThenExit, FLUSHED_STREAMS, FLUSH_TIMEOUT_MS, ACTIVE_INSTALLS,
-  CLEANUP_SIGNALS, reapActiveInstalls };
+  CLEANUP_SIGNALS, reapActiveInstalls, NOT_OUR_SIGNALS, STOP_SIGNALS,
+  boundReportLine, MAX_REPORT_LINE };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then((code) => {

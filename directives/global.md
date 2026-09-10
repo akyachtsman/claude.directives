@@ -456,6 +456,30 @@ Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner ruling
 plus the two surviving stops (secrets or personal data in the diff; invented
 scope) and the revert-first safety net.
 
+## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
+**Falsify your own claims before you open the PR.** For each claim the change
+makes, make it fail for its own named reason, then restore — **a check you have
+never seen fail is a check you have no evidence about.**
+
+**A round ends on feedback you cannot check**: speculation about unwritten code,
+staging plans for work that does not exist, arguments for different phrasing. It
+does **not** end on a finding you can check — including one about test code, and
+including a wording finding that names a factual claim the tree contradicts.
+Those get fixed.
+
+**When the same class of defect recurs across several rounds, in the previous
+rounds' fixes, the mechanism is in the wrong place** — revert or redesign rather
+than patch a third time. Both conditions matter: one unrelated bug in an
+otherwise sound fix is not this.
+
+**Correct findings do not mean the process is converging.** Terminating is a
+separate property from being right, and has to be designed for.
+
+**Prove the environment under test is the tree under test** — compare the bytes
+served against the bytes on disk, since reachability and version tokens prove
+nothing — and prove it for the baseline too. A separate port is not a separate
+tree, and a checkout named `main` may be stale.
+
 ## Progress Visibility (owner ruling, 2026-07-17)
 Silent processing is indistinguishable from a hang. For any operation expected
 to take more than ~1 minute (subagent fan-outs, CI/deploy watches, large sweeps,

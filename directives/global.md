@@ -457,15 +457,34 @@ plus the two surviving stops (secrets or personal data in the diff; invented
 scope) and the revert-first safety net.
 
 ## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
-**Falsify your own claims before you open the PR.** For each claim the change
-makes, make it fail for its own named reason, then restore — **a check you have
-never seen fail is a check you have no evidence about.**
+**Falsify your own claims — before you open the PR, and before every push that
+answers a review.** For each claim the change makes, make it fail for its own
+named reason, then restore — **a check you have never seen fail is a check you
+have no evidence about.** A mutation the check is *designed* to accept has not
+falsified anything; read what the check claims to enforce before believing your
+own negative control.
 
-**A round ends on feedback you cannot check**: speculation about unwritten code,
-staging plans for work that does not exist, arguments for different phrasing. It
-does **not** end on a finding you can check — including one about test code, and
-including a wording finding that names a factual claim the tree contradicts.
-Those get fixed.
+The second half of that boundary is the load-bearing one. Defects that recur
+across rounds are introduced by the *fixes*, so a gate that runs once at PR
+creation never sees them — falsifying at open and then pushing three unfalsified
+fixes is the failure this rule exists to stop.
+
+Where a failure path **cannot be exercised safely** — behaviour owned by an
+external service, a production-safety property, a claim with no controlled
+failure mode — do not force it. Never induce a destructive failure to check
+wording; that is Behavior Rules' *Evidence before assertions* boundary and it
+still governs. Fall back to what that rule already allows: a dry run, the live
+schema, the tool's own docs, plus the counterexample you would expect to see.
+Say which claims got a real negative control and which got documentary evidence,
+because the two are not the same strength.
+
+**A round ends only when every remaining item is one you cannot check** —
+speculation about unwritten code, staging plans for work that does not exist,
+arguments for different phrasing. A mixed review does not end it: one
+uncheckable suggestion alongside one reproducible defect means the defect is
+still open, and open defects are fixed first. A round does **not** end on a
+finding you can check — including one about test code, and including a wording
+finding that names a factual claim the tree contradicts.
 
 **When the same class of defect recurs across several rounds, in the previous
 rounds' fixes, the mechanism is in the wrong place** — revert or redesign rather
@@ -475,10 +494,15 @@ otherwise sound fix is not this.
 **Correct findings do not mean the process is converging.** Terminating is a
 separate property from being right, and has to be designed for.
 
-**Prove the environment under test is the tree under test** — compare the bytes
-served against the bytes on disk, since reachability and version tokens prove
-nothing — and prove it for the baseline too. A separate port is not a separate
-tree, and a checkout named `main` may be stale.
+**Prove the environment under test is the tree under test**, and prove it for
+the baseline too. Reachability proves nothing, and neither does a version string
+someone maintains by hand. Where the asset is served untransformed, compare the
+bytes served against the bytes on disk. Where the environment transpiles,
+bundles, minifies, server-renders or injects dev assets, served bytes are
+*supposed* to differ from every source file — there, bind identity to the
+checkout with a content-derived digest or a sentinel the build carries, which is
+proof precisely because it is derived rather than declared. A separate port is
+not a separate tree, and a checkout named `main` may be stale.
 
 ## Progress Visibility (owner ruling, 2026-07-17)
 Silent processing is indistinguishable from a hang. For any operation expected

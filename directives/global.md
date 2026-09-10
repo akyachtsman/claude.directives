@@ -528,23 +528,27 @@ amendment, and it is the half that makes it stick:** *"we need to routinely and
 frequently look at our environment for potential multitasking using multiple
 agents … when I ask you to do it once, you just go back to serialization."*
 
-⛔ **SCAN AT NAMED MOMENTS — a stated preference is not enough.** Applies to
+⛔ **SCAN AT BOTH EDGES OF EVERY COMMITMENT OF TIME — BEFORE STARTING work and
+BEFORE WAITING on anything.** A stated preference is not enough. Applies to
 **every task list, one item or more**, and to work with no list at all.
 ⚠️ **Where the Agent tool is unavailable**, the scan still runs and its result is
 still stated; it then ORDERS the work instead of launching it. Missing tooling
 suspends the launching, never the scan.
 
-### Scan at these moments
-- **Whenever work is handed to an external system** — a PR opened, a review
-  requested, CI started, a deploy triggered, a long build or migration kicked
-  off. ⚠️ **That handoff IS the trigger**: the moment with the most spare
-  capacity and the one most reliably wasted.
-- **On every wake-up, notification and scheduled check-in — BEFORE reporting
-  state.**
-- **Whenever a task finishes**, on the next task's independent sub-parts. Where
-  a plan exists, a sub-part found mid-run is ADDED to it with its `depends:`
-  declared before it launches — amend the plan, never bypass it.
-- **Before ending any turn.**
+### Instances of those two edges — not a closed list
+A moment not named here still scans if it is a start or a wait.
+- **Work ARRIVES** — an ask, a plan, a wake-up, a notification, a scheduled
+  check-in. Scan before the first sub-part is started, and BEFORE reporting
+  state. ⚠️ **One request carrying independent sub-parts is the most common
+  miss**, because nothing about it announces itself as parallel.
+- **Work is HANDED to an external system** — a PR opened, a review requested,
+  CI started, a deploy triggered, a long build or migration kicked off.
+  ⚠️ **That handoff IS the trigger**: the moment with the most spare capacity
+  and the one most reliably wasted.
+- **A task FINISHES**, on the next task's independent sub-parts. Where a plan
+  exists, a sub-part found mid-run is ADDED to it with its `depends:` declared
+  before it launches — amend the plan, never bypass it.
+- **A turn is ENDING.**
 
 **Report the scan's result when a turn ends waiting** — what you started, or
 what blocks what you did not. ⛔ **This is a report, not a test, and no

@@ -131,8 +131,8 @@ BELOW the ask ledger (→ *Burst Intake — Multiple Asks at Once*): the ledger 
 the reply's final block, this is its final line.
 
 - **"Waiting for CI"** — tests running; the session resumes itself on the
-  result. Never the whole story: the turn still owes the scan's result, every
-  candidate disposed (→ *Parallel Tasking via Subagents*).
+  result. Never the whole story: say what you started, or what blocks what you
+  did not (→ *Parallel Tasking via Subagents*).
 - **"Waiting for response"** — blocked on the owner; the question sits
   directly above the status line.
 - **"Deployed"** — merged AND verified live at the deployed URL; safe to test.
@@ -485,6 +485,8 @@ recur is the mechanism or the violated invariant, not merely the defect
 category; independent bugs that share a label are ordinary iteration. **If a
 redesign reproduces either the mechanism or the invariant, revert the whole
 change — not merely the latest edit — and stop there pending the escalation.**
+Where the change is one the owner directed, raise it and let him rule on the
+revert; stopping is not optional, reverting before he answers is.
 
 **Prove the environment under test is the tree under test**, and prove it for
 the baseline too. Reachability proves nothing, and neither does a version string
@@ -509,8 +511,8 @@ multi-file audits):
   agents and stepwise tool calls over one monolithic blocking wait, because a
   session cannot emit text mid-wait inside a single blocking call.
 - **Parked is not silent.** When waiting on an external event, say so before
-  ending the turn, WITH the scan's result — "parked on PR #N's green comment
-  (~3 min); auditing the exported guard meanwhile, nothing else in scope" — so
+  ending the turn, WITH what you started or what blocks the rest — "parked on
+  PR #N's green comment (~3 min); auditing the exported guard meanwhile" — so
   quiet reads as waiting, not hung (→ *Parallel Tasking via Subagents*).
 - **Estimate misses get an update, not silence.** Say what's still running and
   the new expectation.
@@ -543,23 +545,18 @@ suspends the launching, never the scan.
   declared before it launches — amend the plan, never bypass it.
 - **Before ending any turn.**
 
-⚠️ **THE TURN-END TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: if a turn's
-honest summary is "waiting", it must report the SCAN'S RESULT — every candidate
-the scan found, each carrying exactly one disposition: STARTED, BLOCKED BY
-<what>, or OUT OF SCOPE.** ⛔ **The obligation is COVERAGE OF THE CANDIDATE
-SET, never a form of words.** A turn that disposes of one candidate and leaves
-another unmentioned fails, whichever one it named — and what the turn is waiting
-ON is never a candidate, it is the wait. An empty set is a valid result stated
-as one: *"scan ran, no candidates — parked on CI"*. A turn reporting only a
-status has not run the scan. The test bites on the state of the turn, not on the
-word used: "I'll report back when CI lands" is a waiting turn. Do not build the
-rule on counting whether there is "enough" to parallelise — that judgement is
-the first thing to fail in a long session.
+**Report the scan's result when a turn ends waiting** — what you started, or
+what blocks what you did not. ⛔ **This is a report, not a test, and no
+turn-end SELF-check belongs here:** four were written and four were defeated,
+because a session grading its own turn also decides what was on the list.
+Enforcement is the triggers above, which fire on events; do not add a fifth
+wording. Do not build any of it on counting whether there is "enough" to
+parallelise — that judgement is the first thing to fail in a long session.
 
 **Scan inside the authorized task, never outside it.** Candidates are sub-parts
 of, or investigation supporting, work already asked for. When the plan drains,
 → *Standing Authorization* governs: report done and stop. An unrelated audit
-invented to satisfy the test above is a scope violation, not parallelism.
+invented to fill a quiet turn is a scope violation, not parallelism.
 
 ### Plan the list so it can pipeline
 - **Dependencies are declared at plan time.** Every task carries an explicit
@@ -701,10 +698,9 @@ naming what remains open, or "nothing open" — never absent.
      webhooks that resume the session — and with `ci-notify.yml` installed
      (standard scaffold), CI SUCCESS arrives too, as a PR comment. Event wakes
      are the PRIMARY signal for a PR-attached wait: end the turn saying you'll
-     report back, and act on the event rather than asking for it. ⚠️ That
-     ending still has to pass the turn-end test in → *Parallel Tasking via
-     Subagents* — the scan's result, every candidate disposed. "I'll report
-     back" on its own is the failing turn, not the approved one.
+     report back, and act on the event rather than asking for it — with what
+     you started beside it, or what blocks it (→ *Parallel Tasking via
+     Subagents*).
      ⚠️ **Primary is not sole — event-driven does not mean "no scheduler."** A
      wake only covers what something actually emits. A dispatched run on a PR
      branch has seven verified ways to emit nothing (`git.md` → *PR Lifecycle*),

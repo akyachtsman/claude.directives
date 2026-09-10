@@ -547,6 +547,70 @@ task list, one item or more**:
   agent before the turn ends (→ *Async Operations*); shared-file conflicts stay
   a valid reason to serialize, "it's tidier one at a time" does not.
 
+## Parallel Agent Work Is the Default Posture (owner ruling, 2026-09-10)
+**The rule:** *"I want parallel multiagent processing at all times."* **The
+amendment, same day, and it is the half that makes it stick:** *"we need to
+routinely and frequently look at our environment for potential multitasking
+using multiple agents … when I ask you to do it once, you just go back to
+serialization."*
+
+⛔ **A POSTURE RULE DECAYS; A TRIGGER DOES NOT.** A disposition has to be
+remembered at exactly the moment attention is elsewhere, so this is a **scan at
+named moments**, not a preference. *Pipelined Execution* covers the ready-queue;
+this covers looking for parallel work at all, including when no list exists.
+
+**Scan for parallelisable work at these moments:**
+- **Whenever work is handed to an external system** — a PR opened, a review
+  requested, CI started, a deploy triggered, a long build or migration kicked
+  off. ⚠️ **That handoff IS the trigger**, and it is the moment with the most
+  spare capacity and the one most reliably wasted.
+- **On every wake-up, notification and scheduled check-in — BEFORE reporting
+  state.**
+- **Whenever a task finishes**, on the next task's independent sub-parts.
+- **Before ending any turn.**
+
+⚠️ **THE TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: if a turn's honest summary
+is "waiting", that turn should have started something.** A turn that reports only
+a status and launched nothing is the failure this rule names. Do not build the
+rule on counting whether there is "enough" to parallelise — that judgement is the
+first thing to fail in a long session.
+
+**Judge candidates by independence, not availability.** ⛔ An agent aimed at work
+that is not independent manufactures merge conflicts, and two agents editing one
+file is worse than doing it once.
+- **Read-only investigation** — a census, an audit, a plan measured against the
+  real tree, *"is this claim actually true?"*. Any number run at once; they
+  collide with nothing. **Highest-yield category and the most under-used.**
+- **Implementation in an ISOLATED WORKTREE**, for anything that edits code while
+  another run is in flight. A revert done for a test inside a shared tree makes
+  an unrelated concurrent run report a failure that is not real, and that false
+  signal costs more than the parallelism saved.
+- **Disjoint files in one tree**, when the split is clean and stated explicitly
+  to each agent.
+
+✅ **"Nothing here is independent" is sometimes the correct answer — but it must
+be REACHED, not skipped.** Say it in one line, naming what collides and why, so
+the reasoning is visible rather than indistinguishable from having forgotten.
+
+**Name the real serialiser instead of working around it.** Often the constraint
+is the **landing** — a single active branch, one review queue, one deploy slot.
+⚠️ That constrains LANDING, never STARTING: parallel work builds while the
+current change is in review and lands after it merges. Say which constraint is
+in force rather than treating "I can only merge one thing" as "I can only do one
+thing".
+
+**Aim agents at a seam or a class, not at the latest diff.** Ask a structural
+question — *census every place X happens*, *which of these names is which kind of
+binding*, *audit my own tests for ones that pass for the wrong reason*. Asking
+*"is this diff correct"* returns least, because that is the question already
+answered while writing it. ⚠️ **The highest-yield instruction is to point an
+agent at your OWN work.**
+
+**When adding a process rule, state its trigger in the same breath as its
+behaviour**, and prefer a trigger that fires on an observable event — a handoff,
+a wake-up, a turn ending — over one that fires on noticing. A rule that leaves
+*when* to memory stops firing.
+
 ## Burst Intake — Multiple Asks at Once (owner ruling, 2026-08-18)
 
 *Pipelined Execution* governs a task list already written. This governs the

@@ -51,7 +51,12 @@ explicitly overrides it.
   an assertion too: run it, dry-run it, or confirm it against the live schema or
   its own docs before shipping; never run a destructive command to check wording.
   Presence in the authoring session proves nothing downstream — a tool that may
-  be absent there ships with a runtime check and fallback.
+  be absent there ships with a runtime check and fallback. **Say which evidence
+  you have**: a check you made fail for its own named reason and then restored,
+  or one you only watched pass — a check you have never seen fail is a check you
+  have no evidence about, and a mutation the check is *designed* to accept
+  falsifies nothing. Where the failure cannot be induced safely, say so rather
+  than implying the stronger evidence.
 - **Correct a prior answer explicitly.** When something you already told the
   user turns out to be wrong, name that specific claim and replace it — not a
   general apology, and never a quiet restatement in new words.
@@ -457,19 +462,9 @@ plus the two surviving stops (secrets or personal data in the diff; invented
 scope) and the revert-first safety net.
 
 ## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
-**No claim the change makes ships unfalsified**, stated or implied — merging
-asserts every one of them. Before asserting a claim holds, in a PR body, a
-review reply, or a merge, make its check fail for its own named reason, then
-restore. A check you have never seen fail is a check you have no evidence about;
-a mutation the check is *designed* to accept falsifies nothing, so read what the
-check enforces before trusting your own negative control. A push whose purpose is
-to run that negative test is part of falsifying, not an assertion.
-
-Where a failure path cannot be exercised safely, do not force it; never induce a
-destructive failure to check wording, which Behavior Rules' *Evidence before
-assertions* forbids outright. Use what that rule allows — a dry run, the live
-schema, the tool's own docs — plus the counterexample you would expect to see.
-Say which claims got a negative control and which got documentary evidence.
+Falsifying your own claims is carried by Behavior Rules' *Evidence before
+assertions*, which binds on every report rather than at some moment. This
+section is about the rounds themselves.
 
 **A round ends only when every remaining item is one that cannot be checked at
 all** — speculation about unwritten code, staging plans for work that does not
@@ -487,8 +482,8 @@ survive a handoff and a run of correct findings is not evidence of convergence.
 wrong place:** revert or redesign rather than patch a third time. What has to
 recur is the mechanism or the violated invariant, not merely the defect
 category; independent bugs that share a label are ordinary iteration. **If a
-redesign reproduces the mechanism, revert the change and escalate** — a second
-redesign is the loop this section exists to end.
+redesign reproduces either the mechanism or the invariant, revert the whole
+change — not merely the latest edit — and stop there pending the escalation.**
 
 **Prove the environment under test is the tree under test**, and prove it for
 the baseline too. Reachability proves nothing, and neither does a version string

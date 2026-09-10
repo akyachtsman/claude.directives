@@ -536,10 +536,11 @@ to have listed them all. Applies to
 still stated; it then ORDERS the work instead of launching it. Missing tooling
 suspends the launching, never the scan.
 
-### The moments that pay most — examples, NEVER a test
-⛔ **A moment absent from this list is not thereby exempt.** Three attempts to
-state exactly when the scan is owed have each been shown incomplete; do not
-write a fourth and do not read this list as one.
+### The moments that pay most — a FLOOR, never a ceiling
+⛔ **The first item is MANDATORY. The rest are where to look, and a moment
+absent from the list is not thereby exempt.** Three attempts to state exactly
+when the scan is owed have each been shown incomplete, so the list makes no
+claim to completeness — but "not exhaustive" never means "not binding".
 - **Work ARRIVES** — an ask, a plan, a wake-up, a notification, a scheduled
   check-in. Scan before the first sub-part is started, and BEFORE reporting
   state. ⚠️ **One request carrying independent sub-parts is the most common
@@ -604,8 +605,10 @@ and two agents editing one file is worse than doing it once.
   run at once. ⛔ **They create no merge conflict but they DO collide
   semantically:** a tree being edited concurrently is read as a mixture of
   revisions, and the answer is confidently wrong. ⛔ **The subject must not
-  change while it is being read** — either read something that CANNOT change (a
-  commit SHA, a tag), or hold an EXCLUSIVE window in which nothing writes.
+  change while it is being read** — either read a RESOLVED COMMIT SHA (a branch
+  or tag NAME is a mutable ref: `git tag --force` replaces one, so two reads of
+  the same name can span two commits), or hold an EXCLUSIVE window in which
+  nothing writes.
   Only the orchestrator can grant that window, because only it decides who runs:
   an audit of staged or unstaged state has no SHA to read, so it gets the window
   or it does not run. "Wait for the current writes" is not the window — the next

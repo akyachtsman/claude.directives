@@ -1,5 +1,5 @@
 [
-  {"file": "directives/global.md", "sections": ["Escalation Rules", "PR Lifecycle", "Session Start", "Skill Bootstrap", "Review Rounds Have to Terminate", "Parallel Tasking via Subagents"]},
+  {"file": "directives/global.md", "sections": ["Escalation Rules", "PR Lifecycle", "Session Start", "Skill Bootstrap", "Review Rounds Have to Terminate", "Parallel Tasking via Subagents", "Pipelined Execution"]},
   {"file": "directives/git.md", "sections": ["PR Lifecycle", "Conditional Auto-Merge on Green", "Repo-settings preflight"]},
   {"file": "directives/design.md", "sections": ["Establishing your project's look", "Cross-platform & responsive", "Accessibility", "Editorial Preferences"]},
   {"file": "directives/test.md", "sections": ["Session start", "Playwright", "CI triage", "Escalation"]},

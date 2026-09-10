@@ -538,19 +538,22 @@ suspends the launching, never the scan.
   capacity and the one most reliably wasted.
 - **On every wake-up, notification and scheduled check-in — BEFORE reporting
   state.**
-- **Whenever a task finishes**, on the next task's independent sub-parts. A
-  sub-part found mid-run is ADDED to the plan with its `depends:` declared
-  before it launches — amend the plan, never bypass it.
+- **Whenever a task finishes**, on the next task's independent sub-parts. Where
+  a plan exists, a sub-part found mid-run is ADDED to it with its `depends:`
+  declared before it launches — amend the plan, never bypass it.
 - **Before ending any turn.**
 
 ⚠️ **THE TURN-END TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: if a turn's
-honest summary is "waiting", it must NAME what it started or NAME what
-collides.** It bites on the state of the turn, not on the word used — "I'll
-report back when CI lands" is a waiting turn. Reporting only a status, having
-launched nothing and named nothing, is a directive violation, not a style
-choice. *"Queue empty — parked on CI"* passes only with the reason attached —
-the scan ran, and what it found is blocked or out of scope; the bare phrase
-names nothing. Do not build the rule on counting whether there is "enough" to
+honest summary is "waiting", it must NAME the ready independent work it
+STARTED, or NAME what blocks EVERY remaining candidate.** ⛔ The verification
+you just launched is not work you started — it is what you are waiting on. And
+naming one collision while an independent task sits ready fails as surely as
+naming nothing. The test bites on the state of the turn, not on the word used —
+"I'll report back when CI lands" is a waiting turn. Reporting only a status,
+having launched nothing and named nothing, is a directive violation, not a
+style choice. *"Queue empty — parked on CI"* passes only with the reason
+attached — the scan ran, and every candidate it found is blocked or out of
+scope; the bare phrase names nothing. Do not build the rule on counting whether there is "enough" to
 parallelise — that judgement is the first thing to fail in a long session.
 
 **Scan inside the authorized task, never outside it.** Candidates are sub-parts

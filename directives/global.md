@@ -51,7 +51,12 @@ explicitly overrides it.
   an assertion too: run it, dry-run it, or confirm it against the live schema or
   its own docs before shipping; never run a destructive command to check wording.
   Presence in the authoring session proves nothing downstream — a tool that may
-  be absent there ships with a runtime check and fallback.
+  be absent there ships with a runtime check and fallback. **Say which evidence
+  you have**: a check you made fail for its own named reason and then restored,
+  or one you only watched pass — a check you have never seen fail is a check you
+  have no evidence about, and a mutation the check is *designed* to accept
+  falsifies nothing. Where the failure cannot be induced safely, say so rather
+  than implying the stronger evidence.
 - **Correct a prior answer explicitly.** When something you already told the
   user turns out to be wrong, name that specific claim and replace it — not a
   general apology, and never a quiet restatement in new words.
@@ -455,6 +460,39 @@ Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner ruling
 2026-07-12 / 2026-08-18): auto-merge on green is the rule for every diff class —
 plus the two surviving stops (secrets or personal data in the diff; invented
 scope) and the revert-first safety net.
+
+## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
+Falsifying your own claims is carried by Behavior Rules' *Evidence before
+assertions*, which binds on every report rather than at some moment. This
+section is about the rounds themselves.
+
+**A round ends only when every remaining item is one that cannot be checked at
+all** — speculation about unwritten code, staging plans for work that does not
+exist, arguments for different phrasing. A concrete finding you merely lack the
+access or tooling to prove is not that: hand it off or escalate it by name, and
+never end a round on it. A mixed review does not end one either: fix the
+checkable findings first. A round does **not** end on a finding you can check —
+including one about test code, and including a wording finding that names a
+factual claim the tree contradicts.
+
+**Record each round's findings by cause in the PR itself** — new, introduced by
+a previous round's fix, or left unresolved by one — since a session does not
+survive a handoff and a run of correct findings is not evidence of convergence.
+**When the same mechanism fails again across rounds, that mechanism is in the
+wrong place:** revert or redesign rather than patch a third time. What has to
+recur is the mechanism or the violated invariant, not merely the defect
+category; independent bugs that share a label are ordinary iteration. **If a
+redesign reproduces either the mechanism or the invariant, revert the whole
+change — not merely the latest edit — and stop there pending the escalation.**
+
+**Prove the environment under test is the tree under test**, and prove it for
+the baseline too. Reachability proves nothing, and neither does a version string
+maintained by hand. Where the asset is served untransformed, compare the bytes
+served against the bytes on disk. Where the environment transpiles, bundles,
+minifies, server-renders or injects dev assets, bind identity to the checkout
+with a content-derived digest or a sentinel the build carries — derived, not
+declared. A separate port is not a separate tree, and a checkout named `main`
+may be stale.
 
 ## Progress Visibility (owner ruling, 2026-07-17)
 Silent processing is indistinguishable from a hang. For any operation expected

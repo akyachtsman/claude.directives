@@ -554,10 +554,12 @@ routinely and frequently look at our environment for potential multitasking
 using multiple agents … when I ask you to do it once, you just go back to
 serialization."*
 
-⛔ **A POSTURE RULE DECAYS; A TRIGGER DOES NOT.** A disposition has to be
-remembered at exactly the moment attention is elsewhere, so this is a **scan at
-named moments**, not a preference. *Pipelined Execution* covers the ready-queue;
-this covers looking for parallel work at all, including when no list exists.
+⛔ **SCAN AT NAMED MOMENTS — a stated preference is not enough.**
+*Pipelined Execution* covers the ready-queue; this covers looking for parallel
+work at all, including when no list exists. ⚠️ **Where the Agent tool is not
+available**, the scan still runs and its result is still stated — it is recorded
+and used to ORDER the work rather than to launch it. Missing tooling suspends the
+launching, never the scan.
 
 **Scan for parallelisable work at these moments:**
 - **Whenever work is handed to an external system** — a PR opened, a review
@@ -566,14 +568,23 @@ this covers looking for parallel work at all, including when no list exists.
   spare capacity and the one most reliably wasted.
 - **On every wake-up, notification and scheduled check-in — BEFORE reporting
   state.**
-- **Whenever a task finishes**, on the next task's independent sub-parts.
+- **Whenever a task finishes**, on the next task's independent sub-parts. Where
+  a plan exists, a newly found sub-part is ADDED to it with its dependencies
+  declared before it launches — this amends the plan, never bypasses it
+  (→ *Pipelined Execution*).
 - **Before ending any turn.**
 
 ⚠️ **THE TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: if a turn's honest summary
-is "waiting", that turn should have started something.** A turn that reports only
-a status and launched nothing is the failure this rule names. Do not build the
-rule on counting whether there is "enough" to parallelise — that judgement is the
-first thing to fail in a long session.
+is "waiting", that turn must have STARTED something or SAID what collides.** A
+turn that reports only a status, launched nothing and named nothing is the
+failure this rule names. Do not build the rule on counting whether there is
+"enough" to parallelise — that judgement is the first thing to fail in a long
+session.
+
+**Scan inside the authorized task, never outside it.** Candidates are sub-parts
+of, or investigation supporting, work already asked for. When the declared plan
+drains, → *Standing Authorization* governs: report done and stop. An unrelated
+audit invented to satisfy the test above is a scope violation, not parallelism.
 
 **Judge candidates by independence, not availability.** ⛔ An agent aimed at work
 that is not independent manufactures merge conflicts, and two agents editing one
@@ -581,12 +592,13 @@ file is worse than doing it once.
 - **Read-only investigation** — a census, an audit, a plan measured against the
   real tree, *"is this claim actually true?"*. Any number run at once; they
   collide with nothing. **Highest-yield category and the most under-used.**
-- **Implementation in an ISOLATED WORKTREE**, for anything that edits code while
-  another run is in flight. A revert done for a test inside a shared tree makes
-  an unrelated concurrent run report a failure that is not real, and that false
-  signal costs more than the parallelism saved.
-- **Disjoint files in one tree**, when the split is clean and stated explicitly
-  to each agent.
+- **Implementation in an ISOLATED WORKTREE** — the default for anything that
+  edits code while another run is in flight. A revert done for a test inside a
+  shared tree makes an unrelated concurrent run report a failure that is not
+  real, and that false signal costs more than the parallelism saved.
+- **Disjoint files in one tree** — the ONE exception to that default, and only
+  when the split is stated explicitly to each agent AND no agent will run the
+  suite, revert, or check out. Doubt on either: use a worktree.
 
 ✅ **"Nothing here is independent" is sometimes the correct answer — but it must
 be REACHED, not skipped.** Say it in one line, naming what collides and why, so

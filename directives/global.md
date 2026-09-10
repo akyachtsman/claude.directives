@@ -512,8 +512,9 @@ multi-file audits):
   session cannot emit text mid-wait inside a single blocking call.
 - **Parked is not silent.** When waiting on an external event, say so before
   ending the turn, WITH what you started or what blocks the rest — "parked on
-  PR #N's green comment (~3 min); auditing the exported guard meanwhile" — so
-  quiet reads as waiting, not hung (→ *Parallel Tasking via Subagents*).
+  PR #N's green comment (~3 min); the guard audit is done and in the PR body,
+  nothing else is independent of that CI run" — so quiet reads as waiting, not
+  hung (→ *Parallel Tasking via Subagents*).
 - **Estimate misses get an update, not silence.** Say what's still running and
   the new expectation.
 
@@ -591,9 +592,13 @@ and two agents editing one file is worse than doing it once.
   edits code while another run is in flight. A revert done for a test inside a
   shared tree makes an unrelated concurrent run report a failure that is not
   real, and that false signal costs more than the parallelism saved.
-- **Disjoint files in one tree** — the ONE exception to that default, and only
-  when the split is stated explicitly to each agent AND no agent will run the
-  suite, revert, or check out. Doubt on either: use a worktree.
+- **Disjoint files in one tree** — the ONE exception to that default, and it is
+  a capability boundary, not a list of banned commands: an agent may EDIT ITS
+  OWN FILES AND READ, nothing else. ⛔ Staging, committing, checking out,
+  reverting, stashing and running the suite are the ORCHESTRATOR's, after
+  collection — an index and a HEAD are shared even when no two agents touch the
+  same file. Split not stated explicitly to each agent, or an agent that needs
+  more than edit-and-read: use a worktree.
 
 ✅ **"Nothing here is independent" is sometimes the correct answer — but it must
 be REACHED, not skipped.** Say it in one line, naming what collides **and why**,
@@ -890,8 +895,9 @@ which is KEEP GOING.
   one. Work task-to-task without re-asking; checkpoint reports replace
   permission requests.
 - **Re-asking at a task boundary that trips no stop gate is a directive
-  violation**, symmetric to idle-waiting during verification — see the turn-end
-  test in → *Parallel Tasking via Subagents*.
+  violation**, symmetric to idle-waiting during verification — a launched
+  verification is the start signal for the next ready task, and the queue is
+  worked until drained (→ *Parallel Tasking via Subagents*).
 - The stop gates are NEVER overridden by a standing authorization: Escalation
   Rules above, the surviving merge stops (`git.md` → *Conditional
   Auto-Merge on Green* — secrets or personal data in the diff; invented scope),

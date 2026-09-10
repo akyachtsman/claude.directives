@@ -131,8 +131,8 @@ BELOW the ask ledger (→ *Burst Intake — Multiple Asks at Once*): the ledger 
 the reply's final block, this is its final line.
 
 - **"Waiting for CI"** — tests running; the session resumes itself on the
-  result. Never the whole story: the turn still has to name what it started or
-  what collides (→ *Parallel Tasking via Subagents*).
+  result. Never the whole story: the turn still owes the scan's result, every
+  candidate disposed (→ *Parallel Tasking via Subagents*).
 - **"Waiting for response"** — blocked on the owner; the question sits
   directly above the status line.
 - **"Deployed"** — merged AND verified live at the deployed URL; safe to test.
@@ -509,9 +509,9 @@ multi-file audits):
   agents and stepwise tool calls over one monolithic blocking wait, because a
   session cannot emit text mid-wait inside a single blocking call.
 - **Parked is not silent.** When waiting on an external event, say so before
-  ending the turn, WITH what you started or what collides — "parked on PR #N's
-  green comment (~3 min); auditing the exported guard meanwhile" — so quiet
-  reads as waiting, not hung (→ *Parallel Tasking via Subagents*).
+  ending the turn, WITH the scan's result — "parked on PR #N's green comment
+  (~3 min); auditing the exported guard meanwhile, nothing else in scope" — so
+  quiet reads as waiting, not hung (→ *Parallel Tasking via Subagents*).
 - **Estimate misses get an update, not silence.** Say what's still running and
   the new expectation.
 
@@ -544,17 +544,17 @@ suspends the launching, never the scan.
 - **Before ending any turn.**
 
 ⚠️ **THE TURN-END TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: if a turn's
-honest summary is "waiting", it must NAME the ready independent work it
-STARTED, or NAME what blocks EVERY remaining candidate.** ⛔ The verification
-you just launched is not work you started — it is what you are waiting on. And
-naming one collision while an independent task sits ready fails as surely as
-naming nothing. The test bites on the state of the turn, not on the word used —
-"I'll report back when CI lands" is a waiting turn. Reporting only a status,
-having launched nothing and named nothing, is a directive violation, not a
-style choice. *"Queue empty — parked on CI"* passes only with the reason
-attached — the scan ran, and every candidate it found is blocked or out of
-scope; the bare phrase names nothing. Do not build the rule on counting whether there is "enough" to
-parallelise — that judgement is the first thing to fail in a long session.
+honest summary is "waiting", it must report the SCAN'S RESULT — every candidate
+the scan found, each carrying exactly one disposition: STARTED, BLOCKED BY
+<what>, or OUT OF SCOPE.** ⛔ **The obligation is COVERAGE OF THE CANDIDATE
+SET, never a form of words.** A turn that disposes of one candidate and leaves
+another unmentioned fails, whichever one it named — and what the turn is waiting
+ON is never a candidate, it is the wait. An empty set is a valid result stated
+as one: *"scan ran, no candidates — parked on CI"*. A turn reporting only a
+status has not run the scan. The test bites on the state of the turn, not on the
+word used: "I'll report back when CI lands" is a waiting turn. Do not build the
+rule on counting whether there is "enough" to parallelise — that judgement is
+the first thing to fail in a long session.
 
 **Scan inside the authorized task, never outside it.** Candidates are sub-parts
 of, or investigation supporting, work already asked for. When the plan drains,
@@ -703,8 +703,8 @@ naming what remains open, or "nothing open" — never absent.
      are the PRIMARY signal for a PR-attached wait: end the turn saying you'll
      report back, and act on the event rather than asking for it. ⚠️ That
      ending still has to pass the turn-end test in → *Parallel Tasking via
-     Subagents* — name what you started, or what collides. "I'll report back"
-     on its own is the failing turn, not the approved one.
+     Subagents* — the scan's result, every candidate disposed. "I'll report
+     back" on its own is the failing turn, not the approved one.
      ⚠️ **Primary is not sole — event-driven does not mean "no scheduler."** A
      wake only covers what something actually emits. A dispatched run on a PR
      branch has seven verified ways to emit nothing (`git.md` → *PR Lifecycle*),

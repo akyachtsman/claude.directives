@@ -514,8 +514,8 @@ multi-file audits):
   the new expectation.
 
 ## Pipelined Execution (owner ruling, 2026-07-18)
-Merged into → *Parallel Tasking via Subagents* (2026-09-10), which carries every
-rule below unchanged. Stub kept so existing references still resolve.
+Merged into → *Parallel Tasking via Subagents* (2026-09-10). Stub kept so
+existing references still resolve.
 
 ## Parallel Tasking via Subagents (owner rulings, 2026-07-18 · 2026-07-22 · 2026-09-10)
 **The rule:** *"I want parallel multiagent processing at all times."* **The
@@ -541,13 +541,15 @@ suspends the launching, never the scan.
   before it launches — amend the plan, never bypass it.
 - **Before ending any turn.**
 
-⚠️ **THE TURN-END TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: a turn that ends
-"waiting" must NAME what it started or NAME what collides.** Reporting only a
-status, having launched nothing and named nothing, is a directive violation, not
-a style choice. *"Queue empty — parked on CI"* counts only as the second form:
-the scan has to have run and found nothing independent. Do not build the rule on
-counting whether there is "enough" to parallelise — that judgement is the first
-thing to fail in a long session.
+⚠️ **THE TURN-END TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: if a turn's
+honest summary is "waiting", it must NAME what it started or NAME what
+collides.** It bites on the state of the turn, not on the word used — "I'll
+report back when CI lands" is a waiting turn. Reporting only a status, having
+launched nothing and named nothing, is a directive violation, not a style
+choice. *"Queue empty — parked on CI"* passes only with the reason attached —
+the scan ran, and what it found is blocked or out of scope; the bare phrase
+names nothing. Do not build the rule on counting whether there is "enough" to
+parallelise — that judgement is the first thing to fail in a long session.
 
 **Scan inside the authorized task, never outside it.** Candidates are sub-parts
 of, or investigation supporting, work already asked for. When the plan drains,
@@ -563,10 +565,11 @@ invented to satisfy the test above is a scope violation, not parallelism.
 - **Batch verification.** Group independent small tasks and run ONE suite over
   the batch rather than one run per task.
 
-### Run it without serializing behind verification
+### Run it
+**Never serialize a task list behind each step's verification.**
 - **A launched verification IS the start signal for the next task** (owner
-  reinforcement, 2026-07-22). The moment a push, PR, CI run or deploy is in
-  flight, pick up the next ready task in the SAME turn. Results arrive
+  reinforcement, 2026-07-22). The moment a UI suite, push, PR, CI run or deploy
+  is in flight, pick up the next ready task in the SAME turn. Results arrive
   asynchronously — ci-notify, webhooks, background agents — and route back.
 - **Failure routing.** A failed verification becomes the priority; tasks
   downstream of it pause; independent tasks keep going. Circuit breakers
@@ -591,13 +594,15 @@ and two agents editing one file is worse than doing it once.
   suite, revert, or check out. Doubt on either: use a worktree.
 
 ✅ **"Nothing here is independent" is sometimes the correct answer — but it must
-be REACHED, not skipped.** Say it in one line, naming what collides, so it is
-distinguishable from having forgotten.
+be REACHED, not skipped.** Say it in one line, naming what collides **and why**,
+so the reasoning is visible rather than indistinguishable from having forgotten.
 
 **Name the real serialiser instead of working around it.** Often the constraint
 is the **landing** — one active branch, one review queue, one deploy slot.
 ⚠️ That constrains LANDING, never STARTING: parallel work builds while the
-current change is in review and lands after it merges.
+current change is in review and lands after it merges. Say which constraint is
+in force rather than treating "I can only merge one thing" as "I can only do one
+thing".
 
 **Aim agents at a seam or a class, not at the latest diff.** Ask a structural
 question — *census every place X happens*, *which of these names is which kind of
@@ -606,9 +611,11 @@ binding*, *audit my own tests for ones that pass for the wrong reason*. Asking
 answered while writing it. ⚠️ **The highest-yield instruction is to point an
 agent at your OWN work.**
 
-**Subagents stay small, tightly scoped, one task each; the main session stays
-the orchestrator** — it assigns, integrates results, and runs the batched
-verification. Collect every spawned agent before the turn ends
+**Fan independent tasks out to subagents** — they run as PARALLEL BACKGROUND
+subagents, small, tightly scoped, one task each. Spawning one, waiting for it,
+then spawning the next is serialization wearing a subagent costume. The main
+session stays the orchestrator: it assigns, integrates results, and runs the
+batched verification. Collect every spawned agent before the turn ends
 (→ *Async Operations*).
 
 **When adding a process rule, state its trigger in the same breath as its

@@ -514,18 +514,60 @@ multi-file audits):
   the new expectation.
 
 ## Pipelined Execution (owner ruling, 2026-07-18)
-Never serialize a task list behind each step's verification. Applies to **every
-task list, one item or more**:
+Merged into → *Parallel Tasking via Subagents* (2026-09-10), which carries every
+rule below unchanged. Stub kept so existing references still resolve.
+
+## Parallel Tasking via Subagents (owner rulings, 2026-07-18 · 2026-07-22 · 2026-09-10)
+**The rule:** *"I want parallel multiagent processing at all times."* **The
+amendment, and it is the half that makes it stick:** *"we need to routinely and
+frequently look at our environment for potential multitasking using multiple
+agents … when I ask you to do it once, you just go back to serialization."*
+
+⛔ **SCAN AT NAMED MOMENTS — a stated preference is not enough.** Applies to
+**every task list, one item or more**, and to work with no list at all.
+⚠️ **Where the Agent tool is unavailable**, the scan still runs and its result is
+still stated; it then ORDERS the work instead of launching it. Missing tooling
+suspends the launching, never the scan.
+
+### Scan at these moments
+- **Whenever work is handed to an external system** — a PR opened, a review
+  requested, CI started, a deploy triggered, a long build or migration kicked
+  off. ⚠️ **That handoff IS the trigger**: the moment with the most spare
+  capacity and the one most reliably wasted.
+- **On every wake-up, notification and scheduled check-in — BEFORE reporting
+  state.**
+- **Whenever a task finishes**, on the next task's independent sub-parts. A
+  sub-part found mid-run is ADDED to the plan with its `depends:` declared
+  before it launches — amend the plan, never bypass it.
+- **Before ending any turn.**
+
+⚠️ **THE TURN-END TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: a turn that ends
+"waiting" must NAME what it started or NAME what collides.** Reporting only a
+status, having launched nothing and named nothing, is a directive violation, not
+a style choice. *"Queue empty — parked on CI"* counts only as the second form:
+the scan has to have run and found nothing independent. Do not build the rule on
+counting whether there is "enough" to parallelise — that judgement is the first
+thing to fail in a long session.
+
+**Scan inside the authorized task, never outside it.** Candidates are sub-parts
+of, or investigation supporting, work already asked for. When the plan drains,
+→ *Standing Authorization* governs: report done and stop. An unrelated audit
+invented to satisfy the test above is a scope violation, not parallelism.
+
+### Plan the list so it can pipeline
 - **Dependencies are declared at plan time.** Every task carries an explicit
-  `depends:` (task IDs it must wait for, or `none`). Parallelism is decided when
+  `depends:` — task IDs it must wait for, or `none`. Parallelism is decided when
   the list is written, not improvised mid-run.
-- **Never idle-wait on verification.** The moment a task's UI suite / CI run is
-  launched, start the next task with no unmet dependencies. Results arrive
-  asynchronously (ci-notify, webhooks, background agents) and route back.
 - **Block only on a true dependency or a shared-file conflict.** "Finishing one
   first feels tidy" is not a dependency.
 - **Batch verification.** Group independent small tasks and run ONE suite over
   the batch rather than one run per task.
+
+### Run it without serializing behind verification
+- **A launched verification IS the start signal for the next task** (owner
+  reinforcement, 2026-07-22). The moment a push, PR, CI run or deploy is in
+  flight, pick up the next ready task in the SAME turn. Results arrive
+  asynchronously — ci-notify, webhooks, background agents — and route back.
 - **Failure routing.** A failed verification becomes the priority; tasks
   downstream of it pause; independent tasks keep going. Circuit breakers
   (`test.md` → 3 attempts) unchanged.
@@ -533,62 +575,10 @@ task list, one item or more**:
   ready and everything outstanding waits only on verification or the owner. The
   completion bar is unchanged — ALL verification green before work is done
   (`test.md` gates); pipelining reorders the waiting, never skips it.
-- **A launched verification IS the start signal for the next task** (owner
-  reinforcement, 2026-07-22). The moment a push, PR, CI run, or deploy is in
-  flight, pick up the next ready task in the SAME turn. The turn-end test: a
-  turn that launched verification may not end as "waiting on CI" while the
-  ready-queue is non-empty — either name the next task you just started, or
-  state "queue empty — parked on CI". "Waiting" with ready work on the list is a
-  directive violation, not a style choice.
-- **Fan independent tasks out to subagents.** Where the Agent tool is available,
-  independent items run as parallel background subagents — small, tightly
-  scoped, one task each. The main session stays the orchestrator: it assigns,
-  integrates results, and runs the batched verification. Collect every spawned
-  agent before the turn ends (→ *Async Operations*); shared-file conflicts stay
-  a valid reason to serialize, "it's tidier one at a time" does not.
 
-## Parallel Agent Work Is the Default Posture (owner ruling, 2026-09-10)
-**The rule:** *"I want parallel multiagent processing at all times."* **The
-amendment, same day, and it is the half that makes it stick:** *"we need to
-routinely and frequently look at our environment for potential multitasking
-using multiple agents … when I ask you to do it once, you just go back to
-serialization."*
-
-⛔ **SCAN AT NAMED MOMENTS — a stated preference is not enough.**
-*Pipelined Execution* covers the ready-queue; this covers looking for parallel
-work at all, including when no list exists. ⚠️ **Where the Agent tool is not
-available**, the scan still runs and its result is still stated — it is recorded
-and used to ORDER the work rather than to launch it. Missing tooling suspends the
-launching, never the scan.
-
-**Scan for parallelisable work at these moments:**
-- **Whenever work is handed to an external system** — a PR opened, a review
-  requested, CI started, a deploy triggered, a long build or migration kicked
-  off. ⚠️ **That handoff IS the trigger**, and it is the moment with the most
-  spare capacity and the one most reliably wasted.
-- **On every wake-up, notification and scheduled check-in — BEFORE reporting
-  state.**
-- **Whenever a task finishes**, on the next task's independent sub-parts. Where
-  a plan exists, a newly found sub-part is ADDED to it with its dependencies
-  declared before it launches — this amends the plan, never bypasses it
-  (→ *Pipelined Execution*).
-- **Before ending any turn.**
-
-⚠️ **THE TEST NEEDS NO JUDGEMENT, WHICH IS THE POINT: if a turn's honest summary
-is "waiting", that turn must have STARTED something or SAID what collides.** A
-turn that reports only a status, launched nothing and named nothing is the
-failure this rule names. Do not build the rule on counting whether there is
-"enough" to parallelise — that judgement is the first thing to fail in a long
-session.
-
-**Scan inside the authorized task, never outside it.** Candidates are sub-parts
-of, or investigation supporting, work already asked for. When the declared plan
-drains, → *Standing Authorization* governs: report done and stop. An unrelated
-audit invented to satisfy the test above is a scope violation, not parallelism.
-
-**Judge candidates by independence, not availability.** ⛔ An agent aimed at work
-that is not independent manufactures merge conflicts, and two agents editing one
-file is worse than doing it once.
+### Judge candidates by independence, not availability
+⛔ An agent aimed at work that is not independent manufactures merge conflicts,
+and two agents editing one file is worse than doing it once.
 - **Read-only investigation** — a census, an audit, a plan measured against the
   real tree, *"is this claim actually true?"*. Any number run at once; they
   collide with nothing. **Highest-yield category and the most under-used.**
@@ -601,15 +591,13 @@ file is worse than doing it once.
   suite, revert, or check out. Doubt on either: use a worktree.
 
 ✅ **"Nothing here is independent" is sometimes the correct answer — but it must
-be REACHED, not skipped.** Say it in one line, naming what collides and why, so
-the reasoning is visible rather than indistinguishable from having forgotten.
+be REACHED, not skipped.** Say it in one line, naming what collides, so it is
+distinguishable from having forgotten.
 
 **Name the real serialiser instead of working around it.** Often the constraint
-is the **landing** — a single active branch, one review queue, one deploy slot.
+is the **landing** — one active branch, one review queue, one deploy slot.
 ⚠️ That constrains LANDING, never STARTING: parallel work builds while the
-current change is in review and lands after it merges. Say which constraint is
-in force rather than treating "I can only merge one thing" as "I can only do one
-thing".
+current change is in review and lands after it merges.
 
 **Aim agents at a seam or a class, not at the latest diff.** Ask a structural
 question — *census every place X happens*, *which of these names is which kind of
@@ -618,6 +606,11 @@ binding*, *audit my own tests for ones that pass for the wrong reason*. Asking
 answered while writing it. ⚠️ **The highest-yield instruction is to point an
 agent at your OWN work.**
 
+**Subagents stay small, tightly scoped, one task each; the main session stays
+the orchestrator** — it assigns, integrates results, and runs the batched
+verification. Collect every spawned agent before the turn ends
+(→ *Async Operations*).
+
 **When adding a process rule, state its trigger in the same breath as its
 behaviour**, and prefer a trigger that fires on an observable event — a handoff,
 a wake-up, a turn ending — over one that fires on noticing. A rule that leaves
@@ -625,15 +618,16 @@ a wake-up, a turn ending — over one that fires on noticing. A rule that leaves
 
 ## Burst Intake — Multiple Asks at Once (owner ruling, 2026-08-18)
 
-*Pipelined Execution* governs a task list already written. This governs the
-moment the asks ARRIVE — the owner firing several requests in one message, or
-interjecting new ones mid-turn while work is in flight.
+→ *Parallel Tasking via Subagents* governs a task list already written, and the
+scan for parallel work generally. This governs the moment the asks ARRIVE — the
+owner firing several requests in one message, or interjecting new ones mid-turn
+while work is in flight.
 
 **The trigger, quantified.** The moment TWO OR MORE independently actionable
 requests are pending in the same turn — one message carrying several, or
 mid-turn interjections stacking on in-flight work — decompose IMMEDIATELY, in
 that turn, before finishing the current step:
-1. Name each ask as a task with `depends:` (per *Pipelined Execution*).
+1. Name each ask as a task with `depends:`, per → *Parallel Tasking via Subagents*.
 2. **Spawn a background subagent for every item that** (a) shares no files with
    an in-flight item, and (b) is investigation, diagnosis, reproduction, or
    authoring work of roughly three or more tool calls. One agent per item,
@@ -885,8 +879,8 @@ which is KEEP GOING.
   one. Work task-to-task without re-asking; checkpoint reports replace
   permission requests.
 - **Re-asking at a task boundary that trips no stop gate is a directive
-  violation**, symmetric to idle-waiting during verification (→ *Pipelined
-  Execution*'s turn-end test).
+  violation**, symmetric to idle-waiting during verification — see the turn-end
+  test in → *Parallel Tasking via Subagents*.
 - The stop gates are NEVER overridden by a standing authorization: Escalation
   Rules above, the surviving merge stops (`git.md` → *Conditional
   Auto-Merge on Green* — secrets or personal data in the diff; invented scope),
@@ -906,7 +900,7 @@ needs restating.
    it is not an escalation.
 3. **Pipeline the work.** Recruit agents and run independent work in parallel
    rather than idling, especially while waiting on CI, a deploy, or a review
-   (→ *Pipelined Execution*).
+   (→ *Parallel Tasking via Subagents*).
 4. **Auto-merge.** Where the work produces a PR, take it through to merged,
    clearing a `codex-flagged` blocker by **requesting the review pass** rather
    than removing the label. Take the label off by hand only where `git.md` →

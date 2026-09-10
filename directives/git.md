@@ -117,8 +117,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   branch match can name a **superseded** commit, so verify the SHA is still head
   before treating it as a gate.
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
-  next ready task (`global.md` → *Pipelined Execution*, whose turn-end test
-  applies)
+  next ready task — `global.md` → *Parallel Tasking via Subagents*, whose
+  turn-end test applies
 - Fix all CI failures before marking ready for review
 - Mark PR ready only when all checks pass
 - **Auto-merge on green:** squash-merge as soon as the gates hold — see

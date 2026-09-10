@@ -518,9 +518,9 @@ five:
 
 These are **completion gates, not sequencing gates**: everything must pass before
 the work is called done, but a task never waits for the previous task's suite to
-finish before starting (`global.md` → *Pipelined Execution*). Verification runs
-concurrently with the next task; batching independent tasks into one suite run is
-the norm, not a shortcut.
+finish before starting (`global.md` → *Parallel Tasking via Subagents*).
+Verification runs concurrently with the next task; batching independent tasks
+into one suite run is the norm, not a shortcut.
 
 ## Sandboxed local runs (agent sessions)
 A test run inside an agent sandbox can fail for reasons that have nothing to do

@@ -457,11 +457,12 @@ plus the two surviving stops (secrets or personal data in the diff; invented
 scope) and the revert-first safety net.
 
 ## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
-**Falsify your own claims before every push.** For each claim the change makes,
-make it fail for its own named reason, then restore — a check you have never
-seen fail is a check you have no evidence about. A mutation the check is
-*designed* to accept falsifies nothing: read what the check enforces before
-trusting your own negative control.
+**No claim ships unfalsified.** Before asserting a claim holds — in a PR body, a
+review reply, or a merge — make its check fail for its own named reason, then
+restore. A check you have never seen fail is a check you have no evidence about;
+a mutation the check is *designed* to accept falsifies nothing, so read what the
+check enforces before trusting your own negative control. A push whose purpose is
+to run that negative test is part of falsifying, not an assertion.
 
 Where a failure path cannot be exercised safely, do not force it; never induce a
 destructive failure to check wording, which Behavior Rules' *Evidence before
@@ -476,13 +477,13 @@ checkable findings first. A round does **not** end on a finding you can check �
 including one about test code, and including a wording finding that names a
 factual claim the tree contradicts.
 
-**Track each round's findings by cause, not only by whether each was right**; a
-run of correct findings is not evidence of convergence. **When the same
-mechanism fails again across rounds — introduced by a previous round's fix, or
-left unresolved by one — that mechanism is in the wrong place:** revert or
-redesign rather than patch a third time. What has to recur is the mechanism or
-the violated invariant, not merely the defect category; independent bugs that
-share a label are ordinary iteration.
+**Record each round's findings by cause in the PR itself** — new, introduced by
+a previous round's fix, or left unresolved by one — since a session does not
+survive a handoff and a run of correct findings is not evidence of convergence.
+**When the same mechanism fails again across rounds, that mechanism is in the
+wrong place:** revert or redesign rather than patch a third time. What has to
+recur is the mechanism or the violated invariant, not merely the defect
+category; independent bugs that share a label are ordinary iteration.
 
 **Prove the environment under test is the tree under test**, and prove it for
 the baseline too. Reachability proves nothing, and neither does a version string

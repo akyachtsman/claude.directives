@@ -528,15 +528,17 @@ amendment, and it is the half that makes it stick:** *"we need to routinely and
 frequently look at our environment for potential multitasking using multiple
 agents … when I ask you to do it once, you just go back to serialization."*
 
-⛔ **SCAN AT BOTH EDGES OF EVERY COMMITMENT OF TIME — BEFORE STARTING work and
-BEFORE WAITING on anything.** A stated preference is not enough. Applies to
+⛔ **SCAN AT EVERY EDGE OF A COMMITMENT OF TIME — BEFORE STARTING work, BEFORE
+WAITING on anything, and BEFORE STOPPING.** Those three close it: from here you
+either spend time working, spend it waiting, or spend no more. A stated
+preference is not enough. Applies to
 **every task list, one item or more**, and to work with no list at all.
 ⚠️ **Where the Agent tool is unavailable**, the scan still runs and its result is
 still stated; it then ORDERS the work instead of launching it. Missing tooling
 suspends the launching, never the scan.
 
-### Instances of those two edges — not a closed list
-A moment not named here still scans if it is a start or a wait.
+### Instances of those three edges — not a closed list
+A moment not named here still scans if it is a start, a wait, or a stop.
 - **Work ARRIVES** — an ask, a plan, a wake-up, a notification, a scheduled
   check-in. Scan before the first sub-part is started, and BEFORE reporting
   state. ⚠️ **One request carrying independent sub-parts is the most common
@@ -548,10 +550,12 @@ A moment not named here still scans if it is a start or a wait.
 - **A task FINISHES**, on the next task's independent sub-parts. Where a plan
   exists, a sub-part found mid-run is ADDED to it with its `depends:` declared
   before it launches — amend the plan, never bypass it.
-- **A turn is ENDING.**
+- **A turn is ENDING** — whether parked on something or finished. ⚠️ *"All
+  done"* is a STOP and scans like one: nothing authorized may be left
+  unexamined because the queue looked empty.
 
-**Report the scan's result when a turn ends waiting** — what you started, or
-what blocks what you did not. ⛔ **This is a report, not a test, and no
+**Report the scan's result whenever a turn ends** — what you started, or what
+blocks what you did not. ⛔ **This is a report, not a test, and no
 turn-end SELF-check belongs here:** four were written and four were defeated,
 because a session grading its own turn also decides what was on the list.
 Enforcement is the triggers above, which fire on events; do not add a fifth
@@ -589,9 +593,14 @@ invented to fill a quiet turn is a scope violation, not parallelism.
 ### Judge candidates by independence, not availability
 ⛔ An agent aimed at work that is not independent manufactures merge conflicts,
 and two agents editing one file is worse than doing it once.
-- **Read-only investigation** — a census, an audit, a plan measured against the
-  real tree, *"is this claim actually true?"*. Any number run at once; they
-  collide with nothing. **Highest-yield category and the most under-used.**
+- **Read-only investigation** — a census, an audit, *"is this claim actually
+  true?"*. **Highest-yield category and the most under-used**, and any number
+  run at once. ⛔ **They create no merge conflict but they DO collide
+  semantically:** a tree being edited concurrently is read as a mixture of
+  revisions, and the answer is confidently wrong. Point every investigation at
+  an IMMUTABLE SNAPSHOT — a commit SHA, a tag, a worktree pinned to a ref — or
+  declare it dependent on the writes in flight and start it after they land.
+  ⚠️ Aiming an agent at your OWN work, below, is exactly when this bites.
 - **Implementation in an ISOLATED WORKTREE** — the default for anything that
   edits code while another run is in flight. A revert done for a test inside a
   shared tree makes an unrelated concurrent run report a failure that is not

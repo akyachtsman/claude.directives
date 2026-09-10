@@ -35,18 +35,12 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
 ### Operating Rules
 
 - Do not modify code or files
-- Capture the batch's head and base SHAs ONCE, and pass those — not the branch
-  name — to every source-reading subagent, so siblings cannot describe different
-  revisions when a later task advances the branch mid-review. Pass the changed
-  files list, app URL, and existing `.agent-reports/` alongside them
-- ⛔ **Passing a SHA is not enough for any subagent that READS THE FILESYSTEM.**
-  `test-verifier` runs `git status`, inspects diffs and executes the suite in
-  whatever checkout it is given, so a concurrent uncommitted edit contaminates
-  its result WITHOUT MOVING HEAD — which no SHA check can detect. Run every
-  source-reading verification in a worktree pinned to the captured head, or hold
-  the live tree exclusively for its duration (`global.md` → *Parallel Tasking
-  via Subagents*). Fixing the values passed to an agent never fixes the tree it
-  reads
+- Pass the branch name, changed files list, app URL, and existing
+  `.agent-reports/` to each subagent
+- ⛔ **Do not run this pipeline while another task is writing the tree.** Its
+  reads, its diffs and its suite all see the live checkout, so a concurrent edit
+  contaminates every report at once — silently, and without moving HEAD. Hold
+  the writers until the pipeline is collected
 - Also pass the PR number (owner/repo/number) when one exists — `pr-readiness-reviewer`
   cannot resolve a branch to a PR itself and reports Codex as Pending without it
 - Continue pipeline even if non-blocking issues emerge — capture full picture

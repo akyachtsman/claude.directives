@@ -536,11 +536,11 @@ to have listed them all. Applies to
 still stated; it then ORDERS the work instead of launching it. Missing tooling
 suspends the launching, never the scan.
 
-### The moments that pay most — a FLOOR, never a ceiling
-⛔ **The first item is MANDATORY. The rest are where to look, and a moment
-absent from the list is not thereby exempt.** Three attempts to state exactly
-when the scan is owed have each been shown incomplete, so the list makes no
-claim to completeness — but "not exhaustive" never means "not binding".
+### The moments that pay most
+These are where the scan earns most; they are not a schedule and not a test.
+⚠️ **Five attempts to state exactly when the scan is owed each moved the gap
+instead of closing it** — treat *routinely and frequently* as the rule and this
+as where to look. Tracked in #363; do not write a sixth here.
 - **Work ARRIVES** — an ask, a plan, a wake-up, a notification, a scheduled
   check-in. Scan before the first sub-part is started, and BEFORE reporting
   state. ⚠️ **One request carrying independent sub-parts is the most common
@@ -602,18 +602,12 @@ invented to fill a quiet turn is a scope violation, not parallelism.
 and two agents editing one file is worse than doing it once.
 - **Read-only investigation** — a census, an audit, *"is this claim actually
   true?"*. **Highest-yield category and the most under-used**, and any number
-  run at once. ⛔ **They create no merge conflict but they DO collide
-  semantically:** a tree being edited concurrently is read as a mixture of
-  revisions, and the answer is confidently wrong. ⛔ **The subject must not
-  change while it is being read** — either read a RESOLVED COMMIT SHA (a branch
-  or tag NAME is a mutable ref: `git tag --force` replaces one, so two reads of
-  the same name can span two commits), or hold an EXCLUSIVE window in which
-  nothing writes.
-  Only the orchestrator can grant that window, because only it decides who runs:
-  an audit of staged or unstaged state has no SHA to read, so it gets the window
-  or it does not run. "Wait for the current writes" is not the window — the next
-  writer starts mid-read. ⚠️ Aiming an agent at your OWN work, below, is exactly
-  when this bites.
+  run at once. ⛔ **Never point one at a tree you are editing.** They create no
+  merge conflict, which is why this goes unnoticed: a tree read while it is
+  being written is read as a mixture of revisions, and the answer comes back
+  confidently wrong. ⚠️ Aiming an agent at your OWN work, below, is exactly when
+  this bites. (Making that safe by construction — snapshots, pinned checkouts,
+  exclusive windows — is unsolved here; see #363.)
 - **Implementation in an ISOLATED WORKTREE** — the default for anything that
   edits code while another run is in flight. A revert done for a test inside a
   shared tree makes an unrelated concurrent run report a failure that is not

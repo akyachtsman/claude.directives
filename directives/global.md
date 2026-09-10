@@ -131,7 +131,8 @@ BELOW the ask ledger (→ *Burst Intake — Multiple Asks at Once*): the ledger 
 the reply's final block, this is its final line.
 
 - **"Waiting for CI"** — tests running; the session resumes itself on the
-  result.
+  result. Never the whole story: the turn still has to name what it started or
+  what collides (→ *Parallel Tasking via Subagents*).
 - **"Waiting for response"** — blocked on the owner; the question sits
   directly above the status line.
 - **"Deployed"** — merged AND verified live at the deployed URL; safe to test.
@@ -508,8 +509,9 @@ multi-file audits):
   agents and stepwise tool calls over one monolithic blocking wait, because a
   session cannot emit text mid-wait inside a single blocking call.
 - **Parked is not silent.** When waiting on an external event, say so before
-  ending the turn — "parked; the green comment on PR #N will wake me (~3 min)" —
-  so quiet reads as waiting, not hung.
+  ending the turn, WITH what you started or what collides — "parked on PR #N's
+  green comment (~3 min); auditing the exported guard meanwhile" — so quiet
+  reads as waiting, not hung (→ *Parallel Tasking via Subagents*).
 - **Estimate misses get an update, not silence.** Say what's still running and
   the new expectation.
 
@@ -696,7 +698,10 @@ naming what remains open, or "nothing open" — never absent.
      webhooks that resume the session — and with `ci-notify.yml` installed
      (standard scaffold), CI SUCCESS arrives too, as a PR comment. Event wakes
      are the PRIMARY signal for a PR-attached wait: end the turn saying you'll
-     report back, and act on the event rather than asking for it.
+     report back, and act on the event rather than asking for it. ⚠️ That
+     ending still has to pass the turn-end test in → *Parallel Tasking via
+     Subagents* — name what you started, or what collides. "I'll report back"
+     on its own is the failing turn, not the approved one.
      ⚠️ **Primary is not sole — event-driven does not mean "no scheduler."** A
      wake only covers what something actually emits. A dispatched run on a PR
      branch has seven verified ways to emit nothing (`git.md` → *PR Lifecycle*),

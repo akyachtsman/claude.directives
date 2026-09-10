@@ -163,11 +163,15 @@ Every command and skill carries:
 ## Deliberate rejects (simplicity discipline)
 
 - **gstack runtime** — browser daemon, GStack Browser, redaction/egress server,
-  pair-agent tunnel, ONNX injection classifier, all iOS skills,
-  Conductor/worktrees, `claude -p` evals: CLI/native, unusable browser-only.
-- **superpowers** — `using-git-worktrees`, local `finishing-a-development-branch`
+  pair-agent tunnel, ONNX injection classifier, all iOS skills, the Conductor
+  app, `claude -p` evals: CLI/native, unusable browser-only.
+- **superpowers** — the `using-git-worktrees` skill, local `finishing-a-development-branch`
   (use the GitHub UI/MCP instead), the bash `session-start` hook (use the
   plugin's own mechanism), multi-platform packaging.
+
+⚠️ Those two entries reject the named **tools**, never `git worktree` itself —
+`global.md` → *Parallel Tasking via Subagents* makes an isolated worktree the
+default for concurrent edits, and that rule stands here.
 - **frameworked AI UI generators** (v0, Lovable, Bolt, 21st.dev, official Figma
   codegen) — React/Tailwind output and (often) a local server; wrong target for a
   plain-HTML, browser-only stack. (`frontend-design` + Stitch's *remote* MCP are

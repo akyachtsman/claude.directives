@@ -457,8 +457,9 @@ plus the two surviving stops (secrets or personal data in the diff; invented
 scope) and the revert-first safety net.
 
 ## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
-**No claim ships unfalsified.** Before asserting a claim holds — in a PR body, a
-review reply, or a merge — make its check fail for its own named reason, then
+**No claim the change makes ships unfalsified**, stated or implied — merging
+asserts every one of them. Before asserting a claim holds, in a PR body, a
+review reply, or a merge, make its check fail for its own named reason, then
 restore. A check you have never seen fail is a check you have no evidence about;
 a mutation the check is *designed* to accept falsifies nothing, so read what the
 check enforces before trusting your own negative control. A push whose purpose is
@@ -470,9 +471,11 @@ assertions* forbids outright. Use what that rule allows — a dry run, the live
 schema, the tool's own docs — plus the counterexample you would expect to see.
 Say which claims got a negative control and which got documentary evidence.
 
-**A round ends only when every remaining item is one you cannot check** —
-speculation about unwritten code, staging plans for work that does not exist,
-arguments for different phrasing. A mixed review does not end it: fix the
+**A round ends only when every remaining item is one that cannot be checked at
+all** — speculation about unwritten code, staging plans for work that does not
+exist, arguments for different phrasing. A concrete finding you merely lack the
+access or tooling to prove is not that: hand it off or escalate it by name, and
+never end a round on it. A mixed review does not end one either: fix the
 checkable findings first. A round does **not** end on a finding you can check —
 including one about test code, and including a wording finding that names a
 factual claim the tree contradicts.
@@ -483,7 +486,9 @@ survive a handoff and a run of correct findings is not evidence of convergence.
 **When the same mechanism fails again across rounds, that mechanism is in the
 wrong place:** revert or redesign rather than patch a third time. What has to
 recur is the mechanism or the violated invariant, not merely the defect
-category; independent bugs that share a label are ordinary iteration.
+category; independent bugs that share a label are ordinary iteration. **If a
+redesign reproduces the mechanism, revert the change and escalate** — a second
+redesign is the loop this section exists to end.
 
 **Prove the environment under test is the tree under test**, and prove it for
 the baseline too. Reachability proves nothing, and neither does a version string

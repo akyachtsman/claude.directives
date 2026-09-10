@@ -528,17 +528,18 @@ amendment, and it is the half that makes it stick:** *"we need to routinely and
 frequently look at our environment for potential multitasking using multiple
 agents … when I ask you to do it once, you just go back to serialization."*
 
-⛔ **SCAN AT EVERY EDGE OF A COMMITMENT OF TIME — BEFORE STARTING work, BEFORE
-WAITING on anything, and BEFORE STOPPING.** Those three close it: from here you
-either spend time working, spend it waiting, or spend no more. A stated
-preference is not enough. Applies to
+⛔ **SCAN ROUTINELY AND FREQUENTLY — a stated preference is not enough.** Its
+useful edges are the start of work, a wait, and a stop, and no rule here claims
+to have listed them all. Applies to
 **every task list, one item or more**, and to work with no list at all.
 ⚠️ **Where the Agent tool is unavailable**, the scan still runs and its result is
 still stated; it then ORDERS the work instead of launching it. Missing tooling
 suspends the launching, never the scan.
 
-### Instances of those three edges — not a closed list
-A moment not named here still scans if it is a start, a wait, or a stop.
+### The moments that pay most — examples, NEVER a test
+⛔ **A moment absent from this list is not thereby exempt.** Three attempts to
+state exactly when the scan is owed have each been shown incomplete; do not
+write a fourth and do not read this list as one.
 - **Work ARRIVES** — an ask, a plan, a wake-up, a notification, a scheduled
   check-in. Scan before the first sub-part is started, and BEFORE reporting
   state. ⚠️ **One request carrying independent sub-parts is the most common
@@ -550,6 +551,8 @@ A moment not named here still scans if it is a start, a wait, or a stop.
 - **A task FINISHES**, on the next task's independent sub-parts. Where a plan
   exists, a sub-part found mid-run is ADDED to it with its `depends:` declared
   before it launches — amend the plan, never bypass it.
+- **MID-TASK, the moment inspection reveals independent sub-parts.** A long task
+  reaches no boundary for hours; waiting for one wastes the whole interval.
 - **A turn is ENDING** — whether parked on something or finished. ⚠️ *"All
   done"* is a STOP and scans like one: nothing authorized may be left
   unexamined because the queue looked empty.
@@ -559,8 +562,11 @@ blocks what you did not. ⛔ **This is a report, not a test, and no
 turn-end SELF-check belongs here:** four were written and four were defeated,
 because a session grading its own turn also decides what was on the list.
 Enforcement is the triggers above, which fire on events; do not add a fifth
-wording. Do not build any of it on counting whether there is "enough" to
-parallelise — that judgement is the first thing to fail in a long session.
+wording. Do not decide WHETHER to scan by judging if there is "enough" to parallelise —
+that judgement is the first thing to fail in a long session. Judging whether a
+found item is worth a SUBAGENT is a different question with a measured answer:
+→ *Burst Intake — Multiple Asks at Once* keeps items cheaper than the spawn
+overhead inline.
 
 **Scan inside the authorized task, never outside it.** Candidates are sub-parts
 of, or investigation supporting, work already asked for. When the plan drains,
@@ -597,10 +603,14 @@ and two agents editing one file is worse than doing it once.
   true?"*. **Highest-yield category and the most under-used**, and any number
   run at once. ⛔ **They create no merge conflict but they DO collide
   semantically:** a tree being edited concurrently is read as a mixture of
-  revisions, and the answer is confidently wrong. Point every investigation at
-  an IMMUTABLE SNAPSHOT — a commit SHA, a tag, a worktree pinned to a ref — or
-  declare it dependent on the writes in flight and start it after they land.
-  ⚠️ Aiming an agent at your OWN work, below, is exactly when this bites.
+  revisions, and the answer is confidently wrong. ⛔ **The subject must not
+  change while it is being read** — either read something that CANNOT change (a
+  commit SHA, a tag), or hold an EXCLUSIVE window in which nothing writes.
+  Only the orchestrator can grant that window, because only it decides who runs:
+  an audit of staged or unstaged state has no SHA to read, so it gets the window
+  or it does not run. "Wait for the current writes" is not the window — the next
+  writer starts mid-read. ⚠️ Aiming an agent at your OWN work, below, is exactly
+  when this bites.
 - **Implementation in an ISOLATED WORKTREE** — the default for anything that
   edits code while another run is in flight. A revert done for a test inside a
   shared tree makes an unrelated concurrent run report a failure that is not

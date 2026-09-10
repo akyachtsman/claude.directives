@@ -35,7 +35,10 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
 ### Operating Rules
 
 - Do not modify code or files
-- Pass the branch name, changed files list, app URL, and existing `.agent-reports/` to each subagent
+- Capture the batch's head and base SHAs ONCE, and pass those — not the branch
+  name — to every source-reading subagent, so siblings cannot describe different
+  revisions when a later task advances the branch mid-review. Pass the changed
+  files list, app URL, and existing `.agent-reports/` alongside them
 - Also pass the PR number (owner/repo/number) when one exists — `pr-readiness-reviewer`
   cannot resolve a branch to a PR itself and reports Codex as Pending without it
 - Continue pipeline even if non-blocking issues emerge — capture full picture

@@ -530,8 +530,8 @@ agents … when I ask you to do it once, you just go back to serialization."*
 
 ⛔ **SCAN ROUTINELY AND FREQUENTLY — a stated preference is not enough.** Its
 useful edges are the start of work, a wait, and a stop, and no rule here claims
-to have listed them all. Applies to
-**every task list, one item or more**, and to work with no list at all.
+to have listed them all. Applies to **every task list, one item or more**, and
+to work with no list at all.
 ⚠️ **Where the Agent tool is unavailable**, the scan still runs and its result is
 still stated; it then ORDERS the work instead of launching it. Missing tooling
 suspends the launching, never the scan.
@@ -559,11 +559,13 @@ as where to look. Tracked in #363; do not write a sixth here.
   unexamined because the queue looked empty.
 
 **Report the scan's result whenever a turn ends** — what you started, or what
-blocks what you did not. ⛔ **This is a report, not a test, and no
-turn-end SELF-check belongs here:** four were written and four were defeated,
-because a session grading its own turn also decides what was on the list.
-Enforcement is the triggers above, which fire on events; do not add a fifth
-wording. Do not decide WHETHER to scan by judging if there is "enough" to parallelise —
+blocks what you did not. ⛔ **This is a report, not a test, and no turn-end
+SELF-check belongs here:** four were written and four were defeated, because a
+session grading its own turn also decides what was on the list. ⚠️ **Nothing
+here enforces the scan** — that is the honest state, not an oversight, and #363
+carries what would. Do not write a fifth wording in its place.
+
+Do not decide WHETHER to scan by judging if there is "enough" to parallelise —
 that judgement is the first thing to fail in a long session. Judging whether a
 found item is worth a SUBAGENT is a different question with a measured answer:
 → *Burst Intake — Multiple Asks at Once* keeps items cheaper than the spawn
@@ -622,10 +624,9 @@ and two agents editing one file is worse than doing it once.
   OWN FILES, and READ ONLY WHAT NO OTHER AGENT IS WRITING — someone else's
   in-flight file is read as a mixture of revisions exactly like a concurrently
   edited tree, and code built on one is built on a revision that never existed.
-  Nothing else. ⛔ Staging, committing, checking out,
-  reverting, stashing and running the suite are the ORCHESTRATOR's, after
-  collection — an index and a HEAD are shared even when no two agents touch the
-  same file. Split not stated explicitly to each agent, or an agent that needs
+  Nothing else. ⛔ Staging, committing, checking out, reverting, stashing and
+  running the suite are the ORCHESTRATOR's, after collection — an index and a
+  HEAD are shared even when no two agents touch the same file. Split not stated explicitly to each agent, or an agent that needs
   more than edit-and-read: use a worktree.
 
 ✅ **"Nothing here is independent" is sometimes the correct answer — but it must

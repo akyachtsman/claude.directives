@@ -573,6 +573,11 @@ overhead inline.
 of, or investigation supporting, work already asked for. When the plan drains,
 → *Standing Authorization* governs: report done and stop. An unrelated audit
 invented to fill a quiet turn is a scope violation, not parallelism.
+⛔ **A sub-part found mid-run is covered only if it SERVES A TASK ALREADY IN THE
+PLAN** — decomposing approved work is not new scope, and launching it needs no
+fresh approval. Anything else is a plan amendment and goes to the owner first,
+however obviously useful: "it supports the goal" is the test for a candidate,
+never for an authorization.
 
 ### Plan the list so it can pipeline
 - **Dependencies are declared at plan time.** Every task carries an explicit

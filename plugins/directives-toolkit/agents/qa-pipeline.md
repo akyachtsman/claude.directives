@@ -35,7 +35,17 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
 ### Operating Rules
 
 - Do not modify code or files
-- Pass the branch name, changed files list, app URL, and existing `.agent-reports/` to each subagent
+- Pass the branch name, changed files list, app URL, and existing
+  `.agent-reports/` to each subagent
+- ⛔ **Do not run this pipeline while another task is writing the tree.** Its
+  reads, its diffs and its suite all see the live checkout, so a concurrent edit
+  contaminates every report at once — silently, and without moving HEAD. Hold
+  every OTHER writer until the pipeline is collected
+- ⚠️ **The ui-tester loop is not a concurrent writer** — it is a handoff. The
+  tester returns a targeted fix, the caller applies and pushes it, and only then
+  does the tester rerun: the tree changes hands between rounds and is never
+  written while a step is reading it. Treating that loop as a writer to be held
+  would deadlock the pipeline against a fix it requires
 - Also pass the PR number (owner/repo/number) when one exists — `pr-readiness-reviewer`
   cannot resolve a branch to a PR itself and reports Codex as Pending without it
 - Continue pipeline even if non-blocking issues emerge — capture full picture

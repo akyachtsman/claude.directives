@@ -69,9 +69,9 @@ plain cards. "Smallest slice" is for risk, not the finish line.
 **End the plan with the task list.** An ordered, dependency-aware checklist
 derived from the plan above it, under `## Tasks`. Number tasks and give **every
 task an explicit `depends:` line** (task IDs it must wait for, or `none`) —
-required for every task list, one item or more (`global.md` → Pipelined
-Execution); tag parallel-safe tasks `[P]`. Size each task to roughly **2–5
-minutes** — ideally failing test → implement → verify → commit. **Reject
+required for every task list, one item or more, per `global.md` →
+*Parallel Tasking via Subagents*; tag parallel-safe tasks `[P]`. Size each task
+to roughly **2–5 minutes** — ideally failing test → implement → verify → commit. **Reject
 placeholders** ("TBD", "similar to Task N", vague "handle errors"): every task
 must name concrete files and changes. The tasks live in `plan.md` because they
 are the plan made executable — a separate `tasks.md` only split one thought
@@ -105,9 +105,9 @@ first. Build the remaining pages against that contract; for an elaborate brief,
 sign-off on the *look*** before doing the rest — cheapest to fix on one screen.
 
 Then execute the plan's `## Tasks` **pipelined, not step-serialized**
-(`global.md` → Pipelined Execution): implement a task, launch its verification
-in the background, and immediately start the next task whose `depends:` are
-all satisfied — never idle-wait for a suite to finish before beginning
+(`global.md` → *Parallel Tasking via Subagents*): implement a task, launch its
+verification in the background, and immediately start the next task whose
+`depends:` are all satisfied — never idle-wait for a suite to finish before beginning
 independent work. **Batch verification**: group completed independent tasks
 and run the `directives-toolkit:qa-pipeline` agent (test-verifier → ui-tester
 → code review → pr-readiness) once over the batch rather than once per task.

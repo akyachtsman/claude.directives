@@ -614,7 +614,10 @@ and two agents editing one file is worse than doing it once.
   real, and that false signal costs more than the parallelism saved.
 - **Disjoint files in one tree** — the ONE exception to that default, and it is
   a capability boundary, not a list of banned commands: an agent may EDIT ITS
-  OWN FILES AND READ, nothing else. ⛔ Staging, committing, checking out,
+  OWN FILES, and READ ONLY WHAT NO OTHER AGENT IS WRITING — someone else's
+  in-flight file is read as a mixture of revisions exactly like a concurrently
+  edited tree, and code built on one is built on a revision that never existed.
+  Nothing else. ⛔ Staging, committing, checking out,
   reverting, stashing and running the suite are the ORCHESTRATOR's, after
   collection — an index and a HEAD are shared even when no two agents touch the
   same file. Split not stated explicitly to each agent, or an agent that needs

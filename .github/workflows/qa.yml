@@ -280,6 +280,15 @@ jobs:
       - name: Check the canonical-claim guard enforces what it claims
         run: node .github/scripts/check-claims-cases.js
 
+      # The link checker reports "N/N cross-references resolve", and one it
+      # cannot PARSE is absent from BOTH sides of that fraction — so partial
+      # blindness reads as full coverage (#323's family). Measured: a name
+      # wrapped across a line was invisible and twenty were live here (#363).
+      # Nothing else here would notice, because the tree's own references are
+      # the only input and a missed one produces no output at all.
+      - name: Check the link checker sees the references it claims to check
+        run: node .github/scripts/check-links-cases.js
+
       # /refresh-repo derives WHICH .github/scripts/* a refresh must install by
       # grepping the callers it is installing. That pattern lives in a markdown
       # file; the callers are YAML edited independently, so nothing tied them

@@ -154,7 +154,11 @@ if (mode !== '--external') {
   // contains an arrow. One heading does — `## GitHub settings (Settings →
   // Secrets and variables → Actions)` — and references to it drop the
   // qualifier, which is the substring behaviour `resolves` is built on.
-  const NAME = String.raw`((?:[^*\n→]|-(?!>)|\n(?![ \t\r]*(?:\n|$)))+?)`;
+  // `-` is excluded from the negated class AND allowed back by the guarded
+  // alternative. Both halves are needed: with `-` still in the class that arm
+  // matches first, `-(?!>)` is never consulted, and `->` stays legal inside a
+  // name — so the fix above held for `→` and not for its ASCII spelling.
+  const NAME = String.raw`((?:[^*\n→-]|-(?!>)|\n(?![ \t\r]*(?:\n|$)))+?)`;
   // One hard wrap, with its indent. NOT `\s*`, which spans a blank line: a
   // filename ending one paragraph would then pair with an arrow in the next.
   const WRAP = String.raw`[ \t]*(?:\r?\n[ \t]*)?`;

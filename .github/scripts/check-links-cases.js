@@ -254,6 +254,27 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
   check('a multiline name does not swallow the next reference',
     r.code !== 0 && /Missing/.test(r.out),
     `exit=${r.code} out=${r.out.trim()}`);
+
+  // Both spellings of the arrow, because the first fix covered `→` and not
+  // `->`: `-` was still in the negated class, so the guarded alternative that
+  // was supposed to reject `->` was never reached.
+  const ascii = run({
+    'a.md': '# Decoy ->\n\n## Real Heading\n\ntext\n',
+    'b.md': 'see `a.md` -> *Decoy\n-> *Missing*\n',
+  });
+  check('…nor does it with the ASCII -> arrow',
+    ascii.code !== 0 && /Missing/.test(ascii.out),
+    `exit=${ascii.code} out=${ascii.out.trim()}`);
+
+  // …and the exclusion must not cost an ordinary hyphenated name, including
+  // one ending in `-` right before its closing delimiter.
+  const hyphen = run({
+    'a.md': '# Top\n\n## Well-Known Thing-\n\ntext\n',
+    'b.md': 'see `a.md` -> *Well-Known Thing-*\n',
+  });
+  check('a hyphenated name, and one ending in a hyphen, still parse',
+    hyphen.code === 0 && parsed(hyphen.out)?.good === 1,
+    `exit=${hyphen.code} got ${JSON.stringify(parsed(hyphen.out))}`);
 }
 
 // 13. An explicit file that resolves to nothing is still an error — the arm that

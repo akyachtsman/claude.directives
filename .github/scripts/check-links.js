@@ -100,7 +100,10 @@ if (mode !== '--external') {
   // Strip fenced code blocks first, exactly as check-sections.js does: a deleted
   // section whose name survives inside a fenced example would otherwise satisfy
   // the scan and report a broken cross-reference as resolved.
-  const stripFences = (content) => content.replace(/^```[\s\S]*?^```/gm, '');
+  const stripFences = (content) => content.replace(
+    /^```[\s\S]*?^```/gm,
+    (block) => '\n'.repeat((block.match(/\n/g) || []).length),
+  );
   const headingsOf = (file) => {
     if (!headingCache.has(file)) {
       const heads = existsSync(file)
@@ -126,7 +129,7 @@ if (mode !== '--external') {
   // and was not (#363, the #323 fail-open family). A newline is now allowed
   // inside the name, but never a BLANK one: an unclosed `*` would otherwise run
   // to the next asterisk anywhere in the file and match arbitrary prose.
-  const NAME = String.raw`((?:[^*\n]|\n(?![ \t]*(?:\n|$)))+?)`;
+  const NAME = String.raw`((?:[^*\n]|\n(?![ \t\r]*(?:\n|$)))+?)`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
   const XREF_FILE = new RegExp(String.raw`\`([A-Za-z0-9_./-]+\.md)\`\s*(?:→|->)\s*\*` + NAME + String.raw`\*`, 'g');
   // → *Bar*   with no file named: the current file
@@ -135,15 +138,21 @@ if (mode !== '--external') {
   // never contain one, so compare on collapsed whitespace.
   const flatten = (name) => name.replace(/\s+/g, ' ').trim();
   // Names are short. A match longer than this is an unclosed `*` swallowing
-  // prose, not a reference — skip it rather than report a nonsense failure.
+  // prose, not a reference. It is NOT checked — and because "not checked" is
+  // exactly the state this file exists to stop hiding, it is NAMED below with
+  // the undelimited ones rather than dropped (the fix's own fail-open, #365).
   const NAME_MAX = 120;
   // What this check CANNOT parse: `foo.md` → Bar with no italics. A bare arrow
   // is far too common in prose to treat as a reference ("work → refresh", "PR →
   // green → merge"), and without the `*` delimiters there is no way to tell
   // where the name ends. Those are COUNTED AND NAMED below rather than guessed
   // at, so the summary stops implying a coverage it does not have.
-  const XREF_UNDELIMITED = /`([A-Za-z0-9_./-]+\.md)`[ \t]*(?:→|->)[ \t]*(?!\*)(?=\S)/g;
+  const XREF_UNDELIMITED = /`([A-Za-z0-9_./-]+\.md)`[ \t]*(?:→|->)[ \t\r]*(?:\n[ \t]*)?(?!\*)(?=\S)/g;
   const unparseable = [];
+  // Line number of a match, for the NOTE. 1-based, counted in the
+  // fence-stripped content — which pads rather than deletes, so it is the line
+  // number in the SOURCE file too.
+  const lineOf = (text, idx) => text.slice(0, idx).split('\n').length;
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
     // Fence-stripped on the SOURCE side as well as the target side: an
@@ -152,11 +161,13 @@ if (mode !== '--external') {
     const content = stripFences(readFileSync(file, 'utf8'));
     const checks = [];
     for (const m of content.matchAll(XREF_UNDELIMITED)) {
-      const line = content.slice(0, m.index ?? 0).split('\n').length;
-      unparseable.push(`${file}:${line}: \`${m[1]}\` → …  (name not italicised)`);
+      unparseable.push(`${file}:${lineOf(content, m.index ?? 0)}: \`${m[1]}\` → …  (name not italicised)`);
     }
     for (const m of content.matchAll(XREF_FILE)) {
-      if (m[2].length > NAME_MAX) continue;
+      if (m[2].length > NAME_MAX) {
+        unparseable.push(`${file}:${lineOf(content, m.index ?? 0)}: \`${m[1]}\` → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
+        continue;
+      }
       checks.push([m[1], flatten(m[2]), true]);
     }
     // Record where the explicit-file form matched, so the self form below does
@@ -166,7 +177,10 @@ if (mode !== '--external') {
     for (const m of content.matchAll(XREF_SELF)) {
       const idx = m.index ?? 0;
       if (claimed.some(([a, b]) => idx >= a - 2 && idx < b)) continue;
-      if (m[1].length > NAME_MAX) continue;
+      if (m[1].length > NAME_MAX) {
+        unparseable.push(`${file}:${lineOf(content, idx)}: → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
+        continue;
+      }
       checks.push([file, flatten(m[1]), false]);
     }
     for (const [target, section, explicit] of checks) {
@@ -203,9 +217,9 @@ if (mode !== '--external') {
   // checked" — that mistake is exactly what let three unparseable references
   // sit in the tree looking verified (#363).
   if (unparseable.length) {
-    console.log(`NOTE: ${unparseable.length} reference(s) NOT checked — no italic delimiters, so the name has no end:`);
+    console.log(`NOTE: ${unparseable.length} reference(s) NOT checked — the name has no parseable end:`);
     for (const u of unparseable) console.log(`      ${u}`);
-    console.log('      Italicise the section name to bring these under the check.');
+    console.log('      Italicise the section name, or close the `*`, to bring these under the check.');
   }
 }
 

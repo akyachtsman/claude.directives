@@ -15,12 +15,20 @@
 // Re-prove discrimination with CHECK_LINKS_BIN=<mutant> node <this file>.
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = process.env.CHECK_LINKS_BIN || join(HERE, 'check-links.js');
+// Resolved against the CALLER's cwd, not left relative: each case spawns the
+// checker with cwd set to a throwaway temp dir, so a relative
+// CHECK_LINKS_BIN=./old-check-links.js would resolve there, fail to load, and
+// every case would "discriminate" by crashing — a discrimination proof that
+// proves nothing. Measured: the original proof passed only because the path
+// handed to it happened to be absolute.
+const BIN = process.env.CHECK_LINKS_BIN
+  ? resolve(process.env.CHECK_LINKS_BIN)
+  : join(HERE, 'check-links.js');
 
 let failed = 0;
 
@@ -105,11 +113,27 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
 }
 
 // 6. …and an absurdly long match is an unclosed delimiter, not a section name.
+//    It is NOT checked — so it must be NAMED, exactly like the undelimited form.
+//    Dropping it silently is the same fail-open this file exists to catch, and
+//    an earlier revision of this case asserted the drop as correct behaviour.
 {
   const long = 'x'.repeat(200);
   const r = run({ 'a.md': HEADINGS, 'b.md': `see \`a.md\` → *${long}*\n` });
-  check('an over-long name is skipped, not reported as broken',
+  check('an over-long name is not reported as broken',
     r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} out=${r.out.trim()}`);
+  check('an over-long name is NAMED as unchecked, not silently dropped',
+    /NOT checked/.test(r.out) && /b\.md:1:/.test(r.out),
+    `out=${r.out.trim()}`);
+}
+
+// 6b. The same for the SELF form — it had its own copy of the length skip, and
+//     a fix applied to one arm and not the other is how this blind spot began.
+{
+  const long = 'y'.repeat(200);
+  const r = run({ 'a.md': `${HEADINGS}\nan arrow → *${long}*\n` });
+  check('an over-long SELF name is NAMED as unchecked',
+    r.code === 0 && /NOT checked/.test(r.out) && parsed(r.out)?.total === 0,
     `exit=${r.code} out=${r.out.trim()}`);
 }
 

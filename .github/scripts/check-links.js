@@ -119,10 +119,31 @@ if (mode !== '--external') {
     const want = section.toLowerCase();
     return heads.some(h => h.toLowerCase().includes(want));
   };
+  // The italicised NAME may wrap across a line: prose is hard-wrapped at ~80
+  // columns, so `→ *Parallel Tasking via\n  Subagents*` is an ordinary and
+  // correct reference. Both patterns used [^*\n], which cannot cross a newline,
+  // so every wrapped reference was INVISIBLE to this check — it looked verified
+  // and was not (#363, the #323 fail-open family). A newline is now allowed
+  // inside the name, but never a BLANK one: an unclosed `*` would otherwise run
+  // to the next asterisk anywhere in the file and match arbitrary prose.
+  const NAME = String.raw`((?:[^*\n]|\n(?![ \t]*(?:\n|$)))+?)`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
-  const XREF_FILE = /`([A-Za-z0-9_./-]+\.md)`\s*(?:→|->)\s*\*([^*\n]+?)\*/g;
+  const XREF_FILE = new RegExp(String.raw`\`([A-Za-z0-9_./-]+\.md)\`\s*(?:→|->)\s*\*` + NAME + String.raw`\*`, 'g');
   // → *Bar*   with no file named: the current file
-  const XREF_SELF = /(?:^|[^`\w])(?:→|->)\s*\*([^*\n]+?)\*/g;
+  const XREF_SELF = new RegExp(String.raw`(?:^|[^\`\w])(?:→|->)\s*\*` + NAME + String.raw`\*`, 'g');
+  // A wrapped name arrives with its line break and indent still in it; headings
+  // never contain one, so compare on collapsed whitespace.
+  const flatten = (name) => name.replace(/\s+/g, ' ').trim();
+  // Names are short. A match longer than this is an unclosed `*` swallowing
+  // prose, not a reference — skip it rather than report a nonsense failure.
+  const NAME_MAX = 120;
+  // What this check CANNOT parse: `foo.md` → Bar with no italics. A bare arrow
+  // is far too common in prose to treat as a reference ("work → refresh", "PR →
+  // green → merge"), and without the `*` delimiters there is no way to tell
+  // where the name ends. Those are COUNTED AND NAMED below rather than guessed
+  // at, so the summary stops implying a coverage it does not have.
+  const XREF_UNDELIMITED = /`([A-Za-z0-9_./-]+\.md)`[ \t]*(?:→|->)[ \t]*(?!\*)(?=\S)/g;
+  const unparseable = [];
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
     // Fence-stripped on the SOURCE side as well as the target side: an
@@ -130,7 +151,14 @@ if (mode !== '--external') {
     // a live reference, and collecting it fails CI on correct documentation.
     const content = stripFences(readFileSync(file, 'utf8'));
     const checks = [];
-    for (const m of content.matchAll(XREF_FILE)) checks.push([m[1], m[2], true]);
+    for (const m of content.matchAll(XREF_UNDELIMITED)) {
+      const line = content.slice(0, m.index ?? 0).split('\n').length;
+      unparseable.push(`${file}:${line}: \`${m[1]}\` → …  (name not italicised)`);
+    }
+    for (const m of content.matchAll(XREF_FILE)) {
+      if (m[2].length > NAME_MAX) continue;
+      checks.push([m[1], flatten(m[2]), true]);
+    }
     // Record where the explicit-file form matched, so the self form below does
     // not re-flag the same reference as if it named no file.
     const claimed = [...content.matchAll(XREF_FILE)]
@@ -138,7 +166,8 @@ if (mode !== '--external') {
     for (const m of content.matchAll(XREF_SELF)) {
       const idx = m.index ?? 0;
       if (claimed.some(([a, b]) => idx >= a - 2 && idx < b)) continue;
-      checks.push([file, m[1], false]);
+      if (m[1].length > NAME_MAX) continue;
+      checks.push([file, flatten(m[1]), false]);
     }
     for (const [target, section, explicit] of checks) {
       // Resolve a bare filename against the repo's known locations.
@@ -169,6 +198,15 @@ if (mode !== '--external') {
     }
   }
   console.log(`OK:   ${xrefs - badXrefs}/${xrefs} section cross-references resolve to a heading`);
+  // A pass line that counts only what was parsed reads as full coverage. Name
+  // what was skipped, every time, so "all resolve" cannot be mistaken for "all
+  // checked" — that mistake is exactly what let three unparseable references
+  // sit in the tree looking verified (#363).
+  if (unparseable.length) {
+    console.log(`NOTE: ${unparseable.length} reference(s) NOT checked — no italic delimiters, so the name has no end:`);
+    for (const u of unparseable) console.log(`      ${u}`);
+    console.log('      Italicise the section name to bring these under the check.');
+  }
 }
 
 // External links: verify over the network with retry. Authed requests do not

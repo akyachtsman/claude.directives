@@ -280,6 +280,19 @@ jobs:
       - name: Check the canonical-claim guard enforces what it claims
         run: node .github/scripts/check-claims-cases.js
 
+      # check-links reports "N/N cross-references resolve", and a reference it
+      # cannot PARSE is absent from BOTH sides of that fraction — so partial
+      # blindness reads as full coverage (#323's family). Measured, not feared:
+      # both patterns used [^*\n], so a name wrapped across a line was invisible,
+      # and TWENTY such references were live here while CI reported all green
+      # (#363). Nothing else would notice: the tree's own references are the only
+      # input, and a missed one produces no output at all. Re-prove discrimination
+      # by driving a mutated copy with CHECK_LINKS_BIN — the pre-fix file at
+      # `git show 1cbee19:.github/scripts/check-links.js` fails exactly the
+      # wrapped and undelimited-reporting cases and passes the rest.
+      - name: Check the link checker sees the references it claims to check
+        run: node .github/scripts/check-links-cases.js
+
       # /refresh-repo derives WHICH .github/scripts/* a refresh must install by
       # grepping the callers it is installing. That pattern lives in a markdown
       # file; the callers are YAML edited independently, so nothing tied them

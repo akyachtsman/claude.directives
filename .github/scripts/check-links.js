@@ -97,9 +97,17 @@ for (const url of internalTargets) {
 // skipped rather than guessed at.
 if (mode !== '--external') {
   const headingCache = new Map();
+  // A wrapped name arrives with its line break and indent still in it; headings
+  // never contain one, so compare on collapsed whitespace — on BOTH sides.
+  // Collapsing only the reference broke an exact single-line match against a
+  // heading carrying a double space.
+  const flatten = (s) => s.replace(/\s+/g, ' ').trim();
   // Strip fenced code blocks first, exactly as check-sections.js does: a deleted
   // section whose name survives inside a fenced example would otherwise satisfy
-  // the scan and report a broken cross-reference as resolved.
+  // the scan and report a broken cross-reference as resolved. Each block is
+  // replaced by an equal count of newlines rather than deleted, so an offset in
+  // the stripped text is an offset in the source and reported line numbers are
+  // the real ones.
   const stripFences = (content) => content.replace(
     /^```[\s\S]*?^```/gm,
     (block) => '\n'.repeat((block.match(/\n/g) || []).length),
@@ -108,7 +116,7 @@ if (mode !== '--external') {
     if (!headingCache.has(file)) {
       const heads = existsSync(file)
         ? [...stripFences(readFileSync(file, 'utf8')).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)]
-            .map(m => m[1].replace(/\s+/g, ' ').trim())
+            .map(m => flatten(m[1]))
         : null;
       headingCache.set(file, heads);
     }
@@ -120,64 +128,44 @@ if (mode !== '--external') {
   const resolves = (file, section) => {
     const heads = headingsOf(file);
     if (heads === null) return null;               // file not found — reported elsewhere
-    const want = section.replace(/\s+/g, ' ').trim().toLowerCase();
+    const want = flatten(section).toLowerCase();
+    // `→ *   *` names nothing, and EVERY string contains the empty string, so
+    // without this an empty name resolves against any file that has a heading
+    // at all. Normalising both sides is what made this reachable.
+    if (!want) return false;
     return heads.some(h => h.toLowerCase().includes(want));
   };
-  // The italicised NAME may wrap across a line: prose is hard-wrapped at ~80
-  // columns, so `→ *Parallel Tasking via\n  Subagents*` is an ordinary and
+  // The italicised NAME may wrap across a line: prose here is hard-wrapped at
+  // ~80 columns, so `→ *Parallel Tasking via\n  Subagents*` is an ordinary and
   // correct reference. Both patterns used [^*\n], which cannot cross a newline,
   // so every wrapped reference was INVISIBLE to this check — it looked verified
-  // and was not (#363, the #323 fail-open family). A newline is now allowed
-  // inside the name, but never a BLANK one: an unclosed `*` would otherwise run
-  // to the next asterisk anywhere in the file and match arbitrary prose.
+  // and was not (#363, the #323 fail-open family). TWENTY were live here, none
+  // of them broken, which is why nobody noticed. A newline is allowed inside a
+  // name now, but never a BLANK one (LF or CRLF): an unclosed `*` would
+  // otherwise run to the next asterisk anywhere in the file and match prose.
   const NAME = String.raw`((?:[^*\n]|\n(?![ \t\r]*(?:\n|$)))+?)`;
   // One hard wrap, with its indent. NOT `\s*`, which spans a blank line: a
   // filename ending one paragraph would then pair with an arrow in the next.
   const WRAP = String.raw`[ \t]*(?:\r?\n[ \t]*)?`;
   const ARROW = String.raw`(?:→|->)`;
-  // A SITE is an arrow a reference could hang off. Every site is either parsed
-  // into a checkable pair or NAMED as unparseable below — the set is CLOSED,
-  // and that is the point. Enumerating the malformed shapes instead (a pattern
-  // per bad form) left `foo.md` → *unclosed matching neither producer, so it
-  // was absent from the count AND from the NOTE: the same fail-open, one level
-  // further in. Ask "which arrows did I fail to parse", never "which broken
-  // spellings can I think of".
-  const FILE_SITE = new RegExp(String.raw`\`([A-Za-z0-9_./-]+\.md)\`` + WRAP + ARROW, 'g');
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
-  const XREF_FILE = new RegExp(FILE_SITE.source + WRAP + String.raw`\*` + NAME + String.raw`\*`, 'g');
-  // → *Bar*   with no file named: the current file. Its site is an arrow plus an
-  // OPENING `*`; a bare arrow cannot be one, because prose here is full of them
-  // ("work → refresh", "PR → green → merge") and there is no end to a name
-  // without delimiters. Lookbehind rather than a consumed character, so the
-  // match index IS the arrow — consuming it put every column-1 reference's
-  // NOTE line one line early.
-  // `\*(?!\*)`: a single asterisk, not the first of a `**bold**`. Prose here is
-  // full of `→ **Settings** → **Notifications**`, and treating those as opened-
-  // but-unclosed italics put ELEVEN correct sentences in the NOTE — a warning
-  // nobody reads is this repo's recorded failure mode, so a site has to be a
-  // plausible reference, not merely an arrow next to an asterisk.
-  const SELF_OPEN = String.raw`(?<![\`\w])` + ARROW + WRAP + String.raw`\*(?!\*)`;
-  const SELF_SITE = new RegExp(SELF_OPEN, 'g');
-  const XREF_SELF = new RegExp(SELF_OPEN + NAME + String.raw`\*`, 'g');
-  // A wrapped name arrives with its line break and indent still in it; headings
-  // never contain one, so compare on collapsed whitespace — on BOTH sides.
-  // Collapsing only the reference broke an exact single-line match against a
-  // heading carrying a double space.
-  const flatten = (name) => name.replace(/\s+/g, ' ').trim();
+  const XREF_FILE = new RegExp(
+    String.raw`\`([A-Za-z0-9_./-]+\.md)\`` + WRAP + ARROW + WRAP + String.raw`\*` + NAME + String.raw`\*`, 'g');
+  // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
+  // character: consuming it made the match index point at the preceding newline,
+  // so a reference starting at column 1 reported the line above itself.
+  const XREF_SELF = new RegExp(
+    String.raw`(?<![\`\w])` + ARROW + WRAP + String.raw`\*` + NAME + String.raw`\*`, 'g');
   // Names are short. A match longer than this is an unclosed `*` swallowing
-  // prose, not a reference. It is NOT checked — and because "not checked" is
-  // exactly the state this file exists to stop hiding, it is NAMED below rather
-  // than dropped (the fix's own fail-open, #365).
+  // prose, not a reference, so it is not checked — and it is NAMED below rather
+  // than dropped, because a silent discard is the same fail-open this file is
+  // about. This set is closed BY CONSTRUCTION: it is the parser's own discards,
+  // not a guess at what the parser never saw. That distinction is the whole
+  // lesson of #365 — see the summary note at the bottom and #366.
   const NAME_MAX = 120;
-  // Why a site would not parse, for the NOTE. Peeked from just past the arrow.
-  const reasonAt = (text, after) =>
-    new RegExp(`^${WRAP}\\*(?!\\*)`).test(text.slice(after, after + 200))
-      ? 'italic delimiter never closed'
-      : 'name not italicised';
-  const unparseable = [];
-  // Line number of a match, for the NOTE. 1-based, counted in the
-  // fence-stripped content — which pads rather than deletes, so it is the line
-  // number in the SOURCE file too.
+  const discarded = [];
+  // Line number of a match. 1-based, counted in the fence-stripped content —
+  // which pads rather than deletes, so it is the source line number too.
   const lineOf = (text, idx) => text.slice(0, idx).split('\n').length;
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
@@ -186,42 +174,26 @@ if (mode !== '--external') {
     // a live reference, and collecting it fails CI on correct documentation.
     const content = stripFences(readFileSync(file, 'utf8'));
     const checks = [];
-    // Site start indexes this pass disposed of — queued for checking, or named.
-    const parsedFile = new Set();
-    const parsedSelf = new Set();
+    // Spans the explicit-file form matched, so the self form below does not
+    // re-flag the same reference as if it named no file.
+    const claimed = [];
     for (const m of content.matchAll(XREF_FILE)) {
       const idx = m.index ?? 0;
-      parsedFile.add(idx);
+      claimed.push([idx, idx + m[0].length]);
       if (m[2].length > NAME_MAX) {
-        unparseable.push(`${file}:${lineOf(content, idx)}: \`${m[1]}\` → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
+        discarded.push(`${file}:${lineOf(content, idx)}: \`${m[1]}\` → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
         continue;
       }
       checks.push([m[1], flatten(m[2]), true]);
     }
-    // Arrows the explicit-file form owns, so the self pass does not re-flag the
-    // same reference as if it named no file.
-    const fileArrows = new Set();
-    for (const m of content.matchAll(FILE_SITE)) {
-      const idx = m.index ?? 0;
-      const arrow = idx + m[0].length - (m[0].endsWith('->') ? 2 : 1);
-      fileArrows.add(arrow);
-      if (parsedFile.has(idx)) continue;
-      unparseable.push(`${file}:${lineOf(content, idx)}: \`${m[1]}\` → …  (${reasonAt(content, idx + m[0].length)})`);
-    }
     for (const m of content.matchAll(XREF_SELF)) {
       const idx = m.index ?? 0;
-      parsedSelf.add(idx);
-      if (fileArrows.has(idx)) continue;
+      if (claimed.some(([a, b]) => idx >= a && idx < b)) continue;
       if (m[1].length > NAME_MAX) {
-        unparseable.push(`${file}:${lineOf(content, idx)}: → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
+        discarded.push(`${file}:${lineOf(content, idx)}: → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
         continue;
       }
       checks.push([file, flatten(m[1]), false]);
-    }
-    for (const m of content.matchAll(SELF_SITE)) {
-      const idx = m.index ?? 0;
-      if (fileArrows.has(idx) || parsedSelf.has(idx)) continue;
-      unparseable.push(`${file}:${lineOf(content, idx)}: → *…  (italic delimiter never closed)`);
     }
     for (const [target, section, explicit] of checks) {
       // Resolve a bare filename against the repo's known locations.
@@ -251,15 +223,21 @@ if (mode !== '--external') {
       }
     }
   }
-  console.log(`OK:   ${xrefs - badXrefs}/${xrefs} section cross-references resolve to a heading`);
-  // A pass line that counts only what was parsed reads as full coverage. Name
-  // what was skipped, every time, so "all resolve" cannot be mistaken for "all
-  // checked" — that mistake is exactly what let three unparseable references
-  // sit in the tree looking verified (#363).
-  if (unparseable.length) {
-    console.log(`NOTE: ${unparseable.length} reference(s) NOT checked — the name has no parseable end:`);
-    for (const u of unparseable) console.log(`      ${u}`);
-    console.log('      Italicise the section name, or close the `*`, to bring these under the check.');
+  // A pass line counting only what was PARSED reads as full coverage, and that
+  // misreading is half of #363. The fix is to state the scope, not to enumerate
+  // what fell outside it: three review rounds each found another Markdown
+  // spelling the enumeration had missed (an unterminated `*`, a wrap before the
+  // arrow, a filename outside the character class), so that set is open and
+  // saying otherwise was the real fail-open. Stated as a DISPOSITION instead —
+  // #366 carries the work of widening what PARSED covers.
+  console.log(`OK:   ${xrefs - badXrefs}/${xrefs} PARSED section cross-references resolve to a heading`);
+  console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms ONLY. A reference');
+  console.log('      written any other way is absent from that fraction and is NOT verified (#366).');
+  // These, by contrast, are a CLOSED set: matches this parser made and then
+  // discarded. Reporting them costs nothing and hides nothing.
+  if (discarded.length) {
+    console.log(`NOTE: ${discarded.length} parsed reference(s) DISCARDED as malformed, so not checked:`);
+    for (const u of discarded) console.log(`      ${u}`);
   }
 }
 

@@ -2,13 +2,23 @@
 // Guards check-links.js's SECTION CROSS-REFERENCE scan.
 //
 // Why this exists: that scan reports "N/N cross-references resolve", and a
-// reference it cannot PARSE is silently absent from both sides of that fraction.
-// A partial blindness therefore looks identical to full coverage — the #323
-// fail-open family. It was not theoretical: both patterns used [^*\n], so every
-// reference whose italicised name wrapped across a line was invisible, and
-// twenty such references were live in this repo while CI reported all green
+// reference it could not PARSE was silently absent from both sides of that
+// fraction. Partial blindness therefore looked identical to full coverage — the
+// #323 fail-open family. It was not theoretical: both patterns used [^*\n], so
+// every reference whose italicised name wrapped across a line was invisible,
+// and twenty such references were live in this repo while CI reported all green
 // (#363). Nothing else here would have noticed, because the tree's own
 // references are the only input and a missed one produces no output at all.
+//
+// SCOPE, and why it is this narrow. #365 first tried to make the scan report
+// everything it could not parse. Three review rounds each found another
+// Markdown spelling that escaped the enumeration — an unterminated `*`, a wrap
+// before the arrow, a filename outside the character class — so the set of
+// "references I failed to see" is open, and every claim to have closed it was
+// itself a fail-open. The checker now states its scope as a disposition instead
+// and reports only its OWN discards, which is a set closed by construction.
+// #366 carries the widening. Cases here test that narrower contract; do not add
+// one asserting that some new malformed spelling is reported.
 //
 // Each case builds a throwaway tree and runs the SHIPPED checker against it, so
 // these test the file that actually ships rather than a copy of its regexes.
@@ -56,9 +66,13 @@ function check(name, cond, detail) {
   failed++;
 }
 
-// Counts the "N/N" the summary reports, or null when the line is absent.
+// Counts the "N/N" the summary reports, or null when the line is absent. The
+// word PARSED is OPTIONAL here on purpose: a mutant that only reverts the
+// wording would otherwise make every count-based case fail, and a case failing
+// because it could not read the output is indistinguishable from a case that
+// caught something. Case 9 tests the wording, deliberately and alone.
 const parsed = (out) => {
-  const m = out.match(/(\d+)\/(\d+) section cross-references resolve/);
+  const m = out.match(/(\d+)\/(\d+) (?:PARSED )?section cross-references resolve/);
   return m ? { good: +m[1], total: +m[2] } : null;
 };
 
@@ -110,75 +124,54 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
   check('a blank line stops a runaway match',
     parsed(r.out)?.total === 0 && r.code === 0,
     `got ${JSON.stringify(parsed(r.out))} exit=${r.code} out=${r.out.trim()}`);
-  // Stopping the runaway is not enough: an arrow with an opening `*` that never
-  // closes is a SITE that did not parse, so it must be named. Asserting only
-  // "not matched" is what let the unterminated form vanish entirely.
-  check('the unclosed site is NAMED, not merely unmatched',
-    /NOT checked/.test(r.out) && /never closed/.test(r.out),
-    `out=${r.out.trim()}`);
 }
 
-// 6. …and an absurdly long match is an unclosed delimiter, not a section name.
-//    It is NOT checked — so it must be NAMED, exactly like the undelimited form.
-//    Dropping it silently is the same fail-open this file exists to catch, and
-//    an earlier revision of this case asserted the drop as correct behaviour.
+// 5b. …and a CRLF blank line stops it too. `\r\n\r\n` puts a `\r` where the
+//     lookahead expected the blank line, so the runaway crossed it and matched
+//     the next emphasis marker — on LF input the identical file was ignored.
+{
+  const r = run({
+    'a.md': HEADINGS,
+    'b.md': 'text → *not a reference\r\n\r\nlater *emphasis* here\r\n',
+  });
+  check('a CRLF blank line stops a runaway match',
+    parsed(r.out)?.total === 0 && r.code === 0,
+    `got ${JSON.stringify(parsed(r.out))} exit=${r.code} out=${r.out.trim()}`);
+}
+
+// 6. An absurdly long match is an unclosed delimiter, not a section name. It is
+//    NOT checked — so it must be NAMED. Dropping it silently is the same
+//    fail-open this file exists to catch, and an earlier revision of this case
+//    asserted the drop as correct behaviour. These discards are a CLOSED set:
+//    matches the parser made and rejected, not a guess at what it never saw.
 {
   const long = 'x'.repeat(200);
   const r = run({ 'a.md': HEADINGS, 'b.md': `see \`a.md\` → *${long}*\n` });
   check('an over-long name is not reported as broken',
     r.code === 0 && parsed(r.out)?.total === 0,
     `exit=${r.code} out=${r.out.trim()}`);
-  check('an over-long name is NAMED as unchecked, not silently dropped',
-    /NOT checked/.test(r.out) && /b\.md:1:/.test(r.out),
+  check('an over-long name is NAMED as discarded, not silently dropped',
+    /DISCARDED/.test(r.out) && /b\.md:1:/.test(r.out),
     `out=${r.out.trim()}`);
 }
 
-// 6b. The same for the SELF form — it had its own copy of the length skip, and
+// 6b. The same for the SELF form — it has its own copy of the length check, and
 //     a fix applied to one arm and not the other is how this blind spot began.
+//     Line 8 is the reference; the consumed-newline bug reported line 7.
 {
   const long = 'y'.repeat(200);
-  const r = run({ 'a.md': `${HEADINGS}\nan arrow → *${long}*\n` });
-  check('an over-long SELF name is NAMED as unchecked',
-    r.code === 0 && /NOT checked/.test(r.out) && parsed(r.out)?.total === 0,
+  const r = run({ 'a.md': `${HEADINGS}\nintro\n→ *${long}*\n` });
+  check('an over-long SELF name is NAMED as discarded',
+    r.code === 0 && /DISCARDED/.test(r.out) && parsed(r.out)?.total === 0,
     `exit=${r.code} out=${r.out.trim()}`);
+  check('a column-1 self reference reports its OWN line',
+    /a\.md:8:/.test(r.out) && !/a\.md:7:/.test(r.out),
+    `out=${r.out.trim()}`);
 }
 
-// 6c. An explicit reference that OPENS `*` and never closes it matched neither
-//     producer: XREF_FILE needs the closing `*`, and the undelimited detector
-//     refused anything starting with `*`. It was absent from the count and from
-//     the NOTE — the fail-open rebuilt one level in. This is why sites are
-//     enumerated and parses subtracted, rather than bad spellings listed.
-{
-  const r = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → *Missing close\n' });
-  check('an unterminated italic is NAMED, not dropped',
-    r.code === 0 && /NOT checked/.test(r.out) && /b\.md:1:/.test(r.out)
-      && /never closed/.test(r.out),
-    `exit=${r.code} out=${r.out.trim()}`);
-}
-
-// 6d. A hard wrap BEFORE the arrow. The name-side wrap was fixed first and this
-//     placement still fell through; one instance is live in this repo.
-{
-  const r = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md`\n→ Gamma Delta\n' });
-  check('a wrap before the arrow is still seen',
-    r.code === 0 && /NOT checked/.test(r.out) && /b\.md:1:/.test(r.out),
-    `exit=${r.code} out=${r.out.trim()}`);
-}
-
-// 6e. `→ **Bold**` is prose emphasis, not an opened-and-unclosed italic. Eleven
-//     correct sentences in this repo were reported as broken references before
-//     the site required a single `*`; a NOTE full of false entries is a NOTE
-//     nobody reads, which lands back where the silent drop did.
-{
-  const r = run({ 'a.md': `${HEADINGS}\nthe flow is work → **Settings** → **Notifications**\n` });
-  check('bold after an arrow is not a reference site',
-    r.code === 0 && !/NOT checked/.test(r.out),
-    `exit=${r.code} out=${r.out.trim()}`);
-}
-
-// 6f. Heading whitespace is normalised on BOTH sides. Collapsing only the
-//     reference broke an EXACT single-line match against a heading carrying a
-//     double space — a regression introduced by the wrapped-name fix itself.
+// 7. Heading whitespace is normalised on BOTH sides. Collapsing only the
+//    reference broke an EXACT single-line match against a heading carrying a
+//    double space — a regression the wrapped-name fix itself introduced.
 {
   const r = run({
     'a.md': '# Top\n\n## Alpha  Beta\n\ntext\n',
@@ -189,45 +182,41 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
-// 6g. The self form's leading context is a LOOKBEHIND, not a consumed
-//     character. Consuming it made the match index point at the preceding
-//     newline, so every reference starting at column 1 was reported one line early.
+// 8. …and normalising both sides made an EMPTY name reachable: every string
+//    contains the empty string, so `→ *   *` resolved against any file with a
+//    heading at all. A nameless reference resolves to nothing, by definition.
 {
-  const long = 'z'.repeat(200);
-  const r = run({ 'a.md': `${HEADINGS}\nintro\n→ *${long}*\n` });
-  // The reference is on line 8; the consumed-newline bug reported line 7.
-  check('a column-1 self reference reports its OWN line',
-    /a\.md:8:/.test(r.out) && !/a\.md:7:/.test(r.out),
-    `out=${r.out.trim()}`);
+  const r = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → *   *\n' });
+  check('a whitespace-only name does NOT resolve',
+    r.code !== 0 && parsed(r.out)?.good === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
-// 7. The undelimited form cannot be parsed — its name has no end. It must be
-//    NAMED as unchecked rather than silently dropped, which is the whole point:
-//    the summary must stop implying coverage it does not have.
+// 9. The summary states its SCOPE every run. Without that line, "187/187
+//    resolve" reads as "every reference is checked", which is the half of #363
+//    that no pattern can fix: the set of spellings this parser cannot see is
+//    open, so it is disclosed rather than enumerated.
 {
   const r = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → Gamma Delta here\n' });
-  check('undelimited reference is reported as NOT checked',
-    /NOT checked/.test(r.out) && /b\.md/.test(r.out),
+  check('an unparseable form is not counted as resolved',
+    parsed(r.out)?.total === 0 && r.code === 0,
+    `got ${JSON.stringify(parsed(r.out))} exit=${r.code}`);
+  check('the summary discloses that PARSED is not ALL',
+    /PARSED/.test(r.out) && /NOT verified/.test(r.out),
     `out=${r.out.trim()}`);
-  check('undelimited reference does not fail the build',
-    r.code === 0, `exit=${r.code}`);
-  check('undelimited reference is not counted as resolved',
-    parsed(r.out)?.total === 0,
-    `got ${JSON.stringify(parsed(r.out))}`);
 }
 
-// 8. Prose arrows are everywhere ("work → refresh", "PR → green → merge"). The
-//    undelimited report keys off a backticked .md filename precisely so those
-//    are not swept in; if that ever loosens, this repo's own files light up.
+// 10. Prose arrows are everywhere ("work → refresh", "PR → green → merge") and
+//     must never be mistaken for references.
 {
   const r = run({ 'a.md': `${HEADINGS}\nthe flow is work → refresh → duplicate → exit\n` });
-  check('bare prose arrows are not reported as references',
-    !/NOT checked/.test(r.out) && r.code === 0,
+  check('bare prose arrows are not references',
+    parsed(r.out)?.total === 0 && r.code === 0,
     `out=${r.out.trim()}`);
 }
 
-// 9. Fenced blocks are documentation OF the syntax, not live references —
-//    preserved behaviour, and a regex change is exactly what would break it.
+// 11. Fenced blocks are documentation OF the syntax, not live references —
+//     preserved behaviour, and a regex change is exactly what would break it.
 {
   const r = run({
     'a.md': HEADINGS,
@@ -238,7 +227,19 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
     `exit=${r.code} out=${r.out.trim()}`);
 }
 
-// 10. An explicit file that resolves to nothing is still an error — the arm that
+// 12. Fences are replaced by equal newline padding, not deleted, so a reported
+//     line number is the SOURCE line number. Deleting shifted every location
+//     after a fence upward, pointing readers at the wrong line.
+{
+  const r = run({
+    'a.md': HEADINGS,
+    'b.md': `intro\n\`\`\`\nfenced\nmore\n\`\`\`\nsee \`a.md\` → *${'q'.repeat(200)}*\n`,
+  });
+  check('a line number after a fence is the SOURCE line',
+    /b\.md:6:/.test(r.out), `out=${r.out.trim()}`);
+}
+
+// 13. An explicit file that resolves to nothing is still an error — the arm that
 //     once returned "0/0 … resolve" and exited 0.
 {
   const r = run({ 'a.md': HEADINGS, 'b.md': 'see `ghost.md` → *Gamma Delta*\n' });

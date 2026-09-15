@@ -290,6 +290,52 @@ for (const [label, second] of [
     /b\.md:6:/.test(fenced.out), `out=${fenced.out.trim()}`);
 }
 
+// ── #367 round 2: block classification, and Unicode ────────────────────────
+// 22. A block that ends AT ITS OWN NEWLINE cannot absorb the line below it.
+//     Every block start used to leave the paragraph open, so `# → *draft`
+//     swallowed the next line and failed a valid file. That is a bug in the
+//     joining logic, not a missing marker, so it is fixed by classifying blocks
+//     as line-bound or continuable rather than by lengthening a list.
+for (const [label, first] of [
+  ['an ATX heading', '# → *draft'],
+  ['a table row', '| x → *draft'],
+]) {
+  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': `${first}\ncontinued prose*\n` });
+  check(`${label} does not absorb the line below it`,
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
+// 23. …and a block that DOES continue must still continue. Closing every block
+//     would trade one false failure for silence on every wrapped reference
+//     inside a list, which is most of them in this repo.
+{
+  const r = run({
+    'a.md': '# Top\n\n## Gamma Delta\n\ntext\n',
+    'b.md': '- see `a.md` → *Gamma\n  Delta* here\n',
+  });
+  check('a list item still continues onto its wrapped line',
+    r.code === 0 && parsed(r.out)?.good === 1,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
+// 24. Thematic breaks come in three characters, and only two were recognised.
+for (const [label, rule] of [['-', '---'], ['_', '___'], ['*', '***']]) {
+  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': `x → *draft\n${rule}\ncontinued*\n` });
+  check(`a thematic break of ${label} interrupts the paragraph`,
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
+// 25. The closer's right-flanking exclusion must be Unicode-aware. Limited to
+//     [A-Za-z0-9] it accepted `*Wow!*éclair`, where the star is not a closer.
+{
+  const r = run({ 'a.md': '# Top\n\n## Wow!\n\ntext\n', 'b.md': 'see `a.md` → *Wow!*éclair\n' });
+  check('a closing star followed by a non-ASCII letter does not close',
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
 // 17. The summary states its SCOPE every run. Without that line "187/187
 //     resolve" reads as "every reference is checked", which is the half of #363
 //     no pattern can fix: the set of spellings this parser cannot see is open,

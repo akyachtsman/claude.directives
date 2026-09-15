@@ -153,13 +153,24 @@ if (mode !== '--external') {
   // stops a name without being named inside a character class.
   // Everything that INTERRUPTS a paragraph, because joining across one
   // manufactures a reference out of two unrelated blocks: an HTML block (`<`),
-  // a setext underline or a GFM table delimiter (a rule-like line of -=:|), a
-  // list marker, heading, blockquote, table row, fence or link definition.
-  // Getting this wrong in the joining direction is the dangerous one — it
-  // produced `*draft <div>*` as a broken reference and FAILED a valid file.
-  // Erring the other way only leaves a wrapped reference unseen, which is the
-  // state the summary already discloses.
-  const BLOCK_START = /^ {0,3}(?:#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|>|\||<|```|~~~|[-=:|]{2,}[ \t]*\r?$|\[[^\]]+\]:)/;
+  // a thematic break or setext underline or GFM table delimiter (a rule-like
+  // line of -=_*:|), a list marker, heading, blockquote, table row, fence or
+  // link definition. Getting this wrong in the joining direction is the
+  // dangerous one — it produced `*draft <div>*` as a broken reference and
+  // FAILED a valid file. Erring the other way only leaves a wrapped reference
+  // unseen, which the summary already discloses.
+  const RULE_LIKE = String.raw`(?:[-=_*:|][ \t]*){2,}\r?$`;
+  const BLOCK_START = new RegExp(
+    String.raw`^ {0,3}(?:#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|>|\||<|` + '```' + String.raw`|~~~|\[[^\]]+\]:|` + RULE_LIKE + `)`);
+  // …and of those, the ones that END AT THEIR OWN NEWLINE and therefore cannot
+  // absorb the line below. A list item, blockquote or HTML block continues; a
+  // heading, thematic break, table row or link definition does not. Without
+  // this distinction every block start left the paragraph open, so
+  // `# → *draft` swallowed the next line and failed a valid file — a bug in the
+  // joining logic rather than another missing marker, which is why it is fixed
+  // by classifying blocks instead of by lengthening a list.
+  const LINE_BOUND = new RegExp(
+    String.raw`^ {0,3}(?:#{1,6}(?:[ \t]|\r?$)|\||\[[^\]]+\]:|` + RULE_LIKE + `)`);
   // Returns the joined text plus map[i] = offset in `src` of joined char i.
   const unwrap = (src) => {
     const lines = src.split('\n');
@@ -181,7 +192,13 @@ if (mode !== '--external') {
         out += '\n'; map.push(pos); open = false;
       } else if (!open || BLOCK_START.test(line)) {
         if (open) { out += '\n'; map.push(pos); }
-        emit(line, 0); open = true;
+        emit(line, 0);
+        open = !LINE_BOUND.test(line);
+        // A line-bound block ends here, so TERMINATE the logical line. Setting
+        // `open = false` without emitting the newline let the next line be
+        // concatenated straight on, which joined `*draft` to `continued prose*`
+        // with no separator at all — a worse version of the bug being fixed.
+        if (!open) { out += '\n'; map.push(pos + line.length); }
       } else {
         // Continuation: the newline and the indent become ONE space.
         const lead = line.length - line.replace(/^[ \t]+/, '').length;
@@ -208,17 +225,17 @@ if (mode !== '--external') {
   // CommonMark for `*Wow*now`, deliberately — a name butted against a word is
   // not a reference form here, and refusing it leaves the text outside PARSED
   // rather than failing a build.
-  const CLOSE = String.raw`(?<![\s*])\*(?![A-Za-z0-9])`;
+  const CLOSE = String.raw`(?<![\s*])\*(?![\p{L}\p{N}])`;
   const NAME = String.raw`([^*\n]+?)`;
   const ARROW = String.raw`(?:→|->)`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
   const XREF_FILE = new RegExp(
-    String.raw`\`([A-Za-z0-9_./-]+\.md)\`[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'g');
+    String.raw`\x60([A-Za-z0-9_./-]+\.md)\x60[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
   // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
   // character, so the match index IS the arrow — consuming it reported a
   // reference at column 1 against the line above itself.
   const XREF_SELF = new RegExp(
-    String.raw`(?<![\`\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'g');
+    String.raw`(?<![\x60\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {

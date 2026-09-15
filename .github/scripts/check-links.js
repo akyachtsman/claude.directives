@@ -151,15 +151,29 @@ if (mode !== '--external') {
   // work. `[^*\n]` cannot leave its line, and the line is now the whole
   // paragraph. Block boundaries end a paragraph here, so a bullet or heading
   // stops a name without being named inside a character class.
-  const BLOCK_START = /^ {0,3}(?:#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|>|\||```|~~~|-{3,}[ \t]*\r?$|\[[^\]]+\]:)/;
+  // Everything that INTERRUPTS a paragraph, because joining across one
+  // manufactures a reference out of two unrelated blocks: an HTML block (`<`),
+  // a setext underline or a GFM table delimiter (a rule-like line of -=:|), a
+  // list marker, heading, blockquote, table row, fence or link definition.
+  // Getting this wrong in the joining direction is the dangerous one — it
+  // produced `*draft <div>*` as a broken reference and FAILED a valid file.
+  // Erring the other way only leaves a wrapped reference unseen, which is the
+  // state the summary already discloses.
+  const BLOCK_START = /^ {0,3}(?:#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|>|\||<|```|~~~|[-=:|]{2,}[ \t]*\r?$|\[[^\]]+\]:)/;
   // Returns the joined text plus map[i] = offset in `src` of joined char i.
   const unwrap = (src) => {
     const lines = src.split('\n');
     let out = '';
     const map = [];
     let pos = 0, open = false;
+    // A trailing CR is dropped, never emitted: joined into the middle of a
+    // logical line it sits between tokens the patterns separate with [ \t]*, so
+    // a CRLF wrap between a filename and its arrow stopped matching the
+    // explicit-file form and was silently re-matched as a SELF reference —
+    // resolving against the WRONG file.
     const emit = (line, from) => {
-      for (let k = from; k < line.length; k++) { out += line[k]; map.push(pos + k); }
+      const end = line.endsWith('\r') ? line.length - 1 : line.length;
+      for (let k = from; k < end; k++) { out += line[k]; map.push(pos + k); }
     };
     for (const line of lines) {
       const blank = /^[ \t\r]*$/.test(line);
@@ -187,7 +201,14 @@ if (mode !== '--external') {
   // reference to `Missing` is found instead. It also rejects `*   *` outright,
   // and `**bold**`, without either being enumerated as a special case.
   const OPEN = String.raw`\*(?![\s*])`;
-  const CLOSE = String.raw`(?<![\s*])\*`;
+  // Not preceded by a space (left-flanking openers cannot close), and not
+  // followed by a word character. The second half is the right-flanking
+  // condition: without it `*Wow!*now` closed on a star CommonMark does not
+  // treat as a closer, certifying prose as a reference. Stricter than
+  // CommonMark for `*Wow*now`, deliberately — a name butted against a word is
+  // not a reference form here, and refusing it leaves the text outside PARSED
+  // rather than failing a build.
+  const CLOSE = String.raw`(?<![\s*])\*(?![A-Za-z0-9])`;
   const NAME = String.raw`([^*\n]+?)`;
   const ARROW = String.raw`(?:→|->)`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
@@ -204,7 +225,11 @@ if (mode !== '--external') {
     // Fence-stripped on the SOURCE side as well as the target side: an
     // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
     // a live reference, and collecting it fails CI on correct documentation.
-    const { text } = unwrap(stripFences(readFileSync(file, 'utf8')));
+    const src = stripFences(readFileSync(file, 'utf8'));
+    const { text, map } = unwrap(src);
+    // 1-based line of a SOURCE offset. Fences are padded rather than deleted,
+    // so this is the line in the file on disk.
+    const lineOf = (off) => src.slice(0, off).split('\n').length;
     const checks = [];
     // Spans the explicit-file form matched, so the self form does not re-flag
     // the same reference as if it named no file.
@@ -212,14 +237,15 @@ if (mode !== '--external') {
     for (const m of text.matchAll(XREF_FILE)) {
       const idx = m.index ?? 0;
       claimed.push([idx, idx + m[0].length]);
-      checks.push([m[1], m[2], true]);
+      checks.push([m[1], m[2], true, map[idx]]);
     }
     for (const m of text.matchAll(XREF_SELF)) {
       const idx = m.index ?? 0;
       if (claimed.some(([a, b]) => idx >= a && idx < b)) continue;
-      checks.push([file, m[1], false]);
+      checks.push([file, m[1], false, map[idx]]);
     }
-    for (const [target, section, explicit] of checks) {
+    for (const [target, section, explicit, off] of checks) {
+      const at = `${file}:${lineOf(off)}`;
       // Resolve a bare filename against the repo's known locations.
       let path = target;
       if (explicit && !existsSync(path)) {
@@ -235,7 +261,7 @@ if (mode !== '--external') {
         // bare filenames in arbitrary Markdown: silently skipping it reported
         // "0/0 cross-references resolve" and exited 0.
         if (explicit) {
-          console.error(`FAIL: ${file}: cross-reference names "${target}", which resolves to no file in the repo`);
+          console.error(`FAIL: ${at}: cross-reference names "${target}", which resolves to no file in the repo`);
           // It PARSED, so it belongs in the fraction. Counting it only as a
           // printed error left `0/0 … resolve` next to a failure.
           failed = true; xrefs++; badXrefs++;
@@ -244,7 +270,7 @@ if (mode !== '--external') {
       }
       xrefs++;
       if (!r) {
-        console.error(`FAIL: ${file}: section cross-reference "${section}" has no matching heading in ${path}`);
+        console.error(`FAIL: ${at}: section cross-reference "${section}" has no matching heading in ${path}`);
         failed = true; badXrefs++;
       }
     }

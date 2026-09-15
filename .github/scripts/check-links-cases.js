@@ -232,6 +232,64 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
+// ── #367 round 1: the joining step's own failure modes ─────────────────────
+// 18. A block that INTERRUPTS a paragraph must not be joined into it. Joining
+//     across one manufactures a reference out of two unrelated blocks — an HTML
+//     block produced `*draft <div>*` and FAILED a valid file, which is the
+//     dangerous direction: erring the other way only leaves a reference unseen.
+for (const [label, second] of [
+  ['an HTML block', '<div>*</div>'],
+  ['a setext underline', '==='],
+  ['a table delimiter', '---|---'],
+]) {
+  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': `The status is → *draft\n${second}\n` });
+  check(`${label} is not joined into the paragraph above it`,
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
+// 19. The closing delimiter's right-flanking half. Without it `*Wow!*now` closed
+//     on a star CommonMark does not treat as a closer, certifying prose as a
+//     reference — the summary promises the italic form and this was not one.
+{
+  const r = run({ 'a.md': '# Top\n\n## Wow!\n\ntext\n', 'b.md': 'see `a.md` → *Wow!*now\n' });
+  check('a closing star followed by a word character does not close',
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
+// 20. A trailing CR must be dropped, not joined. Left in, it sits between tokens
+//     the patterns separate with [ \t]*, so a CRLF wrap between a filename and
+//     its arrow stopped matching the explicit-file form and was silently
+//     re-matched as a SELF reference — resolving against the WRONG file, and
+//     reporting 1/1 when the named file has no such heading.
+{
+  const r = run({
+    'a.md': '# Top\n\n## Other\n\ntext\n',
+    'b.md': '## Absent\n\nsee `a.md`\r\n → *Absent*\r\n',
+  });
+  check('a CRLF wrap before the arrow still names the EXPLICIT file',
+    r.code !== 0 && /Absent/.test(r.out) && /a\.md/.test(r.out),
+    `exit=${r.code} out=${r.out.trim()}`);
+}
+
+// 21. The offset map must actually be USED. It was built, paid for per
+//     character, and discarded — so the fence padding and the lookbehind bought
+//     nothing and diagnostics named only the file. A failure now carries the
+//     source line, and the fence case proves padding keeps it honest.
+{
+  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': 'intro\n\nsee `a.md` → *Nope*\n' });
+  check('a failure names the source line, not just the file',
+    /b\.md:3:/.test(r.out), `out=${r.out.trim()}`);
+
+  const fenced = run({
+    'a.md': '# Top\n\n## Gamma\n\ntext\n',
+    'b.md': 'intro\n```\nfenced\nmore\n```\nsee `a.md` → *Nope*\n',
+  });
+  check('that line number survives a fence above it',
+    /b\.md:6:/.test(fenced.out), `out=${fenced.out.trim()}`);
+}
+
 // 17. The summary states its SCOPE every run. Without that line "187/187
 //     resolve" reads as "every reference is checked", which is the half of #363
 //     no pattern can fix: the set of spellings this parser cannot see is open,

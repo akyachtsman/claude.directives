@@ -107,7 +107,8 @@ if (mode !== '--external') {
   const headingsOf = (file) => {
     if (!headingCache.has(file)) {
       const heads = existsSync(file)
-        ? [...stripFences(readFileSync(file, 'utf8')).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)].map(m => m[1])
+        ? [...stripFences(readFileSync(file, 'utf8')).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)]
+            .map(m => m[1].replace(/\s+/g, ' ').trim())
         : null;
       headingCache.set(file, heads);
     }
@@ -119,7 +120,7 @@ if (mode !== '--external') {
   const resolves = (file, section) => {
     const heads = headingsOf(file);
     if (heads === null) return null;               // file not found — reported elsewhere
-    const want = section.toLowerCase();
+    const want = section.replace(/\s+/g, ' ').trim().toLowerCase();
     return heads.some(h => h.toLowerCase().includes(want));
   };
   // The italicised NAME may wrap across a line: prose is hard-wrapped at ~80
@@ -130,24 +131,49 @@ if (mode !== '--external') {
   // inside the name, but never a BLANK one: an unclosed `*` would otherwise run
   // to the next asterisk anywhere in the file and match arbitrary prose.
   const NAME = String.raw`((?:[^*\n]|\n(?![ \t\r]*(?:\n|$)))+?)`;
+  // One hard wrap, with its indent. NOT `\s*`, which spans a blank line: a
+  // filename ending one paragraph would then pair with an arrow in the next.
+  const WRAP = String.raw`[ \t]*(?:\r?\n[ \t]*)?`;
+  const ARROW = String.raw`(?:→|->)`;
+  // A SITE is an arrow a reference could hang off. Every site is either parsed
+  // into a checkable pair or NAMED as unparseable below — the set is CLOSED,
+  // and that is the point. Enumerating the malformed shapes instead (a pattern
+  // per bad form) left `foo.md` → *unclosed matching neither producer, so it
+  // was absent from the count AND from the NOTE: the same fail-open, one level
+  // further in. Ask "which arrows did I fail to parse", never "which broken
+  // spellings can I think of".
+  const FILE_SITE = new RegExp(String.raw`\`([A-Za-z0-9_./-]+\.md)\`` + WRAP + ARROW, 'g');
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
-  const XREF_FILE = new RegExp(String.raw`\`([A-Za-z0-9_./-]+\.md)\`\s*(?:→|->)\s*\*` + NAME + String.raw`\*`, 'g');
-  // → *Bar*   with no file named: the current file
-  const XREF_SELF = new RegExp(String.raw`(?:^|[^\`\w])(?:→|->)\s*\*` + NAME + String.raw`\*`, 'g');
+  const XREF_FILE = new RegExp(FILE_SITE.source + WRAP + String.raw`\*` + NAME + String.raw`\*`, 'g');
+  // → *Bar*   with no file named: the current file. Its site is an arrow plus an
+  // OPENING `*`; a bare arrow cannot be one, because prose here is full of them
+  // ("work → refresh", "PR → green → merge") and there is no end to a name
+  // without delimiters. Lookbehind rather than a consumed character, so the
+  // match index IS the arrow — consuming it put every column-1 reference's
+  // NOTE line one line early.
+  // `\*(?!\*)`: a single asterisk, not the first of a `**bold**`. Prose here is
+  // full of `→ **Settings** → **Notifications**`, and treating those as opened-
+  // but-unclosed italics put ELEVEN correct sentences in the NOTE — a warning
+  // nobody reads is this repo's recorded failure mode, so a site has to be a
+  // plausible reference, not merely an arrow next to an asterisk.
+  const SELF_OPEN = String.raw`(?<![\`\w])` + ARROW + WRAP + String.raw`\*(?!\*)`;
+  const SELF_SITE = new RegExp(SELF_OPEN, 'g');
+  const XREF_SELF = new RegExp(SELF_OPEN + NAME + String.raw`\*`, 'g');
   // A wrapped name arrives with its line break and indent still in it; headings
-  // never contain one, so compare on collapsed whitespace.
+  // never contain one, so compare on collapsed whitespace — on BOTH sides.
+  // Collapsing only the reference broke an exact single-line match against a
+  // heading carrying a double space.
   const flatten = (name) => name.replace(/\s+/g, ' ').trim();
   // Names are short. A match longer than this is an unclosed `*` swallowing
   // prose, not a reference. It is NOT checked — and because "not checked" is
-  // exactly the state this file exists to stop hiding, it is NAMED below with
-  // the undelimited ones rather than dropped (the fix's own fail-open, #365).
+  // exactly the state this file exists to stop hiding, it is NAMED below rather
+  // than dropped (the fix's own fail-open, #365).
   const NAME_MAX = 120;
-  // What this check CANNOT parse: `foo.md` → Bar with no italics. A bare arrow
-  // is far too common in prose to treat as a reference ("work → refresh", "PR →
-  // green → merge"), and without the `*` delimiters there is no way to tell
-  // where the name ends. Those are COUNTED AND NAMED below rather than guessed
-  // at, so the summary stops implying a coverage it does not have.
-  const XREF_UNDELIMITED = /`([A-Za-z0-9_./-]+\.md)`[ \t]*(?:→|->)[ \t\r]*(?:\n[ \t]*)?(?!\*)(?=\S)/g;
+  // Why a site would not parse, for the NOTE. Peeked from just past the arrow.
+  const reasonAt = (text, after) =>
+    new RegExp(`^${WRAP}\\*(?!\\*)`).test(text.slice(after, after + 200))
+      ? 'italic delimiter never closed'
+      : 'name not italicised';
   const unparseable = [];
   // Line number of a match, for the NOTE. 1-based, counted in the
   // fence-stripped content — which pads rather than deletes, so it is the line
@@ -160,28 +186,42 @@ if (mode !== '--external') {
     // a live reference, and collecting it fails CI on correct documentation.
     const content = stripFences(readFileSync(file, 'utf8'));
     const checks = [];
-    for (const m of content.matchAll(XREF_UNDELIMITED)) {
-      unparseable.push(`${file}:${lineOf(content, m.index ?? 0)}: \`${m[1]}\` → …  (name not italicised)`);
-    }
+    // Site start indexes this pass disposed of — queued for checking, or named.
+    const parsedFile = new Set();
+    const parsedSelf = new Set();
     for (const m of content.matchAll(XREF_FILE)) {
+      const idx = m.index ?? 0;
+      parsedFile.add(idx);
       if (m[2].length > NAME_MAX) {
-        unparseable.push(`${file}:${lineOf(content, m.index ?? 0)}: \`${m[1]}\` → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
+        unparseable.push(`${file}:${lineOf(content, idx)}: \`${m[1]}\` → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
         continue;
       }
       checks.push([m[1], flatten(m[2]), true]);
     }
-    // Record where the explicit-file form matched, so the self form below does
-    // not re-flag the same reference as if it named no file.
-    const claimed = [...content.matchAll(XREF_FILE)]
-      .map(m => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
+    // Arrows the explicit-file form owns, so the self pass does not re-flag the
+    // same reference as if it named no file.
+    const fileArrows = new Set();
+    for (const m of content.matchAll(FILE_SITE)) {
+      const idx = m.index ?? 0;
+      const arrow = idx + m[0].length - (m[0].endsWith('->') ? 2 : 1);
+      fileArrows.add(arrow);
+      if (parsedFile.has(idx)) continue;
+      unparseable.push(`${file}:${lineOf(content, idx)}: \`${m[1]}\` → …  (${reasonAt(content, idx + m[0].length)})`);
+    }
     for (const m of content.matchAll(XREF_SELF)) {
       const idx = m.index ?? 0;
-      if (claimed.some(([a, b]) => idx >= a - 2 && idx < b)) continue;
+      parsedSelf.add(idx);
+      if (fileArrows.has(idx)) continue;
       if (m[1].length > NAME_MAX) {
         unparseable.push(`${file}:${lineOf(content, idx)}: → *…*  (name over ${NAME_MAX} chars — unclosed \`*\`?)`);
         continue;
       }
       checks.push([file, flatten(m[1]), false]);
+    }
+    for (const m of content.matchAll(SELF_SITE)) {
+      const idx = m.index ?? 0;
+      if (fileArrows.has(idx) || parsedSelf.has(idx)) continue;
+      unparseable.push(`${file}:${lineOf(content, idx)}: → *…  (italic delimiter never closed)`);
     }
     for (const [target, section, explicit] of checks) {
       // Resolve a bare filename against the repo's known locations.

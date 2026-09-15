@@ -239,6 +239,23 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
     /b\.md:6:/.test(r.out), `out=${r.out.trim()}`);
 }
 
+// 12b. A multiline name must not swallow a FOLLOWING reference. The name ran
+//      through `→ *` and took that asterisk as its closing delimiter; matchAll
+//      then resumed past the second arrow, so the real reference was never
+//      attempted. The pre-#365 checker caught and failed it — this is the one
+//      regression here that turned a RED into a GREEN, which is why the case
+//      asserts the failure rather than a count. Fixing the duplicate filter
+//      does not help: the cause is scan order.
+{
+  const r = run({
+    'a.md': '# Decoy →\n\n## Real Heading\n\ntext\n',
+    'b.md': 'see `a.md` → *Decoy\n→ *Missing*\n',
+  });
+  check('a multiline name does not swallow the next reference',
+    r.code !== 0 && /Missing/.test(r.out),
+    `exit=${r.code} out=${r.out.trim()}`);
+}
+
 // 13. An explicit file that resolves to nothing is still an error — the arm that
 //     once returned "0/0 … resolve" and exited 0.
 {

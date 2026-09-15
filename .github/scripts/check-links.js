@@ -143,7 +143,18 @@ if (mode !== '--external') {
   // of them broken, which is why nobody noticed. A newline is allowed inside a
   // name now, but never a BLANK one (LF or CRLF): an unclosed `*` would
   // otherwise run to the next asterisk anywhere in the file and match prose.
-  const NAME = String.raw`((?:[^*\n]|\n(?![ \t\r]*(?:\n|$)))+?)`;
+  // An ARROW cannot appear inside a name, and that exclusion is load-bearing:
+  // without it a multiline name runs THROUGH a following `→ *` and takes that
+  // asterisk as its own closing delimiter. `matchAll` then resumes past the
+  // second arrow, so the real reference there is never attempted — a reference
+  // the pre-#365 checker caught and failed came back green. The cause is scan
+  // order, not the duplicate filter, so suppressing the file match's own arrow
+  // more precisely does NOT fix it (measured, #365 round 4).
+  // Safe here by measurement, not taste: no reference NAME in this repo
+  // contains an arrow. One heading does — `## GitHub settings (Settings →
+  // Secrets and variables → Actions)` — and references to it drop the
+  // qualifier, which is the substring behaviour `resolves` is built on.
+  const NAME = String.raw`((?:[^*\n→]|-(?!>)|\n(?![ \t\r]*(?:\n|$)))+?)`;
   // One hard wrap, with its indent. NOT `\s*`, which spans a blank line: a
   // filename ending one paragraph would then pair with an arrow in the next.
   const WRAP = String.raw`[ \t]*(?:\r?\n[ \t]*)?`;

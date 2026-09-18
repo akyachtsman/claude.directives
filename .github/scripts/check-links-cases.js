@@ -147,13 +147,12 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
 //    distance. Bounding it only by distance hid genuine broken self references
 //    behind ordinary prose — "Run `npm test` \u2192 *Missing Section*" vanished from
 //    both sides of the fraction and exited 0 with that heading absent, which is
-//    the wrong-target defect facing the other way. SPACED only: at zero spacing
-//    the pre-existing `\x60` lookbehind suppresses it, and that rule has to stay
-//    — it is what stops CLAUDE.md's literal `\u2192 *Section*`, which documents this
-//    very checker, from failing the repo. Removing it was tried and did exactly
-//    that. A lookbehind cannot tell an opening backtick from a closing one, so
-//    that case is a DISCLOSED limitation rather than a fixable one.
-for (const [label, gap] of [['spaced', ' ']]) {
+//    the wrong-target defect facing the other way. BOTH spacings: the zero-space
+//    form was a DISCLOSED limitation for two rounds, because the lookbehind that
+//    kept CLAUDE.md's literal `\u2192 *Section*` from being parsed could not tell an
+//    opening backtick from a closing one. The round-15 scanner knows which is
+//    which, so this is an assertion now rather than a disclosure.
+for (const [label, gap] of [['spaced', ' '], ['adjacent', '']]) {
   const BT = String.fromCharCode(96);
   const r = run({ 'b.md': '# Top\n\n## Other\n\nRun ' + BT + 'npm test' + BT + gap + '\u2192 *Missing Section*\n' });
   check(`a non-filename code span (${label}) does not hide a broken self reference`,
@@ -176,6 +175,24 @@ for (const [label, gap] of [['spaced', ' ']]) {
   const r2 = run({ 'b.md': '# Top\n\n## Other\n\nRun ' + BT + 'npm test' + BT + ' \u2192 *Missing Section*\n' });
   check('a multi-backtick NON-filename span still leaves the reference checked',
     r2.code !== 0 && /Missing Section/.test(r2.out), `exit=${r2.code} out=${r2.out.trim()}`);
+}
+
+// 3f. #367 round 15: CommonMark code spans take optional symmetric padding, so
+//    `.md` need not touch the closing run. That was the FOURTH axis of one rule
+//    (content, delimiter, padding — each found by example), which made it a
+//    redesign rather than a fourth patch: the lookbehind is gone and codeSpans()
+//    finds the spans. Pinned alongside an arrow INSIDE a span, which the scanner
+//    now recognises as sample syntax rather than by a backtick heuristic.
+{
+  const BT = String.fromCharCode(96);
+  const r = run({ 'b.md': '# Top\n\n## Target\n\nsee ' + BT+BT + ' docs/my guide.md ' + BT+BT + ' \u2192 *Target*\n' });
+  check('a PADDED filename code span suppresses the self form',
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+  const r2 = run({ 'b.md': '# Top\n\n## Other\n\nthe ' + BT + '\u2192 *Section*' + BT + ' syntax\n' });
+  check('an arrow INSIDE a code span is sample syntax, not a reference',
+    r2.code === 0 && parsed(r2.out)?.total === 0,
+    `exit=${r2.code} got ${JSON.stringify(parsed(r2.out))} out=${r2.out.trim()}`);
 }
 
 // 4. Single-line references must still work — the fix must not trade one form

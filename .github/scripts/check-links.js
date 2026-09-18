@@ -107,6 +107,23 @@ if (mode !== '--external') {
   // the scan and report a broken cross-reference as resolved. Each block is
   // replaced by an equal count of newlines rather than deleted, so a line number
   // computed here is the line number in the source file.
+  // Every read goes through this. Line endings are normalised to LF ONCE, here,
+  // rather than each consumer handling CR for itself.
+  //
+  // ⚠️ THIS REPLACED THREE SEPARATE CR FIXES, and the third is why. Round 6 found
+  // the NAME pattern excluding only `\n`, so a bare CR let two lines be spliced
+  // into one invented reference. Round 7 found `lineOf` splitting only on `\n`,
+  // so every failure in such a file reported line 1. Round 8 found THIS padding
+  // counting only `\n`, so a fenced block collapsed to nothing and the line
+  // numbers moved again. Three sites, one mechanism, each fix revealing the next.
+  //
+  // Normalising at the source makes the class unreachable: nothing downstream can
+  // be CR-blind because nothing downstream sees a CR. Line COUNT is preserved —
+  // `\r\n` and `\r` each become one `\n` — so a reported line number is still
+  // the source file's line number, which is the property the padding exists for.
+  //
+  // Do NOT reintroduce per-consumer CR handling; add readSource() calls instead.
+  const readSource = (file) => readFileSync(file, 'utf8').replace(/\r\n|\r/g, '\n');
   const stripFences = (content) => content.replace(
     /^```[\s\S]*?^```/gm,
     (block) => '\n'.repeat((block.match(/\n/g) || []).length),
@@ -114,7 +131,7 @@ if (mode !== '--external') {
   const headingsOf = (file) => {
     if (!headingCache.has(file)) {
       const heads = existsSync(file)
-        ? [...stripFences(readFileSync(file, 'utf8')).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)]
+        ? [...stripFences(readSource(file)).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)]
             .map(m => flatten(m[1]))
         : null;
       headingCache.set(file, heads);
@@ -221,14 +238,11 @@ if (mode !== '--external') {
     // Fence-stripped on the SOURCE side as well as the target side: an
     // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
     // a live reference, and collecting it fails CI on correct documentation.
-    const src = stripFences(readFileSync(file, 'utf8'));
+    const src = stripFences(readSource(file));
     // 1-based line of a SOURCE offset. Fences are padded rather than deleted,
     // so this is the line in the file on disk.
-    // Counts every line ending commonmark recognises (/\r\n|\n|\r/), not just
-    // LF. Splitting on LF alone reported every failure in a bare-CR file as
-    // line 1 — the same CR blindness as the name pattern, one level over
-    // (Codex, #367 round 7).
-    const lineOf = (off) => src.slice(0, off).split(/\r\n|\r|\n/).length;
+    // `src` came through readSource(), so every line ending is already LF.
+    const lineOf = (off) => src.slice(0, off).split('\n').length;
     const checks = [];
     // Spans the explicit-file form matched, so the self form does not re-flag
     // the same reference as if it named no file.

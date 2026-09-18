@@ -362,6 +362,18 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     cr.code === 0 && parsed(cr.out)?.total === 0,
     `exit=${cr.code} out=${cr.out.trim()}`);
 
+  // A bare-CR file with a FENCE above the reference. The padding replaces the
+  // block with one newline per line ending; counting only `\n` collapsed it to
+  // nothing and moved every later line number. Third CR-blind site in this file
+  // after the name pattern and lineOf, which is why readSource() normalises at
+  // the source instead (Codex, #367 round 8).
+  const crFence = run({
+    'a.md': '# Top\r\r```\rignored\r```\r\rsee \u2192 *Missing*\r',
+  });
+  check('a fence in a bare-CR file keeps later line numbers right',
+    crFence.code !== 0 && /a\.md:7:/.test(crFence.out),
+    `exit=${crFence.code} out=${crFence.out.trim()}`);
+
   // 22-24. These pinned CommonMark's flanking rule, which the checker no longer
   //     implements. Rounds 4, 5 and 6 each broke that invariant from a different
   //     cause, and a ten-axis probe then found SEVEN more disagreements — an open

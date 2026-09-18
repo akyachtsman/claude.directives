@@ -240,46 +240,41 @@ if (mode !== '--external') {
   // character, so the match index IS the arrow — consuming it reported a
   // reference at column 1 against the line above itself.
   //
-  // A code span beside the arrow means the author NAMED A FILE, so the self form
-  // must not claim it. `docs/my guide.md` → *Target* reported 1/1 and exited 0
-  // with that file absent, because the explicit form takes only
-  // [A-Za-z0-9_./-] before `.md` and everything else fell through to here.
+  // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
+  // character, so the match index IS the arrow — consuming it reported a
+  // reference at column 1 against the line above itself.
   //
-  // This was a LOOKBEHIND for three rounds and is now a SCANNER, because the
-  // lookbehind had to re-implement what a code span is and was wrong about it
-  // once per round, each fix revealing the next axis:
+  // ⚠️ `\x60` here is NOT about filenames. An arrow directly after a backtick is
+  // inside a code span showing the syntax — CLAUDE.md documents this checker with
+  // a literal `→ *Section*` — and parsing it fails the repo on its own
+  // documentation. Removing it was tried (#367 round 13) and did exactly that.
   //
-  //     round 13   content   — any adjacent span suppressed, hiding a genuine
-  //                            broken reference behind "Run `npm test` → *X*"
-  //     round 14   delimiter — a RUN of backticks was not a code span to it
-  //     round 15   padding   — ``` ` docs/x.md ` ``` has optional symmetric
-  //                            padding, so `.md` need not touch the closer
+  // ⚠️ DO NOT add a rule here that suppresses the self form when a code span
+  // NAMES a .md file. It was tried for five rounds and is the reason this comment
+  // exists. The motivation is real: the explicit form takes only
+  // [A-Za-z0-9_./-] before `.md`, so any other filename falls through to here and
+  // is checked against THIS file — a wrong target reported as resolved. But every
+  // implementation has to decide what a code span IS, and that question was wrong
+  // once per round:
   //
-  // Three axes of one rule, each found by example rather than by enumeration.
-  // `global.md` → *Review Rounds Have to Terminate* makes the third a redesign,
-  // so codeSpans() now finds the spans ONCE and the predicate reads them, rather
-  // than a pattern guessing at their shape. Do NOT reintroduce a lookbehind here.
+  //     r13  content    any adjacent span suppressed, hiding a real broken ref
+  //     r14  delimiter  a RUN of backticks was not a code span to it
+  //     r15  padding    CommonMark strips one symmetric space, so `.md` need not
+  //                     touch the closer
+  //     r16  ×4         the SCANNER that replaced the lookbehind: a match could
+  //                     start inside an unmatched opener run; a shorter run
+  //                     INSIDE a span was rejected; trimEnd() destroyed
+  //                     CommonMark's asymmetric trailing space; and the guard was
+  //                     applied to this form and not to the explicit one
   //
-  // The scanner is strictly better than what it replaced, not merely different:
-  // an arrow INSIDE a span is now skipped because it is inside one, so the old
-  // `\x60` exclusion is gone and with it its disclosed limitation — a non-filename
-  // span at zero spacing (`npm test`→ *Name*) is checked again instead of being
-  // silently dropped. `(?<!\w)` stays, and is only about not matching mid-word.
+  // Findings per round 1, 1, 1, 4 — diverging, not converging. Two of round 16's
+  // FAILED VALID FILES, which is the worse direction. This is the third time this
+  // PR has bet on reimplementing a piece of Markdown (after #365's line joining
+  // and the flanking rule) and the third time the set proved open, so the state is
+  // DISCLOSED on every run instead, exactly as the filename/arrow line break is.
+  // Owner ruling, 2026-09-18. Widening what the explicit form accepts is #366.
   const XREF_SELF = new RegExp(
-    String.raw`(?<!\w)` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
-
-  // Inline code spans on ONE line: a run of backticks, content holding neither a
-  // backtick nor a line ending, then a run of the same length. `(?!\x60)` stops a
-  // 1-backtick match from closing inside a longer run. Returns [start, end,
-  // content] with the content NOT yet trimmed — padding is CommonMark's, and
-  // whether it matters is the caller's question, not the scanner's.
-  const CODE_SPAN = /(\x60+)([^\x60\n]+)\1(?!\x60)/gu;
-  const codeSpans = (text) => [...text.matchAll(CODE_SPAN)]
-    .map((m) => [m.index ?? 0, (m.index ?? 0) + m[0].length, m[2]]);
-  // CommonMark strips ONE leading and ONE trailing space when both are present
-  // and the content is not all spaces. Applying that rather than trim() keeps the
-  // question "does this name a .md file" answered on the rendered content.
-  const spanText = (raw) => (/^ .* $/.test(raw) && /[^ ]/.test(raw) ? raw.slice(1, -1) : raw);
+    String.raw`(?<![\x60\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
@@ -295,17 +290,6 @@ if (mode !== '--external') {
     // Spans the explicit-file form matched, so the self form does not re-flag
     // the same reference as if it named no file.
     const claimed = [];
-    const spans = codeSpans(src);
-    // An arrow INSIDE a code span is sample syntax, not a reference: CLAUDE.md
-    // documents this checker with a literal `→ *Section*`, and parsing it fails
-    // the repo on its own documentation.
-    const inSpan = (i) => spans.some(([a, b]) => i > a && i < b);
-    // A code span ending just before the arrow, separated by spaces or tabs only,
-    // whose rendered content names a .md file. Distance and content are both
-    // required: "see `foo.md` for details, and → *Bar*" is a real self reference
-    // (prose intervenes), and "Run `npm test` → *X*" is one too (not a filename).
-    const namesFileBefore = (i) => spans.some(([, b, raw]) =>
-      b <= i && /^[ \t]*$/.test(src.slice(b, i)) && spanText(raw).trimEnd().endsWith('.md'));
     for (const m of src.matchAll(XREF_FILE)) {
       const idx = m.index ?? 0;
       claimed.push([idx, idx + m[0].length]);
@@ -314,7 +298,6 @@ if (mode !== '--external') {
     for (const m of src.matchAll(XREF_SELF)) {
       const idx = m.index ?? 0;
       if (claimed.some(([a, b]) => idx >= a && idx < b)) continue;
-      if (inSpan(idx) || namesFileBefore(idx)) continue;
       checks.push([file, m[1], false, idx]);
     }
     for (const [target, section, explicit, off] of checks) {
@@ -364,16 +347,19 @@ if (mode !== '--external') {
   console.log('        a single `*`, then text that does not START with whitespace and');
   console.log('        contains no `*` and no line ending, then a single `*`.');
   console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
-  console.log('      CODE SPANS are scanned, not guessed at. An arrow INSIDE one is not');
-  console.log('      parsed — that is how this file documents the syntax. An arrow just');
-  console.log('      after one whose content names a `.md` file is NOT read as a self');
-  console.log('      reference, since the author named a file the explicit form does not');
-  console.log('      accept (it takes only [A-Za-z0-9_./-] before `.md`), and checking it');
-  console.log('      against THIS file would report the wrong target as resolved.');
-  console.log('      Any delimiter run and CommonMark padding are handled, so all of');
-  console.log('        `my file.md` → *Name*   ``my file.md`` → *Name*   `` my file.md ``');
-  console.log('      behave alike. A span that does NOT name a .md file never suppresses');
-  console.log('      anything: `npm test` → *Name* is still checked against this file.');
+  console.log('      An arrow written DIRECTLY after a backtick is not parsed: that is how');
+  console.log('      this file documents the syntax. Put a space after a code span.');
+  console.log('      ⚠️ A FILENAME THE EXPLICIT FORM CANNOT READ IS A SECOND ROUTE TO THE');
+  console.log('      WRONG-TARGET STATE ABOVE. It accepts only [A-Za-z0-9_./-] before');
+  console.log('      `.md`, so `my file.md` → *Name* — a space, or any other character —');
+  console.log('      is not matched as an explicit reference, and the arrow is then read');
+  console.log('      as a SELF reference and checked against THIS file. It can report');
+  console.log('      resolved against a file that is not in the repo at all.');
+  console.log('      This is DISCLOSED, not detected. Suppressing it needs a rule for what');
+  console.log('      a code span IS, and five rounds produced five wrong answers (content,');
+  console.log('      delimiter runs, padding, opener runs, runs nested inside a span) —');
+  console.log('      two of which FAILED VALID FILES. Use a filename the explicit form');
+  console.log('      accepts, or write no code span before the arrow. Widening it: #366.');
   console.log('      A construct CommonMark renders differently — an escaped closer,');
   console.log('      a code span holding a star, a closer starting a delimiter run — is');
   console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');

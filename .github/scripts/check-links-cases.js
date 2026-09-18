@@ -117,82 +117,36 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
-// 3b. #367 round 12: the SAME wrong-target state, reached without a line break.
-//    A filename the explicit form does not accept — anything outside
-//    [A-Za-z0-9_./-], a space being the obvious one — used to fall through to
-//    the self form, which claimed the arrow and checked the name against THIS
-//    file. `docs/my guide.md` → *Target* reported 1/1 and exited 0 with that
-//    file absent from the tree. The `(?<![\x60\w])` guard was already there for
-//    exactly this and covered only the zero-space case; one space defeated it.
-//    Fixed in the PARSER, not the disclosure: the reference is now ABSENT.
+// 3b. #367 rounds 12-16, WITHDRAWN: the wrong-target state has a SECOND route,
+//    and this pins it honestly rather than claiming a fix. A filename the
+//    explicit form cannot read — it takes only [A-Za-z0-9_./-] before `.md` —
+//    falls through to the self form and is checked against THIS file, so a file
+//    absent from the repo can be reported resolved.
+//
+//    ⚠️ DO NOT "fix" this by suppressing the self form after a code span naming
+//    a .md file. Five rounds, five wrong answers about what a code span is:
+//    content (r13), delimiter runs (r14), padding (r15), then the scanner that
+//    replaced the lookbehind — opener runs and runs nested inside a span (r16).
+//    Findings per round went 1, 1, 1, 4, and TWO of round 16's failed valid
+//    files. Same open set as #365's line joining and the flanking rule; third
+//    bet, third loss. Disclosed on every run instead. Owner ruling 2026-09-18.
 {
   const r = run({ 'b.md': '# Top\n\n## Target\n\nsee `docs/my guide.md` \u2192 *Target*\n' });
-  check('an unsupported filename does not fall through to the self form',
-    r.code === 0 && parsed(r.out)?.total === 0,
+  check('an unsupported filename is counted against THIS file — disclosed, not fixed',
+    r.code === 0 && parsed(r.out)?.total === 1 && /wrong target/.test(r.out),
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
-// 3c. The suppression must be bounded to a code span ADJACENT to the arrow, or
-//    it silently drops genuine self references that merely mention a file
-//    earlier in the sentence. That would be the round-10 defect again — buying a
-//    wrong-target fix with a new silent absence.
-{
-  const r = run({ 'b.md': '# Top\n\n## Target\n\nsee `foo.md` for details, and \u2192 *Target*\n' });
-  check('a code span earlier in the sentence still leaves a self reference',
-    r.code === 0 && parsed(r.out)?.total === 1,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-}
-
-// 3d. #367 round 13: the suppression must be bounded by CONTENT as well as by
-//    distance. Bounding it only by distance hid genuine broken self references
-//    behind ordinary prose — "Run `npm test` \u2192 *Missing Section*" vanished from
-//    both sides of the fraction and exited 0 with that heading absent, which is
-//    the wrong-target defect facing the other way. BOTH spacings: the zero-space
-//    form was a DISCLOSED limitation for two rounds, because the lookbehind that
-//    kept CLAUDE.md's literal `\u2192 *Section*` from being parsed could not tell an
-//    opening backtick from a closing one. The round-15 scanner knows which is
-//    which, so this is an assertion now rather than a disclosure.
-for (const [label, gap] of [['spaced', ' '], ['adjacent', '']]) {
-  const BT = String.fromCharCode(96);
-  const r = run({ 'b.md': '# Top\n\n## Other\n\nRun ' + BT + 'npm test' + BT + gap + '\u2192 *Missing Section*\n' });
-  check(`a non-filename code span (${label}) does not hide a broken self reference`,
-    r.code !== 0 && /Missing Section/.test(r.out),
-    `exit=${r.code} out=${r.out.trim()}`);
-}
-
-// 3e. #367 round 14: a code span may be delimited by a RUN of backticks, and a
-//    one-backtick suppression rule let ``docs/my guide.md`` \u2192 *Target* fall
-//    straight back into the wrong-target state round 12 removed. Both the
-//    suppression (multi-backtick filename) and its bound (multi-backtick
-//    NON-filename must still be checked), since widening the delimiter must not
-//    widen what it suppresses.
-{
-  const BT = String.fromCharCode(96).repeat(2);
-  const r = run({ 'b.md': '# Top\n\n## Target\n\nsee ' + BT + 'docs/my guide.md' + BT + ' \u2192 *Target*\n' });
-  check('a multi-backtick filename span suppresses the self form too',
-    r.code === 0 && parsed(r.out)?.total === 0,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-  const r2 = run({ 'b.md': '# Top\n\n## Other\n\nRun ' + BT + 'npm test' + BT + ' \u2192 *Missing Section*\n' });
-  check('a multi-backtick NON-filename span still leaves the reference checked',
-    r2.code !== 0 && /Missing Section/.test(r2.out), `exit=${r2.code} out=${r2.out.trim()}`);
-}
-
-// 3f. #367 round 15: CommonMark code spans take optional symmetric padding, so
-//    `.md` need not touch the closing run. That was the FOURTH axis of one rule
-//    (content, delimiter, padding — each found by example), which made it a
-//    redesign rather than a fourth patch: the lookbehind is gone and codeSpans()
-//    finds the spans. Pinned alongside an arrow INSIDE a span, which the scanner
-//    now recognises as sample syntax rather than by a backtick heuristic.
+// 3c. The backtick exclusion is NOT about filenames and must stay: an arrow
+//    directly after one is inside a code span showing the syntax. CLAUDE.md
+//    documents this checker with a literal `\u2192 *Section*`, and removing the
+//    exclusion was tried at round 13 and failed the repo on its own docs.
 {
   const BT = String.fromCharCode(96);
-  const r = run({ 'b.md': '# Top\n\n## Target\n\nsee ' + BT+BT + ' docs/my guide.md ' + BT+BT + ' \u2192 *Target*\n' });
-  check('a PADDED filename code span suppresses the self form',
+  const r = run({ 'b.md': '# Top\n\n## Other\n\nthe ' + BT + '\u2192 *Section*' + BT + ' syntax\n' });
+  check('an arrow directly after a backtick is not parsed',
     r.code === 0 && parsed(r.out)?.total === 0,
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-  const r2 = run({ 'b.md': '# Top\n\n## Other\n\nthe ' + BT + '\u2192 *Section*' + BT + ' syntax\n' });
-  check('an arrow INSIDE a code span is sample syntax, not a reference',
-    r2.code === 0 && parsed(r2.out)?.total === 0,
-    `exit=${r2.code} got ${JSON.stringify(parsed(r2.out))} out=${r2.out.trim()}`);
 }
 
 // 4. Single-line references must still work — the fix must not trade one form

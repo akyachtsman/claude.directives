@@ -133,7 +133,20 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
 {
   const r = run({ 'b.md': '# Top\n\n## Target\n\nsee `docs/my guide.md` \u2192 *Target*\n' });
   check('an unsupported filename is counted against THIS file — disclosed, not fixed',
-    r.code === 0 && parsed(r.out)?.total === 1 && /wrong target/.test(r.out),
+    r.code === 0 && parsed(r.out)?.total === 1
+      && /A FILENAME THE EXPLICIT FORM CANNOT READ/.test(r.out),
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
+// 3b-ii. #367 round 17: the self form also requires a NON-WORD character before
+//    the arrow, so `text\u2192 *Name*` is not parsed. Undisclosed, that is another
+//    way an unchecked reference looks covered — the round-10 defect. Asserted
+//    against the emitted contract, not just the count.
+{
+  const r = run({ 'b.md': '# Top\n\n## Other\n\ntext\u2192 *Missing*\n' });
+  check('a word character before the arrow is not parsed, and the contract says so',
+    r.code === 0 && parsed(r.out)?.total === 0
+      && /directly after a LETTER, DIGIT or _/.test(r.out),
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 

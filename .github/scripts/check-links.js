@@ -155,8 +155,19 @@ if (mode !== '--external') {
   // ── A reference lives on ONE line ───────────────────────────────────────────
   // Prose here wraps at ~80 columns, and the original patterns used [^*\n], so a
   // reference whose italicised name straddled a break was INVISIBLE — it looked
-  // verified and was not (#363, the #323 fail-open family). Thirty-seven were
-  // live here.
+  // verified and was not (#363, the #323 fail-open family).
+  //
+  // Thirty-seven references were split across a break here, by TWO different
+  // mechanisms, and conflating them hides why the count moved the way it did:
+  //
+  //     20   the NAME straddled the break — not matched at all, so invisible
+  //     17   the break fell between the FILENAME and its arrow — `main`'s `\s*`
+  //          DID match these, the self form claiming the arrow line and checking
+  //          the name against the CURRENT file, i.e. against the wrong target
+  //
+  // Only the first 20 were absent. Tightening the separators to `[ \t]*` dropped
+  // the 17 from the count (167 → 150) because they stopped matching wrongly;
+  // joining all 37 in the source is what brought it to 187.
   //
   // Two designs tried to read them anyway and both failed the same way. #365 let
   // the name SPAN a newline; six review rounds each found another Markdown
@@ -349,6 +360,10 @@ if (mode !== '--external') {
   console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
   console.log('      An arrow written DIRECTLY after a backtick is not parsed: that is how');
   console.log('      this file documents the syntax. Put a space after a code span.');
+  console.log('      An arrow directly after a LETTER, DIGIT or _ is not parsed either, so');
+  console.log('      `text→ *Name*` is NOT counted — the self form requires a non-word');
+  console.log('      character before the arrow so it cannot match inside a word.');
+  console.log('      Put a space before the arrow.');
   console.log('      ⚠️ A FILENAME THE EXPLICIT FORM CANNOT READ IS A SECOND ROUTE TO THE');
   console.log('      WRONG-TARGET STATE ABOVE. It accepts only [A-Za-z0-9_./-] before');
   console.log('      `.md`, so `my file.md` → *Name* — a space, or any other character —');

@@ -56,9 +56,14 @@ GUARD = Path(os.environ.get(
 ))
 KEY = "a-terminal-state-watcher-cannot-see-a-hang"
 
-# Sentinel: this workflow "file" is actually a directory. Marked rather than
-# inferred, so a case cannot create one by accident.
+# Sentinels: this workflow "file" is actually a directory, or a symlink to the
+# given target. Marked rather than inferred, so a case cannot make one by accident.
 DIRECTORY = object()
+
+
+class SYMLINK:
+    def __init__(self, target):
+        self.target = target
 
 failures = []
 passes = 0
@@ -83,6 +88,10 @@ def run(workflows, lines, templates=None):
             target = tmp / ".github" / "workflows" / name
             if body is DIRECTORY:
                 target.mkdir()
+            elif isinstance(body, SYMLINK):
+                real = tmp / "elsewhere.yml"
+                real.write_text(body.target, encoding="utf-8")
+                target.symlink_to(real)
             elif isinstance(body, bytes):
                 target.write_bytes(body)
             else:
@@ -220,10 +229,14 @@ refuses("`on.workflow_run` is a sequence",
         f"name: W\non:\n  workflow_run:\n    - completed\n{JOB}")
 refuses("`types:` is a mapping",
         f"name: W\non:\n  workflow_run:\n    types:\n      completed: true\n{JOB}")
-matches("a junk entry beside completed does not un-declare completed",
+refuses("an invalid activity type BESIDE completed — ignore-or-reject is undocumented",
         f"name: W\non:\n  workflow_run:\n    types: [completed, 3]\n{JOB}")
-ignores("...and a junk entry on its own still declares nothing terminal",
-        f"name: W\non:\n  workflow_run:\n    types: [3]\n{JOB}")
+refuses("...and one on its own refuses too, rather than reading as no-match",
+        f"name: W\non:\n  workflow_run:\n    types: [bogus]\n{JOB}")
+ignores("`in_progress` is a DOCUMENTED type, so it reads as a clean non-match",
+        f"name: W\non:\n  workflow_run:\n    types: [in_progress]\n{JOB}")
+matches("all three documented types together still declare completed",
+        f"name: W\non:\n  workflow_run:\n    types: [requested, in_progress, completed]\n{JOB}")
 refuses("a NESTED structure inside types: is refused, not flattened",
         f"name: W\non:\n  workflow_run:\n    types: [[completed]]\n{JOB}")
 
@@ -298,6 +311,17 @@ case("an unreadable file refuses even when the entry ALREADY lists it",
      workflows={"w.yml": b"name: W\non:\n  workflow_run:\n    types: [completed]\n# \xff\n"},
      lines=[entry([".github/workflows/w.yml"])],
      expect_exit=1, expect_text="could not be classified")
+
+# ── a symlinked candidate is refused, not followed (round 23) ───────────────
+case("a symlinked workflow is refused, not read through to its target",
+     workflows={"w.yml": SYMLINK(f"name: W\non:\n  workflow_run:\n    types: [completed]\n{JOB}")},
+     lines=[entry([])], expect_exit=1, expect_text="is a symlink")
+case("...even when the target would NOT have matched — the refusal is about the link",
+     workflows={"w.yml": SYMLINK(f"name: W\non:\n  push:\n{JOB}")},
+     lines=[entry([])], expect_exit=1, expect_text="is a symlink")
+case("...and even when the entry already lists it",
+     workflows={"w.yml": SYMLINK(f"name: W\non:\n  workflow_run:\n    types: [completed]\n{JOB}")},
+     lines=[entry([".github/workflows/w.yml"])], expect_exit=1, expect_text="is a symlink")
 
 # ── multi-document files: composing refuses rather than guessing ─────────────
 refuses("a multi-document YAML file",

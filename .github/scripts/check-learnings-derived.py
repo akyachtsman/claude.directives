@@ -88,6 +88,13 @@ class Unreadable(Exception):
 # consumer appears, make it a module instead of copying again.
 
 
+# The activity types workflow_run declares, from github/docs @ 2320b38,
+# events-that-trigger-workflows.md -> `workflow_run`. An item outside this set is
+# not something GitHub accepts, and whether it ignores the item or rejects the
+# whole trigger is undocumented — so the sequence is refused rather than read
+# past (Codex, #368 round 23).
+ACTIVITY_TYPES = ("completed", "requested", "in_progress")
+
 NULL_TAG = "tag:yaml.org,2002:null"
 BOOL_TAG = "tag:yaml.org,2002:bool"
 
@@ -150,17 +157,30 @@ def _is_null(node):
 #
 #   VERDICT, because github/docs @ 2320b38 documents the behaviour
 #     * a root key whose text is `on` is the trigger key    (every example)
+#     * NO root key resolving to `on`                       -> not a watcher
+#     * a root that is not a mapping at all                 -> not a watcher
 #     * `on:` holding no `workflow_run` key                 -> not a watcher
 #     * `on:` that is not a mapping (`on: push`, `on: [x]`) -> not a watcher
 #     * `workflow_run:` with NO value                       -> defaults apply
 #     * `types` ABSENT                                      -> defaults apply
-#     * `types` as a SEQUENCE of scalars                    -> membership
+#     * `types` as a SEQUENCE of documented activity types  -> membership
 #   REFUSE, because nothing documents it and a wrong guess is SILENT
+#     * the file is not parseable as YAML, or holds >1 document
 #     * a bool-spelled root key (`ON:`, `yes:`, `true:`)
 #     * the trigger key, `workflow_run:` or `types:` written TWICE
 #     * `workflow_run` as a non-null scalar, or as a sequence
 #     * `types` PRESENT but null, or any scalar, or a mapping
-#     * a sequence item that is not a scalar
+#     * a sequence item that is not a scalar, or not a documented activity type
+#   (The caller adds two more refusals of its own, for a candidate that is a
+#    SYMLINK and for one that cannot be read at all. They are listed at that
+#    site, not here, because they are about the file rather than its contents.)
+#
+# ⚠️ This list is only worth having if it is EXHAUSTIVE — a reader is entitled to
+# treat anything absent from it as not happening. Round 23 found three branches
+# missing from an earlier version of it (the parse failure and the two
+# not-a-mapping verdicts). Add the branch here in the same edit that adds it
+# below, or delete the list rather than let it become a coverage claim that is
+# not one.
 #
 # The refusals are affordable because every one of them is a form no real
 # workflow contains: `types` appears as a sequence in every example in the docs
@@ -258,9 +278,18 @@ def terminal_state_watcher(path, text):
                 f"{type(item).__name__}, not a scalar — teach this guard that form "
                 f'rather than letting it read as "no match".'
             )
-    # Compared as written text. A non-string scalar (`types: [completed, 3]`) is
-    # not an activity type GitHub accepts, but it does not stop the trigger
-    # declaring `completed`, and that is the only question here.
+        if item.value not in ACTIVITY_TYPES:
+            # An earlier version read past this, reasoning that a junk sibling
+            # does not stop the trigger declaring `completed`. That is an
+            # inference, not something the docs establish: GitHub may ignore the
+            # bad item or reject the whole trigger, and the two give opposite
+            # answers here.
+            raise Unreadable(
+                f"{path}: `on.workflow_run.types` contains {item.value!r}, which is "
+                f"not one of {', '.join(ACTIVITY_TYPES)}. Whether GitHub ignores an "
+                f"invalid activity type or rejects the trigger is undocumented, so "
+                f"this guard will not guess."
+            )
     return any(item.value == "completed" for item in types.value)
 
 
@@ -332,6 +361,19 @@ def main():
                 if candidate.suffix not in (".yml", ".yaml"):
                     continue
                 name = f"{root}/{candidate.name}"
+                # A symlink is refused rather than followed. `read_text()` would
+                # read the TARGET, so the guard would classify content that is not
+                # this workflow — and git stores a symlink as its link PATH, not
+                # as that target's YAML, so the verdict would come from checkout
+                # filesystem behaviour rather than from what GitHub receives. It
+                # can also reach outside both governed roots entirely (Codex,
+                # #368 round 23).
+                if candidate.is_symlink():
+                    raise Unreadable(
+                        f"{name}: is a symlink. What GitHub does with a symlinked "
+                        f"workflow file is unestablished, and reading through it "
+                        f"would classify the target's contents as this file's."
+                    )
                 # A read failure is a REFUSAL, not an exclusion. This used to
                 # `continue`, which is the guard's own fail-open: a workflow that
                 # cannot be read is exactly the one most likely to be the drift,

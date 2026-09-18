@@ -96,9 +96,55 @@ const DERIVED = [{
   what: 'workflows using a terminal-state workflow_run trigger',
   // The canonical watcher set is automations.md -> Watcher Rules; this reads
   // the tree rather than restating it, so a new watcher is caught on arrival.
-  match: (f, body) => /\.ya?ml$/.test(f) && body.includes('types: [completed]'),
+  match: terminalStateWatcher,
   roots: ['.github/workflows', 'templates/workflows'],
 }];
+
+// Reads the `types:` of a `workflow_run:` trigger. The first version of this
+// matched the literal string `types: [completed]`, which MISSED `types: [
+// completed ]` and the block-sequence form - two spellings of the same trigger,
+// both of them real watchers, both silently excluded while the guard printed OK.
+// That is the fail-open this guard exists to prevent, inside the guard.
+//
+// So it recognises both forms AND REFUSES on a third: a `workflow_run:` block
+// carrying a `types:` this cannot parse throws rather than returning false,
+// because "I did not recognise it" and "it does not match" must not be the same
+// answer. There is no YAML parser in this checker's dependencies; a refusal is
+// what keeps the gap visible until there is one.
+function terminalStateWatcher(file, rawBody) {
+  if (!/\.ya?ml$/.test(file)) return false;
+  // Strip comments FIRST. pages-monitor.yml carries a commented-out
+  // `workflow_run:` / `types: [completed]` snippet showing what a downstream
+  // project should ADD - it has no such trigger itself (its triggers are
+  // page_build and workflow_dispatch). Matching the raw body put it, and its
+  // template twin, into the derived set as FALSE POSITIVES, and I asserted the
+  // entry equal to that set for two rounds. An assertion against a wrong
+  // predicate is indistinguishable from an assertion against a right one.
+  const body = rawBody.split('\n').map((l) => l.replace(/(^|\s)#.*$/, '$1')).join('\n');
+  const wr = body.indexOf('workflow_run:');
+  if (wr === -1) return false;
+  const after = body.slice(wr);
+  const types = after.match(/^(\s*)types:(.*)$/m);
+  if (!types) return false;                      // no types: => all activity types
+  const [, , inline] = types;
+  const flow = inline.match(/^\s*\[([^\]]*)\]\s*$/);
+  if (flow) return flow[1].split(',').map((t) => t.trim().replace(/['"]/g, '')).includes('completed');
+  if (inline.trim() === '') {
+    // block sequence: the lines under `types:` that are deeper-indented items
+    const rest = after.slice(after.indexOf(types[0]) + types[0].length).split('\n');
+    const items = [];
+    for (const line of rest) {
+      if (!line.trim()) continue;
+      const item = line.match(/^\s+-\s*(.+?)\s*$/);
+      if (!item) break;
+      items.push(item[1].replace(/['"]/g, ''));
+    }
+    if (items.length) return items.includes('completed');
+  }
+  throw new Error(`${file}: workflow_run types: is in a form this guard cannot read `
+    + `(${JSON.stringify(types[0].trim())}). Teach terminalStateWatcher that form `
+    + `rather than letting it read as "no match".`);
+}
 
 for (const rule of DERIVED) {
   // `lines` holds raw JSONL strings; malformed ones already failed above, so
@@ -112,7 +158,11 @@ for (const rule of DERIVED) {
     try { names = readdirSync(dir); } catch { return []; }
     return names
       .map((n) => `${dir}/${n}`)
-      .filter((p) => { try { return rule.match(p, readFileSync(p, 'utf8')); } catch { return false; } });
+      .filter((p) => {
+        let body;
+        try { body = readFileSync(p, 'utf8'); } catch { return false; }   // unreadable: not ours
+        return rule.match(p, body);                                       // a REFUSAL propagates
+      });
   }).sort();
   // Only the paths the predicate could ever produce are governed; an entry may
   // also list prose files, and those are judgement, not derivation.

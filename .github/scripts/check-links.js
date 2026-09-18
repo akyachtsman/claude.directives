@@ -97,10 +97,12 @@ for (const url of internalTargets) {
 // skipped rather than guessed at.
 if (mode !== '--external') {
   const headingCache = new Map();
-  // A wrapped name arrives joined on a single space; headings never contain a
-  // line break, so compare on collapsed whitespace — on BOTH sides. Collapsing
-  // only the reference breaks an exact match against a heading that carries a
-  // double space.
+  // Compare on collapsed whitespace, on BOTH sides. A name is strictly
+  // single-line — NAME excludes `\n`, a wrapped one is not parsed at all and is
+  // absent from the count — so this is NOT about joining anything: it is about a
+  // name or heading carrying a run of spaces or a tab. Collapsing only the
+  // reference breaks an exact match against a heading that carries a double
+  // space, which is why both sides go through it.
   const flatten = (s) => s.replace(/\s+/g, ' ').trim();
   // Strip fenced code blocks first, exactly as check-sections.js does: a deleted
   // section whose name survives inside a fenced example would otherwise satisfy
@@ -244,7 +246,14 @@ if (mode !== '--external') {
   const OPEN = String.raw`(?<!\*)\*(?!\*)`;
   const CLOSE = String.raw`\*(?!\*)`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file). The backtick is
-  // \x60: `u` mode, required by \p{…}, rejects \` as an invalid identity escape.
+  // \x60 because `u` mode rejects \` as an invalid identity escape.
+  //
+  // `u` is no longer required by anything in these patterns — every \p{…} went
+  // with the flanking rule, and measured, the flag changes no match here. It is
+  // kept as a STRICTNESS guard: under `u` a mistyped escape is a SyntaxError,
+  // where without it the escape silently matches the literal character and the
+  // pattern goes on quietly meaning something else. That is the fail-open family
+  // (#323) at the regex level, so the flag stays.
   const XREF_FILE = new RegExp(
     String.raw`\x60([A-Za-z0-9_./-]+\.md)\x60[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
   // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed

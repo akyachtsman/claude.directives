@@ -176,11 +176,20 @@ def _is_null(node):
 #    site, not here, because they are about the file rather than its contents.)
 #
 # ⚠️ This list is only worth having if it is EXHAUSTIVE — a reader is entitled to
-# treat anything absent from it as not happening. Round 23 found three branches
-# missing from an earlier version of it (the parse failure and the two
-# not-a-mapping verdicts). Add the branch here in the same edit that adds it
-# below, or delete the list rather than let it become a coverage claim that is
-# not one.
+# treat anything absent from it as not happening. Twice it was not: round 23
+# found three branches missing from it, and round 24 found a fifth verdict path
+# (an empty `types:` sequence) that no bullet described. Four consecutive rounds
+# found the same mechanism — a path reaching a verdict without being enumerated.
+#
+# So the list is no longer a promise. check-learnings-derived-cases.py parses
+# THIS function and asserts the counts below; adding a branch either way without
+# updating the enumeration turns that case red.
+#
+#   VERDICT_PATHS = 5      every `return` in terminal_state_watcher
+#   REFUSAL_PATHS = 11     every `raise Unreadable` in it
+#
+# That is the whole point of the change: exhaustiveness is now a property the
+# suite checks, not a claim this comment makes.
 #
 # The refusals are affordable because every one of them is a form no real
 # workflow contains: `types` appears as a sequence in every example in the docs
@@ -270,6 +279,18 @@ def terminal_state_watcher(path, text):
             f"does with this form is unestablished — and unlike an ABSENT `types:`, "
             f"a present one cannot fall back on the documented default. This guard "
             f"will not guess."
+        )
+    if not types.value:
+        # `types: []`. any() over an empty sequence is False, so this used to
+        # produce a DEFINITE no-match from a shape nothing establishes: GitHub
+        # may treat an empty sequence as disabling the trigger, as rejecting the
+        # file, or as falling back to the defaults, and those do not agree.
+        # Round 24, and the fourth instance of one mechanism — which is why the
+        # COUNTS below are now enforced rather than promised.
+        raise Unreadable(
+            f"{path}: `on.workflow_run.types` is an EMPTY sequence. Whether that "
+            f"disables the trigger, is rejected, or falls back to the defaults is "
+            f"undocumented, so this guard will not guess."
         )
     for item in types.value:
         if not isinstance(item, yaml.ScalarNode):

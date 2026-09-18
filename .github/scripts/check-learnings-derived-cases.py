@@ -68,6 +68,57 @@ class SYMLINK:
 failures = []
 passes = 0
 
+# ── the enumeration is CHECKED, not promised (round 24 / option B) ───────────
+# Four consecutive rounds found the same mechanism: a path in
+# terminal_state_watcher reaching a verdict without appearing in the block
+# comment that claims to enumerate them. Twice that block was itself wrong.
+#
+# Counting the branches turns "I enumerated them all" from something the author
+# asserts into something the suite measures. A new `return` or `raise` in that
+# function is red until the enumeration is updated to describe it — which is the
+# only step that was ever actually being skipped.
+#
+# It does NOT check that a branch is CORRECT, only that none was added
+# unannounced. The behaviour cases below are what check correctness.
+VERDICT_PATHS = 5
+REFUSAL_PATHS = 11
+
+
+def check_enumeration_is_exhaustive():
+    global passes
+    import ast
+    try:
+        tree = ast.parse(GUARD.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError) as exc:
+        failures.append(f"enumeration: cannot parse the guard — {exc}")
+        print("FAIL: the predicate's branch counts match the enumeration")
+        return
+    fn = next((n for n in ast.walk(tree)
+               if isinstance(n, ast.FunctionDef) and n.name == "terminal_state_watcher"), None)
+    if fn is None:
+        failures.append("enumeration: terminal_state_watcher not found")
+        print("FAIL: the predicate's branch counts match the enumeration")
+        return
+    returns = sum(1 for n in ast.walk(fn) if isinstance(n, ast.Return))
+    raises = sum(1 for n in ast.walk(fn) if isinstance(n, ast.Raise))
+    if returns == VERDICT_PATHS and raises == REFUSAL_PATHS:
+        passes += 1
+        print(f"OK:   the predicate's branch counts match the enumeration "
+              f"({returns} verdicts, {raises} refusals)")
+    else:
+        failures.append(
+            f"enumeration: terminal_state_watcher has {returns} verdict path(s) and "
+            f"{raises} refusal path(s); the enumeration describes {VERDICT_PATHS} and "
+            f"{REFUSAL_PATHS}.\n"
+            f"      A branch was added or removed without updating the block comment "
+            f"above the predicate. Describe it there, then update these constants — "
+            f"in that order, because the comment is what a reader trusts."
+        )
+        print("FAIL: the predicate's branch counts match the enumeration")
+
+
+check_enumeration_is_exhaustive()
+
 
 def entry(files):
     return json.dumps({
@@ -237,6 +288,10 @@ ignores("`in_progress` is a DOCUMENTED type, so it reads as a clean non-match",
         f"name: W\non:\n  workflow_run:\n    types: [in_progress]\n{JOB}")
 matches("all three documented types together still declare completed",
         f"name: W\non:\n  workflow_run:\n    types: [requested, in_progress, completed]\n{JOB}")
+refuses("an EMPTY types: sequence — disable/reject/default all disagree (round 24)",
+        f"name: W\non:\n  workflow_run:\n    types: []\n{JOB}")
+refuses("...and the block-sequence spelling of empty is the same shape",
+        f"name: W\non:\n  workflow_run:\n    workflows: [X]\n    types: [ ]\n{JOB}")
 refuses("a NESTED structure inside types: is refused, not flattened",
         f"name: W\non:\n  workflow_run:\n    types: [[completed]]\n{JOB}")
 

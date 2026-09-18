@@ -137,8 +137,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
    by name. List that directory and compare against the installed toolkit's
    commands and skills. For each collision report both line counts and, where
    the personal copy contradicts a current directive rule, name the rule — a
-   handoff skill saying "summarize everything" contradicts `global.md` →
-   *Handoffs Carry Only What Dies With the Session*. Removing them is the
+   handoff skill saying "summarize everything" contradicts `global.md` → *Handoffs Carry Only What Dies With the Session*. Removing them is the
    owner's action in their Claude account; no repo PR can, so report and stop.
    No personal skills directory, or no collisions, is a pass.
 8. Connectors & tools — Inventory the session's actual capabilities. Discover

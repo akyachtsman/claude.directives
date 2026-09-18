@@ -50,8 +50,7 @@ You are the final gate before a pull request or merge. Confirm that the branch i
 4. **Reviewer issues**
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
    - Codex is judged from its **response**, not the label. `codex-monitor` writes
-     `codex-flagged` asynchronously, so an absent label proves nothing (`git.md` →
-     *PR Lifecycle*). **Never report Clear from label state.** With the PR number the
+     `codex-flagged` asynchronously, so an absent label proves nothing (`git.md` → *PR Lifecycle*). **Never report Clear from label state.** With the PR number the
      orchestrator supplies, use `mcp__github__pull_request_read`: `get_reviews` for a
      review whose reviewed-commit SHA matches HEAD — by SHA, never by timestamp, since a
      review of an older commit can land after a newer push — then `get_review_comments`

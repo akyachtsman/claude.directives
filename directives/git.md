@@ -551,8 +551,7 @@ Two stops survive, neither a permission ask:
    invented scope needs approval for the CHANGE, after which the merge again
    needs none.
 
-Applying changes to the live database still follows `data.md` →
-*Reversible-by-Design* and each project's escalation rules — that governs the
+Applying changes to the live database still follows `data.md` → *Reversible-by-Design* and each project's escalation rules — that governs the
 operation, never the merge.
 
 The safety net is reversibility, not hesitation: a regression found after merge

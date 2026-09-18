@@ -93,8 +93,7 @@ one:
 4. Verify: `get_advisors` clean, spot-check the restored RPC/table via
    `execute_sql`, and confirm the live site against the reverted Pages deploy.
 
-(Merge timing for backend changes is governed by `git.md` → *Conditional
-Auto-Merge on Green* — backend PRs merge on green like every other class, and
+(Merge timing for backend changes is governed by `git.md` → *Conditional Auto-Merge on Green* — backend PRs merge on green like every other class, and
 this section is what makes that safe: whatever merged can be walked back.
 Applying the change to the live database still follows the escalation rules
 here.)

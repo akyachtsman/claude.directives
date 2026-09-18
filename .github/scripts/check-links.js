@@ -97,14 +97,44 @@ for (const url of internalTargets) {
 // skipped rather than guessed at.
 if (mode !== '--external') {
   const headingCache = new Map();
+  // Compare on collapsed whitespace, on BOTH sides. A name is strictly
+  // single-line — NAME excludes `\n`, a wrapped one is not parsed at all and is
+  // absent from the count — so this is NOT about joining anything: it is about a
+  // name or heading carrying a run of spaces or a tab. Collapsing only the
+  // reference breaks an exact match against a heading that carries a double
+  // space, which is why both sides go through it.
+  const flatten = (s) => s.replace(/\s+/g, ' ').trim();
   // Strip fenced code blocks first, exactly as check-sections.js does: a deleted
   // section whose name survives inside a fenced example would otherwise satisfy
-  // the scan and report a broken cross-reference as resolved.
-  const stripFences = (content) => content.replace(/^```[\s\S]*?^```/gm, '');
+  // the scan and report a broken cross-reference as resolved. Each block is
+  // replaced by an equal count of newlines rather than deleted, so a line number
+  // computed here is the line number in the source file.
+  // Every read goes through this. Line endings are normalised to LF ONCE, here,
+  // rather than each consumer handling CR for itself.
+  //
+  // ⚠️ THIS REPLACED THREE SEPARATE CR FIXES, and the third is why. Round 6 found
+  // the NAME pattern excluding only `\n`, so a bare CR let two lines be spliced
+  // into one invented reference. Round 7 found `lineOf` splitting only on `\n`,
+  // so every failure in such a file reported line 1. Round 8 found THIS padding
+  // counting only `\n`, so a fenced block collapsed to nothing and the line
+  // numbers moved again. Three sites, one mechanism, each fix revealing the next.
+  //
+  // Normalising at the source makes the class unreachable: nothing downstream can
+  // be CR-blind because nothing downstream sees a CR. Line COUNT is preserved —
+  // `\r\n` and `\r` each become one `\n` — so a reported line number is still
+  // the source file's line number, which is the property the padding exists for.
+  //
+  // Do NOT reintroduce per-consumer CR handling; add readSource() calls instead.
+  const readSource = (file) => readFileSync(file, 'utf8').replace(/\r\n|\r/g, '\n');
+  const stripFences = (content) => content.replace(
+    /^```[\s\S]*?^```/gm,
+    (block) => '\n'.repeat((block.match(/\n/g) || []).length),
+  );
   const headingsOf = (file) => {
     if (!headingCache.has(file)) {
       const heads = existsSync(file)
-        ? [...stripFences(readFileSync(file, 'utf8')).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)].map(m => m[1])
+        ? [...stripFences(readSource(file)).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)]
+            .map(m => flatten(m[1]))
         : null;
       headingCache.set(file, heads);
     }
@@ -116,31 +146,185 @@ if (mode !== '--external') {
   const resolves = (file, section) => {
     const heads = headingsOf(file);
     if (heads === null) return null;               // file not found — reported elsewhere
-    const want = section.toLowerCase();
+    const want = flatten(section).toLowerCase();
+    // Every string contains the empty string, so without this a nameless
+    // reference resolves against any file that has a heading at all. The
+    // delimiter rules below already reject `*   *`; this is the backstop.
+    if (!want) return false;
     return heads.some(h => h.toLowerCase().includes(want));
   };
-  // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
-  const XREF_FILE = /`([A-Za-z0-9_./-]+\.md)`\s*(?:→|->)\s*\*([^*\n]+?)\*/g;
-  // → *Bar*   with no file named: the current file
-  const XREF_SELF = /(?:^|[^`\w])(?:→|->)\s*\*([^*\n]+?)\*/g;
+
+  // ── A reference lives on ONE line ───────────────────────────────────────────
+  // Prose here wraps at ~80 columns, and the original patterns used [^*\n], so a
+  // reference whose italicised name straddled a break was INVISIBLE — it looked
+  // verified and was not (#363, the #323 fail-open family).
+  //
+  // Thirty-seven references were split across a break here, by TWO different
+  // mechanisms, and conflating them hides why the count moved the way it did:
+  //
+  //     20   the NAME straddled the break — not matched at all, so invisible
+  //     17   the break fell between the FILENAME and its arrow — `main`'s `\s*`
+  //          DID match these, the self form claiming the arrow line and checking
+  //          the name against the CURRENT file, i.e. against the wrong target
+  //
+  // Only the first 20 were absent. Tightening the separators to `[ \t]*` dropped
+  // the 17 from the count (167 → 150) because they stopped matching wrongly;
+  // joining all 37 in the source is what brought it to 187.
+  //
+  // Two designs tried to read them anyway and both failed the same way. #365 let
+  // the name SPAN a newline; six review rounds each found another Markdown
+  // construct it should not have spanned. #367 removed the wrap first by joining
+  // hard-wrapped lines; three more rounds found blockquote continuations, a
+  // self-closing HTML comment and a multiline code span, because a hand-rolled
+  // normaliser has to reimplement Markdown's block structure and that structure
+  // is large. Both sets are open.
+  //
+  // So the SOURCE was fixed instead of the parser: all thirty-seven references
+  // were put on one line, and this stays strictly single-line. `[ \t]*` between
+  // every token — never `\s*`, which silently spans a newline and was quietly
+  // matching seventeen references across a break, some against the WRONG file,
+  // because a break between the filename and its arrow left the self form to
+  // claim it. The contract is now one sentence: a reference is on one line.
+  const ARROW = String.raw`(?:→|->)`;
+  // The name may not START with whitespace — `* *` is not a reference, and a
+  // whitespace-only name would otherwise be reported as a BROKEN one and fail a
+  // valid file. This is the old opener's `(?![\s*])` condition, restated as part
+  // of the closed rule rather than hidden in the delimiter.
+  //
+  // Only `\n` is excluded, not `\r`: readSource() normalises every line ending
+  // before this runs, so a CR cannot reach here. The round-6 fix added `\r` and
+  // the round-8 redesign made it dead — measured, removing it leaves all cases
+  // green. It is gone for the same reason lineOf's was: a redundant guard implies
+  // the invariant does not hold, and that is how somebody reintroduces
+  // per-consumer CR handling.
+  const NAME = String.raw`([^*\n\s][^*\n]*?)`;
+  // ── The delimiter rule is a CLOSED, STATED rule — deliberately NOT CommonMark.
+  //
+  // It was CommonMark's flanking rule for three rounds. Rounds 4, 5 and 6 each
+  // found a different cause violating one invariant — *the counted set equals
+  // the set CommonMark renders as emphasis*:
+  //
+  //     round 4   implemented only half of right-flanking
+  //     round 5   wrong category set (marks, ZWJ and private-use are not
+  //               punctuation; writing the spec's PROSE definition scored 176
+  //               disagreements against the bug's 95)
+  //     round 6   wrong granularity — scanDelims reads neighbours with charAt,
+  //               so it sees a lone surrogate; lookarounds under `u` classify
+  //               the whole code point
+  //
+  // Before escalating I probed ten axes the 1056-pair sweep never touched.
+  // SEVEN disagreed, three of them mattering: an escaped closer (`*Name\* x*`),
+  // a code span holding a star (`*Na\x60*\x60me*`), and a closer that starts a
+  // delimiter run (`*Name**bold**`, which CommonMark renders with NO emphasis at
+  // all while this claimed 1/1). Backslash escapes, code spans, delimiter-run
+  // length — inline STRUCTURE, which is open in exactly the way Markdown BLOCK
+  // structure was open in #365. The same mechanism, one level down.
+  //
+  // Nothing ever required that invariant. #363 asked for the fraction to stop
+  // lying, and two things already do that with zero findings in six rounds: the
+  // references are on one line (150 -> 187), and the summary discloses what
+  // PARSED means. The invariant was adopted at round 4 in response to a finding
+  // about one input, and failed three times.
+  //
+  // So the open set is replaced by a closed one. A reference is:
+  //
+  //     a single `*`, then text with no `*` and no line ending, then a single `*`
+  //
+  // Single means not part of a run, which is what keeps `**bold**` out. That is
+  // the whole rule; it is decidable by reading it, and no construct can be
+  // "missing" from it, because it does not claim to track anything external.
+  // A construct that CommonMark renders differently is OUT OF SCOPE and
+  // disclosed on every run, not silently mishandled. All 187 references here
+  // satisfy it.
+  //
+  // "No line ending" means any of commonmark's (/\r\n|\n|\r/), not just LF —
+  // but the pattern only excludes `\n`, because readSource() has already
+  // normalised the others away. See its comment; do not add `\r` back here.
+  //
+  // The name also may not START with whitespace, which is stated in the emitted
+  // contract because it is part of the rule a reader is entitled to rely on.
+  const OPEN = String.raw`(?<!\*)\*(?!\*)`;
+  const CLOSE = String.raw`\*(?!\*)`;
+  // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file). The backtick is
+  // \x60 because `u` mode rejects \` as an invalid identity escape.
+  //
+  // `u` is no longer required by anything in these patterns — every \p{…} went
+  // with the flanking rule, and measured, the flag changes no match here. It is
+  // kept as a STRICTNESS guard: under `u` a mistyped escape is a SyntaxError,
+  // where without it the escape silently matches the literal character and the
+  // pattern goes on quietly meaning something else. That is the fail-open family
+  // (#323) at the regex level, so the flag stays.
+  const XREF_FILE = new RegExp(
+    String.raw`\x60([A-Za-z0-9_./-]+\.md)\x60[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
+  // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
+  // character, so the match index IS the arrow — consuming it reported a
+  // reference at column 1 against the line above itself.
+  //
+  // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
+  // character, so the match index IS the arrow — consuming it reported a
+  // reference at column 1 against the line above itself.
+  //
+  // ⚠️ `\x60` here is NOT about filenames. An arrow directly after a backtick is
+  // inside a code span showing the syntax — CLAUDE.md documents this checker with
+  // a literal `→ *Section*` — and parsing it fails the repo on its own
+  // documentation. Removing it was tried (#367 round 13) and did exactly that.
+  //
+  // ⚠️ DO NOT add a rule here that suppresses the self form when a code span
+  // NAMES a .md file. It was tried for five rounds and is the reason this comment
+  // exists. The motivation is real: the explicit form takes only
+  // [A-Za-z0-9_./-] before `.md`, so any other filename falls through to here and
+  // is checked against THIS file — a wrong target reported as resolved. But every
+  // implementation has to decide what a code span IS, and that question was wrong
+  // once per round:
+  //
+  //     r13  content    any adjacent span suppressed, hiding a real broken ref
+  //     r14  delimiter  a RUN of backticks was not a code span to it
+  //     r15  padding    CommonMark strips one symmetric space, so `.md` need not
+  //                     touch the closer
+  //     r16  ×4         the SCANNER that replaced the lookbehind: a match could
+  //                     start inside an unmatched opener run; a shorter run
+  //                     INSIDE a span was rejected; trimEnd() destroyed
+  //                     CommonMark's asymmetric trailing space; and the guard was
+  //                     applied to this form and not to the explicit one
+  //
+  // Findings per round 1, 1, 1, 4 — diverging, not converging. Two of round 16's
+  // FAILED VALID FILES, which is the worse direction. This is the third time this
+  // PR has bet on reimplementing a piece of Markdown (after #365's line joining
+  // and the flanking rule) and the third time the set proved open, so the state is
+  // DISCLOSED on every run instead, exactly as the filename/arrow line break is.
+  // Owner ruling, 2026-09-18. Widening what the explicit form accepts is #366.
+  const XREF_SELF = new RegExp(
+    // `\w` is ASCII even under /u — `café→ *Name*` IS parsed. Deliberate and
+    // disclosed: it errs toward CHECKING, and a \p{L}/\p{N} rule here would
+    // reopen the Unicode-category chase that cost rounds 4-6 (#366).
+    String.raw`(?<![\x60\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
+
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
     // Fence-stripped on the SOURCE side as well as the target side: an
     // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
     // a live reference, and collecting it fails CI on correct documentation.
-    const content = stripFences(readFileSync(file, 'utf8'));
+    const src = stripFences(readSource(file));
+    // 1-based line of a SOURCE offset. Fences are padded rather than deleted,
+    // so this is the line in the file on disk.
+    // `src` came through readSource(), so every line ending is already LF.
+    const lineOf = (off) => src.slice(0, off).split('\n').length;
     const checks = [];
-    for (const m of content.matchAll(XREF_FILE)) checks.push([m[1], m[2], true]);
-    // Record where the explicit-file form matched, so the self form below does
-    // not re-flag the same reference as if it named no file.
-    const claimed = [...content.matchAll(XREF_FILE)]
-      .map(m => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
-    for (const m of content.matchAll(XREF_SELF)) {
+    // Spans the explicit-file form matched, so the self form does not re-flag
+    // the same reference as if it named no file.
+    const claimed = [];
+    for (const m of src.matchAll(XREF_FILE)) {
       const idx = m.index ?? 0;
-      if (claimed.some(([a, b]) => idx >= a - 2 && idx < b)) continue;
-      checks.push([file, m[1], false]);
+      claimed.push([idx, idx + m[0].length]);
+      checks.push([m[1], m[2], true, idx]);
     }
-    for (const [target, section, explicit] of checks) {
+    for (const m of src.matchAll(XREF_SELF)) {
+      const idx = m.index ?? 0;
+      if (claimed.some(([a, b]) => idx >= a && idx < b)) continue;
+      checks.push([file, m[1], false, idx]);
+    }
+    for (const [target, section, explicit, off] of checks) {
+      const at = `${file}:${lineOf(off)}`;
       // Resolve a bare filename against the repo's known locations.
       let path = target;
       if (explicit && !existsSync(path)) {
@@ -156,19 +340,63 @@ if (mode !== '--external') {
         // bare filenames in arbitrary Markdown: silently skipping it reported
         // "0/0 cross-references resolve" and exited 0.
         if (explicit) {
-          console.error(`FAIL: ${file}: cross-reference names "${target}", which resolves to no file in the repo`);
-          failed = true;
+          console.error(`FAIL: ${at}: cross-reference names "${target}", which resolves to no file in the repo`);
+          // It PARSED, so it belongs in the fraction. Counting it only as a
+          // printed error left `0/0 … resolve` next to a failure.
+          failed = true; xrefs++; badXrefs++;
         }
         continue;
       }
       xrefs++;
       if (!r) {
-        console.error(`FAIL: ${file}: section cross-reference "${section}" has no matching heading in ${path}`);
+        console.error(`FAIL: ${at}: section cross-reference "${section}" has no matching heading in ${path}`);
         failed = true; badXrefs++;
       }
     }
   }
-  console.log(`OK:   ${xrefs - badXrefs}/${xrefs} section cross-references resolve to a heading`);
+  // A fraction counting only what was PARSED reads as full coverage, and that
+  // misreading is half of #363. The scope is stated rather than the exceptions
+  // enumerated — #365 proved that list cannot be built by pattern-matching.
+  console.log(`OK:   ${xrefs - badXrefs}/${xrefs} PARSED section cross-references resolve to a heading`);
+  console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms, ON ONE LINE.');
+  console.log('      A reference written any other way lands in one of three states, and');
+  console.log('      NONE of them is "verified":');
+  console.log('        - a name broken across a line is not parsed, so it is NOT counted;');
+  console.log('        - a break between a filename and its arrow IS counted — the arrow line');
+  console.log('          is read as a SELF reference and checked against THIS file, not the');
+  console.log('          one named, so it can report resolved against the wrong target;');
+  console.log('        - any other unparsed form is simply absent from the fraction.');
+  console.log('      The delimiters are a REPO CONVENTION, not CommonMark emphasis:');
+  console.log('        a single `*`, then text that does not START with whitespace and');
+  console.log('        contains no `*` and no line ending, then a single `*`.');
+  console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
+  console.log('      An arrow written DIRECTLY after a backtick is not parsed: that is how');
+  console.log('      this file documents the syntax. Put a space after a code span.');
+  console.log('      An arrow directly after an ASCII letter, digit or _ is not parsed');
+  console.log('      either, so `text→ *Name*` is NOT counted — the self form requires a');
+  console.log('      non-word character before it, so it cannot match inside a word.');
+  console.log('      ASCII ONLY, deliberately: JS `\\w` is ASCII even under /u, so');
+  console.log('      `café→ *Name*` IS parsed and checked. That errs toward CHECKING,');
+  console.log('      which is the safe direction, and avoids a Unicode category rule —');
+  console.log('      the thing that cost this checker three rounds (#366).');
+  console.log('      Put a space before the arrow.');
+  console.log('      ⚠️ A FILENAME THE EXPLICIT FORM CANNOT READ IS A SECOND ROUTE TO THE');
+  console.log('      WRONG-TARGET STATE ABOVE. It accepts only [A-Za-z0-9_./-] before');
+  console.log('      `.md`, so `my file.md` → *Name* — a space, or any other character —');
+  console.log('      is not matched as an explicit reference, and the arrow is then read');
+  console.log('      as a SELF reference and checked against THIS file. It can report');
+  console.log('      resolved against a file that is not in the repo at all.');
+  console.log('      This is DISCLOSED, not detected. Suppressing it needs a rule for what');
+  console.log('      a code span IS, and five rounds produced five wrong answers (content,');
+  console.log('      delimiter runs, padding, opener runs, runs nested inside a span) —');
+  console.log('      two of which FAILED VALID FILES. Use a filename the explicit form');
+  console.log('      accepts, or write no code span before the arrow. Widening it: #366.');
+  console.log('      A construct CommonMark renders differently — an escaped closer,');
+  console.log('      a code span holding a star, a closer starting a delimiter run — is');
+  console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');
+  console.log('      Markdown parser was an OPEN set: three rounds, three causes, and a');
+  console.log('      ten-axis probe then found seven more disagreements. See #366.');
+  console.log('      Keep every reference on one line. Widening what is parsed: #366.');
 }
 
 // External links: verify over the network with retry. Authed requests do not

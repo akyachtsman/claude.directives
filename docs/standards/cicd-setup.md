@@ -457,8 +457,7 @@ issue. **Two prerequisites:** (1) it targets the **branch-source** Pages workflo
 (`pages-build-deployment`) — projects on the **GitHub Actions** Pages source
 should instead build retry into their own deploy workflow, unless that deploy is
 provably idempotent and the project's CLAUDE.md records both the reasoning **and
-a revisit trigger** ending the exception (`docs/standards/automations.md` →
-*Watcher Rules*, W3). ⚠️ An Actions-source project that keeps this watcher
+a revisit trigger** ending the exception (`docs/standards/automations.md` → *Watcher Rules*, W3). ⚠️ An Actions-source project that keeps this watcher
 un-repointed must **delete** it, not narrow it — a visibility flip fires
 `pages-build-deployment` even under Actions-source, and the retry would re-run
 that rogue unfiltered deploy; (2) it only arms once

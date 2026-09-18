@@ -239,8 +239,23 @@ if (mode !== '--external') {
   // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
   // character, so the match index IS the arrow — consuming it reported a
   // reference at column 1 against the line above itself.
+  //
+  // The second lookbehind is the whole point: a code span before the arrow means
+  // the author NAMED A FILE, so the self form must not claim the arrow. Without
+  // it, a filename the explicit form does not accept — anything outside
+  // [A-Za-z0-9_./-], a space being the obvious one — fell through to the self
+  // form and was checked against THIS file. `docs/my guide.md` → *Target*
+  // reported 1/1 and exited 0 with that file absent from the tree entirely.
+  // That is the wrong-target state, reached by a second route.
+  //
+  // `(?<![\x60\w])` alone covered only the zero-space case (`x.md`→ *Bar*), so
+  // the guard was already here and was simply too narrow — one space defeated it.
+  // The span is bounded to one line by [^\x60\n]*, and the [ \t]* tail is why a
+  // code span EARLIER in the sentence does not suppress a genuine self reference:
+  // "see `foo.md` for details, and → *Bar*" still matches, because the text
+  // between the closing backtick and the arrow is not only spaces and tabs.
   const XREF_SELF = new RegExp(
-    String.raw`(?<![\x60\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
+    String.raw`(?<![\x60\w])(?<!\x60[^\x60\n]*\x60[ \t]*)` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
@@ -313,6 +328,10 @@ if (mode !== '--external') {
   console.log('        a single `*`, then text that does not START with whitespace and');
   console.log('        contains no `*` and no line ending, then a single `*`.');
   console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
+  console.log('      A code span immediately before the arrow SUPPRESSES the self form,');
+  console.log('      so a filename the explicit form does not accept is absent rather than');
+  console.log('      checked against THIS file. The explicit form accepts [A-Za-z0-9_./-]');
+  console.log('      before `.md`, so `my file.md` → *Name* is NOT counted at all.');
   console.log('      A construct CommonMark renders differently — an escaped closer,');
   console.log('      a code span holding a star, a closer starting a delimiter run — is');
   console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');

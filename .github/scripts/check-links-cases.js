@@ -117,6 +117,32 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
+// 3b. #367 round 12: the SAME wrong-target state, reached without a line break.
+//    A filename the explicit form does not accept — anything outside
+//    [A-Za-z0-9_./-], a space being the obvious one — used to fall through to
+//    the self form, which claimed the arrow and checked the name against THIS
+//    file. `docs/my guide.md` → *Target* reported 1/1 and exited 0 with that
+//    file absent from the tree. The `(?<![\x60\w])` guard was already there for
+//    exactly this and covered only the zero-space case; one space defeated it.
+//    Fixed in the PARSER, not the disclosure: the reference is now ABSENT.
+{
+  const r = run({ 'b.md': '# Top\n\n## Target\n\nsee `docs/my guide.md` \u2192 *Target*\n' });
+  check('an unsupported filename does not fall through to the self form',
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
+// 3c. The suppression must be bounded to a code span ADJACENT to the arrow, or
+//    it silently drops genuine self references that merely mention a file
+//    earlier in the sentence. That would be the round-10 defect again — buying a
+//    wrong-target fix with a new silent absence.
+{
+  const r = run({ 'b.md': '# Top\n\n## Target\n\nsee `foo.md` for details, and \u2192 *Target*\n' });
+  check('a code span earlier in the sentence still leaves a self reference',
+    r.code === 0 && parsed(r.out)?.total === 1,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+}
+
 // 4. Single-line references must still work — the fix must not trade one form
 //    for another.
 {

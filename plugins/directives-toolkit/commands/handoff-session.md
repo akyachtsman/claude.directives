@@ -7,8 +7,7 @@ handoff file (anything durable belongs in CLAUDE.md, not a sidecar that goes
 stale the moment the repo changes).
 
 ## 0. The only test for including anything
-The rule itself is `global.md` → *Handoffs Carry Only What Dies With the
-Session*, which applies whether or not this command is installed. What follows
+The rule itself is `global.md` → *Handoffs Carry Only What Dies With the Session*, which applies whether or not this command is installed. What follows
 is how to apply it.
 
 > **Would this be lost forever the moment this session ends?**

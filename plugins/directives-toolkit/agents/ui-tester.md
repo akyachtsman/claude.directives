@@ -126,8 +126,7 @@ After exploration, set viewport to 390×844 and reload. Assert `document.body.sc
 
 ### Phase 6 — Occlusion & Transition Checks
 
-DOM-level queries pass while the pixels are wrong (`test.md` → *Layered UI:
-rendered is not reachable*); these checks look where the DOM cannot:
+DOM-level queries pass while the pixels are wrong (`test.md` → *Layered UI: rendered is not reachable*); these checks look where the DOM cannot:
 
 - **Occlusion hit-test.** For every overlay, menu, drawer, or sticky layer the
   app exposes — the persistent ones visible on load plus every one revealed

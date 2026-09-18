@@ -419,11 +419,8 @@ had. Do not re-propose it, and do not scaffold toward it.
 
 - **Needing a server is not a reason to reach for one.** The gap a framework
   tier would have filled is server-side execution — a real secret at request
-  time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth
-  Pattern*). **Supabase Edge Functions already cover that**, with no framework,
-  no build step and no new platform — this ruling rests on `data.md` →
-  *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend
-  Changes*).
+  time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth Pattern*). **Supabase Edge Functions already cover that**, with no framework,
+  no build step and no new platform — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend Changes*).
 - **If a project ever genuinely outgrows Pages**, the owner's stated direction
   is **Cloudflare** — response time, caching, security. That names a direction,
   not a decision: it still needs explicit sign-off, against a real requirement.
@@ -732,8 +729,7 @@ naming what remains open, or "nothing open" — never absent.
      (standard scaffold), CI SUCCESS arrives too, as a PR comment. Event wakes
      are the PRIMARY signal for a PR-attached wait: end the turn saying you'll
      report back, and act on the event rather than asking for it — with what
-     you started beside it, or what blocks it (→ *Parallel Tasking via
-     Subagents*).
+     you started beside it, or what blocks it (→ *Parallel Tasking via Subagents*).
      ⚠️ **Primary is not sole — event-driven does not mean "no scheduler."** A
      wake only covers what something actually emits. A dispatched run on a PR
      branch has seven verified ways to emit nothing (`git.md` → *PR Lifecycle*),
@@ -785,8 +781,7 @@ naming what remains open, or "nothing open" — never absent.
        pass" is not the test — an anticipated success that gets cancelled is the
        case that strands the session, and it is indistinguishable in advance
        from the success that would have woken it.
-     - Event wakes stay the primary signal; the heartbeat (→ *Status Line on
-       Every Stop*) is the owner-visible liveness line carried by whatever wake
+     - Event wakes stay the primary signal; the heartbeat (→ *Status Line on Every Stop*) is the owner-visible liveness line carried by whatever wake
        already happens — never a replacement for event wakes, and never a
        reason to arm extra ones.
      - `create_trigger` / `update_trigger` / `fire_trigger` are pre-approved
@@ -910,8 +905,7 @@ four and this adds none. It adds a wait: work depending on the deviation stops
 until the question is answered, work independent of it continues.
 
 **Under a standing authorization and under "proceed", raise it anyway.** A
-knowing deviation IS the *genuinely important and critical* case → *"Proceed" —
-the Standing Directive* item 2 names, not an exception to it — the owner made
+knowing deviation IS the *genuinely important and critical* case → *"Proceed" — the Standing Directive* item 2 names, not an exception to it — the owner made
 the decision and it is not being executed. Item 7 there covers a question you
 have not answered; this covers one you have answered differently.
 
@@ -927,8 +921,7 @@ which is KEEP GOING.
   verification is the start signal for the next ready task, and the queue is
   worked until drained (→ *Parallel Tasking via Subagents*).
 - The stop gates are NEVER overridden by a standing authorization: Escalation
-  Rules above, the surviving merge stops (`git.md` → *Conditional
-  Auto-Merge on Green* — secrets or personal data in the diff; invented scope),
+  Rules above, the surviving merge stops (`git.md` → *Conditional Auto-Merge on Green* — secrets or personal data in the diff; invented scope),
   and genuine scope changes. Work NOT in the declared plan still needs the
   owner — momentum is never a license to invent scope.
 - When the declared list drains: report done and stop. A standing authorization
@@ -948,8 +941,7 @@ needs restating.
    (→ *Parallel Tasking via Subagents*).
 4. **Auto-merge.** Where the work produces a PR, take it through to merged,
    clearing a `codex-flagged` blocker by **requesting the review pass** rather
-   than removing the label. Take the label off by hand only where `git.md` →
-   *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
+   than removing the label. Take the label off by hand only where `git.md` → *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
    rule requires. Work that produces no PR has nothing to merge — see item 5.
 5. **Keep going until the whole task is done.** Merging is a milestone, not the
    finish line: the task is done when every effect the work was for has
@@ -1026,8 +1018,7 @@ See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 Self-scheduling is how a session resumes after CI and re-arms check-ins — a
 permission prompt the owner must click defeats the point. It is NOT how a
 session heartbeats: a wake is scheduled to perform a real check, and the
-heartbeat rides the wake that check already needed (→ *Status Line on Every
-Stop*). Never schedule one for liveness alone. Every
+heartbeat rides the wake that check already needed (→ *Status Line on Every Stop*). Never schedule one for liveness alone. Every
 project repo's committed `.claude/settings.json` carries the allowlist verbatim
 from `templates/claude-settings.json` → `permissions.allow`. It covers two
 classes and no others:

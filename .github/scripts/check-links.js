@@ -135,100 +135,39 @@ if (mode !== '--external') {
     return heads.some(h => h.toLowerCase().includes(want));
   };
 
-  // ── Hard wraps are REMOVED before matching, not matched across ──────────────
-  // Prose here is wrapped at ~80 columns, so `→ *Parallel Tasking via\n
-  // Subagents*` is an ordinary, correct reference — and the original patterns
-  // used [^*\n], which cannot cross a newline, so every wrapped reference was
-  // INVISIBLE (#363, the #323 fail-open family). Twenty were live here.
+  // ── A reference lives on ONE line ───────────────────────────────────────────
+  // Prose here wraps at ~80 columns, and the original patterns used [^*\n], so a
+  // reference whose italicised name straddled a break was INVISIBLE — it looked
+  // verified and was not (#363, the #323 fail-open family). Thirty-seven were
+  // live here.
   //
-  // #365 tried to fix that by letting the NAME pattern span a newline. Six review
-  // rounds each found another Markdown construct it should not have spanned — a
-  // following `→ *`, the same for `->`, a list bullet — and the exclusion added
-  // to stop the first made the checker invent a reference out of prose and fail
-  // a valid file. That set is open; the PR was reverted.
+  // Two designs tried to read them anyway and both failed the same way. #365 let
+  // the name SPAN a newline; six review rounds each found another Markdown
+  // construct it should not have spanned. #367 removed the wrap first by joining
+  // hard-wrapped lines; three more rounds found blockquote continuations, a
+  // self-closing HTML comment and a multiline code span, because a hand-rolled
+  // normaliser has to reimplement Markdown's block structure and that structure
+  // is large. Both sets are open.
   //
-  // So the wrap is removed first and the ORIGINAL single-line pattern does the
-  // work. `[^*\n]` cannot leave its line, and the line is now the whole
-  // paragraph. Block boundaries end a paragraph here, so a bullet or heading
-  // stops a name without being named inside a character class.
-  // Everything that INTERRUPTS a paragraph, because joining across one
-  // manufactures a reference out of two unrelated blocks: an HTML block (`<`),
-  // a thematic break or setext underline or GFM table delimiter (a rule-like
-  // line of -=_*:|), a list marker, heading, blockquote, table row, fence or
-  // link definition. Getting this wrong in the joining direction is the
-  // dangerous one — it produced `*draft <div>*` as a broken reference and
-  // FAILED a valid file. Erring the other way only leaves a wrapped reference
-  // unseen, which the summary already discloses.
-  const RULE_LIKE = String.raw`(?:[-=_*:|][ \t]*){2,}\r?$`;
-  const BLOCK_START = new RegExp(
-    String.raw`^ {0,3}(?:#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|>|\||<|` + '```' + String.raw`|~~~|\[[^\]]+\]:|` + RULE_LIKE + `)`);
-  // …and of those, the ones that END AT THEIR OWN NEWLINE and therefore cannot
-  // absorb the line below. A list item, blockquote or HTML block continues; a
-  // heading, thematic break, table row or link definition does not. Without
-  // this distinction every block start left the paragraph open, so
-  // `# → *draft` swallowed the next line and failed a valid file — a bug in the
-  // joining logic rather than another missing marker, which is why it is fixed
-  // by classifying blocks instead of by lengthening a list.
-  const LINE_BOUND = new RegExp(
-    String.raw`^ {0,3}(?:#{1,6}(?:[ \t]|\r?$)|\||\[[^\]]+\]:|` + RULE_LIKE + `)`);
-  // Returns the joined text plus map[i] = offset in `src` of joined char i.
-  const unwrap = (src) => {
-    const lines = src.split('\n');
-    let out = '';
-    const map = [];
-    let pos = 0, open = false;
-    // A trailing CR is dropped, never emitted: joined into the middle of a
-    // logical line it sits between tokens the patterns separate with [ \t]*, so
-    // a CRLF wrap between a filename and its arrow stopped matching the
-    // explicit-file form and was silently re-matched as a SELF reference —
-    // resolving against the WRONG file.
-    const emit = (line, from) => {
-      const end = line.endsWith('\r') ? line.length - 1 : line.length;
-      for (let k = from; k < end; k++) { out += line[k]; map.push(pos + k); }
-    };
-    for (const line of lines) {
-      const blank = /^[ \t\r]*$/.test(line);
-      if (blank) {
-        out += '\n'; map.push(pos); open = false;
-      } else if (!open || BLOCK_START.test(line)) {
-        if (open) { out += '\n'; map.push(pos); }
-        emit(line, 0);
-        open = !LINE_BOUND.test(line);
-        // A line-bound block ends here, so TERMINATE the logical line. Setting
-        // `open = false` without emitting the newline let the next line be
-        // concatenated straight on, which joined `*draft` to `continued prose*`
-        // with no separator at all — a worse version of the bug being fixed.
-        if (!open) { out += '\n'; map.push(pos + line.length); }
-      } else {
-        // Continuation: the newline and the indent become ONE space.
-        const lead = line.length - line.replace(/^[ \t]+/, '').length;
-        out += ' '; map.push(pos);
-        emit(line, lead);
-      }
-      pos += line.length + 1;
-    }
-    out += '\n'; map.push(pos);
-    return { text: out, map };
-  };
-
-  // Delimiters follow CommonMark's flanking rule: an opening `*` is not followed
-  // by a space, a closing `*` is not preceded by one. That is what keeps
-  // `→ *Decoy → *Missing*` from parsing as a reference named `Decoy →` — the
-  // candidate closer sits after a space, so it cannot close, and the real
-  // reference to `Missing` is found instead. It also rejects `*   *` outright,
-  // and `**bold**`, without either being enumerated as a special case.
-  const OPEN = String.raw`\*(?![\s*])`;
-  // Not preceded by a space (left-flanking openers cannot close), and not
-  // followed by a word character. The second half is the right-flanking
-  // condition: without it `*Wow!*now` closed on a star CommonMark does not
-  // treat as a closer, certifying prose as a reference. Stricter than
-  // CommonMark for `*Wow*now`, deliberately — a name butted against a word is
-  // not a reference form here, and refusing it leaves the text outside PARSED
-  // rather than failing a build.
-  const CLOSE = String.raw`(?<![\s*])\*(?![\p{L}\p{N}])`;
-  const NAME = String.raw`([^*\n]+?)`;
+  // So the SOURCE was fixed instead of the parser: all thirty-seven references
+  // were put on one line, and this stays strictly single-line. `[ \t]*` between
+  // every token — never `\s*`, which silently spans a newline and was quietly
+  // matching seventeen references across a break, some against the WRONG file,
+  // because a break between the filename and its arrow left the self form to
+  // claim it. The contract is now one sentence: a reference is on one line.
   const ARROW = String.raw`(?:→|->)`;
-  // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file)
+  const NAME = String.raw`([^*\n]+?)`;
+  // Delimiters follow CommonMark's flanking rule plus a single-asterisk
+  // condition: an opening `*` is not followed by a space (nor by another `*`,
+  // which is what rejects `**bold**` — the two-asterisk runs are validly
+  // flanking and run LENGTH is what makes them strong emphasis), and a closing
+  // `*` is neither preceded by a space nor followed by a letter or digit. That
+  // rejects `*Wow!*now` and `*   *` without either being a special case, and it
+  // is Unicode-aware: `[A-Za-z0-9]` accepted `*Wow!*éclair`.
+  const OPEN = String.raw`\*(?![\s*])`;
+  const CLOSE = String.raw`(?<![\s*])\*(?![\p{L}\p{N}])`;
+  // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file). The backtick is
+  // \x60: `u` mode, required by \p{…}, rejects \` as an invalid identity escape.
   const XREF_FILE = new RegExp(
     String.raw`\x60([A-Za-z0-9_./-]+\.md)\x60[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
   // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
@@ -243,7 +182,6 @@ if (mode !== '--external') {
     // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
     // a live reference, and collecting it fails CI on correct documentation.
     const src = stripFences(readFileSync(file, 'utf8'));
-    const { text, map } = unwrap(src);
     // 1-based line of a SOURCE offset. Fences are padded rather than deleted,
     // so this is the line in the file on disk.
     const lineOf = (off) => src.slice(0, off).split('\n').length;
@@ -251,15 +189,15 @@ if (mode !== '--external') {
     // Spans the explicit-file form matched, so the self form does not re-flag
     // the same reference as if it named no file.
     const claimed = [];
-    for (const m of text.matchAll(XREF_FILE)) {
+    for (const m of src.matchAll(XREF_FILE)) {
       const idx = m.index ?? 0;
       claimed.push([idx, idx + m[0].length]);
-      checks.push([m[1], m[2], true, map[idx]]);
+      checks.push([m[1], m[2], true, idx]);
     }
-    for (const m of text.matchAll(XREF_SELF)) {
+    for (const m of src.matchAll(XREF_SELF)) {
       const idx = m.index ?? 0;
       if (claimed.some(([a, b]) => idx >= a && idx < b)) continue;
-      checks.push([file, m[1], false, map[idx]]);
+      checks.push([file, m[1], false, idx]);
     }
     for (const [target, section, explicit, off] of checks) {
       const at = `${file}:${lineOf(off)}`;
@@ -296,8 +234,9 @@ if (mode !== '--external') {
   // misreading is half of #363. The scope is stated rather than the exceptions
   // enumerated — #365 proved that list cannot be built by pattern-matching.
   console.log(`OK:   ${xrefs - badXrefs}/${xrefs} PARSED section cross-references resolve to a heading`);
-  console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms ONLY. A reference');
-  console.log('      written any other way is absent from that fraction and is NOT verified (#366).');
+  console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms, ON ONE LINE.');
+  console.log('      A reference written any other way, or split across a line break, is absent');
+  console.log('      from that fraction and is NOT verified (#366).');
 }
 
 // External links: verify over the network with retry. Authed requests do not

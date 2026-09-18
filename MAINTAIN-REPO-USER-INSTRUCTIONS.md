@@ -363,8 +363,7 @@ Hard-won; each cost a real debugging session:
   since the config change" alone is equally consistent with an idle repository,
   and treating it as proof manufactures false alarms in exactly the repos nobody
   is touching.
-- **Scheduling tools are pre-approved via committed settings** (`global.md` →
-  *Scheduling Tools Never Prompt*, 2026-08-18): the six-tool allowlist in
+- **Scheduling tools are pre-approved via committed settings** (`global.md` → *Scheduling Tools Never Prompt*, 2026-08-18): the six-tool allowlist in
   `.claude/settings.json` loads at session start; a one-time prompt in an
   already-running session is accepted. ci-notify's webhook wake covers a
   PR-attached completion **only when that completion emits one** — success
@@ -379,8 +378,7 @@ Hard-won; each cost a real debugging session:
   default-branch SHA uniquely matches an unrelated promotion PR gets commented
   there, satisfying every condition above while the dispatching session waits.
   Where nothing will wake you a check-in is
-  the only observer (`git.md` → *PR Lifecycle*; `global.md` → *Async
-  Operations*, item 1's exception).
+  the only observer (`git.md` → *PR Lifecycle*; `global.md` → *Async Operations*, item 1's exception).
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,
   not the UI prose title.
 - **Mid-session staleness** — `CLAUDE.md` → *Mid-session change semantics*:
@@ -395,14 +393,12 @@ Hard-won; each cost a real debugging session:
   2026-07-21 alone. Failed calls are retryable, not fatal: the window rolls
   hourly, so arm ONE `send_later` completion check-in and park — that single
   check-in is also the heartbeat's next opportunity, never a reason to arm a
-  second wake for liveness (`directives/global.md` → *Status Line on Every
-  Stop*). The owner's browser
+  second wake for liveness (`directives/global.md` → *Status Line on Every Stop*). The owner's browser
   session has its own separate quota — a UI "Ready for review → Squash and
   merge" is the instant fallback. Economize the budget: small `per_page`,
   jq-summarize oversized saved payloads instead of re-fetching, WebFetch
   (server-side, own egress) for reads when the MCP is throttled. The full
-  fleet-wide rulebook is exported to every repo as `directives/git.md` →
-  *GitHub API Quota Economy* (inherited live at session start).
+  fleet-wide rulebook is exported to every repo as `directives/git.md` → *GitHub API Quota Economy* (inherited live at session start).
 - **REST and GraphQL quotas are separate, and un-drafting needs GraphQL** —
   observed 2026-08-01: `merge_pull_request` returned a clean `405 still a
   draft` (REST alive) while `update_pull_request draft:false` returned

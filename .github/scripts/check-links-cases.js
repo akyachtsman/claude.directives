@@ -17,9 +17,11 @@
 // prose and fail a valid file. That PR was reverted. The set of constructs a
 // multiline name must not cross is OPEN; do not reopen it.
 //
-// The shipped design removes the wrap before matching and keeps the original
-// single-line pattern, so most of these cases are regression pins for defects
-// that design makes unreachable. Each is labelled with the round that found it.
+// The shipped design is strictly SINGLE-LINE: the thirty-seven wrapped
+// references were put on one line in the source, and the parser never crosses a
+// break. Do not reintroduce joining or a multiline name — both were tried, both
+// took three or more review rounds against an open set of Markdown constructs,
+// and both were reverted (#365, #367). Widening what is parsed belongs in #366.
 //
 // Each case builds a throwaway tree and runs the SHIPPED checker against it, so
 // these test the file that actually ships rather than a copy of its regexes.
@@ -79,24 +81,40 @@ const parsed = (out) => {
 
 const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
 
-// ── The defect this file exists for (#363) ──────────────────────────────────
-// 1-3. A wrapped name must be SEEN: a broken one fails, a correct one counts,
-//      and the self form (no file named) wrapped for the same reason.
+// ── The defect this file exists for (#363), and how it was actually fixed ──
+// 1-2. A wrapped name is NOT parsed, and the summary says so. Thirty-seven were
+//      live here and invisible; the fix put them on ONE LINE in the source
+//      rather than teaching the parser to read across a break. Two designs tried
+//      that and both failed the same way — #365 let the name span a newline,
+//      #367 joined lines first — because the set of Markdown constructs a
+//      reference must not cross is open. This pins the honest state: a split
+//      reference is outside PARSED, and the fraction does not pretend otherwise.
 {
-  const good = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → *Gamma\n   Delta* here\n' });
-  check('wrapped name that resolves is counted',
-    good.code === 0 && parsed(good.out)?.total === 1,
-    `got ${JSON.stringify(parsed(good.out))} exit=${good.code}`);
+  const r = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → *Gamma\n   Delta* here\n' });
+  check('a name split across a line is NOT counted',
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+  check('…and the summary discloses that split references are unverified',
+    /ON ONE LINE/.test(r.out) && /NOT verified/.test(r.out), `out=${r.out.trim()}`);
+}
 
-  const bad = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → *Gamma\n   Nonexistent* here\n' });
-  check('wrapped name that does NOT resolve fails',
-    bad.code !== 0 && /Gamma Nonexistent/.test(bad.out),
-    `exit=${bad.code} out=${bad.out.trim()}`);
-
-  const self = run({ 'a.md': `${HEADINGS}\nsee → *Gamma\n   Nonexistent* here\n` });
-  check('wrapped SELF reference that does not resolve fails',
-    self.code !== 0 && /Gamma Nonexistent/.test(self.out),
-    `exit=${self.code} out=${self.out.trim()}`);
+// 3. The break can also fall between the FILENAME and its arrow, and that case
+//    is UNFIXABLE in the parser — which is the strongest argument for fixing the
+//    source. `main` matched it, because `\s*` spans a newline, and seventeen
+//    references here were matched that way. Tightening every separator to
+//    `[ \t]*` stops the explicit form matching across the break — but the self
+//    form still claims the arrow line on its own, and checks the name against
+//    the CURRENT file. The author wrote `a.md`; the checker reads b.md. No rule
+//    recovers the intent once the break is there, so the reference has to be on
+//    one line. This pins the behaviour honestly rather than claiming a fix.
+{
+  const r = run({
+    'a.md': '# Top\n\n## Other\n\ntext\n',
+    'b.md': '## Absent\n\nsee `a.md`\n → *Absent*\n',
+  });
+  check('a break before the arrow leaves a SELF reference, not a check of a.md',
+    r.code === 0 && parsed(r.out)?.total === 1 && !/a\.md/.test(r.out),
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
 // 4. Single-line references must still work — the fix must not trade one form
@@ -223,115 +241,12 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
-// 16. A wrapped name in a CRLF file still resolves — joining must not leave the
-//     carriage return embedded in the compared name.
+// 16. A CRLF file is not special: a split name is unparsed there too. The
+//     carriage return used to be joined into the middle of a logical line and
+//     retarget the reference; with no joining there is nothing to carry it.
 {
   const r = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → *Gamma\r\n   Delta* here\r\n' });
-  check('a wrapped name resolves in a CRLF file',
-    r.code === 0 && parsed(r.out)?.good === 1,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-}
-
-// ── #367 round 1: the joining step's own failure modes ─────────────────────
-// 18. A block that INTERRUPTS a paragraph must not be joined into it. Joining
-//     across one manufactures a reference out of two unrelated blocks — an HTML
-//     block produced `*draft <div>*` and FAILED a valid file, which is the
-//     dangerous direction: erring the other way only leaves a reference unseen.
-for (const [label, second] of [
-  ['an HTML block', '<div>*</div>'],
-  ['a setext underline', '==='],
-  ['a table delimiter', '---|---'],
-]) {
-  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': `The status is → *draft\n${second}\n` });
-  check(`${label} is not joined into the paragraph above it`,
-    r.code === 0 && parsed(r.out)?.total === 0,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-}
-
-// 19. The closing delimiter's right-flanking half. Without it `*Wow!*now` closed
-//     on a star CommonMark does not treat as a closer, certifying prose as a
-//     reference — the summary promises the italic form and this was not one.
-{
-  const r = run({ 'a.md': '# Top\n\n## Wow!\n\ntext\n', 'b.md': 'see `a.md` → *Wow!*now\n' });
-  check('a closing star followed by a word character does not close',
-    r.code === 0 && parsed(r.out)?.total === 0,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-}
-
-// 20. A trailing CR must be dropped, not joined. Left in, it sits between tokens
-//     the patterns separate with [ \t]*, so a CRLF wrap between a filename and
-//     its arrow stopped matching the explicit-file form and was silently
-//     re-matched as a SELF reference — resolving against the WRONG file, and
-//     reporting 1/1 when the named file has no such heading.
-{
-  const r = run({
-    'a.md': '# Top\n\n## Other\n\ntext\n',
-    'b.md': '## Absent\n\nsee `a.md`\r\n → *Absent*\r\n',
-  });
-  check('a CRLF wrap before the arrow still names the EXPLICIT file',
-    r.code !== 0 && /Absent/.test(r.out) && /a\.md/.test(r.out),
-    `exit=${r.code} out=${r.out.trim()}`);
-}
-
-// 21. The offset map must actually be USED. It was built, paid for per
-//     character, and discarded — so the fence padding and the lookbehind bought
-//     nothing and diagnostics named only the file. A failure now carries the
-//     source line, and the fence case proves padding keeps it honest.
-{
-  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': 'intro\n\nsee `a.md` → *Nope*\n' });
-  check('a failure names the source line, not just the file',
-    /b\.md:3:/.test(r.out), `out=${r.out.trim()}`);
-
-  const fenced = run({
-    'a.md': '# Top\n\n## Gamma\n\ntext\n',
-    'b.md': 'intro\n```\nfenced\nmore\n```\nsee `a.md` → *Nope*\n',
-  });
-  check('that line number survives a fence above it',
-    /b\.md:6:/.test(fenced.out), `out=${fenced.out.trim()}`);
-}
-
-// ── #367 round 2: block classification, and Unicode ────────────────────────
-// 22. A block that ends AT ITS OWN NEWLINE cannot absorb the line below it.
-//     Every block start used to leave the paragraph open, so `# → *draft`
-//     swallowed the next line and failed a valid file. That is a bug in the
-//     joining logic, not a missing marker, so it is fixed by classifying blocks
-//     as line-bound or continuable rather than by lengthening a list.
-for (const [label, first] of [
-  ['an ATX heading', '# → *draft'],
-  ['a table row', '| x → *draft'],
-]) {
-  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': `${first}\ncontinued prose*\n` });
-  check(`${label} does not absorb the line below it`,
-    r.code === 0 && parsed(r.out)?.total === 0,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-}
-
-// 23. …and a block that DOES continue must still continue. Closing every block
-//     would trade one false failure for silence on every wrapped reference
-//     inside a list, which is most of them in this repo.
-{
-  const r = run({
-    'a.md': '# Top\n\n## Gamma Delta\n\ntext\n',
-    'b.md': '- see `a.md` → *Gamma\n  Delta* here\n',
-  });
-  check('a list item still continues onto its wrapped line',
-    r.code === 0 && parsed(r.out)?.good === 1,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-}
-
-// 24. Thematic breaks come in three characters, and only two were recognised.
-for (const [label, rule] of [['-', '---'], ['_', '___'], ['*', '***']]) {
-  const r = run({ 'a.md': '# Top\n\n## Gamma\n\ntext\n', 'b.md': `x → *draft\n${rule}\ncontinued*\n` });
-  check(`a thematic break of ${label} interrupts the paragraph`,
-    r.code === 0 && parsed(r.out)?.total === 0,
-    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-}
-
-// 25. The closer's right-flanking exclusion must be Unicode-aware. Limited to
-//     [A-Za-z0-9] it accepted `*Wow!*éclair`, where the star is not a closer.
-{
-  const r = run({ 'a.md': '# Top\n\n## Wow!\n\ntext\n', 'b.md': 'see `a.md` → *Wow!*éclair\n' });
-  check('a closing star followed by a non-ASCII letter does not close',
+  check('a split name in a CRLF file is not counted either',
     r.code === 0 && parsed(r.out)?.total === 0,
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }

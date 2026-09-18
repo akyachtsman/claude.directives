@@ -168,8 +168,7 @@ Execute in order:
    claude-directives marketplace, enables the directives-toolkit plugin
    for every session on this repo, and pre-approves all six Claude Code
    Remote scheduling tools (`send_later`, `create_trigger`, `delete_trigger`,
-   `update_trigger`, `fire_trigger`, `list_triggers`) per `global.md` →
-   *Scheduling Tools Never Prompt* (owner ruling, 2026-08-18; its accepted
+   `update_trigger`, `fire_trigger`, `list_triggers`) per `global.md` → *Scheduling Tools Never Prompt* (owner ruling, 2026-08-18; its accepted
    residuals record the persistence-vector trade-off) — self-scheduling is how
    a session resumes after CI and re-arms check-ins, and per-call permission
    prompts defeat unattended monitoring. It is NOT how a session heartbeats:

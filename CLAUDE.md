@@ -83,8 +83,7 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 `claude/<name>` branches, never commit to `main`, draft PR on first push,
 squash-merge on green — no approval is sought.
 
-The gate is `git.md` →
-*Conditional Auto-Merge on Green*: a **clean** current-head Codex verdict — a response
+The gate is `git.md` → *Conditional Auto-Merge on Green*: a **clean** current-head Codex verdict — a response
 naming the head is not one, since a review with live findings names it too — or
 the reaction ladder's attestation, or any state its *unreachable-review test*
 admits, stated on the PR. The two states are an *unavailable* reply still inside
@@ -253,8 +252,7 @@ A directive repo must pass its own CI before it can be trusted downstream.
   exits silently otherwise. ⚠️ A unique match is not a guaranteed wake for YOUR
   session either — a `repository_dispatch` run's default-branch SHA can uniquely
   match an unrelated promotion PR, which gets the comment instead. Arm the
-  check-in whenever the run's SHA is not your PR's head (`git.md` → *PR
-  Lifecycle*).
+  check-in whenever the run's SHA is not your PR's head (`git.md` → *PR Lifecycle*).
 - `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments; adds
   a `codex-flagged` label when Codex raised concerns and clears it on an
   all-clear **comment** naming the current head SHA — observed working at `b64ff09`. ⚠️ A clean rerun can instead
@@ -264,8 +262,7 @@ A directive repo must pass its own CI before it can be trusted downstream.
   list). If the verdict is clean but the label persists,
   **request another review pass** rather than removing the label — a clean
   COMMENT verdict naming the head clears it automatically, observed 2026-08-27
-  on #333 at `63bed51`. Hand removal is the last resort `git.md` → *PR
-  Lifecycle* bounds by the *unreachable-review test* — an OBSERVABLE terminal
+  on #333 at `63bed51`. Hand removal is the last resort `git.md` → *PR Lifecycle* bounds by the *unreachable-review test* — an OBSERVABLE terminal
   state on the PR showing a further request cannot produce a verdict, which
   never needs a pass to have run: a request GitHub could not make or deliver is
   itself the exit. A
@@ -358,8 +355,8 @@ python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard
 node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — nothing else here runs it, and its FAILING branches (no privileges, blocked download, a binary that will not start) cannot be produced on demand, so the two effects are injected and every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
-node .github/scripts/check-links.js --internal   # offline: verifies against the working tree. Its OK line counts only the forms it PARSES — the italic `file.md` → *Name* / → *Name* — and SAYS SO on every run; a reference written any other way is absent from that fraction and is NOT verified (#366)
-node .github/scripts/check-links-cases.js        # that checker's own guard — a reference it cannot parse is absent from both sides of "N/N resolve", so partial blindness reads as full coverage. Measured: a name wrapped across a line was invisible and 20 were live here (#363). ⚠️ The scan removes hard wraps BEFORE matching and keeps the ORIGINAL single-line pattern. #365 instead let the name SPAN a newline and took six review rounds, each finding another construct it should not have spanned (a following `→ *`, the ASCII `->`, a list bullet), and the exclusion added to stop the first made the checker invent a reference out of prose and FAIL a valid file — that PR was reverted. Do not reopen that approach; widening what is parsed belongs in #366. Re-prove with CHECK_LINKS_BIN=<mutant> (a RELATIVE one resolves against the caller, not the temp tree; left relative it crashed every case and read as perfect discrimination)
+node .github/scripts/check-links.js --internal   # offline: verifies against the working tree. Strictly SINGLE-LINE — its OK line counts only the italic `file.md` → *Name* / → *Name* forms with the whole reference on ONE line, and SAYS SO on every run; anything else, including a reference split across a break, is absent from that fraction and NOT verified (#366)
+node .github/scripts/check-links-cases.js        # that checker's own guard — a reference it cannot parse is absent from both sides of "N/N resolve", so partial blindness reads as full coverage. ⚠️ DO NOT teach it to read across a line break. #365 let the name SPAN a newline (six rounds, each finding another construct it should not have crossed); #367 JOINED lines first (three more — blockquote continuations, a self-closing HTML comment, a multiline code span). Both sets are open; both were reverted. The 37 wrapped references were put on ONE LINE in the source instead, which is why the count is 187. Keep them that way: re-wrapping one makes it invisible again, and nothing detects that — the summary discloses it, nothing enforces it. A break between the FILENAME and its arrow is worse than invisible and unfixable in the parser: the self form claims the arrow line and checks the name against the CURRENT file. `main`'s `\s*` was matching 17 references across a break that way. Re-prove with CHECK_LINKS_BIN=<mutant> (a RELATIVE one resolves against the caller, not the temp tree; left relative it crashed every case and read as perfect discrimination)
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json
 diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml

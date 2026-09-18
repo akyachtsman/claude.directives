@@ -11,8 +11,7 @@ all detected by event-driven infra workflows — no session, no polling:
 
 GitHub automatically emails issue comments and label events, so the inbox is
 notified without polling. A watching session is woken by the PR-comment webhook
-(`ci-notify.yml`) on green and natively on failure — never poll (`git.md` →
-*GitHub API Quota Economy*); a single catch-up read at session start is fine.
+(`ci-notify.yml`) on green and natively on failure — never poll (`git.md` → *GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
 ⚠️ **"Woken on green" is not universal, and the exceptions need a check-in, not
 a poll.** `ci-notify` fires only on `conclusion == 'success'`, only for workflows
@@ -26,8 +25,7 @@ while the session that dispatched waits — see `git.md` → *PR Lifecycle*. So 
 **cancelled** run always ends with no wake, and a dispatched run
 or an ordinary success ends with none when both lookups come back ambiguous or
 empty. Neither of the latter two is silent by category: the branch-plus-owner
-fallback exists precisely to catch dispatched PR-branch runs. `git.md` →
-*PR Lifecycle* carries the list and the rule: **arm a check-in for any awaited outcome that can end without
+fallback exists precisely to catch dispatched PR-branch runs. `git.md` → *PR Lifecycle* carries the list and the rule: **arm a check-in for any awaited outcome that can end without
 emitting a wake, and drop it when THAT outcome is terminal.** That is not the
 polling this line bans — polling is asking for something that would have arrived
 anyway.
@@ -72,8 +70,7 @@ anyway.
 ## CI never registered on a PR
 
 No run at all is a different failure from a red run — usually nothing in the
-repo is broken. Follow the escalation ladder in `directives/git.md` → *PR
-Lifecycle* (close→reopen → empty commit → fresh branch/PR → scope diagnosis).
+repo is broken. Follow the escalation ladder in `directives/git.md` → *PR Lifecycle* (close→reopen → empty commit → fresh branch/PR → scope diagnosis).
 The distinguishing test: if push-to-main runs fire while `pull_request` runs
 don't, it's a GitHub event-delivery outage, not your workflow file — run the
 gate manually via `qa.yml`'s `workflow_dispatch` on the PR's branch, and do
@@ -86,8 +83,7 @@ not edit workflows chasing a bug that isn't there.
   comments, then request another pass and let the monitor clear it — it only
   sees a **commented** all-clear, and a clean rerun may instead arrive as a 👍
   reaction or an inline review-thread reply, so check the comments AND the
-  review threads. Hand removal is a last resort that `directives/git.md` → *PR
-  Lifecycle* bounds by its *unreachable-review test*, and needs what that rule names
+  review threads. Hand removal is a last resort that `directives/git.md` → *PR Lifecycle* bounds by its *unreachable-review test*, and needs what that rule names
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

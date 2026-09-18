@@ -146,8 +146,17 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
   const r = run({ 'b.md': '# Top\n\n## Other\n\ntext\u2192 *Missing*\n' });
   check('a word character before the arrow is not parsed, and the contract says so',
     r.code === 0 && parsed(r.out)?.total === 0
-      && /directly after a LETTER, DIGIT or _/.test(r.out),
+      && /directly after an ASCII letter, digit or _/.test(r.out),
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+  // #367 round 18: and it really is ASCII-only. JS `\w` is ASCII even under /u,
+  // so a non-ASCII letter does NOT block the arrow — `café\u2192 *Name*` IS parsed
+  // and checked. Pinned in the direction of CHECKING, with the contract's own
+  // qualification asserted, because the round-17 wording said "a LETTER" and was
+  // false for exactly this input.
+  const r2 = run({ 'b.md': '# Top\n\n## Other\n\ncaf\u00e9\u2192 *Missing*\n' });
+  check('a NON-ASCII letter does not block the arrow — parsed, and disclosed as ASCII-only',
+    r2.code !== 0 && /Missing/.test(r2.out) && /ASCII ONLY, deliberately/.test(r2.out),
+    `exit=${r2.code} out=${r2.out.trim()}`);
 }
 
 // 3c. The backtick exclusion is NOT about filenames and must stay: an arrow

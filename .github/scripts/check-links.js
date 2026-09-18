@@ -285,6 +285,9 @@ if (mode !== '--external') {
   // DISCLOSED on every run instead, exactly as the filename/arrow line break is.
   // Owner ruling, 2026-09-18. Widening what the explicit form accepts is #366.
   const XREF_SELF = new RegExp(
+    // `\w` is ASCII even under /u — `café→ *Name*` IS parsed. Deliberate and
+    // disclosed: it errs toward CHECKING, and a \p{L}/\p{N} rule here would
+    // reopen the Unicode-category chase that cost rounds 4-6 (#366).
     String.raw`(?<![\x60\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
   let xrefs = 0, badXrefs = 0;
@@ -360,9 +363,13 @@ if (mode !== '--external') {
   console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
   console.log('      An arrow written DIRECTLY after a backtick is not parsed: that is how');
   console.log('      this file documents the syntax. Put a space after a code span.');
-  console.log('      An arrow directly after a LETTER, DIGIT or _ is not parsed either, so');
-  console.log('      `text→ *Name*` is NOT counted — the self form requires a non-word');
-  console.log('      character before the arrow so it cannot match inside a word.');
+  console.log('      An arrow directly after an ASCII letter, digit or _ is not parsed');
+  console.log('      either, so `text→ *Name*` is NOT counted — the self form requires a');
+  console.log('      non-word character before it, so it cannot match inside a word.');
+  console.log('      ASCII ONLY, deliberately: JS `\\w` is ASCII even under /u, so');
+  console.log('      `café→ *Name*` IS parsed and checked. That errs toward CHECKING,');
+  console.log('      which is the safe direction, and avoids a Unicode category rule —');
+  console.log('      the thing that cost this checker three rounds (#366).');
   console.log('      Put a space before the arrow.');
   console.log('      ⚠️ A FILENAME THE EXPLICIT FORM CANNOT READ IS A SECOND ROUTE TO THE');
   console.log('      WRONG-TARGET STATE ABOVE. It accepts only [A-Za-z0-9_./-] before');

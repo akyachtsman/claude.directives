@@ -1,7 +1,7 @@
 // learnings.jsonl is append-only project memory read at session start and by
 // /diagnose. Nothing validated it, so entries drifted to types the /learn command
 // does not declare — a reader filtering by type silently misses them.
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 
 const TYPES = new Set(['pattern', 'pitfall', 'preference', 'architecture', 'tool']);
 const REQUIRED = ['ts', 'type', 'key', 'text', 'confidence', 'files'];
@@ -78,6 +78,60 @@ lines.forEach((line, i) => {
   }
   if (d.key) keys.set(d.key, (keys.get(d.key) ?? 0) + 1);
 });
+
+// ── Derived recall inventories ────────────────────────────────────────────
+// An entry whose lesson applies to EVERY file with some property carries that
+// file list by hand, and a hand-carried list goes stale silently: adding or
+// renaming a watcher leaves the entry correct-looking and the new file
+// unrouted, while this checker reports OK because it only validates shapes.
+// #368 needed FOUR successive routing corrections to one such list before the
+// derivation was written down, and even then it lived in a scratch script that
+// nothing re-runs — the fail-open of #323, one level out.
+//
+// So the property is the source of truth and the list is compared against it.
+// Add a row here when an entry's `files` is defined by a predicate rather than
+// by judgement.
+const DERIVED = [{
+  key: 'a-terminal-state-watcher-cannot-see-a-hang',
+  what: 'workflows using a terminal-state workflow_run trigger',
+  // The canonical watcher set is automations.md -> Watcher Rules; this reads
+  // the tree rather than restating it, so a new watcher is caught on arrival.
+  match: (f, body) => /\.ya?ml$/.test(f) && body.includes('types: [completed]'),
+  roots: ['.github/workflows', 'templates/workflows'],
+}];
+
+for (const rule of DERIVED) {
+  // `lines` holds raw JSONL strings; malformed ones already failed above, so
+  // parse leniently here and skip what will not read.
+  const parsed = lines.map((l, i) => { try { return [i, JSON.parse(l)]; } catch { return null; } })
+    .filter(Boolean);
+  const entries = parsed.filter(([, d]) => d && d.key === rule.key);
+  if (!entries.length) continue;           // entry retired: nothing to guard
+  const expected = rule.roots.flatMap((dir) => {
+    let names = [];
+    try { names = readdirSync(dir); } catch { return []; }
+    return names
+      .map((n) => `${dir}/${n}`)
+      .filter((p) => { try { return rule.match(p, readFileSync(p, 'utf8')); } catch { return false; } });
+  }).sort();
+  // Only the paths the predicate could ever produce are governed; an entry may
+  // also list prose files, and those are judgement, not derivation.
+  const governed = new Set(expected);
+  const universe = rule.roots;
+  for (const [i, d] of entries) {
+    const listed = (d.files ?? [])
+      .filter((f) => universe.some((d) => f.startsWith(`${d}/`)))
+      .sort();
+    const missing = expected.filter((f) => !listed.includes(f));
+    const extra = listed.filter((f) => !governed.has(f));
+    if (missing.length || extra.length) {
+      fail(`line ${i + 1}: "${rule.key}" must list exactly the ${rule.what} `
+        + `(${expected.length} found)`
+        + (missing.length ? `\n  missing: ${missing.join(', ')}` : '')
+        + (extra.length ? `\n  not matching: ${extra.join(', ')}` : ''));
+    }
+  }
+}
 
 // Duplicate keys are LEGAL — latest-key-wins is the documented rule — so this
 // reports them rather than failing, since a same-day duplicate is usually a typo.

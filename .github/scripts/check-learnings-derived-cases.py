@@ -147,7 +147,7 @@ matches("a quoted \"on\": is the trigger key",
         f'name: W\n"on":\n  workflow_run:\n    types: [completed]\n{JOB}')
 ignores("a quoted \"ON\": is a DIFFERENT key, not the trigger",
         f'name: W\n"ON":\n  workflow_run:\n    types: [completed]\n{JOB}')
-matches("a duplicated `on:` — the LAST one is what runs",
+refuses("a duplicated bare `on:` — refused, not resolved to a winner",
         f"name: W\non:\n  push:\n    branches: [main]\non:\n  workflow_run:\n    types: [completed]\n{JOB}")
 
 # ── default activity types: unexercised by the live tree, pinned here ───────
@@ -155,6 +155,14 @@ matches("`workflow_run:` with NO types: — defaults include completed",
         f"name: W\non:\n  workflow_run:\n    workflows: [X]\n{JOB}")
 matches("`workflow_run:` with an EMPTY body",
         f"name: W\non:\n  workflow_run:\n{JOB}")
+refuses("`workflow_run: \"\"` — a QUOTED empty string is not an omitted value",
+        f'name: W\non:\n  workflow_run: ""\n{JOB}')
+refuses("`types: \"\"` — likewise, not the same as omitting types:",
+        f'name: W\non:\n  workflow_run:\n    types: ""\n{JOB}')
+refuses("`types: \"   \"` — whitespace is not an activity type either",
+        f'name: W\non:\n  workflow_run:\n    types: "   "\n{JOB}')
+ignores("`types: requested` as a bare scalar is still read, not refused",
+        f"name: W\non:\n  workflow_run:\n    types: requested\n{JOB}")
 matches("`types:` present but null",
         f"name: W\non:\n  workflow_run:\n    workflows: [X]\n    types:\n{JOB}")
 
@@ -233,18 +241,23 @@ case("a malformed JSONL line is skipped, not fatal — check-learnings.js owns i
 # safe_load collapses these into separate dict keys (True and "on") and loses the
 # order entirely, so both of these were wrong before the node-level rewrite — and
 # wrong in OPPOSITE directions, which is why both orderings are pinned.
-matches("bare `on:` then quoted \"on\": — the LATER block is the trigger",
+# Which duplicate wins is UNDOCUMENTED — github/docs @ 2320b38 says nothing about
+# duplicate keys or about `on` resolving to a YAML boolean. So these refuse rather
+# than resolve: a wrong pick silently drops or invents a watcher, a refusal is loud.
+refuses("bare `on:` and quoted \"on\": together — which wins is undocumented",
         f'name: W\non: push\n"on":\n  workflow_run:\n    types: [completed]\n{JOB}')
-ignores("quoted \"on\": last overrides an earlier workflow_run block",
+refuses("...in the other order too — the refusal is not order-dependent",
         f'name: W\non:\n  workflow_run:\n    types: [completed]\n"on": push\n{JOB}')
-matches("`ON:` after a bare `on:` is still the same key, and later",
+refuses("`ON:` alongside a bare `on:` — both are the trigger key",
         f"name: W\non: push\nON:\n  workflow_run:\n    types: [completed]\n{JOB}")
-matches("a quoted \"ON\": after a real trigger does NOT override it — different key",
-        f'name: W\non:\n  workflow_run:\n    types: [completed]\n"ON": push\n{JOB}')
-matches("a duplicated `types:` inside one workflow_run — the LAST one wins",
+refuses("a duplicated `workflow_run:` inside one `on:`",
+        f"name: W\non:\n  workflow_run:\n    types: [requested]\n  \"workflow_run\":\n    types: [completed]\n{JOB}")
+refuses("a duplicated `types:` inside one workflow_run",
         f"name: W\non:\n  workflow_run:\n    types: [requested]\n    types: [completed]\n{JOB}")
-ignores("...and the reverse order loses the terminal type",
-        f"name: W\non:\n  workflow_run:\n    types: [completed]\n    types: [requested]\n{JOB}")
+matches("a quoted \"ON\": is a DIFFERENT key, so it is not a duplicate and the trigger stands",
+        f'name: W\non:\n  workflow_run:\n    types: [completed]\n"ON": push\n{JOB}')
+matches("...and a single `ON:` on its own is still the trigger key",
+        f"name: W\nON:\n  workflow_run:\n    types: [completed]\n{JOB}")
 
 # ── a file that cannot be READ must refuse, never drop out (round 20) ────────
 # Dropping it is the guard's own fail-open: an unreadable workflow is exactly the

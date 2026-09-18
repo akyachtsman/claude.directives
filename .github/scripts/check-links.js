@@ -156,51 +156,56 @@ if (mode !== '--external') {
   // because a break between the filename and its arrow left the self form to
   // claim it. The contract is now one sentence: a reference is on one line.
   const ARROW = String.raw`(?:→|->)`;
-  const NAME = String.raw`([^*\n]+?)`;
-  // Delimiters follow CommonMark's flanking rule plus a single-asterisk
-  // condition: an opening `*` is not followed by a space (nor by another `*`,
-  // which is what rejects `**bold**` — the two-asterisk runs are validly
-  // flanking and run LENGTH is what makes them strong emphasis).
+  // The name may not START with whitespace — `* *` is not a reference, and a
+  // whitespace-only name would otherwise be reported as a BROKEN one and fail a
+  // valid file. This is the old opener's `(?![\s*])` condition, restated as part
+  // of the closed rule rather than hidden in the delimiter.
+  const NAME = String.raw`([^*\n\r\s][^*\n\r]*?)`;
+  // ── The delimiter rule is a CLOSED, STATED rule — deliberately NOT CommonMark.
   //
-  // Left-flanking in full is `!after_ws && (!after_punct || before_ws ||
-  // before_punct)`, but the character BEFORE this opener is always a space, a
-  // tab, or the arrow itself (U+2192 and `>` are both Sm, i.e. punctuation), so
-  // the parenthesis is always true and the rule collapses to "not followed by
-  // whitespace" — which is what this is. Measured, not argued: 128/128 agreeing
-  // with commonmark.js over every general category after the opener, for each
-  // of the four characters that can precede it here.
-  const OPEN = String.raw`\*(?![\s*])`;
-  // Right-flanking, as the reference implementation COMPUTES it (commonmark.js
-  // `scanDelims`), not as the spec prose reads:
+  // It was CommonMark's flanking rule for three rounds. Rounds 4, 5 and 6 each
+  // found a different cause violating one invariant — *the counted set equals
+  // the set CommonMark renders as emphasis*:
   //
-  //   right_flanking = !before_ws && (!before_punct || after_ws || after_punct)
-  //   whitespace  = JS `\s`
-  //   punctuation = \p{P} | \p{S}   (its ASCII list is a subset of those)
+  //     round 4   implemented only half of right-flanking
+  //     round 5   wrong category set (marks, ZWJ and private-use are not
+  //               punctuation; writing the spec's PROSE definition scored 176
+  //               disagreements against the bug's 95)
+  //     round 6   wrong granularity — scanDelims reads neighbours with charAt,
+  //               so it sees a lone surrogate; lookarounds under `u` classify
+  //               the whole code point
   //
-  // Both halves were got wrong once each, in opposite directions, and reading
-  // the spec text is what produced the second:
+  // Before escalating I probed ten axes the 1056-pair sweep never touched.
+  // SEVEN disagreed, three of them mattering: an escaped closer (`*Name\* x*`),
+  // a code span holding a star (`*Na\x60*\x60me*`), and a closer that starts a
+  // delimiter run (`*Name**bold**`, which CommonMark renders with NO emphasis at
+  // all while this claimed 1/1). Backslash escapes, code spans, delimiter-run
+  // length — inline STRUCTURE, which is open in exactly the way Markdown BLOCK
+  // structure was open in #365. The same mechanism, one level down.
   //
-  //   - PUNCTUATION is not "anything that is not a letter or digit". Marks,
-  //     ZWJ and private-use characters are none of the three, so a closer after
-  //     one is right-flanking with no condition on what follows. Taking the
-  //     complement of `[\p{L}\p{N}]` was TOO STRICT on 40 pairs (a real broken
-  //     reference dropped from both counts) and TOO LOOSE on 55 (punctuation
-  //     then a mark counted as a verified reference, which CommonMark renders
-  //     as literal text). The loose direction is the one this file exists to
-  //     prevent.
-  //   - WHITESPACE is JS `\s`, not the spec's "Zs, tab, LF, FF or CR". Writing
-  //     the prose definition out as `[\t\n\f\r\p{Zs}]` scored WORSE than the
-  //     bug it replaced — 176 disagreements against 95 — because `\s` also
-  //     covers U+000B, U+2028, U+2029 and U+FEFF, and the implementation treats
-  //     all four as whitespace.
+  // Nothing ever required that invariant. #363 asked for the fraction to stop
+  // lying, and two things already do that with zero findings in six rounds: the
+  // references are on one line (150 -> 187), and the summary discloses what
+  // PARSED means. The invariant was adopted at round 4 in response to a finding
+  // about one input, and failed three times.
   //
-  // Derived by sweeping 1056 (char before x char after) pairs — one per Unicode
-  // general category on each side, plus every whitespace character that
-  // separates `\s` from Zs — against commonmark.js 0.31.2: 0 disagreements.
-  // Re-derive that way rather than from the prose; `check-links-cases.js` pins
-  // one case per disagreement class found.
-  const PUNCT = String.raw`\p{P}\p{S}`;
-  const CLOSE = String.raw`(?:(?<![\s${PUNCT}])\*|(?<=[${PUNCT}])\*(?=[\s${PUNCT}]|$))`;
+  // So the open set is replaced by a closed one. A reference is:
+  //
+  //     a single `*`, then text with no `*` and no line ending, then a single `*`
+  //
+  // Single means not part of a run, which is what keeps `**bold**` out. That is
+  // the whole rule; it is decidable by reading it, and no construct can be
+  // "missing" from it, because it does not claim to track anything external.
+  // A construct that CommonMark renders differently is OUT OF SCOPE and
+  // disclosed on every run, not silently mishandled. All 187 references here
+  // satisfy it.
+  //
+  // `\r` joins `\n` in the exclusion: commonmark's reLineEnding is
+  // /\r\n|\n|\r/, and a lone CR inside a name let the checker manufacture
+  // "draftcontinued prose" out of two lines and FAIL A VALID FILE — byte for
+  // byte the same invented string as round 2, from a different cause.
+  const OPEN = String.raw`(?<!\*)\*(?!\*)`;
+  const CLOSE = String.raw`\*(?!\*)`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file). The backtick is
   // \x60: `u` mode, required by \p{…}, rejects \` as an invalid identity escape.
   const XREF_FILE = new RegExp(
@@ -271,6 +276,13 @@ if (mode !== '--external') {
   console.log(`OK:   ${xrefs - badXrefs}/${xrefs} PARSED section cross-references resolve to a heading`);
   console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms, ON ONE LINE.');
   console.log('      A reference written any other way is absent from that fraction.');
+  console.log('      The delimiters are a REPO CONVENTION, not CommonMark emphasis:');
+  console.log('        a single `*`, text with no `*` and no line ending, a single `*`.');
+  console.log('      A construct CommonMark renders differently — an escaped closer,');
+  console.log('      a code span holding a star, a closer starting a delimiter run — is');
+  console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');
+  console.log('      Markdown parser was an OPEN set: three rounds, three causes, and a');
+  console.log('      ten-axis probe then found seven more disagreements. See #366.');
   console.log('      A split reference is worse than absent, in two different ways:');
   console.log('        - a name broken across a line is not parsed, so it is NOT counted;');
   console.log('        - a break between a filename and its arrow IS counted — the arrow line');

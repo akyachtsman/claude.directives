@@ -265,8 +265,8 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     `exit=${r.code} out=${r.out.trim()}`);
 
   const punct = run({ 'a.md': '# Top\n\n## Wow!\n\ntext\n', 'b.md': 'see `a.md` → *Wow!*now\n' });
-  check('…but a closer after PUNCTUATION still does not',
-    punct.code === 0 && parsed(punct.out)?.total === 0,
+  check('a closer after punctuation IS parsed under the closed rule',
+    parsed(punct.out)?.total === 1,
     `exit=${punct.code} got ${JSON.stringify(parsed(punct.out))}`);
 
   const tail = run({
@@ -341,39 +341,53 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     zwj.code !== 0 && /name/.test(zwj.out),
     `exit=${zwj.code} out=${zwj.out.trim()}`);
 
-  // 22. TOO LOOSE, and the worse direction: punctuation before the closer and
-  //     a MARK after it. Round 4 counted this as a verified reference because
-  //     a mark is not a letter or digit; CommonMark renders it as literal
-  //     text, so the checker was reporting coverage it did not have.
+  // A BARE CR inside a name. commonmark's reLineEnding is /\r\n|\n|\r/, and the
+  // name used to exclude only \n — so a lone CR let the checker splice two lines
+  // into one manufactured name ("draftcontinued prose") and FAIL A VALID FILE.
+  // Byte for byte the same invented string as round 2 of this PR, from a wholly
+  // different cause, which is what made it worth pinning rather than just fixing.
+  const cr = run({
+    'a.md': '# Top\n\n## draft\n\ntext\n',
+    'b.md': 'see `a.md` \u2192 *draft*\rcontinued prose\n',
+  });
+  check('a bare CR ends a name, so a valid file is not failed',
+    cr.code === 0 && parsed(cr.out)?.good === 1,
+    `exit=${cr.code} out=${cr.out.trim()}`);
+
+  // 22-24. These pinned CommonMark's flanking rule, which the checker no longer
+  //     implements. Rounds 4, 5 and 6 each broke that invariant from a different
+  //     cause, and a ten-axis probe then found SEVEN more disagreements — an open
+  //     set. The closed rule replaces it, so all three inputs below are now
+  //     PARSED and enter the fraction.
+  //
+  //     They are kept, INVERTED, because they are the clearest statement of what
+  //     the trade costs: each renders as literal text in CommonMark and is
+  //     counted here anyway. Deleting them would leave the divergence
+  //     undocumented in the one place able to demonstrate it. They assert only
+  //     that the reference is PARSED — whether it resolves is the fixture's
+  //     headings, not the rule.
   const loose = run({
     'a.md': '# Top\n\n## Wow!\n\ntext\n',
     'b.md': 'see `a.md` → *Wow!*́x\n',
   });
-  check('punctuation then a MARK is not a reference, and is not counted',
-    loose.code === 0 && parsed(loose.out)?.total === 0,
+  check('punctuation then a MARK: literal text to CommonMark, parsed here',
+    parsed(loose.out)?.total === 1,
     `exit=${loose.code} got ${JSON.stringify(parsed(loose.out))}`);
 
-  // 23. NOT an overcorrection: symbols ARE punctuation here. commonmark.js
-  //     `rePunctuation` is `\p{P}|\p{S}`, so `*Wow<U+263A>*next` is literal text
-  //     and must stay outside the count. Treating symbols as non-punctuation
-  //     would have made this a counted reference.
   const sym = run({
     'a.md': '# Top\n\n## Other\n\ntext\n',
     'b.md': 'see `a.md` → *Wow☺*next\n',
   });
-  check('a SYMBOL counts as punctuation, so this stays uncounted',
-    sym.code === 0 && parsed(sym.out)?.total === 0,
+  check('a SYMBOL in the name: literal text to CommonMark, parsed here',
+    parsed(sym.out)?.total === 1,
     `exit=${sym.code} got ${JSON.stringify(parsed(sym.out))}`);
 
-  // 24. NOT an overcorrection: U+2028 is whitespace to the implementation even
-  //     though the spec's prose says whitespace is Zs plus tab/LF/FF/CR, and
-  //     U+2028 is Zl. Spelling the prose out longhand made this a reference.
   const zl = run({
     'a.md': '# Top\n\n## Other\n\ntext\n',
     'b.md': 'see `a.md` → *name *next\n',
   });
-  check('U+2028 before the closer is WHITESPACE, so this stays uncounted',
-    zl.code === 0 && parsed(zl.out)?.total === 0,
+  check('U+2028 stays inside the name — only \\n and \\r end it',
+    parsed(zl.out)?.total === 1,
     `exit=${zl.code} got ${JSON.stringify(parsed(zl.out))}`);
 }
 

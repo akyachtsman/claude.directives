@@ -165,7 +165,15 @@ if (mode !== '--external') {
   // rejects `*Wow!*now` and `*   *` without either being a special case, and it
   // is Unicode-aware: `[A-Za-z0-9]` accepted `*Wow!*éclair`.
   const OPEN = String.raw`\*(?![\s*])`;
-  const CLOSE = String.raw`(?<![\s*])\*(?![\p{L}\p{N}])`;
+  // CommonMark's right-flanking rule in full, not the half of it I shipped
+  // twice: a closer must not follow a space, and the restriction on what may
+  // FOLLOW it applies only when the character BEFORE it is punctuation. An
+  // unconditional `(?![\p{L}\p{N}])` rejects `*Missing*next`, which CommonMark
+  // accepts because `g` is neither space nor punctuation — so a real, broken
+  // reference was dropped from BOTH counts and CI stayed green. "Stricter than
+  // the spec, in the safe direction" was wrong: it is only safe when the input
+  // is genuinely unparseable, and that one parses.
+  const CLOSE = String.raw`(?:(?<=[\p{L}\p{N}])\*|(?<=[^\s*])\*(?![\p{L}\p{N}]))`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file). The backtick is
   // \x60: `u` mode, required by \p{…}, rejects \` as an invalid identity escape.
   const XREF_FILE = new RegExp(
@@ -235,8 +243,13 @@ if (mode !== '--external') {
   // enumerated — #365 proved that list cannot be built by pattern-matching.
   console.log(`OK:   ${xrefs - badXrefs}/${xrefs} PARSED section cross-references resolve to a heading`);
   console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms, ON ONE LINE.');
-  console.log('      A reference written any other way, or split across a line break, is absent');
-  console.log('      from that fraction and is NOT verified (#366).');
+  console.log('      A reference written any other way is absent from that fraction.');
+  console.log('      A split reference is worse than absent, in two different ways:');
+  console.log('        - a name broken across a line is not parsed, so it is NOT counted;');
+  console.log('        - a break between a filename and its arrow IS counted — the arrow line');
+  console.log('          is read as a SELF reference and checked against THIS file, not the');
+  console.log('          one named, so it can report resolved against the wrong target.');
+  console.log('      Keep every reference on one line. Widening what is parsed: #366.');
 }
 
 // External links: verify over the network with retry. Authed requests do not

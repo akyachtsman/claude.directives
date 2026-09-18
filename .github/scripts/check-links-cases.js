@@ -94,8 +94,8 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
   check('a name split across a line is NOT counted',
     r.code === 0 && parsed(r.out)?.total === 0,
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
-  check('…and the summary discloses that split references are unverified',
-    /ON ONE LINE/.test(r.out) && /NOT verified/.test(r.out), `out=${r.out.trim()}`);
+  check('…and the summary discloses that a split name is not counted',
+    /ON ONE LINE/.test(r.out) && /NOT counted/.test(r.out), `out=${r.out.trim()}`);
 }
 
 // 3. The break can also fall between the FILENAME and its arrow, and that case
@@ -251,6 +251,46 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
+// ── #367 round 4 ───────────────────────────────────────────────────────────
+// 18. The closer's right-flanking restriction applies ONLY when the character
+//     before it is punctuation. Unconditional, it rejected `*Missing*next` —
+//     which CommonMark accepts, because `g` is neither space nor punctuation —
+//     so a real BROKEN reference was dropped from both counts and CI stayed
+//     green. I defended that strictness twice as "the safe direction"; it is
+//     only safe when the input is genuinely unparseable, and that one parses.
+{
+  const r = run({ 'a.md': '# Top\n\n## Other\n\ntext\n', 'b.md': 'see `a.md` → *Missing*next\n' });
+  check('a closer after a LETTER closes even before a word character',
+    r.code !== 0 && /Missing/.test(r.out),
+    `exit=${r.code} out=${r.out.trim()}`);
+
+  const punct = run({ 'a.md': '# Top\n\n## Wow!\n\ntext\n', 'b.md': 'see `a.md` → *Wow!*now\n' });
+  check('…but a closer after PUNCTUATION still does not',
+    punct.code === 0 && parsed(punct.out)?.total === 0,
+    `exit=${punct.code} got ${JSON.stringify(parsed(punct.out))}`);
+
+  const tail = run({
+    'a.md': '# Top\n\n## Well-Known Thing-\n\ntext\n',
+    'b.md': 'see `a.md` → *Well-Known Thing-*\n',
+  });
+  check('…and a name ending in punctuation still parses at end of line',
+    tail.code === 0 && parsed(tail.out)?.good === 1,
+    `exit=${tail.code} got ${JSON.stringify(parsed(tail.out))}`);
+}
+
+// 19. The scope disclosure must distinguish the two split cases. It said every
+//     split reference is absent and unverified — but a filename/arrow split IS
+//     counted, as a self reference against the WRONG file. A disclosure whose
+//     whole job is honesty stating something false about its own coverage is
+//     the same defect as the fraction that started all this.
+{
+  const r = run({ 'a.md': HEADINGS, 'b.md': 'see `a.md` → Gamma Delta here\n' });
+  check('the summary names the not-counted split case',
+    /NOT counted/.test(r.out), `out=${r.out.trim()}`);
+  check('the summary names the counted-against-the-wrong-file split case',
+    /SELF reference/.test(r.out) && /wrong target/.test(r.out), `out=${r.out.trim()}`);
+}
+
 // 17. The summary states its SCOPE every run. Without that line "187/187
 //     resolve" reads as "every reference is checked", which is the half of #363
 //     no pattern can fix: the set of spellings this parser cannot see is open,
@@ -261,7 +301,7 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     r.code === 0 && parsed(r.out)?.total === 0,
     `got ${JSON.stringify(parsed(r.out))} exit=${r.code}`);
   check('the summary discloses that PARSED is not ALL',
-    /PARSED/.test(r.out) && /NOT verified/.test(r.out), `out=${r.out.trim()}`);
+    /PARSED/.test(r.out) && /absent from that fraction/.test(r.out), `out=${r.out.trim()}`);
 }
 
 if (failed) {

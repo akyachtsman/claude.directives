@@ -160,7 +160,8 @@ def _is_null(node):
 #     * NO root key resolving to `on`                       -> not a watcher
 #     * a root that is not a mapping at all                 -> not a watcher
 #     * `on:` holding no `workflow_run` key                 -> not a watcher
-#     * `on:` that is not a mapping (`on: push`, `on: [x]`) -> not a watcher
+#     * `on:` as a bare event name, or a sequence of them   -> watcher iff one
+#       (`on: workflow_run`, `on: [push, workflow_run]`)       of them is it
 #     * `workflow_run:` with NO value                       -> defaults apply
 #     * `types` ABSENT                                      -> defaults apply
 #     * `types` as a SEQUENCE of documented activity types  -> membership
@@ -171,6 +172,8 @@ def _is_null(node):
 #     * `workflow_run` as a non-null scalar, or as a sequence
 #     * `types` PRESENT but null, or any scalar, or a mapping
 #     * a sequence item that is not a scalar, or not a documented activity type
+#     * an `on:` sequence entry that is not a scalar, or an `on:` that is none of
+#       mapping / event name / sequence of them
 #   (The caller adds two more refusals of its own, for a candidate that is a
 #    SYMLINK and for one that cannot be read at all. They are listed at that
 #    site, not here, because they are about the file rather than its contents.)
@@ -182,7 +185,7 @@ def _is_null(node):
 # found the same mechanism — a path reaching a verdict without being enumerated.
 #
 # check-learnings-derived-cases.py counts the `return` and `raise` nodes here
-# (5 and 11) so a branch cannot be ADDED OR REMOVED without this list being
+# (7 and 13) so a branch cannot be ADDED OR REMOVED without this list being
 # updated to describe it.
 #
 # ⚠️ That is a drift detector, NOT a proof this list is exhaustive. It counts
@@ -228,7 +231,31 @@ def terminal_state_watcher(path, text):
         )
     on = ons[0]
 
-    # `on: push` and `on: [push]` are not mappings, so no workflow_run can exist.
+    # `on: workflow_run` and `on: [push, workflow_run]` are the SHORTHAND forms —
+    # an event named with no configuration. They subscribe to the event exactly as
+    # a mapping entry does, and because no `types` keyword is used, the documented
+    # default applies, the same reasoning as a null `workflow_run:` body.
+    #
+    # An earlier version returned False for any non-mapping `on:`, and the
+    # enumeration said "`on:` that is not a mapping -> not a watcher". That bullet
+    # was not merely incomplete, it was WRONG: it is only true when the event named
+    # is not workflow_run (Codex, #368 round 26).
+    if not isinstance(on, yaml.MappingNode):
+        if isinstance(on, yaml.ScalarNode):
+            return on.value == "workflow_run"
+        if isinstance(on, yaml.SequenceNode):
+            for item in on.value:
+                if not isinstance(item, yaml.ScalarNode):
+                    raise Unreadable(
+                        f"{path}: an entry in the `on:` sequence is a "
+                        f"{type(item).__name__}, not an event name."
+                    )
+            return any(item.value == "workflow_run" for item in on.value)
+        raise Unreadable(
+            f"{path}: `on:` is a {type(on).__name__}, which is neither a mapping, "
+            f"an event name, nor a sequence of them."
+        )
+
     wrs = _mapping_get_all(on, "workflow_run")
     if not wrs:
         return False

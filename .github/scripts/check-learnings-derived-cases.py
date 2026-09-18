@@ -91,8 +91,8 @@ passes = 0
 # strong). The behaviour cases below are what establish that a branch is
 # reachable only by the inputs it should be; this catches the narrower case of
 # somebody adding a fifth verdict and not saying so.
-VERDICT_PATHS = 5
-REFUSAL_PATHS = 11
+VERDICT_PATHS = 7
+REFUSAL_PATHS = 13
 
 
 def check_enumeration_is_exhaustive():
@@ -274,7 +274,11 @@ ignores("workflow_run inside a `run: |` body is not a trigger",
         "name: W\non:\n  push:\njobs:\n  j:\n    runs-on: ubuntu-latest\n"
         "    timeout-minutes: 5\n    steps:\n      - run: |\n          echo 'on:'\n"
         "          echo '  workflow_run:'\n          echo '    types: [completed]'\n")
-ignores("`on: push` — a scalar cannot carry workflow_run", f"name: W\non: push\n{JOB}")
+ignores("`on: push` — a scalar naming another event", f"name: W\non: push\n{JOB}")
+matches("`on: workflow_run` — the SHORTHAND form is still a watcher (round 26)",
+        f"name: W\non: workflow_run\n{JOB}")
+matches("`on: [push, workflow_run]` — shorthand in a sequence",
+        f"name: W\non: [push, workflow_run]\n{JOB}")
 ignores("`on: [push, pull_request]` — nor can a sequence",
         f"name: W\non: [push, pull_request]\n{JOB}")
 ignores("a workflow with no `on:` at all", f"name: W\n{JOB}")

@@ -224,10 +224,12 @@ if (mode !== '--external') {
   // disclosed on every run, not silently mishandled. All 187 references here
   // satisfy it.
   //
-  // `\r` joins `\n` in the exclusion: commonmark's reLineEnding is
-  // /\r\n|\n|\r/, and a lone CR inside a name let the checker manufacture
-  // "draftcontinued prose" out of two lines and FAIL A VALID FILE — byte for
-  // byte the same invented string as round 2, from a different cause.
+  // "No line ending" means any of commonmark's (/\r\n|\n|\r/), not just LF —
+  // but the pattern only excludes `\n`, because readSource() has already
+  // normalised the others away. See its comment; do not add `\r` back here.
+  //
+  // The name also may not START with whitespace, which is stated in the emitted
+  // contract because it is part of the rule a reader is entitled to rely on.
   const OPEN = String.raw`(?<!\*)\*(?!\*)`;
   const CLOSE = String.raw`\*(?!\*)`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file). The backtick is
@@ -302,7 +304,9 @@ if (mode !== '--external') {
   console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms, ON ONE LINE.');
   console.log('      A reference written any other way is absent from that fraction.');
   console.log('      The delimiters are a REPO CONVENTION, not CommonMark emphasis:');
-  console.log('        a single `*`, text with no `*` and no line ending, a single `*`.');
+  console.log('        a single `*`, then text that does not START with whitespace and');
+  console.log('        contains no `*` and no line ending, then a single `*`.');
+  console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
   console.log('      A construct CommonMark renders differently — an escaped closer,');
   console.log('      a code span holding a star, a closer starting a delimiter run — is');
   console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');

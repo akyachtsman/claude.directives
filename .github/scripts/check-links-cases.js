@@ -343,6 +343,17 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     zwj.code !== 0 && /name/.test(zwj.out),
     `exit=${zwj.code} out=${zwj.out.trim()}`);
 
+  // The leading-whitespace condition, which the emitted contract now states.
+  // `* *` alone would be a whitespace-only NAME; this is the general form, and
+  // it must be absent from the fraction rather than counted as broken.
+  const lead = run({
+    'a.md': '# Top\n\n## Name\n\ntext\n',
+    'b.md': 'see `a.md` \u2192 * Name*\n',
+  });
+  check('a name starting with whitespace is NOT parsed, as the contract says',
+    lead.code === 0 && parsed(lead.out)?.total === 0,
+    `exit=${lead.code} out=${lead.out.trim()}`);
+
   // A BARE CR inside a name. commonmark's reLineEnding is /\r\n|\n|\r/, and the
   // name used to exclude only \n — so a lone CR let the checker splice two lines
   // into one manufactured name ("draftcontinued prose") and FAIL A VALID FILE.
@@ -350,7 +361,7 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
   // different cause, which is what made it worth pinning rather than just fixing.
   // The CR must fall INSIDE the candidate name, between an unmatched opener and
   // a later closer. An earlier version of this case put it after an already
-  // closed `*draft*`, so it passed with both `\r` exclusions removed — it pinned
+  // closed `*draft*`, so it passed even with CR handling removed — it pinned
   // nothing (Codex, #367 round 7). Here the name would be "draft\r\rcontinued
   // prose" if CR did not end it, which is a manufactured reference that fails a
   // valid file.
@@ -406,7 +417,7 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     'a.md': '# Top\n\n## Other\n\ntext\n',
     'b.md': 'see `a.md` → *name *next\n',
   });
-  check('U+2028 stays inside the name — only \\n and \\r end it',
+  check('U+2028 stays inside the name — only a real line ending closes it',
     parsed(zl.out)?.total === 1,
     `exit=${zl.code} got ${JSON.stringify(parsed(zl.out))}`);
 }

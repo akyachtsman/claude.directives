@@ -304,6 +304,79 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     /PARSED/.test(r.out) && /absent from that fraction/.test(r.out), `out=${r.out.trim()}`);
 }
 
+// -- #367 round 5 -----------------------------------------------------------
+// 20-24. Round 4 replaced "not followed by a letter or digit" with the same
+//     assumption one level in: that every character which is not a letter or
+//     digit is PUNCTUATION. It is not. Marks, ZWJ and private-use characters
+//     are neither punctuation nor whitespace, so a closer after one is
+//     right-flanking with nothing required of what follows.
+//
+//     The rule now mirrors commonmark.js `scanDelims` exactly -- whitespace is
+//     JS `\s`, punctuation is `\p{P}|\p{S}` -- established by sweeping 1056
+//     (char before x char after) pairs against commonmark.js 0.31.2, where the
+//     round-4 form disagreed on 95 and this one on 0. Each case below pins one
+//     disagreement class. Two of them exist to stop an OVERCORRECTION: the
+//     finding that prompted this round also said to treat symbols as
+//     non-punctuation, and writing the spec's prose definition of whitespace
+//     out longhand scored WORSE than the bug (176 disagreements against 95).
+{
+  // 20. TOO STRICT: a mark before the closer. `Cafe` + U+0301 is what an
+  //     editor that does not normalise produces, and the reference vanished
+  //     from BOTH sides of the fraction -- the exact defect this file is for.
+  const mark = run({
+    'a.md': '# Top\n\n## Other\n\ntext\n',
+    'b.md': 'see `a.md` → *Café*next\n',
+  });
+  check('a closer after a MARK closes, so the broken reference is caught',
+    mark.code !== 0 && /Cafe/.test(mark.out),
+    `exit=${mark.code} out=${mark.out.trim()}`);
+
+  // 21. TOO STRICT: a format character (ZWJ) before the closer. Same class,
+  //     different general category, and neither is reachable from `\p{L}\p{N}`.
+  const zwj = run({
+    'a.md': '# Top\n\n## Other\n\ntext\n',
+    'b.md': 'see `a.md` → *name‍*next\n',
+  });
+  check('a closer after a FORMAT character closes too',
+    zwj.code !== 0 && /name/.test(zwj.out),
+    `exit=${zwj.code} out=${zwj.out.trim()}`);
+
+  // 22. TOO LOOSE, and the worse direction: punctuation before the closer and
+  //     a MARK after it. Round 4 counted this as a verified reference because
+  //     a mark is not a letter or digit; CommonMark renders it as literal
+  //     text, so the checker was reporting coverage it did not have.
+  const loose = run({
+    'a.md': '# Top\n\n## Wow!\n\ntext\n',
+    'b.md': 'see `a.md` → *Wow!*́x\n',
+  });
+  check('punctuation then a MARK is not a reference, and is not counted',
+    loose.code === 0 && parsed(loose.out)?.total === 0,
+    `exit=${loose.code} got ${JSON.stringify(parsed(loose.out))}`);
+
+  // 23. NOT an overcorrection: symbols ARE punctuation here. commonmark.js
+  //     `rePunctuation` is `\p{P}|\p{S}`, so `*Wow<U+263A>*next` is literal text
+  //     and must stay outside the count. Treating symbols as non-punctuation
+  //     would have made this a counted reference.
+  const sym = run({
+    'a.md': '# Top\n\n## Other\n\ntext\n',
+    'b.md': 'see `a.md` → *Wow☺*next\n',
+  });
+  check('a SYMBOL counts as punctuation, so this stays uncounted',
+    sym.code === 0 && parsed(sym.out)?.total === 0,
+    `exit=${sym.code} got ${JSON.stringify(parsed(sym.out))}`);
+
+  // 24. NOT an overcorrection: U+2028 is whitespace to the implementation even
+  //     though the spec's prose says whitespace is Zs plus tab/LF/FF/CR, and
+  //     U+2028 is Zl. Spelling the prose out longhand made this a reference.
+  const zl = run({
+    'a.md': '# Top\n\n## Other\n\ntext\n',
+    'b.md': 'see `a.md` → *name *next\n',
+  });
+  check('U+2028 before the closer is WHITESPACE, so this stays uncounted',
+    zl.code === 0 && parsed(zl.out)?.total === 0,
+    `exit=${zl.code} got ${JSON.stringify(parsed(zl.out))}`);
+}
+
 if (failed) {
   console.error(`\n${failed} case(s) failed`);
   process.exit(1);

@@ -160,20 +160,47 @@ if (mode !== '--external') {
   // Delimiters follow CommonMark's flanking rule plus a single-asterisk
   // condition: an opening `*` is not followed by a space (nor by another `*`,
   // which is what rejects `**bold**` — the two-asterisk runs are validly
-  // flanking and run LENGTH is what makes them strong emphasis), and a closing
-  // `*` is neither preceded by a space nor followed by a letter or digit. That
-  // rejects `*Wow!*now` and `*   *` without either being a special case, and it
-  // is Unicode-aware: `[A-Za-z0-9]` accepted `*Wow!*éclair`.
+  // flanking and run LENGTH is what makes them strong emphasis).
+  //
+  // Left-flanking in full is `!after_ws && (!after_punct || before_ws ||
+  // before_punct)`, but the character BEFORE this opener is always a space, a
+  // tab, or the arrow itself (U+2192 and `>` are both Sm, i.e. punctuation), so
+  // the parenthesis is always true and the rule collapses to "not followed by
+  // whitespace" — which is what this is. Measured, not argued: 128/128 agreeing
+  // with commonmark.js over every general category after the opener, for each
+  // of the four characters that can precede it here.
   const OPEN = String.raw`\*(?![\s*])`;
-  // CommonMark's right-flanking rule in full, not the half of it I shipped
-  // twice: a closer must not follow a space, and the restriction on what may
-  // FOLLOW it applies only when the character BEFORE it is punctuation. An
-  // unconditional `(?![\p{L}\p{N}])` rejects `*Missing*next`, which CommonMark
-  // accepts because `g` is neither space nor punctuation — so a real, broken
-  // reference was dropped from BOTH counts and CI stayed green. "Stricter than
-  // the spec, in the safe direction" was wrong: it is only safe when the input
-  // is genuinely unparseable, and that one parses.
-  const CLOSE = String.raw`(?:(?<=[\p{L}\p{N}])\*|(?<=[^\s*])\*(?![\p{L}\p{N}]))`;
+  // Right-flanking, as the reference implementation COMPUTES it (commonmark.js
+  // `scanDelims`), not as the spec prose reads:
+  //
+  //   right_flanking = !before_ws && (!before_punct || after_ws || after_punct)
+  //   whitespace  = JS `\s`
+  //   punctuation = \p{P} | \p{S}   (its ASCII list is a subset of those)
+  //
+  // Both halves were got wrong once each, in opposite directions, and reading
+  // the spec text is what produced the second:
+  //
+  //   - PUNCTUATION is not "anything that is not a letter or digit". Marks,
+  //     ZWJ and private-use characters are none of the three, so a closer after
+  //     one is right-flanking with no condition on what follows. Taking the
+  //     complement of `[\p{L}\p{N}]` was TOO STRICT on 40 pairs (a real broken
+  //     reference dropped from both counts) and TOO LOOSE on 55 (punctuation
+  //     then a mark counted as a verified reference, which CommonMark renders
+  //     as literal text). The loose direction is the one this file exists to
+  //     prevent.
+  //   - WHITESPACE is JS `\s`, not the spec's "Zs, tab, LF, FF or CR". Writing
+  //     the prose definition out as `[\t\n\f\r\p{Zs}]` scored WORSE than the
+  //     bug it replaced — 176 disagreements against 95 — because `\s` also
+  //     covers U+000B, U+2028, U+2029 and U+FEFF, and the implementation treats
+  //     all four as whitespace.
+  //
+  // Derived by sweeping 1056 (char before x char after) pairs — one per Unicode
+  // general category on each side, plus every whitespace character that
+  // separates `\s` from Zs — against commonmark.js 0.31.2: 0 disagreements.
+  // Re-derive that way rather than from the prose; `check-links-cases.js` pins
+  // one case per disagreement class found.
+  const PUNCT = String.raw`\p{P}\p{S}`;
+  const CLOSE = String.raw`(?:(?<![\s${PUNCT}])\*|(?<=[${PUNCT}])\*(?=[\s${PUNCT}]|$))`;
   // `foo.md` → *Bar*  |  `foo.md` -> *Bar*   (explicit file). The backtick is
   // \x60: `u` mode, required by \p{…}, rejects \` as an invalid identity escape.
   const XREF_FILE = new RegExp(

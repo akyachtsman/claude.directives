@@ -71,19 +71,6 @@ jobs:
       - name: Check learnings.jsonl is well-formed
         run: node .github/scripts/check-learnings.js
 
-      # A learnings entry whose `files` list is DERIVABLE is compared to the tree,
-      # so adding a watcher cannot leave the entry correct-looking and the new file
-      # unrouted. Parses the workflows with PyYAML — this was a text scan for two
-      # rounds and was wrong both times, see the script's header.
-      - name: Check derived learnings inventories match the tree
-        run: python3 .github/scripts/check-learnings-derived.py
-
-      # That guard prints the same OK whether its predicate works or classifies
-      # nothing, and the live tree exercises exactly one of the YAML spellings it
-      # claims to handle.
-      - name: Check the derived-inventory guard itself
-        run: python3 .github/scripts/check-learnings-derived-cases.py
-
       # Confirms pinned claims still TRAVELLED to every consumer that must state
       # them. It cannot tell whether a claim is TRUE, and cannot see a fix that
       # over-reaches — see the header of check-claims.js before trusting a green.

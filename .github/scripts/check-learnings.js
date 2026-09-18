@@ -79,19 +79,6 @@ lines.forEach((line, i) => {
   if (d.key) keys.set(d.key, (keys.get(d.key) ?? 0) + 1);
 });
 
-// The DERIVED-inventory check that lived here is now
-// .github/scripts/check-learnings-derived.py. It asked whether a workflow watches
-// `workflow_run` for `completed`, which is a question about YAML STRUCTURE, and it
-// answered by scanning text. That was wrong twice in the same way (a commented-out
-// snippet counted; `types: [ completed ]`, `types : [completed]`, a quoted
-// `'workflow_run':` key and the inline flow form all read as no-match), and
-// workflow-ref-guard.py's header already carried the verdict on that whole approach
-// before this reintroduced it: do not hand-roll a YAML scan. Moved rather than
-// patched a third time, per global.md -> Review Rounds Have to Terminate.
-//
-// Keep this file to SHAPE validation, which needs no parser. Add a structural
-// question to the Python guard, not here.
-
 // Duplicate keys are LEGAL — latest-key-wins is the documented rule — so this
 // reports them rather than failing, since a same-day duplicate is usually a typo.
 for (const [k, n] of keys) if (n > 1) console.log(`note: key "${k}" appears ${n}x (latest wins)`);

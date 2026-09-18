@@ -177,7 +177,14 @@ if (mode !== '--external') {
   // whitespace-only name would otherwise be reported as a BROKEN one and fail a
   // valid file. This is the old opener's `(?![\s*])` condition, restated as part
   // of the closed rule rather than hidden in the delimiter.
-  const NAME = String.raw`([^*\n\r\s][^*\n\r]*?)`;
+  //
+  // Only `\n` is excluded, not `\r`: readSource() normalises every line ending
+  // before this runs, so a CR cannot reach here. The round-6 fix added `\r` and
+  // the round-8 redesign made it dead — measured, removing it leaves all cases
+  // green. It is gone for the same reason lineOf's was: a redundant guard implies
+  // the invariant does not hold, and that is how somebody reintroduces
+  // per-consumer CR handling.
+  const NAME = String.raw`([^*\n\s][^*\n]*?)`;
   // ── The delimiter rule is a CLOSED, STATED rule — deliberately NOT CommonMark.
   //
   // It was CommonMark's flanking rule for three rounds. Rounds 4, 5 and 6 each

@@ -23,6 +23,22 @@ stopped consulting.
 
 Re-prove discrimination by pointing it at a deliberately broken copy:
     CHECK_LEARNINGS_DERIVED_BIN=/tmp/mutant.py python3 .github/scripts/check-learnings-derived-cases.py
+
+TWO THINGS THAT MADE THE MEASUREMENT HONEST, both learned the hard way here:
+
+  * `ast.parse` every mutant before running it. The first batch produced three
+    that did not parse; they failed every case and looked like perfect
+    discrimination. A mutant that cannot run measures nothing — the same
+    pass/did-not-look confusion these guards exist to prevent, one level out.
+
+  * Ask which cases NO mutant kills, not just how many each kills. Collect the
+    FAIL labels across every mutant, union them, and subtract from the full case
+    list; anything left is a case that has never been observed failing. Targeted
+    mutants alone left 20 of 62 unaccounted for, because none of them breaks the
+    happy path. Coarse mutants (always-True, always-False, one root instead of
+    two, no suffix filter) close that gap: with those, 62 of 62 are killed and no
+    case is vacuous. A per-mutant count can look healthy while whole cases sit
+    inert, and only the union shows it.
 """
 
 import json
@@ -133,7 +149,7 @@ matches("an ANCHOR on types — the form the old scan refused",
         f"name: W\non:\n  workflow_run:\n    workflows: [X]\n    types: &t [completed]\n{JOB}")
 matches("an ALIAS resolving to the types list",
         f"name: W\nx: &t [completed]\non:\n  workflow_run:\n    workflows: [X]\n    types: *t\n{JOB}")
-matches("types as a bare scalar rather than a list",
+refuses("types as a bare scalar — the docs only ever show a sequence",
         f"name: W\non:\n  workflow_run:\n    workflows: [X]\n    types: completed\n{JOB}")
 matches("completed alongside other activity types",
         f"name: W\non:\n  workflow_run:\n    workflows: [X]\n    types: [requested, completed]\n{JOB}")
@@ -141,8 +157,12 @@ matches("completed alongside other activity types",
 # ── the `on:` key itself, which YAML 1.1 turns into a boolean ───────────────
 matches("bare `on:` resolves to True and is still the trigger key",
         f"name: W\non:\n  workflow_run:\n    types: [completed]\n{JOB}")
-matches("`ON:` is bool-tagged too and must not be missed",
+refuses("`ON:` is bool-tagged by PyYAML — that is this parser, not GitHub's syntax",
         f"name: W\nON:\n  workflow_run:\n    types: [completed]\n{JOB}")
+refuses("`yes:` likewise — a round-tripped boolean spelling is not a verdict",
+        f"name: W\nyes:\n  workflow_run:\n    types: [completed]\n{JOB}")
+refuses("`true:` likewise",
+        f"name: W\ntrue:\n  workflow_run:\n    types: [completed]\n{JOB}")
 matches("a quoted \"on\": is the trigger key",
         f'name: W\n"on":\n  workflow_run:\n    types: [completed]\n{JOB}')
 ignores("a quoted \"ON\": is a DIFFERENT key, not the trigger",
@@ -161,10 +181,14 @@ refuses("`types: \"\"` — likewise, not the same as omitting types:",
         f'name: W\non:\n  workflow_run:\n    types: ""\n{JOB}')
 refuses("`types: \"   \"` — whitespace is not an activity type either",
         f'name: W\non:\n  workflow_run:\n    types: "   "\n{JOB}')
-ignores("`types: requested` as a bare scalar is still read, not refused",
+refuses("...and a non-terminal bare scalar refuses too — the form, not the value",
         f"name: W\non:\n  workflow_run:\n    types: requested\n{JOB}")
-matches("`types:` present but null",
+refuses("`types:` PRESENT but null — the default covers an ABSENT types:, not this",
         f"name: W\non:\n  workflow_run:\n    workflows: [X]\n    types:\n{JOB}")
+matches("...while an ABSENT types: does fall back on the documented default",
+        f"name: W\non:\n  workflow_run:\n    workflows: [X]\n{JOB}")
+matches("...and a null `workflow_run:` does too — it never USES the types keyword",
+        f"name: W\non:\n  workflow_run:\n{JOB}")
 
 # ── things that must NOT be counted ─────────────────────────────────────────
 ignores("types: [requested] — not a terminal state",
@@ -248,7 +272,7 @@ refuses("bare `on:` and quoted \"on\": together — which wins is undocumented",
         f'name: W\non: push\n"on":\n  workflow_run:\n    types: [completed]\n{JOB}')
 refuses("...in the other order too — the refusal is not order-dependent",
         f'name: W\non:\n  workflow_run:\n    types: [completed]\n"on": push\n{JOB}')
-refuses("`ON:` alongside a bare `on:` — both are the trigger key",
+refuses("`ON:` alongside a bare `on:` — refused on the bool spelling, not as a duplicate",
         f"name: W\non: push\nON:\n  workflow_run:\n    types: [completed]\n{JOB}")
 refuses("a duplicated `workflow_run:` inside one `on:`",
         f"name: W\non:\n  workflow_run:\n    types: [requested]\n  \"workflow_run\":\n    types: [completed]\n{JOB}")
@@ -256,8 +280,8 @@ refuses("a duplicated `types:` inside one workflow_run",
         f"name: W\non:\n  workflow_run:\n    types: [requested]\n    types: [completed]\n{JOB}")
 matches("a quoted \"ON\": is a DIFFERENT key, so it is not a duplicate and the trigger stands",
         f'name: W\non:\n  workflow_run:\n    types: [completed]\n"ON": push\n{JOB}')
-matches("...and a single `ON:` on its own is still the trigger key",
-        f"name: W\nON:\n  workflow_run:\n    types: [completed]\n{JOB}")
+matches("a quoted \"on\": on its own IS the trigger key — same raw text as a bare on:",
+        f'name: W\n"on":\n  workflow_run:\n    types: [completed]\n{JOB}')
 
 # ── a file that cannot be READ must refuse, never drop out (round 20) ────────
 # Dropping it is the guard's own fail-open: an unreadable workflow is exactly the

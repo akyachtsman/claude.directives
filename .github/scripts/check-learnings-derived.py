@@ -107,39 +107,73 @@ def _mapping_get_all(node, key):
 
 
 def _root_on_nodes(root):
-    """Every root key GitHub reads as the trigger key, in source order.
+    """(trigger value nodes, undocumented bool-spelled keys) from the root mapping.
 
-    `on:` is bool-tagged (YAML 1.1 resolves it to true) and `"on":` is str-tagged,
-    but both are the trigger key; `ON:`/`yes:`/`true:` are bool-tagged too. A
-    quoted `"ON":` is NOT — it is str-tagged and GitHub's keys are case-sensitive,
-    so it is genuinely a different key.
+    A key is the trigger key when its RAW TEXT is exactly `on`. That covers the
+    bare `on:` and the quoted `"on":`, which differ only in PyYAML's tag.
+
+    It deliberately does NOT cover `ON:`, `On:`, `yes:` or `true:`. Those are
+    bool-tagged by PyYAML's YAML 1.1 resolution, and that tag describes THIS
+    parser, not GitHub's workflow syntax — GitHub's keys are case-sensitive and
+    nothing documents the boolean-key behaviour at all (Codex, #368 round 22).
+    Treating them as the trigger would invent a watcher out of a round-tripped
+    `true:` or an `ON:` typo, and pairing one with a real `on:` would raise a
+    FALSE duplicate refusal. They are returned separately so the caller can refuse
+    on them rather than silently guess in either direction.
     """
     if not isinstance(root, yaml.MappingNode):
-        return []
-    out = []
+        return [], []
+    triggers, bool_spelled = [], []
     for key_node, value_node in root.value:
         if not isinstance(key_node, yaml.ScalarNode):
             continue
-        if key_node.value == "on" or (
-            key_node.tag == BOOL_TAG
-            and key_node.value.lower() in ("true", "yes", "y", "on")
-        ):
-            out.append(value_node)
-    return out
+        if key_node.value == "on":
+            triggers.append(value_node)
+        elif key_node.tag == BOOL_TAG:
+            bool_spelled.append(key_node.value)
+    return triggers, bool_spelled
 
 
 def _is_null(node):
     """A key written with NO value.
 
     Tag only. Testing `not node.value.strip()` as well treated a QUOTED empty
-    string as an omission, so `workflow_run: ""` and `types: ""` both invented a
-    terminal-state watcher (Codex, #368 round 21). PyYAML tags `""` as str and a
-    valueless key as null; that tag is the whole difference and the text cannot
-    show it.
+    string as an omission, so `workflow_run: ""` invented a terminal-state
+    watcher (Codex, #368 round 21). PyYAML tags `""` as str and a valueless key
+    as null; that tag is the whole difference and the text cannot show it.
     """
     return node.tag == NULL_TAG
 
 
+# ── What this predicate will and will not answer ─────────────────────────────
+# Every branch below is one of two things, and the split is the whole design:
+#
+#   VERDICT, because github/docs @ 2320b38 documents the behaviour
+#     * a root key whose text is `on` is the trigger key    (every example)
+#     * `on:` holding no `workflow_run` key                 -> not a watcher
+#     * `on:` that is not a mapping (`on: push`, `on: [x]`) -> not a watcher
+#     * `workflow_run:` with NO value                       -> defaults apply
+#     * `types` ABSENT                                      -> defaults apply
+#     * `types` as a SEQUENCE of scalars                    -> membership
+#   REFUSE, because nothing documents it and a wrong guess is SILENT
+#     * a bool-spelled root key (`ON:`, `yes:`, `true:`)
+#     * the trigger key, `workflow_run:` or `types:` written TWICE
+#     * `workflow_run` as a non-null scalar, or as a sequence
+#     * `types` PRESENT but null, or any scalar, or a mapping
+#     * a sequence item that is not a scalar
+#
+# The refusals are affordable because every one of them is a form no real
+# workflow contains: `types` appears as a sequence in every example in the docs
+# and never as a bare scalar, and `on` appears bare and lower-case every time.
+# That is what keeps "refuse rather than guess" from degrading into refusing
+# things people actually write.
+#
+# ⚠️ Note the asymmetry between a null `workflow_run:` and a null `types:`, which
+# is deliberate. A null `workflow_run:` does not USE the `types` keyword, so the
+# documented default applies to it directly. A null `types:` DOES use the keyword,
+# with no value, and what GitHub does with that is not documented anywhere —
+# limit to nothing, ignore it, or reject the file. So the first is a verdict and
+# the second is a refusal.
 def terminal_state_watcher(path, text):
     """True when this workflow fires on `workflow_run` with `completed` among its types."""
     try:
@@ -147,26 +181,20 @@ def terminal_state_watcher(path, text):
     except yaml.YAMLError as exc:
         raise Unreadable(f"{path}: not parseable as YAML — {exc}")
 
-    # A file carrying the trigger key TWICE — `on:` and `"on":`, or `on:` twice —
-    # is refused rather than resolved. GitHub's parser could take the last, take
-    # the first, or reject the file outright, and NONE of that is documented: I
-    # searched content/actions and data/reusables in github/docs and found nothing
-    # on duplicate keys or on the `on`-is-a-YAML-boolean gotcha. Picking one would
-    # be a guess, and a wrong guess here silently drops or invents a watcher.
-    # Refusing is the loud error, which is the same rule applied throughout this
-    # file. No real workflow has two.
-    #
-    # This deliberately diverges from workflow-ref-guard.py, which takes last-wins.
-    # It answers a different question — "does every NAMED workflow resolve" — where
-    # a wrong pick degrades into a dangling-name check that still mostly works.
-    ons = _root_on_nodes(root)
+    ons, bool_spelled = _root_on_nodes(root)
+    if bool_spelled:
+        raise Unreadable(
+            f"{path}: the root mapping carries {bool_spelled!r}, which YAML 1.1 "
+            f"resolves to a boolean. Whether GitHub reads that as the `on:` trigger "
+            f"key is undocumented, so this guard will not guess — write `on:`."
+        )
     if not ons:
         return False
     if len(ons) > 1:
         raise Unreadable(
-            f"{path}: the root mapping carries {len(ons)} keys that GitHub reads as "
-            f"`on:` (e.g. `on:` and `\"on\":`). Which one wins is undocumented, so "
-            f"this guard will not guess — write exactly one."
+            f"{path}: the root mapping carries {len(ons)} `on:` keys (a bare and a "
+            f"quoted one count as two). Which wins is undocumented, so this guard "
+            f"will not guess — write exactly one."
         )
     on = ons[0]
 
@@ -176,14 +204,19 @@ def terminal_state_watcher(path, text):
         return False
     if len(wrs) > 1:
         raise Unreadable(
-            f"{path}: `on:` carries {len(wrs)} `workflow_run:` keys. Which one wins "
-            f"is undocumented, so this guard will not guess — write exactly one."
+            f"{path}: `on:` carries {len(wrs)} `workflow_run:` keys. Which wins is "
+            f"undocumented, so this guard will not guess — write exactly one."
         )
     wr = wrs[0]
 
     if isinstance(wr, yaml.ScalarNode):
         if _is_null(wr):
-            return True          # `workflow_run:` with no body — default types
+            # No `types` keyword is used, so the documented default applies:
+            # events-that-trigger-workflows.md pulls in limit_workflow_to_activity_
+            # types.md — "By default, all activity types trigger workflows that run
+            # on this event" — and workflow_run's types are completed / requested /
+            # in_progress.
+            return True
         raise Unreadable(
             f"{path}: `on.workflow_run` is the scalar {wr.value!r}, not a mapping — "
             f"this guard cannot tell which activity types it declares."
@@ -198,51 +231,37 @@ def terminal_state_watcher(path, text):
     if len(types_nodes) > 1:
         raise Unreadable(
             f"{path}: `on.workflow_run` carries {len(types_nodes)} `types:` keys. "
-            f"Which one wins is undocumented, so this guard will not guess — write "
+            f"Which wins is undocumented, so this guard will not guess — write "
             f"exactly one."
         )
     if not types_nodes:
-        # VERIFIED against github/docs @ 2320b38. events-that-trigger-workflows.md
-        # gives workflow_run's activity types as completed / requested /
-        # in_progress and pulls in data/reusables/developer-site/
-        # limit_workflow_to_activity_types.md: "By default, all activity types
-        # trigger workflows that run on this event." So an un-typed
-        # `workflow_run:` fires on `completed` and IS a terminal-state watcher.
-        #
-        # ⚠️ That default is PER EVENT, not a general rule — do not carry this
+        # ⚠️ The default is PER EVENT, not a general rule — do not carry this
         # reasoning to another event. `pull_request` does not use that reusable and
         # documents a narrower default (opened / synchronize / reopened), so the
         # same argument there would silently misclassify.
         return True
     types = types_nodes[0]
 
-    if isinstance(types, yaml.ScalarNode):
-        if _is_null(types):
-            return True
-        if not types.value.strip():
+    if not isinstance(types, yaml.SequenceNode):
+        what = "null" if _is_null(types) else f"a {type(types).__name__}"
+        raise Unreadable(
+            f"{path}: `on.workflow_run.types` is {what}. Every example in the docs "
+            f"writes it as a sequence and none writes a bare scalar, so what GitHub "
+            f"does with this form is unestablished — and unlike an ABSENT `types:`, "
+            f"a present one cannot fall back on the documented default. This guard "
+            f"will not guess."
+        )
+    for item in types.value:
+        if not isinstance(item, yaml.ScalarNode):
             raise Unreadable(
-                f"{path}: `on.workflow_run.types` is an explicitly EMPTY string, "
-                f"which is not an activity type. A key with no value at all means "
-                f"the defaults; this does not, and the difference is deliberate."
+                f"{path}: an entry in `on.workflow_run.types` is a "
+                f"{type(item).__name__}, not a scalar — teach this guard that form "
+                f'rather than letting it read as "no match".'
             )
-        return types.value == "completed"
-    if isinstance(types, yaml.SequenceNode):
-        for item in types.value:
-            if not isinstance(item, yaml.ScalarNode):
-                raise Unreadable(
-                    f"{path}: an entry in `on.workflow_run.types` is a "
-                    f"{type(item).__name__}, not a scalar — teach this guard that "
-                    f'form rather than letting it read as "no match".'
-                )
-        # Compared as written text. A non-string scalar (`types: [completed, 3]`)
-        # is not an activity type GitHub accepts, but it does not stop the trigger
-        # declaring `completed`, and that is the only question here.
-        return any(item.value == "completed" for item in types.value)
-    raise Unreadable(
-        f"{path}: `on.workflow_run.types` is a {type(types).__name__}, which is "
-        f"neither a scalar nor a sequence — teach this guard that form rather "
-        f'than letting it read as "no match".'
-    )
+    # Compared as written text. A non-string scalar (`types: [completed, 3]`) is
+    # not an activity type GitHub accepts, but it does not stop the trigger
+    # declaring `completed`, and that is the only question here.
+    return any(item.value == "completed" for item in types.value)
 
 
 # Add a row here when an entry's `files` is defined by a PREDICATE rather than by

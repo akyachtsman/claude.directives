@@ -161,6 +161,23 @@ for (const [label, gap] of [['spaced', ' ']]) {
     `exit=${r.code} out=${r.out.trim()}`);
 }
 
+// 3e. #367 round 14: a code span may be delimited by a RUN of backticks, and a
+//    one-backtick suppression rule let ``docs/my guide.md`` \u2192 *Target* fall
+//    straight back into the wrong-target state round 12 removed. Both the
+//    suppression (multi-backtick filename) and its bound (multi-backtick
+//    NON-filename must still be checked), since widening the delimiter must not
+//    widen what it suppresses.
+{
+  const BT = String.fromCharCode(96).repeat(2);
+  const r = run({ 'b.md': '# Top\n\n## Target\n\nsee ' + BT + 'docs/my guide.md' + BT + ' \u2192 *Target*\n' });
+  check('a multi-backtick filename span suppresses the self form too',
+    r.code === 0 && parsed(r.out)?.total === 0,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+  const r2 = run({ 'b.md': '# Top\n\n## Other\n\nRun ' + BT + 'npm test' + BT + ' \u2192 *Missing Section*\n' });
+  check('a multi-backtick NON-filename span still leaves the reference checked',
+    r2.code !== 0 && /Missing Section/.test(r2.out), `exit=${r2.code} out=${r2.out.trim()}`);
+}
+
 // 4. Single-line references must still work — the fix must not trade one form
 //    for another.
 {

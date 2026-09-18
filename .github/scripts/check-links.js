@@ -257,6 +257,13 @@ if (mode !== '--external') {
   //              be ADJACENT, so "see `foo.md` for details, and → *Bar*" is still
   //              a self reference; anything but spaces and tabs between them
   //              means the author was not naming the arrow's target.
+  //   delimiter — `\x60+` on BOTH sides, not a single backtick. A code span may be
+  //              opened and closed by a RUN of them, and ``docs/my guide.md`` \u2192
+  //              *Target* slipped past a one-backtick rule straight back into the
+  //              wrong-target state this suppression exists to remove. The run
+  //              lengths are not required to match, which is laxer than
+  //              CommonMark; that errs toward suppressing, and is acceptable only
+  //              because the span must ALSO end in `.md` to reach this rule at all.
   //   content  — the span must end in `.md`. Suppressing on EVERY adjacent span
   //              hid genuine broken self references behind ordinary prose:
   //              "Run `npm test` → *Missing Section*" vanished from both sides of
@@ -274,7 +281,7 @@ if (mode !== '--external') {
   // at zero spacing is suppressed too. That is a real limitation, not a fix, and
   // the emitted contract says so rather than leaving it to be rediscovered.
   const XREF_SELF = new RegExp(
-    String.raw`(?<![\x60\w])(?<!\x60[^\x60\n]*\.md\x60[ \t]*)` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
+    String.raw`(?<![\x60\w])(?<!\x60+[^\x60\n]*\.md\x60+[ \t]*)` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
@@ -348,6 +355,7 @@ if (mode !== '--external') {
   console.log('        contains no `*` and no line ending, then a single `*`.');
   console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
   console.log('      A code span ending in `.md` immediately before the arrow SUPPRESSES');
+  console.log('      — any number of backticks may delimit it —');
   console.log('      the self form, so a filename the explicit form does not accept is');
   console.log('      absent rather than checked against THIS file: the explicit form takes');
   console.log('      only [A-Za-z0-9_./-] before `.md`, so `my file.md` → *Name* is NOT');

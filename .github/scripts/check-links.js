@@ -224,7 +224,11 @@ if (mode !== '--external') {
     const src = stripFences(readFileSync(file, 'utf8'));
     // 1-based line of a SOURCE offset. Fences are padded rather than deleted,
     // so this is the line in the file on disk.
-    const lineOf = (off) => src.slice(0, off).split('\n').length;
+    // Counts every line ending commonmark recognises (/\r\n|\n|\r/), not just
+    // LF. Splitting on LF alone reported every failure in a bare-CR file as
+    // line 1 — the same CR blindness as the name pattern, one level over
+    // (Codex, #367 round 7).
+    const lineOf = (off) => src.slice(0, off).split(/\r\n|\r|\n/).length;
     const checks = [];
     // Spans the explicit-file form matched, so the self form does not re-flag
     // the same reference as if it named no file.

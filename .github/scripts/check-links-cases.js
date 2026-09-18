@@ -308,17 +308,19 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
 // 20-24. Round 4 replaced "not followed by a letter or digit" with the same
 //     assumption one level in: that every character which is not a letter or
 //     digit is PUNCTUATION. It is not. Marks, ZWJ and private-use characters
-//     are neither punctuation nor whitespace, so a closer after one is
-//     right-flanking with nothing required of what follows.
+//     are neither punctuation nor whitespace.
 //
-//     The rule now mirrors commonmark.js `scanDelims` exactly -- whitespace is
-//     JS `\s`, punctuation is `\p{P}|\p{S}` -- established by sweeping 1056
-//     (char before x char after) pairs against commonmark.js 0.31.2, where the
-//     round-4 form disagreed on 95 and this one on 0. Each case below pins one
-//     disagreement class. Two of them exist to stop an OVERCORRECTION: the
-//     finding that prompted this round also said to treat symbols as
-//     non-punctuation, and writing the spec's prose definition of whitespace
-//     out longhand scored WORSE than the bug (176 disagreements against 95).
+//     ⚠️ THAT RULE IS GONE. Rounds 4, 5 and 6 each broke one invariant — the
+//     counted set equals CommonMark's emphasis set — from a different cause, and
+//     a ten-axis probe then found seven more disagreements. The delimiters are
+//     now a CLOSED, STATED repo convention: a single `*`, text with no `*` and
+//     no line ending, a single `*`. Do NOT re-derive them by sweeping
+//     commonmark.js; that is the design this replaced.
+//
+//     The cases below are kept and INVERTED. Each renders as literal text in
+//     CommonMark and is counted here anyway, which makes them the clearest
+//     statement of what the trade costs. They assert only that the reference is
+//     PARSED.
 {
   // 20. TOO STRICT: a mark before the closer. `Cafe` + U+0301 is what an
   //     editor that does not normalise produces, and the reference vanished
@@ -346,12 +348,18 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
   // into one manufactured name ("draftcontinued prose") and FAIL A VALID FILE.
   // Byte for byte the same invented string as round 2 of this PR, from a wholly
   // different cause, which is what made it worth pinning rather than just fixing.
+  // The CR must fall INSIDE the candidate name, between an unmatched opener and
+  // a later closer. An earlier version of this case put it after an already
+  // closed `*draft*`, so it passed with both `\r` exclusions removed — it pinned
+  // nothing (Codex, #367 round 7). Here the name would be "draft\r\rcontinued
+  // prose" if CR did not end it, which is a manufactured reference that fails a
+  // valid file.
   const cr = run({
     'a.md': '# Top\n\n## draft\n\ntext\n',
-    'b.md': 'see `a.md` \u2192 *draft*\rcontinued prose\n',
+    'b.md': 'see `a.md` \u2192 *draft\r\rcontinued prose*\n',
   });
-  check('a bare CR ends a name, so a valid file is not failed',
-    cr.code === 0 && parsed(cr.out)?.good === 1,
+  check('a bare CR ends a name — no manufactured reference, valid file passes',
+    cr.code === 0 && parsed(cr.out)?.total === 0,
     `exit=${cr.code} out=${cr.out.trim()}`);
 
   // 22-24. These pinned CommonMark's flanking rule, which the checker no longer

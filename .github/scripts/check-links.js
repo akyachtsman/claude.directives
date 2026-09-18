@@ -302,7 +302,13 @@ if (mode !== '--external') {
   // enumerated — #365 proved that list cannot be built by pattern-matching.
   console.log(`OK:   ${xrefs - badXrefs}/${xrefs} PARSED section cross-references resolve to a heading`);
   console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms, ON ONE LINE.');
-  console.log('      A reference written any other way is absent from that fraction.');
+  console.log('      A reference written any other way lands in one of three states, and');
+  console.log('      NONE of them is "verified":');
+  console.log('        - a name broken across a line is not parsed, so it is NOT counted;');
+  console.log('        - a break between a filename and its arrow IS counted — the arrow line');
+  console.log('          is read as a SELF reference and checked against THIS file, not the');
+  console.log('          one named, so it can report resolved against the wrong target;');
+  console.log('        - any other unparsed form is simply absent from the fraction.');
   console.log('      The delimiters are a REPO CONVENTION, not CommonMark emphasis:');
   console.log('        a single `*`, then text that does not START with whitespace and');
   console.log('        contains no `*` and no line ending, then a single `*`.');
@@ -312,11 +318,6 @@ if (mode !== '--external') {
   console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');
   console.log('      Markdown parser was an OPEN set: three rounds, three causes, and a');
   console.log('      ten-axis probe then found seven more disagreements. See #366.');
-  console.log('      A split reference is worse than absent, in two different ways:');
-  console.log('        - a name broken across a line is not parsed, so it is NOT counted;');
-  console.log('        - a break between a filename and its arrow IS counted — the arrow line');
-  console.log('          is read as a SELF reference and checked against THIS file, not the');
-  console.log('          one named, so it can report resolved against the wrong target.');
   console.log('      Keep every reference on one line. Widening what is parsed: #366.');
 }
 

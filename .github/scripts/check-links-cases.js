@@ -144,7 +144,10 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
 //    from names to stop case 5; that made this reference fail, restart at the
 //    embedded arrow, and invent a reference named "later" out of the prose
 //    below — a false FAILURE on a correct file, the only one of its kind in
-//    that PR. Delimiter flanking handles case 5 without excluding anything.
+//    that PR. Case 5 is handled without excluding anything, because names are
+//    strictly SINGLE-LINE and cannot reach the next reference. (This said
+//    "delimiter flanking handles it" until round 11 — flanking was deleted in
+//    round 6's redesign, so that pointed maintenance at a removed mechanism.)
 {
   const r = run({
     'a.md': '# Top\n\n## Alpha ->\n\ntext\n',
@@ -252,12 +255,17 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
 }
 
 // ── #367 round 4 ───────────────────────────────────────────────────────────
-// 18. The closer's right-flanking restriction applies ONLY when the character
-//     before it is punctuation. Unconditional, it rejected `*Missing*next` —
-//     which CommonMark accepts, because `g` is neither space nor punctuation —
-//     so a real BROKEN reference was dropped from both counts and CI stayed
-//     green. I defended that strictness twice as "the safe direction"; it is
-//     only safe when the input is genuinely unparseable, and that one parses.
+// 18. HISTORICAL: this began as a flanking finding — the closer's right-flanking
+//     restriction should apply only when the character before it is punctuation.
+//     Unconditional, it rejected `*Missing*next`, dropping a real BROKEN
+//     reference from both counts while CI stayed green. I defended that
+//     strictness twice as "the safe direction"; it is only safe when the input
+//     is genuinely unparseable, and that one parses.
+//
+//     Flanking is GONE as of round 6's redesign. The case is kept because the
+//     closed rule must still parse `*Missing*next` — for a different reason
+//     (nothing looks at the neighbours at all). Do not restore flanking to
+//     "fix" it.
 {
   const r = run({ 'a.md': '# Top\n\n## Other\n\ntext\n', 'b.md': 'see `a.md` → *Missing*next\n' });
   check('a closer after a LETTER closes even before a word character',
@@ -300,8 +308,13 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
   check('an unparseable form is not counted as resolved',
     r.code === 0 && parsed(r.out)?.total === 0,
     `got ${JSON.stringify(parsed(r.out))} exit=${r.code}`);
-  check('the summary discloses that PARSED is not ALL',
-    /PARSED/.test(r.out) && /absent from that fraction/.test(r.out), `out=${r.out.trim()}`);
+  // Anchored to the SUMMARY line, not the whole output. A global /PARSED/ passed
+  // even when the word was removed from the headline, because the explanatory
+  // lines below still contain it — so the guard against an apparently universal
+  // "N/N resolve" did not guard it (Codex, #367 round 11).
+  check('the summary LINE itself says PARSED, not just the prose below it',
+    /^OK:\s+\d+\/\d+ PARSED section cross-references resolve/m.test(r.out)
+      && /NONE of them is "verified"/.test(r.out), `out=${r.out.trim()}`);
 }
 
 // -- #367 round 5 -----------------------------------------------------------

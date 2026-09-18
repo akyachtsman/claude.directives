@@ -68,18 +68,29 @@ class SYMLINK:
 failures = []
 passes = 0
 
-# ── the enumeration is CHECKED, not promised (round 24 / option B) ───────────
-# Four consecutive rounds found the same mechanism: a path in
-# terminal_state_watcher reaching a verdict without appearing in the block
-# comment that claims to enumerate them. Twice that block was itself wrong.
+# ── branch-count drift detector (round 24 / option B) ────────────────────────
+# Counts `return` and `raise` NODES in terminal_state_watcher and compares them
+# to the enumeration above the predicate, so a branch cannot be ADDED OR REMOVED
+# without the enumeration being updated to describe it.
 #
-# Counting the branches turns "I enumerated them all" from something the author
-# asserts into something the suite measures. A new `return` or `raise` in that
-# function is red until the enumeration is updated to describe it — which is the
-# only step that was ever actually being skipped.
+# ⚠️ READ THIS BEFORE TRUSTING IT. It counts SYNTAX NODES, not decision paths,
+# and the difference is exactly where it is blind:
 #
-# It does NOT check that a branch is CORRECT, only that none was added
-# unannounced. The behaviour cases below are what check correctness.
+#   * Several inputs can reach one `return`. Relaxing or widening a CONDITION so
+#     an unlisted form reaches an EXISTING outcome changes no count at all.
+#     Measured: replacing `if item.value not in ACTIVITY_TYPES:` with `if False:`
+#     leaves 5 returns and 11 raises, and this check stays green. Two behaviour
+#     cases catch it; this one does not.
+#
+#   * It would NOT have caught round 24, the defect it was written for.
+#     `types: []` reached the EXISTING final return — no node was added or
+#     removed — so the counts would have matched while the hole was open.
+#
+# So it is a drift detector, not the exhaustiveness proof an earlier version of
+# this comment claimed (Codex, #368 round 25 — the claim was mine and it was too
+# strong). The behaviour cases below are what establish that a branch is
+# reachable only by the inputs it should be; this catches the narrower case of
+# somebody adding a fifth verdict and not saying so.
 VERDICT_PATHS = 5
 REFUSAL_PATHS = 11
 
@@ -103,8 +114,8 @@ def check_enumeration_is_exhaustive():
     raises = sum(1 for n in ast.walk(fn) if isinstance(n, ast.Raise))
     if returns == VERDICT_PATHS and raises == REFUSAL_PATHS:
         passes += 1
-        print(f"OK:   the predicate's branch counts match the enumeration "
-              f"({returns} verdicts, {raises} refusals)")
+        print(f"OK:   no branch added or removed unannounced "
+              f"({returns} verdicts, {raises} refusals — counts nodes, not paths)")
     else:
         failures.append(
             f"enumeration: terminal_state_watcher has {returns} verdict path(s) and "

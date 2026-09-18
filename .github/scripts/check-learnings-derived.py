@@ -181,15 +181,16 @@ def _is_null(node):
 # (an empty `types:` sequence) that no bullet described. Four consecutive rounds
 # found the same mechanism — a path reaching a verdict without being enumerated.
 #
-# So the list is no longer a promise. check-learnings-derived-cases.py parses
-# THIS function and asserts the counts below; adding a branch either way without
-# updating the enumeration turns that case red.
+# check-learnings-derived-cases.py counts the `return` and `raise` nodes here
+# (5 and 11) so a branch cannot be ADDED OR REMOVED without this list being
+# updated to describe it.
 #
-#   VERDICT_PATHS = 5      every `return` in terminal_state_watcher
-#   REFUSAL_PATHS = 11     every `raise Unreadable` in it
-#
-# That is the whole point of the change: exhaustiveness is now a property the
-# suite checks, not a claim this comment makes.
+# ⚠️ That is a drift detector, NOT a proof this list is exhaustive. It counts
+# syntax nodes, not decision paths: widening a CONDITION so an unlisted form
+# reaches an existing outcome changes no count, and it would not have caught
+# round 24, whose `types: []` reached the existing final return. The behaviour
+# cases are what establish reachability. Keeping this list right is still a
+# human obligation — the counter only makes one way of neglecting it loud.
 #
 # The refusals are affordable because every one of them is a form no real
 # workflow contains: `types` appears as a sequence in every example in the docs

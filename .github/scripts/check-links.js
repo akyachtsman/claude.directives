@@ -250,12 +250,31 @@ if (mode !== '--external') {
   //
   // `(?<![\x60\w])` alone covered only the zero-space case (`x.md`→ *Bar*), so
   // the guard was already here and was simply too narrow — one space defeated it.
-  // The span is bounded to one line by [^\x60\n]*, and the [ \t]* tail is why a
-  // code span EARLIER in the sentence does not suppress a genuine self reference:
-  // "see `foo.md` for details, and → *Bar*" still matches, because the text
-  // between the closing backtick and the arrow is not only spaces and tabs.
+  //
+  // It is bounded on BOTH axes, and both bounds are load-bearing:
+  //
+  //   distance — [^\x60\n]* keeps the span on one line and [ \t]* requires it to
+  //              be ADJACENT, so "see `foo.md` for details, and → *Bar*" is still
+  //              a self reference; anything but spaces and tabs between them
+  //              means the author was not naming the arrow's target.
+  //   content  — the span must end in `.md`. Suppressing on EVERY adjacent span
+  //              hid genuine broken self references behind ordinary prose:
+  //              "Run `npm test` → *Missing Section*" vanished from both sides of
+  //              the fraction and exited 0 with that heading absent.
+  //
+  // Widening either bound trades the wrong-target state for a silent absence,
+  // which is the same defect facing the other way. Both directions have a case.
+  //
+  // The `\x60` in the FIRST lookbehind is a different rule and stays. It is not
+  // about filenames: an arrow immediately after a backtick is INSIDE a code span
+  // showing the syntax — CLAUDE.md documents this checker with a literal
+  // `→ *Section*` — and parsing that fails the repo on its own documentation.
+  // Removing it was tried here and did exactly that. A lookbehind cannot tell an
+  // OPENING backtick from a CLOSING one, so the cost is that `npm test`→ *Name*
+  // at zero spacing is suppressed too. That is a real limitation, not a fix, and
+  // the emitted contract says so rather than leaving it to be rediscovered.
   const XREF_SELF = new RegExp(
-    String.raw`(?<![\x60\w])(?<!\x60[^\x60\n]*\x60[ \t]*)` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
+    String.raw`(?<![\x60\w])(?<!\x60[^\x60\n]*\.md\x60[ \t]*)` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
   let xrefs = 0, badXrefs = 0;
   for (const file of findMarkdown('.')) {
@@ -328,10 +347,15 @@ if (mode !== '--external') {
   console.log('        a single `*`, then text that does not START with whitespace and');
   console.log('        contains no `*` and no line ending, then a single `*`.');
   console.log('        So `→ * Name*` is NOT parsed — a leading space means no reference.');
-  console.log('      A code span immediately before the arrow SUPPRESSES the self form,');
-  console.log('      so a filename the explicit form does not accept is absent rather than');
-  console.log('      checked against THIS file. The explicit form accepts [A-Za-z0-9_./-]');
-  console.log('      before `.md`, so `my file.md` → *Name* is NOT counted at all.');
+  console.log('      A code span ending in `.md` immediately before the arrow SUPPRESSES');
+  console.log('      the self form, so a filename the explicit form does not accept is');
+  console.log('      absent rather than checked against THIS file: the explicit form takes');
+  console.log('      only [A-Za-z0-9_./-] before `.md`, so `my file.md` → *Name* is NOT');
+  console.log('      counted. A span that is not a filename does NOT suppress it, so');
+  console.log('      `npm test` → *Name* is still checked against this file.');
+  console.log('      An arrow written DIRECTLY after a backtick is not parsed at all: it');
+  console.log('      is how this file documents the syntax, and a lookbehind cannot tell');
+  console.log('      an opening backtick from a closing one. Put a space after the span.');
   console.log('      A construct CommonMark renders differently — an escaped closer,');
   console.log('      a code span holding a star, a closer starting a delimiter run — is');
   console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');

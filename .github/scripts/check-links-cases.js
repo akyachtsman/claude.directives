@@ -143,6 +143,24 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
+// 3d. #367 round 13: the suppression must be bounded by CONTENT as well as by
+//    distance. Bounding it only by distance hid genuine broken self references
+//    behind ordinary prose — "Run `npm test` \u2192 *Missing Section*" vanished from
+//    both sides of the fraction and exited 0 with that heading absent, which is
+//    the wrong-target defect facing the other way. SPACED only: at zero spacing
+//    the pre-existing `\x60` lookbehind suppresses it, and that rule has to stay
+//    — it is what stops CLAUDE.md's literal `\u2192 *Section*`, which documents this
+//    very checker, from failing the repo. Removing it was tried and did exactly
+//    that. A lookbehind cannot tell an opening backtick from a closing one, so
+//    that case is a DISCLOSED limitation rather than a fixable one.
+for (const [label, gap] of [['spaced', ' ']]) {
+  const BT = String.fromCharCode(96);
+  const r = run({ 'b.md': '# Top\n\n## Other\n\nRun ' + BT + 'npm test' + BT + gap + '\u2192 *Missing Section*\n' });
+  check(`a non-filename code span (${label}) does not hide a broken self reference`,
+    r.code !== 0 && /Missing Section/.test(r.out),
+    `exit=${r.code} out=${r.out.trim()}`);
+}
+
 // 4. Single-line references must still work — the fix must not trade one form
 //    for another.
 {

@@ -66,66 +66,132 @@ class Unreadable(Exception):
     """A file this guard cannot classify. NOT the same as one that does not match."""
 
 
-def trigger_block(doc):
-    """The root `on:` value.
+# ── YAML node helpers ─────────────────────────────────────────────────────
+# These walk the NODE stream (yaml.compose) rather than yaml.safe_load's plain
+# dicts, because safe_load throws away the one thing GitHub's duplicate-key rule
+# needs: source order. YAML 1.1 resolves a bare `on` to boolean true, so a file
+# carrying both `on:` and `"on":` comes back as two SEPARATE dict keys, `True`
+# and `"on"`, and nothing in the dict says which was written last. Measured:
+#
+#     on: push                 ->  keys ['name', True, 'on'], and reading doc[True]
+#     "on":                        answers `push` while GitHub runs the LATER
+#       workflow_run:              workflow_run block. The reverse order invents a
+#         types: [completed]       watcher that GitHub does not have.
+#
+# Both directions were wrong, in opposite directions (Codex, #368 round 20). The
+# node stream preserves ['name', 'on', 'on'], so last-wins is readable from it.
+#
+# This is ~25 lines of mapping lookup, not a YAML implementation — the parsing is
+# still PyYAML's. It mirrors workflow-ref-guard.py's `mapping_get`/`on_node`,
+# which solved this same problem over four rounds; that file is a script rather
+# than an importable module, so the two are kept in step by hand. If a third
+# consumer appears, make it a module instead of copying again.
 
-    YAML 1.1 — which PyYAML speaks — resolves a bare `on` to boolean true, so the
-    key comes back as `True`, and so do `ON:`, `On:` and `yes:`. GitHub still reads
-    all of those as the trigger block, so this must too. A QUOTED `"on":` stays a
-    string and is also the trigger key; a quoted `"ON":` is not, because GitHub's
-    keys are case-sensitive and that is genuinely a different key.
-    """
-    if not isinstance(doc, dict):
+
+def _mapping_get(node, key):
+    """Value node for `key`, matched on raw scalar text so `types:`, `'types':`
+    and `"types":` are one key. LAST match wins — the same rule PyYAML and GitHub
+    both apply to a duplicated key."""
+    if not isinstance(node, yaml.MappingNode):
         return None
-    if True in doc:
-        return doc[True]
-    return doc.get("on")
+    found = None
+    for key_node, value_node in node.value:
+        if isinstance(key_node, yaml.ScalarNode) and key_node.value == key:
+            found = value_node
+    return found
+
+
+def _on_node(root):
+    """The value of the root `on:` key, whichever spelling came LAST.
+
+    `on:` is bool-tagged and `"on":` is str-tagged, but both are the trigger key;
+    `ON:`/`yes:`/`true:` are bool-tagged too. A quoted `"ON":` is NOT the trigger
+    key — it is str-tagged and GitHub's keys are case-sensitive, so it is
+    genuinely a different key.
+    """
+    if not isinstance(root, yaml.MappingNode):
+        return None
+    found = None
+    for key_node, value_node in root.value:
+        if not isinstance(key_node, yaml.ScalarNode):
+            continue
+        if key_node.value == "on" or (
+            key_node.tag == "tag:yaml.org,2002:bool"
+            and key_node.value.lower() in ("true", "yes", "y", "on")
+        ):
+            found = value_node
+    return found
+
+
+def _is_empty_scalar(node):
+    return node.tag == "tag:yaml.org,2002:null" or not node.value.strip()
 
 
 def terminal_state_watcher(path, text):
     """True when this workflow fires on `workflow_run` with `completed` among its types."""
     try:
-        doc = yaml.safe_load(text)
+        root = yaml.compose(text)
     except yaml.YAMLError as exc:
         raise Unreadable(f"{path}: not parseable as YAML — {exc}")
 
-    on = trigger_block(doc)
+    on = _on_node(root)
     if on is None:
         return False
-    if not isinstance(on, dict):
-        # `on: push` or `on: [push, pull_request]` — a scalar or sequence of event
-        # names cannot carry a workflow_run configuration at all.
-        return False
-    if "workflow_run" not in on:
+    # `on: push` or `on: [push, pull_request]` cannot carry a workflow_run block;
+    # _mapping_get returns None for a non-mapping, so both fall through to False.
+    wr = _mapping_get(on, "workflow_run")
+    if wr is None:
         return False
 
-    wr = on["workflow_run"]
-    if wr is None:
-        # `workflow_run:` with no body at all — default activity types apply.
-        return True
-    if not isinstance(wr, dict):
+    if isinstance(wr, yaml.ScalarNode):
+        if _is_empty_scalar(wr):
+            return True          # `workflow_run:` with no body — default types
         raise Unreadable(
-            f"{path}: `on.workflow_run` is {type(wr).__name__}, not a mapping — "
+            f"{path}: `on.workflow_run` is the scalar {wr.value!r}, not a mapping — "
             f"this guard cannot tell which activity types it declares."
         )
-    if "types" not in wr or wr["types"] is None:
-        # GitHub: omitting `types` runs the workflow for ALL activity types of the
-        # event, and `completed` is one of workflow_run's. So an un-typed
-        # `workflow_run:` IS a terminal-state watcher. Nothing in this tree spells
-        # it that way today, so the behaviour is pinned by a case rather than by a
-        # live file — see check-learnings-derived-cases.py.
-        return True
-
-    types = wr["types"]
-    if isinstance(types, str):
-        types = [types]
-    if not isinstance(types, list) or not all(isinstance(t, str) for t in types):
+    if not isinstance(wr, yaml.MappingNode):
         raise Unreadable(
-            f"{path}: `on.workflow_run.types` is {types!r}, which is neither a string "
-            f"nor a list of strings — teach this guard that form rather than letting "
-            f'it read as "no match".'
+            f"{path}: `on.workflow_run` is a {type(wr).__name__}, not a mapping — "
+            f"this guard cannot tell which activity types it declares."
         )
-    return "completed" in types
+
+    types = _mapping_get(wr, "types")
+    if types is None:
+        # GitHub: omitting `types` runs the workflow for ALL activity types of the
+        # event, and `completed` is one of workflow_run's — so an un-typed
+        # `workflow_run:` IS a terminal-state watcher.
+        #
+        # This reading could not be verified from here (docs.github.com is blocked
+        # by the egress proxy) and nothing in this tree corroborates it: every live
+        # watcher spells `types: [completed]`. It is kept because of the DIRECTION
+        # of its error, not because it is certain. True over-counts a future
+        # un-typed watcher, which surfaces as a loud `missing:`/`not matching:`
+        # failure someone investigates; False would silently omit a real watcher,
+        # which is the fail-open this guard exists to prevent. Pinned by a case
+        # rather than by a live file — see check-learnings-derived-cases.py.
+        return True
+    if isinstance(types, yaml.ScalarNode):
+        if _is_empty_scalar(types):
+            return True
+        return types.value == "completed"
+    if isinstance(types, yaml.SequenceNode):
+        for item in types.value:
+            if not isinstance(item, yaml.ScalarNode):
+                raise Unreadable(
+                    f"{path}: an entry in `on.workflow_run.types` is a "
+                    f"{type(item).__name__}, not a scalar — teach this guard that "
+                    f'form rather than letting it read as "no match".'
+                )
+        # Compared as written text. A non-string scalar (`types: [completed, 3]`)
+        # is not an activity type GitHub accepts, but it does not stop the trigger
+        # declaring `completed`, and the question here is only whether it does.
+        return any(item.value == "completed" for item in types.value)
+    raise Unreadable(
+        f"{path}: `on.workflow_run.types` is a {type(types).__name__}, which is "
+        f"neither a scalar nor a sequence — teach this guard that form rather "
+        f'than letting it read as "no match".'
+    )
 
 
 # Add a row here when an entry's `files` is defined by a PREDICATE rather than by
@@ -193,16 +259,28 @@ def main():
             if not directory.is_dir():
                 continue
             for candidate in sorted(directory.iterdir()):
-                if candidate.suffix not in (".yml", ".yaml") or not candidate.is_file():
+                if candidate.suffix not in (".yml", ".yaml"):
                     continue
+                name = f"{root}/{candidate.name}"
+                # A read failure is a REFUSAL, not an exclusion. This used to
+                # `continue`, which is the guard's own fail-open: a workflow that
+                # cannot be read is exactly the one most likely to be the drift,
+                # and dropping it leaves `missing` and `extra` both empty and the
+                # run green (Codex, #368 round 20). There is no `is_file()` filter
+                # either, for the same reason — it silently swallowed a DIRECTORY
+                # named `x.yml` before any read was attempted.
+                #
+                # ValueError is in the clause because UnicodeDecodeError is NOT an
+                # OSError: a workflow that is not valid UTF-8 used to escape the
+                # handler entirely and crash with a traceback.
                 try:
                     text = candidate.read_text(encoding="utf-8")
-                except OSError:
-                    continue
+                except (OSError, ValueError) as exc:
+                    raise Unreadable(f"{name}: could not be read — {exc}")
                 # An Unreadable propagates: a derived set missing the file that could
                 # not be read is not a set worth comparing an entry against.
-                if rule["match"](f"{root}/{candidate.name}", text):
-                    expected.append(f"{root}/{candidate.name}")
+                if rule["match"](name, text):
+                    expected.append(name)
         expected.sort()
 
         governed = set(expected)

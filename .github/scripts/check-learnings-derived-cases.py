@@ -40,6 +40,10 @@ GUARD = Path(os.environ.get(
 ))
 KEY = "a-terminal-state-watcher-cannot-see-a-hang"
 
+# Sentinel: this workflow "file" is actually a directory. Marked rather than
+# inferred, so a case cannot create one by accident.
+DIRECTORY = object()
+
 failures = []
 passes = 0
 
@@ -60,7 +64,13 @@ def run(workflows, lines, templates=None):
         (tmp / "templates" / "workflows").mkdir(parents=True)
         shutil.copy(GUARD, tmp / ".github" / "scripts" / "check-learnings-derived.py")
         for name, body in (workflows or {}).items():
-            (tmp / ".github" / "workflows" / name).write_text(body, encoding="utf-8")
+            target = tmp / ".github" / "workflows" / name
+            if body is DIRECTORY:
+                target.mkdir()
+            elif isinstance(body, bytes):
+                target.write_bytes(body)
+            else:
+                target.write_text(body, encoding="utf-8")
         for name, body in (templates or {}).items():
             (tmp / "templates" / "workflows" / name).write_text(body, encoding="utf-8")
         (tmp / "learnings.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -178,8 +188,12 @@ refuses("`on.workflow_run` is a sequence",
         f"name: W\non:\n  workflow_run:\n    - completed\n{JOB}")
 refuses("`types:` is a mapping",
         f"name: W\non:\n  workflow_run:\n    types:\n      completed: true\n{JOB}")
-refuses("`types:` is a list containing a non-string",
+matches("a junk entry beside completed does not un-declare completed",
         f"name: W\non:\n  workflow_run:\n    types: [completed, 3]\n{JOB}")
+ignores("...and a junk entry on its own still declares nothing terminal",
+        f"name: W\non:\n  workflow_run:\n    types: [3]\n{JOB}")
+refuses("a NESTED structure inside types: is refused, not flattened",
+        f"name: W\non:\n  workflow_run:\n    types: [[completed]]\n{JOB}")
 
 # ── the entry comparison itself ─────────────────────────────────────────────
 W = f"name: W\non:\n  workflow_run:\n    types: [completed]\n{JOB}"
@@ -213,6 +227,44 @@ case("a DERIVED key with no entry at all FAILS rather than skipping",
 case("a malformed JSONL line is skipped, not fatal — check-learnings.js owns it",
      workflows={"w.yml": W},
      lines=["{not json", entry([".github/workflows/w.yml"])], expect_exit=0)
+
+
+# ── duplicate `on:` keys across spellings: GitHub takes the LAST (round 20) ──
+# safe_load collapses these into separate dict keys (True and "on") and loses the
+# order entirely, so both of these were wrong before the node-level rewrite — and
+# wrong in OPPOSITE directions, which is why both orderings are pinned.
+matches("bare `on:` then quoted \"on\": — the LATER block is the trigger",
+        f'name: W\non: push\n"on":\n  workflow_run:\n    types: [completed]\n{JOB}')
+ignores("quoted \"on\": last overrides an earlier workflow_run block",
+        f'name: W\non:\n  workflow_run:\n    types: [completed]\n"on": push\n{JOB}')
+matches("`ON:` after a bare `on:` is still the same key, and later",
+        f"name: W\non: push\nON:\n  workflow_run:\n    types: [completed]\n{JOB}")
+matches("a quoted \"ON\": after a real trigger does NOT override it — different key",
+        f'name: W\non:\n  workflow_run:\n    types: [completed]\n"ON": push\n{JOB}')
+matches("a duplicated `types:` inside one workflow_run — the LAST one wins",
+        f"name: W\non:\n  workflow_run:\n    types: [requested]\n    types: [completed]\n{JOB}")
+ignores("...and the reverse order loses the terminal type",
+        f"name: W\non:\n  workflow_run:\n    types: [completed]\n    types: [requested]\n{JOB}")
+
+# ── a file that cannot be READ must refuse, never drop out (round 20) ────────
+# Dropping it is the guard's own fail-open: an unreadable workflow is exactly the
+# one most likely to BE the drift, and excluding it leaves missing and extra both
+# empty and the run green.
+refuses("a workflow that is not valid UTF-8",
+        b"name: W\non:\n  workflow_run:\n    types: [completed]\n# \xff\xfe\n")
+refuses("a DIRECTORY named like a workflow — no is_file() filter to swallow it",
+        DIRECTORY)
+case("a directory named .yaml is refused too, not just .yml",
+     workflows={"d.yaml": DIRECTORY}, lines=[entry([])],
+     expect_exit=1, expect_text="could not be classified")
+case("an unreadable file refuses even when the entry ALREADY lists it",
+     workflows={"w.yml": b"name: W\non:\n  workflow_run:\n    types: [completed]\n# \xff\n"},
+     lines=[entry([".github/workflows/w.yml"])],
+     expect_exit=1, expect_text="could not be classified")
+
+# ── multi-document files: composing refuses rather than guessing ─────────────
+refuses("a multi-document YAML file",
+        f"name: W\non:\n  workflow_run:\n    types: [completed]\n---\nname: X\n{JOB}")
 
 print()
 if failures:

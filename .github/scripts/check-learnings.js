@@ -120,6 +120,12 @@ function terminalStateWatcher(file, rawBody) {
   // template twin, into the derived set as FALSE POSITIVES, and I asserted the
   // entry equal to that set for two rounds. An assertion against a wrong
   // predicate is indistinguishable from an assertion against a right one.
+  //
+  // The strip is textual, not YAML-aware, so it also eats a `#` inside a quoted
+  // scalar. Measured: `workflows: ['QA #1 - ...']` still classifies correctly,
+  // because the damage lands on a line this predicate never reads - it reads
+  // `workflow_run:` and `types:`. A `#` on one of THOSE two lines is the case
+  // that would mislead it, and no real activity type or trigger key contains one.
   const body = rawBody.split('\n').map((l) => l.replace(/(^|\s)#.*$/, '$1')).join('\n');
   const wr = body.indexOf('workflow_run:');
   if (wr === -1) return false;
@@ -147,39 +153,49 @@ function terminalStateWatcher(file, rawBody) {
 }
 
 for (const rule of DERIVED) {
-  // `lines` holds raw JSONL strings; malformed ones already failed above, so
-  // parse leniently here and skip what will not read.
-  const parsed = lines.map((l, i) => { try { return [i, JSON.parse(l)]; } catch { return null; } })
-    .filter(Boolean);
-  const entries = parsed.filter(([, d]) => d && d.key === rule.key);
-  if (!entries.length) continue;           // entry retired: nothing to guard
-  const expected = rule.roots.flatMap((dir) => {
-    let names = [];
-    try { names = readdirSync(dir); } catch { return []; }
-    return names
-      .map((n) => `${dir}/${n}`)
-      .filter((p) => {
-        let body;
-        try { body = readFileSync(p, 'utf8'); } catch { return false; }   // unreadable: not ours
-        return rule.match(p, body);                                       // a REFUSAL propagates
-      });
-  }).sort();
-  // Only the paths the predicate could ever produce are governed; an entry may
-  // also list prose files, and those are judgement, not derivation.
-  const governed = new Set(expected);
-  const universe = rule.roots;
-  for (const [i, d] of entries) {
-    const listed = (d.files ?? [])
-      .filter((f) => universe.some((d) => f.startsWith(`${d}/`)))
-      .sort();
-    const missing = expected.filter((f) => !listed.includes(f));
-    const extra = listed.filter((f) => !governed.has(f));
-    if (missing.length || extra.length) {
-      fail(`line ${i + 1}: "${rule.key}" must list exactly the ${rule.what} `
-        + `(${expected.length} found)`
-        + (missing.length ? `\n  missing: ${missing.join(', ')}` : '')
-        + (extra.length ? `\n  not matching: ${extra.join(', ')}` : ''));
+  // A refusal from a predicate is a FINDING, not a crash. Unhandled, it printed a
+  // file:line stack trace as the first line of stderr, which reads as the checker
+  // being broken rather than as the tree carrying something it cannot classify —
+  // and a reader triaging CI would look in the wrong place. Caught HERE, outside
+  // the per-file filter, so it still stops the comparison: a derived set missing
+  // the file that could not be read is not a set worth comparing against.
+  try {
+    // `lines` holds raw JSONL strings; malformed ones already failed above, so
+    // parse leniently here and skip what will not read.
+    const parsed = lines.map((l, i) => { try { return [i, JSON.parse(l)]; } catch { return null; } })
+      .filter(Boolean);
+    const entries = parsed.filter(([, d]) => d && d.key === rule.key);
+    if (!entries.length) continue;           // entry retired: nothing to guard
+    const expected = rule.roots.flatMap((dir) => {
+      let names = [];
+      try { names = readdirSync(dir); } catch { return []; }
+      return names
+        .map((n) => `${dir}/${n}`)
+        .filter((p) => {
+          let body;
+          try { body = readFileSync(p, 'utf8'); } catch { return false; }   // unreadable: not ours
+          return rule.match(p, body);                                       // a REFUSAL propagates
+        });
+    }).sort();
+    // Only the paths the predicate could ever produce are governed; an entry may
+    // also list prose files, and those are judgement, not derivation.
+    const governed = new Set(expected);
+    const universe = rule.roots;
+    for (const [i, d] of entries) {
+      const listed = (d.files ?? [])
+        .filter((f) => universe.some((root) => f.startsWith(`${root}/`)))
+        .sort();
+      const missing = expected.filter((f) => !listed.includes(f));
+      const extra = listed.filter((f) => !governed.has(f));
+      if (missing.length || extra.length) {
+        fail(`line ${i + 1}: "${rule.key}" must list exactly the ${rule.what} `
+          + `(${expected.length} found)`
+          + (missing.length ? `\n  missing: ${missing.join(', ')}` : '')
+          + (extra.length ? `\n  not matching: ${extra.join(', ')}` : ''));
+      }
     }
+  } catch (e) {
+    fail(`${rule.key}: ${e.message}`);
   }
 }
 

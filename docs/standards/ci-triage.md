@@ -85,7 +85,8 @@ Every project using these agents runs two Playwright workflows:
   decided answer with `TEST_AUTH_READY_SELECTOR` / `TEST_AUTH_READY_REQUEST`
   (`test.md` → *Playwright*). If S2 fails with `Auth-readiness condition never
   resolved`, the project's own declared condition did not hold — that is a real
-  app or config problem, not a flake, and re-running will not change it.
+  app or config problem, not a flake, and re-running will not change it. Likewise
+  `S2 FAIL | TEST_AUTH_SUCCESS_SELECTOR (…) never became visible` (#379): the project's own post-login condition did not hold — a rejected credential, or a selector the signed-in view does not render.
 - **A skipped auth scenario is not always an exemption.** S2 skips when there is
   genuinely no gate and no credential; it now **fails** when credentials ARE
   supplied and no gate is found, because config asserting a gate while the

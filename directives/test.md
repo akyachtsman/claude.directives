@@ -106,6 +106,7 @@ Execute these before any task work:
   A configured condition that never resolves FAILS rather than falling back,
   because a silent fallback rebuilds exactly that ambiguity. A selector naming
   only the gate times out on every signed-in run — it must match either outcome.
+  The AFTER-login counterpart is optional **`TEST_AUTH_SUCCESS_SELECTOR`** (also a variable, `vars.TEST_AUTH_SUCCESS_SELECTOR`): a selector only the signed-in view shows, which S2 requires VISIBLE after submitting the credential and FAILS without (#379); unset, S2 reads the gate clearing as success, as before.
 - **`waitForFunction`'s page function must be SYNCHRONOUS.** An `async` one is
   invoked exactly **once**. Playwright adopts the Promise it returns, and whatever
   that Promise settles to — `false` included — ends the wait. It never polls

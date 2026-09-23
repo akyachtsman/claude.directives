@@ -87,6 +87,10 @@ inputs:
     description: 'TEST_AUTH_READY_REQUEST (directives#302, #320): a substring of the URL of the request whose completion decides the auth outcome. Empty keeps the windowed answer. Not a secret — pass it from a repo VARIABLE'
     required: false
     default: ''
+  test-auth-success-selector:
+    description: 'TEST_AUTH_SUCCESS_SELECTOR (directives#379): a selector only the signed-in view shows; S2 asserts it is visible after submitting the credential. Empty keeps reading the gate clearing as success. Not a secret — pass it from a repo VARIABLE, never a secret: a masked selector in a failure message is unreadable'
+    required: false
+    default: ''
   artifact-name:
     description: 'Name for the uploaded results artifact'
     required: true
@@ -330,6 +334,7 @@ runs:
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
+        TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
         PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
@@ -368,6 +373,7 @@ runs:
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
+        TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
         # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
         # check-ui-suite-env.py enforces exact env parity across the sequence,
@@ -397,6 +403,7 @@ runs:
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
+        TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
         # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
         # check-ui-suite-env.py enforces exact env parity across the sequence,
@@ -474,6 +481,7 @@ runs:
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
         TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
         TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
+        TEST_AUTH_SUCCESS_SELECTOR: ${{ inputs.test-auth-success-selector }}
         APP_PAGES: ${{ inputs.app-pages }}
         # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
         # check-ui-suite-env.py enforces exact env parity across the sequence,

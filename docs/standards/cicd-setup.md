@@ -536,6 +536,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 |---|---|
 | `TEST_AUTH_READY_SELECTOR` | A selector matching whichever auth outcome occurs — the gate itself OR the authenticated app shell — so "no auth gate" is reported `proven` rather than `windowed` (`test.md`). A variable, not a secret: a masked selector is unreadable in a failure message |
 | `TEST_AUTH_READY_REQUEST` | Alternative to the selector: a substring of the URL of the request whose settling decides the auth outcome |
+| `TEST_AUTH_SUCCESS_SELECTOR` | A selector only the signed-in view shows; S2 fails unless it is visible after submitting the credential (#379). Unset, S2 reads the gate clearing as success. A variable, not a secret |
 | `APP_PAGES` | Extra HTML entry points beyond `APP_URL`, comma-separated and relative to it (e.g. `admin.html,vendor/console.html`); each gets the ENTRY load gate. Unset, only the base URL is covered |
 
 ---

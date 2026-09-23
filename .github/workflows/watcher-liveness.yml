@@ -223,8 +223,10 @@ jobs:
 
           def file_issue(findings, table):
               body = (
-                  "**Advisory — informational, not a gate. Nothing is blocked.** Whether this check "
-                  "becomes blocking is an open decision on #318.\n\n"
+                  "**Advisory — informational, not a gate yet. Nothing is blocked.** Per the promotion "
+                  "rule recorded on #318, SILENT/GAPS start failing this job after 4 consecutive weekly "
+                  "runs with no false alarm; a false alarm resets the count. If a row below is healthy, "
+                  "say so on #318.\n\n"
                   f"`.github/workflows/watcher-liveness.yml` compared the last {WINDOW} day(s) of run history "
                   "and found a `workflow_run` watcher that stayed silent while the workflow it watches ran:\n\n"
                   + table

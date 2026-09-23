@@ -375,7 +375,10 @@ kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml 2>/dev/
 if [ -z "$kit_dirs" ]; then   # no UI_TESTS_DIR set: the default, if the project has a kit at all
   [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests || echo "no UI-test kit in this project — kit defects step skipped"
 fi
-for d in $kit_dirs; do [ -d "$d" ] && echo "kit: $d" || echo "kit dir named but missing: $d — kit defects NOT checked there"; done
+printf '%s\n' "$kit_dirs" | while IFS= read -r d; do   # one path per LINE: a path with spaces stays whole
+  [ -n "$d" ] || continue
+  [ -d "$d" ] && echo "kit: $d" || echo "kit dir named but missing: $d — kit defects NOT checked there"
+done
 ```
 
 1. Fetch the list from UPSTREAM (not the local copy, which is only as new as the

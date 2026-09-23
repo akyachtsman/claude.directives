@@ -370,8 +370,13 @@ whether or not the delta touches the kit**. The kit may live elsewhere
 (`cicd-setup.md` lets `UI_TESTS_DIR` point anywhere), so find it from the
 workflows rather than assuming the default:
 ```bash
+# The YAML scalar, not the rest of the line: a quoted value ends at its closing
+# quote (a `#` inside it is part of the path), an unquoted one at ` #` (a comment).
 kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml 2>/dev/null \
-  | sed -E "s/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//; s/[\"']//g; s/[[:space:]]+$//" | sort -u)
+  | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
+           -e '/^"/{s/^"([^"]*)".*$/\1/;b' -e '}' \
+           -e '/^\x27/{s/^\x27([^\x27]*)\x27.*$/\1/;b' -e '}' \
+           -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sort -u)
 if [ -z "$kit_dirs" ]; then   # no UI_TESTS_DIR set: the default, if the project has a kit at all
   [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests || echo "no UI-test kit in this project — kit defects step skipped"
 fi

@@ -118,6 +118,10 @@ Corollaries worth memorizing:
   the disposition that path already carries. Cite the row or restate it — a
   session following a direct instruction literally is doing its job, and the
   defect belongs to whoever wrote the instruction.
+- **A kit BUG fix also gets a `templates/ui-tests/KIT-DEFECTS.md` entry** — a
+  mechanical check plus the minimal hunk. The per-file rule above cannot tell a
+  defect fix from evolution, so without the entry the fix does not travel
+  (#327); `/refresh-repo` reads that file before every kit diff.
 - **Record the pointer, not the value.** A number you own is a **record**; a
   number someone else owns is an **authority**. Cache the first with a date and
   provenance — `apfp.claude`'s 16.2–17.0min and `claude.trading`'s 30m35s are

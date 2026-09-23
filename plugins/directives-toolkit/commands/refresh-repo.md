@@ -309,7 +309,7 @@ project** — map each to its installed location before dispositioning:
 |---|---|---|
 | `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ **EXCEPT `pages-retry.yml`, whose ABSENCE can be deliberate — never batch-install it.** An Actions-source project is required to delete it (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered deploy on a visibility flip. Decide it in both branches rather than as a single condition: **branch-source** → install it and restore its `REQUIRED` entry in the same edit; **Actions-source** → leave it absent, **unless** the project has taken W3's idempotent exception, in which case it carries a repointed copy whose `REQUIRED` entry names the project's own deploy — never overwrite that with the template or drop that entry. This row is the reason that deletion needs a rule at all: without it, the first refresh that touches the retry template undoes the fix silently. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
-| `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: `claude.insurance` was told exactly that on 2026-08-26 and diffing first is the only reason their `LIVE_TARGET` reachability split survived — a locally-defined guard, absent upstream, without which three scenarios would have run against a backend-less server on a blocking job. A kit file a project extended is invisible to whoever wrote the instruction |
+| `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: `claude.insurance` was told exactly that on 2026-08-26 and diffing first is the only reason their `LIVE_TARGET` reachability split survived — a locally-defined guard, absent upstream, without which three scenarios would have run against a backend-less server on a blocking job. A kit file a project extended is invisible to whoever wrote the instruction. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. A hand-list here has now fallen behind its own general form twice: `check-ui-viewports.js` was missing when `claude.insurance` refreshed, and every UI job there would have died at step resolution had they applied this row literally (directives#321) |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
@@ -358,6 +358,33 @@ all required watchers intact without it.
 This is the same principle as `pages-retry.yml`'s carve-out above and belongs
 beside it: **"absent locally" is not a fact about the project's intent.** Ask
 what installing it *starts*, not only what it restores.
+
+### Kit defects
+
+The per-file rule above protects local kit edits, and it also stops a kit BUG
+fix from arriving: a defect shipped in `templates/ui-tests/` is in every
+downstream copy, and a session weighing the fix hunk as "evolution" keeps the bug
+(#327 — S2's fail-open reached projects that followed this table exactly). So,
+whenever `.github/scripts/ui-tests/` exists locally — **every refresh, before any
+kit diff, whether or not the delta touches the kit**:
+
+1. Fetch
+   `https://raw.githubusercontent.com/akyachtsman/claude.directives/$head/templates/ui-tests/KIT-DEFECTS.md`
+   at Phase 2's `$head` (not the local copy, which is only as new as the last
+   sync). No `$head`, or a failed fetch, is reported as *kit defects NOT
+   checked*, never as none found.
+2. For each entry, run its **Check** from `.github/scripts/ui-tests/`. `CLEAR` →
+   nothing. `UNDECIDED` → read the code the entry names and record a verdict.
+3. `AFFECTED` → apply that entry's **Minimal fix** — that hunk only, never the
+   surrounding upstream rewrite, which stays per-file diff work — **unless the
+   project states why the defect does not apply here**. Record that reason as one
+   line in the project's `CLAUDE.md` naming the entry id, so the next refresh
+   reads the verdict instead of re-deriving it.
+4. Report each entry's result (`CLEAR` / fixed / declined with reason) in the
+   refresh report.
+
+An entry is not a licence to take a kit file wholesale: it names one bug and one
+hunk, and everything else in the kit is still dispositioned by the row above.
 
 ### Deriving the referenced-script set
 

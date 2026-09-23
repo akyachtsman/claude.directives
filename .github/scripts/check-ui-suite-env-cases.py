@@ -726,7 +726,23 @@ SPEC_CASES = [
      'TEST_SOMETHING_NEW is read by'),
     ("the spec reads process.env through a computed key — refused, not skipped",
      "const k = 'APP_URL';\nconst X = process.env[k];\n", 1,
-     "uses process.env in a form this guard cannot name"),
+     "uses `process` in a form this guard cannot name"),
+    # Spellings of the same read that are not the contiguous text `process.env`:
+    # a guard keyed on that text skipped them entirely and printed OK (#372).
+    ("the spec reads process['env'] — refused, not skipped",
+     "const X = process['env'].TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    ("the spec reads `process . env` with spacing — refused, not skipped",
+     "const X = process . env.TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    ("the spec aliases process — refused, not skipped",
+     "const p = process;\nconst X = p.env.TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    # ...and the accepting complement, so the refusals are not bought by
+    # refusing every mention of `process`.
+    ("the spec reads process.platform — accepted",
+     "if (process.platform === 'linux') {}\n", 0,
+     "spec env wired from inputs"),
 ]
 
 
@@ -772,12 +788,47 @@ def main():
     else:
         print("OK:   the live ui-suite composite passes (exit 0)")
 
+    # DISCOVERY (#372): with no spec arguments the guard must find every JS/TS
+    # file under the kit, so a spec added later is covered without being named.
+    # Run in a temp tree holding the live composite and a kit with one extra spec.
+    extra = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        action = root / "templates/actions/ui-suite/action.yml"
+        action.parent.mkdir(parents=True)
+        action.write_text(LIVE.read_text(encoding="utf-8"), encoding="utf-8")
+        tests = root / "templates/ui-tests/tests"
+        tests.mkdir(parents=True)
+        (tests / "checkout.spec.js").write_text(
+            "const u = process.env.CHECKOUT_USER;\n", encoding="utf-8")
+        nm = root / "templates/ui-tests/node_modules/dep"
+        nm.mkdir(parents=True)
+        (nm / "index.js").write_text("process.env.IGNORED_IN_NODE_MODULES;\n", encoding="utf-8")
+        for label, cwd_files, expected, needle in (
+            ("a spec added to the kit is discovered without being named — refused",
+             True, 1, "CHECKOUT_USER is read by"),
+            ("a kit with no JS/TS files at all — refused, never an empty OK",
+             False, 1, "CANNOT CHECK: no JS/TS files found"),
+        ):
+            if not cwd_files:
+                (tests / "checkout.spec.js").unlink()
+            r = subprocess.run([sys.executable, str(GUARD), str(action)],
+                               capture_output=True, text=True, cwd=tmp)
+            code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
+            extra += 1
+            if code != expected or needle not in out:
+                failures.append(f"{label}\n      expected exit {expected} with {needle!r}; got {code}.\n      {out}")
+            elif "IGNORED_IN_NODE_MODULES" in out:
+                failures.append(f"{label}\n      node_modules was scanned.\n      {out}")
+            else:
+                print(f"OK:   {label} (exit {code})")
+
     if failures:
         print("\ncheck-ui-suite-env-cases: FAILED\n")
         for f in failures:
             print(f"  - {f}")
         return 1
-    print(f"\ncheck-ui-suite-env-cases: OK — {len(CASES) + len(SPEC_CASES) + 1} pinned shapes read correctly.")
+    print(f"\ncheck-ui-suite-env-cases: OK — {len(CASES) + len(SPEC_CASES) + 1 + extra} pinned shapes read correctly.")
     return 0
 
 

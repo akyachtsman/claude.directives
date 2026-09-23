@@ -33,6 +33,7 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-ui-suite-env.py
 """
+import os
 import re
 import sys
 
@@ -50,9 +51,29 @@ ACTION = sys.argv[1] if len(sys.argv) > 1 else "templates/actions/ui-suite/actio
 # local run. Every rule below compares the steps with EACH OTHER, and a variable
 # the run step never had is absent from all of them, so parity said nothing.
 # The config is included for the same reason: the run imports it too.
-# Overridable (argv[2:]) so the cases can point it at a fixture spec.
-SPEC_FILES = tuple(sys.argv[2:]) or ("templates/ui-tests/tests/app.spec.js",
-                                     "templates/ui-tests/playwright.config.js")
+# DISCOVERED, not listed: every JS/TS file under the kit (specs, the config,
+# and any helper a spec imports), so a spec added later is covered the moment it
+# exists rather than when someone remembers to name it here. Walked on disk, not
+# via `git ls-files`, so an unstaged new file is not invisible. Overridable
+# (argv[2:]) so the cases can point it at a fixture spec.
+KIT_DIR = "templates/ui-tests"
+KIT_SKIP_DIRS = {"node_modules", "test-results", "playwright-report", ".git"}
+KIT_EXTS = (".js", ".mjs", ".cjs", ".ts", ".mts", ".cts")
+
+
+def discover_kit_files(root=KIT_DIR):
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in KIT_SKIP_DIRS)
+        found += [os.path.join(dirpath, f) for f in sorted(filenames) if f.endswith(KIT_EXTS)]
+    return tuple(found)
+
+
+SPEC_FILES = tuple(sys.argv[2:]) or discover_kit_files()
+if not SPEC_FILES:
+    # A discovery that finds nothing would check nothing and print OK -- the
+    # fail-open shape this rule exists to close. Refuse instead.
+    sys.exit(f"CANNOT CHECK: no JS/TS files found under {KIT_DIR} (run from the repo root)")
 # Variables a spec may read WITHOUT the composite wiring them, as {name: reason}.
 # Empty on purpose: every variable the shipped kit reads today is a per-project
 # value that only an input can carry. Add one only for something the RUNNER
@@ -364,30 +385,39 @@ def workdir_of(steps, name):
 def check_spec_env(doc, run_env, problems):
     """Every process.env variable a spec file reads is an input the run step passes.
 
-    A CLOSED reader, not a JS parser: it accepts exactly `process.env.NAME` and
-    `process.env['NAME']` / `process.env["NAME"]`, and REFUSES any other use of
-    `process.env` (a computed key, destructuring, passing the object on), because
-    a read this cannot name is a read it cannot check -- and reporting OK past it
-    is the silent-null failure #320 is about.
+    A CLOSED reader, not a JS parser. EVERY occurrence of the identifier
+    `process` must be one of: `process.env.NAME`, `process.env['NAME']` /
+    `process.env["NAME"]`, or `process.<ident>` for a property other than `env`
+    (`process.platform`, `process.exit`). Anything else is REFUSED -- a computed
+    key, destructuring, `process['env']`, `process . env`, an alias, passing the
+    object on -- because a read this cannot name is a read it cannot check, and
+    reporting OK past it is the silent-null failure #320 is about. The rule is
+    lexical, so the word `process` in a comment or string is refused too: that is
+    the safe direction, and rewording the comment is the fix.
     """
     declared = set((doc.get("inputs") or {}).keys())
     reads = {}
     for path in SPEC_FILES:
         with open(path, encoding="utf-8") as handle:
             text = handle.read()
-        for m in re.finditer(r"process\.env\b", text):
+        for m in re.finditer(r"(?<![\w$])process(?![\w$])", text):
             line = text.count("\n", 0, m.start()) + 1
-            named = re.match(r"\.([A-Za-z_$][\w$]*)|\[\s*(['\"])([A-Za-z_]\w*)\2\s*\]",
-                             text[m.end():])
-            if not named:
-                problems.append(
-                    f"{path}:{line} uses process.env in a form this guard cannot name"
-                    + f"\n    got: {text[m.start():].splitlines()[0][:60]!r}"
-                    + "\n    Only `process.env.NAME` and `process.env['NAME']` are read; any other"
-                    + "\n    form is a variable nothing here can prove the composite passes (#320)."
-                )
+            rest = text[m.end():]
+            named = re.match(r"\.env(?:\.([A-Za-z_$][\w$]*)|\[(['\"])([A-Za-z_]\w*)\2\])(?![\w$])",
+                             rest)
+            if named:
+                reads.setdefault(named.group(1) or named.group(3), f"{path}:{line}")
                 continue
-            reads.setdefault(named.group(1) or named.group(3), f"{path}:{line}")
+            other = re.match(r"\.([A-Za-z_$][\w$]*)", rest)
+            if other and other.group(1) != "env":
+                continue
+            problems.append(
+                f"{path}:{line} uses `process` in a form this guard cannot name"
+                + f"\n    got: {text[m.start():].splitlines()[0][:60]!r}"
+                + "\n    Only `process.env.NAME`, `process.env['NAME']` and `process.<prop>` (prop"
+                + "\n    not `env`) are read; any other form -- `process['env']`, spacing, an alias,"
+                + "\n    destructuring, the word in a comment -- is refused, not skipped (#320)."
+            )
     for name, where in sorted(reads.items()):
         if name in ENV_EXEMPT:
             continue

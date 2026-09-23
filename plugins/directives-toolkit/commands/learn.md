@@ -35,7 +35,10 @@ Fields: `ts` (ISO-8601) · `type` (`pattern` | `pitfall` | `preference` |
 
 **Budget and compaction:** the per-entry cap slows growth but does not bound the
 file — distinct keys are unlimited and every update appends another line. Keep the
-file under **40 live entries / ~3,000 tokens**. On exceeding it, run a
+file under **40 live entries**; with the per-entry cap that bounds it too. There is
+deliberately no separate token figure: 40 entries at 60 words is ~5,700 tokens, so a
+lower one could only be met by deleting correct entries (#369, owner ruling
+2026-09-23). On exceeding it, run a
 **compaction**: drop lines superseded by a later same-key entry (they are already
 inert under latest-key-wins), merge entries that state one lesson, and delete any
 whose rule now lives in CLAUDE.md or a directive.

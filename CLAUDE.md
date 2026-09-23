@@ -333,7 +333,7 @@ node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
-node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence
+node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence, every listed file exists (a workflow_run entry's workflows still contain the text) — completeness NOT checked (#370)
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header). Literal phrasings, CASE-SENSITIVE; a reworded carrier is meant to turn this red, and the fix is to add the wording to `phrasings` (#341)
 node .github/scripts/check-claims-cases.js       # that guard's own guard — case-sensitivity and the mustNotMatch-containment rule are what replaced the inference layer, and nothing else here would notice either being dropped. Re-prove with CHECK_CLAIMS_BIN=<mutant>
 python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking

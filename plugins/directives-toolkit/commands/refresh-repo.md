@@ -365,8 +365,18 @@ The per-file rule above protects local kit edits, and it also stops a kit BUG
 fix from arriving: a defect shipped in `templates/ui-tests/` is in every
 downstream copy, and a session weighing the fix hunk as "evolution" keeps the bug
 (#327 — S2's fail-open reached projects that followed this table exactly). So,
-whenever `.github/scripts/ui-tests/` exists locally — **every refresh, before any
-kit diff, whether or not the delta touches the kit**:
+whenever the project carries the kit — **every refresh, before any kit diff,
+whether or not the delta touches the kit**. The kit may live elsewhere
+(`cicd-setup.md` lets `UI_TESTS_DIR` point anywhere), so find it from the
+workflows rather than assuming the default:
+```bash
+kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml 2>/dev/null \
+  | sed -E "s/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//; s/[\"']//g; s/[[:space:]]+$//" | sort -u)
+if [ -z "$kit_dirs" ]; then   # no UI_TESTS_DIR set: the default, if the project has a kit at all
+  [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests || echo "no UI-test kit in this project — kit defects step skipped"
+fi
+for d in $kit_dirs; do [ -d "$d" ] && echo "kit: $d" || echo "kit dir named but missing: $d — kit defects NOT checked there"; done
+```
 
 1. Fetch the list from UPSTREAM (not the local copy, which is only as new as the
    last sync). Every Bash call starts a fresh shell, so Phase 2's `$head` is NOT
@@ -383,15 +393,17 @@ kit diff, whether or not the delta touches the kit**:
    fi
    ```
    *NOT checked* is reported as such, never as none found.
-2. For each entry, run its **Check** from `.github/scripts/ui-tests/`. `CLEAR` →
-   nothing. `UNDECIDED` → read the code the entry names and record a verdict.
+2. For each entry, run its **Check** from each kit directory found above. `CLEAR`
+   → nothing. `UNDECIDED` → read the code the entry names and record a verdict.
 3. `AFFECTED` → apply that entry's **Minimal fix** — that hunk only, never the
    surrounding upstream rewrite, which stays per-file diff work — **unless the
    project states why the defect does not apply here**. Record that reason as one
-   line in the project's `CLAUDE.md` naming the entry id AND the revision it
-   judged (`KD-1 r1 declined: …`), so the next refresh reads the verdict instead
-   of re-deriving it — unless the entry's `Revision:` is now higher, which voids
-   the decline: re-run that entry's check.
+   line in the project's `CLAUDE.md` naming the entry id (`KD-1 declined: …`).
+   **A recorded decline never skips the check** — step 2 runs every entry every
+   time. On a later `AFFECTED`, re-read the recorded reason against the code you
+   just checked and report whether it still holds; if the code changed or the
+   entry was corrected so that it no longer does, apply the fix. Re-running is
+   cheap, and it is what stops a stale verdict from outliving either change.
 4. Report each entry's result (`CLEAR` / fixed / declined with reason) in the
    refresh report.
 

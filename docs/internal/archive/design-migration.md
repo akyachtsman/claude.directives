@@ -8,7 +8,7 @@
 > (`design.md` is now a thin per-project method, `/design-intake` ships, the fixed
 > 10-theme system + `design-system.html` are retired). This doc is retained as the
 > historical plan that staged it (Phase 1 additive → Phase 2 cutover, CI green
-> throughout); see `dev-pipeline.md` → "Design — per-project generative (done)".
+> throughout); see `dev-pipeline.md` → *Implementation status*, "Design — per-project generative (done)".
 
 ## Why
 The current `directives/design.md` is a **fixed, company-wide** design system (10

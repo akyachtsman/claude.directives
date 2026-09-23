@@ -656,7 +656,7 @@ advance from a web session at all (#326). If `ls-remote` or the fetch is
 unreachable this run, skip Phases 2–3 gracefully: report
 "upstream delta unavailable this run — stamp unchanged, re-run /refresh-repo
 later", keep the old stamp, and never fabricate a SHA or an unverified delta
-(global.md → Behavior Rules → evidence before assertions).
+(`global.md` → *Behavior Rules*: evidence before assertions).
 
 Report: rules re-read (Phase 0), broken references and fixes, the upstream
 delta with per-file dispositions, the new stamp — and remind that any toolkit

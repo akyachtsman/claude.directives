@@ -96,6 +96,6 @@ the list here; copy it from the template so the two cannot drift.
 
 ## Session Start
 1. Read all Imported Directive URLs above fully
-2. Verify the directives-toolkit plugin attached (commands/agents resolve) per global.md → Skill Bootstrap
+2. Verify the directives-toolkit plugin attached (commands/agents resolve) per `global.md` → *Skill Bootstrap*
 3. Confirm active branch: `git branch --show-current`
 4. Run `/env-chk` and report status

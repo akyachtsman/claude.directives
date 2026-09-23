@@ -13,8 +13,8 @@ verdict. Read-only — do NOT modify files. Execute in order:
    background tasks**: on a resumed/long session a backgrounded `sleep` poll can
    linger as a phantom "running" task after its process was reaped — flag any
    `sleep`/poll process with no live backing (and remind that future waits use
-   `send_later`/`ScheduleWakeup`/event-wakeups, never a backgrounded `sleep`; see global.md →
-   Async Operations).
+   `send_later`/`ScheduleWakeup`/event-wakeups, never a backgrounded `sleep`; see
+   `global.md` → *Async Operations*).
 3. CI & deploy status — Check for any open CI-failure or reviewer-flagged
    tracking issues/PRs and list them (a broken deploy surfaces here as a
    `pages-deploy-failure` issue). Run the `directives/git.md` repo-settings
@@ -69,7 +69,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
    129 because it requires a value. If the object is STILL missing after that one
    attempt, stop retrying. Anywhere else, or when the object is still missing, report the SHA
    delta **uncategorised and say classification was unavailable**, pointing at
-   MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix. Never clone the repo
+   `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*. Never clone the repo
    to classify — the alarm is a diagnostic and must cost less than what it warns
    about. Degrading loudly is correct; inheriting a blocked or nonexistent call
    one line after the SHA fetch is not.
@@ -95,14 +95,14 @@ verdict. Read-only — do NOT modify files. Execute in order:
      reports self-updating for a project whose updater never runs at session
      start.
      On CLI/desktop the first condition is false by design — the hook exits early
-     off the web (`global.md` → Skill Bootstrap keeps local installs manual). Do
+     off the web (`global.md` → *Skill Bootstrap* keeps local installs manual). Do
      not report a local session as self-updating: tell it to run
      `scripts/install-toolkit.sh` itself, and say the hook covers its web
      sessions only.
      Self-updating → the next session picks the toolkit up on its own; say so and
      prescribe nothing. Otherwise → force the env cache rebuild (see
-     NEW-REPO-USER-INSTRUCTIONS.md → "Force a toolkit update") or wait for the
-     ~weekly expiry, and offer `/refresh-repo` to install or repair the hook so
+     `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0 — One-time: turn the toolkit on (you may already be done)*,
+     "Force a toolkit update") or wait for the ~weekly expiry, and offer `/refresh-repo` to install or repair the hook so
      the manual step stops recurring. Name which of the three failed: a present
      but unregistered or non-executable hook is the trap — it looks installed and
      never runs.

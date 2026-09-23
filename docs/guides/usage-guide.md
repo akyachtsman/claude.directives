@@ -11,7 +11,7 @@ skills are **not** a committed runtime dependency — they bootstrap fresh from
   `CLAUDE.md`, the CI workflows, the Playwright kit, and the plugin-enable
   settings.
 - **Existing project:** the `directives-toolkit` plugin delivers all commands,
-  skills, agents, and hooks (global.md → Skill Bootstrap). Nothing is fetched
+  skills, agents, and hooks (`global.md` → *Skill Bootstrap*). Nothing is fetched
   into `.claude/`; updates track this repo's `main` automatically.
 
 Toolkit agents: `test-verifier`, `pr-readiness-reviewer`, `qa-pipeline`,

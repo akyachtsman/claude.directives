@@ -110,7 +110,7 @@ Repo-specific deltas:
 ## Session Start
 1. Read all five exported directive files under `directives/` fully — from the
    local working tree, not the raw `main` URLs (on a branch, `main` copies may be stale)
-2. Verify the directives-toolkit plugin attached (commands/agents resolve) per global.md → Skill Bootstrap
+2. Verify the directives-toolkit plugin attached (commands/agents resolve) per `global.md` → *Skill Bootstrap*
 3. Confirm active branch: `git branch --show-current`
 4. Run `/env-chk` and report status — this includes the `scope-chk` repo-scope
    verification (global.md's Session Start step 2), so it need not be run separately here

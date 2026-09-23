@@ -49,7 +49,7 @@ Run in order:
      `ScheduleWakeup` where a session has that instead. Verify which exists per
      `/env-chk` rather than assuming either. Do **not** background a `sleep` poll
      and do not sit in a foreground sleep — a backgrounded sleep orphans into a
-     phantom "running" task on session resume (see global.md → Async Operations;
+     phantom "running" task on session resume (see `global.md` → *Async Operations*;
      the `wait-gate` hook blocks it).
 
 5. **Stuck detection.** If no run for the pushed SHA appears within ~2 minutes,

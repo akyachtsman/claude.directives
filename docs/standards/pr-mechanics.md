@@ -197,9 +197,12 @@ the states that rule's test admits.
   request is unanswered, you cannot tell, and this rung does not apply.
 
   Note what that implies: an unanswered earlier request is *exactly* what a
-  previous clean round looks like, so on a PR that has already run clean once,
-  rung 1 is usually unavailable and rungs 2–3 are the real path. Compounding
-  it, a GitHub user holds at most one reaction of a given type per subject, so a
+  previous clean round answered by REACTION alone looks like, so on a PR that
+  has already run clean that way, rung 1 is usually unavailable and rungs 2–3
+  are the real path. A clean round that came as a SHA-bearing comment or inline
+  reply is different: it answered its request and left no 👍, so a later 👍 can
+  still satisfy rung 1 when the ordering conditions hold. Compounding the
+  reaction-only case, a GitHub user holds at most one reaction of a given type per subject, so a
   second clean verdict from Codex adds **no new reaction at all** — the only 👍
   present is the first one, with its original timestamp. (That follows from the
   documented reaction model rather than from measurement here; treat it as the

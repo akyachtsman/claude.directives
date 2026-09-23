@@ -186,10 +186,12 @@
       "source": "directives/git.md",
       "phrasings": [
         "Every exit stays reachable, and none clears the gate silently.",
-        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently."
+        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently.",
+        "every exit from the Codex verdict gate stays reachable, and none clears the gate silently."
       ],
       "consumers": [
-        "docs/standards/automations.md"
+        "docs/standards/automations.md",
+        "docs/standards/pr-mechanics.md"
       ],
       "mustNotMatch": [
         "Every exit stays reachable, and none clears the gate silently unless the owner approves.",
@@ -202,7 +204,9 @@
         "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is permitted is clearing the gate silently.",
         "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate loudly.",
         "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently only after owner approval.",
-        "what is forbidden is clearing the gate silently."
+        "what is forbidden is clearing the gate silently.",
+        "every exit from the Codex verdict gate stays reachable, and one may clear the gate silently.",
+        "every exit from the Codex verdict gate stays reachable, and none clears the gate silently unless the owner approves."
       ]
     },
     {

@@ -716,9 +716,22 @@ CASES = [
 
 ]
 
+# THE SPEC-ENV RULE (#320): every process.env variable the spec reads must reach
+# the run step from a declared input. These run against the LIVE composite with a
+# fixture spec, so the accepting side is the real wiring; the fixture composites
+# above get a spec that reads nothing, which keeps them about the step rules.
+SPEC_CASES = [
+    ("the spec reads a variable the composite never passes — refused",
+     "const X = process.env.TEST_SOMETHING_NEW || null;\n", 1,
+     'TEST_SOMETHING_NEW is read by'),
+    ("the spec reads process.env through a computed key — refused, not skipped",
+     "const k = 'APP_URL';\nconst X = process.env[k];\n", 1,
+     "uses process.env in a form this guard cannot name"),
+]
 
-def run_guard(path):
-    r = subprocess.run([sys.executable, str(GUARD), str(path)],
+
+def run_guard(path, spec):
+    r = subprocess.run([sys.executable, str(GUARD), str(path), str(spec)],
                        capture_output=True, text=True, cwd=REPO_ROOT)
     return r.returncode, f"{r.stdout}{r.stderr}".strip()
 
@@ -726,10 +739,18 @@ def run_guard(path):
 def main():
     failures = []
     with tempfile.TemporaryDirectory() as tmp:
-        for i, (label, body, expected, needle) in enumerate(CASES):
+        no_reads = Path(tmp) / "no-reads.spec.js"
+        no_reads.write_text("// reads no environment\n", encoding="utf-8")
+        cases = [(label, body, expected, needle, no_reads)
+                 for label, body, expected, needle in CASES]
+        for j, (label, spec_text, expected, needle) in enumerate(SPEC_CASES):
+            spec = Path(tmp) / f"spec{j}.spec.js"
+            spec.write_text(spec_text, encoding="utf-8")
+            cases.append((label, LIVE.read_text(encoding="utf-8"), expected, needle, spec))
+        for i, (label, body, expected, needle, spec) in enumerate(cases):
             path = Path(tmp) / f"case{i}.yml"
             path.write_text(body, encoding="utf-8")
-            code, out = run_guard(path)
+            code, out = run_guard(path, spec)
             if code != expected:
                 failures.append(f"{label}\n      expected exit {expected}; got {code}.\n      {out}")
             elif needle not in out:
@@ -742,7 +763,10 @@ def main():
 
     # The guard must also still pass against the REAL composite. A suite that only
     # ever sees fixtures can be perfectly green while the shipped file is broken.
-    code, out = run_guard(LIVE)
+    # With the SHIPPED spec and config, so the #320 wiring is checked for real.
+    r = subprocess.run([sys.executable, str(GUARD), str(LIVE)],
+                       capture_output=True, text=True, cwd=REPO_ROOT)
+    code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
     if code != 0:
         failures.append(f"the live composite no longer passes\n      exit {code}\n      {out}")
     else:
@@ -753,7 +777,7 @@ def main():
         for f in failures:
             print(f"  - {f}")
         return 1
-    print(f"\ncheck-ui-suite-env-cases: OK — {len(CASES) + 1} pinned shapes read correctly.")
+    print(f"\ncheck-ui-suite-env-cases: OK — {len(CASES) + len(SPEC_CASES) + 1} pinned shapes read correctly.")
     return 0
 
 

@@ -33,6 +33,7 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-ui-suite-env.py
 """
+import re
 import sys
 
 import yaml
@@ -42,6 +43,22 @@ import yaml
 # round 9 broke in round 10 unnoticed (#333) -- the guard's own failure path is
 # exactly the code nobody exercises.
 ACTION = sys.argv[1] if len(sys.argv) > 1 else "templates/actions/ui-suite/action.yml"
+# THE FILES WHOSE process.env READS THE RUN STEP MUST SUPPLY (#320). The spec
+# read TEST_AUTH_READY_SELECTOR / _REQUEST for weeks while nothing in the
+# composite passed them, so in CI both were always null and `gateEvidence:
+# 'proven'` was unreachable -- a feature that worked only under a hand-exported
+# local run. Every rule below compares the steps with EACH OTHER, and a variable
+# the run step never had is absent from all of them, so parity said nothing.
+# The config is included for the same reason: the run imports it too.
+# Overridable (argv[2:]) so the cases can point it at a fixture spec.
+SPEC_FILES = tuple(sys.argv[2:]) or ("templates/ui-tests/tests/app.spec.js",
+                                     "templates/ui-tests/playwright.config.js")
+# Variables a spec may read WITHOUT the composite wiring them, as {name: reason}.
+# Empty on purpose: every variable the shipped kit reads today is a per-project
+# value that only an input can carry. Add one only for something the RUNNER
+# itself sets (e.g. `CI`, `GITHUB_*`), and give the reason -- an entry is a claim
+# that the value arrives without this file, and nothing here can check it.
+ENV_EXEMPT = {}
 CHECK_STEP = "Check three viewport classes are declared"
 RUN_STEP = "Run Playwright tests"
 # THE POST-RUN STEP IS NOT A THIRD SPECIAL CASE, it is the same step twice. Since
@@ -344,6 +361,56 @@ def workdir_of(steps, name):
     return matches[0].get("working-directory") if len(matches) == 1 else None
 
 
+def check_spec_env(doc, run_env, problems):
+    """Every process.env variable a spec file reads is an input the run step passes.
+
+    A CLOSED reader, not a JS parser: it accepts exactly `process.env.NAME` and
+    `process.env['NAME']` / `process.env["NAME"]`, and REFUSES any other use of
+    `process.env` (a computed key, destructuring, passing the object on), because
+    a read this cannot name is a read it cannot check -- and reporting OK past it
+    is the silent-null failure #320 is about.
+    """
+    declared = set((doc.get("inputs") or {}).keys())
+    reads = {}
+    for path in SPEC_FILES:
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        for m in re.finditer(r"process\.env\b", text):
+            line = text.count("\n", 0, m.start()) + 1
+            named = re.match(r"\.([A-Za-z_$][\w$]*)|\[\s*(['\"])([A-Za-z_]\w*)\2\s*\]",
+                             text[m.end():])
+            if not named:
+                problems.append(
+                    f"{path}:{line} uses process.env in a form this guard cannot name"
+                    + f"\n    got: {text[m.start():].splitlines()[0][:60]!r}"
+                    + "\n    Only `process.env.NAME` and `process.env['NAME']` are read; any other"
+                    + "\n    form is a variable nothing here can prove the composite passes (#320)."
+                )
+                continue
+            reads.setdefault(named.group(1) or named.group(3), f"{path}:{line}")
+    for name, where in sorted(reads.items()):
+        if name in ENV_EXEMPT:
+            continue
+        value = run_env.get(name)
+        if value is None:
+            problems.append(
+                f'{name} is read by {where} but "{RUN_STEP}" does not set it'
+                + "\n    In CI it is then always unset, so whatever the spec does with it is"
+                + "\n    unreachable. Add an input and pass it into the run step's env, or"
+                + "\n    list it in ENV_EXEMPT with the reason it arrives another way (#320)."
+            )
+            continue
+        m = re.fullmatch(r"\$\{\{\s*inputs\.([\w-]+)\s*\}\}", str(value))
+        if not m or m.group(1) not in declared:
+            problems.append(
+                f'{name} is read by {where} but "{RUN_STEP}" does not take it from a declared input'
+                + f"\n    got: {value!r}; expected `${{{{ inputs.<name> }}}}` naming a key of `inputs:`"
+                + "\n    A project sets it only through an input; any other value is one no"
+                + "\n    caller can reach (#320)."
+            )
+    return sorted(reads)
+
+
 def main():
     with open(ACTION, encoding="utf-8") as handle:
         doc = yaml.safe_load(handle)
@@ -355,6 +422,7 @@ def main():
 
     problems = []
     check_upload(steps, problems)
+    spec_reads = check_spec_env(doc, run_env, problems)
     for label, *_ in SEQUENCE:
         count = envs[label][1]
         if count > 1:
@@ -612,6 +680,11 @@ def main():
     print(
         f"check-ui-suite-env: OK -- {len(SEQUENCE)} consecutive steps, same step-level "
         f"env and working directory ({', '.join(shared) if shared else 'empty'})"
+    )
+    print(
+        f'  spec env wired from inputs into "{RUN_STEP}": '
+        + (", ".join(spec_reads) if spec_reads else "none read")
+        + f" (read from {', '.join(SPEC_FILES)})"
     )
     print(
         "  (declared env only: the launchers differ -- `node` vs `npx` -- and the"

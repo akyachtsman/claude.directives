@@ -125,8 +125,10 @@
 //  15  --report was given and the report could not be read (CANNOT CHECK)
 //  16  RETIRED — the listing that needed it is gone; see readReport()
 //  17  RETIRED — ditto
-//  18  two or more projects share a name (CANNOT CHECK) — the run reports
-//      results by project name, so one project's tests would certify another's
+//  18  two or more projects share a name (CANNOT CHECK) — the gate joins
+//      results by project name, so one project's tests would certify another's.
+//      The report DOES carry a unique projectId; the refusal stays by owner
+//      ruling because it fails closed (#351, see the join comment below)
 //  19  RETIRED — `--forbid-only` was a probe against the listing, and a probe
 //      the config could observe. The run's report needs no probe.
 //  20  --declared was given with --report and the mapping could not be read, or
@@ -1680,9 +1682,16 @@ console.log(`config:    ${configPath}`);
   // Stage two counts a project when Playwright discovers a test for it, which
   // answers the same question by observation and needs no list of key names.
   // THE JOIN IS BY PROJECT NAME, so two projects that share one are
-  // indistinguishable — whichever ran would certify both bands. Playwright has
-  // no trouble telling them apart; this gate cannot, because the run's report
-  // identifies a result only by `projectName`.
+  // indistinguishable TO THIS GATE — whichever ran would certify both bands.
+  // An earlier version of this comment said the report identifies a result only
+  // by `projectName`. That was FALSE: measured on 1.62.1, `config.projects[]`
+  // carries `id` as well as `name` (`same`, `same1`, `phone` for names `same`,
+  // `same`, `phone`, in config order) and every test carries `projectId` beside
+  // `projectName`. #357 tried rejoining by id and its review found six ways that
+  // positional mapping certifies a project that never ran — all fail-open — so
+  // the refusal stays, by owner ruling (#351): it costs a rename and never
+  // overstates coverage. A false refusal and a false certification are not
+  // symmetric defects.
   //
   // An unnamed project reports `projectName: ""`, so the empty string is the key
   // for "no name" on BOTH sides and two nameless projects collide exactly as two
@@ -1802,8 +1811,8 @@ console.log(`config:    ${configPath}`);
     die(18, [
       'CANNOT CHECK: two or more projects share a name.',
       `  ${dupes.map(n => (n === '' ? '(no name)' : n)).join(', ')}`,
-      '  The run reports each result by project NAME, so tests belonging to one of',
-      '  them would certify the other\'s band. Give every project a distinct name;',
+      '  This gate joins each result to its project by NAME, so tests belonging to',
+      '  one of them would certify the other\'s band. Give every project a distinct name;',
       '  Playwright accepts any string and the names appear in the run\'s output.',
       '  test.md -> UI coverage gates, fifth gate.',
     ]);

@@ -588,7 +588,8 @@ Two things that repeatedly get this wrong, both measured on this PR:
   present is not a browser that launches; an install that exits 0 is not a browser
   that launches; a green aggregate CI run is not the scenario having executed
   (`claude.insurance`'s green read 24 passed **12 skipped** 0 failed — a skipped
-  case and a passing case produce the same green).
+  case and a passing case produce the same green — the fail-open family,
+  `code-review-standard.md` → *Fail-Open Guards*).
 - **Absent is not unavailable.** A browser missing from the image may be
   installable — `ui-suite/action.yml` installs browsers as a normal step. Run the
   ladder rather than judging by eye:

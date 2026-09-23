@@ -27,6 +27,9 @@ and nowhere else.** Each workflow file and setup step carries the ACTION it
 needs and points back here for the reasoning — a rule explained in five places
 is a rule corrected in four (learned the hard way, 2026-08-19).
 
+A watcher that resolves but never fires, or fires and asserts too little, is as
+green as a healthy one — `code-review-standard.md` → *Fail-Open Guards*.
+
 ### W1 — Every watched name must resolve to a workflow this repo has
 
 A `workflow_run` entry naming a workflow you did not install can never fire. It

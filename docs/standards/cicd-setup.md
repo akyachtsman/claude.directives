@@ -540,6 +540,14 @@ Required repository variables:
 | `APP_URL` | Live GitHub Pages URL (e.g. `https://<username>.github.io/<repo>/`) |
 | `DB_URL` | Backend project/connection URL (safe in a variable; the client/anon key relies on RLS) |
 
+Optional repository variables (the qa workflows pass them through the `ui-suite` composite; unset keeps the default behaviour):
+
+| Variable | Purpose |
+|---|---|
+| `TEST_AUTH_READY_SELECTOR` | A selector matching whichever auth outcome occurs — the gate itself OR the authenticated app shell — so "no auth gate" is reported `proven` rather than `windowed` (`test.md`). A variable, not a secret: a masked selector is unreadable in a failure message |
+| `TEST_AUTH_READY_REQUEST` | Alternative to the selector: a substring of the URL of the request whose settling decides the auth outcome |
+| `APP_PAGES` | Extra HTML entry points beyond `APP_URL`, comma-separated and relative to it (e.g. `admin.html,vendor/console.html`); each gets the ENTRY load gate. Unset, only the base URL is covered |
+
 ---
 
 ## Verification Checklist

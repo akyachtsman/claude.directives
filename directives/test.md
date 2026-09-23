@@ -15,6 +15,9 @@ touch.
 - `docs/standards/code-review-standard.md` — Blocking vs. non-blocking review criteria
 - `docs/guides/usage-guide.md` — Agent installation, review boundaries, and .agent-reports/ organization
 - `docs/standards/ci-triage.md` — Expected vs. real CI failures, workflow trigger rules
+- `docs/standards/pr-mechanics.md` — evidence and edge cases behind `git.md` → *PR Lifecycle* (missing wakes, verdict-gate exits, the reaction ladder, review metering)
+- `docs/standards/session-mechanics.md` — evidence and edge cases behind `global.md`'s session-behaviour rules
+- `docs/standards/hosting-mechanics.md` — evidence and edge cases behind `global.md` → *Hosting & Deployment*
 
 ### QA/data agents — ship in the directives-toolkit plugin
 Agents arrive via the `directives-toolkit` plugin (see `global.md` → *Skill Bootstrap*) and are namespaced `directives-toolkit:*`. Nothing is fetched into

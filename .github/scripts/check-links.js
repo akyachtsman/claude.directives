@@ -169,7 +169,8 @@ if (mode !== '--external') {
   //
   // Only the first 20 were absent. Tightening the separators to `[ \t]*` dropped
   // the 17 from the count (167 → 150) because they stopped matching wrongly;
-  // joining all 37 in the source is what brought it to 187.
+  // joining all 37 in the source is what brought it to 187 at #367 (historical;
+  // the count has grown with the repo since).
   //
   // Two designs tried to read them anyway and both failed the same way. #365 let
   // the name SPAN a newline; six review rounds each found another Markdown
@@ -222,7 +223,7 @@ if (mode !== '--external') {
   //
   // Nothing ever required that invariant. #363 asked for the fraction to stop
   // lying, and two things already do that with zero findings in six rounds: the
-  // references are on one line (150 -> 187), and the summary discloses what
+  // references are on one line (150 -> 187 at #367), and the summary discloses what
   // PARSED means. The invariant was adopted at round 4 in response to a finding
   // about one input, and failed three times.
   //
@@ -234,8 +235,8 @@ if (mode !== '--external') {
   // the whole rule; it is decidable by reading it, and no construct can be
   // "missing" from it, because it does not claim to track anything external.
   // A construct that CommonMark renders differently is OUT OF SCOPE and
-  // disclosed on every run, not silently mishandled. All 187 references here
-  // satisfy it.
+  // disclosed on every run, not silently mishandled. Every reference here
+  // satisfies it (187 of them at #367).
   //
   // "No line ending" means any of commonmark's (/\r\n|\n|\r/), not just LF —
   // but the pattern only excludes `\n`, because readSource() has already

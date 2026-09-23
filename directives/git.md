@@ -6,6 +6,8 @@ merge → cleanup. Split out of `global.md` (2026-07-14), which keeps pointer
 stubs under the original headings so older references still resolve. Branch
 policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
 `global.md` → *GitHub Workflow*.
+A `docs/…` path in these directives resolves against claude.directives:
+`https://raw.githubusercontent.com/akyachtsman/claude.directives/main/<path>`.
 
 ## PR Lifecycle
 - Open a draft PR as soon as a branch has a first commit
@@ -72,8 +74,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   itself when the PR merges or closes; `unsubscribe_pr_activity` is for a PR you
   were asked to stop watching, not for one you are driving.
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
-  apply the fix, then get the label **cleared by requesting another review
-  pass**, not by removing it. Check the PR's labels on GitHub before merging.
+  apply the fix, then request another review pass (next bullet). Check the PR's
+  labels on GitHub before merging.
   The `codex-monitor` workflow adds the label on a flagged round and clears it
   itself on a Codex all-clear **comment** that names the current head SHA — the
   only form it can act on, and the form that cleared #293. A clean rerun can
@@ -83,10 +85,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   any of them. A label still present means concerns not yet re-reviewed, a clean
   round delivered in a form the monitor cannot see, or an all-clear that failed
   the SHA match — read the PR, never the label alone.
-- **Taking `codex-flagged` off by hand is the last resort.** Removing it asserts
-  the concern is resolved, which is the author claiming what the reviewer should
-  say; requesting a pass makes Codex say it, in the form the monitor watches. So
-  the default is always: request the pass, let the monitor clear the label.
+- **Taking `codex-flagged` off by hand is the last resort — request another
+  review pass and let the monitor clear the label.** Removing it asserts the
+  concern is resolved, which is the author claiming what the reviewer should
+  say; requesting a pass makes Codex say it, in the form the monitor watches.
 
   **The opening is a TEST — the *unreachable-review test*.** Hand removal is
   permitted only where an **observable terminal state**, recorded on the PR,
@@ -159,8 +161,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     explicitly dismissed on its thread. A response ends *pending* — it is the
     start of the check, not the end of it.
     ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
-    does not watch that event. **Request another review pass rather than removing
-    `codex-flagged` by hand** (`docs/standards/pr-mechanics.md` → *The inline-reply form and the label*).
+    does not watch that event, so the last-resort rule above governs the label
+    (`docs/standards/pr-mechanics.md` → *The inline-reply form and the label*).
   - **Check the author — it validates the SOURCE, not the outcome.** Wording and
     a current SHA are both forgeable, so a response that is not the Codex bot's
     own cannot clear the gate. Authorship is necessary and never sufficient: a
@@ -194,15 +196,13 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     as a comment or inline reply instead, a new 👍 still counts for rung 1. Each rung's conditions and why:
     `docs/standards/pr-mechanics.md` → *The reaction ladder*.
   - **A CLEAN verdict leaves NO REVIEW — but it may still leave a comment.**
-    Three forms occur — a comment, an inline reply, a reaction — and which one
-    you get is not predictable, so an empty REVIEW list means nothing on its own.
-    A SHA-bearing CLEAN verdict in a comment or a review thread clears the gate
-    normally; a review carrying live findings is a response, not a clearance.
-    `codex-monitor` clears the label only on the COMMENT form, so after a clean
-    rerun delivered as a 👍 or an inline reply, **request another pass so the
-    verdict lands as a comment the monitor acts on**. **Do not read the stuck
-    label as unaddressed concerns; read the PR.** Observed forms and the four
-    delivery modes: `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
+    It arrives in one of the three forms the `codex-flagged` bullet above names,
+    none of them a review, so an empty REVIEW list means nothing on its own. A SHA-bearing
+    CLEAN verdict in a comment or a review thread clears the gate normally; a
+    review carrying live findings is a response, not a clearance. A label left
+    by a 👍 or inline-reply rerun follows the last-resort rule above — **do not
+    read the stuck label as unaddressed concerns; read the PR.** Observed forms
+    and the four delivery modes: `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
   - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
     current head.** Its `head_sha` is whatever the suite ran against, often a
     commit you have already replaced. **Resolve the head from the API at use
@@ -236,9 +236,8 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     rather than two. Merging while silently omitting it is precisely the failure
     this gate exists to prevent: an absent signal read as a passing one.
   - **Codex reviews are metered per REQUEST, not per push.** Each request spends
-    from that shared weekly pool, and requests come from opening a PR, flipping a
-    draft to ready, and `@codex review` — the same three the bullet below names.
-    Verify locally, open the PR once, and reserve `@codex review` for a fix you
+    from that shared weekly pool, and every trigger the next bullet names is a
+    request. Verify locally, open the PR once, and reserve `@codex review` for a fix you
     genuinely want re-read. Check which trigger the account is on first: under
     "On every push" every commit spends a review, and the setting is
     account-level. The measurement: `docs/standards/pr-mechanics.md` → *Review metering*.
@@ -255,8 +254,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     returns the repo to the default; two consecutive misses re-enter no-wait.
     Rates and reasoning: `docs/standards/pr-mechanics.md` → *Review triggers*.
   - Do not generalise either way: where the trigger works, a reflex explicit
-    request is a duplicate, and reviews are metered per request from a pool that
-    is weekly and account-wide — the waste lands on every other repo.
+    request is a duplicate, and its metered cost (above) lands on every other repo.
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or

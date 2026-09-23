@@ -549,7 +549,7 @@
     "lsp-plugins": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "The eleven language-server plugins (typescript-lsp, pyright-lsp, gopls-lsp, ...). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive eleven verdicts.",
+      "rationale": "The twelve Anthropic language-server plugins (typescript-lsp, pyright-lsp, gopls-lsp, ...). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive eleven verdicts.",
       "stays": "CLAUDE.md"
     },
     "output-styles": {

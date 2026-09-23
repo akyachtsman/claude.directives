@@ -85,7 +85,7 @@ to arrive, each verified in the workflow's own source:
    steps ambiguous or empty** — a shared head commit alone is not enough, since
    the branch fallback still runs and resolves PRs on distinct branches;
 7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
-   nothing — the cancelled-run case (→ *Wakes that never arrive*), which reaches ordinary PR CI too.
+   nothing — the cancelled-run instance listed at the top of this section, which reaches ordinary PR CI too.
 
 Do not attempt to enumerate your way to a "covered" test. That list grew from
 one item to seven under review, and the eighth is not knowable in advance.
@@ -97,10 +97,12 @@ wake**; a check-in withheld on a false promise of coverage costs an agent
 
 *Supports:* every exit from the Codex verdict gate stays reachable, and none clears the gate silently.
 
-⚠️ **Any state the _unreachable-review test_ (`git.md` → *PR Lifecycle*) admits sits OUTSIDE that
-framing, and it must not be read as closing them** — a gate that cannot be
+⚠️ **Any state the _unreachable-review test_ (`git.md` → *PR Lifecycle*) admits sits OUTSIDE git.md's
+normal-path framing — where some SHA-bearing Codex response names HEAD, every
+check is necessary and only the clean-verdict test is sufficient — and that
+framing must not be read as closing them** — a gate that cannot be
 cleared is not stricter than one that can, it just moves the failure from a bad
-merge to a stalled PR. This gate takes the test, not a copy of its instances:
+merge to a stalled PR. The Codex verdict gate takes the unreachable-review test, not a copy of its instances:
 an enumeration here would disagree with the test the first time a fourth state
 appears, which is the disagreement this wording exists to end. The instances
 known today:

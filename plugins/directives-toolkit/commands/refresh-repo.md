@@ -386,6 +386,12 @@ printf '%s\n' "$kit_dirs" | while IFS= read -r d; do   # one path per LINE: a pa
   [ -d "$d" ] && echo "kit: $d" || echo "kit dir named but missing: $d — kit defects NOT checked there"
 done
 ```
+The accepted value forms are a CLOSED set (#375): unquoted (ending at ` #`),
+single-quoted with `''`, and double-quoted with `\"` and `\\` only. Anything else —
+another double-quoted escape such as `\x20`, a block or flow scalar, an anchor, a
+`${{ }}` expression — is not decoded, so the literal text is taken as the path and
+it lands on *named but missing … NOT checked there*: reported, never silent.
+Such a project checks that directory by hand; the set is not widened per spelling.
 
 1. Fetch the list from UPSTREAM (not the local copy, which is only as new as the
    last sync). Every Bash call starts a fresh shell, so Phase 2's `$head` is NOT

@@ -1,0 +1,254 @@
+name: Watcher Liveness
+# ⚠️ ADVISORY — NOT A GATE (#318). This job never fails and never blocks anything.
+# Whether and when it becomes blocking is an OPEN owner decision; until that is
+# recorded on #318, nothing here may be read as a pass/fail signal on a PR.
+#
+# WHAT IT ASKS. `workflow-ref-guard.py` proves every `workflow_run` name RESOLVES —
+# offline, from the tree. It cannot prove the watcher still FIRES; that needs run
+# history. This asks the Actions API the question the tree cannot answer, in the
+# form #318's comment settled on: not "has the watcher run in N days" (a
+# legitimately dormant watcher fails that), but "did its SUBJECT run while the
+# watcher did not". A watcher is suspect only when its subject is alive and it is
+# silent. A quiet subject is reported QUIET — healthy dormancy, nothing to compare.
+#
+# HOW. For each watcher file in .github/workflows/ and each name it lists, every
+# COMPLETED run of the named workflow inside the window is paired with a run of the
+# watcher (event=workflow_run) created between the subject run's creation and its
+# last update plus SLACK. A subject run with no such watcher run is a gap. The
+# pairing is by time only, so one watcher run can cover several overlapping
+# subject runs: it errs toward quiet, never toward a false alarm.
+#
+# The watcher list is NOT re-derived here: it imports workflow-ref-guard.py and
+# uses its own extraction (#318: "reuse its extraction, do not write a second
+# one"). If that guard fails, nothing is compared and the summary says NOT CHECKED.
+#
+# NOT CHECKED, and said so rather than guessed: a watcher with a `branches` /
+# `branches-ignore` filter (the filter decides which subject runs should fire it),
+# a watcher not yet on the default branch, a subject name the API does not list,
+# and a run listing the API truncated.
+#
+# Not in qa.yml, deliberately: it needs API calls and a time window, and per-PR is
+# the wrong cadence (`git.md` → *GitHub API Quota Economy*). Weekly, plus manual.
+# Findings go to the job summary as warnings and to at most ONE open
+# `watcher-liveness` issue, edited in place rather than re-filed.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: 'Days of run history to compare (default 14)'
+        required: false
+        default: '14'
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  liveness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare each watcher against its subject (advisory)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WINDOW_DAYS: ${{ github.event.inputs.window_days || '14' }}
+          ISSUE_LABEL: 'watcher-liveness'
+        run: |
+          # `|| echo` keeps even a crashed interpreter from failing the job — it is
+          # advisory — while the warning keeps the crash from reading as a pass.
+          python3 - <<'PY' || echo "::warning title=Watcher liveness::the check itself crashed — NOTHING was compared this run"
+          import contextlib, importlib.util, io, json, os, subprocess, traceback
+          from datetime import datetime, timedelta, timezone
+
+          REPO = os.environ["REPO"]
+          LABEL = os.environ.get("ISSUE_LABEL") or "watcher-liveness"
+          SUMMARY = os.environ.get("GITHUB_STEP_SUMMARY") or "/dev/stdout"
+          NOW = datetime.now(timezone.utc)
+          GRACE = timedelta(minutes=60)  # a subject that finished later than this may still be dispatching
+          SLACK = timedelta(minutes=30)  # how long after a subject run's last update its watcher may start
+          notes = []
+          try:
+              WINDOW = int(os.environ.get("WINDOW_DAYS") or "14")
+              if WINDOW < 1:
+                  raise ValueError
+          except ValueError:
+              notes.append(f"window_days={os.environ.get('WINDOW_DAYS')!r} is not a positive integer; used 14.")
+              WINDOW = 14
+          SINCE = NOW - timedelta(days=WINDOW)
+
+
+          def ts(s):
+              return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+          def gh(*args, paginate=False):
+              cmd = ["gh", "api"] + (["--paginate"] if paginate else []) + list(args)
+              p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+              if p.returncode != 0:
+                  raise RuntimeError(f"gh api {' '.join(args)[:120]} failed: {p.stderr.strip()[:300]}")
+              # --paginate without --slurp prints one JSON document per page, back to back.
+              dec, s, i, docs = json.JSONDecoder(), p.stdout, 0, []
+              while True:
+                  while i < len(s) and s[i].isspace():
+                      i += 1
+                  if i >= len(s):
+                      return docs
+                  doc, i = dec.raw_decode(s, i)
+                  docs.append(doc)
+
+
+          def runs(workflow_id, event=None):
+              """(runs, complete) created on/after SINCE's date. complete=False when the
+              API returned fewer runs than its own total_count (it caps a filtered
+              listing), so a truncated history is never read as a silent watcher."""
+              q = f"per_page=100&created=%3E%3D{SINCE:%Y-%m-%d}" + (f"&event={event}" if event else "")
+              pages = gh(f"repos/{REPO}/actions/workflows/{workflow_id}/runs?{q}", paginate=True)
+              got = [r for pg in pages for r in pg.get("workflow_runs", [])]
+              total = pages[0].get("total_count", len(got)) if pages else 0
+              return got, len(got) >= total
+
+
+          def scalars(node, mod):
+              if node is None:
+                  return None
+              if isinstance(node, mod.yaml.SequenceNode):
+                  return [n.value for n in node.value if isinstance(n, mod.yaml.ScalarNode)]
+              return [node.value] if isinstance(node, mod.yaml.ScalarNode) else ["?"]
+
+
+          def main():
+              rows = []  # (watcher, subject, verdict, detail)
+              # 1. The watcher list — workflow-ref-guard.py's own extraction, not a copy.
+              spec = importlib.util.spec_from_file_location("wrg", ".github/scripts/workflow-ref-guard.py")
+              mod = importlib.util.module_from_spec(spec)
+              buf = io.StringIO()
+              try:
+                  with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+                      spec.loader.exec_module(mod)
+              except SystemExit as exc:
+                  if exc.code not in (0, None):
+                      rows.append(("*", "*", "NOT CHECKED",
+                                   "workflow-ref-guard.py failed, so no watcher list was trusted: "
+                                   + buf.getvalue().strip().replace("\n", " ")[:400]))
+                      return rows
+              watchers = []  # (filename, [subject names], why-not-checked or None)
+              for path in mod.files:
+                  root = mod.roots.get(path.name)
+                  wr = mod.mapping_get(mod.on_node(root), "workflow_run") if root is not None else None
+                  if wr is None:
+                      continue
+                  names = [n for n, _ in mod.referenced_workflows(root, [])]
+                  if not names:
+                      rows.append((path.name, "(every workflow)", "NOT CHECKED",
+                                   "`workflow_run` with no `workflows:` list names no subject to compare"))
+                      continue
+                  filt = [k for k in ("branches", "branches-ignore") if scalars(mod.mapping_get(wr, k), mod)]
+                  why = f"has a `{'`/`'.join(filt)}` filter — which subject runs should fire it is not evaluated" if filt else None
+                  watchers.append((path.name, names, why))
+
+              # 2. What the API knows: every workflow, including GitHub-managed dynamic ones.
+              wfs = [w for pg in gh(f"repos/{REPO}/actions/workflows?per_page=100", paginate=True)
+                     for w in pg.get("workflows", [])]
+              by_path = {w["path"]: w for w in wfs}
+              by_name = {}
+              for w in wfs:
+                  by_name.setdefault(w["name"], []).append(w)
+
+              # 3. Each (watcher, subject) pair.
+              for fname, names, why in watchers:
+                  if why:
+                      rows += [(fname, n, "NOT CHECKED", why) for n in names]
+                      continue
+                  wf = by_path.get(f".github/workflows/{fname}")
+                  if wf is None:
+                      rows += [(fname, n, "NOT CHECKED", "watcher is not on the default branch, where GitHub reads `workflow_run` triggers") for n in names]
+                      continue
+                  lower = max(SINCE, ts(wf["created_at"]))
+                  state = "" if wf.get("state") == "active" else f" Watcher state: `{wf.get('state')}`."
+                  w_runs, w_complete = runs(wf["id"], event="workflow_run")
+                  w_times = [ts(r["created_at"]) for r in w_runs]
+                  for name in names:
+                      subjects = [s for s in by_name.get(name, []) if s["id"] != wf["id"]]
+                      if not subjects:
+                          rows.append((fname, name, "NOT CHECKED", "no workflow of that name in the Actions API listing"))
+                          continue
+                      s_runs, s_complete = [], True
+                      for s in subjects:
+                          got, ok = runs(s["id"])
+                          s_runs += got
+                          s_complete = s_complete and ok
+                      if not (s_complete and w_complete):
+                          rows.append((fname, name, "NOT CHECKED", "the API truncated a run listing; narrow `window_days`"))
+                          continue
+                      due = [r for r in s_runs
+                             if r.get("status") == "completed"
+                             and ts(r["created_at"]) >= lower
+                             and ts(r["updated_at"]) <= NOW - GRACE]
+                      gaps = [r for r in due
+                              if not any(ts(r["created_at"]) <= t <= ts(r["updated_at"]) + SLACK for t in w_times)]
+                      if not due:
+                          verdict, detail = "QUIET", "subject did not complete a run in the window — nothing to compare"
+                      elif not gaps:
+                          verdict, detail = "OK", f"{len(due)} subject run(s), each followed by a watcher run"
+                      else:
+                          verdict = "SILENT" if len(gaps) == len(due) else "GAPS"
+                          sample = ", ".join(f"[{r['id']}]({r['html_url']})" for r in gaps[:5])
+                          detail = f"{len(gaps)} of {len(due)} subject run(s) with no watcher run: {sample}"
+                      rows.append((fname, name, verdict, detail + state))
+              return rows
+
+
+          def file_issue(findings, table):
+              body = (
+                  "**Advisory — informational, not a gate. Nothing is blocked.** Whether this check "
+                  "becomes blocking is an open decision on #318.\n\n"
+                  f"`.github/workflows/watcher-liveness.yml` compared the last {WINDOW} day(s) of run history "
+                  "and found a `workflow_run` watcher that stayed silent while the workflow it watches ran:\n\n"
+                  + table
+                  + "\n\nFor each SILENT/GAPS row, either fix the trigger or confirm here why it is intentional. "
+                  "This issue is edited in place by each run while it stays open; closing it means the next run "
+                  "that still finds a gap files a fresh one.\n"
+              )
+              title = f"Watcher liveness (advisory): {len(findings)} watcher/subject pair(s) silent while the subject ran"
+              try:
+                  subprocess.run(["gh", "api", "-X", "POST", f"repos/{REPO}/labels", "-f", f"name={LABEL}",
+                                  "-f", "color=FBCA04", "-f",
+                                  "description=Advisory: a workflow_run watcher was silent while its subject ran (#318)"],
+                                 capture_output=True, text=True, timeout=60)  # 422 = exists; fine
+                  open_issues = [i for pg in gh(f"repos/{REPO}/issues?labels={LABEL}&state=open&per_page=100", paginate=True)
+                                 for i in pg if "pull_request" not in i]
+                  if open_issues:
+                      num = min(i["number"] for i in open_issues)
+                      gh("-X", "PATCH", f"repos/{REPO}/issues/{num}", "-f", f"title={title}", "-f", f"body={body}")
+                      return f"Updated advisory issue #{num}."
+                  made = gh("-X", "POST", f"repos/{REPO}/issues", "-f", f"title={title}", "-f", f"body={body}",
+                            "-f", f"labels[]={LABEL}")
+                  return f"Opened advisory issue #{made[0]['number']}."
+              except Exception as exc:  # advisory: an issue failure is reported, never fatal
+                  return f"Could not file the advisory issue: {exc}"
+
+
+          out = ["## Watcher liveness — ADVISORY, not a gate (#318)", ""]
+          try:
+              rows = main()
+          except Exception:
+              rows = [("*", "*", "NOT CHECKED", "the check raised: " + traceback.format_exc().strip().splitlines()[-1])]
+          table = "| watcher | subject | verdict | detail |\n|---|---|---|---|\n" + "\n".join(
+              f"| `{w}` | {s} | **{v}** | {d} |" for w, s, v, d in rows)
+          out += [f"Window: last {WINDOW} day(s); subject runs finished in the last {int(GRACE.total_seconds() // 60)} min are not judged yet.", "",
+                  table if rows else "_No `workflow_run` watchers found — nothing to compare._", ""]
+          out += [f"> {n}" for n in notes]
+          findings = [r for r in rows if r[2] in ("SILENT", "GAPS")]
+          for w, s, v, d in rows:
+              if v in ("SILENT", "GAPS", "NOT CHECKED"):
+                  print(f"::warning title=Watcher liveness ({v})::{w} watching '{s}': {d}")
+          if findings:
+              out.append(file_issue(findings, table))
+          with open(SUMMARY, "a", encoding="utf-8") as fh:
+              fh.write("\n".join(out) + "\n")
+          PY

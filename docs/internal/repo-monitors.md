@@ -59,6 +59,19 @@ See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
 `.github/workflows/codex-monitor.yml`, `.github/workflows/pages-monitor.yml`, and
 `.github/workflows/pages-retry.yml` — the five the checklist below expects.
 
+**watcher-liveness.yml** — ⚠️ **advisory, not a gate, and not one of the five
+above** (#318). Weekly (Monday) and on manual dispatch. `workflow-ref-guard.py`
+proves every `workflow_run` name resolves; this asks whether each watcher still
+FIRES: for every watcher it compares the watched workflow's completed runs in the
+window against the watcher's own `workflow_run` runs, and reports a subject run
+with no watcher run after it — SILENT (none fired) or GAPS (some did not). A
+subject that did not run is QUIET, not a finding, so healthy dormancy stays quiet.
+It reuses the ref guard's own extraction, never fails its job, and says NOT
+CHECKED rather than guessing (branch-filtered watcher, truncated listing, API
+error). Findings go to the job summary and to at most one open
+`watcher-liveness` issue, edited in place. Whether and when it becomes blocking
+is an open owner decision on #318.
+
 ### Activation Checklist for New Sessions
 - Confirm all five exist: `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check
 - Do not subscribe to open PRs as a session-start step — subscription is harness-side on open. Then leave it alone; the harness drops it at merge (`CLAUDE.md` → *Notifications*, `git.md` → *PR Lifecycle*). Unsubscribing yourself disables `ci-notify.yml`'s wake and leaves a Codex review with no push signal at all

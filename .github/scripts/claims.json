@@ -182,7 +182,7 @@
     },
     {
       "id": "ci-notify-unique-match-is-not-proof",
-      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. Both capitalisations are listed because CLAUDE.md opens a sentence with it and the others do not.",
+      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. Both capitalisations are listed because CLAUDE.md opens a sentence with it and the others do not. Three carriers state it ANAPHORICALLY, in words no earlier phrasing reached and --derive therefore could not surface (#314): repo-monitors.md ('Nor does a unique match guarantee one', antecedent in the previous sentence), ci-triage.md ('Unique is not the same as correct.'), and git.md's PR Lifecycle bullet, which states the consequence ('that unrelated PR is commented while the session that triggered the dispatch waits.'). git.md's neighbouring 'it uniquely resolves the one matching workflow_run.head_branch' is the lookup MECHANISM, not this warning, and is deliberately left untracked rather than pinned under this id — the response-is-not-a-verdict mistake of certifying a neighbouring rule.",
       "source": "docs/standards/automations.md",
       "phrasings": [
         ". ⚠️ A unique match is not a guaranteed wake for YOUR session",
@@ -190,7 +190,10 @@
         "a unique match is not a guaranteed wake for YOUR session:",
         ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN, EITHER.",
         ". ⚠️ A unique match is not proof of coverage either:",
-        "even a unique match is not proof of coverage,"
+        "even a unique match is not proof of coverage,",
+        ". ⚠️ Nor does a unique match guarantee one:",
+        ". ⚠️ Unique is not the same as correct.",
+        "say) that unrelated PR is commented while the session that triggered the dispatch waits."
       ],
       "consumers": [
         "CLAUDE.md",
@@ -198,7 +201,10 @@
         ".github/workflows/ci-notify.yml",
         "templates/workflows/ci-notify.yml",
         "docs/standards/cicd-setup.md",
-        "plugins/directives-toolkit/commands/new-repo.md"
+        "plugins/directives-toolkit/commands/new-repo.md",
+        "docs/internal/repo-monitors.md",
+        "docs/standards/ci-triage.md",
+        "directives/git.md"
       ],
       "mustNotMatch": [
         "a non-unique match is not proof of coverage",
@@ -206,7 +212,10 @@
         "a unique match is proof of coverage",
         "a unique match is not a guaranteed wake unless the owner confirms it",
         "If the owner asks, a unique match is not a guaranteed wake",
-        "waits. Only if the owner asks, A unique match is not a guaranteed wake for YOUR session"
+        "waits. Only if the owner asks, A unique match is not a guaranteed wake for YOUR session",
+        "check-in. ⚠️ Nor does a non-unique match guarantee one:",
+        "silent. ⚠️ Non-unique is not the same as correct.",
+        "say) that unrelated PR is not commented while the session that triggered the dispatch waits."
       ]
     },
     {

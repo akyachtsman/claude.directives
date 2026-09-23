@@ -768,6 +768,13 @@ const CASES = [
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },
     1, 'pairs were evaluable'],
 
+  // #328: an UNDECLARED token is what a literal in its role leaves behind
+  // (`.btn { color: #fff }` over a token background), and a bare "7/9" invites
+  // an exception that hides it. The failure must name the pattern.
+  ['an undeclared measured token names the hard-coded-colour cause (#328)',
+    { 'styles/tokens.css': BASE.replace('  --color-on-accent:      #FFFFFF;\n', '') },
+    1, 'A hard-coded colour over a token background cannot be scored'],
+
   ['a malformed hex fails loudly rather than being skipped',
     { 'styles/tokens.css': BASE.replace('--color-accent:         #1565C0;', '--color-accent: #1565C0F;') },
     1, 'invalid hex value'],

@@ -751,6 +751,24 @@ if (evaluated < pairs.length) {
   console.error(`  Not measured: ${missing.join('; ')}`);
   console.error('  Each needs both tokens declared in #hex form (oklch()/rgb()/hsl()/var()');
   console.error('  are not parsed). Declare the missing tokens, or extend this script.');
+  // #328: say WHY a token is missing, because the two causes have different
+  // fixes. A token that is NOT DECLARED AT ALL is what a hard-coded colour in
+  // its role produces (`.btn { color: #fff }` over `var(--color-accent)` leaves
+  // --color-on-accent undeclared), and the tempting response to a bare "7/9" is
+  // an exception that keeps the literal and hides the finding. This gate reads
+  // tokens, not components.css, so it cannot see the literal itself — it names
+  // the pattern instead.
+  const needed = [...new Set(pairs.filter(([fg, bg]) => !t[fg] || !t[bg]).flatMap(([fg, bg]) => [fg, bg]))];
+  const undeclared = needed.filter((n) => !decls[n]);
+  const notHex = needed.filter((n) => decls[n] && !t[n]);
+  if (notHex.length) console.error(`  Declared, but not in #hex form: ${notHex.join(', ')}`);
+  if (undeclared.length) {
+    console.error(`  Not declared at all: ${undeclared.join(', ')}`);
+    console.error('  If a stylesheet paints that role with a literal — e.g. `color: #fff` over');
+    console.error('  `var(--color-accent)` — that is why. A hard-coded colour over a token background cannot be scored:');
+    console.error('  declare a token for it and use var() there. Do not add an exception — that');
+    console.error('  keeps the literal and hides the finding.');
+  }
   exitCode = 1;
   continue;
 }

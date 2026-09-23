@@ -1513,6 +1513,12 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // as awaitAuthReady). Met, it is the verdict the incomplete-auth skip below
   // was waiting for. BUDGET: ~0s when it holds (the settle already ran); on
   // failure it adds up to LOAD_SETTLE_MS, ~41s spare left at N=8 split-step.
+  // Met, it also REPLACES the generic heuristics below — expectGateCleared's
+  // retained-gate reading and the domChanged/onscreenError arm. Both are guesses
+  // for projects that declared nothing: a signed-in page with its own password
+  // field (change-password form) reads as a retained gate, and afterSnap was
+  // taken before this wait, so a slow signed-in view reads as "nothing changed".
+  // The project's own condition outranks both (#382).
   let s2SuccessProven = false;
   if (AUTH_SUCCESS_SELECTOR && mechanism !== 'none') {
     try {
@@ -1529,11 +1535,13 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
       );
     }
   }
-  try {
-    await expectGateCleared(page, mechanism, viewBefore);
-  } catch (gateErr) {
-    await attachAuthDiagnostics().catch(() => {});
-    throw gateErr;
+  if (!s2SuccessProven) {
+    try {
+      await expectGateCleared(page, mechanism, viewBefore);
+    } catch (gateErr) {
+      await attachAuthDiagnostics().catch(() => {});
+      throw gateErr;
+    }
   }
 
   if (AUTH_INCOMPLETE.has(mechanism) && !s2SuccessProven) {
@@ -1546,7 +1554,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // email screen it was trivially true, and the rejection arm below silently
   // stopped firing on split-step gates (#310).
   const domChanged = JSON.stringify(snapBefore) !== JSON.stringify(afterSnap);
-  if (mechanism !== 'none' && (!domChanged || onscreenError.length > 0)) {
+  if (mechanism !== 'none' && !s2SuccessProven && (!domChanged || onscreenError.length > 0)) {
     const diag = await attachAuthDiagnostics();
     throw new Error(
       `S2 FAIL | mechanism: ${mechanism} | onscreenError: "${onscreenError}" | ` +
@@ -1560,6 +1568,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // Auth passed or no auth required — record mechanism
   test.info().attach('auth-result', {
     body: JSON.stringify({ mechanism, credentialSource: credentialSource ?? 'none', domChanged,
+      successProven: s2SuccessProven,
       // 'windowed' = no gate was VISIBLE before the settle expired; 'proven' =
       // this project's own readiness condition resolved first. Recorded because
       // the two were indistinguishable, which is the whole of #302.

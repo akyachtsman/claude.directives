@@ -1062,7 +1062,7 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
     test.info().attach('auth-unverified', {
       body: JSON.stringify({
         mechanism,
-        note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. directives#302 tracks the per-project condition that verifies this properly.',
+        note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. A per-project post-login condition would verify this properly; it is not yet tracked.',
       }, null, 2),
       contentType: 'application/json',
     });
@@ -1097,7 +1097,7 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
         mechanism,
         note: mechanism === 'no-credential'
           ? 'An auth gate was on screen, TEST_AUTH_CREDENTIAL is unset, and the form shipped no credential of its own — so nothing was submitted. NO CREDENTIAL WAS ENTERED and nothing is claimed about the app. Set TEST_AUTH_CREDENTIAL, or — if this app\'s login legitimately ships a working credential and a human signs in by clicking the button — check that the prefilled field is a visible, editable input[type=password]: a prefilled TEXT or PIN gate is deliberately NOT read as a credential source, because a non-empty text input cannot be told from a search box with a default query (directives#312).'
-          : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. directives#302 tracks the per-project post-login condition that turns this into a verdict.',
+          : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. A per-project post-login condition would turn this into a verdict; it is not yet tracked.',
       }, null, 2),
       contentType: 'application/json',
     });
@@ -1126,8 +1126,8 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
         body: JSON.stringify({
           mechanism,
           note: mechanism === 'pin-keypad'
-            ? 'PIN-keypad-like signals (>=9 digit buttons plus a dot/pin-class element) are still visible after the PIN attempt. This is EITHER the retained gate (rejected PIN) OR the app\'s own post-login numeric UI — a PIN-gated calculator or dial pad satisfies the same page-wide signals — and the signal cannot associate itself with the attempted gate, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. directives#302 tracks the per-project post-login condition that verifies this properly.'
-            : 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. directives#302 tracks the per-project post-login condition that verifies this properly.',
+            ? 'PIN-keypad-like signals (>=9 digit buttons plus a dot/pin-class element) are still visible after the PIN attempt. This is EITHER the retained gate (rejected PIN) OR the app\'s own post-login numeric UI — a PIN-gated calculator or dial pad satisfies the same page-wide signals — and the signal cannot associate itself with the attempted gate, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. A per-project post-login condition would verify this properly; it is not yet tracked.'
+            : 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. A per-project post-login condition would verify this properly; it is not yet tracked.',
         }, null, 2),
         contentType: 'application/json',
       });

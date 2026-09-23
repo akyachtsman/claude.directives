@@ -4,6 +4,8 @@
 The company-wide agent behavior standard, imported by every project repo via raw
 GitHub URL. Every rule here applies to every Claude Code session unless a repo
 explicitly overrides it.
+A `docs/…` path in these directives resolves against claude.directives:
+`https://raw.githubusercontent.com/akyachtsman/claude.directives/main/<path>`.
 
 ## Identity
 - Owner: akyachtsman

@@ -25,7 +25,7 @@ while the session that dispatched waits — see `git.md` → *PR Lifecycle*. So 
 **cancelled** run always ends with no wake, and a dispatched run
 or an ordinary success ends with none when both lookups come back ambiguous or
 empty. Neither of the latter two is silent by category: the branch-plus-owner
-fallback exists precisely to catch dispatched PR-branch runs. `git.md` → *PR Lifecycle* carries the list and the rule: **arm a check-in for any awaited outcome that can end without
+fallback exists precisely to catch dispatched PR-branch runs. `pr-mechanics.md` → *Wakes that never arrive* carries the list, and `git.md` → *PR Lifecycle* the rule: **arm a check-in for any awaited outcome that can end without
 emitting a wake, and drop it when THAT outcome is terminal.** That is not the
 polling this line bans — polling is asking for something that would have arrived
 anyway.
@@ -65,7 +65,7 @@ anyway.
    form the monitor acts on. Read the PR rather than reading the stuck label as
    unaddressed concerns. Never merge while the label is present, and clear the
    Codex gate itself per `git.md` → *PR Lifecycle* (a reaction is not a verdict
-   you can attribute; that section carries the ladder).
+   you can attribute; `pr-mechanics.md` → *The reaction ladder* carries the ladder).
 
 ## CI never registered on a PR
 

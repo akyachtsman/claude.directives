@@ -145,7 +145,9 @@ Execute in order:
    scheduled job never crashes cryptically. The email secrets are **mandatory repo
    setup** (NEW-REPO-USER-INSTRUCTIONS Step 1); the project replaces the task body
    with its real notification. `check-contrast.js` is the WCAG guardrail `qa.yml`
-   runs against `styles/tokens.css`.
+   runs against the project's design tokens — `styles/tokens.css` or
+   `css/tokens.css` by default; elsewhere, append `--tokens <file>` (repeat it per
+   theme file).
 
    **Design starter.** Copy `claude.directives/templates/styles/` (`tokens.css`,
    `components.css`) into `styles/`. These are neutral starters that pass the

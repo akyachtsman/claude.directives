@@ -117,6 +117,7 @@
       "ui-kit": [
         "templates/actions/ui-suite/",
         "templates/ui-tests/",
+        "docs/standards/kit-defects.md",
         "templates/scripts/check-ui-viewports.js",
         "templates/scripts/browser-ladder.js",
         "plugins/directives-toolkit/agents/ui-tester.md"
@@ -190,6 +191,7 @@
       "docs/standards/session-mechanics.md",
       "docs/standards/hosting-mechanics.md",
       "docs/standards/cicd-setup.md",
+      "docs/standards/kit-defects.md",
       ".claude-plugin/marketplace.json",
       "plugins/directives-toolkit/.claude-plugin/plugin.json",
       "scripts/install-toolkit.sh",
@@ -232,6 +234,7 @@
         "directives/test.md",
         "docs/standards/code-review-standard.md",
         "docs/standards/ci-triage.md",
+        "docs/standards/kit-defects.md",
         "directives/data.md",
         "plugins/directives-toolkit/evals/"
       ]
@@ -546,7 +549,7 @@
     "lsp-plugins": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "The eleven language-server plugins (typescript-lsp, pyright-lsp, gopls-lsp, ...). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive eleven verdicts.",
+      "rationale": "The twelve Anthropic language-server plugins (typescript-lsp, pyright-lsp, gopls-lsp, ...). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive eleven verdicts.",
       "stays": "CLAUDE.md"
     },
     "output-styles": {
@@ -554,6 +557,66 @@
       "verdict": "rejected",
       "rationale": "explanatory-output-style and learning-output-style change how a session narrates. global.md -> Plain Language First and Say It in Verbs already own that, as owner rulings; a plugin that overrides them would contradict the directives.",
       "stays": "directives/global.md"
+    },
+    "claude-security": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Deep vulnerability scan that also generates and applies verified patches, with hooks of its own. The security job is already delegated to Anthropic natives recorded in externals (security-guidance plugin + built-in /security-review), and the toolkit maintains no security reviewer for it to replace. A heavier scan-and-patch tier suits a project with application code; install it per project, not fleet-wide from here.",
+      "stays": "directives/test.md"
+    },
+    "ralph-loop": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "A Stop hook blocks session exit and re-feeds the SAME prompt until the model emits a completion-promise string. /sdd-loop iterates over spec -> plan -> tasks artifacts with the imported directives as the constitution, so completion is decided by the directives' gates (tests, CI, review), not by a string the model chooses to print.",
+      "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
+    },
+    "ralph-wiggum": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "The same plugin as ralph-loop, advertised under its older name by the claude-code-plugins marketplace. Same verdict and reason; recorded separately because the parity diff matches manifest names.",
+      "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
+    },
+    "simplify": {
+      "vendor": "Anthropic",
+      "verdict": "borrowed",
+      "rationale": "Built-in skill; already covered by the code-simplifier entry, recorded under its own name because the parity diff matches names. /audit-repo recommends it as a follow-up and never runs it itself, since it APPLIES fixes and audit-repo is findings-only.",
+      "stays": "plugins/directives-toolkit/commands/audit-repo.md"
+    },
+    "loop": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Built-in skill that re-runs a prompt on an interval. git.md -> GitHub API Quota Economy says never poll for CI, deploy, or PR status (webhook wakes + ci-notify instead), and CLAUDE.md -> Notifications forbids arming a timed check-in as a substitute for a subscription. A recurring prompt is the mechanism both rulings exclude.",
+      "stays": "directives/git.md"
+    },
+    "run": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Built-in skill that launches and drives the app for a one-off look at a change. The ui-tester agent does a different job: it runs the project's Playwright suite against the URL CLAUDE.md names and writes the report the orchestrator reads, which is the evidence test.md asks for. Complementary, not overlapping.",
+      "stays": "plugins/directives-toolkit/agents/ui-tester.md"
+    },
+    "anthropic-skills": {
+      "vendor": "Anthropic",
+      "verdict": "deferred",
+      "rationale": "Parent of the docx, pdf, pptx and xlsx file skills (plus browser, research and docs skills with no toolkit counterpart). The docx redline output is not wanted, because doc-comp's deliverable is a published Artifact, not a tracked-changes .docx. What still fits is INPUT: doc-comp does not say how to read a .docx or .pdf, and could hand that extraction to these skills where the session provides them. Not done yet.",
+      "stays": "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
+    },
+    "project-artifact": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Publishes a living project status page as a claude.ai artifact. This repo's published view is the logical map, generated from EXPORTS.json and checked in CI (build-logical-map.js --check) on GitHub Pages; a status page built from gathered state would be a second, unchecked view of the same repo.",
+      "stays": ".github/scripts/build-logical-map.js"
+    },
+    "playground": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Generates single-file interactive HTML explorers. The logical map is the only interactive page here, and its behaviour is hand-written and held by the Repo Map UI Playwright suite; a generated explorer would carry none of those invariants.",
+      "stays": "docs/site/logical-map.js"
+    },
+    "out-of-domain": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Plugins agent-sdk-dev, claude-opus-4-5-migration, code-modernization, cwc-makers, math-olympiad, mcp-apps, mcp-server-dev, mcp-tunnels and receipts, and built-in skills claude-api, workflow-authoring and keybindings-help. Each serves a job this repo and its toolkit do not have (SDK or MCP development, model migration, legacy modernisation, hardware onboarding, competition math, usage reports, API reference, Workflow scripts, keybindings). Recorded as one entry so a future parity pass does not re-derive twelve verdicts.",
+      "stays": "CLAUDE.md"
     }
   }
 }

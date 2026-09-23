@@ -393,15 +393,16 @@ another double-quoted escape such as `\x20`, a block or flow scalar, an anchor, 
 it lands on *named but missing … NOT checked there*: reported, never silent.
 Such a project checks that directory by hand; the set is not widened per spelling.
 
-1. Fetch the list from UPSTREAM (not the local copy, which is only as new as the
-   last sync). Every Bash call starts a fresh shell, so Phase 2's `$head` is NOT
-   set here — re-derive the SHA in the same call that fetches:
+1. Fetch the list — `docs/standards/kit-defects.md`, kept OUTSIDE the kit so the
+   row above never copies it downstream — from UPSTREAM (not a local copy, which
+   is only as new as the last sync). Every Bash call starts a fresh shell, so
+   Phase 2's `$head` is NOT set here — re-derive the SHA in the same call that fetches:
    ```bash
    kd_head=$(cat "$(git rev-parse --git-path refresh-repo-classified)" 2>/dev/null)   # Phase 2's SHA, if its marker is still there
    [ -n "$kd_head" ] || kd_head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
    kd=$(mktemp)
    if printf '%s' "$kd_head" | grep -qE '^[0-9a-f]{40}$' \
-      && curl -fsS "https://raw.githubusercontent.com/akyachtsman/claude.directives/$kd_head/templates/ui-tests/KIT-DEFECTS.md" -o "$kd"; then
+      && curl -fsS "https://raw.githubusercontent.com/akyachtsman/claude.directives/$kd_head/docs/standards/kit-defects.md" -o "$kd"; then
      echo "kit defects list at $kd_head: $kd"
    else
      echo "kit defects NOT checked (no upstream SHA, or the fetch failed)"

@@ -18,6 +18,16 @@ name: Pages Monitor
 # The job below already handles that event — it normalises the two status
 # vocabularies. Do not pre-fill a guessed name.
 # Why: docs/standards/automations.md -> Watcher Rules (W2, W3 — a monitor may watch either source; a retry may not).
+#
+# ⚠️ EXPOSURE (optional) — a rogue unfiltered republish (the visibility-flip
+# legacy build, global.md -> Hosting & Deployment) serves the app as 200, so
+# build status + liveness alone pass it. Declare your forbidden paths in
+# `.github/pages-deny.txt` — one site-relative path per line, `#` comments and
+# blank lines ignored — and every run asserts each serves 404 on the LIVE site,
+# whoever published it; a late legacy build fires its own run. Absent file =
+# nothing declared = no-op, and the job summary says exposure was NOT checked.
+# LIMIT: this checks the paths you REMEMBERED to list. A new internal directory
+# nobody adds is invisible — the deploy's deny-list problem, one layer out.
 on:
   page_build:
   workflow_dispatch:
@@ -46,7 +56,9 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 10, not 5: liveness can take ~165s, and each forbidden path that fails
+    # takes up to ~30s more before it is reported.
+    timeout-minutes: 10
     steps:
       - name: Verify Pages deploy and report
         env:
@@ -108,6 +120,36 @@ jobs:
             problems="${problems}- Live site did not return 200 at ${url} (last HTTP ${code})\n"
           fi
 
+          # 3) Exposure: each path in .github/pages-deny.txt must serve 404 (see
+          #    the ⚠️ EXPOSURE header). Only a 404 from the API means "no file";
+          #    any other read failure is a problem, never a silent no-op.
+          deny_note="none declared (no .github/pages-deny.txt) — exposure NOT checked"
+          deny_err=$(mktemp)
+          if [ "$code" != "200" ]; then
+            problems="${problems}- Forbidden paths NOT checked: the site itself is not serving\n"
+          elif deny=$(gh api -H "Accept: application/vnd.github.raw+json" \
+                "repos/$REPO/contents/.github/pages-deny.txt" 2>"$deny_err"); then
+            n=0
+            while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+              case "$p" in ''|'#'*) continue ;; esac
+              p="${p#/}"; n=$((n + 1)); dcode="000"
+              for attempt in 1 2; do
+                dcode=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 10 "${url}${p}?cb=${GITHUB_RUN_ID}-d${attempt}" || echo "000")
+                [ "$dcode" = "404" ] && break
+                [ "$attempt" = 1 ] && sleep 10
+              done
+              if [ "$dcode" != "404" ]; then
+                problems="${problems}- Forbidden path served HTTP ${dcode}, expected 404: ${url}${p}\n"
+              fi
+            done <<< "$deny"
+            deny_note="${n} declared in .github/pages-deny.txt, all 404"
+          elif grep -q 'HTTP 404' "$deny_err"; then
+            :
+          else
+            problems="${problems}- Could not read .github/pages-deny.txt: $(head -c 200 "$deny_err" | tr '\n' ' ')\n"
+          fi
+
           stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
           if [ -n "$problems" ]; then
@@ -150,4 +192,5 @@ jobs:
             echo "- Commit: \`${short:-n/a}\`"
             echo "- URL: $url"
             echo "- Verified: HTTP 200"
+            echo "- Forbidden paths: ${deny_note}"
           } >> "$GITHUB_STEP_SUMMARY"

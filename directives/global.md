@@ -357,7 +357,7 @@ above. The templates are written additively for exactly this reason
 legacy build does.
 
 ⚠️ **BUT KEEPING THE ARM IS NOT THE SAME AS DETECTING THE EXPOSURE, AND DO NOT
-READ IT THAT WAY.** `pages-monitor.yml` asserts exactly two things — the build
+READ IT THAT WAY.** By default `pages-monitor.yml` asserts two things — the build
 did not error, and the live URL returns **200** — and `qa-live.yml` runs the
 ordinary UI suite. **A rogue build that republishes the unfiltered tree serves
 the app as 200 and passes both.** The internal paths are exposed and every
@@ -365,8 +365,9 @@ watcher is green. So the arm buys you a run at the right moment and nothing
 more; **what turns that run into detection is a forbidden-path assertion** — the
 same 200/404 deny-list check the deploy workflow carries, evaluated by the
 watcher, against paths the template cannot know and the project must declare.
-Until a project adds that, a visibility-flip exposure is still caught only by
-someone looking. Tracked as #319.
+**Declare them in `.github/pages-deny.txt`** (one path per line) and
+`pages-monitor.yml` asserts each serves 404 on every run. Without that file, a
+visibility-flip exposure is still caught only by someone looking.
 
 ⚠️ **The asymmetry between the monitor and the retry is about RE-RUNNING, not
 about Pages.** A watcher that only **observes** — a monitor, a live gate — can

@@ -1,6 +1,6 @@
 # UI-test kit defects
 
-An entry here is a bug that shipped in this kit and is therefore in a downstream copy too — NOT an upstream improvement, which stays ordinary per-file diff work.
+An entry here is a bug that shipped in the UI-test kit (`templates/ui-tests/`, copied downstream as `.github/scripts/ui-tests/`) and is therefore in a downstream copy too — NOT an upstream improvement, which stays ordinary per-file diff work.
 `/refresh-repo` reads this file from the upstream head BEFORE diffing the kit, runs each entry's check against the project's `.github/scripts/ui-tests/`, and applies the minimal fix unless the project states why it does not apply (#327).
 Entries are never deleted and ids are never reused. Each entry carries a `Revision:` number, starting at 1. A wrong entry is corrected IN PLACE: bump `Revision:` and add a `Corrected (rN):` line saying what changed. `/refresh-repo` always reads this file from the upstream head, so a correction takes effect on the next refresh, whereas a later entry could not stop the wrong fix from being applied first (#373). `/refresh-repo` re-runs EVERY check on EVERY refresh — a project's recorded decline never skips one; it only explains an `AFFECTED` result, and is re-confirmed against the code just checked. So neither an upstream correction nor a later local change can leave a stale decline standing.
 

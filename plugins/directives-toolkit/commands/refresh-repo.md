@@ -388,8 +388,10 @@ kit diff, whether or not the delta touches the kit**:
 3. `AFFECTED` → apply that entry's **Minimal fix** — that hunk only, never the
    surrounding upstream rewrite, which stays per-file diff work — **unless the
    project states why the defect does not apply here**. Record that reason as one
-   line in the project's `CLAUDE.md` naming the entry id, so the next refresh
-   reads the verdict instead of re-deriving it.
+   line in the project's `CLAUDE.md` naming the entry id AND the date it was
+   declined (`KD-1 declined 2026-09-23: …`), so the next refresh reads the verdict
+   instead of re-deriving it — unless the entry carries a `Corrected:` line dated
+   after the decline, which voids it: re-run that entry's check.
 4. Report each entry's result (`CLEAR` / fixed / declined with reason) in the
    refresh report.
 

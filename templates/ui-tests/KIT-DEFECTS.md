@@ -2,7 +2,7 @@
 
 An entry here is a bug that shipped in this kit and is therefore in a downstream copy too — NOT an upstream improvement, which stays ordinary per-file diff work.
 `/refresh-repo` reads this file from the upstream head BEFORE diffing the kit, runs each entry's check against the project's `.github/scripts/ui-tests/`, and applies the minimal fix unless the project states why it does not apply (#327).
-Entries are never deleted and ids are never reused. A wrong entry is corrected IN PLACE, with a dated `Corrected:` line saying what changed: `/refresh-repo` always reads this file from the upstream head, so a correction takes effect on the next refresh, whereas a later entry could not stop the wrong fix from being applied first (#373).
+Entries are never deleted and ids are never reused. A wrong entry is corrected IN PLACE, with a dated `Corrected:` line saying what changed: `/refresh-repo` always reads this file from the upstream head, so a correction takes effect on the next refresh, whereas a later entry could not stop the wrong fix from being applied first (#373). A `Corrected:` line dated after a project's recorded decline voids that decline: the entry is re-checked.
 
 Every check runs from the project's `.github/scripts/ui-tests/` and prints exactly one of `AFFECTED`, `CLEAR` or `UNDECIDED`. `UNDECIDED` means the copy no longer has the shape the check reads — read the code by hand and record the verdict; it is never a pass.
 
@@ -13,14 +13,15 @@ Every check runs from the project's `.github/scripts/ui-tests/` and prints exact
 - **Check:**
   ```bash
   s2=$(mktemp); awk '/^test\(.S2:/,/^}\);/' tests/app.spec.js \
-    | perl -0pe 's#/\*.*?\*/##gs; s#(^|[^:])//[^\n]*#$1#gm' > "$s2"
+    | perl -0pe 's#/\*.*?\*/##gs; s#(^|[^:])//[^\n]*#$1#gm;
+                 s#(["\x27\x60])((?:\\.|(?!\1).)*)\1#$2 eq "none" ? "\x27none\x27" : "\x27\x27"#gse' > "$s2"
   if [ ! -s "$s2" ]; then echo UNDECIDED
   elif perl -0ne 'exit((/if\s*\(\s*mechanism\s*===\s*.none.\s*\)\s*\{?\s*throw\s+new\s+[A-Z]\w*\s*\(/
                     || /if\s*\(\s*!s2Gated\s*\)\s*\{[^}]*?if\s*\(\s*authConfigured\s*\)\s*\{?\s*throw\s+new\s+[A-Z]\w*\s*\(/) ? 0 : 1)' "$s2"
   then echo CLEAR
   else echo AFFECTED; fi; rm -f "$s2"
   ```
-  CLOSED on purpose: `CLEAR` only for one of two exact shapes, with comments stripped first — the minimal fix below (`if (mechanism === 'none') throw new Error(…`), or the upstream kit's own (`if (!s2Gated) { … if (authConfigured) { throw new Error(…`). Anything else is `AFFECTED`, including a correct fix written another way: that is the safe direction, and step 3's "state why it does not apply" is how such a project declines. A loose "any `throw` nearby" test was fooled by a comment and then by a string literal (#373), so it is not reopened. Measured: `AFFECTED` on the kit at `fce69d9` and `ce2140a`, and on `ce2140a` with the throw inside a line comment, a block comment, or a string literal; `CLEAR` on the current kit and on `ce2140a` plus the fix below; `UNDECIDED` on a file with no top-level S2.
+  CLOSED on purpose: `CLEAR` only for one of two exact shapes, with comments stripped and every string literal masked first (its text replaced, except the literal `'none'` the shapes name) — the minimal fix below (`if (mechanism === 'none') throw new Error(…`), or the upstream kit's own (`if (!s2Gated) { … if (authConfigured) { throw new Error(…`). Anything else is `AFFECTED`, including a correct fix written another way: that is the safe direction, and step 3's "state why it does not apply" is how such a project declines. A loose "any `throw` nearby" test was fooled by a comment and then by a string literal (#373), so it is not reopened. SCOPE: a lexical check over honest kit code, not a JavaScript parser — it catches a copy that DRIFTED from the fix, not one written to mislead it; a further spelling is recorded on the issue, not chased (`global.md` → *Review Rounds Have to Terminate*). Measured: `AFFECTED` on the kit at `fce69d9` and `ce2140a`, and on `ce2140a` with the throw inside a line comment, a block comment, a string literal, or a string holding the fix's exact text; `CLEAR` on the current kit and on `ce2140a` plus the fix below; `UNDECIDED` on a file with no top-level S2.
 - **Minimal fix** — one line directly after S2's `const mechanism = … : 'none';` (S2 already skipped when no credential is set, so reaching it means one is):
   ```js
   if (mechanism === 'none') throw new Error(`S2 FAIL | no auth gate found at ${page.url()}, but TEST_AUTH_CREDENTIAL is set — this scenario never reached the gate (set APP_URL, or point S2 at the login route). Failing rather than passing: every assertion below is vacuous without a gate (directives#327).`);

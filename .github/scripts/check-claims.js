@@ -150,8 +150,9 @@ import { execFileSync } from 'child_process';
 //   ❌ THE FIX OVER-REACHES (38, 39) — both were caused by a fix whose wording
 //      was fine and whose SCOPE silently closed a documented exit
 //   ❌ A CARRIER THAT STATES A CLAIM TWICE has ONE of its occurrences pinned,
-//      and the manifest author picks which. docs/standards/ci-triage.md states
-//      verdict-lookup in two sentences; only the step-3 procedure sentence
+//      and the manifest author picks which. docs/standards/ci-triage.md stated
+//      verdict-lookup in two sentences (until 2026-09-23, when both became
+//      pointers at git.md and it left the consumer list); only the step-3 procedure sentence
 //      carries an approved phrasing, so inverting THAT one turns this guard red
 //      and inverting the other — the "What not to do" restatement — leaves it
 //      green. This comment previously said inverting either one alone was

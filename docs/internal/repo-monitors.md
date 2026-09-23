@@ -18,11 +18,8 @@ Comments on the open PR for that head SHA so a watching web session wakes on
 success via the comment webhook (no scheduling-tool polling, no permission
 prompts). Needs **one** lookup — head SHA, else branch + head-repo owner — to
 resolve exactly one open PR; no PR, or more than one, → exits quietly, so a
-green run does not guarantee a wake and the waiting session still arms a
-check-in. ⚠️ Nor does a unique match guarantee one: a `repository_dispatch` run
-carries the default-branch SHA, so if that branch heads exactly one open PR the
-comment goes there and the dispatching session gets nothing. Arm the check-in
-whenever the run's SHA is not the PR's head. The template counterpart, adapted
+green run does not guarantee a wake. When to arm a check-in, and why even a
+unique match is not proof: `git.md` → *PR Lifecycle*. The template counterpart, adapted
 to this repo's workflow name.
 
 **codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments. Adds
@@ -30,20 +27,10 @@ a `codex-flagged` label when Codex raised concerns (changes_requested or
 COMMENTED with inline comments); clears it on an all-clear naming the PR's
 current head SHA. A stale or SHA-less all-clear holds the label.
 
-An all-clear can travel as a SHA-bearing **comment**, which the monitor sees and
-acts on — that is what cleared #293 — or as a 👍 **reaction** or an inline
-**review-thread reply**, neither of which it can see at all. All three were
-observed on 2026-08-23 and **which one arrives is not predictable**, so check the
-PR's **comments AND its review threads** for a verdict naming the current head:
-a clean inline reply leaves the comment list empty, so a comments-only
-search comes back reading as "still pending" on a head Codex has cleared.
-
-**A stuck label is not removed by hand.** Request another pass — a clean
-**comment** verdict naming the head clears it automatically, which is what
-cleared #293 and #337. Hand removal is bounded by `git.md` → *PR Lifecycle*'s
-***unreachable-review test***: an observable terminal state, recorded on the PR,
-showing that a further request cannot produce a verdict. Elapsed silence is
-never that state, and neither is a label that looks stale.
+It sees an all-clear only as a SHA-bearing **comment** — the form that cleared
+#293 and #337 here — never as a 👍 reaction or an inline review-thread reply. A
+stuck label is not removed by hand; request another pass. Where to look for the
+verdict and when hand removal is allowed: `git.md` → *PR Lifecycle*.
 Contract detail: `docs/standards/automations.md` → Automation 3.
 
 **pages-monitor.yml** — fires on every GitHub Pages build (`page_build`). Reads the

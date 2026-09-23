@@ -218,8 +218,21 @@ changed UPSTREAM since this project's last sync — stamped in
 Get the head SHA over **git transport**, not the API: `gh` is absent in most
 remote/web sessions and `api.github.com` is refused at the proxy, so the API
 route returns empty in exactly the sessions that run this command (`/env-chk`
-uses `ls-remote` for the same reason). The compare call is optional enrichment —
-the stamp must never depend on it.
+uses `ls-remote` for the same reason). The file-level delta comes over git
+transport too — `/env-chk` step 6's route, adapted: never `api.github.com`, and
+no GitHub MCP call compares two refs. `/refresh-repo` runs in a DOWNSTREAM
+project, so claude.directives' objects are not local and `git fetch origin`
+fetches the wrong repo. Fetch the classified SHA from the claude.directives URL
+into a **scratch bare repo** instead — never into the project's own `.git`,
+where a `--depth` fetch writes `.git/shallow` and leaves foreign objects behind.
+Then, guarded by `git cat-file -e <sha>^{commit}` for both ends, run plain
+`git diff` on `<stamp>..<live>`. The guard matters because the fetch is shallow
+— a commit outside the depth makes `git diff` fail outright rather than degrade.
+One bounded `git fetch --deepen 100` is worth trying; bare `--deepen` exits 129
+because it requires a value. If the object is STILL missing after that one
+attempt, stop retrying and report the delta uncategorised. Measured from a web
+session (`CLAUDE_CODE_REMOTE=true`, 2026-09-23): `--depth=100` fetched in ~1s
+and 1.6 MB, and `--deepen 100` reached 200 commits.
 
 ```bash
 classified=
@@ -228,7 +241,7 @@ head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/h
 # INVALIDATE FIRST. Any marker left by an earlier invocation is cleared before
 # this run attempts anything, so a verdict can only ever be THIS run's. Without
 # it, a run interrupted after writing the marker left approval lying around: a
-# later run against the same head whose compare FAILED would find the stale
+# later run against the same head whose delta listing FAILED would find the stale
 # marker, match it against the unchanged head, and permanently advance the stamp
 # past a delta nobody dispositioned. SHA-binding alone does not catch that,
 # because the SHA is the same.
@@ -237,14 +250,29 @@ rm -f "$(git rev-parse --git-path refresh-repo-classified)"
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
 elif [ -n "$last" ] && [ "$last" != "$head" ]; then
-  # Optional: file-level classification. Needs gh; degrade loudly when absent.
+  # File-level classification over git transport. Degrade loudly when it fails.
   # Lists EVERY changed path, not just templates|docs|directives: a delta made
   # only of plugins/ changes printed nothing while still recording "classified",
   # so the next run treated an unseen change as handled. The disposition table
   # below covers plugins/ as informational — it still has to be SEEN.
-  if command -v gh >/dev/null 2>&1 \
-     && gh api "repos/akyachtsman/claude.directives/compare/$last...$head" \
-          --jq '.files[] | "\(.status)\t\(.filename)"'; then
+  # Fetch by the SHA ls-remote returned, never `main`: main can move between
+  # the two calls, and a delta listed against a different head is not this one.
+  src=https://github.com/akyachtsman/claude.directives.git
+  # An EMPTY $objs must stop everything: `git -C ""` is a no-op, so every call
+  # below would run against THIS project's .git — the pollution the scratch
+  # repo exists to avoid.
+  objs=$(mktemp -d) || objs=
+  if [ -n "$objs" ] && git init -q --bare "$objs"; then
+    git -C "$objs" fetch -q --depth=100 "$src" "$head"
+    git -C "$objs" cat-file -e "$last^{commit}" 2>/dev/null \
+      || git -C "$objs" fetch -q --deepen 100 "$src" "$head"   # ONE bounded retry
+  else
+    objs=
+  fi
+  if [ -n "$objs" ] \
+     && git -C "$objs" cat-file -e "$last^{commit}" 2>/dev/null \
+     && git -C "$objs" cat-file -e "$head^{commit}" 2>/dev/null \
+     && git -C "$objs" diff --no-renames --name-status "$last" "$head"; then
     classified=yes   # the delta was READ — Phase 3 may advance the stamp
     # Written only AFTER the delta has actually been listed. Records WHICH head
     # was classified, so Phase 3 can refuse a verdict made against a different
@@ -252,10 +280,11 @@ elif [ -n "$last" ] && [ "$last" != "$head" ]; then
     # FILE, and a redirect into it fails.
     printf '%s' "$head" > "$(git rev-parse --git-path refresh-repo-classified)"
   else
-    echo "compare unavailable (gh absent or call failed) — delta known by SHA only"
-    echo "($last -> $head); classify per the Propagation Matrix in"
-    echo "MAINTAIN-REPO-USER-INSTRUCTIONS.md. The stamp will NOT advance."
+    echo "delta listing unavailable (fetch failed, or $last beyond the fetched"
+    echo "depth) — delta known by SHA only ($last -> $head); classify per the"
+    echo "Propagation Matrix in MAINTAIN-REPO-USER-INSTRUCTIONS.md. The stamp will NOT advance."
   fi
+  [ -n "$objs" ] && rm -rf "$objs"
 else
   # Nothing to classify: either no prior stamp (first run — the per-file policy
   # is applied directly, below) or the stamp already equals head. Both are
@@ -273,7 +302,7 @@ Then disposition each changed file — classify, don't blindly apply:
 | **New-upstream** — a fix/feature the local copy lacks | Show the upstream patch; apply on approval |
 | **Local-custom** — deliberate project customization touched upstream | Preserve local; report the upstream intent |
 
-The compare output emits **upstream paths, which never exist verbatim in a
+The delta listing emits **upstream paths, which never exist verbatim in a
 project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
@@ -504,14 +533,14 @@ not "this SHA was observed."** Advance it ONLY when Phase 2 actually obtained th
 file-level delta. Two distinct failures make an unguarded stamp destructive:
 - An empty `$head` writes `{"sha": "", "synced": "<today>"}`, destroying the only
   field `/env-chk`'s staleness alarm reads AND back-dating it as freshly synced.
-- A `$head` obtained by `ls-remote` while the compare call was unavailable
-  (`gh` absent — the common case this command documents) advances the stamp past
-  a delta nobody looked at. Phase 1.5 does not inspect customized paths like
+- A `$head` obtained by `ls-remote` while the delta listing was unavailable
+  (the fetch failed, or the stamp lies beyond the one bounded deepen) advances
+  the stamp past a delta nobody looked at. Phase 1.5 does not inspect customized paths like
   `.github/scripts/ui-tests/**`, so the next refresh sees the new SHA as already
   synced and never revisits it: the skipped change is missed permanently, not
   merely deferred.
 
-Set `classified=yes` in Phase 2 only on the branch where the compare output was
+Set `classified=yes` in Phase 2 only on the branch where the delta listing was
 actually read (including "no files changed"); leave it unset otherwise.
 
 ```bash
@@ -555,8 +584,10 @@ fi
 ```
 (Create the file with `{}` first if the project has none.)
 
-**Stamp only a VERIFIED head SHA.** If the commits/compare/refs endpoints are
-unreachable this run (proxy rate limits), skip Phases 2–3 gracefully: report
+**Stamp only a VERIFIED head SHA.** Phases 2 and 3 need nothing from
+`api.github.com` — both run over git transport, which is what lets the stamp
+advance from a web session at all (#326). If `ls-remote` or the fetch is
+unreachable this run, skip Phases 2–3 gracefully: report
 "upstream delta unavailable this run — stamp unchanged, re-run /refresh-repo
 later", keep the old stamp, and never fabricate a SHA or an unverified delta
 (global.md → Behavior Rules → evidence before assertions).

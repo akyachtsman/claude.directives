@@ -24,6 +24,23 @@ Re-prove discrimination with a mutant:
     CHECK_ACTION_SIBLINGS_BIN=/tmp/mutant.py python3 .github/scripts/check-action-siblings-cases.py
 """
 
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-action-siblings-cases.py`:
+#   that guard's own guard — everything in templates/actions/ ships, so the
+#   guard prints the same OK whether its rule works or does nothing. Real `git
+#   init` fixtures, because most cases turn on states no directory of loose
+#   files can express: a `git add -N` placeholder (in `ls-files`, absent from
+#   the tree), a directory SYMLINK (`os.walk` puts it in `dirnames` and never
+#   lists it — and one NAMED `__pycache__`, since what a path IS decides before
+#   what it is CALLED), a filename that is not valid UTF-8, an unreadable
+#   directory (run as `nobody`, because permission bits do not apply to root),
+#   and an index mid-merge that `write-tree` cannot build at all. Each refusal
+#   has its accepting complement, so none can be bought by over-tightening.
+#   Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
+
 import os
 import shutil
 import subprocess

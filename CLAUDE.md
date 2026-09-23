@@ -160,88 +160,21 @@ A directive repo must pass its own CI before it can be trusted downstream.
   cross-references), path-existence, required-section headings, workflow YAML
   validation, secret-scan pattern+filter sync, the export boundary
   (`check-exports.js`, both directions), the canonical-claim guard
-  (`check-claims.js` — pinned rules still stated by every consumer that must
-  state them; it proves a claim TRAVELLED, never that it is TRUE. Rewritten for
-  #341 around **literal carrier pinning**: a claim lists the exact phrasings that
-  count as stating it and the condition/negation inference is gone, after 24
-  review rounds and 100 findings on #336 with no downward trend. Matching is
-  CASE-SENSITIVE and no `mustNotMatch` string may contain a phrasing — those two
-  rules replace the whole inference layer. Two containment rules added in #346
-  round 6 keep the pins honest: no phrasing may contain another (the longer one
-  could never be the sole match, so it read as coverage and was none), and only
-  `.`/`!`/`?` count as a terminator — a phrasing stopping at a `,` or `:` is
-  mid-sentence and an appended condition survives it), `check-claims-cases.js`
-  guarding that guard (two of the old override checks were MEASURED fail-open,
-  #342), a clean-compile check over every tracked `.py`
-  (`.github/scripts/check-py-warnings.py` — a guard that warns at compile time
-  is a guard that stops running on a future interpreter), the viewport gate on
-  the shipped Playwright config (`check-ui-viewports.js`, plus
-  `check-ui-viewports-cases.js` guarding the gate itself — it IMPORTS the config
-  so Node expands the device spreads; a static read was tried three times and
-  failed twelve ways, every failure silent, #282. Since #335 it also OBSERVES:
-  given `--report <playwright json>` after the run, the declared widths are
-  joined against what the run's own report says was SCHEDULED — a non-skipped
-  result under a project declaring that width, which a hook failing before the
-  test body still produces. A listing
-  (`playwright test --list`) was the first design and lost on four measured
-  differences from a run — argv, `filterOnly`, `globalSetup`, and no disposition
-  at all, so a reporter that skips every test lists a full inventory. Predicting
-  discovery from the config cost eight rounds and twenty findings; the refusals
-  that bought — root selection keys, the reporter allowlist, the `--forbid-only`
-  probe — are retired, and a key that narrows nothing now passes. The verdict is
-  **SCHEDULED**, not EXECUTED, and says so: a result proves a test ran in a
-  project DECLARING that width, never that a page was that wide. #347 rounds 5-7
-  tried three mechanisms for the stronger claim — a `viewport-override` marker,
-  a fixture recording the viewport at teardown, then one recording it at
-  navigation — and three variants of ONE finding (a hook that throws, a hook
-  that throws after requesting `page`, a hook that NAVIGATES and throws) defeated
-  all three. Withdrawn rather than lost to a fourth round; #348 carries the
-  work. ⚠️ The gate reads the config through artifacts produced by processes the
-  CONFIG RUNS IN — the JSON report, and the projects it imports — so a config's
-  own exit handler can replace the report, and a corrupted array primitive can
-  forge a declaration row. Both reproduced, #347 round 11. It catches DRIFT, not
-  FORGERY, and every candidate mechanism is either inside the same process or an
-  enumeration. #347 round 22 found the gate creating a distinguisher of its own —
-  the `--declared` sidecar is absent when the pre-run pass imports the config and
-  present when Playwright does, so a config reading it declared one thing to the
-  check and another to the run, and the carried mapping became the lie. The
-  post-run pass now re-imports and the two declarations must AGREE (exit 21);
-  the verdict is still computed from the PRE-RUN reading. Round 22 claimed that
-  preserved round 14's property exactly; round 23 corrected it — a second import
-  makes post-run IMPORTABILITY a prerequisite, so a suite leaving the config
-  unloadable now refuses with its widths unchanged. Kept as a refusal because a
-  fallback would certify without corroboration and is also the evasion. Agreement proves CONSISTENCY, never honesty; the fixture is pinned at exit 0 in the direction of STAYING a
-  limit, so if it starts being caught the case reddens and gets read. #349), job
-  bounds
-  (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding it — an
-  unreadable bound on a job carrying a floor must REFUSE, and the exemption for
-  jobs carrying no floor must survive, #334), the exported contrast guardrail's
-  own guard (`check-contrast-cases.js` — this repo ships no project token file
-  for it to read, so nothing else here would notice `check-contrast.js` break,
-  #334), `/refresh-repo`'s script derivation
-  (`check-refresh-derivation.py` — the derivation is a PATTERN in a markdown file
-  and the callers are YAML edited independently, so a caller changing the FORM of
-  an invocation fell silently out of it; the guard reads the shipped pattern out
-  of the command rather than copying it, PROP6 2026-09-01; plus
-  `check-refresh-derivation-cases.py` guarding it — the derivation is run through
-  real `grep -E`, not Python's `re`, because a construct `re` accepts makes grep
-  match NOTHING and the pipeline's trailing `sort` swallows the failure), the
-  workflow-ref guard, and a paired-file diff check, plus a warn-only
-  external-link job. It also runs
-  `build-logical-map.js --check`, so a committed map that no longer matches
-  `EXPORTS.json` fails the build, and `node --check` over the exported JS
-  templates — `Repo Map UI` exercises this repo's own map suite, not
-  `templates/ui-tests/`, so without that step a syntax error in the largest
-  file we ship would be found by a downstream project's CI rather than ours.
+  (`check-claims.js` — it proves a claim TRAVELLED, never that it is TRUE) and
+  its guard, a clean-compile check over every tracked `.py`, the viewport gate on
+  the shipped Playwright config (`check-ui-viewports.js` — its verdict is
+  **SCHEDULED**, not EXECUTED, and it catches DRIFT, not FORGERY) and its guard,
+  job bounds, the contrast guardrail's guard, `/refresh-repo`'s script
+  derivation, the workflow-ref guard, and a paired-file diff check, plus a
+  warn-only external-link job, `build-logical-map.js --check`, and `node --check`
+  over the exported JS templates. Each guard's design history is in its own
+  header comment; what has no single script home is in
+  `docs/internal/gate-history.md`.
   It also runs a **Playwright UI test** (`Repo Map UI`) — this repo dogfooding
   its own exported UI-testing standard (`test.md` / `templates/ui-tests`) on its
-  interactive Pages artifact, `docs/site/logical-map.html`. It asserts rendering
-  and layout, the whole input surface (pointer, wheel, touch, keyboard), the
-  arrangement a READER makes rather than only the shipped one, and the visual
-  invariants — no arrow crosses a frame it does not connect, no two arrows run
-  alongside each other, no two edge labels overlap. What each case covers and
-  why it exists is in `docs/internal/repo-map-ui.md`; read that before changing
-  the map, the router, or the suite.
+  interactive Pages artifact, `docs/site/logical-map.html`. What each case covers and why it exists is in
+  `docs/internal/repo-map-ui.md`; read that before changing the map, the router,
+  or the suite.
 - `ci-monitor.yml` — fires when `QA — Directive Validation` completes; on failure
   opens/updates a deduplicated `ci-failure` tracking issue.
 - `ci-notify.yml` — fires when `QA — Directive Validation` completes **green**;
@@ -334,14 +267,14 @@ node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
 node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence, every file listed by a key's LATEST entry exists (a workflow_run entry's workflows still contain the text) — completeness NOT checked (#370)
-node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header). Literal phrasings, CASE-SENSITIVE; a reworded carrier is meant to turn this red, and the fix is to add the wording to `phrasings` (#341)
-node .github/scripts/check-claims-cases.js       # that guard's own guard — case-sensitivity and the mustNotMatch-containment rule are what replaced the inference layer, and nothing else here would notice either being dropped. Re-prove with CHECK_CLAIMS_BIN=<mutant>
-python3 .github/scripts/check-py-warnings.py      # tracked .py compile clean: a `\` in a plain docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the guard stops running and stops checking
-(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts)   # RUN THIS FIRST: BOTH viewport checks below resolve @playwright/test from templates/ui-tests, and on a clean tree the cases exit 1 with "CANNOT RUN" before a single case runs (#347 round 36). One-time ~2.4s network step; node_modules/ is gitignored and no lockfile is written
-node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — pinned config shapes, each exit code and diagnostic. Needs the ui-tests install ABOVE: since #335 the execution cases RUN a Playwright suite, so this takes minutes rather than seconds. Re-prove discrimination with CHECK_UI_VIEWPORTS_BIN=<mutant>
-python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives BOTH viewport checks — pre-run and post-run (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round 8). Since #347 round 18 it also pins two variables by NAME (REPORT_PATH, PLAYWRIGHT_JSON_OUTPUT_FILE) — parity is relative, and three steps that all dropped a variable agree perfectly. Round 19: requiring them EQUAL was the same relative mistake one level up (three steps agreeing on `other.json` pass while the stale-report clear and the upload still read the validated output), so both are pinned to the LITERAL `${{ steps.report-path.outputs.relative }}`. Round 20: the same mistake a third time, on `working-directory` — three steps moved together satisfied every relative rule while the validator and the stale-report clear still resolved from the input — so each guarded step's cwd is pinned to the literal `${{ inputs.tests-dir }}` too. Round 21: the stale-report CLEAR step joined the sequence — it was outside it, so skipping it, making it advisory or changing its `rm` all left the guard green while an uncleared report satisfied the post-run gate. Round 36: the artifact UPLOAD was pinned by four attributes and no execution control, so `continue-on-error: true` on it passed every one of them while an upload failure vanished behind a green job — the round-11 defect, one step outside the sequence round 11 fixed. Pinned by PROPERTY there (absent or `false`), not by absence, since an explicit `false` blocks identically and refusing it would be another form-for-construct false refusal
-python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths (a NameError shipped in one, #333 round 11). Its rules have been rewritten four times, so re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
-python3 .github/scripts/check-report-path-cases.py # the ui-suite report-path validator's own guard — this repo does not use the composite, so nothing else here would notice it break; three of #347's rounds found defects in it. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
+node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header); a reworded carrier turns it red: add the wording to `phrasings` (#341)
+node .github/scripts/check-claims-cases.js       # that guard's own guard. Re-prove with CHECK_CLAIMS_BIN=<mutant>
+python3 .github/scripts/check-py-warnings.py      # every tracked .py compiles clean — a `\` in a plain docstring is FATAL on 3.15, and the guard then stops running
+(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts)   # RUN THIS FIRST: BOTH viewport checks below resolve @playwright/test from here; without it the cases exit 1 "CANNOT RUN"
+node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — needs the ui-tests install ABOVE, and runs a Playwright suite (minutes). Re-prove with CHECK_UI_VIEWPORTS_BIN=<mutant>
+python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives both viewport checks the SAME env and cwd as the Playwright run; report-path variables and each step's cwd pinned to literals
+python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths. Re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
+python3 .github/scripts/check-report-path-cases.py # the ui-suite report-path validator's own guard — this repo does not use the composite, so nothing else here would notice it break. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
 node .github/scripts/check-contrast-cases.js      # the exported WCAG guardrail's own guard — this repo has no styles/tokens.css, so NOTHING else here would notice it break (#334)
 node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
@@ -350,13 +283,17 @@ python3 .github/scripts/check-job-bounds.py --include-templates  # every job bou
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
 python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation still matches every shipped caller — it reads the pattern OUT of refresh-repo.md, so a copy cannot drift from it (PROP6)
 python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — 2 of its 3 checks never fire against THIS repo (no ragged caller, no missed match), so nothing else would notice them break
-python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT — present-and-unshipped looks identical to correct on the machine that wrote it (#325, #353). It asks git by performing the operation, not by reading the index: `ls-files -s`/`-t`/`-v` print a `git add -N` entry identically to a real one, and round 4's empty-blob heuristic passed a genuinely zero-byte one (#354 r5). Reads NO shell: two designs that read text (matching install carriers, then deriving references from run bodies) produced defects across seven rounds, so the question changed to one with no syntax to miss. It does NOT check that carriers install these files, nor that a composite names a file that exists — both stated in its own passing verdict
-python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — everything in templates/actions/ ships, so the guard prints the same OK whether its rule works or does nothing. Real `git init` fixtures, because most cases turn on states no directory of loose files can express: a `git add -N` placeholder (in `ls-files`, absent from the tree), a directory SYMLINK (`os.walk` puts it in `dirnames` and never lists it — and one NAMED `__pycache__`, since what a path IS decides before what it is CALLED), a filename that is not valid UTF-8, an unreadable directory (run as `nobody`, because permission bits do not apply to root), and an index mid-merge that `write-tree` cannot build at all. Each refusal has its accepting complement, so none can be bought by over-tightening. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
-node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — nothing else here runs it, and its FAILING branches (no privileges, blocked download, a binary that will not start) cannot be produced on demand, so the two effects are injected and every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
+python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT; it does NOT check that carriers install them, nor that a composite names a file that exists
+python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — real `git init` fixtures, each refusal with its accepting complement. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
+node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — failing branches injected, every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
 node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
-node .github/scripts/check-links.js --internal   # offline: verifies against the working tree. Strictly SINGLE-LINE — its OK line counts only the italic `file.md` → *Name* / → *Name* forms with the whole reference on ONE line, and SAYS SO on every run; anything else lands in one of three states, none of them verified: a name broken across a line is not parsed and NOT counted; a break between the FILENAME and its arrow IS counted, against the WRONG file; anything else is simply absent (#366)
-node .github/scripts/check-links-cases.js        # that checker's own guard — a reference it cannot parse is absent from both sides of "N/N resolve", so partial blindness reads as full coverage. ⚠️ DO NOT teach it to read across a line break. #365 let the name SPAN a newline (six rounds, each finding another construct it should not have crossed); #367 JOINED lines first (three more — blockquote continuations, a self-closing HTML comment, a multiline code span). Both sets are open; both were reverted. The 37 wrapped references were put on ONE LINE in the source instead, which is why the count went 150 → 187 at #367. Keep them that way: re-wrapping one makes it invisible again, and nothing detects that — the summary discloses it, nothing enforces it. A break between the FILENAME and its arrow is worse than invisible and unfixable in the parser: the self form claims the arrow line and checks the name against the CURRENT file. `main`'s `\s*` was matching 17 references across a break that way. The delimiters are a CLOSED, STATED repo convention — a single `*`, then text that does not START with whitespace and contains no `*` and no line ending, then a single `*` — NOT CommonMark emphasis. The leading-whitespace condition is part of the rule, not an implementation detail: `→ * Name*` is not a reference, and the emitted contract says so, because a disclosure that understates what it rejects is how an omitted reference looks verified. The SELF form additionally requires a non-word character before the arrow, so `` text→ *Name* `` is not parsed either — that is what stops it matching inside a word, and it is disclosed for the same reason (#367 round 17). That test is **ASCII only** and deliberately so: JS `\w` is ASCII even under `/u`, so `` café→ *Name* `` IS parsed and checked. It errs toward CHECKING, which is the safe direction, and a `\p{L}`/`\p{N}` rule here would reopen the Unicode-category chase that cost rounds 4-6. Both directions have cases, and the round-17 wording said "a LETTER", which was false for exactly that input (#367 round 18). ⚠️ The SELF form has a SECOND route to the wrong-target state, and it is DISCLOSED, not detected: the explicit form accepts only `[A-Za-z0-9_./-]` before `.md`, so any other filename (a space being the obvious one) is not matched as explicit, and the arrow is read as a SELF reference and checked against the CURRENT file — it can report resolved against a file absent from the repo. ⚠️ Do NOT suppress the self form after a code span naming a `.md` file. Five rounds produced five wrong answers about what a code span IS — content (any adjacent span suppressed, hiding a real broken reference), delimiter runs, CommonMark padding, then the SCANNER that replaced the lookbehind: a match starting inside an unmatched opener run, and a shorter run nested inside a span. Findings per round went 1, 1, 1, 4, and TWO of round 16's FAILED VALID FILES, which is the worse direction. Same open set as #365's line joining and the flanking rule — third bet, third loss, so it is stated on every run instead (#367 rounds 12-16, withdrawn by owner ruling 2026-09-18; widening what the explicit form accepts is #366). The `\x60` in `(?<![\x60\w])` is NOT part of that and must stay: an arrow directly after a backtick is inside a code span showing the syntax — this very file documents the checker with a literal `` `→ *Section*` `` — and removing it was tried at round 13 and failed the repo on its own documentation. ⚠️ Do NOT reintroduce the flanking rule or re-derive it by sweeping commonmark.js: that was the design this replaced, after rounds 4, 5 and 6 each broke ONE invariant (the counted set equals CommonMark's emphasis set) from a different cause — half a flanking rule, then the wrong category set (marks/ZWJ are not punctuation; symbols ARE), then the wrong granularity (scanDelims reads neighbours with `charAt` and sees a surrogate). A ten-axis probe then found SEVEN more disagreements — escaped closers, code spans, delimiter-run length — so the set was OPEN. A construct CommonMark renders differently is now out of scope and disclosed on every run, which is what a closed rule buys. Line endings are normalised ONCE, by `readSource()`, which every read goes through — do NOT reintroduce per-consumer CR handling. Three sites were CR-blind in turn (the name pattern spliced two lines into one invented name; `lineOf` reported every failure as line 1; the fence padding moved later line numbers), each fix revealing the next, so the third occurrence became a redesign rather than a third `\r` (#367 rounds 6-8). Nothing downstream sees a CR, including code not yet written; line COUNT is preserved, so a reported line number is still the source file's. Re-prove with CHECK_LINKS_BIN=<mutant> (a RELATIVE one resolves against the caller, not the temp tree; left relative it crashed every case and read as perfect discrimination)
+node .github/scripts/check-links.js --internal   # offline, against the working tree. Strictly SINGLE-LINE: only a reference wholly on one line is counted, and the run says so (#366)
+node .github/scripts/check-links-cases.js        # that checker's own guard. Re-prove with CHECK_LINKS_BIN=<mutant> — an ABSOLUTE path
+#   ⚠️ check-links rules (history in the check-links-cases.js header):
+#   - DO NOT teach it to read across a line break (#365 and #367 both tried, both reverted); keep every `file.md` → *Name* reference on ONE line
+#   - Do NOT suppress the self form after a code span naming a `.md` file (#367 rounds 12-16, withdrawn by owner ruling 2026-09-18)
+#   - Keep the `\x60` in `(?<![\x60\w])`; do NOT reintroduce the flanking rule; line endings are normalised ONCE by `readSource()`
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
 diff .claude/settings.json templates/claude-settings.json
 diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
@@ -384,11 +321,8 @@ node .github/scripts/check-repo-map-ui.js                    # when the map chan
 until staged.** `check-exports`, `check-py-warnings` and `check-claims --derive`
 all enumerate via `git ls-files`, which does not list untracked paths. So a gate
 run on a working tree containing a brand-new file **checks everything except the
-thing you just added**, and reports OK. Measured 2026-08-26 on #325: the gate
-passed 14 checks with `templates/scripts/check-py-warnings.py` untracked, and
-`check-exports` failed on that exact file in CI one minute later. This is the
-fail-open family (#323) inside the gate itself — a pass and a did-not-look are
-the same output. Stage first, then gate.
+thing you just added**, and reports OK. The #325 measurement: `docs/internal/gate-history.md`.
+Stage first, then gate.
 
 Confirm `git status` shows no unintended changes. If any check fails, fix it
 before pushing rather than pushing and fixing on the PR. The Playwright UI

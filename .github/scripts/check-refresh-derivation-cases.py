@@ -62,6 +62,16 @@ green line. A case built from a fixture that cannot express the condition it
 names will pass forever.
 """
 
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
+#   plus `check-refresh-derivation-cases.py` guarding it — the derivation is run
+#   through real `grep -E`, not Python's `re`, because a construct `re` accepts
+#   makes grep match NOTHING and the pipeline's trailing `sort` swallows the
+#   failure)
+
 import os
 import subprocess
 import sys

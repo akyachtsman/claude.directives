@@ -27,6 +27,15 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-ui-suite-env-cases.py
 """
+
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-ui-suite-env-cases.py`:
+#   that env guard's own guard — every branch that can print, incl. the failure
+#   paths (a NameError shipped in one, #333 round 11). Its rules have been
+#   rewritten four times, so re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
 import os
 import subprocess
 import sys

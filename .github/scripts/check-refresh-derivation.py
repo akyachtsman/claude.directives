@@ -65,6 +65,17 @@ drift, which is the failure that actually happened; it does not prove the
 derivation finds every script a caller could conceivably need.
 """
 
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
+#   `/refresh-repo`'s script derivation (`check-refresh-derivation.py` — the
+#   derivation is a PATTERN in a markdown file and the callers are YAML edited
+#   independently, so a caller changing the FORM of an invocation fell silently
+#   out of it; the guard reads the shipped pattern out of the command rather
+#   than copying it, PROP6 2026-09-01;
+
 import re
 import subprocess
 import sys

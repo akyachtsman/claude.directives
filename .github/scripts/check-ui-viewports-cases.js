@@ -18,6 +18,58 @@
 // ESM (.github/scripts/package.json declares "type": "module").
 //
 // Run: node .github/scripts/check-ui-viewports-cases.js
+
+// ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+// CLAUDE.md now keeps a one-line purpose per gate command; the history and
+// evidence it carried about this script moved here, verbatim.
+//
+// From CLAUDE.md → Local gate, the comment on `node .github/scripts/check-ui-viewports-cases.js`:
+//   the viewport gate's own guard — pinned config shapes, each exit code and
+//   diagnostic. Needs the ui-tests install ABOVE: since #335 the execution cases
+//   RUN a Playwright suite, so this takes minutes rather than seconds. Re-prove
+//   discrimination with CHECK_UI_VIEWPORTS_BIN=<mutant>
+//
+// From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
+//   the viewport gate on the shipped Playwright config (`check-ui-viewports.js`,
+//   plus `check-ui-viewports-cases.js` guarding the gate itself — it IMPORTS the
+//   config so Node expands the device spreads; a static read was tried three
+//   times and failed twelve ways, every failure silent, #282. Since #335 it also
+//   OBSERVES: given `--report <playwright json>` after the run, the declared
+//   widths are joined against what the run's own report says was SCHEDULED — a
+//   non-skipped result under a project declaring that width, which a hook
+//   failing before the test body still produces. A listing (`playwright test
+//   --list`) was the first design and lost on four measured differences from a
+//   run — argv, `filterOnly`, `globalSetup`, and no disposition at all, so a
+//   reporter that skips every test lists a full inventory. Predicting discovery
+//   from the config cost eight rounds and twenty findings; the refusals that
+//   bought — root selection keys, the reporter allowlist, the `--forbid-only`
+//   probe — are retired, and a key that narrows nothing now passes. The verdict
+//   is **SCHEDULED**, not EXECUTED, and says so: a result proves a test ran in a
+//   project DECLARING that width, never that a page was that wide. #347 rounds
+//   5-7 tried three mechanisms for the stronger claim — a `viewport-override`
+//   marker, a fixture recording the viewport at teardown, then one recording it
+//   at navigation — and three variants of ONE finding (a hook that throws, a
+//   hook that throws after requesting `page`, a hook that NAVIGATES and throws)
+//   defeated all three. Withdrawn rather than lost to a fourth round; #348
+//   carries the work. ⚠️ The gate reads the config through artifacts produced by
+//   processes the CONFIG RUNS IN — the JSON report, and the projects it imports
+//   — so a config's own exit handler can replace the report, and a corrupted
+//   array primitive can forge a declaration row. Both reproduced, #347 round 11.
+//   It catches DRIFT, not FORGERY, and every candidate mechanism is either
+//   inside the same process or an enumeration. #347 round 22 found the gate
+//   creating a distinguisher of its own — the `--declared` sidecar is absent
+//   when the pre-run pass imports the config and present when Playwright does,
+//   so a config reading it declared one thing to the check and another to the
+//   run, and the carried mapping became the lie. The post-run pass now
+//   re-imports and the two declarations must AGREE (exit 21); the verdict is
+//   still computed from the PRE-RUN reading. Round 22 claimed that preserved
+//   round 14's property exactly; round 23 corrected it — a second import makes
+//   post-run IMPORTABILITY a prerequisite, so a suite leaving the config
+//   unloadable now refuses with its widths unchanged. Kept as a refusal because
+//   a fallback would certify without corroboration and is also the evasion.
+//   Agreement proves CONSISTENCY, never honesty; the fixture is pinned at exit 0
+//   in the direction of STAYING a limit, so if it starts being caught the case
+//   reddens and gets read. #349)
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, unlinkSync, lstatSync, existsSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';

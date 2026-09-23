@@ -102,6 +102,19 @@
  * have called both of them caught while they checked nothing.
  */
 
+// ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+// CLAUDE.md now keeps a one-line purpose per gate command; the history and
+// evidence it carried about this script moved here, verbatim.
+//
+// From CLAUDE.md → Local gate, the comment on `node .github/scripts/check-claims-cases.js`:
+//   that guard's own guard — case-sensitivity and the mustNotMatch-containment
+//   rule are what replaced the inference layer, and nothing else here would
+//   notice either being dropped. Re-prove with CHECK_CLAIMS_BIN=<mutant>
+//
+// From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
+//   `check-claims-cases.js` guarding that guard (two of the old override checks
+//   were MEASURED fail-open, #342)
+
 import { execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';

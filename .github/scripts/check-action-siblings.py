@@ -72,6 +72,23 @@ empty-blob rule, the file-size read and the special intent-to-add branch
 together.
 """
 
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-action-siblings.py`:
+#   every file under `templates/actions/*/` is in the tree `git write-tree`
+#   would COMMIT — present-and-unshipped looks identical to correct on the
+#   machine that wrote it (#325, #353). It asks git by performing the operation,
+#   not by reading the index: `ls-files -s`/`-t`/`-v` print a `git add -N` entry
+#   identically to a real one, and round 4's empty-blob heuristic passed a
+#   genuinely zero-byte one (#354 r5). Reads NO shell: two designs that read
+#   text (matching install carriers, then deriving references from run bodies)
+#   produced defects across seven rounds, so the question changed to one with no
+#   syntax to miss. It does NOT check that carriers install these files, nor
+#   that a composite names a file that exists — both stated in its own passing
+#   verdict
+
 import os
 import subprocess
 import sys

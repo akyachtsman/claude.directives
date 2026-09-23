@@ -23,6 +23,15 @@
 // ESM (.github/scripts/package.json declares "type": "module").
 //
 // Run: node .github/scripts/check-contrast-cases.js
+
+// ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+// CLAUDE.md now keeps a one-line purpose per gate command; the history and
+// evidence it carried about this script moved here, verbatim.
+//
+// From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
+//   the exported contrast guardrail's own guard (`check-contrast-cases.js` —
+//   this repo ships no project token file for it to read, so nothing else here
+//   would notice `check-contrast.js` break, #334)
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';

@@ -88,7 +88,8 @@ tablet (iPad), and phone (iPhone/Android). Design responsive-first:
 
 ## Accessibility
 Non-negotiable, independent of the chosen look. A per-project contrast guardrail
-(`templates/scripts/check-contrast.js`, run in CI against `styles/tokens.css`)
+(`templates/scripts/check-contrast.js`, run in CI against `styles/tokens.css` or
+`css/tokens.css` — any other path is named with `--tokens <file>`)
 checks part of this — see the limits below before treating a green as proof:
 - **WCAG AA contrast:** normal text ≥ 4.5:1, large/icon ≥ 3.0:1
 - Visible keyboard focus: pair `:hover` with `:focus-visible`
@@ -124,14 +125,16 @@ white: CSS applied the `rgb()`, the gate measured the superseded hex. It now
 refuses that file instead of picking a value, for both shapes — a non-hex
 override, and a second, different hex under a `[data-theme]` block or a
 `prefers-color-scheme` query. So a themed project gives **each theme its own
-tokens file** holding that theme's resolved values and adds it to `CANDIDATES`
-at the top of the script — every candidate is measured, one palette per run, and
-each theme file must carry a **complete** palette rather than an override
-fragment. Once more than one is listed, a candidate that does not exist is a
-**hard failure**, not a skip: filtering the list through "does it exist" measured
-the surviving theme and printed green, while the renamed one was never opened.
-(With the single default candidate, an absent file is still the bootstrap notice
-in a fresh repo, and still a hard failure in a repo that has CSS elsewhere.)
+tokens file** holding that theme's resolved values and lists every one — as
+repeated `--tokens <file>` on the `qa.yml` run line, `CHECK_CONTRAST_TOKENS`, or
+`CANDIDATES` at the top of the script — every listed file is measured, one
+palette per run, and each theme file must carry a **complete** palette rather
+than an override fragment. A listed file that does not exist is a **hard
+failure**, not a skip: filtering the list through "does it exist" measured the
+surviving theme and printed green, while the renamed one was never opened.
+(Unconfigured, the script checks whichever default — `styles/tokens.css`,
+`css/tokens.css` — exists; with neither, it is the bootstrap notice in a fresh
+repo and still a hard failure in a repo that has CSS elsewhere.)
 Tokens no pair reads are unaffected.
 
 **Where measured tokens must live.** Every token a contrast pair reads must be

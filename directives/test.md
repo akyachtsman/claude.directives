@@ -323,7 +323,12 @@ four with a scenario (named in parentheses); the fifth is a property of the
 runner's config rather than of any test, so no scenario can carry it —
 `check-ui-viewports.js` enforces it from the ui-suite composite instead, and a
 green SUITE still says nothing about it. Project-specific suites must keep all
-five:
+five. **A gate is its PROPERTY, not the kit's scenario** — the name in
+parentheses is how the kit meets it, and a project that carries its own
+scenarios in place of the kit's (a refresh may keep, port or drop each one)
+meets the gate with any test proving the same property for every surface the
+gate names. Dropping the kit's scenario is fine; dropping the property is not
+(#322):
 - **Console-error gate.** Every UI test run attaches `page.on('pageerror')` and
   `page.on('console')` (type `error`) and **fails if either fires** during load
   or interaction (S1, S3, ENTRY). An uncaught error on load is a broken page even

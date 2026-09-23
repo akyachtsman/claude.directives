@@ -1,8 +1,10 @@
 'use strict';
-// Per-project WCAG AA contrast guardrail. Reads this project's styles/tokens.css
-// and checks the meaningful foreground/background pairs. Copy into the project's
-// .github/scripts/ and run it from qa.yml. If styles/tokens.css doesn't exist yet
-// (before /design-intake), it prints a notice and exits 0 — safe in a fresh repo.
+// Per-project WCAG AA contrast guardrail. Reads this project's design tokens
+// (styles/tokens.css or css/tokens.css by default; see "WHERE THE TOKENS LIVE"
+// below to point it elsewhere) and checks the meaningful foreground/background
+// pairs. Copy into the project's .github/scripts/ and run it from qa.yml. If no
+// tokens file exists yet and the repo has no CSS (before /design-intake), it
+// prints a notice and exits 0 — safe in a fresh repo.
 // CommonJS (matches the other .github/scripts/ helpers, e.g. notify-email.js).
 //
 // ── What a green run does NOT prove ─────────────────────────────────────────
@@ -44,28 +46,53 @@
 const { readFileSync, existsSync, readdirSync, statSync, realpathSync } = require('fs');
 const { join } = require('path');
 
-// styles/tokens.css is the design contract's single home (design.md -> Tokens &
-// components). Kept as a list so a project with a second token file can add it
-// here; every candidate that exists is checked, never just the first.
-const CANDIDATES = ['styles/tokens.css'];
-const FILES = CANDIDATES.filter((f) => existsSync(f));
+// ── WHERE THE TOKENS LIVE (#322) ────────────────────────────────────────────
+// The path used to be one literal, 'styles/tokens.css', and a project keeping
+// its contract at css/tokens.css got a red build from a constant rather than a
+// contrast problem — or carried a local edit to re-diff on every refresh. So a
+// project SAYS where its tokens are, in the first of these that is set:
+//   1. `--tokens <file>` (or `--tokens=<file>`), repeatable — qa.yml's run line
+//   2. CHECK_CONTRAST_TOKENS=<file>[,<file>…]
+//   3. CANDIDATES below, edited in place (a themed project lists each theme's
+//      file — design.md -> a themed project gives each theme its own file)
+// Every configured file is checked, never just the first. Left unconfigured,
+// the script GUESSES from DEFAULT_CANDIDATES and checks each one that exists.
+const CANDIDATES = [];
+const DEFAULT_CANDIDATES = ['styles/tokens.css', 'css/tokens.css'];
 
-// A CONFIGURED candidate that is gone is a broken configuration, not a fresh
-// repo. The single default below is a path this script GUESSES; a second entry
-// can only get there by a human editing this line to say "this project's tokens
-// live in these files" (design.md -> a themed project gives each theme its own
-// file). Filtering both through existsSync measured the surviving theme and
-// printed green for it, while the renamed one was never read -- the every-theme
-// guarantee reported about a file nobody opened. So once more than one is
-// declared, a missing one is FATAL. With exactly one, a miss is already covered:
-// absent + no CSS is the bootstrap notice, absent + CSS present is the gap below.
-const MISSING = CANDIDATES.filter((f) => !existsSync(f));
-if (CANDIDATES.length > 1 && MISSING.length > 0) {
-  console.error(`FAIL  ${MISSING.length} of ${CANDIDATES.length} configured token files do not exist:`);
+const fromArgs = [];
+for (let a = 2; a < process.argv.length; a++) {
+  const arg = process.argv[a];
+  if (arg === '--tokens' && a + 1 < process.argv.length) fromArgs.push(process.argv[++a]);
+  else if (arg.startsWith('--tokens=') && arg.length > 9) fromArgs.push(arg.slice(9));
+  else {
+    // A mistyped flag must not fall back to the defaults: that would measure a
+    // file the project did not name and print green about it.
+    console.error(`FAIL  unrecognised argument ${JSON.stringify(arg)} — usage: check-contrast.js [--tokens <file>]…`);
+    process.exit(1);
+  }
+}
+const fromEnv = (process.env.CHECK_CONTRAST_TOKENS || '').split(',').map((f) => f.trim()).filter(Boolean);
+const CONFIGURED = fromArgs.length ? fromArgs : fromEnv.length ? fromEnv : CANDIDATES;
+const CONFIG_SOURCE = fromArgs.length ? '--tokens' : fromEnv.length ? 'CHECK_CONTRAST_TOKENS' : 'CANDIDATES';
+const LOOKED_AT = CONFIGURED.length ? CONFIGURED : DEFAULT_CANDIDATES;
+const FILES = LOOKED_AT.filter((f) => existsSync(f));
+
+// A CONFIGURED file that is gone is a broken configuration, not a fresh repo.
+// Only the defaults are guesses; a configured entry can only get there by a
+// human saying "this project's tokens live in these files". Filtering configured
+// files through existsSync measured the surviving theme and printed green for
+// it, while the renamed one was never read -- the every-theme guarantee
+// reported about a file nobody opened. So any configured file that is missing
+// is FATAL: absent-and-unconfigured is the bootstrap/gap logic below,
+// absent-while-configured is a failure.
+const MISSING = CONFIGURED.filter((f) => !existsSync(f));
+if (MISSING.length > 0) {
+  console.error(`FAIL  ${MISSING.length} of ${CONFIGURED.length} configured token files do not exist:`);
   for (const f of MISSING) console.error(`        ${f}`);
-  console.error('      CANDIDATES names the files this project declares as its design contract.');
+  console.error(`      ${CONFIG_SOURCE} names the files this project declares as its design contract.`);
   console.error('      Measuring only the ones still present would certify a palette this gate');
-  console.error('      never read. Restore the file, or drop it from CANDIDATES.');
+  console.error(`      never read. Restore the file, or drop it from ${CONFIG_SOURCE}.`);
   process.exit(1);
 }
 if (FILES.length === 0) {
@@ -130,9 +157,10 @@ if (FILES.length === 0) {
     console.log(`::notice::no stylesheet yet — run /design-intake to establish this project's look. Skipping contrast check.`);
     process.exit(0);
   }
-  console.error(`FAIL  this project has CSS but no tokens file at ${CANDIDATES.join(' or ')}.`);
+  console.error(`FAIL  this project has CSS but no tokens file at ${LOOKED_AT.join(' or ')}.`);
   console.error('      design.md makes tokens.css the single source of truth — the contrast');
-  console.error('      guardrail cannot run without it. Create one via /design-intake.');
+  console.error('      guardrail cannot run without it. Create one via /design-intake, or, if');
+  console.error('      it lives elsewhere, name it: --tokens <file> or CHECK_CONTRAST_TOKENS.');
   process.exit(1);
 }
 
@@ -720,8 +748,9 @@ if (ambiguous.length > 0) {
   console.error('  colour that may never appear. It refuses instead of guessing.');
   console.error('  Fix: declare each measured token exactly once in this file, in #hex form.');
   console.error('  If the project themes, give each theme its own tokens file holding that');
-  console.error('  theme\'s resolved values, add it to CANDIDATES at the top of this script, and');
-  console.error('  let each be measured on its own — one palette per run, every one checked.');
+  console.error('  theme\'s resolved values, list every one (--tokens, CHECK_CONTRAST_TOKENS or');
+  console.error('  CANDIDATES — see the top of this script), and let each be measured on its');
+  console.error('  own — one palette per run, every one checked.');
   exitCode = 1;
   continue;
 }

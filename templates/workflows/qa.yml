@@ -63,8 +63,10 @@ jobs:
       - uses: ./.github/actions/secret-scan
 
       # ── Contrast guardrail ───────────────────────────────────────────────────
-      # WCAG AA check against styles/tokens.css (this project's design tokens).
-      # Exits with a notice (no failure) until /design-intake creates tokens.css.
+      # WCAG AA check against this project's design tokens — styles/tokens.css or
+      # css/tokens.css by default; elsewhere, append `--tokens <file>` (repeat it
+      # per theme file). Exits with a notice (no failure) until /design-intake
+      # creates tokens.css.
       - name: Contrast guardrail (WCAG AA)
         run: node .github/scripts/check-contrast.js
 

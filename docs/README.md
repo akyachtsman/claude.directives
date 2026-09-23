@@ -21,6 +21,8 @@ Referenced by the exported directives and the qa agents.
 | `standards/ci-triage.md` | **Project** CI triage — expected vs real Playwright failures, two-tier CI, when to trigger `qa-live.yml` (this repo's own self-test triage lives in `internal/repo-monitors.md`) |
 | `standards/code-review-standard.md` | Blocking vs non-blocking review criteria and output format |
 | `standards/pr-mechanics.md` | The mechanism and evidence behind `git.md` → *PR Lifecycle* — missed wakes, verdict-gate exits, reading reactions, the reaction ladder, Codex delivery forms, review metering and triggers; read on demand (#299) |
+| `standards/session-mechanics.md` | The mechanism and evidence behind session rules in `global.md` — provenance and sinks, parallel-tasking boundaries, wake coverage and the in-flight test, stale recorded SHAs, the scheduling-allowlist history, and the API equivalents for a blocked command; read on demand (#299) |
+| `standards/hosting-mechanics.md` | The mechanism and evidence behind `global.md` → *Hosting & Deployment* — choosing the Pages source, deny-list verification, monitoring after a switch to Actions-source, observers versus re-runners, and the incident behind them; read on demand (#299) |
 
 ## `guides/` — exported working guidance and setup
 | File | What it covers |

@@ -716,9 +716,41 @@ CASES = [
 
 ]
 
+# THE SPEC-ENV RULE (#320): every process.env variable the spec reads must reach
+# the run step from a declared input. These run against the LIVE composite with a
+# fixture spec, so the accepting side is the real wiring; the fixture composites
+# above get a spec that reads nothing, which keeps them about the step rules.
+SPEC_CASES = [
+    ("the spec reads a variable the composite never passes — refused",
+     "const X = process.env.TEST_SOMETHING_NEW || null;\n", 1,
+     'TEST_SOMETHING_NEW is read by'),
+    ("the spec reads process.env through a computed key — refused, not skipped",
+     "const k = 'APP_URL';\nconst X = process.env[k];\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    # Spellings of the same read that are not the contiguous text `process.env`:
+    # a guard keyed on that text skipped them entirely and printed OK (#372).
+    ("the spec reads process['env'] — refused, not skipped",
+     "const X = process['env'].TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    ("the spec reads `process . env` with spacing — refused, not skipped",
+     "const X = process . env.TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    ("the spec aliases process — refused, not skipped",
+     "const p = process;\nconst X = p.env.TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    # ...and the accepting complement, so the refusals are not bought by
+    # refusing every mention of `process`.
+    ("the spec aliases process through a method (process.valueOf()) — refused",
+     "const p = process.valueOf();\nconst X = p.env.TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
+    ("the spec reads process.platform — accepted",
+     "if (process.platform === 'linux') {}\n", 0,
+     "spec env wired from inputs"),
+]
 
-def run_guard(path):
-    r = subprocess.run([sys.executable, str(GUARD), str(path)],
+
+def run_guard(path, spec):
+    r = subprocess.run([sys.executable, str(GUARD), str(path), str(spec)],
                        capture_output=True, text=True, cwd=REPO_ROOT)
     return r.returncode, f"{r.stdout}{r.stderr}".strip()
 
@@ -726,10 +758,18 @@ def run_guard(path):
 def main():
     failures = []
     with tempfile.TemporaryDirectory() as tmp:
-        for i, (label, body, expected, needle) in enumerate(CASES):
+        no_reads = Path(tmp) / "no-reads.spec.js"
+        no_reads.write_text("// reads no environment\n", encoding="utf-8")
+        cases = [(label, body, expected, needle, no_reads)
+                 for label, body, expected, needle in CASES]
+        for j, (label, spec_text, expected, needle) in enumerate(SPEC_CASES):
+            spec = Path(tmp) / f"spec{j}.spec.js"
+            spec.write_text(spec_text, encoding="utf-8")
+            cases.append((label, LIVE.read_text(encoding="utf-8"), expected, needle, spec))
+        for i, (label, body, expected, needle, spec) in enumerate(cases):
             path = Path(tmp) / f"case{i}.yml"
             path.write_text(body, encoding="utf-8")
-            code, out = run_guard(path)
+            code, out = run_guard(path, spec)
             if code != expected:
                 failures.append(f"{label}\n      expected exit {expected}; got {code}.\n      {out}")
             elif needle not in out:
@@ -742,18 +782,62 @@ def main():
 
     # The guard must also still pass against the REAL composite. A suite that only
     # ever sees fixtures can be perfectly green while the shipped file is broken.
-    code, out = run_guard(LIVE)
+    # With the SHIPPED spec and config, so the #320 wiring is checked for real.
+    r = subprocess.run([sys.executable, str(GUARD), str(LIVE)],
+                       capture_output=True, text=True, cwd=REPO_ROOT)
+    code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
     if code != 0:
         failures.append(f"the live composite no longer passes\n      exit {code}\n      {out}")
     else:
         print("OK:   the live ui-suite composite passes (exit 0)")
+
+    # DISCOVERY (#372): with no spec arguments the guard must find every JS/TS
+    # file under the kit, so a spec added later is covered without being named.
+    # Run in a temp tree holding the live composite and a kit with one extra spec.
+    extra = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        action = root / "templates/actions/ui-suite/action.yml"
+        action.parent.mkdir(parents=True)
+        action.write_text(LIVE.read_text(encoding="utf-8"), encoding="utf-8")
+        tests = root / "templates/ui-tests/tests"
+        tests.mkdir(parents=True)
+        (tests / "checkout.spec.js").write_text(
+            "const u = process.env.CHECKOUT_USER;\n", encoding="utf-8")
+        # Playwright's default testMatch runs .tsx specs too (#372 round 2).
+        (tests / "cart.spec.tsx").write_text(
+            "const c = process.env.CART_USER;\n", encoding="utf-8")
+        nm = root / "templates/ui-tests/node_modules/dep"
+        nm.mkdir(parents=True)
+        (nm / "index.js").write_text("process.env.IGNORED_IN_NODE_MODULES;\n", encoding="utf-8")
+        for label, cwd_files, expected, needle in (
+            ("a spec added to the kit is discovered without being named — refused",
+             True, 1, "CHECKOUT_USER is read by"),
+            ("a .tsx spec added to the kit is discovered too — refused",
+             True, 1, "CART_USER is read by"),
+            ("a kit with no JS/TS files at all — refused, never an empty OK",
+             False, 1, "CANNOT CHECK: no JS/TS files found"),
+        ):
+            if not cwd_files:
+                for f in tests.iterdir():
+                    f.unlink()
+            r = subprocess.run([sys.executable, str(GUARD), str(action)],
+                               capture_output=True, text=True, cwd=tmp)
+            code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
+            extra += 1
+            if code != expected or needle not in out:
+                failures.append(f"{label}\n      expected exit {expected} with {needle!r}; got {code}.\n      {out}")
+            elif "IGNORED_IN_NODE_MODULES" in out:
+                failures.append(f"{label}\n      node_modules was scanned.\n      {out}")
+            else:
+                print(f"OK:   {label} (exit {code})")
 
     if failures:
         print("\ncheck-ui-suite-env-cases: FAILED\n")
         for f in failures:
             print(f"  - {f}")
         return 1
-    print(f"\ncheck-ui-suite-env-cases: OK — {len(CASES) + 1} pinned shapes read correctly.")
+    print(f"\ncheck-ui-suite-env-cases: OK — {len(CASES) + len(SPEC_CASES) + 1 + extra} pinned shapes read correctly.")
     return 0
 
 

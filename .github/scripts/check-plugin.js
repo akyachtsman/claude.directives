@@ -86,7 +86,20 @@ const agents = readdirSync(`${ROOT}/agents`).filter(f => f.endsWith('.md'));
 const names = agents.map(a => fm(`${ROOT}/agents/${a}`)?.name).filter(Boolean);
 if (names.length !== agents.length) fail('agent missing name frontmatter');
 if (new Set(names).size !== names.length) fail('duplicate agent names');
-if (failCount === failsBeforeAgents) ok(`${agents.length} agents, names unique`);
+// An agent's `tools:` line is an allowlist: an `mcp__*` tool its body tells it
+// to call but the list omits is an instruction it cannot follow, and it does
+// not say so — it skips the step (#338). No `tools:` line inherits everything.
+for (const a of agents) {
+  const path = `${ROOT}/agents/${a}`;
+  const tools = fm(path)?.tools;
+  if (tools === undefined) continue;
+  const allowed = new Set(tools.split(',').map(s => s.trim()).filter(Boolean));
+  const body = readFileSync(path, 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '');
+  for (const t of new Set(body.match(/mcp__[A-Za-z0-9_]+/g) ?? [])) {
+    if (!allowed.has(t)) fail(`agent ${a}: body instructs ${t} but its tools: allowlist omits it`);
+  }
+}
+if (failCount === failsBeforeAgents) ok(`${agents.length} agents, names unique, every mcp__ tool a body names is allowlisted`);
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 const hooks = JSON.parse(readFileSync(`${ROOT}/hooks/hooks.json`, 'utf8'));

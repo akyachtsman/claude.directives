@@ -1,7 +1,9 @@
 name: Watcher Liveness
 # ⚠️ ADVISORY — NOT A GATE (#318). This job never fails and never blocks anything.
-# Whether and when it becomes blocking is an OPEN owner decision; until that is
-# recorded on #318, nothing here may be read as a pass/fail signal on a PR.
+# PROMOTION RULE (owner ruling 2026-09-23, recorded on #318): after 4 consecutive
+# weekly runs with no false-alarm SILENT/GAPS verdict, SILENT/GAPS start failing
+# the job. A false alarm resets the count and is recorded on #318; NOT CHECKED and
+# QUIET neither count nor reset. Until then, nothing here is a pass/fail signal.
 #
 # WHAT IT ASKS. `workflow-ref-guard.py` proves every `workflow_run` name RESOLVES —
 # offline, from the tree. It cannot prove the watcher still FIRES; that needs run
@@ -221,12 +223,14 @@ jobs:
 
           def file_issue(findings, table):
               body = (
-                  "**Advisory — informational, not a gate. Nothing is blocked.** Whether this check "
-                  "becomes blocking is an open decision on #318.\n\n"
+                  "**Advisory — informational, not a gate yet. Nothing is blocked.** Per the promotion "
+                  "rule recorded on #318, SILENT/GAPS start failing this job after 4 consecutive weekly "
+                  "runs with no false alarm; a false alarm resets the count, and QUIET / NOT CHECKED weeks "
+                  "neither count nor reset. If a row below is healthy, say so on #318.\n\n"
                   f"`.github/workflows/watcher-liveness.yml` compared the last {WINDOW} day(s) of run history "
                   "and found a `workflow_run` watcher that stayed silent while the workflow it watches ran:\n\n"
                   + table
-                  + "\n\nFor each SILENT/GAPS row, either fix the trigger or confirm here why it is intentional. "
+                  + "\n\nFor each SILENT/GAPS row, either fix the trigger or confirm on #318 why it is intentional (#318 is where false alarms are counted). "
                   "This issue is edited in place by each run while it stays open; closing it means the next run "
                   "that still finds a gap files a fresh one.\n"
               )

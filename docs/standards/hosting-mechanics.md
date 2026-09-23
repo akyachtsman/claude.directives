@@ -41,9 +41,11 @@ Verify with `curl`, not by reading the config.
 *Supports:* the rule to ADD a `workflow_run` trigger to `pages-monitor.yml`, and not to repoint `pages-retry.yml` except under W3's idempotent exception.
 
 ⚠️ **Switching to Actions-source SILENTLY DISABLES this repo's Pages monitoring,
-and that is not optional to handle.** `pages-monitor.yml` and `pages-retry.yml`
-both trigger on `page_build`, which fires only for **branch-source** builds
-(`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
+and that is not optional to handle.** `pages-monitor.yml` triggers on `page_build`
+and `pages-retry.yml` on `workflow_run` of the managed `pages-build-deployment`;
+both fire only for **branch-source** builds, except that a visibility flip can
+still run `pages-build-deployment`, and with it the retry, which is the case W3
+exists for (`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
 *Automation 4b — Pages Deploy Retry*). An Actions-source repo
 keeps the workflow files and gets no runs from them — monitoring that looks
 present and reports nothing, which is worse than none. **ADD to the monitor; do

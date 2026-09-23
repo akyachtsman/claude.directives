@@ -312,8 +312,10 @@ this test, in order:
   concluding anything about what is live.
 
 ⚠️ **Switching to Actions-source SILENTLY DISABLES the repo's Pages monitoring,
-and that is not optional to handle.** `pages-monitor.yml` and `pages-retry.yml`
-both trigger on `page_build`, which fires only for **branch-source** builds.
+and that is not optional to handle.** `pages-monitor.yml` triggers on `page_build`
+and `pages-retry.yml` on `workflow_run` of the managed `pages-build-deployment`;
+both fire only for **branch-source** builds, except that a visibility flip can
+still run `pages-build-deployment`, and with it the retry.
 `docs/standards/automations.md` → *Watcher Rules* (W2, W3) carries the table.
 - **The monitor: ADD, never replace.** `pages-monitor.yml` takes a `workflow_run`
   trigger naming your own deploy workflow (its file header ships the snippet),

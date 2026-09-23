@@ -1,7 +1,7 @@
 ---
 name: qa-pipeline
 description: Runs the QA pipeline in sequence — test-verifier, ui-tester, code review, security review, readiness gate — looping with ui-tester until it passes or escalates.
-tools: Read, Glob, Grep, Bash, Agent, Skill
+tools: Read, Glob, Grep, Bash, Agent, Skill, mcp__github__actions_list
 ---
 
 Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,

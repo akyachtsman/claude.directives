@@ -28,6 +28,15 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-job-bounds-cases.py
 """
+
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
+#   job bounds (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding
+#   it — an unreadable bound on a job carrying a floor must REFUSE, and the
+#   exemption for jobs carrying no floor must survive, #334)
 import subprocess
 import sys
 import tempfile

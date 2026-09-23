@@ -2,6 +2,18 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
 
+// ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+// CLAUDE.md now keeps a one-line purpose per gate command; the history and
+// evidence it carried about this script moved here, verbatim.
+//
+// From CLAUDE.md → Local gate, the comment on `node .github/scripts/check-links.js --internal`:
+//   offline: verifies against the working tree. Strictly SINGLE-LINE — its OK
+//   line counts only the italic `file.md` → *Name* / → *Name* forms with the
+//   whole reference on ONE line, and SAYS SO on every run; anything else lands
+//   in one of three states, none of them verified: a name broken across a line
+//   is not parsed and NOT counted; a break between the FILENAME and its arrow IS
+//   counted, against the WRONG file; anything else is simply absent (#366)
+
 // Recursively collect all .md files, skipping node_modules and .git.
 function findMarkdown(dir) {
   const out = [];

@@ -8,7 +8,12 @@ rule; its reasoning lives elsewhere).
 
 The map is this repo dogfooding its own exported UI-testing standard
 (`test.md` / `templates/ui-tests`) on a real interactive artifact. The suite is
-a headless Chromium run in the `Repo Map UI` job of `qa.yml`.
+a headless Chromium run in the `Repo Map UI` job of `qa.yml`. (The summary `CLAUDE.md`
+carried until 2026-09-23 follows.) It asserts rendering and layout,
+the whole input surface (pointer, wheel, touch, keyboard), the arrangement a
+READER makes rather than only the shipped one, and the visual invariants — no
+arrow crosses a frame it does not connect, no two arrows run alongside each
+other, no two edge labels overlap.
 
 ## Interaction coverage
 

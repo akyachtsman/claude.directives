@@ -25,6 +25,17 @@
 // would leave every case here green. The rung ORDER is pinned as a literal for
 // exactly that reason: if the fact changes, the pin is what gets re-read.
 
+// ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+// CLAUDE.md now keeps a one-line purpose per gate command; the history and
+// evidence it carried about this script moved here, verbatim.
+//
+// From CLAUDE.md → Local gate, the comment on `node .github/scripts/check-browser-ladder-cases.js`:
+//   the exported browser ladder's own guard (#332) — nothing else here runs it,
+//   and its FAILING branches (no privileges, blocked download, a binary that
+//   will not start) cannot be produced on demand, so the two effects are
+//   injected and every case drives the SHIPPED ladder. Re-prove with
+//   BROWSER_LADDER_BIN=<mutant>
+
 // `.github/scripts/package.json` declares "type": "module", while the shipped
 // ladder is CommonJS like every other file in `templates/scripts/`. createRequire
 // loads it as the CJS module it is, rather than converting the shipped file to

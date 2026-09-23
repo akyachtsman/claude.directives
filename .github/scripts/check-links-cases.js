@@ -26,6 +26,78 @@
 // Each case builds a throwaway tree and runs the SHIPPED checker against it, so
 // these test the file that actually ships rather than a copy of its regexes.
 // Re-prove discrimination with CHECK_LINKS_BIN=<mutant> node <this file>.
+
+// ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+// CLAUDE.md now keeps a one-line purpose per gate command; the history and
+// evidence it carried about this script moved here, verbatim.
+//
+// From CLAUDE.md → Local gate, the comment on `node .github/scripts/check-links-cases.js`:
+//   that checker's own guard — a reference it cannot parse is absent from both
+//   sides of "N/N resolve", so partial blindness reads as full coverage. ⚠️ DO
+//   NOT teach it to read across a line break. #365 let the name SPAN a newline
+//   (six rounds, each finding another construct it should not have crossed);
+//   #367 JOINED lines first (three more — blockquote continuations, a
+//   self-closing HTML comment, a multiline code span). Both sets are open; both
+//   were reverted. The 37 wrapped references were put on ONE LINE in the source
+//   instead, which is why the count went 150 → 187 at #367. Keep them that way:
+//   re-wrapping one makes it invisible again, and nothing detects that — the
+//   summary discloses it, nothing enforces it. A break between the FILENAME and
+//   its arrow is worse than invisible and unfixable in the parser: the self form
+//   claims the arrow line and checks the name against the CURRENT file. `main`'s
+//   `\s*` was matching 17 references across a break that way. The delimiters are
+//   a CLOSED, STATED repo convention — a single `*`, then text that does not
+//   START with whitespace and contains no `*` and no line ending, then a single
+//   `*` — NOT CommonMark emphasis. The leading-whitespace condition is part of
+//   the rule, not an implementation detail: `→ * Name*` is not a reference, and
+//   the emitted contract says so, because a disclosure that understates what it
+//   rejects is how an omitted reference looks verified. The SELF form
+//   additionally requires a non-word character before the arrow, so `` text→
+//   *Name* `` is not parsed either — that is what stops it matching inside a
+//   word, and it is disclosed for the same reason (#367 round 17). That test is
+//   **ASCII only** and deliberately so: JS `\w` is ASCII even under `/u`, so ``
+//   café→ *Name* `` IS parsed and checked. It errs toward CHECKING, which is the
+//   safe direction, and a `\p{L}`/`\p{N}` rule here would reopen the
+//   Unicode-category chase that cost rounds 4-6. Both directions have cases, and
+//   the round-17 wording said "a LETTER", which was false for exactly that input
+//   (#367 round 18). ⚠️ The SELF form has a SECOND route to the wrong-target
+//   state, and it is DISCLOSED, not detected: the explicit form accepts only
+//   `[A-Za-z0-9_./-]` before `.md`, so any other filename (a space being the
+//   obvious one) is not matched as explicit, and the arrow is read as a SELF
+//   reference and checked against the CURRENT file — it can report resolved
+//   against a file absent from the repo. ⚠️ Do NOT suppress the self form after
+//   a code span naming a `.md` file. Five rounds produced five wrong answers
+//   about what a code span IS — content (any adjacent span suppressed, hiding a
+//   real broken reference), delimiter runs, CommonMark padding, then the SCANNER
+//   that replaced the lookbehind: a match starting inside an unmatched opener
+//   run, and a shorter run nested inside a span. Findings per round went 1, 1,
+//   1, 4, and TWO of round 16's FAILED VALID FILES, which is the worse
+//   direction. Same open set as #365's line joining and the flanking rule —
+//   third bet, third loss, so it is stated on every run instead (#367 rounds
+//   12-16, withdrawn by owner ruling 2026-09-18; widening what the explicit form
+//   accepts is #366). The `\x60` in `(?<![\x60\w])` is NOT part of that and must
+//   stay: an arrow directly after a backtick is inside a code span showing the
+//   syntax — this very file documents the checker with a literal `` `→
+//   *Section*` `` — and removing it was tried at round 13 and failed the repo on
+//   its own documentation. ⚠️ Do NOT reintroduce the flanking rule or re-derive
+//   it by sweeping commonmark.js: that was the design this replaced, after
+//   rounds 4, 5 and 6 each broke ONE invariant (the counted set equals
+//   CommonMark's emphasis set) from a different cause — half a flanking rule,
+//   then the wrong category set (marks/ZWJ are not punctuation; symbols ARE),
+//   then the wrong granularity (scanDelims reads neighbours with `charAt` and
+//   sees a surrogate). A ten-axis probe then found SEVEN more disagreements —
+//   escaped closers, code spans, delimiter-run length — so the set was OPEN. A
+//   construct CommonMark renders differently is now out of scope and disclosed
+//   on every run, which is what a closed rule buys. Line endings are normalised
+//   ONCE, by `readSource()`, which every read goes through — do NOT reintroduce
+//   per-consumer CR handling. Three sites were CR-blind in turn (the name
+//   pattern spliced two lines into one invented name; `lineOf` reported every
+//   failure as line 1; the fence padding moved later line numbers), each fix
+//   revealing the next, so the third occurrence became a redesign rather than a
+//   third `\r` (#367 rounds 6-8). Nothing downstream sees a CR, including code
+//   not yet written; line COUNT is preserved, so a reported line number is still
+//   the source file's. Re-prove with CHECK_LINKS_BIN=<mutant> (a RELATIVE one
+//   resolves against the caller, not the temp tree; left relative it crashed
+//   every case and read as perfect discrimination)
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';

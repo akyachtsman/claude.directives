@@ -33,6 +33,35 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-ui-suite-env.py
 """
+
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-ui-suite-env.py`:
+#   the ui-suite composite gives BOTH viewport checks — pre-run and post-run
+#   (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate
+#   IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round
+#   8). Since #347 round 18 it also pins two variables by NAME (REPORT_PATH,
+#   PLAYWRIGHT_JSON_OUTPUT_FILE) — parity is relative, and three steps that all
+#   dropped a variable agree perfectly. Round 19: requiring them EQUAL was the
+#   same relative mistake one level up (three steps agreeing on `other.json`
+#   pass while the stale-report clear and the upload still read the validated
+#   output), so both are pinned to the LITERAL `${{
+#   steps.report-path.outputs.relative }}`. Round 20: the same mistake a third
+#   time, on `working-directory` — three steps moved together satisfied every
+#   relative rule while the validator and the stale-report clear still resolved
+#   from the input — so each guarded step's cwd is pinned to the literal `${{
+#   inputs.tests-dir }}` too. Round 21: the stale-report CLEAR step joined the
+#   sequence — it was outside it, so skipping it, making it advisory or changing
+#   its `rm` all left the guard green while an uncleared report satisfied the
+#   post-run gate. Round 36: the artifact UPLOAD was pinned by four attributes
+#   and no execution control, so `continue-on-error: true` on it passed every
+#   one of them while an upload failure vanished behind a green job — the
+#   round-11 defect, one step outside the sequence round 11 fixed. Pinned by
+#   PROPERTY there (absent or `false`), not by absence, since an explicit
+#   `false` blocks identically and refusing it would be another
+#   form-for-construct false refusal
 import os
 import re
 import sys

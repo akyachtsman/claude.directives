@@ -150,8 +150,9 @@ import { execFileSync } from 'child_process';
 //   ❌ THE FIX OVER-REACHES (38, 39) — both were caused by a fix whose wording
 //      was fine and whose SCOPE silently closed a documented exit
 //   ❌ A CARRIER THAT STATES A CLAIM TWICE has ONE of its occurrences pinned,
-//      and the manifest author picks which. docs/standards/ci-triage.md states
-//      verdict-lookup in two sentences; only the step-3 procedure sentence
+//      and the manifest author picks which. docs/standards/ci-triage.md stated
+//      verdict-lookup in two sentences (until 2026-09-23, when both became
+//      pointers at git.md and it left the consumer list); only the step-3 procedure sentence
 //      carries an approved phrasing, so inverting THAT one turns this guard red
 //      and inverting the other — the "What not to do" restatement — leaves it
 //      green. This comment previously said inverting either one alone was
@@ -195,6 +196,30 @@ import { execFileSync } from 'child_process';
 // Nothing else is interpreted. In particular NO sentence boundaries are
 // computed: that reader is what rounds 18-24 were arguing about, and no check
 // here needs to know where a sentence ends.
+
+// ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+// CLAUDE.md now keeps a one-line purpose per gate command; the history and
+// evidence it carried about this script moved here, verbatim.
+//
+// From CLAUDE.md → Local gate, the comment on `node .github/scripts/check-claims.js`:
+//   pinned claims still stated by every listed consumer — travelled, NOT true
+//   (read its header). Literal phrasings, CASE-SENSITIVE; a reworded carrier is
+//   meant to turn this red, and the fix is to add the wording to `phrasings`
+//   (#341)
+//
+// From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
+//   the canonical-claim guard (`check-claims.js` — pinned rules still stated by
+//   every consumer that must state them; it proves a claim TRAVELLED, never that
+//   it is TRUE. Rewritten for #341 around **literal carrier pinning**: a claim
+//   lists the exact phrasings that count as stating it and the
+//   condition/negation inference is gone, after 24 review rounds and 100
+//   findings on #336 with no downward trend. Matching is CASE-SENSITIVE and no
+//   `mustNotMatch` string may contain a phrasing — those two rules replace the
+//   whole inference layer. Two containment rules added in #346 round 6 keep the
+//   pins honest: no phrasing may contain another (the longer one could never be
+//   the sole match, so it read as coverage and was none), and only `.`/`!`/`?`
+//   count as a terminator — a phrasing stopping at a `,` or `:` is mid-sentence
+//   and an appended condition survives it)
 
 const MANIFEST = '.github/scripts/claims.json';
 // ONE LIST, used by the target check AND by --derive. They were kept as two

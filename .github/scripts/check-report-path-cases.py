@@ -28,6 +28,15 @@ NOT exported: .github/ is outside every EXPORTS.json category path.
 
 Run: python3 .github/scripts/check-report-path-cases.py
 """
+
+# ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
+# CLAUDE.md now keeps a one-line purpose per gate command; the history and
+# evidence it carried about this script moved here, verbatim.
+#
+# From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-report-path-cases.py`:
+#   the ui-suite report-path validator's own guard — this repo does not use the
+#   composite, so nothing else here would notice it break; three of #347's
+#   rounds found defects in it. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
 import atexit
 import os
 import shutil

@@ -14,21 +14,8 @@ notified without polling. A watching session is woken by the PR-comment webhook
 (`ci-notify.yml`) on green and natively on failure — never poll (`git.md` → *GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
 ⚠️ **"Woken on green" is not universal, and the exceptions need a check-in, not
-a poll.** `ci-notify` fires only on `conclusion == 'success'`, only for workflows
-it watches by name, and only when one of its two lookups resolves the run to
-exactly one open PR — otherwise it stays silent. ⚠️ **Unique is not the same as
-correct.** Uniqueness stops it picking arbitrarily among duplicate matches; it
-does not prove the one match is related to the run. A `repository_dispatch` run
-carries the DEFAULT-BRANCH SHA, so if the default branch is the head of exactly
-one open PR (a `main` → `release` promotion), that unrelated PR is commented
-while the session that dispatched waits — see `git.md` → *PR Lifecycle*. So a
-**cancelled** run always ends with no wake, and a dispatched run
-or an ordinary success ends with none when both lookups come back ambiguous or
-empty. Neither of the latter two is silent by category: the branch-plus-owner
-fallback exists precisely to catch dispatched PR-branch runs. `pr-mechanics.md` → *Wakes that never arrive* carries the list, and `git.md` → *PR Lifecycle* the rule: **arm a check-in for any awaited outcome that can end without
-emitting a wake, and drop it when THAT outcome is terminal.** That is not the
-polling this line bans — polling is asking for something that would have arrived
-anyway.
+a poll** — polling is asking for something that would have arrived anyway. Which
+runs end with no wake, and why even a unique match is not proof: `directives/git.md` → *PR Lifecycle*, with each case in `docs/standards/pr-mechanics.md` → *Wakes that never arrive*.
 
 > This repo's own `ci-failure` issues come from its **directive-validation**
 > checks (link / section / path); a downstream project's come from its build /
@@ -51,21 +38,11 @@ anyway.
 
 1. Open the PR and read Codex's inline comments
 2. Address each suggestion or explicitly note why it's declined
-3. Request a fresh Codex pass (`@codex review`). The monitor clears the label
-   itself only when the all-clear arrives as a **comment** naming the current
-   head — which does happen, and clears the label with no action from you.
-   ⚠️ **But a clean rerun can equally arrive as a bare 👍 reaction, or as an
-   inline reply inside a review thread** — the monitor watches neither, so the
-   label sits there with nothing to remove it. All three forms were observed in
-   `claude.directives` on 2026-08-23, so do not assume any of them: check the
-   PR's **comments and its review threads**. Where no `codex-flagged` label is
-   present, the ladder is the whole gate and the merge proceeds unattended. Where one is and
-   the clear arrives in
-   either unwatched form, **request another pass** so the verdict lands in the
-   form the monitor acts on. Read the PR rather than reading the stuck label as
-   unaddressed concerns. Never merge while the label is present, and clear the
-   Codex gate itself per `git.md` → *PR Lifecycle* (a reaction is not a verdict
-   you can attribute; `pr-mechanics.md` → *The reaction ladder* carries the ladder).
+3. Request a fresh Codex pass (`@codex review`) and let the monitor clear the
+   label; never merge while it is present. The monitor sees only a **comment**
+   naming the current head, so where the verdict lives, and what to do when it
+   arrives as a 👍 or an inline review-thread reply: `directives/git.md` → *PR Lifecycle*,
+   with the delivery forms in `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
 
 ## CI never registered on a PR
 
@@ -79,11 +56,8 @@ not edit workflows chasing a bug that isn't there.
 ## What not to do
 
 - Do not close a `ci-failure` issue without fixing the underlying failure
-- Do not remove `codex-flagged` by hand as a routine path. Address the inline
-  comments, then request another pass and let the monitor clear it — it only
-  sees a **commented** all-clear, and a clean rerun may instead arrive as a 👍
-  reaction or an inline review-thread reply, so check the comments AND the
-  review threads. Hand removal is a last resort that `directives/git.md` → *PR Lifecycle* bounds by its *unreachable-review test*, and needs what that rule names
+- Do not remove `codex-flagged` by hand as a routine path — request another pass
+  (step 3 of the `codex-flagged` procedure above); hand removal is the last resort `directives/git.md` → *PR Lifecycle* bounds
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

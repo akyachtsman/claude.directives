@@ -94,6 +94,7 @@ const { createRequire } = require('module');
 const { dirname, join, resolve, sep } = require('path');
 const { existsSync } = require('fs');
 const { constants: osConstants } = require('os');
+const { StringDecoder } = require('string_decoder');
 
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
 
@@ -616,12 +617,18 @@ function realInstall(argv, cwd, { spawn = spawnProcess, timeout = INSTALL_TIMEOU
     let cause = null;
     let done = false;
 
+    // RAW bytes are counted, BEFORE decoding: `setEncoding('utf8')` turns each
+    // invalid input byte into U+FFFD, which re-encodes as THREE, so malformed
+    // output would trip the bound at ~a third of it. The decoder is only for
+    // the captured diagnostic strings.
     const collect = (stream, onto) => {
       if (!stream) return;
-      stream.setEncoding('utf8');
+      const decoder = new StringDecoder('utf8');
+      const append = (text) => { if (onto === 'out') stdout += text; else stderr += text; };
+      stream.on('end', () => append(decoder.end()));
       stream.on('data', (chunk) => {
-        if (onto === 'out') stdout += chunk; else stderr += chunk;
-        capturedBytes += Buffer.byteLength(chunk, 'utf8');
+        append(decoder.write(chunk));
+        capturedBytes += chunk.length;
         // The buffer is a bound too, and overflowing it is an interruption
         // rather than a truncation: a browser half-fetched cannot support a
         // verdict either way.

@@ -1369,6 +1369,39 @@ function eq(actual, expected, what) {
     }
   });
 
+  // ...and they are the RAW bytes. 30 MiB of invalid UTF-8 is under the bound,
+  // but decoding first turns each byte into U+FFFD (three bytes re-encoded), so
+  // counting after `setEncoding` read it as ~90 MB and killed a healthy install.
+  await check('the install output bound counts RAW bytes, before UTF-8 decoding', async () => {
+    const payload = Buffer.alloc(30 << 20, 0xff);
+    if (payload.length > INSTALL_MAX_BUFFER || payload.length * 3 <= INSTALL_MAX_BUFFER) {
+      throw new Error('fixture no longer straddles the bound; resize it');
+    }
+    const out = await realInstall(['ignored'], process.cwd(), {
+      timeout: 60000,
+      spawn: () => {
+        const child = new EventEmitter();
+        child.pid = 2147483647;
+        child.stdout = new PassThrough();
+        child.stderr = null;
+        let closed = false;
+        const close = (code, sig) => { if (!closed) { closed = true; child.emit('close', code, sig); } };
+        child.kill = () => setImmediate(() => close(null, 'SIGKILL'));
+        child.stdout.on('end', () => setImmediate(() => close(0, null)));
+        setImmediate(() => {
+          for (let i = 0; i < payload.length; i += 3 << 20) {
+            child.stdout.write(payload.subarray(i, i + (3 << 20)));
+          }
+          child.stdout.end();
+        });
+        return child;
+      },
+    });
+    if (out.interrupted) {
+      throw new Error(`30 MiB of invalid UTF-8 tripped a 64 MiB bound: ${out.reason}`);
+    }
+  });
+
   // Handlers are armed only while an install is in flight. A three-rung ladder
   // must not accumulate three of them, and a process that merely REQUIRES this
   // file must carry none — otherwise the fix leaks listeners instead of

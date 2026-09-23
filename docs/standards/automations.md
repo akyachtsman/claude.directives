@@ -267,9 +267,12 @@ or live URL not serving — with no session required.
 - Reads the build status from the event and verifies the live URL
   (`https://<owner>.github.io/<repo>/`) returns 200, with cache-busted retries.
 - **Exposure (optional):** each path listed in `.github/pages-deny.txt` must
-  serve 404 — the only thing here that catches a rogue unfiltered republish,
-  which serves 200 and passes the two checks above. No file = not checked, and
-  the job summary says so; the list covers only the paths someone remembered.
+  serve 404 on two probes 30s apart (one 404 can be the previous deploy
+  mid-propagation) — the only thing here that catches a rogue unfiltered
+  republish, which serves 200 and passes the two checks above. No file, or no
+  paths in it = not checked, and the job summary says so; more than 15 paths is
+  reported rather than truncated; the list covers only the paths someone
+  remembered.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
   issue. A healthy deploy closes it and reports green in the job summary only.
 - The live URL comes from the Pages API (user-site repos and custom domains work),

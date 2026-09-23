@@ -359,7 +359,11 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
   not skipped.) Because this gate lives in the config and not in any scenario, a
   green suite is not evidence for it: read the `projects` list — or let
   `check-ui-viewports.js` read it for you, which the `ui-suite` composite does on
-  every UI job.
+  every UI job. It checks width CLASSES (defaults: tablet from 768, laptop from
+  1024), **not the project's own breakpoints**, and its OK line prints the bands
+  it used: a design whose widest tier starts at 1400 passes with a 1024 laptop
+  that never renders it. Compare those bands with your design's tiers; the
+  composite does not yet pass a project's own breakpoints in (#328).
   That gate works in two stages, and both are needed. It IMPORTS the config, so
   Node expands `...devices[…]` and the declared widths are read rather than
   pattern-matched — a static read does not work and is not worth retrying, three

@@ -697,6 +697,15 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
     }
   }
   const ok = rowsWellFormed && bands.every(b => cover[b].length > 0);
+  // THE VERDICT STATES ITS OWN BANDS (#328). The gate proves three width
+  // CLASSES are covered, not that the project's own breakpoints are: a design
+  // whose widest tier starts at 1400 passes with a 1024 "laptop" that never
+  // renders that tier. A green that prints the bounds it used can be checked
+  // against the design by the next reader; a bare OK reads as total scope.
+  const bandsUsed = () => console.log(`  (bands: laptop >=${laptopMin}px, tablet ${tabletMin}-${laptopMin - 1}px, phone <${tabletMin}px`
+    + ` — width CLASSES, ${bandOpt('--tablet-min', 768).given || bandOpt('--laptop-min', 1024).given ? 'from --tablet-min/--laptop-min' : 'the DEFAULTS'};`
+    + ' NOT a check of this project\'s own breakpoints. Compare these bounds with'
+    + ' the design\'s tiers: one starting above the laptop floor is not covered by this line.)');
   if (ok) {
     // ── STAGE TWO: WHAT THE RUN SCHEDULED ────────────────────────────────
     // Only when a report is supplied. Without one this gate reports what the
@@ -786,6 +795,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       }
       const where = b => cover[b].filter(ranIn).map(label).join('/');
       console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
+      bandsUsed();
       console.log('  (a NON-SKIPPED result in a project declaring each width. This does NOT');
       console.log('   establish that a page was rendered at it, or that a test body ran at');
       console.log('   all: a test that never opens a page, or whose body never starts');
@@ -827,6 +837,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       }
       const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
       console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
+      bandsUsed();
       // WHAT --report BUYS, IN THE SAME WORDS THE VERDICT USES. This line said
       // "certify that scenarios actually ran at these widths" — the EXECUTED
       // claim the whole gate withdrew in favour of SCHEDULED. A hook that fails

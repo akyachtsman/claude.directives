@@ -65,6 +65,7 @@
     "git": {
       "lifecycle": [
         "directives/git.md",
+        "docs/standards/pr-mechanics.md",
         "templates/pr-checklist.md",
         "plugins/directives-toolkit/commands/commit-chk.md"
       ],
@@ -183,6 +184,7 @@
       "docs/standards/code-review-standard.md",
       "docs/standards/ci-triage.md",
       "docs/standards/automations.md",
+      "docs/standards/pr-mechanics.md",
       "docs/standards/cicd-setup.md",
       ".claude-plugin/marketplace.json",
       "plugins/directives-toolkit/.claude-plugin/plugin.json",
@@ -217,6 +219,7 @@
       "paths": [
         "directives/global.md",
         "directives/git.md",
+        "docs/standards/pr-mechanics.md",
         "docs/standards/automations.md",
         "docs/standards/cicd-setup.md",
         "directives/design.md",

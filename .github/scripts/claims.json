@@ -181,6 +181,31 @@
       ]
     },
     {
+      "id": "exits-stay-reachable-never-silent",
+      "why": "#299 moved the Codex gate's mechanism out of git.md into docs/standards/pr-mechanics.md, and this is the one must-stay rule the issue named that had no pin: every exit from the verdict gate (the reaction ladder, unavailable, outage) stays reachable, and none clears the gate silently. Both exits lived inside the block being moved, so a split that dropped the rule and left only the pointer would have passed every other claim. Each phrasing runs to its sentence terminator so an appended condition changes the pinned text. automations.md states it as the ladder's last rung ('ask Codex a direct question or attest on the PR'), pinned from 'Where that endpoint is out of reach' so a negation of the exit falls inside the pin. ⚠️ Pinning git.md's summary sentence cannot see the list of exits beside it; a refactor that deletes one exit from that list and keeps this sentence stays green.",
+      "source": "directives/git.md",
+      "phrasings": [
+        "Every exit stays reachable, and none clears the gate silently.",
+        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently."
+      ],
+      "consumers": [
+        "docs/standards/automations.md"
+      ],
+      "mustNotMatch": [
+        "Every exit stays reachable, and none clears the gate silently unless the owner approves.",
+        "Every exit stays reachable, and one may clear the gate silently.",
+        "No exit stays reachable, and none clears the gate silently.",
+        "Not every exit stays reachable, and none clears the gate silently.",
+        "Every exit stays reachable.",
+        "none clears the gate silently.",
+        "Where that endpoint is out of reach, never ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently.",
+        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is permitted is clearing the gate silently.",
+        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate loudly.",
+        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently only after owner approval.",
+        "what is forbidden is clearing the gate silently."
+      ]
+    },
+    {
       "id": "ci-notify-unique-match-is-not-proof",
       "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. Both capitalisations are listed because CLAUDE.md opens a sentence with it and the others do not. Three carriers state it ANAPHORICALLY, in words no earlier phrasing reached and --derive therefore could not surface (#314): repo-monitors.md ('Nor does a unique match guarantee one', antecedent in the previous sentence), ci-triage.md ('Unique is not the same as correct.'), and git.md's PR Lifecycle bullet, which states the consequence ('that unrelated PR is commented while the session that triggered the dispatch waits.'). git.md's neighbouring 'it uniquely resolves the one matching workflow_run.head_branch' is the lookup MECHANISM, not this warning, and is deliberately left untracked rather than pinned under this id — the response-is-not-a-verdict mistake of certifying a neighbouring rule.",
       "source": "docs/standards/automations.md",

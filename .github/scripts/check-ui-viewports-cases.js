@@ -1505,6 +1505,30 @@ const CASES = [
       + "    { name: 'c', use: { viewport: { width: 1300, height: 900 } } },\n") },
     1, 'no project declares a phone viewport'],
 
+  // ── A GREEN STATES ITS OWN BANDS (#328) ─────────────────────────────────
+  // The gate proves three width CLASSES, not the project's own tiers, so every
+  // OK verdict prints the bounds it banded with — a design whose widest tier
+  // starts at 1400 can then be read against `laptop >=1024px`. Pinned on both
+  // verdicts and on both sources, so dropping the line from either OK branch,
+  // or printing the defaults when the flags moved the bounds, reddens a case.
+  ['a DECLARED green prints the default bands it used (#328)',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'OK — DECLARED laptop:desktop  tablet:tablet  phone:phone\n'
+      + '  (bands: laptop >=1024px, tablet >=768px and <1024px, phone <768px — width CLASSES, the DEFAULTS;'],
+  ['a DECLARED green prints OVERRIDDEN bands as given (#328)',
+    { 'playwright.config.js': withProjects(
+      "    { name: 'a', use: { viewport: { width: 850, height: 900 } } },\n"
+      + "    { name: 'b', use: { viewport: { width: 1100, height: 900 } } },\n"
+      + "    { name: 'c', use: { viewport: { width: 1300, height: 900 } } },\n") },
+    0, 'OK — DECLARED laptop:c  tablet:b  phone:a\n'
+      + '  (bands: laptop >=1200px, tablet >=900px and <1200px, phone <900px — width CLASSES, from --tablet-min/--laptop-min;',
+    { extraArgs: ['--tablet-min', '900', '--laptop-min', '1200'] }],
+  ['a SCHEDULED green prints the bands it used (#328)',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'OK — SCHEDULED laptop:desktop  tablet:tablet  phone:phone\n'
+      + '  (bands: laptop >=1024px, tablet >=768px and <1024px, phone <768px — width CLASSES, the DEFAULTS;',
+    { runReport: true }],
+
   // ── THE DECLARED MAPPING CROSSES THE RUN (#347 round 14) ────────────────
   // The post-run invocation used to import the config AGAIN, after globalSetup,
   // the tests and globalTeardown had all run. Codex reproduced a config whose

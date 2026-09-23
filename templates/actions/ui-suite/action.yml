@@ -79,6 +79,14 @@ inputs:
     description: 'Identifier for email+password gates (directives#304); empty keeps the password-only path. NOT truly secret: it is typed into a visible input, so failure screenshots/traces record it — use a throwaway test-account address, never a real person''s'
     required: false
     default: ''
+  test-auth-ready-selector:
+    description: 'TEST_AUTH_READY_SELECTOR (directives#302, #320): a selector matching whichever auth outcome occurs, so "no gate" is PROVEN rather than windowed. Empty keeps the windowed answer. Not a secret — pass it from a repo VARIABLE, never a secret: a masked selector in a failure message is unreadable'
+    required: false
+    default: ''
+  test-auth-ready-request:
+    description: 'TEST_AUTH_READY_REQUEST (directives#302, #320): a substring of the URL of the request whose completion decides the auth outcome. Empty keeps the windowed answer. Not a secret — pass it from a repo VARIABLE'
+    required: false
+    default: ''
   artifact-name:
     description: 'Name for the uploaded results artifact'
     required: true
@@ -320,6 +328,8 @@ runs:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
+        TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         APP_PAGES: ${{ inputs.app-pages }}
         REPORT_PATH: ${{ steps.report-path.outputs.relative }}
         PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
@@ -356,6 +366,8 @@ runs:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
+        TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         APP_PAGES: ${{ inputs.app-pages }}
         # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
         # check-ui-suite-env.py enforces exact env parity across the sequence,
@@ -383,6 +395,8 @@ runs:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
+        TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         APP_PAGES: ${{ inputs.app-pages }}
         # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
         # check-ui-suite-env.py enforces exact env parity across the sequence,
@@ -458,6 +472,8 @@ runs:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}
         TEST_AUTH_EMAIL: ${{ inputs.test-auth-email }}
+        TEST_AUTH_READY_SELECTOR: ${{ inputs.test-auth-ready-selector }}
+        TEST_AUTH_READY_REQUEST: ${{ inputs.test-auth-ready-request }}
         APP_PAGES: ${{ inputs.app-pages }}
         # REPORT_PATH is on ALL THREE steps, not just the one that uses it.
         # check-ui-suite-env.py enforces exact env parity across the sequence,

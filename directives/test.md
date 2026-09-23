@@ -94,7 +94,9 @@ Execute these before any task work:
   **`TEST_AUTH_READY_SELECTOR`** (a selector matching whichever outcome occurs —
   the gate itself OR the authenticated app shell) or **`TEST_AUTH_READY_REQUEST`**
   (a substring of the URL whose settling decides the gate), and the answer becomes
-  a decided one. Both optional: unset, behaviour is unchanged and the report
+  a decided one. In CI set them as repository **variables**, not secrets — the
+  qa carriers pass `vars.TEST_AUTH_READY_*` through the ui-suite composite, and a
+  masked selector is unreadable in a failure message (#320). Both optional: unset, behaviour is unchanged and the report
   simply says the answer was `windowed` rather than `proven`. **That second half
   is the point** — the defect was never the window's length, it was that a
   windowed answer and a proven one were indistinguishable in the output.

@@ -32,15 +32,12 @@ explicitly overrides it.
   The trigger is a property of the diff you are already writing: does it change
   where a value comes from, or who may write it — repointing a read at config, a
   column or user input, or granting an update policy, an edit endpoint, or a
-  looser constraint on one that already exists? A widened writer changes the
-  provenance of every existing read without touching any of them. If so, grep
-  the value's name and check every place it lands, before that diff ships.
-  Interpolation that looked safe because the value came from a fixed, known-safe
-  set stops being safe the moment a change makes it user-editable — and the sinks
-  are unchanged, so nothing in them looks wrong. A constraint bounds which values
-  are possible, never whether they are safe in HTML, SQL or shell grammar: encode
-  or parameterize at the sink either way. Check it in the diff that moves the
-  value, never a later sweep.
+  looser constraint on one that already exists? If so, grep the value's name and
+  check every place it lands, before that diff ships. A constraint bounds which
+  values are possible, never whether they are safe in HTML, SQL or shell grammar:
+  encode or parameterize at the sink either way. Check it in the diff that moves
+  the value, never a later sweep. Why a widened writer counts:
+  `docs/standards/session-mechanics.md` → *Provenance and sinks*.
 - For non-trivial features, separate WHAT from HOW: specify intent before
   planning a stack, and refine in phases rather than one-shotting (`/sdd-loop`,
   with the imported directives as its constitution)
@@ -283,8 +280,7 @@ Two different scopes — never conflate them:
 **GitHub Pages is the deployment target.** Plain HTML/CSS/JS, dynamic via
 client-side Supabase + RLS. No build step.
 
-⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one, and
-this line read "branch-source … the push *is* the deploy" until 2026-08-26.**
+⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one.**
 Branch-source publishes the **whole repository** at the public URL. Choose by
 this test, in order:
 
@@ -295,124 +291,73 @@ this test, in order:
    deploy it.
 2. **Otherwise** → branch-source is fine and the push is the deploy.
 
-⚠️ **The test is "must not be public", NOT "is internal-facing".** A file can be
-internal in purpose and harmless in public. `claude.directives` is the worked
-example: it is a public repo, its `CLAUDE.md`, `learnings.jsonl`, `EXPORTS.json`
-and `docs/internal/` all serve 200 from its Pages URL (verified 2026-08-26), and
-that exposes nothing `github.com` does not already serve to anyone. It stays on
-branch-source, correctly. Reading the trigger as "has internal-looking files"
-would send every repo with a `CLAUDE.md` to do pointless work and make the rule
-read as wrong to the first person who checks.
+- **The test is "must not be public", NOT "is internal-facing".** A file can be
+  internal in purpose and harmless in public, and a repo whose internal files
+  expose nothing stays on branch-source. The worked example:
+  `docs/standards/hosting-mechanics.md` → *Choosing the Pages source*.
+- **Deny-list, never allow-list — and verify the live URL after publishing:**
+  assert the app serves 200, each named internal path serves 404, and any
+  internal-looking-but-public asset still serves 200. Fail the run otherwise.
+  Verify with `curl`, not by reading the config. Why a deny-list:
+  `docs/standards/hosting-mechanics.md` → *Deny-list, not allow-list*.
+- ⚠️ **Flipping repo visibility fires the LEGACY managed branch build** ("pages
+  build and deployment", event `dynamic`) even when an Actions workflow also
+  runs — and it can finish *later* and republish the whole tree over the
+  filtered copy. Set Settings → Pages → Source = **GitHub Actions** and confirm
+  it. If internal paths reappear on the live URL, look for a
+  `pages build and deployment` run first.
+- ⚠️ **A plain `curl` of a Pages URL can return a CACHED edge copy**
+  (`max-age=600`), so it may show the old file minutes after a good deploy. Use
+  `-H "Cache-Control: no-cache"` and a cache-busting query param before
+  concluding anything about what is live.
 
-⚠️ **Deny-list, never allow-list.** An allow-list means every new app file needs a
-manifest edit to ship, and its failure mode is a missing file — annoying but
-visible. A deny-list fails the other way only when someone adds a new *internal*
-path and forgets it, which is why the deploy must **verify the live URL after
-publishing**: assert the app serves 200, each named internal path serves 404, and
-any internal-looking-but-public asset still serves 200. Fail the run otherwise.
-Verify with `curl`, not by reading the config.
-
-⚠️ **Flipping repo visibility fires the LEGACY managed branch build** ("pages
-build and deployment", event `dynamic`) even when an Actions workflow also runs —
-and it can finish *later* and republish the whole tree over the filtered copy.
-Set Settings → Pages → Source = **GitHub Actions** and confirm it. If internal
-paths reappear on the live URL, look for a `pages build and deployment` run first.
-
-⚠️ **A plain `curl` of a Pages URL can return a CACHED edge copy** (`max-age=600`),
-so it may show the old file minutes after a good deploy. Use
-`-H "Cache-Control: no-cache"` and a cache-busting query param before concluding
-anything about what is live.
-
-⚠️ **Switching to Actions-source SILENTLY DISABLES this repo's Pages monitoring,
+⚠️ **Switching to Actions-source SILENTLY DISABLES the repo's Pages monitoring,
 and that is not optional to handle.** `pages-monitor.yml` and `pages-retry.yml`
-both trigger on `page_build`, which fires only for **branch-source** builds
-(`docs/standards/automations.md` → *Automation 4 — Pages Monitor Workflow*, and
-*Automation 4b — Pages Deploy Retry*). An Actions-source repo
-keeps the workflow files and gets no runs from them — monitoring that looks
-present and reports nothing, which is worse than none. **ADD to the monitor; do
-NOT repoint the retry.** `docs/standards/automations.md` → *Watcher Rules*
-(W2, W3) carries the table and the reasoning: `pages-monitor.yml` takes a
-`workflow_run` trigger naming your own deploy workflow (its file header ships the
-snippet), while `pages-retry.yml` must not **by default**, because it re-runs the
-**whole** watched run and would replay your entire build — an Actions-source
-project builds retry into its own deploy workflow instead (*Automation 4b*). W3
-carries one narrow exception and this rule does not override it: a project MAY
-extend the retry anyway **if its deploy is genuinely idempotent** — no build, no
-compile, no tests, same commit in and same tree out — provided it records in its
-own `CLAUDE.md` both that reasoning **and a revisit trigger**, the condition that
-ends the exception (*"if the deploy ever gains a build or test stage, move the
-retry inside it"*). The reasoning describes the deploy today; without a stated
-end condition the exception outlives the change that invalidates it.
-
-⚠️ **ADD that trigger — do NOT replace the existing arm — and the reason is the
-visibility flip above.** `pages-monitor.yml` keeps `page_build:` and `qa-live.yml`
-keeps `pages-build-deployment`; the new name goes **alongside**. Those arms are
-what see the **legacy managed build**, which a visibility flip can fire *even
-while Actions-source is configured*, unfiltered, and which can finish later and
-republish the whole tree. Drop them and that rogue build runs with **nothing
-watching it at all** — no gate, no monitor, only the after-the-fact forensics
-above. The templates are written additively for exactly this reason
-(`qa-live.yml`: *"+ your Actions deploy workflow's `name:`"*); a reader who
-"repoints" instead of adding silently removes the only thing that runs when the
-legacy build does.
-
-⚠️ **BUT KEEPING THE ARM IS NOT THE SAME AS DETECTING THE EXPOSURE, AND DO NOT
-READ IT THAT WAY.** By default `pages-monitor.yml` asserts two things — the build
-did not error, and the live URL returns **200** — and `qa-live.yml` runs the
-ordinary UI suite. **A rogue build that republishes the unfiltered tree serves
-the app as 200 and passes both.** The internal paths are exposed and every
-watcher is green. So the arm buys you a run at the right moment and nothing
-more; **what turns that run into detection is a forbidden-path assertion** — the
-same 200/404 deny-list check the deploy workflow carries, evaluated by the
-watcher, against paths the template cannot know and the project must declare.
-**Declare them in `.github/pages-deny.txt`** (one path per line) and
-`pages-monitor.yml` asserts each serves 404 on every run. Without that file, a
-visibility-flip exposure is still caught only by someone looking.
-
-⚠️ **The asymmetry between the monitor and the retry is about RE-RUNNING, not
-about Pages.** A watcher that only **observes** — a monitor, a live gate — can
-name both sources at no cost, and should. A watcher that **re-runs** what it
-watches can not: a second name is a second thing it may replay. That is the whole
-of W2 vs W3, and it generalises to any watcher you add later.
-
-⚠️ **And whichever way you go, DELETE an unrepointed `pages-retry.yml` — the
-reason is worse than dead coverage.** In ordinary operation it is inert: it
-watches `pages-build-deployment`, a GitHub-managed name that still **resolves**
-after the switch (so the workflow-ref guard stays green) while nothing triggers
-it. **But on the visibility-flip path above, that name is exactly what fires** —
-and a retry left installed will faithfully **re-run the rogue unfiltered
-deployment** it was never meant to see, turning a one-off exposure into a
-retried one. So this is not the monitor case one file over: an unrepointed
-monitor merely fails to notice, while an unrepointed retry participates. Delete
-it and its `REQUIRED` entry, or repoint it under the exception above.
+both trigger on `page_build`, which fires only for **branch-source** builds.
+`docs/standards/automations.md` → *Watcher Rules* (W2, W3) carries the table.
+- **The monitor: ADD, never replace.** `pages-monitor.yml` takes a `workflow_run`
+  trigger naming your own deploy workflow (its file header ships the snippet),
+  and keeps `page_build:`; `qa-live.yml` keeps `pages-build-deployment`. The new
+  name goes **alongside**: those arms are what see the **legacy managed build**
+  a visibility flip can fire even while Actions-source is configured
+  (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
+- **The retry: do NOT repoint it, by default.** It re-runs the **whole** watched
+  run and would replay your entire build; an Actions-source project builds retry
+  into its own deploy workflow instead (`docs/standards/automations.md` → *Automation 4b — Pages Deploy Retry*).
+  W3's one narrow exception stands: a project MAY extend the retry anyway **if
+  its deploy is genuinely idempotent** — no build, no compile, no tests, same
+  commit in and same tree out — provided it records in its own `CLAUDE.md` both
+  that reasoning **and a revisit trigger**, the condition that ends the
+  exception (*"if the deploy ever gains a build or test stage, move the retry
+  inside it"*). Detail: `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*.
+- **DELETE an unrepointed `pages-retry.yml`** and its `REQUIRED` entry, or
+  repoint it under that exception. On the visibility-flip path the name it
+  watches is exactly what fires, so a retry left installed will **re-run the
+  rogue unfiltered deployment**: an unrepointed monitor merely fails to notice,
+  while an unrepointed retry participates. Why:
+  `docs/standards/hosting-mechanics.md` → *Why an unrepointed retry must go*.
+- **A watcher that only OBSERVES can name both sources, and should; one that
+  RE-RUNS what it watches can not** — a second name is a second thing it may
+  replay. This generalises to any watcher you add later
+  (`docs/standards/hosting-mechanics.md` → *Observers versus re-runners*).
+- ⚠️ **Keeping the arm is NOT detecting the exposure.** A rogue build that
+  republishes the unfiltered tree serves the app as 200 and passes the monitor's
+  default checks. **Declare the forbidden paths in `.github/pages-deny.txt`**
+  (one path per line) and `pages-monitor.yml` asserts each serves 404 on every
+  run. Without that file, a visibility-flip exposure is still caught only by
+  someone looking (`docs/standards/hosting-mechanics.md` → *Arms are not detection*).
 
 ⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
-monitor — they catch different failures, and swapping one for the other loses
-coverage silently.** Put the 200/404 assertions **inside the deploy workflow**, where
-a bad filter fails the run that produced it. But a deploy that **fails before
-reaching its own assertions** reports nothing about the live site: the steps that
-would have checked it never ran, so as far as verification is concerned the
-failure is **silent** — and only an external watcher turns that silence into a
-tracking issue. A `workflow_run` watcher on `types: [completed]` fires on a
-**failed** run as well as a successful one and reads the conclusion, which is why
-**adding** that trigger restores precisely the coverage the source switch
-removed. (Adding — never repointing; see below.)
-
-⚠️ **Know the bound on that, and do not overclaim it.** `types: [completed]`
-means the watcher sees runs that reach a **terminal state**. A deploy that hangs
-and never completes emits no `workflow_run` event either, so it is covered by
-**neither** the in-run assertions nor the watcher — catching that needs timeout
-or staleness monitoring, which is a third thing and not what either of these is.
-*(Raised by `apfp.claude`, whose Pages incident prompted this whole section: the
-earlier wording here made the verification the monitor's replacement, which would
-have retired the only watcher that can see a deploy that **failed before
-reaching its own assertions**. A deploy that literally never finishes is covered
-by neither instrument — see the bound stated above.)*
-
-*Written from an incident: on 2026-08-18 a repo's internal docs were public for
-~18 minutes on exactly this path. The rule as it stood would have sent a session
-doing routine directive alignment to reproduce it — which is the worst property a
-rule can have, since following it correctly was the failure.*
+monitor — they catch different failures.** Put the 200/404 assertions **inside
+the deploy workflow**, where a bad filter fails the run that produced it, AND
+add the `workflow_run` watcher on `types: [completed]`, which fires on a deploy
+that **failed before reaching its own assertions** — a failure otherwise silent
+(`docs/standards/hosting-mechanics.md` → *Verification versus the monitor*). A
+deploy that hangs and never completes is covered by **neither**; catching that
+needs timeout or staleness monitoring, a third thing — do not overclaim either
+instrument (`docs/standards/hosting-mechanics.md` → *The bound on completed-run watchers*).
+These rules were written from an incident
+(`docs/standards/hosting-mechanics.md` → *Where these rules came from*).
 
 **A React / Next.js-on-Vercel "production tier" was evaluated and REJECTED** —
 a different development platform, changing a lot of code for a need no project
@@ -558,9 +503,8 @@ the list with a specification of when the scan is owed; #363 has why.
 
 **Report the scan's result whenever a turn ends** — what you started, or what
 blocks what you did not. ⛔ **This is a report, not a test, and no turn-end
-SELF-check belongs here:** a session grading its own turn also decides what was
-on the list, so no wording of such a check binds. ⚠️ **Nothing here enforces the
-scan** — that is the honest state, not an oversight; #363 carries what would.
+SELF-check belongs here.** ⚠️ **Nothing here enforces the scan**
+(`docs/standards/session-mechanics.md` → *The scan is a report, not a test*).
 
 Do not decide WHETHER to scan by judging if there is "enough" to parallelise —
 that judgement is the first thing to fail in a long session. Judging whether a
@@ -606,25 +550,19 @@ the goal" is the test for a candidate, never for an authorization.
 and two agents editing one file is worse than doing it once.
 - **Read-only investigation** — a census, an audit, *"is this claim actually
   true?"*. **Highest-yield category and the most under-used**, and any number
-  run at once. ⛔ **Never point one at a tree you are editing.** They create no
-  merge conflict, which is why this goes unnoticed: a tree read while it is
-  being written is read as a mixture of revisions, and the answer comes back
-  confidently wrong. ⚠️ Aiming an agent at your OWN work, below, is exactly when
-  this bites. (Making that safe by construction — snapshots, pinned checkouts,
-  exclusive windows — is unsolved here; see #363.)
+  run at once. ⛔ **Never point one at a tree you are editing** — a tree read
+  while it is being written is read as a mixture of revisions.
 - **Implementation in an ISOLATED WORKTREE** — the default for anything that
-  edits code while another run is in flight. A revert done for a test inside a
-  shared tree makes an unrelated concurrent run report a failure that is not
-  real, and that false signal costs more than the parallelism saved.
+  edits code while another run is in flight.
 - **Disjoint files in one tree** — the ONE exception to that default, and it is
   a capability boundary, not a list of banned commands: an agent may EDIT ITS
-  OWN FILES, and READ ONLY WHAT NO OTHER AGENT IS WRITING — someone else's
-  in-flight file is read as a mixture of revisions exactly like a concurrently
-  edited tree, and code built on one is built on a revision that never existed.
-  Nothing else. ⛔ Staging, committing, checking out, reverting, stashing and
-  running the suite are the ORCHESTRATOR's, after collection — an index and a
-  HEAD are shared even when no two agents touch the same file. Split not stated explicitly to each agent, or an agent that needs
-  more than edit-and-read: use a worktree.
+  OWN FILES, and READ ONLY WHAT NO OTHER AGENT IS WRITING. Nothing else.
+  ⛔ Staging, committing, checking out, reverting, stashing and running the
+  suite are the ORCHESTRATOR's, after collection. Split not stated explicitly
+  to each agent, or an agent that needs more than edit-and-read: use a worktree.
+
+Why each boundary sits where it does:
+`docs/standards/session-mechanics.md` → *Why independence decides*.
 
 ✅ **"Nothing here is independent" is sometimes the correct answer — but it must
 be REACHED, not skipped.** Say it in one line, naming what collides **and why**,
@@ -735,11 +673,8 @@ naming what remains open, or "nothing open" — never absent.
      wake only covers what something actually emits. A dispatched run on a PR
      branch has seven verified ways to emit nothing (`git.md` → *PR Lifecycle*),
      and a cancelled run emits no PR WAKE, since `ci-notify` fires only on
-     success. (`ci-monitor.yml`
-     may still surface it as a `ci-failure` issue — coverage depends on its watch
-     list and on whether anyone dispatches its manual scan; read that file rather
-     than trusting a summary. **None of it reaches the session waiting on the
-     PR**, which is the only part that bears on this rule.)
+     success. What `ci-monitor.yml` does and does not cover:
+     `docs/standards/session-mechanics.md` → *Wake coverage*.
      Since ANY run can be cancelled, item 2's in-flight test resolves to *yes*
      for essentially every CI run you wait on — so arm the check-in **alongside**
      the event wake, never instead of it, and drop it when THAT outcome is
@@ -767,21 +702,15 @@ naming what remains open, or "nothing open" — never absent.
        NOT report. A wait expected to exceed five minutes also arms the
        heartbeat (→ *Status Line on Every Stop*).
 
-       **Ask the question you can answer while the run is still in flight.**
-       "Does this outcome emit a wake?" is only knowable once the run is
-       terminal, and the decision to arm has to be made before that — a test
-       that needs the answer it is deciding about. So the test is
-       **"could this run end in a way that emits no wake?"**, evaluated over
-       every conclusion still possible. `ci-notify` fires only on
-       `conclusion == 'success'` and only for workflows it watches by name, and
-       **any run can be cancelled** — a superseding push, a manual cancel, a
-       runner loss — which item 1 above establishes emits no PR wake. So the
-       answer for an in-flight CI run is essentially always yes: **arm the
-       check-in, and drop it when the outcome is terminal.** "PR-attached" is
-       not the test, "installed" is not the test, and "I expect this one to
-       pass" is not the test — an anticipated success that gets cancelled is the
-       case that strands the session, and it is indistinguishable in advance
-       from the success that would have woken it.
+       **Ask the question you can answer while the run is still in flight:
+       "could this run end in a way that emits no wake?"**, evaluated over
+       every conclusion still possible — never "does this outcome emit a
+       wake?", which is knowable only once the run is terminal. Any run can be
+       cancelled, so for an in-flight CI run the answer is essentially always
+       yes: **arm the check-in, and drop it when the outcome is terminal.**
+       "PR-attached" is not the test, "installed" is not the test, and "I
+       expect this one to pass" is not the test
+       (`docs/standards/session-mechanics.md` → *The in-flight test*).
      - Event wakes stay the primary signal; the heartbeat (→ *Status Line on Every Stop*) is the owner-visible liveness line carried by whatever wake
        already happens — never a replacement for event wakes, and never a
        reason to arm extra ones.
@@ -799,37 +728,21 @@ naming what remains open, or "nothing open" — never absent.
        own `.claude/settings.json` — no need to ask; it's the session's own repo
        and merges on green like every other change. Note in the PR that the
        pre-approval activates from the NEXT session.
-       ⚠️ **This instruction was ignored for a month and nobody noticed**, because
-       its trigger is a prompt the owner clicks rather than anything a session
-       sees. claude.insurance had NO `.claude/settings.json` at all through
-       2026-08-26 while claude.prop and claude.directives both carried the block,
-       so every scheduling call from that repo prompted, indefinitely, and the
-       cost landed on the owner instead of on any session's error log. A rule
-       whose violation is invisible to the only party who can fix it does not
-       get followed. So: check for the file at Session Start — its ABSENCE, not
-       just its staleness, is the finding — and do not wait for a prompt you will
-       never observe.
+       ⚠️ Its trigger is a prompt the owner clicks, which no session sees. So:
+       check for the file at Session Start — its ABSENCE, not just its
+       staleness, is the finding — and do not wait for a prompt you will never
+       observe (`docs/standards/session-mechanics.md` → *The settings block nobody noticed*).
   3. **Condition-wait with `Monitor`** only when you must block on a specific
      state — always with an exit condition and a hard timeout.
 - **Any recorded SHA is stale from the moment it is written — and a stale one
-  does not error.** The asymmetry is the whole point. An INVENTED identifier
-  fails loudly: the API has nothing to return, so a fabricated run ID 404s
-  immediately and no harm is done. A SUPERSEDED one does the opposite — it
-  resolves perfectly and returns real, well-formed, entirely valid data about the
-  wrong commit. Not an error: a correct answer to a question you no longer meant
-  to ask. There is no failure to catch, which is why this rule cannot live in
-  error handling and has to live in **where the identifier comes from**:
+  does not error.** A SUPERSEDED identifier resolves perfectly and returns
+  valid data about the wrong commit, so there is no failure to catch:
   **resolve the head from the API at use time, never from the record.** A
   recorded SHA tells you to go and check; it never tells you the answer. Every
   surface that hands you one is an instance of the same thing — an event
   payload's `head_sha`, a check-in prompt (item 2 above), a PR body, a handoff or
-  relay message (→ *One Session, One Repo*) — and none of them is a BAD record:
-  each was accurate when written, which is exactly why the API agrees with it.
-  Measured in `claude.prop` on 2026-08-23: five `check_suite.completed` events
-  across two PRs, every one naming a superseded head, four of which would have
-  merged a stale commit if read as clearance (`git.md` → *PR Lifecycle*). The
-  same day, `claude.directives`' own check-ins fired twice carrying SHAs three
-  commits behind, and one carried a claim a later round had already disproved.
+  relay message (→ *One Session, One Repo*). The asymmetry and the measurements:
+  `docs/standards/session-mechanics.md` → *Stale recorded SHAs*.
 - **Never background a bare `sleep` to wait.** On container suspend/resume the
   process is reaped while the harness keeps showing a phantom "running" task
   that never clears — and it was watching nothing. Use options 1–3. (The
@@ -1028,11 +941,9 @@ classes and no others:
 - **Read-only tools** that answer a question and change nothing:
   `list_sessions`, `get_session`, `list_repos`, `list_environments`, and the
   GitHub MCP read surface (`pull_request_read`, `list_issues`, `issue_read`,
-  `get_file_contents`, the `search_*` family, …). Added 2026-08-26 on the
-  owner's instruction, after prompt fatigue reached four figures. The test for
-  admission is not "is it safe" but **"can it change anything a person would
-  want to be asked about"** — if no, it belongs here; if yes or unclear, it does
-  not.
+  `get_file_contents`, the `search_*` family, …). The test for admission is not
+  "is it safe" but **"can it change anything a person would want to be asked
+  about"** — if no, it belongs here; if yes or unclear, it does not.
 
 Remote-server entries carry BOTH server-name spellings, since the prefix differs
 between session surfaces and permission rules match names exactly. GitHub tools
@@ -1049,12 +960,11 @@ owner has twice affirmed.
 
 Settings load at session start, so a widened allowlist reaches a session only on
 its NEXT start — every session already running keeps prompting until restarted,
-which is the single largest source of repeat prompts and is not a
-misconfiguration. **A repo with no `.claude/settings.json` at all pre-approves
-nothing**: claude.insurance was in that state on 2026-08-26 while its sibling
-repos were not, so every scheduling call from that session prompted. Check for
-the file's existence before diagnosing anything subtler. The security trade-offs
-the owner accepted are recorded in `docs/internal/accepted-residuals.md`.
+which is not a misconfiguration. **A repo with no `.claude/settings.json` at all
+pre-approves nothing**: check for the file's existence before diagnosing
+anything subtler (`docs/standards/session-mechanics.md` → *The settings block nobody noticed*).
+The security trade-offs the owner accepted are recorded in
+`docs/internal/accepted-residuals.md`.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.
@@ -1099,49 +1009,32 @@ something he cannot do, however politely it is phrased.
   | delete + `commit` + `push`, one file, on its own | `delete_file` |
   | reading a file at a ref (a READ — no commit, nothing below applies to it) | `get_file_contents` |
 
-  ⚠️ **A commit that both edits and deletes has NO equivalent.** `push_files`
-  requires `content` on every entry, so it cannot express a deletion; `delete_file`
-  handles one path and commits by itself. A change mixing the two therefore lands
-  as **several commits**, and CI runs against each incomplete intermediate tree.
-  When that matters — a build that breaks unless the edit and the deletion land
-  together — do it in a real checkout, or sequence it so no intermediate commit
-  is broken. Do not assume the API can be atomic across a mixed change.
+  ⚠️ **A commit that both edits and deletes has NO equivalent** — it lands as
+  several commits, and CI runs against each incomplete intermediate tree. When
+  the edit and the deletion must land together, do it in a real checkout, or
+  sequence it so no intermediate commit is broken
+  (`docs/standards/session-mechanics.md` → *Mixed edit-and-delete commits*).
 
-  Three mappings that look obvious and are **wrong**, all stated because a table
-  invites the substitution:
-  - **`git rm` is NOT `delete_file`.** `git rm` stages a deletion for a commit
-    you have not written yet, alongside whatever else is in it. `delete_file`
-    commits and pushes immediately, by itself. Substituting it splits an
-    intended atomic change (→ the warning above).
-  - **`git checkout -b` is NOT `create_branch`.** `create_branch` creates the
-    remote ref and nothing else — it does not move local `HEAD`. A session that
-    substitutes it stays on its previous branch, usually `main`, and every later
-    local commit, diff and status check reads the wrong branch. Either stay
-    API-only and pass the branch explicitly on every call, or fetch and switch
-    the local checkout before continuing.
-  - **`git merge` is NOT `merge_pull_request`.** `git merge` usually means
-    *bring the base branch into my working branch*. `merge_pull_request` does
-    the opposite and it **publishes**: it merges a PR into its base and closes
-    it. Use it only when you actually mean to merge that PR, and only after its
-    gates pass. There is no API equivalent for a local branch merge.
+  Three mappings that look obvious and are **wrong**
+  (`docs/standards/session-mechanics.md` → *Mappings that look obvious and are wrong*):
+  - **`git rm` is NOT `delete_file`** — `delete_file` commits and pushes
+    immediately, by itself, splitting an intended atomic change.
+  - **`git checkout -b` is NOT `create_branch`** — `create_branch` creates the
+    remote ref and does not move local `HEAD`. Either stay API-only and pass the
+    branch explicitly on every call, or fetch and switch the local checkout
+    before continuing.
+  - **`git merge` is NOT `merge_pull_request`** — that merges a PR into its base,
+    closes it and **publishes**. Use it only when you actually mean to merge that
+    PR, and only after its gates pass. There is no API equivalent for a local
+    branch merge.
 
-  The three write rows commit to the **remote**, and your local checkout does
-  not follow.
-
-  ⚠️ **Your local checkout does not carry the change, and nothing tells you so.**
-  A `git fetch` will not fix it: it advances `refs/remotes/origin/<branch>` while
-  local `HEAD` and the working tree stay on the pre-API commit. Before resuming
-  local work — any diff, any edit, any gate script — make the checkout actually
-  carry that commit, and treat the API's returned SHA as the reference rather
-  than anything git has cached locally.
-
-  **How to establish that is not written here, deliberately.** It depends on your
-  checkout in ways this file cannot see — whether the branch has unpushed
-  commits, what the index flags and sparse-checkout state are, which refspec the
-  clone maps, what is gitignored. Each of those silently breaks a different
-  plausible check. Work it out against the repository in front of you; a
-  procedure copied from a directive that cannot see your remotes is how you find
-  out by running a gate against the wrong bytes.
+  ⚠️ **The three write rows commit to the remote; your local checkout does not
+  carry the change, and nothing tells you so.** Before resuming local work — any
+  diff, any edit, any gate script — make the checkout actually carry that
+  commit, and treat the API's returned SHA as the reference rather than anything
+  git has cached locally. How to establish that depends on your checkout: work
+  it out against the repository in front of you
+  (`docs/standards/session-mechanics.md` → *The local checkout after an API write*).
 
 - **Report what you tried, not what you inferred.** Never say a command was
   refused unless you ran it and it was. Reporting an inference as an observation

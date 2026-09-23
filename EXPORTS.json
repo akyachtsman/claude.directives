@@ -39,7 +39,8 @@
     "_comment": "The LOGICAL view, orthogonal to categories (which encode propagation): domain \u2192 compartment \u2192 paths. A compartment is the swappable unit \u2014 replace its file set honoring its interface and nothing outside it moves. Rendered visually at docs/site/logical-map.html; boundaries and swap procedure in MAINTAIN-REPO-USER-INSTRUCTIONS.md \u2192 Domain Boundaries. Validated by check-exports.js: every path must exist.",
     "global": {
       "core": [
-        "directives/global.md"
+        "directives/global.md",
+        "docs/standards/session-mechanics.md"
       ],
       "method": [
         "plugins/directives-toolkit/commands/sdd-loop.md",
@@ -54,6 +55,7 @@
         "templates/actions/secret-scan/"
       ],
       "deploy": [
+        "docs/standards/hosting-mechanics.md",
         "plugins/directives-toolkit/skills/update-pages/",
         "templates/workflows/pages-monitor.yml",
         "templates/workflows/pages-retry.yml"
@@ -185,6 +187,8 @@
       "docs/standards/ci-triage.md",
       "docs/standards/automations.md",
       "docs/standards/pr-mechanics.md",
+      "docs/standards/session-mechanics.md",
+      "docs/standards/hosting-mechanics.md",
       "docs/standards/cicd-setup.md",
       ".claude-plugin/marketplace.json",
       "plugins/directives-toolkit/.claude-plugin/plugin.json",
@@ -218,6 +222,8 @@
       "blurb": "State blocking criteria a change must satisfy. Model-independent: a smarter model still has to meet them.",
       "paths": [
         "directives/global.md",
+        "docs/standards/session-mechanics.md",
+        "docs/standards/hosting-mechanics.md",
         "directives/git.md",
         "docs/standards/pr-mechanics.md",
         "docs/standards/automations.md",
@@ -371,7 +377,8 @@
       "serves": "git.lifecycle",
       "sockets": [
         "directives/git.md",
-        "docs/standards/pr-mechanics.md"
+        "docs/standards/pr-mechanics.md",
+        "docs/standards/session-mechanics.md"
       ]
     },
     "github-conversation-resolution": {

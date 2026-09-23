@@ -181,6 +181,29 @@
       ]
     },
     {
+      "id": "unrepointed-retry-participates",
+      "why": "#299 phase 2 moved the reasoning for global.md's Hosting & Deployment rules into docs/standards/hosting-mechanics.md and condensed the rules to one bullet each, so the rule to DELETE an unrepointed pages-retry.yml now stands in global.md as a single bullet beside a pointer. It is the one Hosting rule whose loss turns a missed alarm into an active harm: a retry still watching pages-build-deployment re-runs the rogue unfiltered deploy a visibility flip fires. A later trim that kept the pointer and dropped the bullet would pass every other check. Each phrasing runs to its sentence terminator; the workflow carriers state it in their header comment with a semicolon, and automations.md without 'merely'/'while', so each carrier's own wording is listed and none contains another.",
+      "source": "directives/global.md",
+      "phrasings": [
+        "an unrepointed monitor merely fails to notice, while an unrepointed retry participates.",
+        "an unrepointed monitor fails to notice, an unrepointed retry participates.",
+        "monitor fails to notice; an unrepointed retry participates."
+      ],
+      "consumers": [
+        "docs/standards/hosting-mechanics.md",
+        "docs/standards/automations.md",
+        ".github/workflows/pages-retry.yml",
+        "templates/workflows/pages-retry.yml"
+      ],
+      "mustNotMatch": [
+        "an unrepointed monitor merely fails to notice, while an unrepointed retry is harmless.",
+        "an unrepointed monitor merely fails to notice, while an unrepointed retry never participates.",
+        "an unrepointed monitor merely fails to notice, while an unrepointed retry participates only on failure.",
+        "an unrepointed monitor fails to notice, an unrepointed retry does not participate.",
+        "monitor fails to notice; an unrepointed retry is inert."
+      ]
+    },
+    {
       "id": "exits-stay-reachable-never-silent",
       "why": "#299 moved the Codex gate's mechanism out of git.md into docs/standards/pr-mechanics.md, and this is the one must-stay rule the issue named that had no pin: every exit from the verdict gate (the reaction ladder, unavailable, outage) stays reachable, and none clears the gate silently. Both exits lived inside the block being moved, so a split that dropped the rule and left only the pointer would have passed every other claim. Each phrasing runs to its sentence terminator so an appended condition changes the pinned text. automations.md states it as the ladder's last rung ('ask Codex a direct question or attest on the PR'), pinned from 'Where that endpoint is out of reach' so a negation of the exit falls inside the pin. ⚠️ Pinning git.md's summary sentence cannot see the list of exits beside it; a refactor that deletes one exit from that list and keeps this sentence stays green.",
       "source": "directives/git.md",

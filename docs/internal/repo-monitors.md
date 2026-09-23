@@ -69,8 +69,10 @@ subject that did not run is QUIET, not a finding, so healthy dormancy stays quie
 It reuses the ref guard's own extraction, never fails its job, and says NOT
 CHECKED rather than guessing (branch-filtered watcher, truncated listing, API
 error). Findings go to the job summary and to at most one open
-`watcher-liveness` issue, edited in place. Whether and when it becomes blocking
-is an open owner decision on #318.
+`watcher-liveness` issue, edited in place. Promotion rule (owner ruling
+2026-09-23, recorded on #318): after 4 consecutive weekly runs with no
+false-alarm SILENT/GAPS verdict, SILENT/GAPS start failing the job; a false alarm
+resets the count and is recorded on #318.
 
 ### Activation Checklist for New Sessions
 - Confirm all five exist: `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check

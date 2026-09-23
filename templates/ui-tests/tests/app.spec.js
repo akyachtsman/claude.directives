@@ -75,6 +75,16 @@ const AUTH_EMAIL = process.env.TEST_AUTH_EMAIL || null;
 const AUTH_READY_SELECTOR = process.env.TEST_AUTH_READY_SELECTOR || null;
 const AUTH_READY_REQUEST  = process.env.TEST_AUTH_READY_REQUEST  || null;
 
+// AUTH SUCCESS — what a signed-in page looks like, stated by the project (#379).
+// READY above is BEFORE the attempt (is the gate decided?); this is AFTER it
+// (did the credential land on the signed-in view?). Unset, S2 reads the gate
+// clearing as success, exactly as before. Set, S2 requires this selector to be
+// VISIBLE after the post-auth settle and fails loudly when it is not — the same
+// no-silent-fallback rule as the readiness condition. Name something only the
+// signed-in view renders (the app shell, a sign-out control), never something
+// the login screen shares.
+const AUTH_SUCCESS_SELECTOR = process.env.TEST_AUTH_SUCCESS_SELECTOR || null;
+
 async function awaitAuthReady(page) {
   if (!AUTH_READY_SELECTOR && !AUTH_READY_REQUEST) {
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
@@ -1062,7 +1072,7 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
     test.info().attach('auth-unverified', {
       body: JSON.stringify({
         mechanism,
-        note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. A per-project post-login condition would verify this properly; it is not yet tracked.',
+        note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
       }, null, 2),
       contentType: 'application/json',
     });
@@ -1087,6 +1097,10 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   // SATISFIED, this mechanism is not a failure at all (an identifier-only SSO
   // that lands signed in), and the callers' skip below must not fire. That is
   // the seam; it is written here so #302's author finds it.
+  // LANDED FOR S2 ONLY (#379): TEST_AUTH_SUCCESS_SELECTOR is that condition. S2
+  // evaluates it once, after its post-auth settle and before calling this, and
+  // does not take its incomplete-auth skip when it holds. The other callers do
+  // not read it yet, so this function's behaviour is unchanged.
   // 'no-credential' (#312) joins it on the same grounds and by the same route:
   // a gate stood, nothing was submitted, and that is a fact about the SUITE.
   // The set is the carrier so the next mechanism of this kind cannot be added
@@ -1097,7 +1111,7 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
         mechanism,
         note: mechanism === 'no-credential'
           ? 'An auth gate was on screen, TEST_AUTH_CREDENTIAL is unset, and the form shipped no credential of its own — so nothing was submitted. NO CREDENTIAL WAS ENTERED and nothing is claimed about the app. Set TEST_AUTH_CREDENTIAL, or — if this app\'s login legitimately ships a working credential and a human signs in by clicking the button — check that the prefilled field is a visible, editable input[type=password]: a prefilled TEXT or PIN gate is deliberately NOT read as a credential source, because a non-empty text input cannot be told from a search box with a default query (directives#312).'
-          : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. A per-project post-login condition would turn this into a verdict; it is not yet tracked.',
+          : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
       }, null, 2),
       contentType: 'application/json',
     });
@@ -1126,8 +1140,8 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
         body: JSON.stringify({
           mechanism,
           note: mechanism === 'pin-keypad'
-            ? 'PIN-keypad-like signals (>=9 digit buttons plus a dot/pin-class element) are still visible after the PIN attempt. This is EITHER the retained gate (rejected PIN) OR the app\'s own post-login numeric UI — a PIN-gated calculator or dial pad satisfies the same page-wide signals — and the signal cannot associate itself with the attempted gate, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. A per-project post-login condition would verify this properly; it is not yet tracked.'
-            : 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. A per-project post-login condition would verify this properly; it is not yet tracked.',
+            ? 'PIN-keypad-like signals (>=9 digit buttons plus a dot/pin-class element) are still visible after the PIN attempt. This is EITHER the retained gate (rejected PIN) OR the app\'s own post-login numeric UI — a PIN-gated calculator or dial pad satisfies the same page-wide signals — and the signal cannot associate itself with the attempted gate, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.'
+            : 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
         }, null, 2),
         contentType: 'application/json',
       });
@@ -1307,6 +1321,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // + detectAndAuth() (see its header)     ~53s at N=4    ~94s at N=8
   //     split-step gate (#310)            ~108s at N=4   ~149s at N=8
   // + LOAD_SETTLE_MS post-auth settle       25s
+  // + TEST_AUTH_SUCCESS_SELECTOR (#379)     ~0s when met; <=25s only on its FAIL path
   // + snapshots, error read, assertions      ~few s
   //   ------------------------------------------
   //   ~138s at N=4                          ~179s at N=8   single-step
@@ -1490,6 +1505,30 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
   // credential as accepted with the gate still on screen. The verifier the
   // rest of the suite trusts must not be bypassable by the scenario whose
   // whole job is the auth verdict.
+  //
+  // POST-LOGIN CONDITION (#379) — only when the project declared one. The gate
+  // going away is not the signed-in view arriving; this is the project saying
+  // what that view looks like. Evaluated ONCE, after the post-auth settle, never
+  // per step. Not met is a FAIL, not a fallback to the gate reading (same rule
+  // as awaitAuthReady). Met, it is the verdict the incomplete-auth skip below
+  // was waiting for. BUDGET: ~0s when it holds (the settle already ran); on
+  // failure it adds up to LOAD_SETTLE_MS, ~41s spare left at N=8 split-step.
+  let s2SuccessProven = false;
+  if (AUTH_SUCCESS_SELECTOR && mechanism !== 'none') {
+    try {
+      await page.waitForSelector(AUTH_SUCCESS_SELECTOR, { timeout: LOAD_SETTLE_MS, state: 'visible' });
+      s2SuccessProven = true;
+    } catch {
+      await attachAuthDiagnostics().catch(() => {});
+      throw new Error(
+        `S2 FAIL | TEST_AUTH_SUCCESS_SELECTOR (${AUTH_SUCCESS_SELECTOR}) never became visible within ` +
+        `${LOAD_SETTLE_MS}ms after the auth attempt at ${page.url()} (mechanism: ${mechanism}).\n` +
+        `  This project declared that selector as what a signed-in page shows, so the credential was not ` +
+        `accepted — or the selector names something the signed-in view does not render. See the ` +
+        `auth-diagnostics attachment (directives#379).`
+      );
+    }
+  }
   try {
     await expectGateCleared(page, mechanism, viewBefore);
   } catch (gateErr) {
@@ -1497,7 +1536,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
     throw gateErr;
   }
 
-  if (AUTH_INCOMPLETE.has(mechanism)) {
+  if (AUTH_INCOMPLETE.has(mechanism) && !s2SuccessProven) {
     await attachAuthDiagnostics().catch(() => {});
     test.skip(true, `${authIncompleteNote(mechanism)} "Credential accepted" cannot be asserted, so this is a SKIP rather than a failure — false-reddening a healthy app on a discovery-grade signal is the trade this file refuses (directives#302 is the verdict). See the auth-steps and auth-unverified attachments.`);
   }

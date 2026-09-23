@@ -230,7 +230,7 @@ jobs:
                   f"`.github/workflows/watcher-liveness.yml` compared the last {WINDOW} day(s) of run history "
                   "and found a `workflow_run` watcher that stayed silent while the workflow it watches ran:\n\n"
                   + table
-                  + "\n\nFor each SILENT/GAPS row, either fix the trigger or confirm here why it is intentional. "
+                  + "\n\nFor each SILENT/GAPS row, either fix the trigger or confirm on #318 why it is intentional (#318 is where false alarms are counted). "
                   "This issue is edited in place by each run while it stays open; closing it means the next run "
                   "that still finds a gap files a fresh one.\n"
               )

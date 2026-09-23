@@ -419,6 +419,18 @@ function scanDeclarations(rawCss) {
     return problem;
   };
 
+  // ── ONE TERMINATOR ROUTINE (#340) ─────────────────────────────────────────
+  // `;`, `}` and EOF each end a construct, and each must run the SAME checks in
+  // the SAME order: the at-rule allow-list, then the declaration flush. These
+  // were three hand-maintained copies, and a check present on one path and
+  // absent from its twin shipped twice (round 12: EOF skipped the at-rule check;
+  // round 13: `}` did) — sameness kept by attention failed every time it was
+  // tried. A check added here reaches every terminator. What genuinely differs
+  // between them stays at the call site and is stated there: `;` is not a
+  // terminator inside ( ) or [ ]; `}` must first refuse an unmatched brace and
+  // afterwards close its block; EOF must still check balance.
+  const terminate = () => atRuleProblem(buf) || flush();
+
   for (let i = 0; i < css.length; i++) {
     const c = css[i];
 
@@ -562,48 +574,31 @@ function scanDeclarations(rawCss) {
       // closes more blocks than it opens reached the end balanced and exited 0
       // — contradicting the refusal this same function documents.
       if (depth === 0) return { fatal: 'a closing brace with no matching open — the file does not parse as CSS' };
-      // AND THE AT-RULE CHECK, which this terminator alone did not run. `;` and
-      // EOF both call atRuleProblem() before flush(); `}` called only flush(),
-      // so `.e { @whatever }` — an at-rule that is the last item in a block and
-      // is terminated by the closing brace — printed OK — 9/9 while the same
-      // at-rule under either twin was refused. Round 12's own commit note said
-      // "every other terminator checks it; EOF is a terminator too", and left
-      // the third one out while saying it. That is the EIGHTH time on these two
-      // PRs that a check existed on one path and not its twin.
-      const badAt = atRuleProblem(buf);
-      if (badAt) return { fatal: badAt };
-      const bad = flush();           // the last declaration may omit its `;`
+      // Terminate BEFORE popping: the buffer belongs to the block being closed
+      // (the last declaration may omit its `;`, and `.e { @whatever }` ends at
+      // this brace), so its checks must run while that block's record is on top.
+      const bad = terminate();
       if (bad) return { fatal: bad };
       records.pop();
       depth--;
       continue;
     }
 
+    // Inside ( ) or [ ] a `;` is value text, not a terminator.
     if (c === ';' && closers.length === 0) {
-      const bad = atRuleProblem(buf);
+      const bad = terminate();
       if (bad) return { fatal: bad };
-      const badName = flush();
-      if (badName) return { fatal: badName };
       continue;
     }
 
     if (c === ':' && colonAt < 0 && closers.length === 0) colonAt = buf.length;
     buf += c;
   }
-  // An at-rule that is the last construct and omits its optional `;` reaches
-  // here having hit NEITHER terminator, so the allow-list never saw it —
-  // `@whatever` appended to a valid palette printed OK — 9/9. Every other
-  // terminator checks it; EOF is a terminator too.
-  const trailingAtRule = atRuleProblem(buf);
-  if (trailingAtRule) return { fatal: trailingAtRule };
-  // The EOF flush's fatal was DISCARDED. `;` and `}` both propagate it and this
-  // did not, so a measured declaration that is the last text in the file and
-  // omits its semicolon was recorded silently — while the identical declaration
-  // WITH a semicolon was refused. Round 11 added the at-rule check at this
-  // terminator and left the declaration half bare, which is the same
-  // one-of-two-paths omission this file keeps producing.
-  const trailingDecl = flush();
-  if (trailingDecl) return { fatal: trailingDecl };
+  // EOF is a terminator too: a trailing at-rule or declaration may omit its
+  // optional `;`. It is not a character, so its fatal returns from the function
+  // rather than from an iteration, and the balance check follows it.
+  const trailing = terminate();
+  if (trailing) return { fatal: trailing };
   if (closers.length > 0 || depth > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
   return { decls };
 }

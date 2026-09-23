@@ -630,7 +630,10 @@ for (const claim of claims) {
   }
 
   if (DERIVE) {
-    const listed = new Set([source, ...consumerFiles]);
+    // sourceNorm, not the raw `source`: `git ls-files` returns canonical paths,
+    // so an aliased source (`./directives/git.md`) — which the target checks
+    // accept — was reported as an unlisted carrier of its own claim (#315).
+    const listed = new Set([sourceNorm, ...consumerFiles]);
     const alsoStates = trackedTextFiles()
       .filter((f) => !listed.has(f))
       .filter((f) => { try { return holds(prep(readFileSync(f, 'utf8')), phrasings); } catch { return false; } });

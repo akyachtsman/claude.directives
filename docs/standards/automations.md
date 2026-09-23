@@ -27,6 +27,9 @@ and nowhere else.** Each workflow file and setup step carries the ACTION it
 needs and points back here for the reasoning — a rule explained in five places
 is a rule corrected in four (learned the hard way, 2026-08-19).
 
+A watcher that resolves but never fires, or fires and asserts too little, is as
+green as a healthy one — `code-review-standard.md` → *Fail-Open Guards*.
+
 ### W1 — Every watched name must resolve to a workflow this repo has
 
 A `workflow_run` entry naming a workflow you did not install can never fire. It
@@ -263,6 +266,13 @@ or live URL not serving — with no session required.
   monitor DOES apply to both sources — verifying a deploy is not re-running one.
 - Reads the build status from the event and verifies the live URL
   (`https://<owner>.github.io/<repo>/`) returns 200, with cache-busted retries.
+- **Exposure (optional):** each path listed in `.github/pages-deny.txt` must
+  serve 404 on two probes 30s apart (one 404 can be the previous deploy
+  mid-propagation) — the only thing here that catches a rogue unfiltered
+  republish, which serves 200 and passes the two checks above. No file, or no
+  paths in it = not checked, and the job summary says so; more than 15 paths is
+  reported rather than truncated; the list covers only the paths someone
+  remembered.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
   issue. A healthy deploy closes it and reports green in the job summary only.
 - The live URL comes from the Pages API (user-site repos and custom domains work),

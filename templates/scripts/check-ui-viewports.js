@@ -125,8 +125,10 @@
 //  15  --report was given and the report could not be read (CANNOT CHECK)
 //  16  RETIRED — the listing that needed it is gone; see readReport()
 //  17  RETIRED — ditto
-//  18  two or more projects share a name (CANNOT CHECK) — the run reports
-//      results by project name, so one project's tests would certify another's
+//  18  two or more projects share a name (CANNOT CHECK) — the gate joins
+//      results by project name, so one project's tests would certify another's.
+//      The report DOES carry a unique projectId; the refusal stays by owner
+//      ruling because it fails closed (#351, see the join comment below)
 //  19  RETIRED — `--forbid-only` was a probe against the listing, and a probe
 //      the config could observe. The run's report needs no probe.
 //  20  --declared was given with --report and the mapping could not be read, or
@@ -695,6 +697,15 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
     }
   }
   const ok = rowsWellFormed && bands.every(b => cover[b].length > 0);
+  // THE VERDICT STATES ITS OWN BANDS (#328). The gate proves three width
+  // CLASSES are covered, not that the project's own breakpoints are: a design
+  // whose widest tier starts at 1400 passes with a 1024 "laptop" that never
+  // renders that tier. A green that prints the bounds it used can be checked
+  // against the design by the next reader; a bare OK reads as total scope.
+  const bandsUsed = () => console.log(`  (bands: laptop >=${laptopMin}px, tablet >=${tabletMin}px and <${laptopMin}px, phone <${tabletMin}px`
+    + ` — width CLASSES, ${bandOpt('--tablet-min', 768).given || bandOpt('--laptop-min', 1024).given ? 'from --tablet-min/--laptop-min' : 'the DEFAULTS'};`
+    + ' NOT a check of this project\'s own breakpoints. Compare these bounds with'
+    + ' the design\'s tiers: one starting above the laptop floor is not covered by this line.)');
   if (ok) {
     // ── STAGE TWO: WHAT THE RUN SCHEDULED ────────────────────────────────
     // Only when a report is supplied. Without one this gate reports what the
@@ -784,6 +795,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       }
       const where = b => cover[b].filter(ranIn).map(label).join('/');
       console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
+      bandsUsed();
       console.log('  (a NON-SKIPPED result in a project declaring each width. This does NOT');
       console.log('   establish that a page was rendered at it, or that a test body ran at');
       console.log('   all: a test that never opens a page, or whose body never starts');
@@ -825,6 +837,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       }
       const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
       console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
+      bandsUsed();
       // WHAT --report BUYS, IN THE SAME WORDS THE VERDICT USES. This line said
       // "certify that scenarios actually ran at these widths" — the EXECUTED
       // claim the whole gate withdrew in favour of SCHEDULED. A hook that fails
@@ -1391,7 +1404,7 @@ const shellCwd = () => {
 };
 const TESTS_DIR = isAbsolute(dir) ? resolve(dir) : resolve(shellCwd(), dir);
 console.log(`tests dir: ${TESTS_DIR}  (source: ${dirSource})`);
-console.log(`bands (${bandSource}): phone <${TABLET_MIN}px | tablet ${TABLET_MIN}-${LAPTOP_MIN - 1}px | laptop >=${LAPTOP_MIN}px`);
+console.log(`bands (${bandSource}): phone <${TABLET_MIN}px | tablet >=${TABLET_MIN}px and <${LAPTOP_MIN}px | laptop >=${LAPTOP_MIN}px`);
 
 if (!existsSync(TESTS_DIR) || !statSync(TESTS_DIR).isDirectory()) {
   die(2, [
@@ -1680,9 +1693,16 @@ console.log(`config:    ${configPath}`);
   // Stage two counts a project when Playwright discovers a test for it, which
   // answers the same question by observation and needs no list of key names.
   // THE JOIN IS BY PROJECT NAME, so two projects that share one are
-  // indistinguishable — whichever ran would certify both bands. Playwright has
-  // no trouble telling them apart; this gate cannot, because the run's report
-  // identifies a result only by `projectName`.
+  // indistinguishable TO THIS GATE — whichever ran would certify both bands.
+  // An earlier version of this comment said the report identifies a result only
+  // by `projectName`. That was FALSE: measured on 1.62.1, `config.projects[]`
+  // carries `id` as well as `name` (`same`, `same1`, `phone` for names `same`,
+  // `same`, `phone`, in config order) and every test carries `projectId` beside
+  // `projectName`. #357 tried rejoining by id and its review found six ways that
+  // positional mapping certifies a project that never ran — all fail-open — so
+  // the refusal stays, by owner ruling (#351): it costs a rename and never
+  // overstates coverage. A false refusal and a false certification are not
+  // symmetric defects.
   //
   // An unnamed project reports `projectName: ""`, so the empty string is the key
   // for "no name" on BOTH sides and two nameless projects collide exactly as two
@@ -1802,8 +1822,8 @@ console.log(`config:    ${configPath}`);
     die(18, [
       'CANNOT CHECK: two or more projects share a name.',
       `  ${dupes.map(n => (n === '' ? '(no name)' : n)).join(', ')}`,
-      '  The run reports each result by project NAME, so tests belonging to one of',
-      '  them would certify the other\'s band. Give every project a distinct name;',
+      '  This gate joins each result to its project by NAME, so tests belonging to',
+      '  one of them would certify the other\'s band. Give every project a distinct name;',
       '  Playwright accepts any string and the names appear in the run\'s output.',
       '  test.md -> UI coverage gates, fifth gate.',
     ]);

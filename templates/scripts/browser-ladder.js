@@ -86,38 +86,6 @@
 //
 // After any of these, check for stragglers: `pgrep -f "playwright install"`, and
 // on the --with-deps rung an apt that may still hold dpkg's locks.
-//
-// ── KNOWN, CONFIRMED, AND DELIBERATELY NOT FIXED HERE ─────────────────────
-// Owner ruling 2026-09-08: ship what is verified and record the rest, rather
-// than spend a fifth review round. All three were found by Codex on #359,
-// confirmed against this code, and are tracked in #360. They are
-// written here rather than only in the tracker because this file is what a
-// person reads when the tool misbehaves.
-//
-// Each is a REAL defect, not a caveat. None is reachable on the platform this
-// fleet runs (Linux, ASCII output), which is the whole reason they were ranked
-// below the cost of another round -- and is exactly what would stop being true
-// if someone runs this on a Mac.
-//
-//   1. SIGPWR IS NOT GATED ON LINUX. It is listed in PLATFORM_TERMINATING
-//      because it terminates on Linux, but `cleanupSignalsFor` matches on the
-//      NAME only. On SunOS/illumos, where SIGPWR's default is to be ignored,
-//      a power signal would reap a HEALTHY installer and then be discarded --
-//      the ladder carries on having destroyed the install. Same shape as the
-//      SIGINFO defect one round earlier, in the fix for it.
-//
-//   2. THE RE-RAISE CAN BE SWALLOWED BY SOMEONE ELSE'S LISTENER.
-//      `disarmParentCleanup` removes only THIS file's handlers, so if Playwright
-//      still holds a SIGTERM/SIGHUP listener from an earlier probe, the
-//      re-raised signal is caught again instead of terminating. Reproduced by
-//      Codex: the installer was reaped, but the CLI exited 2 rather than dying
-//      of SIGTERM.
-//
-//   3. INSTALL_MAX_BUFFER COUNTS UTF-16 CODE UNITS, NOT BYTES, while its own
-//      message says "bytes". Multibyte installer output can therefore reach
-//      roughly 3x the nominal 64 MiB before the bound fires -- an OOM instead
-//      of the intended classified interruption. This is the SAME unit bug fixed
-//      in boundReportLine the round before, in a place the fix did not sweep.
 
 'use strict';
 
@@ -126,6 +94,7 @@ const { createRequire } = require('module');
 const { dirname, join, resolve, sep } = require('path');
 const { existsSync } = require('fs');
 const { constants: osConstants } = require('os');
+const { StringDecoder } = require('string_decoder');
 
 const BROWSERS = ['chromium', 'firefox', 'webkit'];
 
@@ -533,11 +502,16 @@ const POSIX_TERMINATING = [
   'SIGKILL', 'SIGPIPE', 'SIGPOLL', 'SIGPROF', 'SIGQUIT', 'SIGSEGV', 'SIGSYS',
   'SIGTERM', 'SIGTRAP', 'SIGUSR1', 'SIGUSR2', 'SIGVTALRM', 'SIGXCPU', 'SIGXFSZ',
 ];
-// Platform signals whose terminate-default is established individually. SIGPWR
-// is Linux's "system going down"; it terminates by default and is exactly the
-// case where an installer must not be left holding dpkg's locks. SIGINFO is
-// deliberately NOT here -- it is the signal that proved the rule.
-const PLATFORM_TERMINATING = ['SIGPWR'];
+// Platform signals whose terminate-default is established individually, KEYED BY
+// PLATFORM (#360). SIGPWR is Linux's "system going down"; it terminates by
+// default there and is exactly the case where an installer must not be left
+// holding dpkg's locks. The first version was a flat NAME list, so it applied
+// on every platform that merely HAS a SIGPWR -- and on SunOS/illumos (and AIX)
+// its default is to be IGNORED, so a power signal reaped a healthy installer and
+// was then discarded: the SIGINFO defect again, inside the fix for it. A
+// disposition is a fact about a (platform, signal) pair, never about a name.
+// SIGINFO is deliberately NOT here -- it is the signal that proved the rule.
+const PLATFORM_TERMINATING = { linux: ['SIGPWR'] };
 
 const UNCATCHABLE = ['SIGKILL', 'SIGSTOP'];
 // Default action is STOP, not terminate -- nothing is ending, and a reap here
@@ -567,8 +541,12 @@ const NOT_OUR_SIGNALS = new Set([
 // Linux and check what it would do there. The bug this replaces could not be
 // reproduced on the machine that shipped it -- SIGINFO does not exist here --
 // and a rule that can only be checked on the platform it breaks is not checked.
-function cleanupSignalsFor(available) {
-  const established = [...POSIX_TERMINATING, ...PLATFORM_TERMINATING];
+// The PLATFORM is an argument for the same reason (#360): the SIGPWR defect only
+// exists off Linux, so it has to be askable from Linux.
+function cleanupSignalsFor(available, platform = process.platform) {
+  const extras = Object.prototype.hasOwnProperty.call(PLATFORM_TERMINATING, platform)
+    ? PLATFORM_TERMINATING[platform] : [];
+  const established = [...POSIX_TERMINATING, ...extras];
   return established.filter((signal) => Object.prototype.hasOwnProperty.call(available, signal)
     && !NOT_OUR_SIGNALS.has(signal));
 }
@@ -585,9 +563,20 @@ function reapActiveInstalls() {
 // ladder -- trading a leaked installer for an unkillable diagnostic, which is a
 // worse defect than the one being fixed. Removing the listener and re-sending
 // the same signal restores the default path and the right exit status (128+n).
+//
+// ⚠️ ONLY IF NOTHING ELSE IS LISTENING (#360). Node restores the default action
+// when a signal's LAST listener goes, and removing only this file's handler left
+// any other -- Playwright installs SIGTERM/SIGHUP/SIGINT handlers while it holds
+// a browser, e.g. one a timed-out probe could not close -- to catch the re-raise
+// and carry on. Codex reproduced it: installer reaped, CLI exited 2 instead of
+// dying of SIGTERM. So every listener for THIS signal is removed before the
+// re-raise. That skips another module's handler, deliberately: the process is
+// terminating by this signal either way, and an asynchronous cleanup started
+// from a handler could not finish before a default-action death regardless.
 function onCleanupSignal(signal) {
   reapActiveInstalls();
   disarmParentCleanup();
+  process.removeAllListeners(signal);
   process.kill(process.pid, signal);
 }
 
@@ -620,18 +609,30 @@ function realInstall(argv, cwd, { spawn = spawnProcess, timeout = INSTALL_TIMEOU
 
     let stdout = '';
     let stderr = '';
+    // IN BYTES, like the constant and its message (#360). This summed
+    // `stdout.length + stderr.length` -- UTF-16 code units -- so multibyte output
+    // reached ~3x the nominal bound before it fired: an OOM where a classified
+    // interruption was meant. The unit bug boundReportLine had, one site over.
+    let capturedBytes = 0;
     let cause = null;
     let done = false;
 
+    // RAW bytes are counted, BEFORE decoding: `setEncoding('utf8')` turns each
+    // invalid input byte into U+FFFD, which re-encodes as THREE, so malformed
+    // output would trip the bound at ~a third of it. The decoder is only for
+    // the captured diagnostic strings.
     const collect = (stream, onto) => {
       if (!stream) return;
-      stream.setEncoding('utf8');
+      const decoder = new StringDecoder('utf8');
+      const append = (text) => { if (onto === 'out') stdout += text; else stderr += text; };
+      stream.on('end', () => append(decoder.end()));
       stream.on('data', (chunk) => {
-        if (onto === 'out') stdout += chunk; else stderr += chunk;
+        append(decoder.write(chunk));
+        capturedBytes += chunk.length;
         // The buffer is a bound too, and overflowing it is an interruption
         // rather than a truncation: a browser half-fetched cannot support a
         // verdict either way.
-        if (stdout.length + stderr.length > INSTALL_MAX_BUFFER && !cause) {
+        if (capturedBytes > INSTALL_MAX_BUFFER && !cause) {
           cause = new Error(`the installer produced more than ${INSTALL_MAX_BUFFER} bytes`);
           killGroup(child);
         }

@@ -627,10 +627,22 @@ const CASES = [
       __candidates: ['styles/light.css', 'styles/dark.css'] },
     1, 'check-contrast: FAIL — fix'],
 
-  // The must-NOT-over-refuse twin: with the single default candidate, an absent
-  // file is still the bootstrap notice, not this new failure.
+  // The must-NOT-over-refuse twin: unconfigured, an absent default candidate
+  // is still the bootstrap notice, not this new failure.
   ['a single absent candidate is still the bootstrap case',
     { 'index.html': '<!doctype html>\n' }, 0, 'no stylesheet yet'],
+
+  // ── #322: the path is not a constant any more ─────────────────────────────
+  // css/tokens.css is a default candidate, so a project keeping its contract
+  // there is measured with no local edit instead of red-built on a literal.
+  ['tokens at css/tokens.css are found without configuration (#322)',
+    { 'css/tokens.css': BASE }, 0, OK9],
+
+  // …and the discrimination #322 asks for: absent-and-unconfigured is the
+  // bootstrap case above, absent-while-CONFIGURED is a failure even for one file.
+  ['a single configured token file that does not exist is fatal (#322)',
+    { 'index.html': '<!doctype html>\n', __env: { CHECK_CONTRAST_TOKENS: 'theme/tokens.css' } },
+    1, 'configured token files do not exist'],
 
   // ── #337 round 9: the contexts that retired block classification ──────────
   // Five findings, four of them silent greens, and each is a DIFFERENT reason a
@@ -768,6 +780,13 @@ const CASES = [
     { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },
     1, 'pairs were evaluable'],
 
+  // #328: an UNDECLARED token is what a literal in its role leaves behind
+  // (`.btn { color: #fff }` over a token background), and a bare "7/9" invites
+  // an exception that hides it. The failure must name the pattern.
+  ['an undeclared measured token names the hard-coded-colour cause (#328)',
+    { 'styles/tokens.css': BASE.replace('  --color-on-accent:      #FFFFFF;\n', '') },
+    1, 'A hard-coded colour over a token background cannot be scored'],
+
   ['a malformed hex fails loudly rather than being skipped',
     { 'styles/tokens.css': BASE.replace('--color-accent:         #1565C0;', '--color-accent: #1565C0F;') },
     1, 'invalid hex value'],
@@ -836,7 +855,7 @@ function runCase(files) {
       writeFileSync(check, src.replace(line, `const CANDIDATES = ${JSON.stringify(files.__candidates)};`), 'utf8');
     }
     for (const [rel, body] of Object.entries(files)) {
-      if (rel === '__candidates') continue;
+      if (rel === '__candidates' || rel === '__env') continue;
       if (rel === '__symlink') {
         const [linkRel, target] = body;
         const dest = join(tmp, linkRel);
@@ -853,7 +872,10 @@ function runCase(files) {
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, body, 'utf8');
     }
-    const r = spawnSync(process.execPath, [check], { encoding: 'utf8', cwd: tmp });
+    // The caller's own CHECK_CONTRAST_TOKENS must not leak into every case.
+    const env = { ...process.env, ...(files.__env || {}) };
+    if (!files.__env || !('CHECK_CONTRAST_TOKENS' in files.__env)) delete env.CHECK_CONTRAST_TOKENS;
+    const r = spawnSync(process.execPath, [check], { encoding: 'utf8', cwd: tmp, env });
     return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };
   } finally {
     rmSync(tmp, { recursive: true, force: true });

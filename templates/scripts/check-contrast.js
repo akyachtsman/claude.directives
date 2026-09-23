@@ -1,8 +1,10 @@
 'use strict';
-// Per-project WCAG AA contrast guardrail. Reads this project's styles/tokens.css
-// and checks the meaningful foreground/background pairs. Copy into the project's
-// .github/scripts/ and run it from qa.yml. If styles/tokens.css doesn't exist yet
-// (before /design-intake), it prints a notice and exits 0 — safe in a fresh repo.
+// Per-project WCAG AA contrast guardrail. Reads this project's design tokens
+// (styles/tokens.css or css/tokens.css by default; see "WHERE THE TOKENS LIVE"
+// below to point it elsewhere) and checks the meaningful foreground/background
+// pairs. Copy into the project's .github/scripts/ and run it from qa.yml. If no
+// tokens file exists yet and the repo has no CSS (before /design-intake), it
+// prints a notice and exits 0 — safe in a fresh repo.
 // CommonJS (matches the other .github/scripts/ helpers, e.g. notify-email.js).
 //
 // ── What a green run does NOT prove ─────────────────────────────────────────
@@ -44,28 +46,53 @@
 const { readFileSync, existsSync, readdirSync, statSync, realpathSync } = require('fs');
 const { join } = require('path');
 
-// styles/tokens.css is the design contract's single home (design.md -> Tokens &
-// components). Kept as a list so a project with a second token file can add it
-// here; every candidate that exists is checked, never just the first.
-const CANDIDATES = ['styles/tokens.css'];
-const FILES = CANDIDATES.filter((f) => existsSync(f));
+// ── WHERE THE TOKENS LIVE (#322) ────────────────────────────────────────────
+// The path used to be one literal, 'styles/tokens.css', and a project keeping
+// its contract at css/tokens.css got a red build from a constant rather than a
+// contrast problem — or carried a local edit to re-diff on every refresh. So a
+// project SAYS where its tokens are, in the first of these that is set:
+//   1. `--tokens <file>` (or `--tokens=<file>`), repeatable — qa.yml's run line
+//   2. CHECK_CONTRAST_TOKENS=<file>[,<file>…]
+//   3. CANDIDATES below, edited in place (a themed project lists each theme's
+//      file — design.md -> a themed project gives each theme its own file)
+// Every configured file is checked, never just the first. Left unconfigured,
+// the script GUESSES from DEFAULT_CANDIDATES and checks each one that exists.
+const CANDIDATES = [];
+const DEFAULT_CANDIDATES = ['styles/tokens.css', 'css/tokens.css'];
 
-// A CONFIGURED candidate that is gone is a broken configuration, not a fresh
-// repo. The single default below is a path this script GUESSES; a second entry
-// can only get there by a human editing this line to say "this project's tokens
-// live in these files" (design.md -> a themed project gives each theme its own
-// file). Filtering both through existsSync measured the surviving theme and
-// printed green for it, while the renamed one was never read -- the every-theme
-// guarantee reported about a file nobody opened. So once more than one is
-// declared, a missing one is FATAL. With exactly one, a miss is already covered:
-// absent + no CSS is the bootstrap notice, absent + CSS present is the gap below.
-const MISSING = CANDIDATES.filter((f) => !existsSync(f));
-if (CANDIDATES.length > 1 && MISSING.length > 0) {
-  console.error(`FAIL  ${MISSING.length} of ${CANDIDATES.length} configured token files do not exist:`);
+const fromArgs = [];
+for (let a = 2; a < process.argv.length; a++) {
+  const arg = process.argv[a];
+  if (arg === '--tokens' && a + 1 < process.argv.length) fromArgs.push(process.argv[++a]);
+  else if (arg.startsWith('--tokens=') && arg.length > 9) fromArgs.push(arg.slice(9));
+  else {
+    // A mistyped flag must not fall back to the defaults: that would measure a
+    // file the project did not name and print green about it.
+    console.error(`FAIL  unrecognised argument ${JSON.stringify(arg)} — usage: check-contrast.js [--tokens <file>]…`);
+    process.exit(1);
+  }
+}
+const fromEnv = (process.env.CHECK_CONTRAST_TOKENS || '').split(',').map((f) => f.trim()).filter(Boolean);
+const CONFIGURED = fromArgs.length ? fromArgs : fromEnv.length ? fromEnv : CANDIDATES;
+const CONFIG_SOURCE = fromArgs.length ? '--tokens' : fromEnv.length ? 'CHECK_CONTRAST_TOKENS' : 'CANDIDATES';
+const LOOKED_AT = CONFIGURED.length ? CONFIGURED : DEFAULT_CANDIDATES;
+const FILES = LOOKED_AT.filter((f) => existsSync(f));
+
+// A CONFIGURED file that is gone is a broken configuration, not a fresh repo.
+// Only the defaults are guesses; a configured entry can only get there by a
+// human saying "this project's tokens live in these files". Filtering configured
+// files through existsSync measured the surviving theme and printed green for
+// it, while the renamed one was never read -- the every-theme guarantee
+// reported about a file nobody opened. So any configured file that is missing
+// is FATAL: absent-and-unconfigured is the bootstrap/gap logic below,
+// absent-while-configured is a failure.
+const MISSING = CONFIGURED.filter((f) => !existsSync(f));
+if (MISSING.length > 0) {
+  console.error(`FAIL  ${MISSING.length} of ${CONFIGURED.length} configured token files do not exist:`);
   for (const f of MISSING) console.error(`        ${f}`);
-  console.error('      CANDIDATES names the files this project declares as its design contract.');
+  console.error(`      ${CONFIG_SOURCE} names the files this project declares as its design contract.`);
   console.error('      Measuring only the ones still present would certify a palette this gate');
-  console.error('      never read. Restore the file, or drop it from CANDIDATES.');
+  console.error(`      never read. Restore the file, or drop it from ${CONFIG_SOURCE}.`);
   process.exit(1);
 }
 if (FILES.length === 0) {
@@ -130,9 +157,10 @@ if (FILES.length === 0) {
     console.log(`::notice::no stylesheet yet — run /design-intake to establish this project's look. Skipping contrast check.`);
     process.exit(0);
   }
-  console.error(`FAIL  this project has CSS but no tokens file at ${CANDIDATES.join(' or ')}.`);
+  console.error(`FAIL  this project has CSS but no tokens file at ${LOOKED_AT.join(' or ')}.`);
   console.error('      design.md makes tokens.css the single source of truth — the contrast');
-  console.error('      guardrail cannot run without it. Create one via /design-intake.');
+  console.error('      guardrail cannot run without it. Create one via /design-intake, or, if');
+  console.error('      it lives elsewhere, name it: --tokens <file> or CHECK_CONTRAST_TOKENS.');
   process.exit(1);
 }
 
@@ -419,6 +447,18 @@ function scanDeclarations(rawCss) {
     return problem;
   };
 
+  // ── ONE TERMINATOR ROUTINE (#340) ─────────────────────────────────────────
+  // `;`, `}` and EOF each end a construct, and each must run the SAME checks in
+  // the SAME order: the at-rule allow-list, then the declaration flush. These
+  // were three hand-maintained copies, and a check present on one path and
+  // absent from its twin shipped twice (round 12: EOF skipped the at-rule check;
+  // round 13: `}` did) — sameness kept by attention failed every time it was
+  // tried. A check added here reaches every terminator. What genuinely differs
+  // between them stays at the call site and is stated there: `;` is not a
+  // terminator inside ( ) or [ ]; `}` must first refuse an unmatched brace and
+  // afterwards close its block; EOF must still check balance.
+  const terminate = () => atRuleProblem(buf) || flush();
+
   for (let i = 0; i < css.length; i++) {
     const c = css[i];
 
@@ -562,48 +602,31 @@ function scanDeclarations(rawCss) {
       // closes more blocks than it opens reached the end balanced and exited 0
       // — contradicting the refusal this same function documents.
       if (depth === 0) return { fatal: 'a closing brace with no matching open — the file does not parse as CSS' };
-      // AND THE AT-RULE CHECK, which this terminator alone did not run. `;` and
-      // EOF both call atRuleProblem() before flush(); `}` called only flush(),
-      // so `.e { @whatever }` — an at-rule that is the last item in a block and
-      // is terminated by the closing brace — printed OK — 9/9 while the same
-      // at-rule under either twin was refused. Round 12's own commit note said
-      // "every other terminator checks it; EOF is a terminator too", and left
-      // the third one out while saying it. That is the EIGHTH time on these two
-      // PRs that a check existed on one path and not its twin.
-      const badAt = atRuleProblem(buf);
-      if (badAt) return { fatal: badAt };
-      const bad = flush();           // the last declaration may omit its `;`
+      // Terminate BEFORE popping: the buffer belongs to the block being closed
+      // (the last declaration may omit its `;`, and `.e { @whatever }` ends at
+      // this brace), so its checks must run while that block's record is on top.
+      const bad = terminate();
       if (bad) return { fatal: bad };
       records.pop();
       depth--;
       continue;
     }
 
+    // Inside ( ) or [ ] a `;` is value text, not a terminator.
     if (c === ';' && closers.length === 0) {
-      const bad = atRuleProblem(buf);
+      const bad = terminate();
       if (bad) return { fatal: bad };
-      const badName = flush();
-      if (badName) return { fatal: badName };
       continue;
     }
 
     if (c === ':' && colonAt < 0 && closers.length === 0) colonAt = buf.length;
     buf += c;
   }
-  // An at-rule that is the last construct and omits its optional `;` reaches
-  // here having hit NEITHER terminator, so the allow-list never saw it —
-  // `@whatever` appended to a valid palette printed OK — 9/9. Every other
-  // terminator checks it; EOF is a terminator too.
-  const trailingAtRule = atRuleProblem(buf);
-  if (trailingAtRule) return { fatal: trailingAtRule };
-  // The EOF flush's fatal was DISCARDED. `;` and `}` both propagate it and this
-  // did not, so a measured declaration that is the last text in the file and
-  // omits its semicolon was recorded silently — while the identical declaration
-  // WITH a semicolon was refused. Round 11 added the at-rule check at this
-  // terminator and left the declaration half bare, which is the same
-  // one-of-two-paths omission this file keeps producing.
-  const trailingDecl = flush();
-  if (trailingDecl) return { fatal: trailingDecl };
+  // EOF is a terminator too: a trailing at-rule or declaration may omit its
+  // optional `;`. It is not a character, so its fatal returns from the function
+  // rather than from an iteration, and the balance check follows it.
+  const trailing = terminate();
+  if (trailing) return { fatal: trailing };
   if (closers.length > 0 || depth > 0) return { fatal: 'unbalanced brackets — the file does not parse as CSS' };
   return { decls };
 }
@@ -725,8 +748,9 @@ if (ambiguous.length > 0) {
   console.error('  colour that may never appear. It refuses instead of guessing.');
   console.error('  Fix: declare each measured token exactly once in this file, in #hex form.');
   console.error('  If the project themes, give each theme its own tokens file holding that');
-  console.error('  theme\'s resolved values, add it to CANDIDATES at the top of this script, and');
-  console.error('  let each be measured on its own — one palette per run, every one checked.');
+  console.error('  theme\'s resolved values, list every one (--tokens, CHECK_CONTRAST_TOKENS or');
+  console.error('  CANDIDATES — see the top of this script), and let each be measured on its');
+  console.error('  own — one palette per run, every one checked.');
   exitCode = 1;
   continue;
 }
@@ -756,6 +780,24 @@ if (evaluated < pairs.length) {
   console.error(`  Not measured: ${missing.join('; ')}`);
   console.error('  Each needs both tokens declared in #hex form (oklch()/rgb()/hsl()/var()');
   console.error('  are not parsed). Declare the missing tokens, or extend this script.');
+  // #328: say WHY a token is missing, because the two causes have different
+  // fixes. A token that is NOT DECLARED AT ALL is what a hard-coded colour in
+  // its role produces (`.btn { color: #fff }` over `var(--color-accent)` leaves
+  // --color-on-accent undeclared), and the tempting response to a bare "7/9" is
+  // an exception that keeps the literal and hides the finding. This gate reads
+  // tokens, not components.css, so it cannot see the literal itself — it names
+  // the pattern instead.
+  const needed = [...new Set(pairs.filter(([fg, bg]) => !t[fg] || !t[bg]).flatMap(([fg, bg]) => [fg, bg]))];
+  const undeclared = needed.filter((n) => !decls[n]);
+  const notHex = needed.filter((n) => decls[n] && !t[n]);
+  if (notHex.length) console.error(`  Declared, but not in #hex form: ${notHex.join(', ')}`);
+  if (undeclared.length) {
+    console.error(`  Not declared at all: ${undeclared.join(', ')}`);
+    console.error('  If a stylesheet paints that role with a literal — e.g. `color: #fff` over');
+    console.error('  `var(--color-accent)` — that is why. A hard-coded colour over a token background cannot be scored:');
+    console.error('  declare a token for it and use var() there. Do not add an exception — that');
+    console.error('  keeps the literal and hides the finding.');
+  }
   exitCode = 1;
   continue;
 }

@@ -94,7 +94,9 @@ Execute these before any task work:
   **`TEST_AUTH_READY_SELECTOR`** (a selector matching whichever outcome occurs —
   the gate itself OR the authenticated app shell) or **`TEST_AUTH_READY_REQUEST`**
   (a substring of the URL whose settling decides the gate), and the answer becomes
-  a decided one. Both optional: unset, behaviour is unchanged and the report
+  a decided one. In CI set them as repository **variables**, not secrets — the
+  qa carriers pass `vars.TEST_AUTH_READY_*` through the ui-suite composite, and a
+  masked selector is unreadable in a failure message (#320). Both optional: unset, behaviour is unchanged and the report
   simply says the answer was `windowed` rather than `proven`. **That second half
   is the point** — the defect was never the window's length, it was that a
   windowed answer and a proven one were indistinguishable in the output.
@@ -323,7 +325,12 @@ four with a scenario (named in parentheses); the fifth is a property of the
 runner's config rather than of any test, so no scenario can carry it —
 `check-ui-viewports.js` enforces it from the ui-suite composite instead, and a
 green SUITE still says nothing about it. Project-specific suites must keep all
-five:
+five. **A gate is its PROPERTY, not the kit's scenario** — the name in
+parentheses is how the kit meets it, and a project that carries its own
+scenarios in place of the kit's (a refresh may keep, port or drop each one)
+meets the gate with any test proving the same property for every surface the
+gate names. Dropping the kit's scenario is fine; dropping the property is not
+(#322):
 - **Console-error gate.** Every UI test run attaches `page.on('pageerror')` and
   `page.on('console')` (type `error`) and **fails if either fires** during load
   or interaction (S1, S3, ENTRY). An uncaught error on load is a broken page even
@@ -352,7 +359,11 @@ five:
   not skipped.) Because this gate lives in the config and not in any scenario, a
   green suite is not evidence for it: read the `projects` list — or let
   `check-ui-viewports.js` read it for you, which the `ui-suite` composite does on
-  every UI job.
+  every UI job. It checks width CLASSES (defaults: tablet from 768, laptop from
+  1024), **not the project's own breakpoints**, and its OK line prints the bands
+  it used: a design whose widest tier starts at 1400 passes with a 1024 laptop
+  that never renders it. Compare those bands with your design's tiers; the
+  composite does not yet pass a project's own breakpoints in (#328).
   That gate works in two stages, and both are needed. It IMPORTS the config, so
   Node expands `...devices[…]` and the declared widths are read rather than
   pattern-matched — a static read does not work and is not worth retrying, three
@@ -583,7 +594,8 @@ Two things that repeatedly get this wrong, both measured on this PR:
   present is not a browser that launches; an install that exits 0 is not a browser
   that launches; a green aggregate CI run is not the scenario having executed
   (`claude.insurance`'s green read 24 passed **12 skipped** 0 failed — a skipped
-  case and a passing case produce the same green).
+  case and a passing case produce the same green — the fail-open family,
+  `code-review-standard.md` → *Fail-Open Guards*).
 - **Absent is not unavailable.** A browser missing from the image may be
   installable — `ui-suite/action.yml` installs browsers as a normal step. Run the
   ladder rather than judging by eye:

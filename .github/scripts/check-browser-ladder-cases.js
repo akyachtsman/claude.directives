@@ -49,6 +49,7 @@ import { tmpdir } from 'os';
 import { existsSync, mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'fs';
 import { spawn as spawnProcess, spawnSync } from 'child_process';
 import { EventEmitter } from 'events';
+import { PassThrough } from 'stream';
 
 const OK = { ok: true, error: null };
 const fail = (msg) => ({ ok: false, error: msg });
@@ -1292,6 +1293,112 @@ function eq(actual, expected, what) {
     // A signal the platform does not have is never handled, however established.
     if (cleanupSignalsFor({ SIGINT: 2 }).length !== 1) {
       throw new Error('a signal absent from the platform table must not be handled');
+    }
+  });
+
+  // ── #360: three defects recorded as limits on #359, now fixed ───────────
+
+  // SIGPWR terminates on Linux and is IGNORED on SunOS/illumos. Matching on the
+  // name alone reaped a healthy installer there on a power signal and then
+  // re-raised one the OS discards. Asked from Linux, with both platforms named.
+  await check('SIGPWR is handled on Linux only, not wherever the name exists', () => {
+    const table = { SIGINT: 2, SIGTERM: 15, SIGPWR: 19 };
+    if (!cleanupSignalsFor(table, 'linux').includes('SIGPWR')) {
+      throw new Error('SIGPWR must be handled on Linux, where it terminates');
+    }
+    for (const platform of ['sunos', 'aix', 'darwin']) {
+      if (cleanupSignalsFor(table, platform).includes('SIGPWR')) {
+        throw new Error(`SIGPWR would be handled on ${platform}, where its default is not `
+          + 'an established terminate -- a power signal would reap a healthy install');
+      }
+    }
+  });
+
+  // A FOREIGN LISTENER MUST NOT SWALLOW THE RE-RAISE. Playwright holds SIGTERM
+  // handlers while it has a browser; removing only this file's handler left
+  // theirs to catch the re-raised signal, so the ladder reaped its installer and
+  // lived on (Codex: exit 2, not death by SIGTERM). Run in a child, because the
+  // assertion is that the process DIES.
+  await check('a foreign SIGTERM listener cannot swallow the re-raise', () => {
+    const script = `
+      const { realInstall } = require(${JSON.stringify(LADDER)});
+      const { spawn } = require('child_process');
+      process.on('SIGTERM', () => {});   // stands in for Playwright's handler
+      realInstall(['ignored'], process.cwd(), {
+        spawn: (cmd, argv, opts) => spawn('sleep', ['30'], opts), timeout: 20000 });
+      setTimeout(() => process.kill(process.pid, 'SIGTERM'), 300);
+      setTimeout(() => process.exit(2), 5000);
+    `;
+    const r = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 30000 });
+    if (r.signal !== 'SIGTERM') {
+      throw new Error(`the ladder must die of SIGTERM, got status=${r.status} signal=${r.signal}`);
+    }
+  });
+
+  // THE BOUND IS IN BYTES. 22.5M three-byte characters: 67.5 MB, over the 64 MiB
+  // bound, but only 22.5M UTF-16 code units -- which the old sum compared, and
+  // so let through at ~3x the nominal size.
+  await check('the install output bound counts BYTES, not UTF-16 code units', async () => {
+    const payload = Buffer.from('界'.repeat(22_500_000), 'utf8');
+    if (payload.length <= INSTALL_MAX_BUFFER || payload.length / 3 > INSTALL_MAX_BUFFER) {
+      throw new Error('fixture no longer straddles the bound; resize it');
+    }
+    const out = await realInstall(['ignored'], process.cwd(), {
+      timeout: 60000,
+      spawn: () => {
+        const child = new EventEmitter();
+        child.pid = 2147483647;             // no such group; killGroup's kill throws ESRCH
+        child.stdout = new PassThrough();
+        child.stderr = null;
+        let closed = false;
+        const close = (code, sig) => { if (!closed) { closed = true; child.emit('close', code, sig); } };
+        child.kill = () => setImmediate(() => close(null, 'SIGKILL'));
+        child.stdout.on('end', () => setImmediate(() => close(0, null)));
+        setImmediate(() => {
+          for (let i = 0; i < payload.length; i += 3 << 20) {
+            child.stdout.write(payload.subarray(i, i + (3 << 20)));
+          }
+          child.stdout.end();
+        });
+        return child;
+      },
+    });
+    if (!out.interrupted || !/bytes/.test(out.reason || '')) {
+      throw new Error(`67.5 MB of multibyte output passed a 64 MiB bound: `
+        + `interrupted=${out.interrupted} code=${out.code}`);
+    }
+  });
+
+  // ...and they are the RAW bytes. 30 MiB of invalid UTF-8 is under the bound,
+  // but decoding first turns each byte into U+FFFD (three bytes re-encoded), so
+  // counting after `setEncoding` read it as ~90 MB and killed a healthy install.
+  await check('the install output bound counts RAW bytes, before UTF-8 decoding', async () => {
+    const payload = Buffer.alloc(30 << 20, 0xff);
+    if (payload.length > INSTALL_MAX_BUFFER || payload.length * 3 <= INSTALL_MAX_BUFFER) {
+      throw new Error('fixture no longer straddles the bound; resize it');
+    }
+    const out = await realInstall(['ignored'], process.cwd(), {
+      timeout: 60000,
+      spawn: () => {
+        const child = new EventEmitter();
+        child.pid = 2147483647;
+        child.stdout = new PassThrough();
+        child.stderr = null;
+        let closed = false;
+        const close = (code, sig) => { if (!closed) { closed = true; child.emit('close', code, sig); } };
+        child.kill = () => setImmediate(() => close(null, 'SIGKILL'));
+        child.stdout.on('end', () => setImmediate(() => close(0, null)));
+        setImmediate(() => {
+          for (let i = 0; i < payload.length; i += 3 << 20) {
+            child.stdout.write(payload.subarray(i, i + (3 << 20)));
+          }
+          child.stdout.end();
+        });
+        return child;
+      },
+    });
+    if (out.interrupted) {
+      throw new Error(`30 MiB of invalid UTF-8 tripped a 64 MiB bound: ${out.reason}`);
     }
   });
 

@@ -28,7 +28,8 @@ contract. Re-run `/design-intake` any time to re-theme.
 ## Accessibility guardrail
 `templates/scripts/check-contrast.js` (copied into each project's
 `.github/scripts/`, run from its `qa.yml`) checks a fixed list of
-foreground/background token pairs in `styles/tokens.css` and fails CI if one is
+foreground/background token pairs in `styles/tokens.css` (or `css/tokens.css`, or
+whatever `--tokens <file>` names) and fails CI if one is
 below WCAG AA. It exits with a notice (no failure) before a project has a
 `tokens.css`, and it refuses outright to score a token carrying an alpha channel
 — a translucent colour has no ratio of its own.

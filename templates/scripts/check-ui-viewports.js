@@ -702,7 +702,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
   // whose widest tier starts at 1400 passes with a 1024 "laptop" that never
   // renders that tier. A green that prints the bounds it used can be checked
   // against the design by the next reader; a bare OK reads as total scope.
-  const bandsUsed = () => console.log(`  (bands: laptop >=${laptopMin}px, tablet ${tabletMin}-${laptopMin - 1}px, phone <${tabletMin}px`
+  const bandsUsed = () => console.log(`  (bands: laptop >=${laptopMin}px, tablet >=${tabletMin}px and <${laptopMin}px, phone <${tabletMin}px`
     + ` — width CLASSES, ${bandOpt('--tablet-min', 768).given || bandOpt('--laptop-min', 1024).given ? 'from --tablet-min/--laptop-min' : 'the DEFAULTS'};`
     + ' NOT a check of this project\'s own breakpoints. Compare these bounds with'
     + ' the design\'s tiers: one starting above the laptop floor is not covered by this line.)');
@@ -1404,7 +1404,7 @@ const shellCwd = () => {
 };
 const TESTS_DIR = isAbsolute(dir) ? resolve(dir) : resolve(shellCwd(), dir);
 console.log(`tests dir: ${TESTS_DIR}  (source: ${dirSource})`);
-console.log(`bands (${bandSource}): phone <${TABLET_MIN}px | tablet ${TABLET_MIN}-${LAPTOP_MIN - 1}px | laptop >=${LAPTOP_MIN}px`);
+console.log(`bands (${bandSource}): phone <${TABLET_MIN}px | tablet >=${TABLET_MIN}px and <${LAPTOP_MIN}px | laptop >=${LAPTOP_MIN}px`);
 
 if (!existsSync(TESTS_DIR) || !statSync(TESTS_DIR).isDirectory()) {
   die(2, [

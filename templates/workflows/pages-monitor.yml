@@ -26,8 +26,10 @@ name: Pages Monitor
 # blank lines ignored — and every run asserts each serves 404 on the LIVE site,
 # whoever published it; a late legacy build fires its own run. A path must be
 # 404 on two probes 30s apart (one 404 can be the PREVIOUS deploy mid-CDN
-# propagation). At most 15 paths — more is reported, not silently truncated,
-# since the job bound cannot fit them. Absent file, or one listing no paths =
+# propagation), with redirects NOT followed — a 3xx to a page that 404s is the
+# declared URL answering something other than 404, so it is reported. At most
+# 15 paths — more is reported, not silently truncated, since the job bound
+# cannot fit them. Absent file, or one listing no paths =
 # nothing declared = no-op, and the job summary says exposure was NOT checked.
 # LIMIT: this checks the paths you REMEMBERED to list. A new internal directory
 # nobody adds is invisible — the deploy's deny-list problem, one layer out.
@@ -155,12 +157,12 @@ jobs:
               first=()
               for i in "${!paths[@]}"; do
                 p="${paths[$i]}"
-                first[$i]=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d1" || echo "000")
+                first[$i]=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d1" || echo "000")
               done
               sleep 30
               for i in "${!paths[@]}"; do
                 p="${paths[$i]}"
-                dcode=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d2" || echo "000")
+                dcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d2" || echo "000")
                 if [ "${first[$i]}" != "404" ] || [ "$dcode" != "404" ]; then
                   problems="${problems}- Forbidden path served HTTP ${first[$i]} then ${dcode}, expected 404 on both: ${url}${p}\n"
                 fi

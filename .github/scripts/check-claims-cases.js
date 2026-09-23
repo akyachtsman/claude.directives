@@ -657,6 +657,15 @@ testCase('--derive does NOT name a file stating the rule in unapproved words', {
   absent: 'docs/unlisted.md',
 });
 
+testCase('--derive does NOT name an ALIASED source as an unlisted carrier of its own claim', {
+  // The target checks accept `./directives/src.md`; the derive exclusion stored
+  // that raw string while `git ls-files` returns the canonical path, so the
+  // source was reported as an unlisted carrier of itself. #315 finding 4.
+  manifest: manifest([claim({ source: './directives/src.md' })]), files: FILES,
+  args: ['--derive'], git: true, expectExit: 0, needle: 'check-claims: OK',
+  absent: '\n         directives/src.md',
+});
+
 testCase('--derive excludes the guard\'s own CASES FILE from its candidates', {
   // It quotes approved wordings as fixtures, so it matches by construction. The
   // exclusion covered the manifest and the guard but not this file, and it was

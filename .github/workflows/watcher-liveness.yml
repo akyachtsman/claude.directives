@@ -41,6 +41,12 @@ on:
         required: false
         default: '14'
 
+# One run at a time: two overlapping runs (a dispatch during the schedule) could
+# each see no open issue and each POST one, breaking the at-most-one issue rule.
+concurrency:
+  group: watcher-liveness
+  cancel-in-progress: false
+
 permissions:
   actions: read
   contents: read
@@ -168,7 +174,17 @@ jobs:
                   if wf is None:
                       rows += [(fname, n, "NOT CHECKED", "watcher is not on the default branch, where GitHub reads `workflow_run` triggers") for n in names]
                       continue
-                  lower = max(SINCE, ts(wf["created_at"]))
+                  # Judge only subject runs AFTER the watcher's current definition
+                  # landed: `created_at` is when the FILE first appeared, so a subject
+                  # added by a later edit would be judged on runs from before it was
+                  # watched. Any edit restarts the window -- errs toward quiet.
+                  try:
+                      last = gh(f"repos/{REPO}/commits?path=.github/workflows/{fname}&per_page=1")
+                      changed = ts(last[0][0]["commit"]["committer"]["date"])
+                  except Exception as exc:
+                      rows += [(fname, n, "NOT CHECKED", f"could not read when the watcher last changed: {str(exc)[:160]}") for n in names]
+                      continue
+                  lower = max(SINCE, ts(wf["created_at"]), changed)
                   state = "" if wf.get("state") == "active" else f" Watcher state: `{wf.get('state')}`."
                   w_runs, w_complete = runs(wf["id"], event="workflow_run")
                   w_times = [ts(r["created_at"]) for r in w_runs]

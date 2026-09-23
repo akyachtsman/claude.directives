@@ -740,6 +740,9 @@ SPEC_CASES = [
      "uses `process` in a form this guard cannot name"),
     # ...and the accepting complement, so the refusals are not bought by
     # refusing every mention of `process`.
+    ("the spec aliases process through a method (process.valueOf()) — refused",
+     "const p = process.valueOf();\nconst X = p.env.TEST_SOMETHING_NEW;\n", 1,
+     "uses `process` in a form this guard cannot name"),
     ("the spec reads process.platform — accepted",
      "if (process.platform === 'linux') {}\n", 0,
      "spec env wired from inputs"),
@@ -801,17 +804,23 @@ def main():
         tests.mkdir(parents=True)
         (tests / "checkout.spec.js").write_text(
             "const u = process.env.CHECKOUT_USER;\n", encoding="utf-8")
+        # Playwright's default testMatch runs .tsx specs too (#372 round 2).
+        (tests / "cart.spec.tsx").write_text(
+            "const c = process.env.CART_USER;\n", encoding="utf-8")
         nm = root / "templates/ui-tests/node_modules/dep"
         nm.mkdir(parents=True)
         (nm / "index.js").write_text("process.env.IGNORED_IN_NODE_MODULES;\n", encoding="utf-8")
         for label, cwd_files, expected, needle in (
             ("a spec added to the kit is discovered without being named — refused",
              True, 1, "CHECKOUT_USER is read by"),
+            ("a .tsx spec added to the kit is discovered too — refused",
+             True, 1, "CART_USER is read by"),
             ("a kit with no JS/TS files at all — refused, never an empty OK",
              False, 1, "CANNOT CHECK: no JS/TS files found"),
         ):
             if not cwd_files:
-                (tests / "checkout.spec.js").unlink()
+                for f in tests.iterdir():
+                    f.unlink()
             r = subprocess.run([sys.executable, str(GUARD), str(action)],
                                capture_output=True, text=True, cwd=tmp)
             code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()

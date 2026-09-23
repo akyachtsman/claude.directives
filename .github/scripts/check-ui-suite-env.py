@@ -58,7 +58,9 @@ ACTION = sys.argv[1] if len(sys.argv) > 1 else "templates/actions/ui-suite/actio
 # (argv[2:]) so the cases can point it at a fixture spec.
 KIT_DIR = "templates/ui-tests"
 KIT_SKIP_DIRS = {"node_modules", "test-results", "playwright-report", ".git"}
-KIT_EXTS = (".js", ".mjs", ".cjs", ".ts", ".mts", ".cts")
+# Playwright's default testMatch is `**/*.@(spec|test).?(c|m)[jt]s?(x)`, so the
+# JSX/TSX forms run too; every one of them is scanned.
+KIT_EXTS = tuple(f".{c}{l}s{x}" for c in ("", "c", "m") for l in ("j", "t") for x in ("", "x"))
 
 
 def discover_kit_files(root=KIT_DIR):
@@ -80,6 +82,16 @@ if not SPEC_FILES:
 # itself sets (e.g. `CI`, `GITHUB_*`), and give the reason -- an entry is a claim
 # that the value arrives without this file, and nothing here can check it.
 ENV_EXEMPT = {}
+# `process.<prop>` forms accepted besides `process.env.*`: a CLOSED list of
+# properties that cannot hand back the process object (so cannot alias `env`).
+# An open "any prop but env" rule let `process.valueOf().env.X` through (#372
+# round 2). Add a name here only if it returns a primitive or a non-process value.
+PROCESS_PROPS_OK = {"platform", "arch", "version", "versions", "argv", "pid",
+                    "exitCode", "exit", "cwd", "stdout", "stderr"}
+# SCOPE: this is a DRIFT guard over honest spec code -- a read someone added and
+# forgot to wire. It is lexical and closed, not a JS evaluator: deliberate evasion
+# (eval, `globalThis['pro'+'cess']`, a required module that aliases process) is
+# out of scope, the same limit check-ui-viewports states as "DRIFT, not FORGERY".
 CHECK_STEP = "Check three viewport classes are declared"
 RUN_STEP = "Run Playwright tests"
 # THE POST-RUN STEP IS NOT A THIRD SPECIAL CASE, it is the same step twice. Since
@@ -387,7 +399,7 @@ def check_spec_env(doc, run_env, problems):
 
     A CLOSED reader, not a JS parser. EVERY occurrence of the identifier
     `process` must be one of: `process.env.NAME`, `process.env['NAME']` /
-    `process.env["NAME"]`, or `process.<ident>` for a property other than `env`
+    `process.env["NAME"]`, or `process.<ident>` for an ident in PROCESS_PROPS_OK
     (`process.platform`, `process.exit`). Anything else is REFUSED -- a computed
     key, destructuring, `process['env']`, `process . env`, an alias, passing the
     object on -- because a read this cannot name is a read it cannot check, and
@@ -408,14 +420,14 @@ def check_spec_env(doc, run_env, problems):
             if named:
                 reads.setdefault(named.group(1) or named.group(3), f"{path}:{line}")
                 continue
-            other = re.match(r"\.([A-Za-z_$][\w$]*)", rest)
-            if other and other.group(1) != "env":
+            other = re.match(r"\.([A-Za-z_$][\w$]*)(?![\w$])", rest)
+            if other and other.group(1) in PROCESS_PROPS_OK:
                 continue
             problems.append(
                 f"{path}:{line} uses `process` in a form this guard cannot name"
                 + f"\n    got: {text[m.start():].splitlines()[0][:60]!r}"
-                + "\n    Only `process.env.NAME`, `process.env['NAME']` and `process.<prop>` (prop"
-                + "\n    not `env`) are read; any other form -- `process['env']`, spacing, an alias,"
+                + "\n    Only `process.env.NAME`, `process.env['NAME']` and `process.<prop>` for a prop"
+                + "\n    in PROCESS_PROPS_OK are read; any other form -- `process['env']`, spacing, an alias,"
                 + "\n    destructuring, the word in a comment -- is refused, not skipped (#320)."
             )
     for name, where in sorted(reads.items()):

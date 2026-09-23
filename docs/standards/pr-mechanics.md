@@ -3,9 +3,9 @@
 The reasoning, mechanism, measurements and history behind the rules in
 `git.md` → *PR Lifecycle*. The rules themselves are stated there, and that is the
 copy every project reads at session start; this file is read on demand, when a
-rule needs its evidence or its edge cases. Everything below was moved here
-verbatim from that section (#299), so "above" and "below" inside a passage keep
-the meaning they had there.
+rule needs its evidence or its edge cases. The passages here were moved out of
+that section (#299); positional references ("above", "below") were replaced with
+explicit section references, since their targets moved.
 
 ## Wakes that never arrive
 
@@ -13,9 +13,9 @@ the meaning they had there.
 
 Instances found so far — treat this as evidence that the class is broad, **not
 as a list to check against.** Three rounds of review added one each; a fourth
-is not knowable in advance, which is why the rule is the question above and not
+is not knowable in advance, which is why the rule is the question — could this outcome end without emitting a wake? (`git.md` → *PR Lifecycle*) — and not
 this list:
-- **a dispatched run on a PR branch** — seven ways below;
+- **a dispatched run on a PR branch** — seven ways, numbered later in this section;
 - **any run that is CANCELLED**, ordinary `pull_request` CI included.
   `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
   **no PR wake**. Nor does the `check_suite.completed` wake cover it: that
@@ -85,7 +85,7 @@ to arrive, each verified in the workflow's own source:
    steps ambiguous or empty** — a shared head commit alone is not enough, since
    the branch fallback still runs and resolves PRs on distinct branches;
 7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
-   nothing — the case above, which reaches ordinary PR CI too.
+   nothing — the cancelled-run case (→ *Wakes that never arrive*), which reaches ordinary PR CI too.
 
 Do not attempt to enumerate your way to a "covered" test. That list grew from
 one item to seven under review, and the eighth is not knowable in advance.
@@ -97,14 +97,14 @@ wake**; a check-in withheld on a false promise of coverage costs an agent
 
 *Supports:* every exit from the Codex verdict gate stays reachable, and none clears the gate silently.
 
-⚠️ **Any state the _unreachable-review test_ above admits sits OUTSIDE that
+⚠️ **Any state the _unreachable-review test_ (`git.md` → *PR Lifecycle*) admits sits OUTSIDE that
 framing, and it must not be read as closing them** — a gate that cannot be
 cleared is not stricter than one that can, it just moves the failure from a bad
 merge to a stalled PR. This gate takes the test, not a copy of its instances:
 an enumeration here would disagree with the test the first time a fourth state
 appears, which is the disagreement this wording exists to end. The instances
 known today:
-the **reaction ladder** below, which applies precisely when NOTHING from Codex
+the **reaction ladder** (→ *The reaction ladder*), which applies precisely when NOTHING from Codex
 names HEAD, so a current-head response is not required on it;
 **_unavailable_**, a usage-limit reply that is never clean and still unblocks
 the merge once stated on the PR and still current; and **outage** — something
@@ -112,14 +112,14 @@ terminal and observable, never elapsed silence. ⚠️ The ladder clears this ga
 and NOT the `codex-flagged` label. Where no label is present — a first pass
 that came back clean as a reaction, so `codex-monitor` never added one — that
 is the whole gate and the merge proceeds. Where a label from an earlier flagged
-round is still there, the ladder does not take it off: the rule above does, and
+round is still there, the ladder does not take it off: the last-resort rule (`git.md` → *PR Lifecycle*) does, and
 on a reaction-only round it escalates instead.
 None of them is a way past a verdict you can READ:
 the ladder requires that nothing from Codex **names** the current head — a bare
 👍 names nothing, which is why it is the ladder's TRIGGER and never its bar —
 *unavailable* requires that no review can be obtained at all, and outage
 requires that the request could not be MADE OR ACCEPTED — never that one was
-accepted and stayed quiet, which is the same silence the rule above rejects.
+accepted and stayed quiet, which is the same silence the unreachable-review test (`git.md` → *PR Lifecycle*) rejects.
 None ever
 bypasses an adverse verdict that exists, and none clears the gate silently.
 
@@ -129,7 +129,7 @@ bypasses an adverse verdict that exists, and none clears the gate silently.
 
 ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
 does not watch that event. **Request another review pass rather than removing
-`codex-flagged` by hand**, per the last-resort rule above: a clean verdict in
+`codex-flagged` by hand**, per the last-resort rule (`git.md` → *PR Lifecycle*): a clean verdict in
 the COMMENT form names the head and the monitor clears the label itself
 (observed 2026-08-27 on #333 at `63bed51`), and hand removal is reserved for
 the states that rule's test admits.
@@ -187,7 +187,7 @@ the states that rule's test admits.
   after the last.
 
   **Second, and this is the one that actually bites: no earlier request may be
-  outstanding.** The ordering above is *necessary and not sufficient*. If
+  outstanding.** The push → request → reaction ordering is *necessary and not sufficient*. If
   request A (on the old head) is still running when you push and send request
   B, A's reaction lands after B and satisfies every timestamp comparison while
   describing A's commit. A reaction carries no SHA, so nothing in it
@@ -241,7 +241,7 @@ the states that rule's test admits.
   work down this ladder and stop at the first rung that is available:
   1. **Reaction list** (verifiable, and often unavailable) — author +
      `created_at`, the push → request → reaction ordering, AND no earlier
-     request left unanswered. All three, per the paragraph above.
+     request left unanswered. All three, per → *Reading reactions*.
   2. **Ask, don't re-review** (verifiable where Codex answers) — a direct
      `@codex` question naming the SHA is answered as a *comment*, which carries
      an author and a timestamp. Cheaper than a review round. **Untested as of
@@ -256,7 +256,7 @@ the states that rule's test admits.
      unreachable in exactly the case it exists for — the failure this ladder
      was written to prevent. Cheap prevention: read `issue_read` → `get` once
      BEFORE each `@codex review`, so the before-count exists when you need it.
-     This is the same shape as the *documented-unavailable* path below: the
+     This is the same shape as the *documented-unavailable* path (`git.md` → *PR Lifecycle*): the
      protection worth keeping is not that a reaction is provable, but that
      **nobody clears this gate silently**.
   A gate that cannot be cleared is not stricter than one that can — it just
@@ -285,7 +285,7 @@ the states that rule's test admits.
   it never is — does the reaction become the discriminator, readable via
   `issue_read` → `get`
   (**`pull_request_read` → `get` returns no `reactions` field at all**, verified
-  2026-08-23), and only then does the ladder below apply.
+  2026-08-23), and only then does the ladder (→ *The reaction ladder*) apply.
 
   A session watching only the review list waits forever either way, and the
   natural escalation is to spend an `@codex review` from the weekly pool, which
@@ -303,7 +303,7 @@ the states that rule's test admits.
   pass so the verdict lands as a comment the monitor acts on** — an inline
   reply clears the verdict gate but is not evidence that a comment cannot
   arrive, so it is not an opening on its own. Hand removal is governed solely
-  by the last-resort rule above. **Do not read the stuck label as unaddressed
+  by the last-resort rule (`git.md` → *PR Lifecycle*). **Do not read the stuck label as unaddressed
   concerns; read the PR.**
 
 ## Stale SHAs in wakes and records
@@ -318,7 +318,7 @@ the states that rule's test admits.
   if read as clearance — including one Codex had just shown was still racing.
   Read the run's own `head_sha` against the PR's current head before acting;
   the event tells you to check, not what the answer is. This is the specific
-  delivery mechanism that most often tempts you past the rule above, and the
+  delivery mechanism that most often tempts you past the rule to clear the gate against the current head (`git.md` → *PR Lifecycle*), and the
   general case is in `global.md` → *Async Operations*: **any recorded SHA is
   stale from the moment it is written**, and a stale one does not error — it
   resolves perfectly and answers about the wrong commit.
@@ -334,7 +334,7 @@ the states that rule's test admits.
 
 - **Codex reviews are metered per REQUEST, not per push.** Each request spends
   from that shared weekly pool, and requests come from opening a PR, flipping a
-  draft to ready, and `@codex review` — the same three the bullet below names.
+  draft to ready, and `@codex review` — the same three `git.md` → *PR Lifecycle* names as Codex's review triggers.
   So the expensive habit is re-requesting, not committing: measured 2026-08-17,
   thirteen reviews on one PR inside 100 minutes, one per commit, from a draft
   toggled ready over and over while the account's trigger was "On PR open".

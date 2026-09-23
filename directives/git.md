@@ -54,7 +54,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   Do not try to enumerate your way to "covered": a check-in armed unnecessarily
   costs **one wasted wake**; one withheld on a false promise of coverage costs an
   agent **waiting forever**. Each case in full, with its evidence:
-  `pr-mechanics.md` → *Wakes that never arrive*.
+  `docs/standards/pr-mechanics.md` → *Wakes that never arrive*.
 
   Read the green it does produce with the caveat the workflow itself attaches: a
   branch match can name a **superseded** commit, so verify the SHA is still head
@@ -142,7 +142,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
   `codex-flagged` label — the label rule above governs that. None of them is a
   way past a verdict you can READ, and none ever bypasses an adverse verdict that
   exists. **Every exit stays reachable, and none clears the gate silently.**
-  What each exit requires: `pr-mechanics.md` → *Exits from the verdict gate*.
+  What each exit requires: `docs/standards/pr-mechanics.md` → *Exits from the verdict gate*.
   The checks:
   - **Wait for a Codex response naming the current head** — a review, a plain
     comment naming the reviewed commit, or an inline reply inside a review thread
@@ -160,7 +160,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     start of the check, not the end of it.
     ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
     does not watch that event. **Request another review pass rather than removing
-    `codex-flagged` by hand** (`pr-mechanics.md` → *The inline-reply form and the label*).
+    `codex-flagged` by hand** (`docs/standards/pr-mechanics.md` → *The inline-reply form and the label*).
   - **Check the author — it validates the SOURCE, not the outcome.** Wording and
     a current SHA are both forgeable, so a response that is not the Codex bot's
     own cannot clear the gate. Authorship is necessary and never sufficient: a
@@ -175,7 +175,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     the current head FIRST**: only once nothing from Codex names HEAD does
     `"+1": 0` mean genuinely pending. A 👀 means *received*, not *clean*. How to
     read the counts, and what the reaction LIST endpoint adds:
-    `pr-mechanics.md` → *Reading reactions*.
+    `docs/standards/pr-mechanics.md` → *Reading reactions*.
   - **The clean-round escape hatch — for when the reaction really is all there
     is.** ⚠️ **Check the COMMENTS and the REVIEW THREADS first.** The ladder
     applies **only when no SHA-bearing Codex response names the CURRENT head** —
@@ -189,9 +189,10 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
        PR: the head SHA, when the review was requested, the reaction count now,
        and that the reaction cannot be attributed on this tool surface. A
        missing before-count weakens the record; it never blocks this rung.
-    A second clean pass adds no new 👍, so on a PR that already ran clean once
-    rungs 2–3 are the usual path. Each rung's conditions and why:
-    `pr-mechanics.md` → *The reaction ladder*.
+    A second clean pass adds no new 👍 when an earlier clean pass already left
+    one, so on such a PR rungs 2–3 are the usual path; if the earlier pass came
+    as a comment or inline reply instead, a new 👍 still counts for rung 1. Each rung's conditions and why:
+    `docs/standards/pr-mechanics.md` → *The reaction ladder*.
   - **A CLEAN verdict leaves NO REVIEW — but it may still leave a comment.**
     Three forms occur — a comment, an inline reply, a reaction — and which one
     you get is not predictable, so an empty REVIEW list means nothing on its own.
@@ -201,14 +202,14 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     rerun delivered as a 👍 or an inline reply, **request another pass so the
     verdict lands as a comment the monitor acts on**. **Do not read the stuck
     label as unaddressed concerns; read the PR.** Observed forms and the four
-    delivery modes: `pr-mechanics.md` → *Codex delivery forms*.
+    delivery modes: `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
   - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
     current head.** Its `head_sha` is whatever the suite ran against, often a
     commit you have already replaced. **Resolve the head from the API at use
     time, never from the record** — an event, a check-in prompt, a PR body, a
     handoff or a relay message, including a SHA you wrote yourself
     (`global.md` → *Async Operations*). The measurements:
-    `pr-mechanics.md` → *Stale SHAs in wakes and records*.
+    `docs/standards/pr-mechanics.md` → *Stale SHAs in wakes and records*.
   - **Read the inline comments** (`pull_request_read` → `get_review_comments`).
     `get_reviews` cannot tell a clean `COMMENTED` review from an actionable one.
   - **Check EVERY unresolved thread, not just this round's.** An all-clear
@@ -240,7 +241,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     Verify locally, open the PR once, and reserve `@codex review` for a fix you
     genuinely want re-read. Check which trigger the account is on first: under
     "On every push" every commit spends a review, and the setting is
-    account-level. The measurement: `pr-mechanics.md` → *Review metering*.
+    account-level. The measurement: `docs/standards/pr-mechanics.md` → *Review metering*.
   - **Request a review after pushing a fix**; Codex responds on open,
     ready-for-review and `@codex review`, not on a push. Un-drafting leaves no
     comment to carry a 👀, so silence is indistinguishable from a missed trigger.
@@ -252,7 +253,7 @@ policy itself (fresh `claude/<name>` per change, PR to `main`) stays in
     state, **take the full wait again every ~5th PR in that repo**, and
     immediately after any change to the account's Codex settings. One firing
     returns the repo to the default; two consecutive misses re-enter no-wait.
-    Rates and reasoning: `pr-mechanics.md` → *Review triggers*.
+    Rates and reasoning: `docs/standards/pr-mechanics.md` → *Review triggers*.
   - Do not generalise either way: where the trigger works, a reflex explicit
     request is a duplicate, and reviews are metered per request from a pool that
     is weekly and account-wide — the waste lands on every other repo.

@@ -362,14 +362,16 @@
       "serves": "git.monitors",
       "sockets": [
         "templates/workflows/codex-monitor.yml",
-        "directives/git.md"
+        "directives/git.md",
+        "docs/standards/pr-mechanics.md"
       ]
     },
     "github-mcp": {
       "vendor": "GitHub",
       "serves": "git.lifecycle",
       "sockets": [
-        "directives/git.md"
+        "directives/git.md",
+        "docs/standards/pr-mechanics.md"
       ]
     },
     "github-conversation-resolution": {

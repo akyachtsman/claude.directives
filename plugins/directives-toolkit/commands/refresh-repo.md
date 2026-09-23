@@ -373,7 +373,7 @@ workflows rather than assuming the default:
 # The YAML scalar, not the rest of the line: a quoted value ends at its closing
 # quote (a `#` inside it is part of the path) with its escapes decoded (`\"` in
 # double quotes, `''` in single); an unquoted one ends at ` #` (a comment).
-kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml 2>/dev/null \
+kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null \
   | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
            -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
            -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \

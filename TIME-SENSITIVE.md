@@ -71,12 +71,14 @@ checked. Treat those rows as the first to re-check.
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
 |---|---|---|---|
 | Web sessions don't attach plugins on their own; the env setup script installs, the `SessionStart` hook updates | `global.md` → *Skill Bootstrap* | undated | ⏳ The next fresh web session: is the toolkit attached before the hook runs? |
+| An update the `SessionStart` hook fetches applies only from the NEXT session (the CLI says "Restart to apply changes") | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0*, `CLAUDE.md` → *Mid-session change semantics* | 2026-09-24 | This session's SessionStart output: an update offered but the installed sha unchanged until restart |
 | The cached setup script rebuilds on a config change or roughly weekly | `global.md` → *Skill Bootstrap*, `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | undated | Claude Code on the web docs; observe a rebuild |
 | Setup scripts written before 2026-08-05 need a manual re-save | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-08-05 | Environment settings page |
 | `claude plugin install --scope` defaults to `user`; `claude plugin update --scope` defaults to `auto-detect` (it read `user` on 2026-08-17), so `install-toolkit.sh` repeats every update at `--scope project` | `scripts/install-toolkit.sh` (step 5), `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-09-24 | `claude plugin install --help`, `claude plugin update --help`: the `--scope` default line |
 | A re-saved environment can still leave a legacy project stale | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | 2026-08-19 | ⏳ The next time the owner re-saves an environment |
 | `CLAUDE_CODE_REMOTE=true` marks a web session | `plugins/directives-toolkit/commands/env-chk.md`, `.claude/hooks/session-start.sh` | undated | `env` in a web session |
-| Opening a PR auto-subscribes the session; merge drops it | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Notifications* | 2026-09-24 | ⏳ The next PR a session opens: did a `subscription.created` event arrive? |
+| Opening a PR auto-subscribes the session | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Notifications* | 2026-09-24 | ⏳ The next PR a session opens: did a `subscription.created` event arrive? |
+| The harness drops the subscription when the PR merges, so never unsubscribing leaks nothing | `CLAUDE.md` → *Notifications* | 2026-09-24 | ⏳ The next merge: does a `pull_request.closed` event say the session was unsubscribed? |
 | Scheduling tools are pre-approved under both MCP server-name spellings | `global.md` → *Scheduling Tools Never Prompt*, `global.md` → *Async Operations* | 2026-08-18 | Tool list names vs `templates/claude-settings.json` |
 | No setting suppresses the `<wake>` envelopes | `CLAUDE.md` → *Notifications* | 2026-08-21 | Claude Code settings docs |
 | `claude plugin eval` is early access; `CLAUDE_CODE_WALNUT_SPIRE=1` enables it | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | undated | `claude plugin eval --help` |
@@ -112,6 +114,7 @@ checked. Treat those rows as the first to re-check.
 | Ready-for-review draws a Codex review only SOMETIMES (5 of 7 here, 1 of 4 in a sibling repo) | `docs/standards/pr-mechanics.md` → *Review triggers* | 2026-08-23 | ⏳ The next few un-drafts; Codex's summary comment names the trigger |
 | An explicit `@codex review` is answered in minutes — ~2.5 min per `pr-mechanics.md`, 4–7 min per `learnings.jsonl` (`codex-review-triggers`), both 2026-08-23: the sources disagree | `docs/standards/pr-mechanics.md` → *Review triggers*, `learnings.jsonl` | 2026-08-23 | ⏳ Time the next explicit request, comment to verdict; 2026-09-24 here (PRs 386, 387): ~3, ~6 and ~7 min |
 | A clean verdict arrives as a comment, a 👍 reaction, or an inline reply; only the comment clears `codex-flagged` | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Self-test monitoring*, `docs/standards/automations.md` → *Automation 2* | 2026-08-27 | ⏳ The next clean review: which form arrived? |
+| A GitHub user holds at most one reaction of a given type per subject, so a second clean Codex round adds no new 👍 (read from GitHub's documented reaction model, not measured) | `docs/standards/pr-mechanics.md` → *Reading reactions* | undated | GitHub REST docs for reactions: is a duplicate same-type reaction by one user rejected or ignored? |
 | The allowance is weekly and shared with Work, Workspace Agents and ChatGPT Excel; "On every push" spends one per commit | `git.md` → *PR Lifecycle* | undated | Codex account settings |
 | An *unavailable* reply states a reset time | `git.md` → *PR Lifecycle* | undated | ⏳ The next unavailable reply |
 
@@ -119,7 +122,7 @@ checked. Treat those rows as the first to re-check.
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
 |---|---|---|---|
 | This repo's sandbox ceiling is NONE: chromium launches as-is | `CLAUDE.md` → *Local gate — CI scripts* | 2026-09-24 | From `templates/ui-tests`: `node ../scripts/browser-ladder.js chromium` |
-| Fleet sandbox ceilings and egress results (`esm.sh` blocked, `cdn.playwright.dev` reachable) | `test.md` → *Sandboxed local runs* | 2026-08-26 | Browser ladder + curl in each app repo |
+| Fleet sandbox ceilings and egress results (`esm.sh` blocked, `cdn.playwright.dev` reachable) | `test.md` → *Sandboxed local runs* | 2026-08-26 | ⏳ The next session in each app repo: browser ladder + curl there |
 | Playwright behaviour measured on `playwright-core` 1.62.1 (async `waitForFunction`, viewport fixture, `outputFile` precedence) | `test.md` → *Playwright*, `test.md` → *UI coverage gates* | 2026-08-25 | Re-run the cited measurement on the current version |
 | npm, not the runner image, picks the Playwright version: `templates/ui-tests/package.json` declares `@playwright/test` `^1.62.1`, which resolved to 1.63.0 on 2026-09-24 | `templates/ui-tests/package.json`, each project's lockfile | 2026-09-24 | From `templates/ui-tests`: `npm install --no-package-lock --ignore-scripts`, then read `node_modules/@playwright/test/package.json` |
 | The render witness's evidence, measured on Playwright 1.63.0: a failing hook records no witness, the annotation reaches both JSON report shapes, an auto fixture would destroy the signal | `templates/ui-tests/tests/app.spec.js` (witness header), `templates/scripts/check-ui-viewports.js` | 2026-09-24 | Re-run the listed cases on the installed version after any Playwright bump |
@@ -134,12 +137,11 @@ checked. Treat those rows as the first to re-check.
 | Supabase MCP tool names | `plugins/directives-toolkit/agents/supabase.md` | undated | Session tool list |
 | Supabase `query_logs` window is capped at, and defaults to, 24h | `plugins/directives-toolkit/agents/supabase.md` | undated | Supabase MCP docs |
 | Stitch and Figma MCPs available for design import | `design.md` → *Establishing your project's look*, `plugins/directives-toolkit/commands/design-intake.md` | undated | Connector registry |
-| html2canvas 1.4.1 throws on `oklch()` | `test.md` → *Stub the collaborators* | undated | Current html2canvas release |
 | WCAG AA thresholds and target sizes | `design.md` → *Accessibility* | undated | Current WCAG version (none is named) |
 
 ## Measured baselines
 | Measurement | Stated in | Last verified | Re-check by |
 |---|---|---|---|
 | Auto-skill eval: 9 of 9 pass, mean Δ +0.67; two newer cases unmeasured | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)*, `docs/internal/skill-eval-notes.md` | 2026-08-19 | `claude plugin eval --no-publish .` in the toolkit |
-| The 120-minute UI-suite timeout floor (`UI_SUITE_FLOOR`) is sized from claude.trading's 30m35s warm job + 21m25s cold browser install | `docs/standards/cicd-setup.md` → *9c-ter — Job bounds guard* | undated | Re-time the slowest fleet UI job, warm and cold, on the current runner image |
+| The 120-minute UI-suite timeout floor (`UI_SUITE_FLOOR`) is sized from claude.trading's 30m35s warm job + 21m25s cold browser install + a failing profile that replaces its healthy scenario with the per-test ceiling and then retries at it (~+22 min each) | `docs/standards/cicd-setup.md` → *9c-ter — Job bounds guard*, `templates/scripts/check-job-bounds.py` (header, rule 3) | undated | ⏳ The next slow-end fleet UI run: warm job, cold install and a failing profile's cost, from its run timings |
 | Auth-scenario and request timings measured in claude.insurance / claude.prop | `test.md` → *Playwright* | 2026-08-25 | ⏳ The next session working in those repos |

@@ -63,7 +63,7 @@ Execute these before any task work:
 4. Confirm `ci-monitor.yml`, `codex-monitor.yml`, and (for Pages projects) `pages-monitor.yml`
    are present in `.github/workflows/` — add any missing from `templates/workflows/`
 
-## Playwright
+## Playwright (owner ruling, 2026-09-24)
 - Always use `page.goto('./')`, never `page.goto('/')`
 - Normalize `APP_URL` to end with `/` in `playwright.config.js`
 - `API status: no call` is expected for a local run that cannot reach the backend;

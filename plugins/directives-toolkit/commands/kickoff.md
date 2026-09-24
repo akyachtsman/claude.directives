@@ -61,7 +61,9 @@ Execute in order:
 
 4. **Optional — competitive discovery fan-out** (only if the user opted in at
    step 1). Spawn parallel worker agents **in one batch so they run concurrently**
-   (Agent tool `general-purpose` with web access, or the `deep-research` skill),
+   (Agent tool `general-purpose` with web access and `model: sonnet` — each judges a
+   site against a rubric, per `global.md` → *Subagent Model Selection* — or the
+   `deep-research` skill),
    **one per target site** (~6–10 of the most popular sites in this app's
    category). Each analyzes its site against a rubric covering **both structure and
    craft**: information architecture; core user flows; content depth & how much they

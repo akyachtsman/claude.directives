@@ -34,35 +34,9 @@ part of review.
 
 ## Spec-Driven Development (`/sdd-loop`)
 
-For non-trivial features, `/sdd-loop` runs a phased spec → plan → tasks →
-implement loop (the `github/spec-kit` methodology, ported — not the CLI). It is
-**stepwise**: one phase per invocation, so you supply intent between phases.
-The constitution is **inherited** from the imported directives — it is never
-regenerated. The full per-phase spec lives in the command body; the loop at a
-glance:
-
-```
-/new-repo            → scaffold + inherit directives (constitution is automatic)
-/sdd-loop specify    → WHAT & WHY, and close its unknowns (you supply the idea)
-          plan       → HOW: stack + architecture, ordered task list, consistency
-                       check (you supply stack decisions)
-          implement  → build task by task, delegated to qa-pipeline
-→ /commit-chk → PR → CI green → merge
-```
-
-Three phases, because a phase boundary is only worth having where the human
-supplies intent. `clarify` folded into `specify`, `tasks` and `analyze` into
-`plan`.
-
-Artifacts are committed under `specs/<feature>/` — `spec.md` and `plan.md`, the
-latter carrying `## Tasks` and `## Consistency`. The command **owns** WHAT and
-HOW and **delegates** review and build verification to the `pr-review-toolkit`
-reviewers and `qa-pipeline` rather than reinventing them.
-
-To kick off a whole new app this way, run **`/kickoff`**: it scaffolds (via
-`/new-repo` if needed), prompts you for the product brief (the only per-project
-input), offers an optional competitive-discovery pass, then drives the `/sdd-loop`
-phases — orchestrating the existing pieces rather than restating them.
+For non-trivial features, `/sdd-loop` runs a stepwise spec → plan → implement loop
+(the `github/spec-kit` method, ported) with the inherited directives as its constitution;
+`/kickoff` drives it for a whole new app. Authoritative spec: `plugins/directives-toolkit/commands/sdd-loop.md`.
 
 ## Reports
 

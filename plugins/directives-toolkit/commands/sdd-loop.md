@@ -84,7 +84,7 @@ over spec + plan rather than hand-rolling a review.
 
 **Plan self-review (one adaptive pass) — before showing it to the user.** After
 drafting, launch a **fresh reviewer subagent** (Agent tool, clean context —
-browser-only path, same model, no extra servers) to score the plan 0–10 on
+browser-only path, `model: sonnet` — it is review work, per `global.md` → *Subagent Model Selection* — no extra servers) to score the plan 0–10 on
 completeness vs the spec, simplicity matched to the brief's ambition, **failure-mode
 coverage**, and constitution-fit. Revise `plan.md` in place for anything under
 ~8, and require it to spell out the **data flow and main failure modes** before

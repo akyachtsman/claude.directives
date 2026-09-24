@@ -45,9 +45,11 @@ verdict. Read-only — do NOT modify files. Execute in order:
    claude.directives `main`. Get that HEAD with
    `git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main`
    — git transport, so it needs no auth, no MCP and no quota, and works from a
-   session scoped to any repo. Do **not** call `api.github.com`: it is refused at
-   the proxy, and the GitHub MCP is scoped to the session's own repo, so in every
-   downstream project — which is most sessions — the API route fails outright.
+   session scoped to any repo. Do **not** depend on `api.github.com`: whether the
+   proxy lets it through depends on the environment's network policy (refused in
+   some fleet environments, reachable unauthenticated here on 2026-09-24), an
+   unauthenticated call shares a small per-IP limit, and the GitHub MCP is scoped
+   to the session's own repo — so in most downstream projects the API route fails.
    If the stamp differs, or none exists, report a ⚠️ finding.
    Then classify the delta by top-level path and state the action per
    EXPORTS.json delivery mode. Classification needs the diff, which `ls-remote`

@@ -179,36 +179,10 @@ A directive repo must pass its own CI before it can be trusted downstream.
   interactive Pages artifact, `docs/site/logical-map.html`. What each case covers and why it exists is in
   `docs/internal/repo-map-ui.md`; read that before changing the map, the router,
   or the suite.
-- `ci-monitor.yml` — fires when `QA — Directive Validation` completes; on failure
-  opens/updates a deduplicated `ci-failure` tracking issue.
-- `ci-notify.yml` — fires when `QA — Directive Validation` completes **green**;
-  comments on the open PR for that head SHA so a watching web session wakes on
-  success without scheduling-tool polling (the template's counterpart, adapted
-  to this repo's workflow name). Coverage is partial: it needs **one** lookup —
-  head SHA, else branch + head-repo owner — to resolve exactly one open PR, and
-  exits silently otherwise. ⚠️ A unique match is not a guaranteed wake for YOUR
-  session either — a `repository_dispatch` run's default-branch SHA can uniquely
-  match an unrelated promotion PR, which gets the comment instead. Arm the
-  check-in whenever the run's SHA is not your PR's head (`git.md` → *PR Lifecycle*).
-- `codex-monitor.yml` — fires on Codex PR reviews and Codex issue comments; adds
-  a `codex-flagged` label when Codex raised concerns and clears it on an
-  all-clear **comment** naming the current head SHA — observed working at `b64ff09`. ⚠️ A clean rerun can instead
-  arrive as a 👍 reaction **or as an inline review-thread reply**, and the
-  monitor watches neither event — so check the PR's comments AND its review
-  threads for a verdict naming the head (an inline reply never enters the comment
-  list). If the verdict is clean but the label persists,
-  **request another review pass** rather than removing the label — a clean
-  COMMENT verdict naming the head clears it automatically, observed 2026-08-27
-  on #333 at `63bed51`. Hand removal is the last resort `git.md` → *PR Lifecycle* bounds by the *unreachable-review test* — an OBSERVABLE terminal
-  state on the PR showing a further request cannot produce a verdict, which
-  never needs a pass to have run: a request GitHub could not make or deliver is
-  itself the exit. A
-  stuck label is not evidence of open concerns, and removing it is not evidence
-  of their absence.
-- `pages-monitor.yml` — fires on every Pages build (`page_build`); verifies the
-  deploy is live and on a problem opens/updates a deduplicated
-  `pages-deploy-failure` issue (success → job summary only). The zero-model
-  counterpart to the `update-pages` skill.
+- `ci-monitor.yml` — opens/updates a deduplicated `ci-failure` issue when QA fails; detail: `docs/internal/repo-monitors.md`.
+- `ci-notify.yml` — comments on the PR when QA goes green, to wake a watching session. ⚠️ A unique match is not a guaranteed wake for YOUR session — it can hit an unrelated PR, which gets the comment instead. Arm the check-in whenever the run's SHA is not your PR's head; detail: `docs/internal/repo-monitors.md`.
+- `codex-monitor.yml` — adds/clears the `codex-flagged` label from Codex's verdict comments; it misses 👍 and inline-reply verdicts, so check the PR's comments AND its review threads; detail: `docs/internal/repo-monitors.md`.
+- `pages-monitor.yml` — verifies each Pages build is live and opens/updates a `pages-deploy-failure` issue on a problem; detail: `docs/internal/repo-monitors.md`.
 
 See `docs/internal/repo-monitors.md` for this repo's monitor detail and self-test
 triage (the `ci-failure` / `codex-flagged` flow), and `docs/standards/automations.md` for
@@ -387,7 +361,7 @@ already happens. Never arm an extra wake to keep a rhythm.
 
 ## Toolkit changes
 
-**Authoring authority.** `plugin-dev` (Anthropic) is the spec for plugin
+**Authoring authority (owner ruling, 2026-09-24).** `plugin-dev` (Anthropic) is the spec for plugin
 structure — commands, agents, hooks, MCP, settings, frontmatter — and its
 `hook-development` skill covers hook events and matchers. Read it before
 hand-writing either; `meta` is permanent, so it informs this toolkit rather than

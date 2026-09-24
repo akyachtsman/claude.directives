@@ -45,7 +45,7 @@ else
 fi
 ```
 **Remote-session transport (verified 2026-07-18, apfp.claude):** `gh` is usually
-absent and sandbox curl to `api.github.com` is proxy-blocked or rate-limited
+absent and sandbox curl to `api.github.com` may be proxy-blocked (per the environment's network policy) or rate-limited
 (unauthenticated per-IP limits on a shared fleet IP — expect 403s after a call
 or two). Use **WebFetch** for the api.github.com calls (server-side, own egress),
 and spend the budget on the ONE `git/trees` call — it carries everything Phase 1
@@ -216,8 +216,8 @@ changed UPSTREAM since this project's last sync — stamped in
 `.claude/directive-sync.json` under `upstream.sha` (Phase 3).
 
 Get the head SHA over **git transport**, not the API: `gh` is absent in most
-remote/web sessions and `api.github.com` is refused at the proxy, so the API
-route returns empty in exactly the sessions that run this command (`/env-chk`
+remote/web sessions and `api.github.com` may be refused at the proxy or
+rate-limited, so the API route can return empty in exactly the sessions that run this command (`/env-chk`
 uses `ls-remote` for the same reason). The file-level delta comes over git
 transport too — `/env-chk` step 6's route, adapted: never `api.github.com`, and
 no GitHub MCP call compares two refs. `/refresh-repo` runs in a DOWNSTREAM

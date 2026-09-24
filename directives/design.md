@@ -307,7 +307,7 @@ function makeSummaryList(card){
 }
 ```
 
-## Charts & data display
+## Charts & data display (owner ruling, 2026-09-24)
 There is **no chart standard written here.** Use the native **`dataviz`** skill
 — a Claude Code built-in, so there is nothing to install or enable —
 it is the authority for chart-type choice, categorical/sequential palettes that
@@ -319,7 +319,7 @@ SVG, matplotlib/plotly/d3/Recharts).
 - Accessibility above is not waived by it — contrast ratios and
   never-colour-alone apply to series colours and legends too.
 
-## Diagrams & connectors
+## Diagrams & connectors (owner ruling, 2026-09-24)
 For any node-and-edge surface (relationship maps, flow/architecture diagrams, org
 charts — SVG or canvas). The invariant: **every connector stays individually
 traceable to exactly one source→target pair**, at any zoom.

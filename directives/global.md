@@ -243,7 +243,7 @@ styles/          ← the committed design contract (tokens.css + components.css)
 - Project/connection IDs and table/column names are defined in each repo's
   CLAUDE.md.
 
-## Automations
+## Automations (owner ruling, 2026-09-24)
 - Scheduled and event-driven automations run as GitHub Actions workflows
 - Claude routines handle agent-driven tasks (alerts, reports, monitors)
 - No external automation platforms — logic lives in the repo, defined at project level

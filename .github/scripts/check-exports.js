@@ -13,7 +13,8 @@ const REPO = 'akyachtsman/claude.directives';
 const manifest = JSON.parse(readFileSync('EXPORTS.json', 'utf8'));
 
 let failed = false;
-const fail = m => { console.error(`FAIL: ${m}`); failed = true; };
+let failCount = 0;
+const fail = m => { console.error(`FAIL: ${m}`); failed = true; failCount++; };
 
 // 1) Every manifest path exists.
 const exportPaths = [];
@@ -91,6 +92,8 @@ for (const [name, ext] of Object.entries(manifest.externals ?? {})) {
 // upkeep mandate's "record why" has nowhere to land and every audit re-derives it.
 const VERDICTS = new Set(['borrowed', 'rejected', 'deferred']);
 for (const [name, c] of Object.entries(manifest.considered ?? {})) {
+  // Per-entry: `failed` is run-wide, so gating on it hid every later entry's OK line.
+  const failsBefore = failCount;
   if (name.startsWith('_')) continue;
   for (const f of ['vendor', 'verdict', 'rationale']) {
     if (!c[f]) fail(`[considered:${name}] missing required field: ${f}`);
@@ -109,7 +112,7 @@ for (const [name, c] of Object.entries(manifest.considered ?? {})) {
   if (c.stays && !existsSync(c.stays)) {
     fail(`[considered:${name}] stays path missing from tree: ${c.stays}`);
   }
-  if (!failed) console.log(`OK:   [considered:${name}] ${c.verdict} (${c.vendor})`);
+  if (failCount === failsBefore) console.log(`OK:   [considered:${name}] ${c.verdict} (${c.vendor})`);
 }
 
 // 2) Every raw-URL self-reference resolves inside a manifest path.

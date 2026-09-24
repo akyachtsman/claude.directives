@@ -618,16 +618,21 @@ standing rule For all sessions, going forward."*
 the default taken.
 
 ⛔ **`fable` — sparingly** (owner, 2026-09-24: *"fable is very expensive, only
-use it sparingly"*). Only when ALL of these hold:
-1. the job is very long and complicated, and cannot be split into independent
-   pieces;
-2. one agent must hold many files or constraints at once (a whole-repo audit, a
-   refactor across many cross-references, a failure spanning several systems);
+use it sparingly"*). Name `model: "fable"` only when ALL of these hold:
+1. the job is very long and complicated, and splitting it would lose what makes
+   it work — one agent must hold many files or constraints at once (a refactor
+   across many cross-references, a failure spanning several systems);
+2. it is building, fixing or diagnosing, never a census or review piece, however
+   long the parent task;
 3. a cheaper tier would cost more in rework — best evidence: it already tried and
    failed.
 
-Never for census or review pieces, however long the parent task. "Important" is
-not a reason. When you do use it, say why in one line in the report.
+Where all three hold, `fable` overrides the build tier's "leave `model` out", and
+the job is the one exception to *Parallel Tasking via Subagents*' small,
+tightly scoped tasks. Everything else keeps its tier; "important" is not a
+reason. ⚠️ **A session itself running on `fable`** must not pass it on by
+omission: a build that does not qualify names `opus` instead of leaving `model`
+out. When you do use `fable`, say why in one line in the report.
 
 Qualifiers:
 - **Unsure between two tiers:** cheaper for read-only work, stronger for

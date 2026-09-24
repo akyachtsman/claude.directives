@@ -82,10 +82,10 @@ is added by the pass that finds it.
 ## Anthropic plugins & built-in skills
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
-| `pr-review-toolkit` and `security-guidance` plugins | `test.md` → *QA/data agents* | undated | `claude plugin marketplace list`; this session's agent list |
+| `pr-review-toolkit` and `security-guidance` plugins | `test.md` → *QA/data agents* | undated | Each registered marketplace's `marketplace.json` under `~/.claude/plugins/marketplaces/` |
 | `plugin-dev` plugin and its skills | `CLAUDE.md` → *Toolkit changes* | 2026-09-24 | This session's skill list |
 | Built-in `/code-review` and `/security-review` | `test.md` → *QA/data agents* | undated | This session's skill list |
-| Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display* | undated | This session's skill list |
+| Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | undated | This session's skill list |
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-23 | The `/audit-repo` native-parity pass |
 
 ## GitHub
@@ -116,8 +116,8 @@ is added by the pass that finds it.
 | Fleet sandbox ceilings and egress | `test.md` → *Sandboxed local runs* | 2026-08-26 | ⏳ The next session in each app repo |
 | Which Playwright version the kit resolves to | `templates/ui-tests/package.json` | 2026-09-24 | `npm view "@playwright/test@^1.62.1" version` (a registry read, installs nothing) |
 | Playwright behaviour the kit and the viewport gate rely on — each measurement is dated in its source | `test.md` → *Playwright* | 2026-09-24 | ⏳ The next Playwright version bump: re-run the measurements the source and `templates/scripts/check-ui-viewports.js` cite |
-| Where preinstalled browsers live | `plugins/directives-toolkit/agents/ui-tester.md` | undated | `ls "$PLAYWRIGHT_BROWSERS_PATH"` in this session |
-| CSS support in CI browsers (`100dvh`) | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | undated | Runner image release notes: browser versions |
+| Where preinstalled browsers live | `plugins/directives-toolkit/agents/ui-tester.md` | undated | `ls "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"` in this session |
+| CSS support in CI browsers (`100dvh`) | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | undated | MDN browser-compat data for `dvh` against the runner image's browser versions |
 | Web-session git fetch cost | `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-09-23 | ⏳ The next `/refresh-repo` run |
 
 ## Outside services & standards
@@ -125,7 +125,7 @@ is added by the pass that finds it.
 |---|---|---|---|
 | Supabase MCP tools and `query_logs` window | `plugins/directives-toolkit/agents/supabase.md` | undated | Supabase MCP docs |
 | Stitch and Figma MCPs for design import | `design.md` → *Establishing your project's look* | undated | The connector registry |
-| WCAG thresholds and target sizes | `design.md` → *Accessibility* | undated | The current WCAG recommendation |
+| WCAG thresholds and target sizes | `design.md` → *Accessibility*, `design.md` → *Cross-platform & responsive* | undated | The current WCAG recommendation |
 
 ## Measured baselines
 | Topic | Source | Last checked | Check |

@@ -28,6 +28,7 @@
 // deriving the list from the tree: that design was withdrawn after 27 rounds on
 // #368 because the accepted YAML forms never converged (#370).
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { posix } from 'path';
 
 const TYPES = new Set(['pattern', 'pitfall', 'preference', 'architecture', 'tool']);
 const REQUIRED = ['ts', 'type', 'key', 'text', 'confidence', 'files'];
@@ -147,7 +148,9 @@ for (const c of COMPLETE) {
     fail(`completeness rule names key "${c.key}", which has no valid latest entry — the rule would silently stop applying (#370)`);
     continue;
   }
-  const listed = new Set(e.files);
+  // Normalised, so `./templates/workflows/qa.yml` and `templates/workflows/qa.yml`
+  // are the same file on both sides of every comparison below (#383).
+  const listed = new Set(e.files.map((f) => posix.normalize(f)));
   for (const dir of c.dirs) {
     let names;
     try { names = readdirSync(dir); } catch (err) { fail(`completeness: cannot read ${dir} — ${err.message}`); continue; }
@@ -159,7 +162,14 @@ for (const c of COMPLETE) {
       }
     }
   }
-  for (const f of Object.keys(c.exempt)) {
+  for (const [f, why] of Object.entries(c.exempt)) {
+    // The reason IS the decision record; an empty one is an unrecorded decision.
+    if (!(typeof why === 'string' && why.trim())) {
+      fail(`completeness exemption "${f}" has no reason — an exemption must say why the file is not such a watcher (#370)`);
+    }
+    if (posix.normalize(f) !== f) {
+      fail(`completeness exemption "${f}" is not in normal form — write it as "${posix.normalize(f)}" (#383)`);
+    }
     if (!existsSync(f) || !statSync(f).isFile() || !readFileSync(f, 'utf8').includes(c.text)) {
       fail(`completeness exemption "${f}" is stale — the file is gone or no longer contains "${c.text}"; remove the exemption (#370)`);
     } else if (listed.has(f)) {

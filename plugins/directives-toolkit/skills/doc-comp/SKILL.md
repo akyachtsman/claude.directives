@@ -11,6 +11,14 @@ behaviour.) Do NOT promise a "downloadable file" and a local path: in a
 web/remote session a path is not a link, and the viewer sandbox blocks
 page-initiated downloads — the Artifact URL is the deliverable.
 
+Reading the inputs:
+- A `.docx` or `.pdf` input is read with the session's `anthropic-skills:docx` /
+  `anthropic-skills:pdf` skill where one is listed — text extraction only, OCR
+  included for a scanned PDF. Never use them to write a tracked-changes `.docx`:
+  the published Artifact is the output.
+- Where the session has no such skill, extract with what is available and say so
+  under *Uncertainty handling* below.
+
 Layout:
 - Left column:  original / baseline document
 - Right column: revised / new document

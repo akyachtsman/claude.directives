@@ -72,7 +72,7 @@ is added by the pass that finds it.
 | Scheduling-tool names the settings pre-approve | `global.md` → *Scheduling Tools Never Prompt* | 2026-09-24 | This session's tool list against `templates/claude-settings.json` |
 | Wake envelopes cannot be switched off | `CLAUDE.md` → *Notifications* | 2026-08-21 | Claude Code settings docs |
 | `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-09-24 | `claude plugin eval --help` |
-| Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | undated | Claude Code on the web docs, network access |
+| Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-09-24 | Claude Code on the web docs, network access |
 
 ## Anthropic plugins & built-in skills
 | Topic | Source | Last checked | Check |

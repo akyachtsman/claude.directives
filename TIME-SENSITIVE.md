@@ -72,7 +72,7 @@ is added by the pass that finds it.
 | Scheduling-tool names the settings pre-approve | `global.md` → *Scheduling Tools Never Prompt* | 2026-09-24 | This session's tool list against `templates/claude-settings.json` |
 | Wake envelopes cannot be switched off | `CLAUDE.md` → *Notifications* | 2026-08-21 | Claude Code settings docs |
 | `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-09-24 | `claude plugin eval --help` |
-| Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | undated | Claude Code on the web docs, network access |
+| Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-09-24 | Claude Code on the web docs, network access |
 
 ## Anthropic plugins & built-in skills
 | Topic | Source | Last checked | Check |
@@ -81,6 +81,7 @@ is added by the pass that finds it.
 | `plugin-dev` plugin and its skills | `CLAUDE.md` → *Toolkit changes* | 2026-09-24 | This session's skill list |
 | Built-in `/code-review` and `/security-review` | `test.md` → *QA/data agents* | 2026-09-24 | This session's skill list |
 | Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | 2026-09-24 | This session's skill list |
+| Built-in `anthropic-skills:docx` and `anthropic-skills:pdf` (text extraction, OCR for scanned PDFs) | `plugins/directives-toolkit/skills/doc-comp/SKILL.md` | 2026-09-24 | This session's skill list: both skills listed, and the `pdf` skill's own description still names OCR for scanned PDFs |
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
 
 ## GitHub

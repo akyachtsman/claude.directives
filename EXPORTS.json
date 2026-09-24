@@ -464,6 +464,13 @@
         "CLAUDE.md",
         "plugins/directives-toolkit/evals/scope-chk-explicit/prompt.md"
       ]
+    },
+    "anthropic-skills": {
+      "vendor": "Anthropic (built-in skills)",
+      "serves": "meta.session",
+      "sockets": [
+        "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
+      ]
     }
   },
   "considered": {
@@ -593,12 +600,6 @@
       "verdict": "rejected",
       "rationale": "Built-in skill that launches and drives the app for a one-off look at a change. The ui-tester agent does a different job: it runs the project's Playwright suite against the URL CLAUDE.md names and writes the report the orchestrator reads, which is the evidence test.md asks for. Complementary, not overlapping.",
       "stays": "plugins/directives-toolkit/agents/ui-tester.md"
-    },
-    "anthropic-skills": {
-      "vendor": "Anthropic",
-      "verdict": "deferred",
-      "rationale": "Parent of the docx, pdf, pptx and xlsx file skills (plus browser, research and docs skills with no toolkit counterpart). The docx redline output is not wanted, because doc-comp's deliverable is a published Artifact, not a tracked-changes .docx. What still fits is INPUT: doc-comp does not say how to read a .docx or .pdf, and could hand that extraction to these skills where the session provides them. Not done yet.",
-      "stays": "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
     },
     "project-artifact": {
       "vendor": "Anthropic",

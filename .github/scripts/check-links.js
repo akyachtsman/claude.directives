@@ -13,6 +13,36 @@ import { execFileSync } from 'child_process';
 //   in one of three states, none of them verified: a name broken across a line
 //   is not parsed and NOT counted; a break between the FILENAME and its arrow IS
 //   counted, against the WRONG file; anything else is simply absent (#366)
+//
+// ── #366, the parser half (2026-09-24) ───────────────────────────
+// The live references #366 listed were rewritten into the parsed form in the
+// SOURCE by #378 (282/282 before this change, 282/282 after — the widening
+// found no new live reference and changed no existing classification). What
+// this change adds, each a CLOSED rule with an unambiguous terminator:
+//   §2  a BACKTICKED filename may hold any character except a backtick or a
+//       line ending (`a+file.md`, `my file.md`). The backticks are the
+//       terminator, so the bare class did not grow. This closes the
+//       wrong-target route for backticked names: such a name used to fall
+//       through to the SELF form and be checked against the current file.
+//   §1  an UNBACKTICKED filename, `name.md → *Section*`, using the old bare
+//       class [A-Za-z0-9_./-], preceded by start-of-line, space/tab or `(`.
+//       Its arrow must not be inside an inline code span, decided by one
+//       stated rule applied to THIS form only: an odd number of backticks
+//       before the match on the same line. Multi-backtick CommonMark spans
+//       are out of scope. The rule is NOT applied to the backticked or SELF
+//       forms (that is #367 rounds 12-16, withdrawn 2026-09-18): a skipped
+//       match claims nothing and its arrow stays open to the SELF form.
+//       docs/guides/dev-pipeline.md:26 (`spec.md → plan.md`, one span) must
+//       not match — pinned by a case, not by the total.
+// Out of scope, disclosed on every run:
+//   §3  other delimiters — a backticked `## Heading`, a quoted name. The only
+//       remaining live instance, docs/guides/dev-pipeline.md:27, names a
+//       per-project artifact (plan.md) that does not exist in this repo, so
+//       parsing it would FAIL a legitimate reference; the quote-delimited
+//       instance was rewritten in the source (#378).
+//   a bare `name.md → Name` with no delimiter — nothing terminates the name.
+//   the wrong-target route for UNBACKTICKED names outside the class (a+b.md
+//       → *X* is read as SELF; my file.md → *X* reads only file.md).
 
 // Recursively collect all .md files, skipping node_modules and .git.
 function findMarkdown(dir) {
@@ -267,8 +297,43 @@ if (mode !== '--external') {
   // where without it the escape silently matches the literal character and the
   // pattern goes on quietly meaning something else. That is the fail-open family
   // (#323) at the regex level, so the flag stays.
+  //
+  // #366 §2 (2026-09-24): the filename INSIDE the backticks is any run of
+  // characters except a backtick or a line ending — `a+file.md`, `my file.md`.
+  // It keys off the backticks rather than growing the bare class, because the
+  // backticks ARE the terminator: the name cannot run past the closer, and it
+  // cannot cross a line. This closes the wrong-target route for BACKTICKED names
+  // (a name the old class could not read fell through to the SELF form and was
+  // checked against the current file); an unbackticked name keeps the old class.
   const XREF_FILE = new RegExp(
-    String.raw`\x60([A-Za-z0-9_./-]+\.md)\x60[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
+    String.raw`\x60([^\x60\n]+\.md)\x60[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
+  // #366 §1 (2026-09-24): an UNBACKTICKED filename — `name.md → *Section*` with
+  // no code span around `name.md`. Closed rule, three parts, all stated in the
+  // per-run disclosure:
+  //   - the filename is today's bare class, [A-Za-z0-9_./-]+ then `.md`;
+  //   - it is preceded by start-of-line, a space/tab, or `(` — a lookbehind, so
+  //     `xglobal.md` or `docs/global.md` never yields `global.md`;
+  //   - its arrow must not fall inside an inline code span, decided by ONE rule:
+  //     an ODD number of backtick characters before the match on the same line
+  //     means inside a span, and the match is NOT read as explicit (counted in
+  //     the disclosure as out of scope). Multi-backtick CommonMark spans are
+  //     out of scope — every backtick counts as one, whatever run it is in.
+  // That code-span rule applies to THIS form ONLY. It is not applied to the
+  // backticked form or to the SELF form: suppressing the self form after a code
+  // span is #367 rounds 12-16, withdrawn by owner ruling 2026-09-18. A skipped
+  // match therefore claims nothing, and its arrow is left to the SELF form
+  // exactly as before this form existed.
+  //   `docs/guides/dev-pipeline.md:26` — `spec.md → plan.md`, one code span
+  //   listing two artifacts — must not match; it has a case.
+  const XREF_BARE = new RegExp(
+    String.raw`(?<=^|[ \t(])([A-Za-z0-9_./-]+\.md)[ \t]*` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gmu');
+  // #366 §3 — other delimiters (a backticked `## Heading`, a quoted name) are
+  // NOT parsed, deliberately. The one remaining live instance,
+  // docs/guides/dev-pipeline.md:27 (`plan.md` → `## Consistency`), names a
+  // per-project artifact that does not exist in THIS repo, so parsing it would
+  // fail a legitimate reference; the quote-delimited instance was rewritten in
+  // the source (#378). A bare `name.md → Name` with no delimiter at all is out
+  // of scope too (#366 says so): nothing terminates the name.
   // → *Bar*   with no file named: the current file. A LOOKBEHIND, not a consumed
   // character, so the match index IS the arrow — consuming it reported a
   // reference at column 1 against the line above itself.
@@ -284,9 +349,11 @@ if (mode !== '--external') {
   //
   // ⚠️ DO NOT add a rule here that suppresses the self form when a code span
   // NAMES a .md file. It was tried for five rounds and is the reason this comment
-  // exists. The motivation is real: the explicit form takes only
-  // [A-Za-z0-9_./-] before `.md`, so any other filename falls through to here and
-  // is checked against THIS file — a wrong target reported as resolved. But every
+  // exists. The motivation is real: the UNBACKTICKED explicit form takes only
+  // [A-Za-z0-9_./-] before `.md`, so any other unbackticked filename falls
+  // through to here and is checked against THIS file — a wrong target reported
+  // as resolved. (A BACKTICKED filename of any spelling is read as explicit since
+  // #366 §2, closing that half of the route without touching this form.) But every
   // implementation has to decide what a code span IS, and that question was wrong
   // once per round:
   //
@@ -312,7 +379,7 @@ if (mode !== '--external') {
     // reopen the Unicode-category chase that cost rounds 4-6 (#366).
     String.raw`(?<![\x60\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
-  let xrefs = 0, badXrefs = 0;
+  let xrefs = 0, badXrefs = 0, bareInSpan = 0;
   for (const file of findMarkdown('.')) {
     // Fence-stripped on the SOURCE side as well as the target side: an
     // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
@@ -328,6 +395,16 @@ if (mode !== '--external') {
     const claimed = [];
     for (const m of src.matchAll(XREF_FILE)) {
       const idx = m.index ?? 0;
+      claimed.push([idx, idx + m[0].length]);
+      checks.push([m[1], m[2], true, idx]);
+    }
+    for (const m of src.matchAll(XREF_BARE)) {
+      const idx = m.index ?? 0;
+      if (claimed.some(([a, b]) => idx >= a && idx < b)) continue;
+      // Odd count of backticks earlier on the SAME line = inside a code span.
+      const lineStart = src.lastIndexOf('\n', idx - 1) + 1;
+      const ticks = (src.slice(lineStart, idx).match(/\x60/g) || []).length;
+      if (ticks % 2 === 1) { bareInSpan++; continue; }   // claims nothing
       claimed.push([idx, idx + m[0].length]);
       checks.push([m[1], m[2], true, idx]);
     }
@@ -371,7 +448,8 @@ if (mode !== '--external') {
   // misreading is half of #363. The scope is stated rather than the exceptions
   // enumerated — #365 proved that list cannot be built by pattern-matching.
   console.log(`OK:   ${xrefs - badXrefs}/${xrefs} PARSED section cross-references resolve to a heading`);
-  console.log('      PARSED = the italic `file.md` → *Name* and → *Name* forms, ON ONE LINE.');
+  console.log('      PARSED = the italic `file.md` → *Name*, file.md → *Name* and → *Name*');
+  console.log('      forms, ON ONE LINE.');
   console.log('      A reference written any other way lands in one of three states, and');
   console.log('      NONE of them is "verified":');
   console.log('        - a name broken across a line is not parsed, so it is NOT counted;');
@@ -393,17 +471,29 @@ if (mode !== '--external') {
   console.log('      which is the safe direction, and avoids a Unicode category rule —');
   console.log('      the thing that cost this checker three rounds (#366).');
   console.log('      Put a space before the arrow.');
+  console.log('      A BACKTICKED filename may hold any character but a backtick or a line');
+  console.log('      ending: `my file.md` → *Name* is read as "my file.md" (#366).');
+  console.log('      An UNBACKTICKED filename takes only [A-Za-z0-9_./-] before `.md`, and');
+  console.log('      must follow start-of-line, a space, a tab or `(`. It is NOT read when');
+  console.log('      its arrow is inside a code span, decided by ONE stated rule: an ODD');
+  console.log('      number of backticks before it on the same line. Multi-backtick');
+  console.log('      CommonMark spans are OUT OF SCOPE — every backtick counts as one.');
+  console.log(`      Unbackticked filenames skipped as inside a code span: ${bareInSpan}`);
+  console.log('      (out of scope — not read as explicit; the arrow stays open to the');
+  console.log('      SELF form exactly as before, which this rule does not touch).');
   console.log('      ⚠️ A FILENAME THE EXPLICIT FORM CANNOT READ IS A SECOND ROUTE TO THE');
-  console.log('      WRONG-TARGET STATE ABOVE. It accepts only [A-Za-z0-9_./-] before');
-  console.log('      `.md`, so `my file.md` → *Name* — a space, or any other character —');
-  console.log('      is not matched as an explicit reference, and the arrow is then read');
-  console.log('      as a SELF reference and checked against THIS file. It can report');
-  console.log('      resolved against a file that is not in the repo at all.');
+  console.log('      WRONG-TARGET STATE ABOVE. Closed for BACKTICKED names (#366); it');
+  console.log('      remains for an UNBACKTICKED name outside the class. In a+b.md → *Name*');
+  console.log('      nothing is read as a filename, so the arrow is read as a SELF');
+  console.log('      reference and checked against THIS file; in my file.md → *Name* only');
+  console.log('      "file.md" is read. Either can report resolved against the wrong target.');
   console.log('      This is DISCLOSED, not detected. Suppressing it needs a rule for what');
   console.log('      a code span IS, and five rounds produced five wrong answers (content,');
   console.log('      delimiter runs, padding, opener runs, runs nested inside a span) —');
-  console.log('      two of which FAILED VALID FILES. Use a filename the explicit form');
-  console.log('      accepts, or write no code span before the arrow. Widening it: #366.');
+  console.log('      two of which FAILED VALID FILES. Backtick the filename.');
+  console.log('      Other delimiters are NOT parsed: a backticked `## Heading` or a quoted');
+  console.log('      name after the arrow, and a bare file.md → Name with no delimiter at');
+  console.log('      all. Each is simply absent from the fraction (#366 §3).');
   console.log('      A construct CommonMark renders differently — an escaped closer,');
   console.log('      a code span holding a star, a closer starting a delimiter run — is');
   console.log('      OUT OF SCOPE and disclosed here, not tracked. Chasing parity with a');

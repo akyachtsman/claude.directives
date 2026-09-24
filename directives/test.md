@@ -411,14 +411,18 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
   evidence for a test whose body never ran. Every fix was right for the variant
   that motivated it and wrong one step out, which is the same pattern that made
   config-prediction unworkable in the first place. Proving a page rendered needs
-  a signal tied to the test body starting. #348 found one, measured on 1.63.0: a
-  fixture requested only by the test body is created after the `beforeAll` /
-  `beforeEach` hooks, so a hook that throws first — plain, after requesting
-  `page`, or after navigating — never creates it. The kit's scenarios request
-  such a fixture (`renderWitness`), which records `page.viewportSize()` at setup.
-  It must not be `auto: true` (measured: an auto fixture is created before the
-  `beforeEach` hooks) or requested from a hook, and it cannot see a
-  `setViewportSize()` later in the body. Add it to any test you write.
+  a signal tied to the test body starting, and only the body itself gives one.
+  The kit's `renderWitness` fixture yields a function and records nothing at
+  setup; each scenario body CALLS `renderWitness();` as its first statement, and
+  that call records `page.viewportSize()` as the witness. Only code inside the
+  test callback can make the call, so a witness proves the callback was entered
+  with the page at that width. Requesting the fixture proves nothing: #348 first
+  recorded at setup, and a sibling fixture set up after it that throws leaves a
+  witness for a body Playwright never invoked (Codex, #384 round 1) — so a test
+  that requests it but never calls it stays SCHEDULED-only. It does not see a
+  `setViewportSize()` later in the body; keep it non-`auto`, and a hook or
+  fixture that calls it forges it (#349). Request it and call it first in any
+  test you write.
 
   **What this gate catches is DRIFT, not FORGERY, and that boundary is stated
   rather than defended.** The evidence it reads — the JSON report, and the

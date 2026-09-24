@@ -185,8 +185,10 @@ const withProjects = rows => cfg(`  projects: [\n${rows}  ],\n`);
 // THE KIT'S OWN RENDER WITNESS, NOT A COPY OF IT (#348). The RENDERED cases
 // build their specs from the block between the kit's `>>> render-witness` and
 // `<<< render-witness` lines, so what they pin is the fixture that ships: make it
-// `auto: true`, or request it from a hook, and the hook-throws cases below turn
-// RENDERED and redden. A missing block is CANNOT RUN, never a skip.
+// record at setup again, or call it from a hook, and the hook- and
+// fixture-throws cases below turn RENDERED and redden. Every body calls
+// `renderWitness();` first, as the kit's scenarios do (#384 round 1): the CALL is
+// the witness, not the request. A missing block is CANNOT RUN, never a skip.
 //
 // BROWSERLESS, ON PURPOSE. The qa.yml job that runs this installs no browser
 // (see its comment: fixtures that took the real `page` turned it red in #347
@@ -2140,10 +2142,10 @@ const CASES = [
   // the per-class split. The hook cases throw in ONE project each, so a gate
   // that ignored witnesses (all RENDERED) and one that never read them (none)
   // both miss the split.
-  ['the body requests the witness in every project — RENDERED all three',
+  ['the body calls the witness in every project — RENDERED all three',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'tests/gate.spec.js': witnessSpec(
-        "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+        "test('present', async ({ renderWitness }) => { renderWitness(); expect(1).toBe(1); });\n") },
     0, '  disposition: RENDERED laptop,tablet,phone\n', { runReport: true }],
 
   // THE SUITE THAT PREDATES THE WITNESS: same exit, same SCHEDULED line as
@@ -2161,7 +2163,7 @@ const CASES = [
       'tests/gate.spec.js': witnessSpec(
         "test.beforeEach(async ({}, testInfo) => {\n"
         + "  if (testInfo.project.name === 'tablet') throw new Error('hook boom');\n});\n"
-        + "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+        + "test('present', async ({ renderWitness }) => { renderWitness(); expect(1).toBe(1); });\n") },
     0, '  disposition: RENDERED laptop,phone · SCHEDULED-only tablet\n', { runReport: true }],
 
   // #347 round 7's variant: the hook requests the witness's own dependency,
@@ -2171,7 +2173,7 @@ const CASES = [
       'tests/gate.spec.js': witnessSpec(
         "test.beforeEach(async ({ page }, testInfo) => {\n  await page.goto('./');\n"
         + "  if (testInfo.project.name === 'phone') throw new Error('hook boom');\n});\n"
-        + "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+        + "test('present', async ({ renderWitness }) => { renderWitness(); expect(1).toBe(1); });\n") },
     0, '  disposition: RENDERED laptop,tablet · SCHEDULED-only phone\n', { runReport: true }],
 
   // #347's first variant: expected-to-fail, beforeAll throws, a `failed` result
@@ -2182,8 +2184,31 @@ const CASES = [
       'tests/gate.spec.js': witnessSpec(
         "test.beforeAll(async ({}, workerInfo) => {\n"
         + "  if (workerInfo.project.name === 'desktop') throw new Error('all boom');\n});\n"
-        + "test.fail('present', async ({ renderWitness }) => { expect(1).toBe(2); });\n") },
+        + "test.fail('present', async ({ renderWitness }) => { renderWitness(); expect(1).toBe(2); });\n") },
     0, '  disposition: RENDERED tablet,phone · SCHEDULED-only laptop\n', { runReport: true }],
+
+  // CODEX, #384 ROUND 1: a SIBLING test-scoped fixture set up AFTER the witness
+  // (it depends on it) throws in tablet, so Playwright never invokes the test
+  // callback there. A witness recorded at fixture SETUP was already on the
+  // result — a false RENDERED; recorded by the body's CALL, it never is.
+  ['a sibling fixture set up after the witness throws (tablet only) — tablet is SCHEDULED-only',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': witnessSpec(
+        "const t2 = test.extend({ boom: async ({ renderWitness }, use, testInfo) => {\n"
+        + "  if (testInfo.project.name === 'tablet') throw new Error('fixture boom');\n"
+        + "  await use(1);\n} });\n"
+        + "t2('present', async ({ renderWitness, boom }) => { renderWitness(); expect(boom).toBe(1); });\n") },
+    0, '  disposition: RENDERED laptop,phone · SCHEDULED-only tablet\n', { runReport: true }],
+
+  // THE CONSEQUENCE OF RECORDING ON THE CALL: a body that REQUESTS the witness
+  // but never calls it records nothing, so that class is SCHEDULED-only. Here
+  // the phone body skips the call; the test still passes there.
+  ['a body requests the witness but never calls it (phone only) — phone is SCHEDULED-only',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': witnessSpec(
+        "test('present', async ({ renderWitness }, testInfo) => {\n"
+        + "  if (testInfo.project.name !== 'phone') renderWitness();\n  expect(1).toBe(1);\n});\n") },
+    0, '  disposition: RENDERED laptop,tablet · SCHEDULED-only phone\n', { runReport: true }],
 
   // THE BAND IS CHECKED, not just the witness's presence. `test.use({ viewport })`
   // puts every project at 390 and Playwright marks nothing (test.md), so the
@@ -2193,7 +2218,7 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'tests/gate.spec.js': witnessSpec(
         "test.use({ viewport: { width: 390, height: 664 } });\n"
-        + "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+        + "test('present', async ({ renderWitness }) => { renderWitness(); expect(1).toBe(1); });\n") },
     0, '  disposition: RENDERED phone · SCHEDULED-only laptop,tablet\n', { runReport: true }],
 
   // MALFORMED WITNESSES ARE NOT EVIDENCE AND NOT A CRASH. Text that is not JSON,

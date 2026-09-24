@@ -55,14 +55,22 @@
 // that throws, a beforeEach that requests `page`, navigates and throws, and a
 // throwing beforeAll on a test marked to fail — none created it; an honest
 // failing body did. Only a hook that requests the fixture ITSELF creates it
-// without the body, which is forgery (#349), not drift.
+// without the body, which is forgery (#349), not drift. That was round 0, and
+// it made the REQUEST the proof — which it is not:
 //
-// So the kit's scenarios request a `renderWitness` fixture in their bodies, and
-// at setup it pushes `{ type: 'rendered-viewport', description: '{"width":…}' }`
+// fixture SETUP is still not body entry (Codex, #384 round 1): a sibling
+// test-scoped fixture set up after the witness can throw, Playwright then never
+// invokes the test callback, and a witness recorded at setup was already on the
+// result — a false RENDERED, reproduced on 1.63.0. So the kit's `renderWitness`
+// fixture records NOTHING at setup: it yields a function, and each scenario
+// body CALLS it as its first statement. The call pushes
+// `{ type: 'rendered-viewport', description: '{"width":…}' }` (once per test)
 // onto the result's annotations — measured to reach the JSON report on both
-// `results[].annotations` and `tests[].annotations`. It must NOT be `auto: true`:
-// measured, an auto fixture is created before the beforeEach hooks, and both
-// beforeEach variants then carried a witness for a body that never ran.
+// `results[].annotations` and `tests[].annotations`. Only code inside the test
+// callback can make that call, so a witness means the callback was ENTERED at
+// that width; a body that requests the fixture but never calls it records
+// nothing and stays SCHEDULED-only. Keep it NOT `auto: true`: measured, the
+// setup-time version was created before the beforeEach hooks when auto.
 //
 // The gate reads the witnesses from the results it already counts as SCHEDULED
 // and, in this (parent) process, bands each width with the SAME bounds as the
@@ -73,9 +81,10 @@
 // failing. A malformed witness is counted as not rendered and reported, never a
 // crash and never a refusal.
 //
-// ⚠️ LIMITS. The witness records the width the body STARTS at — a
+// ⚠️ LIMITS. The witness records the width at the body's first statement — a
 // setViewportSize() later in the body is not seen (S4's `viewport-override`
-// marker still does that job). A hook that requests the witness forges it. And
+// marker still does that job). A hook or fixture that requests the witness and
+// CALLS it forges it (#349). And
 // it proves a page OBJECT had that viewport when the body began, not that the
 // app's layout was correct there — that is what the scenarios assert.
 //
@@ -877,8 +886,8 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       // A class is RENDERED when some project DECLARING it has a counted result
       // carrying a `rendered-viewport` witness whose width falls in THAT class,
       // banded here with the same bounds as the declaration. A witness from the
-      // kit's body-only fixture means a test body started with the page at
-      // that width. The rest are SCHEDULED-only, which is today's verdict,
+      // body's call to the kit's `renderWitness()` means a test body started
+      // with the page at that width. The rest are SCHEDULED-only, which is today's verdict,
       // unchanged: this line adds a disposition and never an exit code, so a
       // suite that predates the witness passes exactly as it did.
       const rendered = bands.filter(b => cover[b].some(n => ranIn(n)
@@ -893,12 +902,13 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
         console.log('   with a finite positive width — and were counted as NOT rendered.)');
       }
       console.log('  (RENDERED: a test BODY started with the page at a width in that class —');
-      console.log('   the kit\'s `renderWitness` fixture, requested only by test bodies, is');
-      console.log('   created after the hooks, so a hook that throws first leaves no witness.');
-      console.log('   It does NOT see a setViewportSize() later in the body, and a hook that');
-      console.log('   requests the witness itself forges it — drift, not forgery, #349.');
-      console.log('   SCHEDULED-only: no in-band witness — a test that does not request it,');
-      console.log('   or a suite that predates it. Not a failure. directives#348.)');
+      console.log('   the body CALLS the kit\'s `renderWitness()` as its first statement, and');
+      console.log('   only code inside the test callback can, so a hook or fixture that throws');
+      console.log('   first leaves no witness. It does NOT see a setViewportSize() later in the');
+      console.log('   body, and a hook or fixture that calls the witness itself forges it —');
+      console.log('   drift, not forgery, #349. SCHEDULED-only: no in-band witness — a test');
+      console.log('   that does not call it, or a suite that predates it. Not a failure.');
+      console.log('   directives#348.)');
       console.log('  (SCHEDULED: a NON-SKIPPED result in a project declaring each width. That');
       console.log('   alone does NOT establish that a page was rendered at it, or that a test');
       console.log('   body ran at all: a test that never opens a page, or whose body never');

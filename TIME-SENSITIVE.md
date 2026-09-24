@@ -30,14 +30,16 @@ corrections through the directives they already import.
    event (a deploy that misbehaves, a Codex reply) and cannot be re-checked on
    demand: an audit reports how old their *Last verified* is and leaves them for
    the event; whichever session sees the event re-checks the row then.
-2. **Still true:** update *Last verified* here. Also update the source's own
+2. **Still true:** update *Last verified* here (from `/audit-repo`, as a proposed
+   fix applied only after approval, like any other finding). Also update the source's own
    date ONLY where the source carries a verification stamp for that fact
    ("verified / measured / observed <date>"). Never touch an
    `(owner ruling, <date>)` stamp: it records when the owner decided, not when a
    fact was checked, and re-checking a fact does not change the ruling.
 3. **No longer true:** fix the source in a PR, then update the row.
-4. **New claim:** any new "measured / observed / verified <date>" statement about
-   an outside system gets a row here in the PR that adds it.
+4. **New claim:** any new statement about how an outside system behaves gets a
+   row here in the PR that adds it — dated or not. A missing date is a reason to
+   add the row, not to skip it.
 
 "undated" in *Last verified* means the source never recorded when it was
 checked. Treat those rows as the first to re-check.
@@ -62,7 +64,7 @@ checked. Treat those rows as the first to re-check.
 | Web sessions don't attach plugins on their own; the env setup script installs, the `SessionStart` hook updates | `global.md` → *Skill Bootstrap* | undated | Fresh web session: is the toolkit attached? |
 | The cached setup script rebuilds on a config change or roughly weekly | `global.md` → *Skill Bootstrap*, `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | undated | Claude Code on the web docs; observe a rebuild |
 | Setup scripts written before 2026-08-05 need a manual re-save | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-08-05 | Environment settings page |
-| `claude plugin install --scope` defaults to `user`; `claude plugin update --scope` defaults to `auto-detect` (it read `user` on 2026-08-17), so `install-toolkit.sh` repeats every update at `--scope project` | `scripts/install-toolkit.sh` (step 5) | 2026-09-24 | `claude plugin install --help`, `claude plugin update --help`: the `--scope` default line |
+| `claude plugin install --scope` defaults to `user`; `claude plugin update --scope` defaults to `auto-detect` (it read `user` on 2026-08-17), so `install-toolkit.sh` repeats every update at `--scope project` | `scripts/install-toolkit.sh` (step 5), `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-09-24 | `claude plugin install --help`, `claude plugin update --help`: the `--scope` default line |
 | A re-saved environment can still leave a legacy project stale | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | 2026-08-19 | Re-save, then open a session in a legacy repo |
 | `CLAUDE_CODE_REMOTE=true` marks a web session | `plugins/directives-toolkit/commands/env-chk.md`, `.claude/hooks/session-start.sh` | undated | `env` in a web session |
 | Opening a PR auto-subscribes the session; merge drops it | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Notifications* | undated | Open a PR and watch for the subscription event |
@@ -77,12 +79,13 @@ checked. Treat those rows as the first to re-check.
 | `pr-review-toolkit`, `security-guidance` and `plugin-dev` exist with the agents/skills named | `test.md` → *QA/data agents*, `plugins/directives-toolkit/agents/qa-pipeline.md` | undated | `claude plugin marketplace list` + each marketplace.json |
 | Built-in `/code-review` and `/security-review` skills exist | `test.md` → *QA/data agents*, `plugins/directives-toolkit/agents/qa-pipeline.md` | undated | This session's skill list |
 | Built-in `dataviz` and `artifact-diagramming` skills exist | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | undated | This session's skill list |
-| Native-parity verdicts (borrowed / rejected / deferred) | `EXPORTS.json` → `externals`, `considered` | per entry | `/audit-repo` native-parity pass |
+| Native-parity verdicts (borrowed / rejected / deferred) | `EXPORTS.json` → `externals`, `considered` | 2026-09-23 (the last native-parity pass, #380; entries carry no dates of their own) | `/audit-repo` native-parity pass |
 
 ## GitHub
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
 |---|---|---|---|
 | REST quota is 5,000 calls/hour; git transport is unmetered; REST and GraphQL pools are separate | `git.md` → *GitHub API Quota Economy* | undated | `GET /rate_limit`; GitHub docs |
+| Marking a PR ready-for-review is GraphQL-only (`markPullRequestReadyForReview`, no REST equivalent), which is why sessions un-draft as soon as CI is green | `git.md` → *GitHub API Quota Economy* | undated | GitHub REST docs for pull requests: is there a ready-for-review endpoint? |
 | `api.github.com` refused at the session proxy; `git ls-remote` works | `plugins/directives-toolkit/commands/env-chk.md`, `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-07-18 | curl from a web session |
 | Pages serves `max-age=600` | `global.md` → *Hosting & Deployment* | undated | `curl -I` a Pages URL |
 | Switching Pages to Actions-source stops `page_build` events, blinding pages-monitor | `global.md` → *Hosting & Deployment*, `docs/standards/hosting-mechanics.md` → *Choosing the Pages source* | 2026-08-26 | GitHub Pages docs; a test repo |
@@ -104,10 +107,11 @@ checked. Treat those rows as the first to re-check.
 ## Test environment
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
 |---|---|---|---|
-| This repo's sandbox ceiling is NONE: chromium launches as-is | `CLAUDE.md` → *Local gate — CI scripts* | 2026-09-05 | `node templates/scripts/browser-ladder.js chromium` from `templates/ui-tests` |
+| This repo's sandbox ceiling is NONE: chromium launches as-is | `CLAUDE.md` → *Local gate — CI scripts* | 2026-09-24 | From `templates/ui-tests`: `node ../scripts/browser-ladder.js chromium` |
 | Fleet sandbox ceilings and egress results (`esm.sh` blocked, `cdn.playwright.dev` reachable) | `test.md` → *Sandboxed local runs* | 2026-08-26 | Browser ladder + curl in each app repo |
 | Playwright behaviour measured on `playwright-core` 1.62.1 (async `waitForFunction`, viewport fixture, `outputFile` precedence) | `test.md` → *Playwright*, `test.md` → *UI coverage gates* | 2026-08-25 | Re-run the cited measurement on the current version |
-| Playwright's bundled version moves with the runner image | `plugins/directives-toolkit/commands/new-repo.md` | undated | Runner image release notes |
+| npm, not the runner image, picks the Playwright version: `templates/ui-tests/package.json` declares `@playwright/test` `^1.62.1`, which resolved to 1.63.0 on 2026-09-24 | `templates/ui-tests/package.json`, each project's lockfile | 2026-09-24 | From `templates/ui-tests`: `npm install --no-package-lock --ignore-scripts`, then read `node_modules/@playwright/test/package.json` |
+| The render witness's evidence, measured on Playwright 1.63.0: a failing hook records no witness, the annotation reaches both JSON report shapes, an auto fixture would destroy the signal | `templates/ui-tests/tests/app.spec.js` (witness header), `templates/scripts/check-ui-viewports.js` | 2026-09-24 | Re-run the listed cases on the installed version after any Playwright bump |
 | Browsers at `$PLAYWRIGHT_BROWSERS_PATH` or `/opt/pw-browsers` | `plugins/directives-toolkit/agents/ui-tester.md` | undated | `ls` in a web session |
 | `100dvh` unsupported on older CI browsers | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | undated | Current runner Chromium/WebKit versions |
 | Web-session fetch depth=100 takes ~1s / 1.6 MB | `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-09-23 | Time it in a fresh session |

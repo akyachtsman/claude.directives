@@ -82,10 +82,11 @@ plugins to current. `claude plugin install` alone never could — it reports
 "already installed" and leaves the old sha pinned. To adopt the fix on an older
 environment, re-save its Setup script once; from then on it self-updates.
 
-**Two later fixes make the manual step rarer still.** First, `--scope` defaults to
-`user` on install *and* update, so until 2026-08-17 the script moved only the user
-pin; a repo carrying `enabledPlugins` in its own `.claude/settings.json` also holds
-a **project**-scope copy, and that stale copy is what the session resolves. An
+**Two later fixes make the manual step rarer still.** First, `--scope` defaulted to
+`user` on install *and* update (`update` now says `auto-detect`, 2026-09-24, and
+does not document which copy it picks when both exist), so until 2026-08-17 the
+script moved only the user pin; a repo carrying `enabledPlugins` in its own
+`.claude/settings.json` also holds a **project**-scope copy, and that stale copy is what the session resolves. An
 environment could re-run a "self-updating" script indefinitely and still serve a
 months-old toolkit. The script now updates both scopes. Second, the install also
 runs from a `SessionStart` hook committed in the repo

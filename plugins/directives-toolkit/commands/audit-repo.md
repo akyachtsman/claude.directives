@@ -41,11 +41,12 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   the row says: a model alias, a Claude Code or GitHub behaviour, a
   test-environment measurement. Rows marked ⏳ need an event that may not happen
   during the audit — report how old their *Last verified* is instead. A row found
-  wrong is a finding naming the source to fix; a row still true gets its *Last
-  verified* bumped, and its source's date only where the source carries its own
-  verification stamp — never an `(owner ruling, <date>)` stamp. Also report any
-  dated "measured / observed / verified" claim about an outside system that has
-  no row — it will expire with nothing to prompt the re-check.
+  wrong is a finding naming the source to fix. A row still true is a PROPOSED
+  fix like any other — bump its *Last verified*, and its source's date only where
+  the source carries its own verification stamp (never an
+  `(owner ruling, <date>)` stamp) — applied only after approval. Also report any
+  statement about how an outside system behaves that has no row, dated or not:
+  a claim that omits its date expires just the same.
 - Errors — syntax errors, broken references, dead imports, invalid config,
   malformed data, things that won't run. For per-file correctness depth, run
   `/code-review --effort high` (read-only, reports findings) and fold its

@@ -35,6 +35,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `learnings.jsonl` | Compounding project memory — `/learn` appends typed, confidence-scored entries (one JSON object per line, latest-key-wins); consulted at session start and by `/diagnose` |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
+| `TIME-SENSITIVE.md` | The register of facts the directives rely on about something OUTSIDE this repo — models, Claude Code, GitHub, Codex, the test environment, outside services — with where it is stated, when it was last verified and how to re-check it. Kept apart from the owner's standing directives, which never expire. Walked by every `/audit-repo` run |
 | `index.html` | The repo's GitHub Pages landing page (links to the logical map and the commands reference); its demo-card list is kept in sync with `docs/site/index.html` by `check-landing-cards.js` |
 | `docs/site/logical-map.html` | The repo map — **generated** from `EXPORTS.json` by `.github/scripts/build-logical-map.js`; never hand-edit it. Its behaviour (pan/zoom/search/isolate, layer toggles, drag-to-move and drag-to-resize with per-browser persistence) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
@@ -133,7 +134,8 @@ Repo-specific deltas:
    repo's own `claude-directives` marketplace, which advertises
    `directives-toolkit`; without that filter the pass flags the toolkit it is
    auditing, plus every third-party vendor plugin, as a missing native. What
-   survives the filter and is in neither list is the finding. Not every
+   survives the filter and is in neither list is the finding. The same pass
+   walks `TIME-SENSITIVE.md` row by row and re-checks each fact it lists. Not every
    session: run it when starting on a fresh `main`, or when the repo has changed
    materially since the last audit. Never let it delay the user's actual request —
    skip or defer if a task is already queued.

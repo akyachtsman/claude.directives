@@ -36,6 +36,16 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   A rule with no stamp and no advocating commit is UNRATIFIED, not settled —
   surface it for the owner to confirm or drop. Do not treat length of service
   as ratification.
+- **Time-sensitive facts.** Where the repo keeps a `TIME-SENSITIVE.md` (the
+  directives repo does), run every row's check that is not marked ⏳ against what
+  the row's Source says, and report the age of each ⏳ row instead — those need an
+  event that may not happen during the audit. A check never creates anything. A
+  row that no longer holds is a finding naming its Source; the fix also covers
+  every other place in the repo that repeats the claim, which the fix finds by
+  searching. A row that still holds is a PROPOSED date bump, applied only after
+  approval like any other fix; a source's date is touched only where it carries
+  its own verification stamp, never an `(owner ruling, <date>)` stamp. Also
+  report anything the directives rely on about an outside system that has no row.
 - Errors — syntax errors, broken references, dead imports, invalid config,
   malformed data, things that won't run. For per-file correctness depth, run
   `/code-review --effort high` (read-only, reports findings) and fold its

@@ -75,15 +75,21 @@ soft "" claude plugin install plugin-dev@claude-code-plugins        # optional
 # sha pinned — so install alone can never deliver an update to an environment whose
 # cache carries a previous install (verified 2026-08-05). `update` is what moves the
 # pointer. Failures are reported by soft() rather than suppressed.
-soft "" claude plugin update directives-toolkit@claude-directives
-soft "" claude plugin update pr-review-toolkit@claude-plugins-official
-soft "" claude plugin update security-guidance@claude-plugins-official
-soft "" claude plugin update frontend-design@claude-code-plugins
-soft "" claude plugin update plugin-dev@claude-code-plugins
+# `--scope user` is explicit because `update` now defaults to `auto-detect`
+# (`--help`, 2026-09-24): without it a repo holding a project-scope copy could have
+# step 5 update that copy twice and leave the user copy stale. Observed the same
+# day: an explicit `--scope user` update moved pr-review-toolkit 6bfd4e0 -> e8e9ee7
+# after this installer's unscoped run had already reported success.
+soft "" claude plugin update directives-toolkit@claude-directives --scope user
+soft "" claude plugin update pr-review-toolkit@claude-plugins-official --scope user
+soft "" claude plugin update security-guidance@claude-plugins-official --scope user
+soft "" claude plugin update frontend-design@claude-code-plugins --scope user
+soft "" claude plugin update plugin-dev@claude-code-plugins --scope user
 
-# 5) Repeat at PROJECT scope. `--scope` defaults to `user` on install AND update
-# (verified 2026-08-17 from `claude plugin update --help`), so steps 3-4 move the
-# user pin only. A project-scope copy — which a repo carrying `enabledPlugins` in
+# 5) Repeat at PROJECT scope. `--scope` defaults to `user` on install; on update
+# it read `user` on 2026-08-17 and `auto-detect` on 2026-09-24 (`--help` both
+# times), so step 4 names `--scope user` and this step names `--scope project`
+# rather than trusting auto-detect's undocumented pick. A project-scope copy — which a repo carrying `enabledPlugins` in
 # its own .claude/settings.json gets — stays pinned at whatever sha it first
 # installed, and that stale copy is what the session resolves. This is why an
 # environment could re-run a "self-updating" setup script and still serve a

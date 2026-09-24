@@ -93,7 +93,7 @@ function walkFiles(dir) {
 const SELF = {
   'self.ops': ['CLAUDE.md', 'EXPORTS.json', 'README.md', '.gitignore',
     '.claude/settings.json', '.claude/directive-sync.json', 'learnings.jsonl',
-    '.claude/hooks/session-start.sh'],
+    '.claude/hooks/session-start.sh', 'TIME-SENSITIVE.md'],
   // Derived for the same reason self.checks is: a hand-list catches a deletion
   // (the existence check) but never an addition, so a new internal doc would go
   // unmapped and nothing would say so.

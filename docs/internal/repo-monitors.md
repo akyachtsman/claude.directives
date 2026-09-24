@@ -18,8 +18,10 @@ Comments on the open PR for that head SHA so a watching web session wakes on
 success via the comment webhook (no scheduling-tool polling, no permission
 prompts). Needs **one** lookup — head SHA, else branch + head-repo owner — to
 resolve exactly one open PR; no PR, or more than one, → exits quietly, so a
-green run does not guarantee a wake. When to arm a check-in, and why even a
-unique match is not proof: `git.md` → *PR Lifecycle*. The template counterpart, adapted
+green run does not guarantee a wake — and a `repository_dispatch` run's
+default-branch SHA can uniquely match an unrelated promotion PR, which gets the
+comment instead, so arm a check-in whenever the run's SHA is not your PR's head.
+When to arm a check-in, and why even a unique match is not proof: `git.md` → *PR Lifecycle*. The template counterpart, adapted
 to this repo's workflow name.
 
 **codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments. Adds
@@ -28,9 +30,16 @@ COMMENTED with inline comments); clears it on an all-clear naming the PR's
 current head SHA. A stale or SHA-less all-clear holds the label.
 
 It sees an all-clear only as a SHA-bearing **comment** — the form that cleared
-#293 and #337 here — never as a 👍 reaction or an inline review-thread reply. A
-stuck label is not removed by hand; request another pass. Where to look for the
-verdict and when hand removal is allowed: `git.md` → *PR Lifecycle*.
+#293 and #337 here, observed working at `b64ff09` — never as a 👍 reaction or an
+inline review-thread reply, so a clean verdict in either of those forms leaves the
+label on. A stuck label is not removed by hand; request another pass: a clean
+COMMENT verdict naming the head clears it automatically (observed 2026-08-27 on
+#333 at `63bed51`). Hand removal is the last resort, bounded by the
+*unreachable-review test* — an observable terminal state on the PR showing a
+further request cannot produce a verdict; a request GitHub could not make or
+deliver is itself the exit, with no pass needing to have run. A stuck label is
+not evidence of open concerns, and removing it is not evidence of their absence.
+Where to look for the verdict and when hand removal is allowed: `git.md` → *PR Lifecycle*.
 Contract detail: `docs/standards/automations.md` → Automation 3.
 
 **pages-monitor.yml** — fires on every GitHub Pages build (`page_build`). Reads the

@@ -129,24 +129,18 @@ once locally — it persists.
      a throwaway test-account address: it is typed into a visible input, so
      failure screenshots record it
    - `DB_SERVICE_KEY` — backend service-role key (required before the project's scheduled data workflow, if any, can run)
-   - `SMTP_PASS` — SMTP app password / API key for the standard email-notification job (`cron-notify.yml`)
+   - Email secrets (`SMTP_PASS`) — needed only if the project sends email; see `docs/guides/cron-email-notifications.md`
    - Any project-specific secrets the app requires
 6. Add repository variables (**Settings → Secrets and variables → Actions → Variables**):
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
-   - `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` — email transport for the standard notification job (`SMTP_PORT` / `ALERT_FROM` optional). Until these + `SMTP_PASS` are set, the job emits a notice and skips — see `docs/guides/cron-email-notifications.md`
+   - Email variables — needed only if the project sends email; the full list is in `docs/guides/cron-email-notifications.md`
 7. **Protect `main`** (**Settings → Rules → Rulesets → New branch ruleset**).
    This is the only thing that actually stops a direct push to the default
    branch — the toolkit's `push-gate` hook is a local speed bump with a bypass
    surface that is not enumerable, so a repo without this ruleset is unprotected
    no matter what the hook reports. `/new-repo` cannot set it; only you can.
-   Enforcement **Active**, target **Include default branch**, tick **Restrict
-   deletions**, **Block force pushes** and **Require a pull request before
-   merging**; inside that last rule tick **Require conversation resolution before
-   merging** and set **Required approvals to `0`**; leave **Restrict updates**
-   unchecked, and leave the **bypass list empty**. Then run both probes — a
-   direct write to `main` must be refused, and one ordinary PR must still merge.
-   Full procedure and the reasoning for each setting:
+   Settings, reasoning and the two probes to run afterwards:
    `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
 ### Step 2 — Build the app

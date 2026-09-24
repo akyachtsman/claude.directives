@@ -617,6 +617,24 @@ standing rule For all sessions, going forward."*
 "inherit", so a search or review call with no `model` breaks the rule; it is not
 the default taken.
 
+⛔ **`fable` — sparingly** (owner, 2026-09-24: *"fable is very expensive, only
+use it sparingly"*). Name `model: "fable"` only when ALL of these hold:
+1. the job is very long and complicated, and splitting it would lose what makes
+   it work — one agent must hold many files or constraints at once (a refactor
+   across many cross-references);
+2. it is building or fixing code — never a census or review piece, however long
+   the parent task;
+3. a cheaper tier would cost more in rework — best evidence: it already tried and
+   failed.
+
+Where all three hold, `fable` replaces the build tier's "leave `model` out", and
+the job is the one exception to *Parallel Tasking via Subagents*' small,
+tightly scoped tasks. "Important" is not a reason. When you use it, say why in
+one line in the report.
+⚠️ Leaving `model` out passes on whatever the session itself runs — `fable`
+included. Keeping sessions off `fable`, or setting the environment default below,
+is the owner's lever; this rule governs only what a call names.
+
 Qualifiers:
 - **Unsure between two tiers:** cheaper for read-only work, stronger for
   anything that writes.

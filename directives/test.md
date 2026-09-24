@@ -385,6 +385,11 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
   the run scheduled under it. That is not the same as one that ran: a hook
   failing before the test body starts still produces a result, which is why the
   verdict is named SCHEDULED and why proving the stronger thing is #348.
+  Since #348 the same line also prints a per-class disposition: **RENDERED**
+  where a project declaring that class has a result carrying the kit's
+  `rendered-viewport` witness at a width inside the class — a test *body* started
+  with the page that wide — and **SCHEDULED-only** for the rest. It never changes
+  the exit code, so a suite that predates the witness passes as before.
   Predicting discovery from the config was tried for eight rounds and
   produced twenty findings, every one a rule correct for its example and wrong
   one step out: a `.gitignore` under `testDir`, a per-project `respectGitIgnore`,
@@ -406,8 +411,18 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
   evidence for a test whose body never ran. Every fix was right for the variant
   that motivated it and wrong one step out, which is the same pattern that made
   config-prediction unworkable in the first place. Proving a page rendered needs
-  a signal tied to the test body starting, and Playwright does not expose one to
-  a fixture; that work is filed as directives#348 rather than guessed at again.
+  a signal tied to the test body starting, and only the body itself gives one.
+  The kit's `renderWitness` fixture yields a function and records nothing at
+  setup; each scenario body CALLS `renderWitness();` as its first statement, and
+  that call records `page.viewportSize()` as the witness. Only code inside the
+  test callback can make the call, so a witness proves the callback was entered
+  with the page at that width. Requesting the fixture proves nothing: #348 first
+  recorded at setup, and a sibling fixture set up after it that throws leaves a
+  witness for a body Playwright never invoked (Codex, #384 round 1) — so a test
+  that requests it but never calls it stays SCHEDULED-only. It does not see a
+  `setViewportSize()` later in the body; keep it non-`auto`, and a hook or
+  fixture that calls it forges it (#349). Request it and call it first in any
+  test you write.
 
   **What this gate catches is DRIFT, not FORGERY, and that boundary is stated
   rather than defended.** The evidence it reads — the JSON report, and the
@@ -479,10 +494,11 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
 
   This is the marker rule doing the work the verdict cannot. The gate's verdict
   is **SCHEDULED** — a non-skipped result in a project *declaring* that width —
-  and it says so; it has never established that a page was rendered at it
-  (directives#348). The marker is how an author states the one thing the report
-  does not carry, so a rule that names only half the ways to override it leaves
-  the other half silent.
+  and it says so; it has never established that a page was rendered at it. The
+  RENDERED disposition (directives#348) records the width a test body STARTED
+  at, so it misses a later `setViewportSize()` as well. The marker is how an
+  author states the one thing the report does not carry, so a rule that names
+  only half the ways to override it leaves the other half silent.
 
   **Your config must declare a json reporter.** The shipped kit declares
   `['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]`

@@ -42,7 +42,51 @@
 // is anything other than "skipped". See `readReport()` below. Declared AND
 // SCHEDULED, joined by project name in the parent process — a non-skipped result
 // is what the run left behind, and a hook failing before the test body leaves
-// one too. Never "executed"; that is #348.
+// one too. Never "executed"; that is #348, answered below as RENDERED.
+//
+// RENDERED, BESIDE SCHEDULED (#348, 2026-09-24). #347 rounds 5-7 had the kit's
+// `page` fixture record a width three ways (a marker, at teardown, at
+// navigation), and a hook that throws — plain, after requesting `page`, after
+// NAVIGATING — defeated each: every one needed a signal that the test BODY
+// started, and Playwright gives a fixture none. The lead #348 left unmeasured
+// held: Playwright creates a test-scoped fixture when it is first REQUESTED, and
+// one requested only by the test body is created after the beforeAll/beforeEach
+// hooks. Measured on 1.63.0 with a fixture depending on `page`: a beforeEach
+// that throws, a beforeEach that requests `page`, navigates and throws, and a
+// throwing beforeAll on a test marked to fail — none created it; an honest
+// failing body did. Only a hook that requests the fixture ITSELF creates it
+// without the body, which is forgery (#349), not drift. That was round 0, and
+// it made the REQUEST the proof — which it is not:
+//
+// fixture SETUP is still not body entry (Codex, #384 round 1): a sibling
+// test-scoped fixture set up after the witness can throw, Playwright then never
+// invokes the test callback, and a witness recorded at setup was already on the
+// result — a false RENDERED, reproduced on 1.63.0. So the kit's `renderWitness`
+// fixture records NOTHING at setup: it yields a function, and each scenario
+// body CALLS it as its first statement. The call pushes
+// `{ type: 'rendered-viewport', description: '{"width":…}' }` (once per test)
+// onto the result's annotations — measured to reach the JSON report on both
+// `results[].annotations` and `tests[].annotations`. Only code inside the test
+// callback can make that call, so a witness means the callback was ENTERED at
+// that width; a body that requests the fixture but never calls it records
+// nothing and stays SCHEDULED-only. Keep it NOT `auto: true`: measured, the
+// setup-time version was created before the beforeEach hooks when auto.
+//
+// The gate reads the witnesses from the results it already counts as SCHEDULED
+// and, in this (parent) process, bands each width with the SAME bounds as the
+// declaration. A class is RENDERED when a project declaring it carries a witness
+// whose width is in that class; every other class is SCHEDULED-only. That is a
+// DISPOSITION printed under the verdict, never an exit code: the fleet has suites
+// that predate the witness, and #348's constraint is that they must not start
+// failing. A malformed witness is counted as not rendered and reported, never a
+// crash and never a refusal.
+//
+// ⚠️ LIMITS. The witness records the width at the body's first statement — a
+// setViewportSize() later in the body is not seen (S4's `viewport-override`
+// marker still does that job). A hook or fixture that requests the witness and
+// CALLS it forges it (#349). And
+// it proves a page OBJECT had that viewport when the body began, not that the
+// app's layout was correct there — that is what the scenarios assert.
 //
 // A LISTING WAS TRIED FIRST AND IS NOT THIS. `playwright test --list` was the
 // #347 design for three rounds and lost on four measured differences from a run,
@@ -103,7 +147,8 @@
 // own exit code and its own printed line:
 //   0  three classes declared; with --report, also SCHEDULED at those widths
 //      (never EXECUTED — a hook can fail before the body and still produce a
-//      non-skipped result; see the header's SCHEDULED note and directives#348)
+//      non-skipped result; see the header's SCHEDULED note and directives#348).
+//      The per-class RENDERED / SCHEDULED-only disposition never changes it.
 //   1  checked — a class is undeclared (the gate FAILED)
 //   2  tests dir not found
 //   3  no Playwright config in the tests dir
@@ -246,7 +291,9 @@ function readReport(reportPath) {
   // for the variant that motivated it and wrong one step out, which is the
   // exact pattern #335 catalogued twenty times over for config prediction. The
   // mechanism was removed rather than lost to a fourth time; the reasoning is
-  // in the PR and the work is filed as directives#348.
+  // in the PR and the work is filed as directives#348. #348 has since answered
+  // it with a body-only witness fixture and a RENDERED disposition beside this
+  // verdict — see the header.
   //
   // NON-SKIPPED, not merely present — and non-skipped is as far as it goes. A
   // test the run reports as `skipped` did not run its body (`testRun.skip()` and
@@ -429,6 +476,9 @@ function readReport(reportPath) {
     return [];
   };
   const executed = new Map();
+  // project name -> widths its `rendered-viewport` witnesses recorded (#348)
+  const witnessed = new Map();
+  let badWitness = 0;
   let total = 0;
   const walk = (suite) => {
     if (!obj(suite, 'a suite')) return;
@@ -477,7 +527,24 @@ function readReport(reportPath) {
           // past the only pass that read them (#347 round 26).
           const perResult = checkEntries(arr(r.annotations, 'result.annotations'), 'result.annotations');
           const list = r.annotations === undefined ? testAnn : perResult;
-          return r.status !== 'skipped' && !marks(list);
+          const counted = r.status !== 'skipped' && !marks(list);
+          // THE RENDER WITNESS (#348) — read only from a result that already
+          // counts as SCHEDULED, so RENDERED can never claim a class SCHEDULED
+          // does not. The widths are only COLLECTED here; which class each
+          // falls in is decided in decideFromRows(), with the same bounds that
+          // band the declaration. A witness this cannot read is not evidence,
+          // and it is not a refusal either: a report that predates the witness,
+          // or carries a broken one, still gets its SCHEDULED verdict.
+          if (counted) {
+            for (const a of list) {
+              if (!a || typeof a !== 'object' || Array.isArray(a) || a.type !== WITNESS) continue;
+              const w = witnessWidth(a);
+              if (w === null) { badWitness += 1; continue; }
+              if (!witnessed.has(name)) witnessed.set(name, []);
+              witnessed.get(name).push(w);
+            }
+          }
+          return counted;
         });
         const ran = counts.some(Boolean);
         if (ran) executed.set(name, (executed.get(name) || 0) + 1);
@@ -498,7 +565,24 @@ function readReport(reportPath) {
       '  strength of a branch that was never read.',
     ] };
   }
-  return { ok: true, total, executed };
+  return { ok: true, total, executed, witnessed, badWitness };
+}
+
+// THE WITNESS'S ONE FIELD, READ DEFENSIVELY (#348). The kit writes
+// `JSON.stringify({ width, height })` into the annotation's description. Anything
+// else — no description, text that is not JSON, JSON that is not an object, a
+// width that is not a finite positive number, the `null` a page with no viewport
+// emulation records — returns null, and the caller counts it as NOT rendered and
+// reports how many it could not read. Never a throw: the witness is optional
+// evidence on top of a verdict that stands without it.
+const WITNESS = 'rendered-viewport';
+function witnessWidth(a) {
+  if (typeof a.description !== 'string') return null;
+  let v;
+  try { v = JSON.parse(a.description); } catch { return null; }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const w = v.width;
+  return typeof w === 'number' && Number.isFinite(w) && w > 0 ? w : null;
 }
 
 // For the parent's payload diagnostics: same one-word answer, at module scope,
@@ -688,12 +772,14 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
     && !Array.isArray(r) && typeof r.name === 'string'
     && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
   const cover = { laptop: [], tablet: [], phone: [] };
+  // ONE BANDING RULE, for the declared widths AND the witnessed ones (#348), so
+  // RENDERED and DECLARED can never disagree about what "tablet" means.
+  const bandOf = w => (w >= laptopMin ? 'laptop' : w >= tabletMin ? 'tablet' : 'phone');
   if (rowsWellFormed && Number.isFinite(tabletMin) && Number.isFinite(laptopMin)
       && tabletMin < laptopMin) {
     for (const r of rowList) {
       if (typeof r.width !== 'number' || !Number.isFinite(r.width)) continue;
-      cover[r.width >= laptopMin ? 'laptop' : r.width >= tabletMin ? 'tablet' : 'phone']
-        .push(r.name);
+      cover[bandOf(r.width)].push(r.name);
     }
   }
   const ok = rowsWellFormed && bands.every(b => cover[b].length > 0);
@@ -796,12 +882,38 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       const where = b => cover[b].filter(ranIn).map(label).join('/');
       console.log(`check-ui-viewports: OK — SCHEDULED laptop:${where('laptop')}  tablet:${where('tablet')}  phone:${where('phone')}`);
       bandsUsed();
-      console.log('  (a NON-SKIPPED result in a project declaring each width. This does NOT');
-      console.log('   establish that a page was rendered at it, or that a test body ran at');
-      console.log('   all: a test that never opens a page, or whose body never starts');
-      console.log('   because a hook threw first, counts here. #347 rounds 5-7 tried');
-      console.log('   three mechanisms for the stronger claim and three variants of one');
-      console.log('   finding defeated all three — see test.md -> UI coverage gates.)');
+      // ── RENDERED, PER CLASS, BESIDE SCHEDULED (#348) ─────────────────────
+      // A class is RENDERED when some project DECLARING it has a counted result
+      // carrying a `rendered-viewport` witness whose width falls in THAT class,
+      // banded here with the same bounds as the declaration. A witness from the
+      // body's call to the kit's `renderWitness()` means a test body started
+      // with the page at that width. The rest are SCHEDULED-only, which is today's verdict,
+      // unchanged: this line adds a disposition and never an exit code, so a
+      // suite that predates the witness passes exactly as it did.
+      const rendered = bands.filter(b => cover[b].some(n => ranIn(n)
+        && (run.witnessed.get(n) || []).some(w => bandOf(w) === b)));
+      const onlySched = bands.filter(b => !rendered.includes(b));
+      console.log(`  disposition: ${[
+        rendered.length ? `RENDERED ${rendered.join(',')}` : '',
+        onlySched.length ? `SCHEDULED-only ${onlySched.join(',')}` : '',
+      ].filter(Boolean).join(' · ')}`);
+      if (run.badWitness > 0) {
+        console.log(`  (${run.badWitness} rendered-viewport witness(es) could not be read — not JSON`);
+        console.log('   with a finite positive width — and were counted as NOT rendered.)');
+      }
+      console.log('  (RENDERED: a test BODY started with the page at a width in that class —');
+      console.log('   the body CALLS the kit\'s `renderWitness()` as its first statement, and');
+      console.log('   only code inside the test callback can, so a hook or fixture that throws');
+      console.log('   first leaves no witness. It does NOT see a setViewportSize() later in the');
+      console.log('   body, and a hook or fixture that calls the witness itself forges it —');
+      console.log('   drift, not forgery, #349. SCHEDULED-only: no in-band witness — a test');
+      console.log('   that does not call it, or a suite that predates it. Not a failure.');
+      console.log('   directives#348.)');
+      console.log('  (SCHEDULED: a NON-SKIPPED result in a project declaring each width. That');
+      console.log('   alone does NOT establish that a page was rendered at it, or that a test');
+      console.log('   body ran at all: a test that never opens a page, or whose body never');
+      console.log('   starts because a hook threw first, counts there — which is why the');
+      console.log('   RENDERED disposition above needs the witness. See test.md -> UI coverage gates.)');
       console.log('  (evidence: the run\'s own report, written by the process the config');
       console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
       console.log('   drift, not forgery. directives#349.)');
@@ -847,8 +959,9 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       // and re-stated when the sidecar guidance went in beside it (#347 r17).
       console.log('  (declared, not executed — pass --report <playwright json> after the run');
       console.log('   for the SCHEDULED check: a non-skipped result under a project declaring');
-      console.log('   each width. That is not proof a page was rendered there — see');
-      console.log('   test.md -> UI coverage gates, and directives#348.)');
+      console.log('   each width, plus a RENDERED disposition for each class whose results');
+      console.log('   carry the kit\'s render witness — see test.md -> UI coverage gates, and');
+      console.log('   directives#348.)');
       if (declaredIdx.given) console.log(`  (mapping written for the post-run check: ${declaredIdx.path})`);
     }
   }

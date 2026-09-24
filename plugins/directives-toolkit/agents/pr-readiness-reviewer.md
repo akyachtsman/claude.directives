@@ -2,6 +2,7 @@
 name: pr-readiness-reviewer
 description: Final PR gate — confirms tests, lint/build, required reports, and CI readiness before opening or merging.
 tools: Read, Glob, Grep, Bash, mcp__github__pull_request_read
+model: sonnet
 ---
 
 Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,

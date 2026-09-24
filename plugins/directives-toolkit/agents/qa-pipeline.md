@@ -46,6 +46,9 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
   does the tester rerun: the tree changes hands between rounds and is never
   written while a step is reading it. Treating that loop as a writer to be held
   would deadlock the pipeline against a fix it requires
+- Choose `model` per subagent you start (`global.md` → *Subagent Model Selection*):
+  `sonnet` for test-verifier, the reviewers and pr-readiness-reviewer; leave
+  `model` out for ui-tester, whose loop produces the fixes, so it inherits
 - Also pass the PR number (owner/repo/number) when one exists — `pr-readiness-reviewer`
   cannot resolve a branch to a PR itself and reports Codex as Pending without it
 - Continue pipeline even if non-blocking issues emerge — capture full picture

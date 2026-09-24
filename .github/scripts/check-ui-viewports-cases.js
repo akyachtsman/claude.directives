@@ -182,6 +182,39 @@ ${PHONE}  ],
 `;
 const withProjects = rows => cfg(`  projects: [\n${rows}  ],\n`);
 
+// THE KIT'S OWN RENDER WITNESS, NOT A COPY OF IT (#348). The RENDERED cases
+// build their specs from the block between the kit's `>>> render-witness` and
+// `<<< render-witness` lines, so what they pin is the fixture that ships: make it
+// `auto: true`, or request it from a hook, and the hook-throws cases below turn
+// RENDERED and redden. A missing block is CANNOT RUN, never a skip.
+//
+// BROWSERLESS, ON PURPOSE. The qa.yml job that runs this installs no browser
+// (see its comment: fixtures that took the real `page` turned it red in #347
+// round 5), so `page` is replaced by a stub that reports the `viewport` option
+// and navigates nowhere. What these cases pin — WHEN Playwright creates a
+// fixture only the body requests, and how the gate reads what it records — does
+// not depend on a real page. The real-page measurement is in the gate's header.
+const WITNESS_SRC = (() => {
+  const kit = join(REPO_ROOT, 'templates', 'ui-tests', 'tests', 'app.spec.js');
+  const m = readFileSync(kit, 'utf8').match(/\/\/ >>> render-witness\n([\s\S]*?)\/\/ <<< render-witness/);
+  if (!m) {
+    console.error('check-ui-viewports-cases: CANNOT RUN — the render-witness block is missing from');
+    console.error(`  ${kit}; the RENDERED cases are built from it (#348).`);
+    process.exit(1);
+  }
+  return m[1];
+})();
+const witnessSpec = body => "import { test as pw, expect } from '@playwright/test';\n"
+  + 'const base = pw.extend({ page: async ({ viewport }, use) => {\n'
+  + '  await use({ viewportSize: () => viewport, goto: async () => {} });\n} });\n'
+  + WITNESS_SRC + body;
+// A hand-written report whose tests each carry per-result annotations.
+const witnessReport = byProject => JSON.stringify({
+  suites: [{ specs: [{ title: 'w', tests: Object.entries(byProject).map(([projectName, ann]) => ({
+    projectName, annotations: ann, results: [{ status: 'passed', annotations: ann }] })) }] }],
+});
+const rv = w => ({ type: 'rendered-viewport', description: JSON.stringify({ width: w, height: 800 }) });
+
 // (label, {files}, expected exit, required diagnostic, options)
 const CASES = [
   ['three classes present (literal widths)',
@@ -2100,6 +2133,92 @@ const CASES = [
   ['…the same config without the rewrite is exit 12, so the pass above IS the rewrite',
     { 'playwright.config.js': forgedReport(false), 'tests/gate.spec.js': SPEC },
     12, 'declared but NOTHING RAN', { runReport: true }],
+
+  // ── RENDERED, BESIDE SCHEDULED (#348) ───────────────────────────────────
+  // Every case here exits 0: RENDERED is a disposition, never an exit code, so
+  // the exit pins that nothing about SCHEDULED moved and the diagnostic pins
+  // the per-class split. The hook cases throw in ONE project each, so a gate
+  // that ignored witnesses (all RENDERED) and one that never read them (none)
+  // both miss the split.
+  ['the body requests the witness in every project — RENDERED all three',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': witnessSpec(
+        "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+    0, '  disposition: RENDERED laptop,tablet,phone\n', { runReport: true }],
+
+  // THE SUITE THAT PREDATES THE WITNESS: same exit, same SCHEDULED line as
+  // before #348, and every class SCHEDULED-only rather than a failure.
+  ['a suite with no witness — SCHEDULED-only, exit unchanged',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, 'OK — SCHEDULED laptop:desktop  tablet:tablet  phone:phone\n', { runReport: true,
+      mustNotSay: ['disposition: RENDERED'] }],
+  ['…and it says so per class',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
+    0, '  disposition: SCHEDULED-only laptop,tablet,phone\n', { runReport: true }],
+
+  ['a beforeEach throws (tablet only) — tablet is SCHEDULED-only',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': witnessSpec(
+        "test.beforeEach(async ({}, testInfo) => {\n"
+        + "  if (testInfo.project.name === 'tablet') throw new Error('hook boom');\n});\n"
+        + "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+    0, '  disposition: RENDERED laptop,phone · SCHEDULED-only tablet\n', { runReport: true }],
+
+  // #347 round 7's variant: the hook requests the witness's own dependency,
+  // navigates, THEN throws. The dependency existing is not the witness existing.
+  ['a beforeEach requests page, navigates, throws (phone only) — phone is SCHEDULED-only',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': witnessSpec(
+        "test.beforeEach(async ({ page }, testInfo) => {\n  await page.goto('./');\n"
+        + "  if (testInfo.project.name === 'phone') throw new Error('hook boom');\n});\n"
+        + "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+    0, '  disposition: RENDERED laptop,tablet · SCHEDULED-only phone\n', { runReport: true }],
+
+  // #347's first variant: expected-to-fail, beforeAll throws, a `failed` result
+  // with no body. Elsewhere the body fails as expected — an honest failure DOES
+  // get a witness.
+  ['a beforeAll throws on an expected-to-fail test (desktop only) — laptop is SCHEDULED-only',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': witnessSpec(
+        "test.beforeAll(async ({}, workerInfo) => {\n"
+        + "  if (workerInfo.project.name === 'desktop') throw new Error('all boom');\n});\n"
+        + "test.fail('present', async ({ renderWitness }) => { expect(1).toBe(2); });\n") },
+    0, '  disposition: RENDERED tablet,phone · SCHEDULED-only laptop\n', { runReport: true }],
+
+  // THE BAND IS CHECKED, not just the witness's presence. `test.use({ viewport })`
+  // puts every project at 390 and Playwright marks nothing (test.md), so the
+  // SCHEDULED verdict still certifies all three; the witness records 390, which
+  // is evidence for phone and for nothing else.
+  ['a witness outside its project\'s band — only the band it is in is RENDERED',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'tests/gate.spec.js': witnessSpec(
+        "test.use({ viewport: { width: 390, height: 664 } });\n"
+        + "test('present', async ({ renderWitness }) => { expect(1).toBe(1); });\n") },
+    0, '  disposition: RENDERED phone · SCHEDULED-only laptop,tablet\n', { runReport: true }],
+
+  // MALFORMED WITNESSES ARE NOT EVIDENCE AND NOT A CRASH. Text that is not JSON,
+  // a string width, and no description at all: SCHEDULED stands, each class is
+  // SCHEDULED-only, and the count is reported.
+  ['malformed witnesses — not RENDERED, counted, never a crash',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'w.json': witnessReport({
+        desktop: [{ type: 'rendered-viewport', description: 'not json' }],
+        tablet: [{ type: 'rendered-viewport', description: '{"width":"810"}' }],
+        phone: [{ type: 'rendered-viewport' }],
+      }) },
+    0, '  disposition: SCHEDULED-only laptop,tablet,phone\n'
+      + '  (3 rendered-viewport witness(es) could not be read', { reportArg: 'w.json' }],
+
+  // THE OLD REPORT SHAPE (no per-result annotations, #347 round 8): the witness
+  // is read from the test-level list, by the same fallback the override uses.
+  ['a report with test-level witnesses only — RENDERED all three',
+    { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
+      'old.json': JSON.stringify({ suites: [{ specs: [{ title: 'w', tests: [
+        { projectName: 'desktop', annotations: [rv(1440)], results: [{ status: 'passed' }] },
+        { projectName: 'tablet', annotations: [rv(810)], results: [{ status: 'passed' }] },
+        { projectName: 'phone', annotations: [rv(390)], results: [{ status: 'passed' }] },
+      ] }] }] }) },
+    0, '  disposition: RENDERED laptop,tablet,phone\n', { reportArg: 'old.json' }],
 ];
 
 // Writes a copy of the gate with the config-evaluation child's bound replaced.

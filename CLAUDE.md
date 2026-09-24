@@ -163,7 +163,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   (`check-claims.js` — it proves a claim TRAVELLED, never that it is TRUE) and
   its guard, a clean-compile check over every tracked `.py`, the viewport gate on
   the shipped Playwright config (`check-ui-viewports.js` — its verdict is
-  **SCHEDULED**, not EXECUTED, and it catches DRIFT, not FORGERY) and its guard,
+  **SCHEDULED**, not EXECUTED, with a per-class **RENDERED** disposition where the
+  kit's body-only witness fixture proves a test body started at that width (#348);
+  it catches DRIFT, not FORGERY) and its guard,
   job bounds, the contrast guardrail's guard, `/refresh-repo`'s script
   derivation, the workflow-ref guard, and a paired-file diff check, plus a
   warn-only external-link job, `build-logical-map.js --check`, and `node --check`

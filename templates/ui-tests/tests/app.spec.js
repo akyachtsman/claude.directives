@@ -10,7 +10,49 @@
 // are present in HTML but not visible to Playwright, check for dvh units in CSS and
 // replace with vh.
 
-import { test, expect } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER WITNESS — evidence that a test BODY started at its project's width (#348)
+// ─────────────────────────────────────────────────────────────────────────────
+// check-ui-viewports.js reads the run's JSON report. A result there proves a test
+// was SCHEDULED in a project declaring a width; it does not prove a page was ever
+// that wide, because a hook that throws before the body still leaves a result.
+// This fixture is the stronger evidence. Playwright creates a test-scoped fixture
+// when it is first REQUESTED, and one requested only by the test body is created
+// after the beforeAll/beforeEach hooks have run — so a hook that throws first
+// leaves no witness. At setup it records `page.viewportSize()` on the result as a
+// `rendered-viewport` annotation, and the gate reports RENDERED for a width class
+// only where such a witness carries a width inside that class.
+//
+// Measured on 1.63.0 (2026-09-24), one laptop project at 1280x800:
+//   * a beforeEach that throws; a beforeEach that requests `page`, NAVIGATES and
+//     throws; a beforeAll that throws on a test marked to fail — NO witness in
+//     any of the three. An honest failing body DOES get one.
+//   * the annotation reaches the JSON report on BOTH `results[].annotations`
+//     and `tests[].annotations`.
+//   * `{ auto: true }` DESTROYS THE SIGNAL: an auto fixture is created before
+//     the beforeEach hooks, so both beforeEach variants above produced a witness
+//     for a body that never ran. Do NOT make this fixture auto, and do NOT
+//     request it from a hook — a hook that requests it creates it without the
+//     body (that is forgery, out of scope per directives#349).
+//
+// ⚠️ It records the width the body STARTS at. A setViewportSize() later in the
+// body is not seen, which is why S4 keeps its `viewport-override` marker. EVERY
+// scenario below requests `renderWitness` in its own parameter list; a test you
+// add should too, or it can only ever count as SCHEDULED.
+// The gate's cases build their fixture specs from the text between the two
+// marker lines below, so keep the block self-contained and the markers intact.
+// >>> render-witness
+const test = base.extend({
+  renderWitness: async ({ page }, use, testInfo) => {
+    const vp = page.viewportSize();
+    testInfo.annotations.push({ type: 'rendered-viewport',
+      description: JSON.stringify(vp ? { width: vp.width, height: vp.height } : null) });
+    await use(vp);
+  },
+});
+// <<< render-witness
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CREDENTIAL — environment only
@@ -1271,7 +1313,7 @@ function testValueFor(el) {
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO 1 — Page Load
 // ─────────────────────────────────────────────────────────────────────────────
-test('S1: page loads without JS errors', async ({ page }) => {
+test('S1: page loads without JS errors', async ({ page, renderWitness }) => {
   // Sized for what this scenario can actually spend, which the 30s config
   // default is not: goto() may take navigationTimeout (30s) and the load-gate
   // wait below may take LOAD_SETTLE_MS (25s) before either assertion runs. On a
@@ -1300,7 +1342,7 @@ test('S1: page loads without JS errors', async ({ page }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO 2 — Auth Discovery & Login (with API diagnostics)
 // ─────────────────────────────────────────────────────────────────────────────
-test('S2: auth gate discovered and credential accepted', async ({ page }) => {
+test('S2: auth gate discovered and credential accepted', async ({ page, renderWitness }) => {
   // THE SKIP MOVED BELOW THE PAGE LOAD (#312), and it had to: the second
   // credential source is the form itself, which cannot be read before the app
   // renders. The condition is now "no credential ANYWHERE", not "no env var".
@@ -1580,7 +1622,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO 3 — Element Mapping & Interaction Sweep
 // ─────────────────────────────────────────────────────────────────────────────
-test('S3: interactive elements discovered and exercised without errors', async ({ page }) => {
+test('S3: interactive elements discovered and exercised without errors', async ({ page, renderWitness }) => {
   // BUDGET — sized from the MATRIX, not from one profile. This sweep is
   // UNCAPPED: it visits every element discoverElements() returns, at ~1.5s
   // settle plus a networkidle wait (now bounded by IDLE_MS, 5s — it was bounded
@@ -1790,7 +1832,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO 4 — Responsive Layout
 // ─────────────────────────────────────────────────────────────────────────────
-test('S4: no horizontal overflow at 390px mobile viewport', async ({ page }) => {
+test('S4: no horizontal overflow at 390px mobile viewport', async ({ page, renderWitness }) => {
   // BUDGET — S4 had NONE and inherited the 30s config default, while running the
   // same load-and-authenticate preamble NAV prices at ~98s. Once this PR set
   // navigationTimeout: 30_000, goto() ALONE could consume the whole test.
@@ -2023,7 +2065,7 @@ function backControlAll(page) {
 // tracks the last page visited instead of an origin-aware nav stack. Skips when
 // the app has no multi-level drill-down or no in-app back control (invariant N/A).
 // ─────────────────────────────────────────────────────────────────────────────
-test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
+test('NAV: back navigation strictly unwinds (no loop)', async ({ page, renderWitness }) => {
   // BUDGET — SIZING ESTIMATE, and the previous version of this comment was
   // simply wrong. It said "bounded by DEPTH_CAP, not by element count". DEPTH_CAP
   // bounds SUCCESSFUL drill levels only; the candidate loop below tries every
@@ -2273,7 +2315,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page }) => {
 // A duplicated primary CTA (e.g. two "Add asset" buttons) is a finding. Scans
 // visible add/new/create controls, groups by accessible name, flags any with >1.
 // ─────────────────────────────────────────────────────────────────────────────
-test('CTRL: no duplicated primary action control', async ({ page }) => {
+test('CTRL: no duplicated primary action control', async ({ page, renderWitness }) => {
   // BUDGET — CTRL had NONE and inherited the 30s config default, while its first
   // statement is the gotoAndAuth() preamble. NAV and DISMISS budget for that call
   // explicitly; CTRL called the same function and was sized as if it were free.
@@ -2315,7 +2357,7 @@ test('CTRL: no duplicated primary action control', async ({ page }) => {
 // APP_PAGES="admin.html,vendor/console.html". Each gets the S1 load gate here;
 // pages with richer flows deserve their own suite (Scenario 5+ below).
 // ─────────────────────────────────────────────────────────────────────────────
-test('ENTRY: every deployed entry point renders without JS errors', async ({ page }) => {
+test('ENTRY: every deployed entry point renders without JS errors', async ({ page, renderWitness }) => {
   const pages = (process.env.APP_PAGES || '').split(',').map(s => s.trim()).filter(Boolean);
   test.skip(pages.length === 0, 'No extra entry points declared (APP_PAGES) — the baseURL is covered by S1');
   // This loop had NO budget of its own and inherited the 30s config default,
@@ -2373,7 +2415,7 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
 // (b) Escape — re-opened between checks — and (c) a backdrop click, asserted
 // only when a backdrop element exists (some designs omit it deliberately).
 // ─────────────────────────────────────────────────────────────────────────────
-test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page }) => {
+test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page, renderWitness }) => {
   // BUDGET — bounded by TWO caps below, and the 180_000 it replaces sat under
   // its own. Per trigger the explicit waits total ~3.8s and there are five
   // click({ timeout: 2000 }) paths: ~13.8s worst case, x30 = ~414s against 180s.

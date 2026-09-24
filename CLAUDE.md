@@ -387,7 +387,7 @@ already happens. Never arm an extra wake to keep a rhythm.
 
 ## Toolkit changes
 
-**Authoring authority.** `plugin-dev` (Anthropic) is the spec for plugin
+**Authoring authority (owner ruling, 2026-09-24).** `plugin-dev` (Anthropic) is the spec for plugin
 structure — commands, agents, hooks, MCP, settings, frontmatter — and its
 `hook-development` skill covers hook events and matchers. Read it before
 hand-writing either; `meta` is permanent, so it informs this toolkit rather than

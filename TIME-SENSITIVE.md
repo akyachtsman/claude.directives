@@ -67,28 +67,28 @@ is added by the pass that finds it.
 | When a hook-fetched plugin update takes effect | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-09-24 | ⏳ The next session whose `SessionStart` hook fetches an update |
 | When the cached setup script rebuilds, and when a re-save fails to | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | 2026-08-19 | ⏳ The next time the owner re-saves an environment |
 | `claude plugin install` / `update` scope defaults | `scripts/install-toolkit.sh` (steps 4–5) | 2026-09-24 | `claude plugin install --help`, `claude plugin update --help` |
-| How a session detects it is on the web (`CLAUDE_CODE_REMOTE`) | `plugins/directives-toolkit/commands/env-chk.md` | undated | `env` in this session |
+| How a session detects it is on the web (`CLAUDE_CODE_REMOTE`) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-09-24 | `env` in this session |
 | PR subscription lifecycle (auto-subscribe on open, drop on merge) | `CLAUDE.md` → *Notifications* | 2026-09-24 | ⏳ The next PR a session opens and merges |
-| Scheduling-tool names the settings pre-approve | `global.md` → *Scheduling Tools Never Prompt* | 2026-08-18 | This session's tool list against `templates/claude-settings.json` |
+| Scheduling-tool names the settings pre-approve | `global.md` → *Scheduling Tools Never Prompt* | 2026-09-24 | This session's tool list against `templates/claude-settings.json` |
 | Wake envelopes cannot be switched off | `CLAUDE.md` → *Notifications* | 2026-08-21 | Claude Code settings docs |
-| `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | undated | `claude plugin eval --help` |
+| `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-09-24 | `claude plugin eval --help` |
 | Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | undated | Claude Code on the web docs, network access |
 
 ## Anthropic plugins & built-in skills
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
-| `pr-review-toolkit` and `security-guidance` plugins | `test.md` → *QA/data agents* | undated | Each registered marketplace's `marketplace.json` under `~/.claude/plugins/marketplaces/` |
+| `pr-review-toolkit` and `security-guidance` plugins | `test.md` → *QA/data agents* | 2026-09-24 | Each registered marketplace's `marketplace.json` under `~/.claude/plugins/marketplaces/` |
 | `plugin-dev` plugin and its skills | `CLAUDE.md` → *Toolkit changes* | 2026-09-24 | This session's skill list |
-| Built-in `/code-review` and `/security-review` | `test.md` → *QA/data agents* | undated | This session's skill list |
-| Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | undated | This session's skill list |
-| Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-23 | The `/audit-repo` native-parity pass |
+| Built-in `/code-review` and `/security-review` | `test.md` → *QA/data agents* | 2026-09-24 | This session's skill list |
+| Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | 2026-09-24 | This session's skill list |
+| Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
 
 ## GitHub
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
 | API quotas and which calls are REST vs GraphQL | `git.md` → *GitHub API Quota Economy* | undated | `GET /rate_limit`; GitHub REST and GraphQL docs |
-| What the session proxy lets through (`api.github.com`, git) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-07-18 | A read-only curl and `git ls-remote` from this session |
-| Pages caching | `global.md` → *Hosting & Deployment* | undated | `curl -I` a Pages URL |
+| What the session proxy lets through (`api.github.com`, git) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-09-24 | A read-only curl and `git ls-remote` from this session |
+| Pages caching | `global.md` → *Hosting & Deployment* | 2026-09-24 | `curl -I` a Pages URL |
 | Pages build events under each Pages source | `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source* | 2026-08-26 | GitHub Pages and webhook-events docs |
 | Pages deploy failure and cache patterns | `plugins/directives-toolkit/skills/update-pages/SKILL.md` | undated | ⏳ The next deploy that misbehaves |
 | Where repo settings live (auto-merge, branch delete, conversation resolution) | `git.md` → *Repo-settings preflight* | 2026-08-26 | GitHub docs; `GET /repos/{owner}/{repo}/rules/branches/main` |
@@ -111,7 +111,7 @@ is added by the pass that finds it.
 | Fleet sandbox ceilings and egress | `test.md` → *Sandboxed local runs* | 2026-08-26 | ⏳ The next session in each app repo |
 | Which Playwright version the kit resolves to | `templates/ui-tests/package.json` | 2026-09-24 | `npm view "@playwright/test@^1.62.1" version` (a registry read, installs nothing) |
 | Playwright behaviour the kit and the viewport gate rely on — each measurement is dated in its source | `test.md` → *Playwright* | 2026-09-24 | ⏳ The next Playwright version bump: re-run the measurements the source and `templates/scripts/check-ui-viewports.js` cite |
-| Where preinstalled browsers live | `plugins/directives-toolkit/agents/ui-tester.md` | undated | `ls "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"` in this session |
+| Where preinstalled browsers live | `plugins/directives-toolkit/agents/ui-tester.md` | 2026-09-24 | `ls "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"` in this session |
 | CSS support in CI browsers (`100dvh`) | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | undated | MDN browser-compat data for `dvh` against the runner image's browser versions |
 | Web-session git fetch cost | `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-09-23 | ⏳ The next `/refresh-repo` run |
 

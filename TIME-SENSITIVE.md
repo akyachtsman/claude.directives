@@ -81,7 +81,7 @@ is added by the pass that finds it.
 | `plugin-dev` plugin and its skills | `CLAUDE.md` → *Toolkit changes* | 2026-09-24 | This session's skill list |
 | Built-in `/code-review` and `/security-review` | `test.md` → *QA/data agents* | 2026-09-24 | This session's skill list |
 | Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | 2026-09-24 | This session's skill list |
-| Built-in `anthropic-skills:docx` and `anthropic-skills:pdf` (text extraction, OCR for scanned PDFs) | `plugins/directives-toolkit/skills/doc-comp/SKILL.md` | 2026-09-24 | This session's skill list |
+| Built-in `anthropic-skills:docx` and `anthropic-skills:pdf` (text extraction, OCR for scanned PDFs) | `plugins/directives-toolkit/skills/doc-comp/SKILL.md` | 2026-09-24 | This session's skill list: both skills listed, and the `pdf` skill's own description still names OCR for scanned PDFs |
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
 
 ## GitHub

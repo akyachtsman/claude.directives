@@ -202,11 +202,18 @@ const HEADINGS = '# Alpha Beta\n\n## Gamma Delta\n\ntext\n';
 //    Findings per round went 1, 1, 1, 4, and TWO of round 16's failed valid
 //    files. Same open set as #365's line joining and the flanking rule; third
 //    bet, third loss. Disclosed on every run instead. Owner ruling 2026-09-18.
+//
+//    #366 §2 (2026-09-24) closed this route for BACKTICKED names by keying off
+//    the backticks: `docs/my guide.md` is now read as the explicit filename, so
+//    a file absent from the repo is REPORTED instead of resolving against THIS
+//    file. The route remains for an UNBACKTICKED name outside the bare class,
+//    and that is pinned (and disclosed) in the #366 block below. The fixture is
+//    unchanged; its expected outcome inverted, which is the fix.
 {
   const r = run({ 'b.md': '# Top\n\n## Target\n\nsee `docs/my guide.md` \u2192 *Target*\n' });
-  check('an unsupported filename is counted against THIS file — disclosed, not fixed',
-    r.code === 0 && parsed(r.out)?.total === 1
-      && /A FILENAME THE EXPLICIT FORM CANNOT READ/.test(r.out),
+  check('a backticked filename outside the bare class is read as EXPLICIT — no wrong target (#366)',
+    r.code !== 0 && /names "docs\/my guide\.md"/.test(r.out) && parsed(r.out)?.total === 1
+      && parsed(r.out)?.good === 0,
     `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
 }
 
@@ -559,6 +566,110 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
   check('U+2028 stays inside the name — only a real line ending closes it',
     parsed(zl.out)?.total === 1,
     `exit=${zl.code} got ${JSON.stringify(parsed(zl.out))}`);
+}
+
+// -- #366, the parser half (2026-09-24) ---------------------------------------
+// Each POSITIVE case below goes red on the pre-#366 checker, which read every
+// one of these arrows as a SELF reference against b.md. Each NEGATIVE case
+// ("not matched") also asserts the disclosure line that states its rule, so it
+// is red there too — but its behavioural half is proven against a mutant with
+// that one rule removed, since the old checker never read the form at all.
+{
+  const BT = String.fromCharCode(96);
+  // §2: a backticked filename of any spelling but a backtick or a line ending.
+  const odd = run({
+    'my file.md': HEADINGS,
+    'a+file.md': HEADINGS,
+    'b.md': '# B\n\nsee ' + BT + 'my file.md' + BT + ' → *Gamma Delta*\n'
+      + 'and ' + BT + 'a+file.md' + BT + ' -> *Alpha Beta*\n',
+  });
+  check('#366 §2: a backticked filename with a space or + resolves against THAT file',
+    odd.code === 0 && parsed(odd.out)?.good === 2 && parsed(odd.out)?.total === 2,
+    `exit=${odd.code} got ${JSON.stringify(parsed(odd.out))} out=${odd.out.trim()}`);
+
+  const oddBad = run({
+    'my file.md': HEADINGS,
+    'b.md': '# No Such\n\nsee ' + BT + 'my file.md' + BT + ' → *No Such*\n',
+  });
+  check('#366 §2: …and a broken one is REPORTED, not resolved against THIS file',
+    oddBad.code !== 0 && /"No Such" has no matching heading in my file\.md/.test(oddBad.out),
+    `exit=${oddBad.code} out=${oddBad.out.trim()}`);
+
+  // §1: an unbackticked filename after start-of-line, a space or `(`; an EVEN
+  // number of backticks before it (a closed span) does not stop it.
+  const bare = run({
+    'a.md': HEADINGS,
+    'b.md': '# B\n\nsee a.md → *Gamma Delta*\n(per a.md -> *Alpha Beta*)\n'
+      + 'a.md → *Gamma*\nwith ' + BT + 'x' + BT + ' then a.md → *Alpha*\n',
+  });
+  check('#366 §1: an unbackticked filename resolves against THAT file',
+    bare.code === 0 && parsed(bare.out)?.good === 4 && parsed(bare.out)?.total === 4,
+    `exit=${bare.code} got ${JSON.stringify(parsed(bare.out))} out=${bare.out.trim()}`);
+
+  const bareBad = run({ 'a.md': HEADINGS, 'b.md': '# Missing\n\nsee a.md → *Missing*\n' });
+  check('#366 §1: …and a broken one is REPORTED against a.md, not resolved in b.md',
+    bareBad.code !== 0 && /"Missing" has no matching heading in a\.md/.test(bareBad.out),
+    `exit=${bareBad.code} out=${bareBad.out.trim()}`);
+
+  // §1 companion rule: an ODD count of backticks before it = inside a code span,
+  // so it is not read as explicit. It claims nothing — the arrow stays open to
+  // the SELF form exactly as before (#367 rounds 12-16 are NOT reopened), which
+  // is why this resolves against b.md's own `Top`. Mutant with the odd-count
+  // rule removed: reads a.md, which has no `Top`, and fails. The filename
+  // follows a SPACE inside the span on purpose: one written directly after the
+  // opening backtick is refused earlier, by the preceded-by rule.
+  const span = run({ 'a.md': HEADINGS, 'b.md': '# Top\n\nthe ' + BT + 'see a.md → *Top*' + BT + ' example\n' });
+  check('#366 §1: an unbackticked filename inside a single-backtick span is NOT read',
+    span.code === 0 && parsed(span.out)?.total === 1
+      && /skipped as inside a code span: 1\b/.test(span.out),
+    `exit=${span.code} got ${JSON.stringify(parsed(span.out))} out=${span.out.trim()}`);
+
+  // docs/guides/dev-pipeline.md:26, verbatim: ONE code span listing two
+  // artifacts. It must not match — proven here, not by the repo's total. Its
+  // behavioural half has no single-rule mutant: `spec.md` follows the opening
+  // backtick (preceded-by rule) AND its arrow is followed by `plan.md`, not a
+  // `*` (delimiter rule); the disclosure assertion is the half main fails.
+  const dp26 = run({
+    'spec.md': '# S\n', 'plan.md': '# P\n',
+    'b.md': '# B\n\n| 1–2 | **Plan** | ' + BT + '/sdd-loop specify' + BT + ' → '
+      + BT + '/sdd-loop plan' + BT + ' (' + BT + '/kickoff' + BT + ') | exists — gated | '
+      + BT + 'spec.md → plan.md' + BT + ' |\n',
+  });
+  check('#366 §1: dev-pipeline.md:26 (`spec.md → plan.md` in one span) is not matched',
+    dp26.code === 0 && parsed(dp26.out)?.total === 0 && /UNBACKTICKED filename/.test(dp26.out),
+    `exit=${dp26.code} got ${JSON.stringify(parsed(dp26.out))} out=${dp26.out.trim()}`);
+
+  // §3 is deliberately NOT implemented: dev-pipeline.md:27 names a per-project
+  // artifact absent from this repo, so parsing it would fail a valid reference.
+  const dp27 = run({
+    'plan.md': '# P\n',
+    'b.md': '# B\n\n| — | **Plan-gate** | x | exists | ' + BT + 'plan.md' + BT + ' → '
+      + BT + '## Consistency' + BT + ' |\n',
+  });
+  check('#366 §3: a backticked `## Heading` after the arrow is not parsed, and that is disclosed',
+    dp27.code === 0 && parsed(dp27.out)?.total === 0 && /Other delimiters are NOT parsed/.test(dp27.out),
+    `exit=${dp27.code} got ${JSON.stringify(parsed(dp27.out))} out=${dp27.out.trim()}`);
+
+  // Preceded-by rule. `xglobal.md` is one token — never `global.md`.
+  const pre = run({ 'global.md': '# G\n\n## X\n', 'b.md': '# X\n\nsee xglobal.md → *X*\n' });
+  check('#366 §1: xglobal.md → *X* reads "xglobal.md", never global.md',
+    pre.code !== 0 && /names "xglobal\.md"/.test(pre.out) && !/names "global\.md"/.test(pre.out),
+    `exit=${pre.code} out=${pre.out.trim()}`);
+
+  // …and a filename after a character outside start-of-line/space/tab/`(` is
+  // not read at all: `a+b.md` yields no `b.md`. This is the wrong-target route
+  // that REMAINS for unbackticked names, so the arrow is read as SELF — pinned
+  // honestly and disclosed. Mutant with the lookbehind removed: reads b.md,
+  // which has no `Target`, and fails.
+  const plus = run({
+    'b.md': '# Other\n',
+    'c.md': '# Top\n\n## Target\n\nsee a+b.md → *Target*\n',
+  });
+  check('#366 §1: a+b.md → *X* does not read b.md; SELF, and the remaining route is disclosed',
+    plus.code === 0 && parsed(plus.out)?.total === 1
+      && /A FILENAME THE EXPLICIT FORM CANNOT READ/.test(plus.out)
+      && /remains for an UNBACKTICKED name outside the class/.test(plus.out),
+    `exit=${plus.code} got ${JSON.stringify(parsed(plus.out))} out=${plus.out.trim()}`);
 }
 
 if (failed) {

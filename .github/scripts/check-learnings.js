@@ -6,19 +6,44 @@
 // tree (superseded lines are inert under latest-key-wins, #377), and such an
 // entry whose text names `workflow_run` must have each listed workflow file
 // (under a `workflows/` dir) still CONTAIN the literal text `workflow_run`.
-// That is the whole check, and it is deliberately that narrow: its input space is
-// closed (a path exists or not; a substring is present or not).
-// What it does NOT prove: that a list is COMPLETE. A new or renamed watcher that
-// no entry names is still unrouted, and this passes. Nor does the substring prove
-// a file WATCHES workflow_run — a comment instructing the reader to add one
-// counts, which is intended (pages-monitor.yml; #370's comment: the prescribed
-// edit site is where the lesson applies). Do NOT grow this into parsing YAML or
+// Deliberately that narrow: its input space is closed (a path exists or not; a
+// substring is present or not).
+//
+// COMPLETENESS (#370) is by INVERTED OWNERSHIP, not derivation. For each rule in
+// COMPLETE below, every workflow file (in the named dirs) whose text CONTAINS the
+// substring must be either listed by that key's latest entry or exempted here
+// with a reason. So adding a watcher turns this red until someone DECIDES —
+// the same shape as workflow-ref-guard.py's REQUIRED list, which gets louder
+// when something breaks. The input stays closed: a directory listing and a
+// substring. It does NOT decide whether a file watches `completed` — that
+// judgement is the human's, recorded as the listing or the exemption reason.
+// A stale exemption (file gone, or no longer containing the text) also fails.
+// The substring does not prove a file WATCHES workflow_run either — a comment
+// instructing the reader to add one counts as listed-worthy, which is intended
+// (pages-monitor.yml; #370's comment: the prescribed edit site is where the
+// lesson applies), and a comment that merely mentions it is what an exemption
+// records. What stays out of scope: a watcher whose YAML spells the key without
+// the literal substring (an escape sequence), which is not an honest form.
+// Do NOT grow this into parsing YAML or
 // deriving the list from the tree: that design was withdrawn after 27 rounds on
 // #368 because the accepted YAML forms never converged (#370).
-import { existsSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 
 const TYPES = new Set(['pattern', 'pitfall', 'preference', 'architecture', 'tool']);
 const REQUIRED = ['ts', 'type', 'key', 'text', 'confidence', 'files'];
+
+// Inverted-ownership completeness rules (#370) — see the header. An exemption
+// is a decision that the file names the text without being a watcher of the kind
+// the entry is about; the reason is part of the record.
+const COMPLETE = [{
+  key: 'a-terminal-state-watcher-cannot-see-a-hang',
+  dirs: ['.github/workflows', 'templates/workflows'],
+  text: 'workflow_run',
+  exempt: {
+    '.github/workflows/watcher-liveness.yml': 'triggers on schedule/workflow_dispatch; it READS workflow_run run history via the API and watches nothing',
+    'templates/workflows/qa.yml': 'triggers on pull_request/push; names workflow_run only in a comment about the ref guard',
+  },
+}];
 
 let failed = false;
 const fail = (m) => { console.error(`FAIL: ${m}`); failed = true; };
@@ -116,9 +141,36 @@ for (const { n, files, text } of latest.values()) {
   }
 }
 
+for (const c of COMPLETE) {
+  const e = latest.get(c.key);
+  if (!e) {
+    fail(`completeness rule names key "${c.key}", which has no valid latest entry — the rule would silently stop applying (#370)`);
+    continue;
+  }
+  const listed = new Set(e.files);
+  for (const dir of c.dirs) {
+    let names;
+    try { names = readdirSync(dir); } catch (err) { fail(`completeness: cannot read ${dir} — ${err.message}`); continue; }
+    for (const name of names.filter((x) => /\.ya?ml$/.test(x)).sort()) {
+      const f = `${dir}/${name}`;
+      if (!statSync(f).isFile() || !readFileSync(f, 'utf8').includes(c.text)) continue;
+      if (!listed.has(f) && !Object.hasOwn(c.exempt, f)) {
+        fail(`line ${e.n}: ${f} contains "${c.text}" but entry "${c.key}" does not list it — append a corrected entry listing it (/learn), or exempt it in check-learnings.js COMPLETE with the reason it is not such a watcher (#370)`);
+      }
+    }
+  }
+  for (const f of Object.keys(c.exempt)) {
+    if (!existsSync(f) || !statSync(f).isFile() || !readFileSync(f, 'utf8').includes(c.text)) {
+      fail(`completeness exemption "${f}" is stale — the file is gone or no longer contains "${c.text}"; remove the exemption (#370)`);
+    } else if (listed.has(f)) {
+      fail(`"${f}" is both listed by "${c.key}" and exempted — pick one (#370)`);
+    }
+  }
+}
+
 // Duplicate keys are LEGAL — latest-key-wins is the documented rule — so this
 // reports them rather than failing, since a same-day duplicate is usually a typo.
 for (const [k, n] of keys) if (n > 1) console.log(`note: key "${k}" appears ${n}x (latest wins)`);
 
 if (failed) { console.error('check-learnings: FAIL'); process.exit(1); }
-console.log(`check-learnings: OK — ${lines.length} entries, all well-formed; every listed file of each key's latest entry exists (workflow_run entries: each listed workflow still contains the text). Completeness NOT checked: a watcher no entry names is still unrouted (#370)`);
+console.log(`check-learnings: OK — ${lines.length} entries, all well-formed; every listed file of each key's latest entry exists (workflow_run entries: each listed workflow still contains the text). completeness by inverted ownership: every workflow naming workflow_run is listed or exempted with a reason (#370)`);

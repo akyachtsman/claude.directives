@@ -266,7 +266,7 @@ node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
 node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
-node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence, every file listed by a key's LATEST entry exists (a workflow_run entry's workflows still contain the text) — completeness NOT checked (#370)
+node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence, every file listed by a key's LATEST entry exists (a workflow_run entry's workflows still contain the text); completeness by inverted ownership — every workflow naming workflow_run is listed or exempted with a reason (#370)
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header); a reworded carrier turns it red: add the wording to `phrasings` (#341)
 node .github/scripts/check-claims-cases.js       # that guard's own guard. Re-prove with CHECK_CLAIMS_BIN=<mutant>
 python3 .github/scripts/check-py-warnings.py      # every tracked .py compiles clean — a `\` in a plain docstring is FATAL on 3.15, and the guard then stops running

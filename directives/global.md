@@ -603,16 +603,19 @@ a wake-up, a turn ending — over one that fires on noticing. A rule that leaves
 job. Made standing in the owner's words: *"Yes. How do we record it as a
 standing rule For all sessions, going forward."*
 
-⛔ **THE MOMENT IT FIRES: every Agent tool call names `model` explicitly.** Never
-leave it to the default — an unnamed model is whatever the session or the
-environment happens to default to, which is the choice this rule exists to make.
+⛔ **THE MOMENT IT FIRES: every Agent tool call.** The kind of work decides the
+`model` field:
 - **Searching, reading, counting, census work** (find every caller, which files
   name X): `haiku`.
 - **Reviews and second opinions** (code review, audit assertions, verify a
   finding): `sonnet`.
-- **Building or fixing code** (implementation, usually in a worktree): the
-  session's own model — still named, e.g. `opus` on an Opus session. A weaker
-  model there costs more in review rounds than it saves.
+- **Building or fixing code** (implementation, usually in a worktree): **leave
+  `model` OUT**, so the agent inherits the session's own model. A weaker model
+  there costs more in review rounds than it saves.
+
+⛔ **Omitting `model` is correct ONLY for building or fixing.** No value spells
+"inherit", so a search or review call with no `model` breaks the rule; it is not
+the default taken.
 
 Qualifiers:
 - **Unsure between two tiers:** cheaper for read-only work, stronger for
@@ -623,19 +626,24 @@ Qualifiers:
 ⚠️ **An agent definition's `model:` frontmatter is only its fallback** — the
 call's `model` overrides it, so the call is still where the choice is made. The
 toolkit's reviewers and verifiers carry `model: sonnet` as that fallback; its
-agents that write code or data carry no `model:` line and so run on the default.
-An agent that spawns agents (`qa-pipeline`) applies this rule to its own calls.
+agents that write code or data carry no `model:` line, so an omitted call
+inherits. ⚠️ Leaving `model` out on an agent type whose frontmatter names one
+runs THAT model, not the session's — so build work goes to an agent type with no
+`model:` line (e.g. not test-verifier). An agent that spawns agents (`qa-pipeline`) applies this rule to its
+own calls.
 ⚠️ **A fork always runs the session's model** — the Agent tool ignores `model`
 for it — so haiku-tier work goes to a named agent type, never a fork.
 
-**The environment backstop is the owner's, never a session's.**
+**The environment variable is the owner's, never a session's.**
 `CLAUDE_CODE_SUBAGENT_MODEL` (verified 2026-09-24 against
-code.claude.com/docs/en/sub-agents) is the fallback for a call that names no
-model and an agent with no `model:` line; the call's `model` and the frontmatter
-both outrank it. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` inverts that — every
-subagent runs the variable's model and a call's `model` is ignored — so under it
-this rule's tiers have no effect. Both are environment settings the owner
-changes; a session never sets either.
+code.claude.com/docs/en/sub-agents) is what an omitted `model` falls to when the
+agent's definition names none; the call's `model` and the frontmatter both
+outrank it. ⚠️ **While it is set, leaving `model` out no longer inherits the
+session's model** — a build agent runs the variable's model instead — so the
+build tier above holds only with it unset (or set to `inherit`).
+`CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` goes further: every subagent runs the
+variable's model and a call's `model` is ignored, so none of the tiers apply.
+Both are environment settings the owner changes; a session never sets either.
 
 ## Burst Intake — Multiple Asks at Once (owner ruling, 2026-08-18)
 

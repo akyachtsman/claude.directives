@@ -36,6 +36,13 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   A rule with no stamp and no advocating commit is UNRATIFIED, not settled —
   surface it for the owner to confirm or drop. Do not treat length of service
   as ratification.
+- **Time-sensitive facts.** Where the repo keeps a `TIME-SENSITIVE.md` (the
+  directives repo does), re-check every row the way the row says: a model alias,
+  a Claude Code or GitHub behaviour, a Codex habit, a test-environment
+  measurement. A row found wrong is a finding naming the source to fix; a row
+  still true gets its *Last verified* date bumped in the fix-up PR. Also report
+  any dated "measured / observed / verified" claim about an outside system that
+  has no row — it will expire with nothing to prompt the re-check.
 - Errors — syntax errors, broken references, dead imports, invalid config,
   malformed data, things that won't run. For per-file correctness depth, run
   `/code-review --effort high` (read-only, reports findings) and fold its

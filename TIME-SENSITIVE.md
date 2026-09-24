@@ -60,12 +60,12 @@ checked. Treat those rows as the first to re-check.
 ## Models & sub-agents
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
 |---|---|---|---|
-| Tier aliases `haiku` / `sonnet` exist and resolve to the current version of each family | `global.md` → *Subagent Model Selection* | 2026-09-24 | Agent tool `model` values + code.claude.com/docs/en/sub-agents |
+| Tier aliases `haiku` / `sonnet` exist and resolve to the current version of each family, so the tiers need no edit when a new version ships | `global.md` → *Subagent Model Selection* (uses the aliases); the resolution is Claude Code's documented behaviour, not stated in this repo | 2026-09-24 | Agent tool `model` values + code.claude.com/docs/en/sub-agents ("an alias always resolves to the version the alias points to") |
 | The Agent tool's `model` accepts `haiku`, `sonnet`, `opus` and `fable` | the Agent tool (no repo source yet) | 2026-09-24 | This session's Agent tool schema: the `model` values |
 | Model precedence: call `model` → frontmatter → `CLAUDE_CODE_SUBAGENT_MODEL` → session model | `global.md` → *Subagent Model Selection* | 2026-09-24 | code.claude.com/docs/en/sub-agents, "Choose a model" |
 | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` makes calls ignore `model` | `global.md` → *Subagent Model Selection* | 2026-09-24 | same docs page |
 | A fork ignores `model` and runs the session's model | `global.md` → *Subagent Model Selection* | 2026-09-24 | Agent tool description |
-| Agent frontmatter `model:` accepts aliases, full IDs, `inherit` | `plugins/directives-toolkit/agents/test-verifier.md`, `plugins/directives-toolkit/agents/pr-readiness-reviewer.md` | 2026-09-24 | docs page above; plugin-dev `agent-development` skill |
+| Agent frontmatter `model:` accepts aliases (the toolkit uses `sonnet`); full IDs and `inherit` are also documented, unused here | `plugins/directives-toolkit/agents/test-verifier.md`, `plugins/directives-toolkit/agents/pr-readiness-reviewer.md` | 2026-09-24 | code.claude.com/docs/en/sub-agents; plugin-dev `agent-development` skill |
 
 ## Claude Code & cloud sessions
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
@@ -100,7 +100,7 @@ checked. Treat those rows as the first to re-check.
 | Marking a PR ready-for-review is GraphQL-only (`markPullRequestReadyForReview`, no REST equivalent), which is why sessions un-draft as soon as CI is green | `git.md` → *GitHub API Quota Economy* | undated | GitHub REST docs for pull requests: is there a ready-for-review endpoint? |
 | `api.github.com` refused at the session proxy; `git ls-remote` works | `plugins/directives-toolkit/commands/env-chk.md`, `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-07-18 | curl from a web session |
 | Pages serves `max-age=600` | `global.md` → *Hosting & Deployment* | undated | `curl -I` a Pages URL |
-| Switching Pages to Actions-source stops `page_build` events, blinding pages-monitor | `global.md` → *Hosting & Deployment*, `docs/standards/hosting-mechanics.md` → *Choosing the Pages source* | 2026-08-26 | GitHub Pages and webhook-events docs for `page_build` |
+| Switching Pages to Actions-source stops `page_build` events, blinding pages-monitor | `global.md` → *Hosting & Deployment*, `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source* | 2026-08-26 | GitHub Pages and webhook-events docs for `page_build` |
 | Pages stuck/transient-failure patterns and CDN cache timing | `plugins/directives-toolkit/skills/update-pages/SKILL.md` | undated | ⏳ The next deploy that misbehaves |
 | Repo settings: auto-merge, delete-branch-on-merge, conversation resolution, where each lives | `git.md` → *Repo-settings preflight* | 2026-08-26 | Settings → General and Rules |
 | `main` here requires conversation resolution server-side | `CLAUDE.md` → *Branch policy* | 2026-08-26 | `GET /repos/{owner}/{repo}/rules/branches/main` |
@@ -137,7 +137,7 @@ checked. Treat those rows as the first to re-check.
 | Supabase MCP tool names | `plugins/directives-toolkit/agents/supabase.md` | undated | Session tool list |
 | Supabase `query_logs` window is capped at, and defaults to, 24h | `plugins/directives-toolkit/agents/supabase.md` | undated | Supabase MCP docs |
 | Stitch and Figma MCPs available for design import | `design.md` → *Establishing your project's look*, `plugins/directives-toolkit/commands/design-intake.md` | undated | Connector registry |
-| WCAG AA thresholds and target sizes | `design.md` → *Accessibility* | undated | Current WCAG version (none is named) |
+| WCAG AA thresholds and target sizes | `design.md` → *Accessibility* (contrast), `design.md` → *Cross-platform & responsive* (target sizes) | undated | Current WCAG version (none is named) |
 
 ## Measured baselines
 | Measurement | Stated in | Last verified | Re-check by |

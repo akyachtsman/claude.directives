@@ -598,6 +598,45 @@ behaviour**, and prefer a trigger that fires on an observable event — a handof
 a wake-up, a turn ending — over one that fires on noticing. A rule that leaves
 *when* to memory stops firing.
 
+## Subagent Model Selection (owner ruling, 2026-09-24)
+**The rule:** every subagent is started on the cheapest model that can do its
+job. Made standing in the owner's words: *"Yes. How do we record it as a
+standing rule For all sessions, going forward."*
+
+⛔ **THE MOMENT IT FIRES: every Agent tool call names `model` explicitly.** Never
+leave it to the default — an unnamed model is whatever the session or the
+environment happens to default to, which is the choice this rule exists to make.
+- **Searching, reading, counting, census work** (find every caller, which files
+  name X): `haiku`.
+- **Reviews and second opinions** (code review, audit assertions, verify a
+  finding): `sonnet`.
+- **Building or fixing code** (implementation, usually in a worktree): the
+  session's own model — still named, e.g. `opus` on an Opus session. A weaker
+  model there costs more in review rounds than it saves.
+
+Qualifiers:
+- **Unsure between two tiers:** cheaper for read-only work, stronger for
+  anything that writes.
+- **This changes WHICH model runs an agent, never WHETHER independent work is
+  fanned out in parallel.** → *Parallel Tasking via Subagents* still binds.
+
+⚠️ **An agent definition's `model:` frontmatter is only its fallback** — the
+call's `model` overrides it, so the call is still where the choice is made. The
+toolkit's reviewers and verifiers carry `model: sonnet` as that fallback; its
+agents that write code or data carry no `model:` line and so run on the default.
+An agent that spawns agents (`qa-pipeline`) applies this rule to its own calls.
+⚠️ **A fork always runs the session's model** — the Agent tool ignores `model`
+for it — so haiku-tier work goes to a named agent type, never a fork.
+
+**The environment backstop is the owner's, never a session's.**
+`CLAUDE_CODE_SUBAGENT_MODEL` (verified 2026-09-24 against
+code.claude.com/docs/en/sub-agents) is the fallback for a call that names no
+model and an agent with no `model:` line; the call's `model` and the frontmatter
+both outrank it. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` inverts that — every
+subagent runs the variable's model and a call's `model` is ignored — so under it
+this rule's tiers have no effect. Both are environment settings the owner
+changes; a session never sets either.
+
 ## Burst Intake — Multiple Asks at Once (owner ruling, 2026-08-18)
 
 → *Parallel Tasking via Subagents* governs a task list already written, and the

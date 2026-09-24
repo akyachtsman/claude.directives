@@ -26,10 +26,16 @@ corrections through the directives they already import.
   - A session observes anything that contradicts a row.
 
 ## How to handle a row
-1. Re-check it the way the row says.
-2. **Still true:** update *Last verified* here AND the dated wording at the
-   source, in the same PR.
-3. **No longer true:** fix the source directive in a PR, then update the row.
+1. Re-check it the way the row says. Rows whose re-check starts with ⏳ need an
+   event (a deploy that misbehaves, a Codex reply) and cannot be re-checked on
+   demand: an audit reports how old their *Last verified* is and leaves them for
+   the event; whichever session sees the event re-checks the row then.
+2. **Still true:** update *Last verified* here. Also update the source's own
+   date ONLY where the source carries a verification stamp for that fact
+   ("verified / measured / observed <date>"). Never touch an
+   `(owner ruling, <date>)` stamp: it records when the owner decided, not when a
+   fact was checked, and re-checking a fact does not change the ruling.
+3. **No longer true:** fix the source in a PR, then update the row.
 4. **New claim:** any new "measured / observed / verified <date>" statement about
    an outside system gets a row here in the PR that adds it.
 
@@ -56,7 +62,7 @@ checked. Treat those rows as the first to re-check.
 | Web sessions don't attach plugins on their own; the env setup script installs, the `SessionStart` hook updates | `global.md` → *Skill Bootstrap* | undated | Fresh web session: is the toolkit attached? |
 | The cached setup script rebuilds on a config change or roughly weekly | `global.md` → *Skill Bootstrap*, `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | undated | Claude Code on the web docs; observe a rebuild |
 | Setup scripts written before 2026-08-05 need a manual re-save | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-08-05 | Environment settings page |
-| `claude plugin update` behaviour and scope handling | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix* | 2026-08-05 | `claude plugin --help`; run it |
+| `claude plugin install --scope` defaults to `user`; `claude plugin update --scope` defaults to `auto-detect` (it read `user` on 2026-08-17), so `install-toolkit.sh` repeats every update at `--scope project` | `scripts/install-toolkit.sh` (step 5) | 2026-09-24 | `claude plugin install --help`, `claude plugin update --help`: the `--scope` default line |
 | A re-saved environment can still leave a legacy project stale | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | 2026-08-19 | Re-save, then open a session in a legacy repo |
 | `CLAUDE_CODE_REMOTE=true` marks a web session | `plugins/directives-toolkit/commands/env-chk.md`, `.claude/hooks/session-start.sh` | undated | `env` in a web session |
 | Opening a PR auto-subscribes the session; merge drops it | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Notifications* | undated | Open a PR and watch for the subscription event |
@@ -80,20 +86,20 @@ checked. Treat those rows as the first to re-check.
 | `api.github.com` refused at the session proxy; `git ls-remote` works | `plugins/directives-toolkit/commands/env-chk.md`, `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-07-18 | curl from a web session |
 | Pages serves `max-age=600` | `global.md` → *Hosting & Deployment* | undated | `curl -I` a Pages URL |
 | Switching Pages to Actions-source stops `page_build` events, blinding pages-monitor | `global.md` → *Hosting & Deployment*, `docs/standards/hosting-mechanics.md` → *Choosing the Pages source* | 2026-08-26 | GitHub Pages docs; a test repo |
-| Pages stuck/transient-failure patterns and CDN cache timing | `plugins/directives-toolkit/skills/update-pages/SKILL.md` | undated | Next deploy that misbehaves |
+| Pages stuck/transient-failure patterns and CDN cache timing | `plugins/directives-toolkit/skills/update-pages/SKILL.md` | undated | ⏳ The next deploy that misbehaves |
 | Repo settings: auto-merge, delete-branch-on-merge, conversation resolution, where each lives | `git.md` → *Repo-settings preflight* | 2026-08-26 | Settings → General and Rules |
 | `main` here requires conversation resolution server-side | `CLAUDE.md` → *Branch policy* | 2026-08-26 | `GET /repos/{owner}/{repo}/rules/branches/main` |
 | Scheduled workflows auto-disable after 60 days of repo inactivity | `plugins/directives-toolkit/commands/new-repo.md` | undated | GitHub Actions docs |
 | Actions cache: saves are branch-scoped, restores are not | `docs/standards/cicd-setup.md` → *Step 1* | 2026-08-25 | Actions cache docs; a `workflow_run` restore |
-| ci-notify's lookup can miss a PR or hit the wrong one (the listed no-wake cases) | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Self-test monitoring* | undated | Next PR whose wake did not arrive |
+| ci-notify's lookup can miss a PR or hit the wrong one (the listed no-wake cases) | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Self-test monitoring* | undated | ⏳ The next PR whose wake does not arrive |
 
 ## Codex
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
 |---|---|---|---|
-| Ready-for-review draws a Codex review only SOMETIMES (5 of 7 here, 1 of 4 in a sibling repo); `@codex review` answers in ~2.5 min | `docs/standards/pr-mechanics.md` → *Review triggers* | 2026-08-23 | Count the next few un-drafts; Codex's summary comment names the trigger |
-| A clean verdict arrives as a comment, a 👍 reaction, or an inline reply; only the comment clears `codex-flagged` | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Self-test monitoring*, `docs/standards/automations.md` → *Automation 2* | 2026-08-27 | Next clean review: which form arrived? |
+| Ready-for-review draws a Codex review only SOMETIMES (5 of 7 here, 1 of 4 in a sibling repo); `@codex review` answers in ~2.5 min | `docs/standards/pr-mechanics.md` → *Review triggers* | 2026-08-23 | ⏳ The next few un-drafts; Codex's summary comment names the trigger |
+| A clean verdict arrives as a comment, a 👍 reaction, or an inline reply; only the comment clears `codex-flagged` | `git.md` → *PR Lifecycle*, `CLAUDE.md` → *Self-test monitoring*, `docs/standards/automations.md` → *Automation 2* | 2026-08-27 | ⏳ The next clean review: which form arrived? |
 | The allowance is weekly and shared with Work, Workspace Agents and ChatGPT Excel; "On every push" spends one per commit | `git.md` → *PR Lifecycle* | undated | Codex account settings |
-| An *unavailable* reply states a reset time | `git.md` → *PR Lifecycle* | undated | Next unavailable reply |
+| An *unavailable* reply states a reset time | `git.md` → *PR Lifecycle* | undated | ⏳ The next unavailable reply |
 
 ## Test environment
 | Fact the directives rely on | Stated in | Last verified | Re-check by |
@@ -120,4 +126,5 @@ checked. Treat those rows as the first to re-check.
 | Measurement | Stated in | Last verified | Re-check by |
 |---|---|---|---|
 | Auto-skill eval: 9 of 9 pass, mean Δ +0.67; two newer cases unmeasured | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)*, `docs/internal/skill-eval-notes.md` | 2026-08-19 | `claude plugin eval --no-publish .` in the toolkit |
+| The 120-minute UI-suite timeout floor (`UI_SUITE_FLOOR`) is sized from claude.trading's 30m35s warm job + 21m25s cold browser install | `docs/standards/cicd-setup.md` → *9c-ter — Job bounds guard* | undated | Re-time the slowest fleet UI job, warm and cold, on the current runner image |
 | Auth-scenario and request timings measured in claude.insurance / claude.prop | `test.md` → *Playwright* | 2026-08-25 | Re-run in those repos |

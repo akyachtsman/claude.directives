@@ -617,6 +617,18 @@ standing rule For all sessions, going forward."*
 "inherit", so a search or review call with no `model` breaks the rule; it is not
 the default taken.
 
+⛔ **`fable` — sparingly** (owner, 2026-09-24: *"fable is very expensive, only
+use it sparingly"*). Only when ALL of these hold:
+1. the job is very long and complicated, and cannot be split into independent
+   pieces;
+2. one agent must hold many files or constraints at once (a whole-repo audit, a
+   refactor across many cross-references, a failure spanning several systems);
+3. a cheaper tier would cost more in rework — best evidence: it already tried and
+   failed.
+
+Never for census or review pieces, however long the parent task. "Important" is
+not a reason. When you do use it, say why in one line in the report.
+
 Qualifiers:
 - **Unsure between two tiers:** cheaper for read-only work, stronger for
   anything that writes.

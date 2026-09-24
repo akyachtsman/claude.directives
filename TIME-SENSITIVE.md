@@ -53,11 +53,6 @@ is added by the pass that finds it.
 4. **New topic:** anything the directives start relying on about an outside
    system gets a row in the PR that adds it, dated or not.
 
-## Open decisions
-| Item | Status |
-|---|---|
-| Where the `fable` alias fits in the sub-agent tiers | Owner ruled 2026-09-24: very expensive, sparing use only; the wording lands in `global.md` → *Subagent Model Selection* in the next PR |
-
 ## Models & sub-agents
 | Topic | Source | Last checked | Check |
 |---|---|---|---|

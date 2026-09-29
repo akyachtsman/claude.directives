@@ -110,8 +110,8 @@ the **reaction ladder** (→ *The reaction ladder*), which applies precisely whe
 names HEAD, so a current-head response is not required on it;
 **_unavailable_**, a usage-limit reply that is never clean and still unblocks
 the merge once stated on the PR and still current; and **outage** — something
-terminal and observable, never elapsed silence. Either of those two unblocks
-the merge only with the fallback reviewer's clean verdict on the head (`git.md` → *PR Lifecycle*). ⚠️ The ladder clears this gate
+terminal and observable, never elapsed silence. Those two, like any state the
+test admits, unblock the merge only with the fallback reviewer's clean verdict on the head (`git.md` → *PR Lifecycle*). ⚠️ The ladder clears this gate
 and NOT the `codex-flagged` label. Where no label is present — a first pass
 that came back clean as a reaction, so `codex-monitor` never added one — that
 is the whole gate and the merge proceeds. Where a label from an earlier flagged

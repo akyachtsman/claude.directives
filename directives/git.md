@@ -140,8 +140,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   merge to a stalled PR. The exits known today: the **reaction ladder** below,
   when NOTHING from Codex names HEAD; **_unavailable_**, a usage-limit reply
   stated on the PR while still current; and **outage**, a request that could not
-  be made or accepted at all. Those last two clear it only with the fallback
-  reviewer's clean verdict (below). ⚠️ The ladder clears this gate and NOT the
+  be made or accepted at all. Those two, like any state the test admits, clear
+  it only with the fallback reviewer's clean verdict (below). ⚠️ The ladder clears this gate and NOT the
   `codex-flagged` label — the label rule above governs that. None of them is a
   way past a verdict you can READ, and none ever bypasses an adverse verdict that
   exists. **Every exit stays reachable, and none clears the gate silently.**
@@ -236,8 +236,8 @@ A `docs/…` path in these directives resolves against claude.directives:
     the PR — never on one reader. Merging while silently omitting it is precisely
     the failure this gate exists to prevent: an absent signal read as a passing one.
   - **Fallback reviewer when Codex is down (owner ruling, 2026-09-29).** In
-    either state the *unreachable-review test* admits, the second reader is an
-    **independent Claude agent**:
+    every state the *unreachable-review test* admits — today's two and any
+    added later — the second reader is an **independent Claude agent**:
     - **Independent** means a fresh sub-agent with `model: "sonnet"` (`global.md` → *Subagent Model Selection*),
       given the PR number, the head SHA and the repo — never the session's own
       plan, reasoning or summary of the change. The session that wrote the
@@ -249,9 +249,10 @@ A `docs/…` path in these directives resolves against claude.directives:
       why it is wrong. A fix is a new head, so a fresh agent reviews again; only a
       clean review of the head being merged clears the gate, and
       `global.md` → *Review Rounds Have to Terminate* governs its rounds.
-    - **Record it on the PR before merging**, in one comment: why Codex is down
-      (the reset time its reply named, or the outage observed), the head SHA
-      reviewed, and the verdict with what was fixed.
+    - **Record it on the PR before merging**, in one comment: the observable
+      terminal state that shows Codex cannot review (for *unavailable*, the
+      reset time its reply named; for an outage, what was observed), the head
+      SHA reviewed, and the verdict with what was fixed.
     - It clears the verdict gate only; the `codex-flagged` label rule above is
       unchanged. When the allowance returns, the next PR goes back to Codex, and
       nothing already merged is re-reviewed.

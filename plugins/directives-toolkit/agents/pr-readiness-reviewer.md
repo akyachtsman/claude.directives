@@ -100,7 +100,10 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      *unavailable* reply still inside its reset window, or a
      request that could not be made or accepted at all — never elapsed silence.
      Neither needs a pass to
-     have run: a request rejected before any review began is the exit. A
+     have run: a request rejected before any review began is the exit. Either
+     one clears the verdict only with the **fallback reviewer**'s clean review
+     of HEAD recorded on the PR (`git.md` → *PR Lifecycle*); without that
+     comment the row stays **Pending**. A
      reaction-only round is **not** one of these; where a label is still present
      that rule escalates it. **An absent label removes only the label
      blocker.** It is written asynchronously and proves nothing about the head,

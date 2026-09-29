@@ -140,7 +140,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   merge to a stalled PR. The exits known today: the **reaction ladder** below,
   when NOTHING from Codex names HEAD; **_unavailable_**, a usage-limit reply
   stated on the PR while still current; and **outage**, a request that could not
-  be made or accepted at all. ⚠️ The ladder clears this gate and NOT the
+  be made or accepted at all. Those last two clear it only with the fallback
+  reviewer's clean verdict (below). ⚠️ The ladder clears this gate and NOT the
   `codex-flagged` label — the label rule above governs that. None of them is a
   way past a verdict you can READ, and none ever bypasses an adverse verdict that
   exists. **Every exit stays reachable, and none clears the gate silently.**
@@ -230,11 +231,30 @@ A `docs/…` path in these directives resolves against claude.directives:
     allowance is **weekly and shared across Codex, Work, Workspace Agents and
     ChatGPT for Excel**, so it can be exhausted by work in another repo entirely —
     check the account, not the repo, before concluding anything about config.
-    Treat it as the gate being DOWN: it never counts as clean, but it does unblock
-    the merge decision on one condition — **say so on the PR before merging**, one
-    line naming the reset time, so the record shows the PR merged with one reader
-    rather than two. Merging while silently omitting it is precisely the failure
-    this gate exists to prevent: an absent signal read as a passing one.
+    Treat it as the gate being DOWN: it never counts as clean, and it opens the
+    merge decision only through the **fallback reviewer** (next bullet), stated on
+    the PR — never on one reader. Merging while silently omitting it is precisely
+    the failure this gate exists to prevent: an absent signal read as a passing one.
+  - **Fallback reviewer when Codex is down (owner ruling, 2026-09-29).** In
+    either state the *unreachable-review test* admits, the second reader is an
+    **independent Claude agent**:
+    - **Independent** means a fresh sub-agent with `model: "sonnet"` (`global.md` → *Subagent Model Selection*),
+      given the PR number, the head SHA and the repo — never the session's own
+      plan, reasoning or summary of the change. The session that wrote the
+      change never grades it.
+    - It runs the built-in `/code-review` on the PR at that head (the
+      `pr-review-toolkit:code-reviewer` agent where the skill is not listed) and
+      reports each finding with file and line.
+    - Its findings bind like Codex's: each is fixed or answered on the PR with
+      why it is wrong. A fix is a new head, so a fresh agent reviews again; only a
+      clean review of the head being merged clears the gate, and
+      `global.md` → *Review Rounds Have to Terminate* governs its rounds.
+    - **Record it on the PR before merging**, in one comment: why Codex is down
+      (the reset time its reply named, or the outage observed), the head SHA
+      reviewed, and the verdict with what was fixed.
+    - It clears the verdict gate only; the `codex-flagged` label rule above is
+      unchanged. When the allowance returns, the next PR goes back to Codex, and
+      nothing already merged is re-reviewed.
   - **Codex reviews are metered per REQUEST, not per push.** Each request spends
     from that shared weekly pool, and every trigger the next bullet names is a
     request. Verify locally, open the PR once, and reserve `@codex review` for a fix you
@@ -279,7 +299,8 @@ sessions auto-merge — don't ask me permission to merge each time").** When the
 gates hold — CI green on the head SHA; a **clean** current-head Codex verdict per
 the gate above (a response naming the head is not a verdict, since a review with
 live findings names it too), or the reaction ladder's attestation, or any state
-the *unreachable-review test* admits, recorded on the PR;
+the *unreachable-review test* admits, recorded on the PR with the fallback
+reviewer's clean verdict (→ *PR Lifecycle*);
 no `codex-flagged` label — request a pass to clear it, or, on a state that test
 admits, remove it with the observable the last-resort rule requires. ⚠️ These two
 are separate gates and the ladder clears only the first. Where no `codex-flagged`

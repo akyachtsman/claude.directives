@@ -223,12 +223,10 @@ managed settings. Do NOT
 commit it to this repo's `.claude/settings.json` — a committed value leaves the
 command gated off anyway.
 
-Measured baseline (2026-08-19, 2 runs/case, with/without arms): **9 of 9 pass**,
-mean Δ +0.67 — neither under- nor over-triggering. Two cases added 2026-08-20
-(`update-pages-stale`, `doc-comp-contract`) alongside the description widenings
-that motivated them are **unmeasured** until the suite is next run. The durable lesson, and the
+Measured baseline (2026-09-29, 3 runs/case, with/without arms): **12 of 12 pass**,
+mean Δ +0.75 — neither under- nor over-triggering. The durable lesson, and the
 reason to keep measuring: **a description triggers on the WORDS a request
-actually uses, not on what the skill is for.** Both gaps found were fixed by
+actually uses, not on what the skill is for.** All three gaps found were fixed by
 rewriting the description against the measurement; the worked cases are in
 `docs/internal/skill-eval-notes.md`.
 

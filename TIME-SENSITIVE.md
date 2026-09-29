@@ -126,6 +126,6 @@ is added by the pass that finds it.
 ## Measured baselines
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
-| Auto-skill eval baseline | `docs/internal/skill-eval-notes.md` | 2026-08-19 | ⏳ The next time an auto-skill description changes and the eval is run |
+| Auto-skill eval baseline | `docs/internal/skill-eval-notes.md` | 2026-09-29 | ⏳ The next time an auto-skill description changes and the eval is run |
 | What sizes the 120-minute UI-suite timeout floor | `templates/scripts/check-job-bounds.py` (header, rule 3) | undated | ⏳ The next slow-end fleet UI run's timings |
 | Fleet auth-scenario and request timings | `test.md` → *Playwright* | 2026-08-25 | ⏳ The next session in those repos |

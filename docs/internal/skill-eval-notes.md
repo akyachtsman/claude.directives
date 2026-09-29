@@ -9,10 +9,11 @@ A description that drifts stops firing **silently** — no error, just absence �
 
 ## Baseline
 
-2026-08-19, 2 runs/case, with/without ablation arms: 9 of 9 pass, mean Δ +0.67.
-All three negatives correctly never fire in either arm.
+2026-09-29, 3 runs/case, with/without ablation arms: 12 of 12 pass, mean Δ +0.75.
+All three negatives correctly never fire in either arm. (Previous: 2026-08-19,
+2 runs/case, 9 of 9, mean Δ +0.67.)
 
-## The two gaps, and what fixed them
+## The three gaps, and what fixed them
 
 **`doc-comp` — 0.00 → +1.00.** It fired on "diff the old X against the new X" and
 never on "compare these two versions of our X" — identical prompts, one verb
@@ -25,6 +26,17 @@ revisions), plus stating that it applies to text pasted inline.
 assistant's side ("before OFFERING work"), while the case it missed was the user
 asking directly. Adding that phrasing took it to 5/5 with the plugin and 0/5
 without.
+
+**`scope-chk` — 0/2 → 3/3 on `scope-chk-offer` (2026-09-29).** Found live: asked
+"where are we at", a session proposed changing another repo without firing the
+skill. The case reproduces it — the user names another repo only to ask what is
+next, and nobody asks for work there. With the plugin, both runs searched for
+the other repo and proposed a change there; one even wrote "I'd use `scope-chk`
+first" and did not. The description covered offering work and the user asking
+for it, not a message that merely NAMES another repo. Adding "whenever a message
+names another repo at all, even only to ask where things stand or what the next
+step is" (and "proposing") took it to 3/3 with the plugin, 0/3 without, with
+every negative still silent.
 
 ## Standing rule
 

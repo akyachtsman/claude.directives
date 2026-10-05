@@ -159,6 +159,7 @@ jobs:
           diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
           diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
           diff .github/scripts/check-py-warnings.py templates/scripts/check-py-warnings.py
+          diff .github/scripts/check-ui-suite-env.py templates/scripts/check-ui-suite-env.py
           diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
           echo "OK: paired files in sync"
 
@@ -246,8 +247,10 @@ jobs:
       # other (Codex reproduced it on #333). The composite now copies the run
       # step's env onto the check step; this keeps that copy honest, since a
       # comment saying "add it here too" is not a mechanism.
+      # The guard ships to projects (PROP6), so its defaults are a project's paths;
+      # this repo points it at the templates it ships.
       - name: Check the ui-suite composite gives both steps the same environment
-        run: python3 .github/scripts/check-ui-suite-env.py
+        run: python3 .github/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml --kit-dir templates/ui-tests
 
       # Same doctrine as the viewport gate's own guard above. This one was
       # hand-verified for three rounds and a previously-working branch broke

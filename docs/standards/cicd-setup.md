@@ -347,7 +347,17 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/scripts/check-job-bounds.py
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-py-warnings.py \
   -o .github/scripts/check-py-warnings.py
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
+  -o .github/scripts/check-ui-suite-env.py
 ```
+
+`check-ui-suite-env.py` keeps the ui-suite composite's viewport checks on the
+same environment as its Playwright run: the checks import the config, so a
+variable added to the run step alone makes them read a different config from the
+one that runs. It also checks that every `process.env` read in the kit is wired
+from an input. A variable that arrives another way goes in
+`.github/ui-suite-env-exempt.json` as `{"NAME": "how it arrives"}`; an entry with
+no reason is refused.
 
 `qa.yml` already invokes it. It needs no config file — the three rules are the
 same in every repo:

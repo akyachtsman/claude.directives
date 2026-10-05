@@ -249,7 +249,7 @@ node .github/scripts/check-claims-cases.js       # that guard's own guard. Re-pr
 python3 .github/scripts/check-py-warnings.py      # every tracked .py compiles clean — a `\` in a plain docstring is FATAL on 3.15, and the guard then stops running
 (cd templates/ui-tests && npm install --no-package-lock --ignore-scripts)   # RUN THIS FIRST: BOTH viewport checks below resolve @playwright/test from here; without it the cases exit 1 "CANNOT RUN"
 node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — needs the ui-tests install ABOVE, and runs a Playwright suite (minutes). Re-prove with CHECK_UI_VIEWPORTS_BIN=<mutant>
-python3 .github/scripts/check-ui-suite-env.py     # the ui-suite composite gives both viewport checks the SAME env and cwd as the Playwright run; report-path variables and each step's cwd pinned to literals
+python3 .github/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml --kit-dir templates/ui-tests  # the ui-suite composite gives both viewport checks the SAME env and cwd as the Playwright run; report-path variables and each step's cwd pinned to literals
 python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths. Re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
 python3 .github/scripts/check-report-path-cases.py # the ui-suite report-path validator's own guard — this repo does not use the composite, so nothing else here would notice it break. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
 node .github/scripts/check-contrast-cases.js      # the exported WCAG guardrail's own guard — this repo has no styles/tokens.css, so NOTHING else here would notice it break (#334)
@@ -279,6 +279,7 @@ diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
 diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
 diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
 diff .github/scripts/check-py-warnings.py templates/scripts/check-py-warnings.py
+diff .github/scripts/check-ui-suite-env.py templates/scripts/check-ui-suite-env.py
 diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
 test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed

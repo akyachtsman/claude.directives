@@ -152,6 +152,15 @@ A `docs/…` path in these directives resolves against claude.directives:
     (`pull_request_review_comment`), which Codex also uses. All three count as a
     RESPONSE on the same terms: Codex-authored, naming the current head. Absence
     is *pending*, never clean. A bare 👍 is **not** one of these: see below.
+  - ⚠️ **The *Codex Review Summary* comment is a progress table, never a
+    verdict.** Seconds after a request, Codex posts a comment headed *Codex
+    Review Summary*, then edits it in place. Its table names the commit and a
+    status. **Running** means the review is in flight, so the gate is *pending*
+    however green CI is. Un-drafting starts a review, so a PR that has just gone
+    ready for review has no verdict yet. **Completed** says the review finished,
+    not what it found: the verdict is in the review, inline comments and
+    reactions above and below. (claude.prop#115 merged 16 s after un-draft, on
+    the Running summary; the finding landed 3 min 37 s later, on a merged PR.)
   - ⚠️ **A response is not a verdict.** Codex-authored and naming HEAD proves the
     head was REVIEWED — not that it PASSED. A review carrying live inline findings
     satisfies both tests while saying the opposite, so treating "a response at the

@@ -15,7 +15,7 @@ lives in `NEW-REPO-USER-INSTRUCTIONS.md`. Supporting directories:
 
 - `plugins/directives-toolkit/` — the installable toolkit (commands, auto-skills,
   QA/data agents, guard hooks); this repo doubles as its plugin marketplace
-- `docs/` — reference material, including the interactive logical map at
+- `docs/` — reference material, including the interactive repo map at
   `docs/site/logical-map.html` and the [AI-first working principles](docs/guides/ai-first-principles.md)
 - `templates/` — installable workflows and the Playwright test kit
 

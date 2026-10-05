@@ -113,9 +113,11 @@ jobs:
       - name: Check the job-bounds guard itself reads workflows correctly
         run: python3 .github/scripts/check-job-bounds-cases.py
 
-      # The logical map is generated from EXPORTS.json, so a committed page that
-      # no longer matches the manifest is drift — fail here rather than let the
-      # map quietly describe a repo that has moved on.
+      # The repo map is generated from the tree, so a committed page that no
+      # longer matches it is drift — fail here rather than let the map quietly
+      # describe a repo that has moved on. The build also fails on its own when
+      # a drawn connection loses its evidence, a file is left unconnected, or an
+      # arrow would cross a box (see the generator's header).
       - name: Check the logical map is regenerated
         run: node .github/scripts/build-logical-map.js --check
 
@@ -360,7 +362,7 @@ jobs:
 
   # Dogfood the exported UI-testing standard (test.md / templates/ui-tests) on
   # this repo's interactive Pages artifact: docs/site/logical-map.html (the
-  # repo map, logical view — the physical view was retired 2026-07-21).
+  # repo map, a lifecycle flow since 2026-10-05).
   # Blocking: the map is a static, self-contained file with no backend, so the
   # run is deterministic (unlike the downstream local-server UI tests).
   ui-tests:
@@ -423,5 +425,5 @@ jobs:
       - name: Validate map HTML
         run: npx --yes html-validate docs/site/logical-map.html
 
-      - name: Repo map UI checks (logical view)
+      - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js

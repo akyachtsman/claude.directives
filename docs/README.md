@@ -39,7 +39,7 @@ Referenced by the exported directives and the qa agents.
 |------|----------------|
 | `internal/repo-monitors.md` | This repo's own infrastructure monitors (`ci-monitor`, `codex-monitor`, `pages-monitor`) **and self-test triage** (the `ci-failure` / `codex-flagged` flow) |
 | `internal/archive/design-migration.md` | The per-project generative design migration (tokens + `/design-intake` + Stitch/frontend-design) — the record of the plan, now implemented |
-| `internal/repo-map-ui.md` | What the `Repo Map UI` suite covers and why — interaction, input surface, visual invariants, the router's provenance. Read before changing the map, the generator or the suite |
+| `internal/repo-map-ui.md` | How the repo map is built and what the `Repo Map UI` suite covers — the evidence rule, the start-to-finish check, the layout and its invariants. Read before changing the map, the generator or the suite |
 | `internal/gate-history.md` | Why the local gate looks like it does — the history `CLAUDE.md`'s *Local gate* no longer carries, and where each script's history now lives (its own header) |
 | `internal/skill-eval-notes.md` | Auto-skill eval baseline and the worked description-tuning cases behind it |
 | `internal/accepted-residuals.md` | Security trade-offs the owner explicitly accepted, with the reasoning (currently: the scheduling-tool allowlist) |
@@ -47,8 +47,8 @@ Referenced by the exported directives and the qa agents.
 ## `site/` — GitHub Pages assets
 | File | What it is |
 |------|------------|
-| `site/logical-map.js` | The map's hand-written behaviour — pan/zoom/search/isolate, drag-to-move and drag-to-resize with per-browser persistence, and the edge router. Generated HTML loads it; never generated itself |
-| `site/logical-map.html` | The repo map (logical view) — domains, compartments, swap classes, vendor sockets (the `EXPORTS.json` view); zoom/pan/search, self-contained (no CDN). **Generated** by `.github/scripts/build-logical-map.js` from `EXPORTS.json` — never hand-edit it; `qa.yml` fails a committed copy that no longer matches. The physical-folders view was retired 2026-07-21 |
+| `site/logical-map.js` | The map's hand-written behaviour — pan/zoom, search, and trace (click a file to light its whole chain, with the line in the files behind each link). The layout is computed by the generator, not here. Generated HTML loads it; never generated itself |
+| `site/logical-map.html` | The repo map — a lifecycle flow from *Publish* to *Upkeep*, every exported file in its stage, every connection backed by a line in the files, vendors as the last column; self-contained (no CDN). **Generated** by `.github/scripts/build-logical-map.js` — never hand-edit it; `qa.yml` fails a committed copy that no longer matches. Replaced the class view 2026-10-05; the physical-folders view was retired 2026-07-21 |
 | `site/commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
 | `site/index.html` | Demo gallery — links to the repo map, React preview, and commands reference (same list as the site-root `../index.html`) |
 | `site/.htmlvalidate.json` | html-validate config for the site pages |

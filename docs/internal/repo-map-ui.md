@@ -1,4 +1,4 @@
-# Repo Map UI — what the suite covers and why
+# Repo Map — how it is built and what the suite covers
 
 Internal. Read before changing `docs/site/logical-map.html`,
 `docs/site/logical-map.js`, `.github/scripts/build-logical-map.js`, or
@@ -6,81 +6,94 @@ Internal. Read before changing `docs/site/logical-map.html`,
 holds the reasoning, per `global.md` → *Plain Language First* (a rule states the
 rule; its reasoning lives elsewhere).
 
-The map is this repo dogfooding its own exported UI-testing standard
-(`test.md` / `templates/ui-tests`) on a real interactive artifact. The suite is
-a headless Chromium run in the `Repo Map UI` job of `qa.yml`. (The summary `CLAUDE.md`
-carried until 2026-09-23 follows.) It asserts rendering and layout,
-the whole input surface (pointer, wheel, touch, keyboard), the arrangement a
-READER makes rather than only the shipped one, and the visual invariants — no
-arrow crosses a frame it does not connect, no two arrows run alongside each
-other, no two edge labels overlap.
+## What the map is (owner ruling, 2026-10-05)
 
-## Interaction coverage
+A **lifecycle flow**, start to finish: *Publish → Bootstrap → Session start →
+Build → PR & review → Merge & deploy → Upkeep*, with the vendors we delegate to
+as a last column. Every exported file sits in exactly one stage, where it first
+acts. The arrows between files are the connections that DO something: copies,
+installs, imports, runs, triggers, governs, hands off, fills in, plus the guides
+that explain and the vendor sockets that delegate. They are drawn at rest.
 
-The map renders; no frame clips its contents; dragging a frame moves it and
-dragging its corner resizes it; the layout survives a reload; every layer toggle
-works **and reverses**; the legend opens; search and isolate behave; dragging the
-canvas selects no text.
+It replaced the class view (8 boxes for the durability classes, 10 class-level
+arrows, nothing drawn until a box was clicked). The owner asked for the map to be
+"redone and all the connections wired from the start to finish", and chose this
+shape and **derived + checked** wiring over a hand-kept list.
 
-## Input surface
+## The evidence rule
 
-A mouse-only test never reaches most of this, which is why it is enumerated
-(`test.md` → *Assert the outcome, not the mechanism*, failure shape 1):
+A connection is drawn only if the files say so. Each declared connection names
+which end carries the reference (`a` by default, `b` where the flow runs opposite
+to it: a checker names what it checks, an installer names its source), and the
+build looks for one of the other file's NAMES in that file's text: its path, its
+basename (only when unique and not generic), `/command`, an agent's
+`directives-toolkit:` name, a skill name, `actions/<x>`, a workflow's `name:`,
+or an alias listed in the generator. The first non-comment line that matches is
+stored and shown in the page's side panel, so every arrow can be audited from the
+page.
 
-- scroll pans on both axes without zooming
-- ctrl/pinch zooms; two-finger pinch zooms on touch
-- middle-drag pans over a frame
-- frames are keyboard-reachable and arrow keys pan
-- `fit` recentres **without discarding the reader's arranged layout**
+What evidence proves: the source file names the target. It does not prove the
+connection's KIND (copies vs governs). That is the declaration's job, and a
+reviewer's.
 
-## Visual invariants
+Four families are **derived**, never declared, so none can be forgotten: a
+workflow's `uses: ./.github/actions/<x>`, a `workflow_run` watcher and the
+workflow it watches, the scripts the plugin's hooks run, and every vendor socket
+in `EXPORTS.json` → `externals`. Declaring one of these by hand fails the build.
 
-The interaction checks kept missing these, and a human had to report them —
-which is the whole argument for measuring rather than eyeballing:
+The manifest and the map files themselves are never evidence: they name every
+file.
 
-- every frame states its relationships in words
-- nothing is drawn at rest; selecting a frame draws only its own connections
-- **no arrow crosses a frame it does not connect** — asserted on the shipped
-  layout AND after frames are dragged, the case the earlier router had never
-  been exercised against
-- **no two arrows run alongside each other** — measured as the length of one
-  line lying within 11px of another: a crossing costs a few px, a bundle costs
-  its whole span
-- no two edge labels overlap; labels draw above every line
-- frames sitting level with each other are linked straight across rather than
-  detouring through the band above
+## Start to finish
 
-**Two arrangements a READER made are pinned as cases** — not the suite's own
-scripted drags — because both defects a human reported lived only in layouts the
-script never produced: neighbours offset just enough to miss the side-link
-threshold, and one frame edge carrying three runs.
+Every box must be reachable from the first stage by following arrows. A file
+nothing leads to is a file the map cannot explain the existence of, and the build
+names it. Only the **re-sync** kind may point backwards (upkeep → session); the
+trace does not follow it, or every file would be upstream of every other.
 
-`arrange()` fails loudly if a test layout names a frame that does not exist: a
-mistyped id is silently ignored on load and would quietly test nothing.
+## Layout
 
-## The router
+Computed by the generator, not the browser, so the page is right before any
+script runs and the geometry can be checked at build time. Columns are stages.
+Within a column, boxes are ordered by repeated barycenter sweeps (Sugiyama's
+crossing-reduction step with the layers fixed). A connection that skips columns
+reserves a thin slot in each column it crosses, so it passes through a gap, never
+through a box. Same-column links and the re-sync loop travel in the gutters,
+which hold no boxes.
 
-Ported from `claude.insurance` — its `relmap.js` and `relmap-view.js` under
-js/keep: **reserve space rather than search for it**, with hop-breaks where lines
-cross. Their layout computes node positions; ours lets the reader drag, so the
-channels are MEASURED from the frames' own extents — the complement of the
-y-intervals gives the horizontal bands, the complement of the x-intervals over a
-y-range gives the vertical corridors. Ports are ordered by where each run is
-heading, which is Sugiyama's crossing-minimisation step applied where a
-hand-placed layout still leaves a choice.
+**Boxes cannot be dragged.** The previous map let readers move and resize its
+frames, and two of its worst routing defects lived only in layouts a reader had
+made, which no fixed test could reach. A computed layout is one layout, and both
+the build and the suite prove it.
 
-`build-logical-map.js`'s default geometry is a GRID whose gutters line up across
-rows precisely so those corridors exist.
+## What the suite asserts
 
-## Why the map opens collapsed
+Run in the `Repo Map UI` job of `qa.yml` against the rendered page:
 
-Each frame leads with its meaning and a delivery-mix bar; its files appear on
-request (search opens the frame holding a hit). A full filename list shown at
-once is a reference table rather than a map.
+- every box and every connection in the data is rendered, in its stage column
+- every connection is visibly drawn at rest
+- **no connection crosses a box it does not connect**, measured on the rendered
+  SVG path, and no two boxes overlap — the generator checks the same thing on
+  its own numbers; this proves what the browser actually drew
+- the trace for **every** box equals an independent walk of the same data
+- panel links move the trace; Escape and a second click clear it
+- search marks matches, and Enter traces the first and brings it into view
+- every toggle (exports only, hide vendors, each kind in the legend) hides and
+  **reverses**
+- input surface: scroll pans on both axes without zooming, ctrl/pinch zooms, the
+  zoom buttons, fit, canvas drag pans without selecting text, a drag that starts
+  on a box pans without selecting it, middle-drag, arrow keys, Tab + Enter on a
+  box, two-finger touch pinch
+- at phone width the page does not scroll sideways and the panel stays on screen
+- no console or page errors
+
+Each assertion was proven able to fail before shipping (2026-10-05): a trace that
+follows the re-sync loop, connections hidden at rest, and a box moved into a
+gutter all turn the suite red. A harmless attribute change does not.
 
 ## Retired
 
-The physical-folders view was retired 2026-07-21; the logical map is the repo's
-single map. The old design-theme parity + contrast checks were retired with the
-fixed design system — design is now per-project, and the contrast guardrail
-ships in `templates/scripts/` for projects to run against their own tokens.
+The class view with draggable frames and its routed edges (2026-10-05). The
+physical-folders view (2026-07-21). The old design-theme parity and contrast
+checks went with the fixed design system; the contrast guardrail ships in
+`templates/scripts/` for projects to run against their own tokens.

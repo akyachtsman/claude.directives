@@ -36,8 +36,8 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
 | `TIME-SENSITIVE.md` | The register of facts the directives rely on about something OUTSIDE this repo — models, Claude Code, GitHub, Codex, the test environment, outside services — with where it is stated, when it was last verified and how to re-check it. Kept apart from the owner's standing directives, which never expire. Walked by every `/audit-repo` run |
-| `index.html` | The repo's GitHub Pages landing page (links to the logical map and the commands reference); its demo-card list is kept in sync with `docs/site/index.html` by `check-landing-cards.js` |
-| `docs/site/logical-map.html` | The repo map — **generated** from `EXPORTS.json` by `.github/scripts/build-logical-map.js`; never hand-edit it. Its behaviour (pan/zoom/search/isolate, layer toggles, drag-to-move and drag-to-resize with per-browser persistence) is hand-written in `docs/site/logical-map.js` |
+| `index.html` | The repo's GitHub Pages landing page (links to the repo map and the commands reference); its demo-card list is kept in sync with `docs/site/index.html` by `check-landing-cards.js` |
+| `docs/site/logical-map.html` | The repo map — a lifecycle flow, stage by stage, with every connection read out of the files. **Generated** by `.github/scripts/build-logical-map.js` from `EXPORTS.json` and the files themselves; never hand-edit it. Its behaviour (pan/zoom, search, trace a file's chain with the evidence for each link) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions do not attach plugins by themselves** — an environment's setup script performs the FIRST install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0); after that the `SessionStart` hook re-runs the same installer each session and moves it to current |
 | `.claude/settings.json` | Plugin enablement (`extraKnownMarketplaces` + `enabledPlugins`) plus the `SessionStart` hook registration; the guard hooks themselves ship inside the plugin |
@@ -263,7 +263,7 @@ python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own gu
 python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT; it does NOT check that carriers install them, nor that a composite names a file that exists
 python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — real `git init` fixtures, each refusal with its accepting complement. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
 node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — failing branches injected, every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
-node .github/scripts/build-logical-map.js --check # the committed logical map still matches EXPORTS.json
+node .github/scripts/build-logical-map.js --check # the committed map still matches the tree; every connection has evidence, every file is wired from the start, no arrow crosses a box
 node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
 node .github/scripts/check-links.js --internal   # offline, against the working tree. Strictly SINGLE-LINE: only a reference wholly on one line is counted, and the run says so (#366)
 node .github/scripts/check-links-cases.js        # that checker's own guard. Re-prove with CHECK_LINKS_BIN=<mutant> — an ABSOLUTE path
@@ -292,7 +292,7 @@ npx html-validate docs/site/logical-map.html                 # when the map chan
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
-#   after editing EXPORTS.json or the map, regenerate first: node .github/scripts/build-logical-map.js
+#   after editing EXPORTS.json, the map, or any file a drawn connection quotes, regenerate first: node .github/scripts/build-logical-map.js
 ```
 ⚠️ **RUN THE GATE AFTER `git add`, NOT BEFORE — a NEW file is invisible to it
 until staged.** `check-exports`, `check-py-warnings` and `check-claims --derive`

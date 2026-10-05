@@ -118,7 +118,8 @@ Run in the `Repo Map UI` job of `qa.yml` against the rendered page:
 - input surface: scroll pans on both axes without zooming, ctrl/pinch zooms, the
   zoom buttons, fit, canvas drag pans without selecting text, a drag that starts
   on a box pans without selecting it, middle-drag, arrow keys, Tab + Enter on a
-  box, two-finger touch pinch, one-finger touch pan
+  box, two-finger touch pinch, two-finger drag, one-finger touch pan; search finds a
+  file inside a group box
 - at phone width the page does not scroll sideways and the panel stays on screen
 - no console or page errors
 

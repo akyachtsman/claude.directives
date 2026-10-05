@@ -146,7 +146,14 @@
   wrap.addEventListener('pointerdown', ev => {
     if (ev.pointerType !== 'touch') return;
     touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-    if (touches.size === 2) { pan = null; pinch = { d: spread().d, scale, px, py }; }
+    if (touches.size === 2) {
+      pan = null;
+      const s0 = spread(), r = wrap.getBoundingClientRect();
+      // Anchor on the midpoint where the gesture STARTED, so fingers that move
+      // together pan the map and a pinch-while-moving keeps its content under
+      // the fingers (Codex, #393).
+      pinch = { d: s0.d, scale, px, py, mx: s0.mx - r.left, my: s0.my - r.top };
+    }
   }, true);
   wrap.addEventListener('pointermove', ev => {
     if (ev.pointerType !== 'touch' || !touches.has(ev.pointerId)) return;
@@ -156,8 +163,10 @@
     const now = spread(), r = wrap.getBoundingClientRect();
     const next = clamp(pinch.scale * (now.d / (pinch.d || 1)), MIN_SCALE, 3);
     const mx = now.mx - r.left, my = now.my - r.top;
-    px = mx - (mx - pinch.px) * (next / pinch.scale);
-    py = my - (my - pinch.py) * (next / pinch.scale);
+    // The canvas point that sat under the starting midpoint stays under the
+    // fingers' current midpoint.
+    px = mx - (pinch.mx - pinch.px) * (next / pinch.scale);
+    py = my - (pinch.my - pinch.py) * (next / pinch.scale);
     scale = next; paint();
   }, true);
   for (const t of ['pointerup', 'pointercancel']) {

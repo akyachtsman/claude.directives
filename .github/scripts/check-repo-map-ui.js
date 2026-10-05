@@ -194,6 +194,15 @@ await page.fill('#search', 'qa-pipeline');
   if (!hits.includes(QA)) fail('search for "qa-pipeline" did not mark it');
   else ok(`search marks ${hits.length} match(es)`);
 }
+// A file inside a group box is findable: searching for it marks the group
+// (Codex, #393: 64 tracked files were unfindable behind the two group boxes).
+{
+  await page.fill('#search', 'check-links.js');
+  const hits = await page.$$eval('.n.hit', ns => ns.map(n => n.dataset.id));
+  if (!hits.includes('self:ci')) fail(`searching a file inside a group does not mark the group (${hits.join(', ') || 'no hits'})`);
+  else ok('a file inside a group box is found through the box');
+  await page.fill('#search', 'qa-pipeline');
+}
 await page.press('#search', 'Enter');
 await settle();
 {
@@ -377,6 +386,17 @@ await page.click('#t_fit');
   await touch('touchEnd', []);
   if ((await view()).scale <= before.scale) fail('two-finger pinch does not zoom');
   else ok('two-finger pinch zooms on touch');
+  // Two fingers moving together at a constant spread pan the map (Codex, #393:
+  // anchoring on the CURRENT midpoint made this a no-op).
+  {
+    const p0 = await view();
+    await touch('touchStart', [{ x: 600, y: 500 }, { x: 800, y: 500 }]);
+    for (let i = 1; i <= 6; i++) await touch('touchMove', [{ x: 600 + i * 15, y: 500 + i * 10 }, { x: 800 + i * 15, y: 500 + i * 10 }]);
+    await touch('touchEnd', []);
+    const p1 = await view();
+    if (Math.abs(p1.px - p0.px - 90) > 2 || Math.abs(p1.py - p0.py - 60) > 2) fail(`a two-finger drag does not pan with the fingers (moved ${p1.px - p0.px}, ${p1.py - p0.py}; expected 90, 60)`);
+    else ok('a two-finger drag pans with the fingers');
+  }
   // One finger pans. The page sets touch-action:none, so if this breaks there
   // is no other way to move around a zoomed map on a phone (Codex, #393).
   const v = await view();

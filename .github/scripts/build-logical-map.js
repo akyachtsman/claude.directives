@@ -834,7 +834,9 @@ for (const id of stageOf.keys()) {
 const nodeHtml = [...stageOf.keys()].map(id => {
   const g = geom.get(id), d = nodeData[id];
   const kind = GROUPS[id] ? 'group' : id.startsWith('vendor:') ? 'vendor' : 'file';
-  const search = [d.label, d.path ?? '', d.cmp ?? '', d.stage].join(' ').toLowerCase();
+  // A group box answers for every file inside it, or 64 tracked files could
+  // not be found at all (Codex, #393).
+  const search = [d.label, d.path ?? '', d.cmp ?? '', d.stage, ...(GROUPS[id]?.files ?? [])].join(' ').toLowerCase();
   const title = [d.path ?? d.label, DELIVERY[d.del].split(' —')[0], d.cmp].filter(Boolean).join(' · ');
   return `<button type="button" class="n n-${kind}" data-id="${h(id)}" data-stage="${d.stage}" `
     + `data-search="${h(search)}" title="${h(title)}" `

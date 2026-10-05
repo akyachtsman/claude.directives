@@ -236,17 +236,20 @@ await toggleCase('#t_vendor', '.n[data-id^="vendor:"]', '"hide vendors"');
 // Hiding vendors hides their column too, and "fit" then fits what is left
 // rather than an empty column (Codex, #393).
 {
+  // Fit is bound by width OR height, whichever is tighter. Width-bound, the scale
+  // grows; height-bound, the scale holds and the narrower map is re-centred
+  // (px grows). A fit that still measures the vendor column does neither.
   await page.click('#t_fit');
-  const full = (await view()).scale;
+  const { scale: full, px: fullPx } = await view();
   await page.click('#t_vendor'); await settle();
   await page.click('#t_fit');
   const col = await page.$eval('.st[data-stage="vendors"]', el => getComputedStyle(el).display);
-  const narrow = (await view()).scale;
+  const { scale: narrow, px: narrowPx } = await view();
   await page.click('#t_vendor'); await settle();
   await page.click('#t_fit');
   const back = await page.$eval('.st[data-stage="vendors"]', el => getComputedStyle(el).display);
   if (col !== 'none') fail('"hide vendors" leaves the Delegated column showing');
-  else if (!(narrow > full)) fail(`"fit" with vendors hidden does not use the freed width (${full} → ${narrow})`);
+  else if (!(narrow > full || (narrow === full && narrowPx > fullPx))) fail(`"fit" with vendors hidden does not use the freed width (scale ${full} → ${narrow}, px ${fullPx} → ${narrowPx})`);
   else if (back === 'none') fail('the Delegated column does not come back');
   else ok('"hide vendors" hides its column too, "fit" uses the freed width, and both reverse');
 }

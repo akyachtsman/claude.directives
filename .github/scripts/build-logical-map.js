@@ -367,8 +367,6 @@ const FLOW = [
   ['self:ops', 'dev-pipeline.md', 'pub', 'publishes', 'a', 'ordered procedure'],
   ['self:ops', 'usage-guide.md', 'pub', 'publishes', 'a', 'bootstrap into a project'],
   ['marketplace.json', 'plugin.json', 'pub', 'lists the plugin', 'a', '"source"'],
-  ['marketplace.json', 'install-toolkit.sh', 'ins', 'delivered through', 'b', 'plugin install'],
-  ['marketplace.json', 'claude-settings.json', 'ins', 'enabled in', 'b', '@claude-directives": true'],
   ['evals/', 'scope-chk', 'val', 'tests when it fires', 'a', 'must fire'],
   ['evals/', 'update-pages', 'val', 'tests when it fires', 'a', 'must fire'],
   ['evals/', 'doc-comp', 'val', 'tests when it fires', 'a', 'must fire'],
@@ -453,7 +451,7 @@ const FLOW = [
   ['test.md', 'ci-triage.md', 'det', 'details in'],
   ['test.md', 'cicd-setup.md', 'det', 'details in'],
   ['data.md', 'supabase', 'gov', 'rules for', 'b'],
-  ['hooks.json', 'update-pages', 'run', 'nudges after a Pages edit', 'a', 'apply the'],
+  ['hooks.json', 'update-pages', 'seq', 'after a Pages edit, prompts to apply', 'a', 'apply the'],
   ['/env-chk', '/refresh-repo', 'seq', 'on drift', 'a', 'run `/refresh-repo`'],
   // build
   ['/kickoff', '/design-intake', 'seq', 'hands off to', 'a', 'Establish the look'],
@@ -590,12 +588,32 @@ const fileToNode = f => {
 // (c) scripts the plugin's hooks run.
 const hooksJson = readFileSync(`${P}/hooks/hooks.json`, 'utf8');
 if (/scripts\/[\w-]+\.sh/.test(hooksJson)) derived.push([`${P}/hooks/`, `${P}/scripts/`, 'run', 'runs on every Bash call']);
-// (c2) what the plugin installs. Claude Code loads commands/, agents/, skills/
-// and hooks/ from the plugin root by convention; nothing lists them, so drawing a
-// few by the files that happen to name them drew a partial set (Codex, #393).
+// (c2) what the plugin installs: everything under its root. Claude Code loads
+// commands/, agents/, skills/ and hooks/ by convention, and the hooks run
+// scripts/ from it; nothing lists them, so drawing a few by the files that
+// happen to name them drew a partial set, and an allow-list of four directories
+// left scripts/ out (Codex, #393).
 for (const id of stageOf.keys()) {
-  if (/^plugins\/directives-toolkit\/(commands|agents|skills|hooks)\//.test(id)) {
+  if (id.startsWith(`${P}/`) && id !== `${P}/.claude-plugin/plugin.json`) {
     derived.push([`${P}/.claude-plugin/plugin.json`, id, 'ins', 'installs', 'plugin', id]);
+  }
+}
+// (c3) what /refresh-repo re-syncs: every row of its Phase 2 path table whose
+// policy is not "Never overwrite", matched against the map's templates. The
+// table is the operation, so it is read, not restated (Codex, #393). A file this
+// repo ships only to retire is not re-synced.
+{
+  const src = `${P}/commands/refresh-repo.md`;
+  const retired = new Set(FLOW.filter(f => f[2] === 'rem').map(f => N(f[1])));
+  for (const line of readFileSync(src, 'utf8').split('\n')) {
+    const row = line.match(/^\| `(templates\/[^`]+)` \| `?([^|`]+)`? \| (.*)\|\s*$/);
+    if (!row || /^Never overwrite/.test(row[3].trim())) continue;
+    const re = new RegExp('^' + row[1].replace(/[.]/g, '\\.').replace(/\/\*\*$/, '/\u0000')
+      .replace(/<[^>]+>|\*/g, '[^/]+').replace('\u0000', '.*') + '$');
+    const hits = [...stageOf.keys()].filter(id => id.startsWith('templates/') && !retired.has(id)
+      && (re.test(id) || (id.endsWith('/') && re.test(id + 'x'))));
+    if (!hits.length) fail(`${src}: Phase 2 row ${row[1]} matches nothing on the map`);
+    for (const id of hits) derived.push([src, id, 'ret', 're-syncs (Phase 2)', 'a', [row[1]], `| \`${row[1]}\``]);
   }
 }
 // (d) vendor sockets.
@@ -624,7 +642,7 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null, quote 
   if (side === 'manifest') {
     ev = { file: 'EXPORTS.json', text: `externals → ${b.slice(7)} → sockets lists ${only}` };
   } else if (side === 'plugin') {
-    ev = { file: only, text: `under the plugin root, where Claude Code loads ${only.split('/')[2]}/ from` };
+    ev = { file: only, text: `under the plugin root, which the plugin install delivers whole` };
   } else {
     const [src, dst] = side === 'b' ? [b, a] : [a, b];
     if (candidates && declared && ACTIVE.has(kind)) {
@@ -646,7 +664,7 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null, quote 
   const sa = STAGES.findIndex(s => s.id === stageOf.get(a));
   const sb = STAGES.findIndex(s => s.id === stageOf.get(b));
   if (sb < sa && kind !== 'ret') fail(`${labelOf(a)} → ${labelOf(b)} runs backwards (${stageOf.get(a)} → ${stageOf.get(b)}); only a re-sync may loop back`);
-  if (kind === 'ret' && sb >= sa) fail(`${labelOf(a)} → ${labelOf(b)} is marked re-syncs but does not loop back`);
+  if (kind === 'ret' && sb > sa) fail(`${labelOf(a)} → ${labelOf(b)} is marked re-syncs but does not loop back`);
   seen.set(key, edges.length);
   edges.push({ a, b, kind, words, ev, side });
 }

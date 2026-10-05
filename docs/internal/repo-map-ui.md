@@ -79,7 +79,7 @@ What evidence proves: the source file names the target. It does not prove the
 connection's KIND (copies vs governs). That is the declaration's job, and a
 reviewer's.
 
-Seven families are **derived**, never declared, so none can be forgotten: a
+Eight families are **derived**, never declared, so none can be forgotten: a
 workflow's `uses: ./.github/actions/<x>`, a `workflow_run` watcher and the
 workflow it watches, every shipped script a workflow or composite action runs
 (`node` / `python3` / `bash` / `sh` followed by its path — hand-declaring these
@@ -88,8 +88,10 @@ installs (`npm install` / `npm ci` in its working directory, in a workflow or a
 composite action, whose `${{ inputs.x }}` is resolved through every workflow
 that passes it — hand-declared, it was drawn from the script that needs the
 package instead, Codex #393), the scripts the plugin's hooks run, everything the
-plugin installs (each file under its `commands/`, `agents/`, `skills/` and
-`hooks/`), and
+plugin installs (every box under its root — an allow-list of four directories
+left `scripts/` out, Codex #393), everything `/refresh-repo` re-syncs (read from
+its Phase 2 path table, every row not marked "Never overwrite", minus retired
+files), and
 every vendor socket in `EXPORTS.json` → `externals`. Declaring one of these by hand fails the build.
 
 The manifest and the map files themselves are never evidence: they name every
@@ -104,8 +106,14 @@ shows how it enters a project (Codex, #393: the composite actions and the notify
 scripts). The fill-in artifacts are exempt; a project reads them from upstream
 when it needs one. A file
 nothing leads to is a file the map cannot explain the existence of, and the build
-names it. Only the **re-sync** kind may point backwards (upkeep → session); the
-trace does not follow it, or every file would be upstream of every other.
+names it. Only the **re-sync** kind may point backwards (upkeep → session), or
+stay in its own column; the trace does not follow it, or every file would be
+upstream of every other.
+
+Vendor arrows are the sockets `EXPORTS.json` lists, so their completeness is the
+manifest's: a file that invokes, enables or configures a vendor is its socket
+(Codex #393 found `/sdd-loop`, `/audit-repo` and `git.md` invoking the review
+providers unlisted). A file that only mentions a vendor in passing is not.
 
 ## Layout
 

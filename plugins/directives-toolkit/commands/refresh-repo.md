@@ -30,15 +30,20 @@ against the upstream tree:
 
 ```bash
 tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
-  --jq '.tree[] | select(.type=="blob") | .path'); rc=$?
+  --jq '"TREE \(.sha) truncated=\(.truncated)", (.tree[] | select(.type=="blob") | .path)'); rc=$?
 # GUARD: a failed fetch makes EVERY path look BROKEN. Emptiness is not enough:
 # a 403 from a project-scoped session can land its JSON error body in $tree,
 # which is non-empty, and every reference then printed BROKEN (claude.prop,
-# 2026-10-05: five false alarms). So require BOTH a clean exit AND a body that
-# is a file listing of this repo — a path the tree always holds.
-if [ "$rc" -ne 0 ] || ! printf '%s\n' "$tree" | grep -qx 'directives/global.md'; then
-  echo "CANNOT CHECK: upstream tree not readable from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
+# 2026-10-05: five false alarms). So require a clean exit AND a first line that
+# only a TREE OBJECT produces: the marker this --jq writes from the response's
+# own sha and truncated flag. Never test for a path being present: a renamed or
+# deleted path is exactly what this phase reports, so using one as the sentinel
+# would turn the breakage into CANNOT CHECK. A truncated tree is also refused —
+# it omits paths, and each omission would print BROKEN.
+if [ "$rc" -ne 0 ] || ! printf '%s\n' "$tree" | head -n 1 | grep -qE '^TREE [0-9a-f]{40} truncated=false$'; then
+  echo "CANNOT CHECK: upstream tree not readable (or truncated) from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
 else
+  tree=$(printf '%s\n' "$tree" | tail -n +2)
   grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
     --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
     | sed -E 's#.*claude\.directives/(main/)?##' | sort -u \

@@ -553,7 +553,9 @@ for (const [name, ext] of vendors) {
   for (const s of ext.sockets) {
     const node = fileToNode(s);
     if (!node) { fail(`vendor socket ${s} (${name}) is not on the map`); continue; }
-    derived.push([node, `vendor:${name}`, 'del', `delegates to`, 'manifest']);
+    // Carry the SOCKET path, not the node: a group or directory node is not
+    // what the manifest lists, and the panel must quote what it does (Codex, #393).
+    derived.push([node, `vendor:${name}`, 'del', `delegates to`, 'manifest', s]);
   }
 }
 
@@ -570,7 +572,7 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null, quote 
   }
   let ev;
   if (side === 'manifest') {
-    ev = { file: 'EXPORTS.json', text: `externals → ${b.slice(7)} → sockets lists ${a}` };
+    ev = { file: 'EXPORTS.json', text: `externals → ${b.slice(7)} → sockets lists ${only}` };
   } else {
     const [src, dst] = side === 'b' ? [b, a] : [a, b];
     if (candidates && declared && ACTIVE.has(kind)) {

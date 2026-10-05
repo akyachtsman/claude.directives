@@ -484,9 +484,10 @@ const FLOW = [
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with', 'a', 'Run `/refresh-repo`'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects', 'a', 'Delete'],
   ['notify-task.js', 'notify-email.js', 'run', 'sends through', 'a', 'require('],
-  ['notify-email.js', 'package.json', 'run', 'needs nodemailer from', 'a', 'require('],
   ['cron-email-notifications.md', 'notify-task.js', 'exp', 'sets up'],
-  ['/refresh-repo', 'git.md', 'ret', 'Phase 0 re-reads the imported directives', 'a', 're-read every imported directive'],
+  // Phase 0 re-reads EVERY directive CLAUDE.md imports, so the loop goes to the
+  // import block, which fans out to all five (Codex, #393: one directive drawn).
+  ['/refresh-repo', 'CLAUDE-template.md', 'ret', 'Phase 0 re-reads the imported directives', 'a', 're-read every imported directive'],
 ];
 
 /* ----------------------------------------------------- derived connections */
@@ -537,6 +538,21 @@ void wfIds;
         derived.push([owner, id, 'run', 'runs', 'a', [base], `${hit[1]} `]);
       }
     }
+  }
+}
+// (b3) dependency manifests a run step installs. Hand-declaring this drew the
+// install from the script that require()s the package instead of the workflow
+// step that runs `npm install` (Codex, #393). Read per step: an `npm install` or
+// `npm ci` run whose working-directory holds a shipped package.json.
+for (const f of allWf) {
+  const steps = readFileSync(f, 'utf8').split(/\n(?=\s*- (?:name|uses|run):)/);
+  for (const step of steps) {
+    const code = step.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
+    const npm = code.match(/run:\s*(npm (?:install|ci))\b/);
+    const dir = code.match(/working-directory:\s*['"]?([^\s'"]+)/);
+    if (!npm || !dir) continue;
+    const id = `${dir[1].replace(/^\.github\/scripts(?=\/|$)/, 'templates/scripts')}/package.json`;
+    if (stageOf.has(id)) derived.push([f, id, 'run', 'installs its dependencies', 'a', [npm[1]], 'run:']);
   }
 }
 // (c) scripts the plugin's hooks run.

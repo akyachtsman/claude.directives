@@ -70,20 +70,26 @@ target. A file is placed where it first acts, so a check that acts later than th
 thing it checks cannot be drawn forward: the rule that requires the check carries
 that link instead (`design.md` → `check-contrast.js`). A **set** is drawn whole —
 the directives Phase 0 re-reads, the workflows a project must carry, the files a
-guide sets up — or not at all.
+guide sets up, everything the plugin installs — or not at all. A set nothing
+lists (the plugin's commands, agents, skills and hooks, loaded from its root by
+convention) is derived from the tree rather than drawn from whichever file
+happens to name a few members (Codex round 9, #393).
 
 What evidence proves: the source file names the target. It does not prove the
 connection's KIND (copies vs governs). That is the declaration's job, and a
 reviewer's.
 
-Six families are **derived**, never declared, so none can be forgotten: a
+Seven families are **derived**, never declared, so none can be forgotten: a
 workflow's `uses: ./.github/actions/<x>`, a `workflow_run` watcher and the
 workflow it watches, every shipped script a workflow or composite action runs
 (`node` / `python3` / `bash` / `sh` followed by its path — hand-declaring these
 missed two of qa.yml's four, Codex #393), every shipped `package.json` a step
-installs (`npm install` / `npm ci` in its working directory — hand-declared, it
-was drawn from the script that needs the package instead, Codex #393), the
-scripts the plugin's hooks run, and
+installs (`npm install` / `npm ci` in its working directory, in a workflow or a
+composite action, whose `${{ inputs.x }}` is resolved through every workflow
+that passes it — hand-declared, it was drawn from the script that needs the
+package instead, Codex #393), the scripts the plugin's hooks run, everything the
+plugin installs (each file under its `commands/`, `agents/`, `skills/` and
+`hooks/`), and
 every vendor socket in `EXPORTS.json` → `externals`. Declaring one of these by hand fails the build.
 
 The manifest and the map files themselves are never evidence: they name every

@@ -340,14 +340,16 @@
       "sockets": [
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
-        "directives/test.md"
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md"
       ]
     },
     "code-review-builtin": {
       "vendor": "Anthropic",
       "serves": "test.review",
       "sockets": [
-        "directives/test.md"
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md"
       ]
     },
     "security-guidance": {
@@ -363,7 +365,8 @@
       "vendor": "Anthropic",
       "serves": "global.security",
       "sockets": [
-        "directives/test.md"
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md"
       ]
     },
     "codex-reviews": {

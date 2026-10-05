@@ -185,8 +185,6 @@ const ALIASES = {
   [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', `${P}/scripts`],
   [`${P}/evals/`]: [`${P}/evals`],
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
-  // the marketplace lists its commands bare: "operational commands (env-chk, …, my-list, ...)"
-  [`${P}/commands/my-list.md`]: [/(?<![\w/.-])my-list(?![\w.-])/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
   'templates/ui-tests/': ['templates/ui-tests', '.github/scripts/ui-tests'],
   'templates/scripts/package.json': ['nodemailer',
@@ -369,13 +367,8 @@ const FLOW = [
   ['self:ops', 'dev-pipeline.md', 'pub', 'publishes', 'a', 'ordered procedure'],
   ['self:ops', 'usage-guide.md', 'pub', 'publishes', 'a', 'bootstrap into a project'],
   ['marketplace.json', 'plugin.json', 'pub', 'lists the plugin', 'a', '"source"'],
-  ['marketplace.json', 'scope-chk', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
-  ['marketplace.json', 'update-pages', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
-  ['marketplace.json', 'doc-comp', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
-  ['marketplace.json', '/my-list', 'ins', 'ships the command', 'a', 'operational commands'],
   ['marketplace.json', 'install-toolkit.sh', 'ins', 'delivered through', 'b', 'plugin install'],
   ['marketplace.json', 'claude-settings.json', 'ins', 'enabled in', 'b', '@claude-directives": true'],
-  ['plugin.json', 'hooks.json', 'ins', 'loads (plugin root)', 'b', '"command"'],
   ['evals/', 'scope-chk', 'val', 'tests when it fires', 'a', 'must fire'],
   ['evals/', 'update-pages', 'val', 'tests when it fires', 'a', 'must fire'],
   ['evals/', 'doc-comp', 'val', 'tests when it fires', 'a', 'must fire'],
@@ -546,31 +539,66 @@ void wfIds;
     }
   }
 }
-// (b3) dependency manifests a run step installs. Hand-declaring this drew the
-// install from the script that require()s the package instead of the workflow
-// step that runs `npm install` (Codex, #393). Read per step: an `npm install` or
-// `npm ci` run whose working-directory holds a shipped package.json.
-for (const f of allWf) {
-  const steps = readFileSync(f, 'utf8').split(/\n(?=\s*- (?:name|uses|run):)/);
-  for (const step of steps) {
-    const code = step.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
-    const npm = code.match(/run:\s*(npm (?:install|ci))\b/);
-    const dir = code.match(/working-directory:\s*['"]?([^\s'"]+)/);
-    if (!npm || !dir) continue;
-    const id = `${dir[1].replace(/^\.github\/scripts(?=\/|$)/, 'templates/scripts')}/package.json`;
-    if (stageOf.has(id)) derived.push([f, id, 'run', 'installs its dependencies', 'a', [npm[1]], 'run:']);
-  }
-}
-// (c) scripts the plugin's hooks run.
-const hooksJson = readFileSync(`${P}/hooks/hooks.json`, 'utf8');
-if (/scripts\/[\w-]+\.sh/.test(hooksJson)) derived.push([`${P}/hooks/`, `${P}/scripts/`, 'run', 'runs on every Bash call']);
-// (d) vendor sockets.
 const fileToNode = f => {
   if (stageOf.has(f)) return f;
   for (const id of stageOf.keys()) if (id.endsWith('/') && f.startsWith(id)) return id;
   for (const [g, def] of Object.entries(GROUPS)) if (def.files.includes(f)) return g;
   return null;
 };
+// (b3) dependency manifests a run step installs. Hand-declaring this drew the
+// install from the script that require()s the package instead of the workflow
+// step that runs `npm install` (Codex, #393). Read per step, in workflows AND
+// composite actions: an `npm install` / `npm ci` run whose working-directory
+// holds a shipped package.json. An action's `${{ inputs.x }}` directory is
+// resolved through every workflow that passes `x` (Codex, #393: ui-suite).
+{
+  const toTemplate = d => d.replace(/^\.github\/scripts\/ui-tests(?=\/|$)/, 'templates/ui-tests')
+    .replace(/^\.github\/scripts(?=\/|$)/, 'templates/scripts');
+  const passed = (action, input) => {
+    const dirs = new Set();
+    for (const w of allWf) {
+      const src = readFileSync(w, 'utf8');
+      if (!src.includes(`./.github/actions/${action}`)) continue;
+      for (const m of src.matchAll(new RegExp(`^\\s*${input}:\\s*['"]?(\\$\\{\\{[^}]*\\}\\}|[^\\s'"]+)`, 'gm'))) {
+        const env = m[1].match(/^\$\{\{\s*env\.(\w+)\s*\}\}$/);
+        const val = env ? src.match(new RegExp(`^\\s*${env[1]}:\\s*['"]?([^\\s'"]+)`, 'm'))?.[1] : m[1];
+        if (val) dirs.add(val);
+      }
+    }
+    return [...dirs];
+  };
+  const runners = [...allWf, ...readdirSync('templates/actions').map(a => `templates/actions/${a}/action.yml`)];
+  for (const f of runners) {
+    const owner = f.startsWith('templates/actions/') ? f.replace(/action\.yml$/, '') : f;
+    const steps = readFileSync(f, 'utf8').split(/\n(?=\s*- (?:name|uses|run|shell):)/);
+    for (const step of steps) {
+      const code = step.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
+      const npm = code.match(/run:\s*(npm (?:install|ci))\b/);
+      const dir = code.match(/working-directory:\s*['"]?(\$\{\{\s*inputs\.([\w-]+)\s*\}\}|[^\s'"]+)/);
+      if (!npm || !dir) continue;
+      const dirs = dir[2] ? passed(owner.split('/').at(-2), dir[2]) : [dir[1]];
+      if (!dirs.length) fail(`${f}: npm install in \${{ inputs.${dir[2]} }}, which no workflow passes`);
+      for (const d of dirs) {
+        const id = fileToNode(`${toTemplate(d)}/package.json`);
+        if (id && !derived.some(([a, b]) => a === owner && b === id)) {
+          derived.push([owner, id, 'run', 'installs its dependencies', 'a', [npm[1]], 'run:']);
+        }
+      }
+    }
+  }
+}
+// (c) scripts the plugin's hooks run.
+const hooksJson = readFileSync(`${P}/hooks/hooks.json`, 'utf8');
+if (/scripts\/[\w-]+\.sh/.test(hooksJson)) derived.push([`${P}/hooks/`, `${P}/scripts/`, 'run', 'runs on every Bash call']);
+// (c2) what the plugin installs. Claude Code loads commands/, agents/, skills/
+// and hooks/ from the plugin root by convention; nothing lists them, so drawing a
+// few by the files that happen to name them drew a partial set (Codex, #393).
+for (const id of stageOf.keys()) {
+  if (/^plugins\/directives-toolkit\/(commands|agents|skills|hooks)\//.test(id)) {
+    derived.push([`${P}/.claude-plugin/plugin.json`, id, 'ins', 'installs', 'plugin', id]);
+  }
+}
+// (d) vendor sockets.
 for (const [name, ext] of vendors) {
   for (const s of ext.sockets) {
     const node = fileToNode(s);
@@ -595,6 +623,8 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null, quote 
   let ev;
   if (side === 'manifest') {
     ev = { file: 'EXPORTS.json', text: `externals → ${b.slice(7)} → sockets lists ${only}` };
+  } else if (side === 'plugin') {
+    ev = { file: only, text: `under the plugin root, where Claude Code loads ${only.split('/')[2]}/ from` };
   } else {
     const [src, dst] = side === 'b' ? [b, a] : [a, b];
     if (candidates && declared && ACTIVE.has(kind)) {

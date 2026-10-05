@@ -36,7 +36,15 @@ makes), and a **negated** mention never counts: "Do NOT copy `keepalive.yml`"
 names the file and says the opposite (Codex, #393). A negation before the name in
 the same clause disqualifies it; one after it ("delete X; do not bypass") does
 not. Declare the evidence on the side that actually performs the connection — the
-workflow that runs a checker, not the checker's own comment about it.
+workflow that runs a checker, not the checker's own comment about it. Where the
+first mention in a file is contrastive and the instruction comes later, give the
+connection a **quote**: the evidence line must then carry that phrase too.
+
+What evidence still cannot prove is the KIND. That is a claim, and it is
+reviewed: on 2026-10-05 an independent reviewer read all 122 declared
+connections against their sources and flagged 12 (passive or contrastive
+mentions recorded as hand-offs, copies or rules). Each was corrected or removed
+in #393. Re-run that read when many connections change at once.
 
 What evidence proves: the source file names the target. It does not prove the
 connection's KIND (copies vs governs). That is the declaration's job, and a

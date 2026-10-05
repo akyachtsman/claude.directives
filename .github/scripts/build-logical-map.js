@@ -219,7 +219,7 @@ function affirms(text, re) {
 // The line in `src` that names `dst`, or null. `only` narrows the tokens — a
 // derived trigger quotes the `workflows:` entry, not a comment that happens to
 // mention the file first.
-function evidence(src, dst, only = null) {
+function evidence(src, dst, only = null, quote = null) {
   const res = (only ?? tokensOf(dst)).map(tokenRe);
   const lines = linesOf(src);
   // Prefer a line that is not a comment: a comment can describe a connection
@@ -227,7 +227,7 @@ function evidence(src, dst, only = null) {
   // ...and within a code line, prefer the code to a trailing comment on it.
   const code = l => /\.(ya?ml|sh|py)$/.test(l.file) ? l.text.replace(/\s#.*$/, '')
     : /\.(js|mjs|cjs)$/.test(l.file) ? l.text.replace(/\s\/\/.*$/, '') : l.text;
-  const names = t => res.some(r => affirms(t, r));
+  const names = t => res.some(r => affirms(t, r)) && (!quote || t.toLowerCase().includes(quote.toLowerCase()));
   const hit = lines.find(l => !/^\s*(#|\/\/)/.test(l.text) && names(code(l)))
     ?? lines.find(l => names(l.text));
   // No line NUMBER is stored: a number shifts on any edit above it, which would
@@ -305,14 +305,14 @@ for (const id of stageOf.keys()) {
 const N = l => { const id = byLabel.get(l) ?? (stageOf.has(l) ? l : null); if (!id) fail(`unknown node in a connection: "${l}"`); return id; };
 
 /* ------------------------------------------------------------ connections */
-// [from, to, kind, words, evidence-side]. Evidence side 'a' (default): `from`
-// names `to`. 'b': `to` names `from` — used where the flow runs opposite to the
+// [from, to, kind, words, evidence-side, quote]. Evidence side 'a' (default):
+// `from` names `to`. 'b': `to` names `from` — used where the flow runs opposite to the
 // reference (a checker names what it checks; an installer names its source).
 const FLOW = [
   // publish
-  ['self:ci', 'marketplace.json', 'pub', 'validates & publishes'],
-  ['self:ci', 'plugin.json', 'pub', 'validates'],
-  ['self:ops', 'evals/', 'pub', 'measures skill triggers with'],
+  ['self:ci', 'marketplace.json', 'val', 'validates'],
+  ['self:ci', 'plugin.json', 'val', 'validates'],
+  ['self:ops', 'evals/', 'run', 'runs when a skill description changes'],
   ['self:ops', 'NEW-REPO-USER-INSTRUCTIONS.md', 'pub', 'publishes the bootstrap guide'],
   ['self:ops', 'ai-first-principles.md', 'pub', 'publishes'],
   ['self:ops', 'dev-pipeline.md', 'pub', 'publishes'],
@@ -330,13 +330,13 @@ const FLOW = [
   // bootstrap
   ['NEW-REPO-USER-INSTRUCTIONS.md', 'install-toolkit.sh', 'run', 'Step 0: the setup script runs'],
   ['NEW-REPO-USER-INSTRUCTIONS.md', '/new-repo', 'seq', 'then run'],
-  ['NEW-REPO-USER-INSTRUCTIONS.md', 'claude-settings.json', 'cop', 'copies'],
-  ['NEW-REPO-USER-INSTRUCTIONS.md', 'session-start.sh', 'cop', 'copies'],
   ['NEW-REPO-USER-INSTRUCTIONS.md', '/kickoff', 'seq', 'then start building with'],
   ['NEW-REPO-USER-INSTRUCTIONS.md', 'MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'seq', 'after bootstrap, maintain with'],
   ['NEW-REPO-USER-INSTRUCTIONS.md', 'cron-email-notifications.md', 'seq', 'optional: scheduled email'],
   ['/new-repo', 'CLAUDE-template.md', 'cop', 'copies'],
-  ['/new-repo', 'styles/', 'cop', 'copies the design starter'],
+  ['/new-repo', 'claude-settings.json', 'cop', 'copies'],
+  ['/new-repo', 'session-start.sh', 'cop', 'copies and makes executable'],
+  ['/new-repo', 'styles/', 'cop', 'copies the design starter', 'a', 'copy'],
   ['/new-repo', 'browser-ladder.js', 'cop', 'copies'],
   ['/new-repo', 'qa.yml', 'cop', 'copies'],
   ['/new-repo', 'qa-response.yml', 'cop', 'copies'],
@@ -361,12 +361,13 @@ const FLOW = [
   ['ai-first-principles.md', 'global.md', 'exp', 'the reasoning behind'],
   ['dev-pipeline.md', '/sdd-loop', 'exp', 'walks through'],
   ['dev-pipeline.md', '/my-list', 'exp', 'lists commands with'],
+  ['dev-pipeline.md', '/audit-repo', 'exp', 'drift review with'],
   ['usage-guide.md', '/kickoff', 'exp', 'quickstart for'],
   // session start
   ['global.md', '/env-chk', 'gov', 'Session Start: run'],
   ['global.md', 'session-mechanics.md', 'det', 'details in'],
   ['/env-chk', 'scope-chk', 'run', 'runs'],
-  ['global.md', '/diagnose', 'gov', 'requires before building'],
+  ['global.md', '/diagnose', 'det', 'proposing work: detail in'],
   ['global.md', '/sdd-loop', 'gov', 'builds with'],
   ['global.md', '/commit-chk', 'gov', 'verifies with'],
   ['global.md', 'codex-monitor.yml', 'gov', 'requires'],
@@ -376,7 +377,6 @@ const FLOW = [
   ['global.md', 'pages-retry.yml', 'gov', 'requires'],
   ['global.md', 'ci-monitor.yml', 'gov', 'requires'],
   ['global.md', 'ci-notify.yml', 'gov', 'requires'],
-  ['global.md', '/refresh-repo', 'gov', 'resync with'],
   ['global.md', '/learn', 'gov', 'record lessons with'],
   ['global.md', '/handoff-session', 'gov', 'hand off with'],
   ['global.md', '/do-repo', 'gov', 'read other repos with'],
@@ -401,7 +401,6 @@ const FLOW = [
   ['test.md', 'cicd-setup.md', 'det', 'details in'],
   ['data.md', 'supabase', 'gov', 'rules for', 'b'],
   ['hooks.json', 'update-pages', 'run', 'nudges after a Pages edit'],
-  ['/env-chk', '/audit-repo', 'seq', 'periodically'],
   ['/env-chk', '/refresh-repo', 'seq', 'on drift'],
   // build
   ['/kickoff', '/design-intake', 'seq', 'hands off to'],
@@ -409,14 +408,13 @@ const FLOW = [
   ['/diagnose', '/sdd-loop', 'seq', 'hands the brief to'],
   ['/diagnose', '/learn', 'run', 'consults lessons from'],
   ['design-tooling.md', '/design-intake', 'exp', 'tools for'],
-  ['/design-intake', 'styles/', 'pro', 'produces tokens.css'],
+  ['/design-intake', 'styles/', 'pro', "replaces the starter's tokens.css with the project's"],
   ['/sdd-loop', 'qa-pipeline', 'run', 'runs'],
   ['/sdd-loop', '/commit-chk', 'seq', 'before pushing'],
   ['qa-pipeline', 'test-verifier', 'run', 'runs'],
   ['qa-pipeline', 'ui-tester', 'run', 'runs'],
   ['qa-pipeline', 'pr-readiness-reviewer', 'run', 'ends with'],
   ['ui-tester', 'ui-tests/', 'run', 'drives'],
-  ['test-verifier', 'pr-checklist.md', 'pro', 'fills in'],
   ['ui-tests/', 'qa.yml', 'run', 'is run in CI by (tests-dir)', 'b'],
   ['ui-tests/', 'qa-live.yml', 'run', 'is run against the live site by (tests-dir)', 'b'],
   ['ui-tests/', 'qa-response.yml', 'run', 'is run on demand by (tests-dir)', 'b'],
@@ -429,7 +427,7 @@ const FLOW = [
   ['cicd-setup.md', 'check-job-bounds.py', 'gov', 'wires'],
   // upkeep
   ['/refresh-repo', 'kit-defects.md', 'run', 'checks against'],
-  ['/learn', '/handoff-session', 'seq', 'feeds'],
+  ['/do-repo', '/audit-repo', 'run', "runs its checklist on another repo", 'a', 'checklist'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects'],
   ['notify-task.js', 'notify-email.js', 'run', 'sends through'],
@@ -491,7 +489,7 @@ for (const [name, ext] of vendors) {
 /* ---------------------------------------------------------- assemble edges */
 const edges = [];
 const seen = new Map();
-function add(a, b, kind, words, side = 'a', declared = true, only = null) {
+function add(a, b, kind, words, side = 'a', declared = true, only = null, quote = null) {
   if (!a || !b) return;
   if (!KINDS[kind]) { fail(`unknown kind ${kind} on ${a} → ${b}`); return; }
   const key = `${a}→${b}`;
@@ -504,7 +502,7 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null) {
     ev = { file: 'EXPORTS.json', text: `externals → ${b.slice(7)} → sockets lists ${a}` };
   } else {
     const [src, dst] = side === 'b' ? [b, a] : [a, b];
-    ev = evidence(src, dst, only);
+    ev = evidence(src, dst, only, quote);
     if (!ev) {
       fail(`no evidence for ${labelOf(a)} → ${labelOf(b)}: ${labelOf(src)} never names ${labelOf(dst)}`);
       return;
@@ -518,7 +516,10 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null) {
   edges.push({ a, b, kind, words, ev, side });
 }
 for (const [a, b, k, w, s, only] of derived) add(a, b, k, w, s ?? 'a', false, only ?? null);
-for (const [a, b, k, w, s] of FLOW) add(N(a), N(b), k, w, s ?? 'a', true);
+// `quote`, when given, pins the evidence to the line that ACTS: it must hold
+// both the other file's name and this phrase. Use it where the first mention
+// in the file is contrastive and the instruction comes later (Codex, #393).
+for (const [a, b, k, w, s, q] of FLOW) add(N(a), N(b), k, w, s ?? 'a', true, null, q ?? null);
 
 /* ----------------------------------------------------- start-to-finish wiring */
 // Every node must be reachable from the first stage. A file nothing leads to is

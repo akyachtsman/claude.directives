@@ -58,7 +58,19 @@ What evidence still cannot prove is the KIND. That is a claim, and it is
 reviewed: on 2026-10-05 an independent reviewer read all 122 declared
 connections against their sources and flagged 12 (passive or contrastive
 mentions recorded as hand-offs, copies or rules). Each was corrected or removed
-in #393. Re-run that read when many connections change at once.
+in #393. After Codex round 8 found the same shape again, a second independent read
+of all 122 (owner ruling: audit before the next round) flagged 14 of two shapes:
+a file named only in passing (an index entry drawn as "requires", one member of a
+set drawn without the rest), and the wrong actor (an arrow drawn "is run by" from
+the thing run). Re-run that read when many connections change at once.
+
+**The arrow starts at the actor.** A workflow runs the kit; the kit is never drawn
+"is run by" the workflow, because the legend reads every arrow as source acts on
+target. A file is placed where it first acts, so a check that acts later than the
+thing it checks cannot be drawn forward: the rule that requires the check carries
+that link instead (`design.md` → `check-contrast.js`). A **set** is drawn whole —
+the directives Phase 0 re-reads, the workflows a project must carry, the files a
+guide sets up — or not at all.
 
 What evidence proves: the source file names the target. It does not prove the
 connection's KIND (copies vs governs). That is the declaration's job, and a

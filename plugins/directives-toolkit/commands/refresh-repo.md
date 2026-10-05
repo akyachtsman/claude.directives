@@ -15,8 +15,8 @@ and CI validates references.
 
 The session's working rules were loaded at session start and do NOT update
 themselves. Re-fetch and re-read every imported directive URL from
-CLAUDE.md (the import block written from `templates/CLAUDE-template.md`; five
-as of `git.md`), and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
+CLAUDE.md (five as of `git.md`: `global.md`, `git.md`, `design.md`, `test.md`,
+`data.md`), and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
 load at session start only — a mid-session upstream merge never reaches THIS
 session. With `.claude/hooks/session-start.sh` installed it reaches the next one;
 without it, only when the environment's cached setup script rebuilds (web: on an

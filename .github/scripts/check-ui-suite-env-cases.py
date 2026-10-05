@@ -792,7 +792,7 @@ def main():
     # The guard must also still pass against the REAL composite. A suite that only
     # ever sees fixtures can be perfectly green while the shipped file is broken.
     # With the SHIPPED spec and config, so the #320 wiring is checked for real.
-    r = subprocess.run([sys.executable, str(GUARD), str(LIVE)],
+    r = subprocess.run([sys.executable, str(GUARD), str(LIVE), "--kit-dir", "templates/ui-tests"],
                        capture_output=True, text=True, cwd=REPO_ROOT)
     code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
     if code != 0:
@@ -802,21 +802,22 @@ def main():
 
     # DISCOVERY (#372): with no spec arguments the guard must find every JS/TS
     # file under the kit, so a spec added later is covered without being named.
-    # Run in a temp tree holding the live composite and a kit with one extra spec.
+    # Run in a temp tree laid out as a PROJECT (the guard ships, PROP6), with NO
+    # arguments, so the project defaults are what is exercised.
     extra = 0
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        action = root / "templates/actions/ui-suite/action.yml"
+        action = root / ".github/actions/ui-suite/action.yml"
         action.parent.mkdir(parents=True)
         action.write_text(LIVE.read_text(encoding="utf-8"), encoding="utf-8")
-        tests = root / "templates/ui-tests/tests"
+        tests = root / ".github/scripts/ui-tests/tests"
         tests.mkdir(parents=True)
         (tests / "checkout.spec.js").write_text(
             "const u = process.env.CHECKOUT_USER;\n", encoding="utf-8")
         # Playwright's default testMatch runs .tsx specs too (#372 round 2).
         (tests / "cart.spec.tsx").write_text(
             "const c = process.env.CART_USER;\n", encoding="utf-8")
-        nm = root / "templates/ui-tests/node_modules/dep"
+        nm = root / ".github/scripts/ui-tests/node_modules/dep"
         nm.mkdir(parents=True)
         (nm / "index.js").write_text("process.env.IGNORED_IN_NODE_MODULES;\n", encoding="utf-8")
         for label, cwd_files, expected, needle in (
@@ -830,7 +831,7 @@ def main():
             if not cwd_files:
                 for f in tests.iterdir():
                     f.unlink()
-            r = subprocess.run([sys.executable, str(GUARD), str(action)],
+            r = subprocess.run([sys.executable, str(GUARD)],
                                capture_output=True, text=True, cwd=tmp)
             code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
             extra += 1
@@ -838,6 +839,49 @@ def main():
                 failures.append(f"{label}\n      expected exit {expected} with {needle!r}; got {code}.\n      {out}")
             elif "IGNORED_IN_NODE_MODULES" in out:
                 failures.append(f"{label}\n      node_modules was scanned.\n      {out}")
+            else:
+                print(f"OK:   {label} (exit {code})")
+
+    # PROJECT EXEMPTIONS (PROP6): a project extends ENV_EXEMPT in its own file,
+    # never by editing the guard, and every entry must carry a reason. Each
+    # refusal has its accepting complement, so neither is bought by the other.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        action = root / ".github/actions/ui-suite/action.yml"
+        action.parent.mkdir(parents=True)
+        action.write_text(LIVE.read_text(encoding="utf-8"), encoding="utf-8")
+        tests = root / ".github/scripts/ui-tests/tests"
+        tests.mkdir(parents=True)
+        (tests / "a.spec.js").write_text("const r = process.env.RUNNER_ONLY_VAR;\n", encoding="utf-8")
+        exempt = root / ".github/ui-suite-env-exempt.json"
+        for label, body, args, expected, needle in (
+            ("no exemption file: an unwired read is refused",
+             None, [], 1, "RUNNER_ONLY_VAR is read by"),
+            ("the default exemption file, with a reason, exempts the read — accepted",
+             '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0, "spec env wired from inputs"),
+            ("an exemption with an empty reason — refused, never read as one",
+             '{"RUNNER_ONLY_VAR": "  "}', [], 1, "RUNNER_ONLY_VAR has no reason"),
+            ("an exemption whose reason is not a string — refused",
+             '{"RUNNER_ONLY_VAR": true}', [], 1, "RUNNER_ONLY_VAR has no reason"),
+            ("an exemption file that is not an object — refused",
+             '["RUNNER_ONLY_VAR"]', [], 1, "must be a JSON object"),
+            ("an exemption file that is not JSON — refused",
+             '{RUNNER_ONLY_VAR: x', [], 1, "is unreadable"),
+            ("an exemption name that is not a variable name — refused",
+             '{"NOT-A-NAME": "reason"}', [], 1, "is not an environment variable name"),
+            ("--exempt-file names a file that does not exist — refused, not skipped",
+             None, ["--exempt-file", "missing.json"], 1, "is unreadable"),
+        ):
+            if body is None:
+                exempt.unlink(missing_ok=True)
+            else:
+                exempt.write_text(body, encoding="utf-8")
+            r = subprocess.run([sys.executable, str(GUARD), *args],
+                               capture_output=True, text=True, cwd=tmp)
+            code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
+            extra += 1
+            if code != expected or needle not in out:
+                failures.append(f"{label}\n      expected exit {expected} with {needle!r}; got {code}.\n      {out}")
             else:
                 print(f"OK:   {label} (exit {code})")
 

@@ -105,11 +105,13 @@ Execute in order:
    live QA gate and the deploy monitor silently inert, which reads as healthy.
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 
-   **Static-check scripts (required by qa.yml).** Copy BOTH
+   **Static-check scripts (required by qa.yml).** Copy ALL FOUR —
    `claude.directives/templates/scripts/workflow-ref-guard.py` and
-   `check-job-bounds.py` and `check-py-warnings.py` into `.github/scripts/` —
-   `qa.yml` runs all three, so the job
-   fails at step resolution without them. `check-job-bounds.py` needs no config;
+   `check-job-bounds.py` and `check-py-warnings.py` and `check-ui-suite-env.py`
+   into `.github/scripts/` — `qa.yml` runs all four, so the job
+   fails at step resolution without them. `check-ui-suite-env.py` needs no config;
+   a variable the kit reads that arrives without an input goes in
+   `.github/ui-suite-env-exempt.json` with its reason, never in the script. `check-job-bounds.py` needs no config;
    it is what keeps the ui-suite callers' 120-minute bound from drifting back to a
    value that cancels healthy runs. Populate `.github/workflow-ref-required.json` with any watcher the
    project must not lose (absent file = none, which is the right default at

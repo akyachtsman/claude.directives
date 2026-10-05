@@ -349,6 +349,15 @@ await page.click('#t_fit');
   await touch('touchEnd', []);
   if ((await view()).scale <= before.scale) fail('two-finger pinch does not zoom');
   else ok('two-finger pinch zooms on touch');
+  // One finger pans. The page sets touch-action:none, so if this breaks there
+  // is no other way to move around a zoomed map on a phone (Codex, #393).
+  const v = await view();
+  await touch('touchStart', [{ x: 500, y: 600 }]);
+  for (let i = 1; i <= 6; i++) await touch('touchMove', [{ x: 500 + i * 15, y: 600 - i * 10 }]);
+  await touch('touchEnd', []);
+  const v2 = await view();
+  if (v2.px === v.px && v2.py === v.py) fail('one-finger touch drag does not pan');
+  else ok('one-finger touch drag pans');
 }
 
 /* ------------------------------------------------------------- phone size */

@@ -99,7 +99,9 @@
   let pan = null;
   wrap.addEventListener('pointerdown', ev => {
     suppressClick = false;   // a stale flag from a drag with no click must not eat this one
-    if (ev.pointerType === 'touch' && touches.size >= 1) return;
+    // The capture-phase handler below has already recorded THIS finger, so one
+    // finger is size 1. Only a second finger means a pinch (Codex, #393).
+    if (ev.pointerType === 'touch' && touches.size >= 2) return;
     if (ev.target.closest('#panel, .legend')) return;
     if (ev.button !== 0 && ev.button !== 1) return;
     pan = { x: ev.clientX, y: ev.clientY, px, py, moved: false, id: ev.pointerId, middle: ev.button === 1 };

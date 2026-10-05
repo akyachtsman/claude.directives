@@ -28,8 +28,9 @@ to it: a checker names what it checks, an installer names its source), and the
 build looks for one of the other file's NAMES in that file's text: its path, its
 basename (only when unique and not generic), `/command`, an agent's
 `directives-toolkit:` name, a skill name, `actions/<x>`, a workflow's `name:`,
-or an alias listed in the generator. The first matching line is stored and shown
-in the page's side panel, so every arrow can be audited from the page. Code is
+or an alias listed in the generator. The first matching line is stored (its
+file and text, not its number, so an edit above it does not make the map stale)
+and shown in the page's side panel, so every arrow can be audited from the page. Code is
 preferred to comments (a comment can describe a connection the code no longer
 makes), and a **negated** mention never counts: "Do NOT copy `keepalive.yml`"
 names the file and says the opposite (Codex, #393). A negation before the name in

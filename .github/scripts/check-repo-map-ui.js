@@ -150,7 +150,7 @@ await settle();
   else if (!sameSet(new Set(t.nodes), want.nodes)) fail(`trace lit ${t.nodes.length} boxes, the data says ${want.nodes.size}`);
   else if (!sameSet(new Set(t.edges), want.edges)) fail(`trace lit ${t.edges.length} connections, the data says ${want.edges.size}`);
   else if (t.title !== 'qa-pipeline') fail(`panel shows "${t.title}", expected qa-pipeline`);
-  else if (t.ev.some(e => !/:\d+ — \S/.test(e) && !/EXPORTS\.json/.test(e))) fail('a panel entry has no file:line evidence');
+  else if (t.ev.some(e => !/^\S+\.\w+ — \S/.test(e))) fail('a panel entry has no file — quoted-line evidence');
   else ok(`trace lights ${t.nodes.length} boxes and ${t.edges.length} connections — exactly the data's chain, each with evidence`);
 }
 // Every box's trace matches the data — not just one hand-picked case.

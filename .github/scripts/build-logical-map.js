@@ -230,7 +230,10 @@ function evidence(src, dst, only = null) {
   const names = t => res.some(r => affirms(t, r));
   const hit = lines.find(l => !/^\s*(#|\/\/)/.test(l.text) && names(code(l)))
     ?? lines.find(l => names(l.text));
-  return hit ? { file: hit.file, line: hit.line, text: hit.text.trim().replace(/\s+/g, ' ').slice(0, 180) } : null;
+  // No line NUMBER is stored: a number shifts on any edit above it, which would
+  // make the committed map stale on nearly every directive PR. The quoted text
+  // only changes when that line itself does.
+  return hit ? { file: hit.file, text: hit.text.trim().replace(/\s+/g, ' ').slice(0, 180) } : null;
 }
 
 /* ------------------------------------------------------------------ nodes */
@@ -498,7 +501,7 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null) {
   }
   let ev;
   if (side === 'manifest') {
-    ev = { file: 'EXPORTS.json', line: 0, text: `externals → ${b.slice(7)} → sockets lists ${a}` };
+    ev = { file: 'EXPORTS.json', text: `externals → ${b.slice(7)} → sockets lists ${a}` };
   } else {
     const [src, dst] = side === 'b' ? [b, a] : [a, b];
     ev = evidence(src, dst, only);

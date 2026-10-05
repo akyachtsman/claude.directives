@@ -198,7 +198,7 @@
   }
   function item(i, other) {
     const e = data.edges[i], k = data.kinds[e.kind];
-    const where = e.ev.line ? `${e.ev.file}:${e.ev.line}` : e.ev.file;
+    const where = e.ev.file;
     return `<li style="--k:${k.color}"><span class="verb">${esc(e.words)}</span> `
       + `<button type="button" data-go="${esc(other)}">${esc(label(other))}</button>`
       + `<span class="ev">${esc(where)} — ${esc(e.ev.text)}</span></li>`;

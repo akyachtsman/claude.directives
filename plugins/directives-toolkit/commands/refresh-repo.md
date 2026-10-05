@@ -29,8 +29,16 @@ old path. Validate every explicit `claude.directives` reference in this project
 against the upstream tree:
 
 ```bash
-tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
-  --jq '"TREE \(.sha) truncated=\(.truncated)", (.tree[] | select(.type=="blob") | .path)'); rc=$?
+# Runs the same under ANY shell options a session has set (`-e`, `-u`,
+# `-o pipefail`): each was a separate Codex finding on #394, so the block is
+# tested against all of them rather than fixed one option at a time. The fetch
+# sits in an `if`, so errexit cannot end the block before the guard reports.
+if tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
+  --jq '"TREE \(.sha) truncated=\(.truncated)", (.tree[] | select(.type=="blob") | .path)'); then
+  rc=0
+else
+  rc=$?
+fi
 # GUARD: a failed fetch makes EVERY path look BROKEN. Emptiness is not enough:
 # a 403 from a project-scoped session can land its JSON error body in $tree,
 # which is non-empty, and every reference then printed BROKEN (claude.prop,
@@ -40,23 +48,25 @@ tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
 # deleted path is exactly what this phase reports, so using one as the sentinel
 # would turn the breakage into CANNOT CHECK. A truncated tree is also refused —
 # it omits paths, and each omission would print BROKEN.
-# No early-closing PIPE anywhere here (`head`, `grep -q` fed by `echo`): under
-# `set -o pipefail` the writer of a large tree dies of SIGPIPE when the reader
-# stops early, and the pipeline then fails although the match succeeded — a
-# complete tree read as CANNOT CHECK, an existing path printed BROKEN (Codex,
-# #394). Read the first line by expansion and feed grep with here-strings.
+# No early-closing PIPE (`head`, `grep -q` fed by `echo`): under pipefail the
+# writer of a large tree dies of SIGPIPE when the reader stops early, and the
+# pipeline fails although the match succeeded. Read the first line by
+# expansion; feed grep with here-strings.
 first=${tree%%$'\n'*}
 if [ "$rc" -ne 0 ] || ! grep -qE '^TREE [0-9a-f]{40} truncated=false$' <<<"$first"; then
   echo "CANNOT CHECK: upstream tree not readable (or truncated) from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
 else
   tree=$(printf '%s\n' "$tree" | tail -n +2)
-  grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
+  # `|| true`: a project with no upstream references is a grep that matched
+  # nothing, not a failure to stop on.
+  refs=$(grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
     --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
     | sed -E 's#.*claude\.directives/(main/)?##' | sort -u \
-    | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' \
-    | while read -r p; do
-      grep -qxF -- "$p" <<<"$tree" || echo "BROKEN: $p"
-    done
+    | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' || true)
+  while read -r p; do
+    [ -n "$p" ] || continue
+    grep -qxF -- "$p" <<<"$tree" || echo "BROKEN: $p"
+  done <<<"$refs"
 fi
 ```
 **Remote-session transport (verified 2026-07-18, apfp.claude):** `gh` is usually

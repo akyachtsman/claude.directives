@@ -105,8 +105,10 @@ jobs:
         # read in the kit is wired from an input. A variable that genuinely
         # arrives another way (set by a self-hosted runner, say) goes in
         # .github/ui-suite-env-exempt.json as {"NAME": "how it arrives"}, never
-        # in the script, so the next template refresh keeps it.
-        run: python3 .github/scripts/check-ui-suite-env.py
+        # in the script, so the next template refresh keeps it. --kit-dir is the
+        # same UI_TESTS_DIR the ui-suite runs: a moved kit left the guard scanning
+        # the default (Codex, #395).
+        run: python3 .github/scripts/check-ui-suite-env.py --kit-dir "$UI_TESTS_DIR"
   ui-changes:
     name: Detect UI-relevant changes
     runs-on: ubuntu-latest

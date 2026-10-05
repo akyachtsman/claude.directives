@@ -74,7 +74,12 @@ file.
 
 ## Start to finish
 
-Every box must be reachable from the first stage by following arrows. A file
+Every box must be reachable from the first stage by following arrows. Reachable
+is not enough for a **copied** template: it must arrive by a *copies* arrow (or
+be *retired*), because a later *runs* arrow can reach a file while the map never
+shows how it enters a project (Codex, #393: the composite actions and the notify
+scripts). The fill-in artifacts are exempt; a project reads them from upstream
+when it needs one. A file
 nothing leads to is a file the map cannot explain the existence of, and the build
 names it. Only the **re-sync** kind may point backwards (upkeep → session); the
 trace does not follow it, or every file would be upstream of every other.

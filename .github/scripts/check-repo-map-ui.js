@@ -224,6 +224,23 @@ async function toggleCase(btn, sel, what) {
 }
 await toggleCase('#t_self', '.n[data-id^="self:"]', '"exports only"');
 await toggleCase('#t_vendor', '.n[data-id^="vendor:"]', '"hide vendors"');
+// Hiding vendors hides their column too, and "fit" then fits what is left
+// rather than an empty column (Codex, #393).
+{
+  await page.click('#t_fit');
+  const full = (await view()).scale;
+  await page.click('#t_vendor'); await settle();
+  await page.click('#t_fit');
+  const col = await page.$eval('.st[data-stage="vendors"]', el => getComputedStyle(el).display);
+  const narrow = (await view()).scale;
+  await page.click('#t_vendor'); await settle();
+  await page.click('#t_fit');
+  const back = await page.$eval('.st[data-stage="vendors"]', el => getComputedStyle(el).display);
+  if (col !== 'none') fail('"hide vendors" leaves the Delegated column showing');
+  else if (!(narrow > full)) fail(`"fit" with vendors hidden does not use the freed width (${full} → ${narrow})`);
+  else if (back === 'none') fail('the Delegated column does not come back');
+  else ok('"hide vendors" hides its column too, "fit" uses the freed width, and both reverse');
+}
 {
   const nSelf = data.edges.filter(e => e.a.startsWith('self:') || e.b.startsWith('self:')).length;
   await page.click('#t_self'); await settle();

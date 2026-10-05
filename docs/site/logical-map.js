@@ -51,9 +51,13 @@
   /* ---------------------------------------------------------- pan & zoom */
   let scale = 1, px = 0, py = 0;
   const paint = () => { vp.style.transform = `translate(${px}px,${py}px) scale(${scale})`; };
+  // Fit what is SHOWN: with vendors hidden, their column is hidden too, and
+  // fitting the full width would leave that space empty (Codex, #393).
   function fit() {
     const r = wrap.getBoundingClientRect();
-    const { w, h } = data.size;
+    const shown = [...document.querySelectorAll('.st')].filter(st => !st.classList.contains('gone'));
+    const w = Math.max(...shown.map(st => st.offsetLeft + st.offsetWidth)) + 30;
+    const { h } = data.size;
     scale = clamp(Math.min((r.width - 32) / w, (r.height - 32) / h), MIN_SCALE, 1.4);
     px = (r.width - w * scale) / 2;
     py = Math.max(16, (r.height - h * scale) / 2);
@@ -276,7 +280,11 @@
     });
   };
   toggle('t_self', on => { hidden.self = on; applyHidden(); });
-  toggle('t_vendor', on => { hidden.vendor = on; applyHidden(); });
+  toggle('t_vendor', on => {
+    hidden.vendor = on;
+    document.querySelector('.st[data-stage="vendors"]')?.classList.toggle('gone', on);
+    applyHidden();
+  });
   for (const kt of document.querySelectorAll('.kt')) {
     kt.addEventListener('click', () => {
       const on = kt.getAttribute('aria-pressed') === 'true';

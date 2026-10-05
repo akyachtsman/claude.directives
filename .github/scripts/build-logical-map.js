@@ -187,7 +187,13 @@ const ALIASES = {
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
   'templates/ui-tests/': ['templates/ui-tests', '.github/scripts/ui-tests'],
-  'templates/scripts/package.json': ['nodemailer'],
+  'templates/scripts/package.json': ['nodemailer',
+    // the scheduled-job scripts list in /new-repo: "(`notify-email.js`, …, `package.json`) into"
+    /`package\.json`\) into/],
+  // /new-repo copies every composite action by one generic instruction,
+  // "`templates/actions/<a>/**` → `.github/actions/<a>/**`", which names each.
+  'templates/actions/secret-scan/': ['templates/actions/<a>/'],
+  'templates/actions/ui-suite/': ['templates/actions/<a>/'],
 };
 const GENERIC = new Set(['package.json', 'SKILL.md', 'hooks.json', 'README.md', 'index.html', 'action.yml']);
 
@@ -390,6 +396,12 @@ const FLOW = [
   ['/new-repo', 'check-job-bounds.py', 'cop', 'copies', 'a', 'Copy BOTH'],
   ['/new-repo', 'check-py-warnings.py', 'cop', 'copies', 'a', 'Copy BOTH'],
   ['/new-repo', 'workflow-ref-guard.py', 'cop', 'copies', 'a', 'Copy BOTH'],
+  ['/new-repo', 'secret-scan', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
+  ['/new-repo', 'ui-suite', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
+  ['/new-repo', 'ui-tests/', 'cop', 'copies the kit', 'a', 'Install the Playwright kit'],
+  ['/new-repo', 'notify-email.js', 'cop', 'copies', 'a', 'Scheduled-job scripts'],
+  ['/new-repo', 'notify-task.js', 'cop', 'copies', 'a', 'Scheduled-job scripts'],
+  ['/new-repo', 'package.json', 'cop', 'copies', 'a', 'Scheduled-job scripts'],
   ['/new-repo', 'pages-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'pages-retry.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'ci-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
@@ -589,6 +601,17 @@ for (const [a, b, k, w, s, q] of FLOW) add(N(a), N(b), k, w, s ?? 'a', true, nul
   }
   for (const s of STAGES.slice(1)) {
     if (!PLACE[s.id].length) fail(`stage ${s.id} is empty`);
+  }
+  // Every COPIED template must arrive by a copy (or be retired). Reachable is
+  // not enough: a later "runs" arrow reached secret-scan and the notify
+  // scripts while the map never showed how they enter a project (Codex, #393).
+  // The fill-in artifacts are exempt: a project reads them from upstream when
+  // it needs one; nothing copies them at bootstrap.
+  for (const { p, cls } of exported) {
+    if (delivery(p) !== 'cop' || cls === 'artifact') continue;
+    if (!edges.some(e => e.b === p && (e.kind === 'cop' || e.kind === 'rem'))) {
+      fail(`copied template with no copy into a project: ${labelOf(p)} — declare the copy that installs it, or retire it`);
+    }
   }
 }
 
@@ -804,7 +827,7 @@ const nodeHtml = [...stageOf.keys()].map(id => {
     + `</button>`;
 }).join('\n');
 const stageHtml = STAGES.map((s, i) =>
-  `<div class="st" style="left:${colX(i) - 12}px;width:${COLW + 24}px;height:${H - 20}px">`
+  `<div class="st" data-stage="${s.id}" style="left:${colX(i) - 12}px;width:${COLW + 24}px;height:${H - 20}px">`
   + `<h2><span>${i + 1}</span>${h(s.label)}</h2><p>${h(s.blurb)}</p></div>`).join('\n');
 const edgeHtml = edges.map((e, i) =>
   `<g class="e" data-i="${i}" data-a="${h(e.a)}" data-b="${h(e.b)}" data-kind="${e.kind}">`
@@ -885,7 +908,7 @@ ${kindCss}
   .tracing .e .ln{opacity:.06}
   .tracing .e.on .ln{opacity:1;stroke-width:2.2}
   .e.hov .ln{opacity:1;stroke-width:2.2}
-  .e.gone,.n.gone{display:none}
+  .e.gone,.n.gone,.st.gone{display:none}
 
   .n{position:absolute;display:flex;align-items:center;gap:6px;padding:0 9px;text-align:left;
     background:var(--surface);border:1px solid var(--border);border-radius:8px;

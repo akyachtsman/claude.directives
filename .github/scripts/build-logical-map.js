@@ -37,6 +37,9 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from '
 const OUT = 'docs/site/logical-map.html';
 const manifest = JSON.parse(readFileSync('EXPORTS.json', 'utf8'));
 const check = process.argv.includes('--check');
+// --candidates: for every ACTIVE declared connection, print each line in the
+// evidence file that names the other end — what you choose a quote from.
+const candidates = process.argv.includes('--candidates');
 let failed = false;
 const fail = m => { console.error(`FAIL: ${m}`); failed = true; };
 
@@ -151,6 +154,16 @@ const KINDS = {
   ret: { label: 're-syncs',     hint: 'loops back: picked up by the next session',                color: '#333333', dash: true },
 };
 
+// ACTIVE kinds claim that something HAPPENS (a copy, a run, a hand-off…). A
+// mention of the other file cannot prove that by itself, and the first mention
+// is often passive or contrastive (three Codex rounds on #393 found them one at
+// a time). So every declared active connection must carry a QUOTE: a phrase
+// that has to appear on the same line as the other file's name. The quote is
+// chosen from the line that performs the connection; deleting that instruction
+// then fails the build. Passive kinds (governs, details in, imports, explains)
+// are relationships of mention, so a mention is their evidence.
+const ACTIVE = new Set(['pub', 'cop', 'ins', 'seq', 'run', 'pro', 'val', 'rem', 'ret']);
+
 /* ----------------------------------------------------------------- tokens */
 // How a file is NAMED by another file. Evidence for a connection is one of
 // these tokens appearing in the source text. Generic basenames (package.json,
@@ -219,7 +232,7 @@ function affirms(text, re) {
 // The line in `src` that names `dst`, or null. `only` narrows the tokens — a
 // derived trigger quotes the `workflows:` entry, not a comment that happens to
 // mention the file first.
-function evidence(src, dst, only = null, quote = null) {
+function evidence(src, dst, only = null, quote = null, all = false) {
   const res = (only ?? tokensOf(dst)).map(tokenRe);
   const lines = linesOf(src);
   // Prefer a line that is not a comment: a comment can describe a connection
@@ -227,9 +240,19 @@ function evidence(src, dst, only = null, quote = null) {
   // ...and within a code line, prefer the code to a trailing comment on it.
   const code = l => /\.(ya?ml|sh|py)$/.test(l.file) ? l.text.replace(/\s#.*$/, '')
     : /\.(js|mjs|cjs)$/.test(l.file) ? l.text.replace(/\s\/\/.*$/, '') : l.text;
-  const names = t => res.some(r => affirms(t, r)) && (!quote || t.toLowerCase().includes(quote.toLowerCase()));
-  const hit = lines.find(l => !/^\s*(#|\/\/)/.test(l.text) && names(code(l)))
-    ?? lines.find(l => names(l.text));
+  // A quote may sit earlier in the same PARAGRAPH (the run of non-blank lines):
+  // instructions wrap, and a list of files to copy hangs off one "copy these…"
+  // lead. It may not sit after the name, or in another paragraph.
+  const lead = l => {
+    const i = lines.indexOf(l), parts = [l.text];
+    for (let j = i - 1; j >= 0 && lines[j].file === l.file && lines[j].text.trim(); j--) parts.unshift(lines[j].text);
+    return parts.join('\n');
+  };
+  const quoted = l => !quote || lead(l).toLowerCase().includes(quote.toLowerCase());
+  const names = t => res.some(r => affirms(t, r));
+  if (all) return lines.filter(l => names(l.text));
+  const hit = lines.find(l => !/^\s*(#|\/\/)/.test(l.text) && names(code(l)) && quoted(l))
+    ?? lines.find(l => names(l.text) && quoted(l));
   // No line NUMBER is stored: a number shifts on any edit above it, which would
   // make the committed map stale on nearly every directive PR. The quoted text
   // only changes when that line itself does.
@@ -310,54 +333,55 @@ const N = l => { const id = byLabel.get(l) ?? (stageOf.has(l) ? l : null); if (!
 // reference (a checker names what it checks; an installer names its source).
 const FLOW = [
   // publish
-  ['self:ci', 'marketplace.json', 'val', 'validates'],
-  ['self:ci', 'plugin.json', 'val', 'validates'],
-  ['self:ops', 'evals/', 'run', 'runs when a skill description changes'],
-  ['self:ops', 'NEW-REPO-USER-INSTRUCTIONS.md', 'pub', 'publishes the bootstrap guide'],
-  ['self:ops', 'ai-first-principles.md', 'pub', 'publishes'],
-  ['self:ops', 'dev-pipeline.md', 'pub', 'publishes'],
-  ['self:ops', 'usage-guide.md', 'pub', 'publishes'],
-  ['marketplace.json', 'plugin.json', 'pub', 'lists the plugin'],
-  ['marketplace.json', 'scope-chk', 'ins', 'ships the auto-skill'],
-  ['marketplace.json', 'update-pages', 'ins', 'ships the auto-skill'],
-  ['marketplace.json', 'doc-comp', 'ins', 'ships the auto-skill'],
-  ['marketplace.json', 'install-toolkit.sh', 'ins', 'is installed from by', 'b'],
-  ['marketplace.json', 'claude-settings.json', 'ins', 'is enabled by', 'b'],
-  ['plugin.json', 'hooks.json', 'ins', 'loads (plugin root)', 'b'],
-  ['evals/', 'scope-chk', 'val', 'tests when it fires'],
-  ['evals/', 'update-pages', 'val', 'tests when it fires'],
-  ['evals/', 'doc-comp', 'val', 'tests when it fires'],
+  ['self:ci', 'marketplace.json', 'val', 'validates', 'a', 'JSON.parse(readFileSync'],
+  ['self:ci', 'plugin.json', 'val', 'validates', 'a', 'JSON.parse(readFileSync'],
+  ['self:ops', 'evals/', 'run', 'runs when a skill description changes', 'a', 'is the harness'],
+  ['self:ops', 'NEW-REPO-USER-INSTRUCTIONS.md', 'pub', 'publishes the bootstrap guide', 'a', 'Bootstrap guide'],
+  ['self:ops', 'ai-first-principles.md', 'pub', 'publishes', 'a', 'AI-first working principles'],
+  ['self:ops', 'dev-pipeline.md', 'pub', 'publishes', 'a', 'ordered procedure'],
+  ['self:ops', 'usage-guide.md', 'pub', 'publishes', 'a', 'bootstrap into a project'],
+  ['marketplace.json', 'plugin.json', 'pub', 'lists the plugin', 'a', '"source"'],
+  ['marketplace.json', 'scope-chk', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
+  ['marketplace.json', 'update-pages', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
+  ['marketplace.json', 'doc-comp', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
+  ['marketplace.json', 'install-toolkit.sh', 'ins', 'is installed from by', 'b', 'plugin install'],
+  ['marketplace.json', 'claude-settings.json', 'ins', 'is enabled by', 'b', 'enabledPlugins'],
+  ['plugin.json', 'hooks.json', 'ins', 'loads (plugin root)', 'b', '"command"'],
+  ['evals/', 'scope-chk', 'val', 'tests when it fires', 'a', 'must fire'],
+  ['evals/', 'update-pages', 'val', 'tests when it fires', 'a', 'must fire'],
+  ['evals/', 'doc-comp', 'val', 'tests when it fires', 'a', 'must fire'],
   // bootstrap
-  ['NEW-REPO-USER-INSTRUCTIONS.md', 'install-toolkit.sh', 'run', 'Step 0: the setup script runs'],
-  ['NEW-REPO-USER-INSTRUCTIONS.md', '/new-repo', 'seq', 'then run'],
-  ['NEW-REPO-USER-INSTRUCTIONS.md', '/kickoff', 'seq', 'then start building with'],
-  ['NEW-REPO-USER-INSTRUCTIONS.md', 'MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'seq', 'after bootstrap, maintain with'],
-  ['NEW-REPO-USER-INSTRUCTIONS.md', 'cron-email-notifications.md', 'seq', 'optional: scheduled email'],
-  ['/new-repo', 'CLAUDE-template.md', 'cop', 'copies'],
-  ['/new-repo', 'claude-settings.json', 'cop', 'copies'],
-  ['/new-repo', 'session-start.sh', 'cop', 'copies and makes executable'],
-  ['/new-repo', 'styles/', 'cop', 'copies the design starter', 'a', 'copy'],
-  ['/new-repo', 'browser-ladder.js', 'cop', 'copies'],
-  ['/new-repo', 'qa.yml', 'cop', 'copies'],
-  ['/new-repo', 'qa-response.yml', 'cop', 'copies'],
-  ['/new-repo', 'qa-live.yml', 'cop', 'copies'],
-  ['/new-repo', 'codex-monitor.yml', 'cop', 'copies'],
-  ['/new-repo', 'check-contrast.js', 'cop', 'copies'],
-  ['/new-repo', 'check-ui-viewports.js', 'cop', 'copies'],
-  ['/new-repo', 'check-job-bounds.py', 'cop', 'copies'],
-  ['/new-repo', 'check-py-warnings.py', 'cop', 'copies'],
-  ['/new-repo', 'pages-monitor.yml', 'cop', 'copies'],
-  ['/new-repo', 'pages-retry.yml', 'cop', 'copies'],
-  ['/new-repo', 'ci-monitor.yml', 'cop', 'copies'],
-  ['/new-repo', 'ci-notify.yml', 'cop', 'copies'],
-  ['/new-repo', 'cron-notify.yml', 'cop', 'copies'],
+  ['NEW-REPO-USER-INSTRUCTIONS.md', 'install-toolkit.sh', 'run', 'Step 0: the setup script runs', 'a', 'Setup script'],
+  ['NEW-REPO-USER-INSTRUCTIONS.md', '/new-repo', 'seq', 'then run', 'a', 'Run `/new-repo`'],
+  ['NEW-REPO-USER-INSTRUCTIONS.md', '/kickoff', 'seq', 'then start building with', 'a', 'scaffolds the repo'],
+  ['NEW-REPO-USER-INSTRUCTIONS.md', 'MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'seq', 'after bootstrap, maintain with', 'a', 'ongoing runbook'],
+  ['NEW-REPO-USER-INSTRUCTIONS.md', 'cron-email-notifications.md', 'seq', 'optional: scheduled email', 'a', 'only if the project sends email'],
+  ['/new-repo', 'CLAUDE-template.md', 'cop', 'copies', 'a', 'Create `CLAUDE.md`'],
+  ['/new-repo', 'claude-settings.json', 'cop', 'copies', 'a', 'Also copy'],
+  ['/new-repo', 'session-start.sh', 'cop', 'copies and makes executable', 'a', 'so copy'],
+  ['/new-repo', 'styles/', 'cop', 'copies the design starter', 'a', 'Design starter'],
+  ['/new-repo', 'browser-ladder.js', 'cop', 'copies', 'a', 'copy TWO scripts'],
+  ['/new-repo', 'qa.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'qa-response.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'qa-live.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'codex-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'check-contrast.js', 'cop', 'copies', 'a', 'Scheduled-job scripts'],
+  ['/new-repo', 'check-ui-viewports.js', 'cop', 'copies', 'a', 'copy TWO scripts'],
+  ['/new-repo', 'check-job-bounds.py', 'cop', 'copies', 'a', 'Copy BOTH'],
+  ['/new-repo', 'check-py-warnings.py', 'cop', 'copies', 'a', 'Copy BOTH'],
+  ['/new-repo', 'workflow-ref-guard.py', 'cop', 'copies', 'a', 'Copy BOTH'],
+  ['/new-repo', 'pages-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'pages-retry.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'ci-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'ci-notify.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
+  ['/new-repo', 'cron-notify.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['CLAUDE-template.md', 'global.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'git.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'design.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'test.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'data.md', 'imp', 'imports'],
-  ['claude-settings.json', 'session-start.sh', 'run', 'registers the SessionStart hook'],
-  ['session-start.sh', 'install-toolkit.sh', 'run', 'runs every session'],
+  ['claude-settings.json', 'session-start.sh', 'run', 'registers the SessionStart hook', 'a', '"command"'],
+  ['session-start.sh', 'install-toolkit.sh', 'run', 'runs every session', 'a', 'RAW_URL'],
   ['ai-first-principles.md', 'global.md', 'exp', 'the reasoning behind'],
   ['dev-pipeline.md', '/sdd-loop', 'exp', 'walks through'],
   ['dev-pipeline.md', '/my-list', 'exp', 'lists commands with'],
@@ -366,7 +390,7 @@ const FLOW = [
   // session start
   ['global.md', '/env-chk', 'gov', 'Session Start: run'],
   ['global.md', 'session-mechanics.md', 'det', 'details in'],
-  ['/env-chk', 'scope-chk', 'run', 'runs'],
+  ['/env-chk', 'scope-chk', 'run', 'runs', 'a', 'run the `scope-chk`'],
   ['global.md', '/diagnose', 'det', 'proposing work: detail in'],
   ['global.md', '/sdd-loop', 'gov', 'builds with'],
   ['global.md', '/commit-chk', 'gov', 'verifies with'],
@@ -400,41 +424,41 @@ const FLOW = [
   ['test.md', 'ci-triage.md', 'det', 'details in'],
   ['test.md', 'cicd-setup.md', 'det', 'details in'],
   ['data.md', 'supabase', 'gov', 'rules for', 'b'],
-  ['hooks.json', 'update-pages', 'run', 'nudges after a Pages edit'],
-  ['/env-chk', '/refresh-repo', 'seq', 'on drift'],
+  ['hooks.json', 'update-pages', 'run', 'nudges after a Pages edit', 'a', 'apply the'],
+  ['/env-chk', '/refresh-repo', 'seq', 'on drift', 'a', 'run `/refresh-repo`'],
   // build
-  ['/kickoff', '/design-intake', 'seq', 'hands off to'],
-  ['/kickoff', '/sdd-loop', 'seq', 'hands off to'],
-  ['/diagnose', '/sdd-loop', 'seq', 'hands the brief to'],
-  ['/diagnose', '/learn', 'run', 'consults lessons from'],
+  ['/kickoff', '/design-intake', 'seq', 'hands off to', 'a', 'Establish the look'],
+  ['/kickoff', '/sdd-loop', 'seq', 'hands off to', 'a', 'Drive the loop'],
+  ['/diagnose', '/sdd-loop', 'seq', 'hands the brief to', 'a', 'Hand off'],
+  ['/diagnose', '/learn', 'det', 'reads the lessons /learn records'],
   ['design-tooling.md', '/design-intake', 'exp', 'tools for'],
-  ['/design-intake', 'styles/', 'pro', "replaces the starter's tokens.css with the project's"],
-  ['/sdd-loop', 'qa-pipeline', 'run', 'runs'],
-  ['/sdd-loop', '/commit-chk', 'seq', 'before pushing'],
-  ['qa-pipeline', 'test-verifier', 'run', 'runs'],
-  ['qa-pipeline', 'ui-tester', 'run', 'runs'],
-  ['qa-pipeline', 'pr-readiness-reviewer', 'run', 'ends with'],
-  ['ui-tester', 'ui-tests/', 'run', 'drives'],
-  ['ui-tests/', 'qa.yml', 'run', 'is run in CI by (tests-dir)', 'b'],
-  ['ui-tests/', 'qa-live.yml', 'run', 'is run against the live site by (tests-dir)', 'b'],
-  ['ui-tests/', 'qa-response.yml', 'run', 'is run on demand by (tests-dir)', 'b'],
-  ['styles/', 'check-contrast.js', 'val', 'is checked by', 'b'],
+  ['/design-intake', 'styles/', 'pro', 'replaces the starter\'s tokens.css with the project\'s', 'a', 'Writes:'],
+  ['/sdd-loop', 'qa-pipeline', 'run', 'runs', 'a', 'run the `directives-toolkit:qa-pipeline`'],
+  ['/sdd-loop', '/commit-chk', 'seq', 'before pushing', 'a', 'Pre-Push gate'],
+  ['qa-pipeline', 'test-verifier', 'run', 'runs', 'a', '1. **test-verifier**'],
+  ['qa-pipeline', 'ui-tester', 'run', 'runs', 'a', '2. **ui-tester**'],
+  ['qa-pipeline', 'pr-readiness-reviewer', 'run', 'ends with', 'a', '5. **pr-readiness-reviewer**'],
+  ['ui-tester', 'ui-tests/', 'run', 'drives', 'a', 'Runnable source of truth'],
+  ['ui-tests/', 'qa.yml', 'run', 'is run in CI by (tests-dir)', 'b', 'UI_TESTS_DIR'],
+  ['ui-tests/', 'qa-live.yml', 'run', 'is run against the live site by (tests-dir)', 'b', 'UI_TESTS_DIR'],
+  ['ui-tests/', 'qa-response.yml', 'run', 'is run on demand by (tests-dir)', 'b', 'UI_TESTS_DIR'],
+  ['styles/', 'check-contrast.js', 'val', 'is checked by', 'b', 'DEFAULT_CANDIDATES'],
   // pr & review
-  ['qa.yml', 'check-job-bounds.py', 'run', 'runs'],
-  ['qa.yml', 'check-contrast.js', 'run', 'runs'],
-  ['ui-suite', 'check-ui-viewports.js', 'run', 'runs'],
+  ['qa.yml', 'check-job-bounds.py', 'run', 'runs', 'a', 'run: python3'],
+  ['qa.yml', 'check-contrast.js', 'run', 'runs', 'a', 'run: node'],
+  ['ui-suite', 'check-ui-viewports.js', 'run', 'runs', 'a', 'run: node'],
   ['cicd-setup.md', 'workflow-ref-guard.py', 'gov', 'wires'],
   ['cicd-setup.md', 'check-job-bounds.py', 'gov', 'wires'],
   // upkeep
-  ['/refresh-repo', 'kit-defects.md', 'run', 'checks against'],
+  ['/refresh-repo', 'kit-defects.md', 'run', 'checks against', 'a', 'Fetch the list'],
   ['/do-repo', '/audit-repo', 'run', "runs its checklist on another repo", 'a', 'checklist'],
-  ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with'],
-  ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects'],
-  ['notify-task.js', 'notify-email.js', 'run', 'sends through'],
-  ['cron-notify.yml', 'notify-task.js', 'run', 'runs'],
-  ['notify-email.js', 'package.json', 'run', 'needs nodemailer from'],
+  ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with', 'a', 'Run `/refresh-repo`'],
+  ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects', 'a', 'Delete'],
+  ['notify-task.js', 'notify-email.js', 'run', 'sends through', 'a', 'require('],
+  ['cron-notify.yml', 'notify-task.js', 'run', 'runs', 'a', 'run: node'],
+  ['notify-email.js', 'package.json', 'run', 'needs nodemailer from', 'a', 'require('],
   ['cron-email-notifications.md', 'notify-task.js', 'exp', 'sets up'],
-  ['/refresh-repo', 'global.md', 'ret', 're-reads at the next session'],
+  ['/refresh-repo', 'git.md', 'ret', 'Phase 0 re-reads the imported directives', 'a', 're-read every imported directive'],
 ];
 
 /* ----------------------------------------------------- derived connections */
@@ -502,9 +526,19 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null, quote 
     ev = { file: 'EXPORTS.json', text: `externals → ${b.slice(7)} → sockets lists ${a}` };
   } else {
     const [src, dst] = side === 'b' ? [b, a] : [a, b];
+    if (candidates && declared && ACTIVE.has(kind)) {
+      console.log(`\n### ${labelOf(a)} --${kind}--> ${labelOf(b)}  (${words})${quote ? `  quote: "${quote}"` : ''}`);
+      for (const l of evidence(src, dst, only, null, true)) console.log(`  ${l.file}:${l.line}  ${l.text.trim().slice(0, 150)}`);
+    }
+    if (declared && ACTIVE.has(kind) && !quote) {
+      fail(`${labelOf(a)} → ${labelOf(b)} is an active connection (${KINDS[kind].label}) with no quote — `
+        + `give it the phrase from the line that performs it (run with --candidates to list them)`);
+      return;
+    }
     ev = evidence(src, dst, only, quote);
     if (!ev) {
-      fail(`no evidence for ${labelOf(a)} → ${labelOf(b)}: ${labelOf(src)} never names ${labelOf(dst)}`);
+      fail(`no evidence for ${labelOf(a)} → ${labelOf(b)}: ${labelOf(src)} never names ${labelOf(dst)}`
+        + (quote ? ` in a paragraph that says "${quote}" (the instruction the quote pins may have changed)` : ''));
       return;
     }
   }

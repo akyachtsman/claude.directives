@@ -40,6 +40,18 @@ workflow that runs a checker, not the checker's own comment about it. Where the
 first mention in a file is contrastive and the instruction comes later, give the
 connection a **quote**: the evidence line must then carry that phrase too.
 
+**Every ACTIVE connection must carry a quote** (owner ruling, 2026-10-05, after
+three Codex rounds on #393 each found more first-mention evidence). Active kinds
+claim something happens: publishes, copies, installs, hands off, runs, fills in,
+checks, retires, re-syncs. The quote is a phrase from the instruction that makes
+it happen, and it must appear at or before the file's name in the same paragraph
+(the run of non-blank lines), so a wrapped sentence or a "copy these…" list
+still counts. Delete or reword that instruction and the build fails. Passive
+kinds (governs, details in, imports, explains) are relationships of mention, so
+the mention is their evidence. To choose a quote, run
+`node .github/scripts/build-logical-map.js --candidates`: it lists every line in
+the source that names the other end.
+
 What evidence still cannot prove is the KIND. That is a claim, and it is
 reviewed: on 2026-10-05 an independent reviewer read all 122 declared
 connections against their sources and flagged 12 (passive or contrastive

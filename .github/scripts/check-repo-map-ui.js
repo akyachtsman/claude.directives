@@ -232,6 +232,17 @@ await toggleCase('#t_vendor', '.n[data-id^="vendor:"]', '"hide vendors"');
   if (vis !== data.edges.length - nSelf) fail(`"exports only" left ${vis} connections, expected ${data.edges.length - nSelf}`);
   else ok('"exports only" also hides the connections that touch this repo');
 }
+// A search typed while a filter hides its match must mark that match once the
+// filter is turned off again, not leave it dimmed as a miss (Codex, #393).
+{
+  await page.click('#t_vendor'); await settle();
+  await page.fill('#search', 'playwright');
+  await page.click('#t_vendor'); await settle();
+  const cls = await page.$eval('.n[data-id="vendor:playwright"]', n => n.className);
+  if (!/\bhit\b/.test(cls) || /\bmiss\b/.test(cls)) fail(`a match restored by a filter stays dimmed (${cls})`);
+  else ok('a search match hidden by a filter is marked once the filter is lifted');
+  await page.fill('#search', ''); await page.keyboard.press('Escape');
+}
 await page.click('.legend summary');
 {
   const open = await page.$eval('.legend', d => d.open);

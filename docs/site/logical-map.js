@@ -171,6 +171,7 @@
     for (const [id, b] of boxes) b.classList.toggle('gone', hiddenNode(id));
     lines.forEach((g, i) => g.classList.toggle('gone', hiddenEdge(i)));
     if (selected && hiddenNode(selected)) clear(); else if (selected) trace(selected, false);
+    runSearch();   // a match the filter hid, or now shows, must be re-marked (Codex, #393)
   }
 
   /* -------------------------------------------------------------- trace */

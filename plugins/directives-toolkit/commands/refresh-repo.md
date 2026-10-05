@@ -40,7 +40,13 @@ tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
 # deleted path is exactly what this phase reports, so using one as the sentinel
 # would turn the breakage into CANNOT CHECK. A truncated tree is also refused —
 # it omits paths, and each omission would print BROKEN.
-if [ "$rc" -ne 0 ] || ! printf '%s\n' "$tree" | head -n 1 | grep -qE '^TREE [0-9a-f]{40} truncated=false$'; then
+# No early-closing PIPE anywhere here (`head`, `grep -q` fed by `echo`): under
+# `set -o pipefail` the writer of a large tree dies of SIGPIPE when the reader
+# stops early, and the pipeline then fails although the match succeeded — a
+# complete tree read as CANNOT CHECK, an existing path printed BROKEN (Codex,
+# #394). Read the first line by expansion and feed grep with here-strings.
+first=${tree%%$'\n'*}
+if [ "$rc" -ne 0 ] || ! grep -qE '^TREE [0-9a-f]{40} truncated=false$' <<<"$first"; then
   echo "CANNOT CHECK: upstream tree not readable (or truncated) from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
 else
   tree=$(printf '%s\n' "$tree" | tail -n +2)
@@ -49,7 +55,7 @@ else
     | sed -E 's#.*claude\.directives/(main/)?##' | sort -u \
     | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' \
     | while read -r p; do
-      echo "$tree" | grep -qx "$p" || echo "BROKEN: $p"
+      grep -qxF -- "$p" <<<"$tree" || echo "BROKEN: $p"
     done
 fi
 ```

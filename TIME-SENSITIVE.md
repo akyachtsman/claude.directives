@@ -103,6 +103,7 @@ is added by the pass that finds it.
 | What triggers a Codex review, and how fast it answers | `docs/standards/pr-mechanics.md` → *Review triggers* | 2026-09-24 | ⏳ The next few requests, timed comment to verdict |
 | The forms a clean verdict takes, and which clears `codex-flagged` | `git.md` → *PR Lifecycle* | 2026-08-27 | ⏳ The next clean review |
 | One same-type reaction per user | `docs/standards/pr-mechanics.md` → *Reading reactions* | undated | GitHub REST docs for reactions |
+| The *Codex Review Summary* comment (Running / Completed) is progress, not a verdict | `git.md` → *PR Lifecycle* | 2026-10-05 | ⏳ The next review request: the summary's wording and statuses |
 | Codex allowance and the *unavailable* reply | `git.md` → *PR Lifecycle* | undated | ⏳ The next unavailable reply |
 
 ## Test environment

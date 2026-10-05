@@ -30,11 +30,14 @@ against the upstream tree:
 
 ```bash
 tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
-  --jq '.tree[] | select(.type=="blob") | .path')
-# GUARD: an empty tree makes EVERY path look BROKEN. Never run the loop on a
-# failed fetch — skip validation and say so instead of reporting false breaks.
-if [ -z "$tree" ]; then
-  echo "tree fetch failed — SKIPPING reference validation (no false BROKENs)"
+  --jq '.tree[] | select(.type=="blob") | .path'); rc=$?
+# GUARD: a failed fetch makes EVERY path look BROKEN. Emptiness is not enough:
+# a 403 from a project-scoped session can land its JSON error body in $tree,
+# which is non-empty, and every reference then printed BROKEN (claude.prop,
+# 2026-10-05: five false alarms). So require BOTH a clean exit AND a body that
+# is a file listing of this repo — a path the tree always holds.
+if [ "$rc" -ne 0 ] || ! printf '%s\n' "$tree" | grep -qx 'directives/global.md'; then
+  echo "CANNOT CHECK: upstream tree not readable from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
 else
   grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
     --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
@@ -52,7 +55,8 @@ or two). Use **WebFetch** for the api.github.com calls (server-side, own egress)
 and spend the budget on the ONE `git/trees` call — it carries everything Phase 1
 needs. Individual raw-URL spot-checks (`raw.githubusercontent.com`, CDN-served,
 not rate-limited the same way) are the fallback for a handful of paths. A failed
-fetch is "cannot verify", never "BROKEN".
+fetch is "CANNOT CHECK", never "BROKEN" — and a fetch that returned *something*
+has not succeeded until the content is a file listing.
 
 For each BROKEN path, search the tree for its basename (rename candidate) and
 propose the fix; deletions get "content was folded — check upstream docs/README.md".

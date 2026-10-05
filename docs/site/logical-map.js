@@ -19,6 +19,9 @@
   const boxes = new Map([...document.querySelectorAll('.n')].map(n => [n.dataset.id, n]));
   const lines = [...document.querySelectorAll('.e')];
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  // The map is ~2700px wide; a 390px phone needs ~0.13 to see it whole, so the
+  // floor sits below that (Codex, #393: a 0.15 floor left fit unable to fit).
+  const MIN_SCALE = 0.05;
 
   /* -------------------------------------------------------------- graph */
   const out = new Map(), inn = new Map();
@@ -51,13 +54,13 @@
   function fit() {
     const r = wrap.getBoundingClientRect();
     const { w, h } = data.size;
-    scale = clamp(Math.min((r.width - 32) / w, (r.height - 32) / h), 0.15, 1.4);
+    scale = clamp(Math.min((r.width - 32) / w, (r.height - 32) / h), MIN_SCALE, 1.4);
     px = (r.width - w * scale) / 2;
     py = Math.max(16, (r.height - h * scale) / 2);
     paint();
   }
   const zoomAt = (k, mx, my) => {
-    const next = clamp(scale * k, 0.15, 3);
+    const next = clamp(scale * k, MIN_SCALE, 3);
     px = mx - (mx - px) * (next / scale);
     py = my - (my - py) * (next / scale);
     scale = next; paint();
@@ -147,7 +150,7 @@
     if (touches.size !== 2 || !pinch) return;
     ev.preventDefault();
     const now = spread(), r = wrap.getBoundingClientRect();
-    const next = clamp(pinch.scale * (now.d / (pinch.d || 1)), 0.15, 3);
+    const next = clamp(pinch.scale * (now.d / (pinch.d || 1)), MIN_SCALE, 3);
     const mx = now.mx - r.left, my = now.my - r.top;
     px = mx - (mx - pinch.px) * (next / pinch.scale);
     py = my - (my - pinch.py) * (next / pinch.scale);

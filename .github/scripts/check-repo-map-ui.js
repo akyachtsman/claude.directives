@@ -380,6 +380,15 @@ await page.click('#t_fit');
   await phone.evaluate(id => window.__map.trace(id), QA);
   await phone.waitForTimeout(200);
   const p = await phone.$eval('#panel', el => { const r = el.getBoundingClientRect(); return [r.left, r.right, innerWidth]; });
+  await phone.evaluate(() => window.__map.clear());
+  await phone.click('#t_fit');
+  const fitsPhone = await phone.evaluate(() => {
+    const vp = document.getElementById('viewport').getBoundingClientRect();
+    const w = document.getElementById('wrap').getBoundingClientRect();
+    return vp.left >= w.left - 1 && vp.right <= w.right + 1;
+  });
+  if (!fitsPhone) fail('"fit" does not fit the whole map at phone width (Codex, #393)');
+  else ok('"fit" fits the whole map at phone width');
   if (overflow > 0) fail(`phone width scrolls sideways by ${overflow}px`);
   else if (p[0] < 0 || p[1] > p[2]) fail(`the panel leaves a phone screen (${p.join(', ')})`);
   else ok('at phone width: no sideways scroll, and the panel stays on screen');

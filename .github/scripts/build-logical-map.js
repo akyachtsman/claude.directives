@@ -33,6 +33,7 @@
 //
 // ESM (matches the other check-*.js).
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { execSync } from 'child_process';
 
 const OUT = 'docs/site/logical-map.html';
 const manifest = JSON.parse(readFileSync('EXPORTS.json', 'utf8'));
@@ -81,16 +82,25 @@ const GROUPS = {
     blurb: 'qa.yml and its validation scripts — everything below is proven here before it ships.',
     files: [...listDir('.github/workflows'), ...listDir('.github/scripts'), '.github/workflow-ref-required.json'],
   },
+  // Everything else this repo TRACKS: derived as the complement of the export
+  // set and the CI group, so a new root or docs file joins it without anyone
+  // listing it (Codex, #393: a hand list had already dropped .gitignore).
   'self:ops': {
     label: "This repo's ops & docs",
-    blurb: 'CLAUDE.md, the manifest, internal docs and the Pages site.',
-    // Order matters only for which line is quoted as evidence: the indexes first.
-    files: ['CLAUDE.md', 'README.md', 'docs/README.md', 'EXPORTS.json', 'TIME-SENSITIVE.md',
-      '.claude/settings.json', '.claude/directive-sync.json', '.claude/hooks/session-start.sh',
-      ...walk('docs/internal').filter(f => f.endsWith('.md')),
-      'index.html', ...listDir('docs/site'), 'learnings.jsonl'],
+    blurb: 'CLAUDE.md, the manifest, internal docs and the Pages site — every tracked file that is neither exported nor CI.',
+    files: null,
   },
 };
+{
+  const exportedPaths = Object.entries(manifest.classes).filter(([k]) => !k.startsWith('_')).flatMap(([, c]) => c.paths);
+  const isExported = f => exportedPaths.some(p => p.endsWith('/') ? f.startsWith(p) : f === p);
+  const ci = new Set(GROUPS['self:ci'].files);
+  const tracked = execSync('git ls-files', { encoding: 'utf8' }).split('\n').filter(Boolean);
+  // Order matters only for which line is quoted as evidence: the indexes first.
+  const first = ['CLAUDE.md', 'README.md', 'docs/README.md'];
+  GROUPS['self:ops'].files = [...first,
+    ...tracked.filter(f => !isExported(f) && !ci.has(f) && !first.includes(f)).sort()];
+}
 // Files whose text proves nothing: the manifest and this map name every file.
 const NO_EVIDENCE = new Set(['EXPORTS.json', OUT, 'docs/site/logical-map.js',
   '.github/scripts/build-logical-map.js', '.github/scripts/check-repo-map-ui.js']);
@@ -240,18 +250,28 @@ function evidence(src, dst, only = null, quote = null, all = false) {
   // ...and within a code line, prefer the code to a trailing comment on it.
   const code = l => /\.(ya?ml|sh|py)$/.test(l.file) ? l.text.replace(/\s#.*$/, '')
     : /\.(js|mjs|cjs)$/.test(l.file) ? l.text.replace(/\s\/\/.*$/, '') : l.text;
-  // A quote may sit earlier in the same PARAGRAPH (the run of non-blank lines):
-  // instructions wrap, and a list of files to copy hangs off one "copy these…"
-  // lead. It may not sit after the name, or in another paragraph.
-  const lead = l => {
+  // A quote may sit anywhere in the same PARAGRAPH (the run of non-blank
+  // lines): instructions wrap, a list of files to copy hangs off one "copy
+  // these…" lead, and a rule can name the file before it says "run it when…".
+  // It may not sit in another paragraph. A quote must therefore be SPECIFIC to
+  // the instruction: a bare "copy" in a paragraph about something else would
+  // pass, which is a declaration to fix, not a rule to loosen.
+  const para = l => {
     const i = lines.indexOf(l), parts = [l.text];
     for (let j = i - 1; j >= 0 && lines[j].file === l.file && lines[j].text.trim(); j--) parts.unshift(lines[j].text);
+    for (let j = i + 1; j < lines.length && lines[j].file === l.file && lines[j].text.trim(); j++) parts.push(lines[j].text);
     return parts.join('\n');
   };
-  const quoted = l => !quote || lead(l).toLowerCase().includes(quote.toLowerCase());
+  const quoted = l => !quote || para(l).toLowerCase().includes(quote.toLowerCase());
   const names = t => res.some(r => affirms(t, r));
   if (all) return lines.filter(l => names(l.text));
-  const hit = lines.find(l => !/^\s*(#|\/\/)/.test(l.text) && names(code(l)) && quoted(l))
+  // Tightest first: a code line carrying the quote itself, then any line
+  // carrying it, then a line whose paragraph carries it.
+  const onLine = l => !quote || l.text.toLowerCase().includes(quote.toLowerCase());
+  const isCode = l => !/^\s*(#|\/\/)/.test(l.text);
+  const hit = lines.find(l => isCode(l) && names(code(l)) && onLine(l))
+    ?? lines.find(l => names(l.text) && onLine(l))
+    ?? lines.find(l => isCode(l) && names(code(l)) && quoted(l))
     ?? lines.find(l => names(l.text) && quoted(l));
   // No line NUMBER is stored: a number shifts on any edit above it, which would
   // make the committed map stale on nearly every directive PR. The quoted text
@@ -335,7 +355,7 @@ const FLOW = [
   // publish
   ['self:ci', 'marketplace.json', 'val', 'validates', 'a', 'JSON.parse(readFileSync'],
   ['self:ci', 'plugin.json', 'val', 'validates', 'a', 'JSON.parse(readFileSync'],
-  ['self:ops', 'evals/', 'run', 'runs when a skill description changes', 'a', 'is the harness'],
+  ['self:ops', 'evals/', 'run', 'runs when a skill description changes', 'a', 'run it when a description changes'],
   ['self:ops', 'NEW-REPO-USER-INSTRUCTIONS.md', 'pub', 'publishes the bootstrap guide', 'a', 'Bootstrap guide'],
   ['self:ops', 'ai-first-principles.md', 'pub', 'publishes', 'a', 'AI-first working principles'],
   ['self:ops', 'dev-pipeline.md', 'pub', 'publishes', 'a', 'ordered procedure'],
@@ -345,7 +365,7 @@ const FLOW = [
   ['marketplace.json', 'update-pages', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
   ['marketplace.json', 'doc-comp', 'ins', 'ships the auto-skill', 'a', 'auto-skills'],
   ['marketplace.json', 'install-toolkit.sh', 'ins', 'is installed from by', 'b', 'plugin install'],
-  ['marketplace.json', 'claude-settings.json', 'ins', 'is enabled by', 'b', 'enabledPlugins'],
+  ['marketplace.json', 'claude-settings.json', 'ins', 'is enabled by', 'b', '@claude-directives": true'],
   ['plugin.json', 'hooks.json', 'ins', 'loads (plugin root)', 'b', '"command"'],
   ['evals/', 'scope-chk', 'val', 'tests when it fires', 'a', 'must fire'],
   ['evals/', 'update-pages', 'val', 'tests when it fires', 'a', 'must fire'],

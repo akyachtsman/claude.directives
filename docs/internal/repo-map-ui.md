@@ -44,9 +44,11 @@ connection a **quote**: the evidence line must then carry that phrase too.
 three Codex rounds on #393 each found more first-mention evidence). Active kinds
 claim something happens: publishes, copies, installs, hands off, runs, fills in,
 checks, retires, re-syncs. The quote is a phrase from the instruction that makes
-it happen, and it must appear at or before the file's name in the same paragraph
-(the run of non-blank lines), so a wrapped sentence or a "copy these…" list
-still counts. Delete or reword that instruction and the build fails. Passive
+it happen. The build looks for it on the same line as the file's name first, and
+only then anywhere in the same paragraph (the run of non-blank lines), so a
+wrapped sentence, a "copy these…" list, or a rule that names the file before it
+says "run it when…" still counts. Because a paragraph can hold more than one
+instruction, a quote must be SPECIFIC to the one that performs the connection. Delete or reword that instruction and the build fails. Passive
 kinds (governs, details in, imports, explains) are relationships of mention, so
 the mention is their evidence. To choose a quote, run
 `node .github/scripts/build-logical-map.js --candidates`: it lists every line in

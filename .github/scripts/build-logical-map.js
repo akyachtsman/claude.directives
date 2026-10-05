@@ -147,6 +147,7 @@ const KINDS = {
   val: { label: 'checks',       hint: 'tests or measures the target',                             color: '#0E7490', dash: true },
   exp: { label: 'explains',     hint: 'a guide to the target; binds nothing',                     color: '#9A968E', dash: true },
   del: { label: 'delegates to', hint: 'hands the work to a vendor we do not own (EXPORTS.json socket)', color: '#6D5BD0', dash: true },
+  rem: { label: 'retires',      hint: 'shipped only so it can be recognised and removed',          color: '#7F1D1D', dash: true },
   ret: { label: 're-syncs',     hint: 'loops back: picked up by the next session',                color: '#333333', dash: true },
 };
 
@@ -202,6 +203,19 @@ function linesOf(id) {
   textCache.set(id, out);
   return out;
 }
+// A mention only counts if it is not NEGATED: "Do NOT copy `keepalive.yml`"
+// names the file and says the opposite of a copy (Codex, #393). A negation
+// before the name, in the same clause, disqualifies that mention; one after it
+// ("delete X; do not bypass") does not.
+const NEGATION = /\b(?:do not|don't|never|must not|should not|shouldn't|not)\b/i;
+function affirms(text, re) {
+  const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+  for (const m of text.matchAll(g)) {
+    const clause = text.slice(0, m.index).split(/[.;:!?]/).pop();
+    if (!NEGATION.test(clause)) return true;
+  }
+  return false;
+}
 // The line in `src` that names `dst`, or null. `only` narrows the tokens — a
 // derived trigger quotes the `workflows:` entry, not a comment that happens to
 // mention the file first.
@@ -210,8 +224,12 @@ function evidence(src, dst, only = null) {
   const lines = linesOf(src);
   // Prefer a line that is not a comment: a comment can describe a connection
   // that the code no longer makes.
-  const hit = lines.find(l => !/^\s*(#|\/\/)/.test(l.text) && res.some(r => r.test(l.text)))
-    ?? lines.find(l => res.some(r => r.test(l.text)));
+  // ...and within a code line, prefer the code to a trailing comment on it.
+  const code = l => /\.(ya?ml|sh|py)$/.test(l.file) ? l.text.replace(/\s#.*$/, '')
+    : /\.(js|mjs|cjs)$/.test(l.file) ? l.text.replace(/\s\/\/.*$/, '') : l.text;
+  const names = t => res.some(r => affirms(t, r));
+  const hit = lines.find(l => !/^\s*(#|\/\/)/.test(l.text) && names(code(l)))
+    ?? lines.find(l => names(l.text));
   return hit ? { file: hit.file, line: hit.line, text: hit.text.trim().replace(/\s+/g, ' ').slice(0, 180) } : null;
 }
 
@@ -329,7 +347,6 @@ const FLOW = [
   ['/new-repo', 'pages-retry.yml', 'cop', 'copies'],
   ['/new-repo', 'ci-monitor.yml', 'cop', 'copies'],
   ['/new-repo', 'ci-notify.yml', 'cop', 'copies'],
-  ['/new-repo', 'keepalive.yml', 'cop', 'copies'],
   ['/new-repo', 'cron-notify.yml', 'cop', 'copies'],
   ['CLAUDE-template.md', 'global.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'git.md', 'imp', 'imports'],
@@ -397,11 +414,13 @@ const FLOW = [
   ['qa-pipeline', 'pr-readiness-reviewer', 'run', 'ends with'],
   ['ui-tester', 'ui-tests/', 'run', 'drives'],
   ['test-verifier', 'pr-checklist.md', 'pro', 'fills in'],
-  ['ui-tests/', 'ui-suite', 'run', 'is run in CI by', 'b'],
+  ['ui-tests/', 'qa.yml', 'run', 'is run in CI by (tests-dir)', 'b'],
+  ['ui-tests/', 'qa-live.yml', 'run', 'is run against the live site by (tests-dir)', 'b'],
+  ['ui-tests/', 'qa-response.yml', 'run', 'is run on demand by (tests-dir)', 'b'],
   ['styles/', 'check-contrast.js', 'val', 'is checked by', 'b'],
   // pr & review
   ['qa.yml', 'check-job-bounds.py', 'run', 'runs'],
-  ['qa.yml', 'check-contrast.js', 'run', 'runs', 'b'],
+  ['qa.yml', 'check-contrast.js', 'run', 'runs'],
   ['ui-suite', 'check-ui-viewports.js', 'run', 'runs'],
   ['cicd-setup.md', 'workflow-ref-guard.py', 'gov', 'wires'],
   ['cicd-setup.md', 'check-job-bounds.py', 'gov', 'wires'],
@@ -409,7 +428,8 @@ const FLOW = [
   ['/refresh-repo', 'kit-defects.md', 'run', 'checks against'],
   ['/learn', '/handoff-session', 'seq', 'feeds'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with'],
-  ['cron-notify.yml', 'notify-email.js', 'run', 'runs'],
+  ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects'],
+  ['notify-task.js', 'notify-email.js', 'run', 'sends through'],
   ['cron-notify.yml', 'notify-task.js', 'run', 'runs'],
   ['notify-email.js', 'package.json', 'run', 'needs nodemailer from'],
   ['cron-email-notifications.md', 'notify-task.js', 'exp', 'sets up'],

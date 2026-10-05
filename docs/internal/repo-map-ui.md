@@ -28,9 +28,14 @@ to it: a checker names what it checks, an installer names its source), and the
 build looks for one of the other file's NAMES in that file's text: its path, its
 basename (only when unique and not generic), `/command`, an agent's
 `directives-toolkit:` name, a skill name, `actions/<x>`, a workflow's `name:`,
-or an alias listed in the generator. The first non-comment line that matches is
-stored and shown in the page's side panel, so every arrow can be audited from the
-page.
+or an alias listed in the generator. The first matching line is stored and shown
+in the page's side panel, so every arrow can be audited from the page. Code is
+preferred to comments (a comment can describe a connection the code no longer
+makes), and a **negated** mention never counts: "Do NOT copy `keepalive.yml`"
+names the file and says the opposite (Codex, #393). A negation before the name in
+the same clause disqualifies it; one after it ("delete X; do not bypass") does
+not. Declare the evidence on the side that actually performs the connection — the
+workflow that runs a checker, not the checker's own comment about it.
 
 What evidence proves: the source file names the target. It does not prove the
 connection's KIND (copies vs governs). That is the declaration's job, and a

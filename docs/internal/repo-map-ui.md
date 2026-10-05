@@ -30,7 +30,9 @@ basename (only when unique and not generic), `/command`, an agent's
 `directives-toolkit:` name, a skill name, `actions/<x>`, a workflow's `name:`,
 or an alias listed in the generator. The first matching line is stored (its
 file and text, not its number, so an edit above it does not make the map stale)
-and shown in the page's side panel, so every arrow can be audited from the page. Code is
+and shown in the page's side panel, so every arrow can be audited from the page. A
+line longer than 180 characters is cut around the quote, or the name it affirms,
+never to its first 180 (Codex #393: a hook command ended before either). Code is
 preferred to comments (a comment can describe a connection the code no longer
 makes), and a **negated** mention never counts: "Do NOT copy `keepalive.yml`"
 names the file and says the opposite (Codex, #393). A negation before the name in
@@ -113,7 +115,8 @@ upstream of every other.
 Vendor arrows are the sockets `EXPORTS.json` lists, so their completeness is the
 manifest's: a file that invokes, enables or configures a vendor is its socket
 (Codex #393 found `/sdd-loop`, `/audit-repo` and `git.md` invoking the review
-providers unlisted). A file that only mentions a vendor in passing is not.
+providers unlisted). A file that only mentions a vendor in passing is not. Several sockets in one box
+(a directory or a group) make one arrow whose evidence lists them all.
 
 ## Layout
 
@@ -149,7 +152,8 @@ Run in the `Repo Map UI` job of `qa.yml` against the rendered page:
   on a box pans without selecting it, middle-drag, arrow keys, Tab + Enter on a
   box, two-finger touch pinch, two-finger drag, one-finger touch pan; search finds a
   file inside a group box
-- at phone width the page does not scroll sideways and the panel stays on screen
+- at phone width the page does not scroll sideways, the panel stays on screen, and a
+  search result is revealed above the bottom-sheet panel, not behind it
 - no console or page errors
 
 Each assertion was proven able to fail before shipping (2026-10-05): a trace that

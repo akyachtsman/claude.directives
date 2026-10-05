@@ -397,7 +397,9 @@
         "directives/test.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
         "plugins/directives-toolkit/agents/qa-pipeline.md",
-        "plugins/directives-toolkit/skills/update-pages/SKILL.md"
+        "plugins/directives-toolkit/skills/update-pages/SKILL.md",
+        "directives/global.md",
+        "templates/claude-settings.json"
       ]
     },
     "github-conversation-resolution": {
@@ -414,7 +416,9 @@
       "serves": "test.ui-kit",
       "sockets": [
         "templates/ui-tests/package.json",
-        "templates/actions/ui-suite/action.yml"
+        "templates/actions/ui-suite/action.yml",
+        "templates/ui-tests/playwright.config.js",
+        "templates/ui-tests/tests/app.spec.js"
       ]
     },
     "frontend-design": {

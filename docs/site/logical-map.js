@@ -79,8 +79,11 @@
     const x = parseFloat(b.style.left) + parseFloat(b.style.width) / 2;
     const y = parseFloat(b.style.top) + parseFloat(b.style.height) / 2;
     const room = panel.hidden || innerWidth <= 800 ? r.width : r.width - 390;
+    // On a phone the panel is a bottom sheet: centre in the part above it, or
+    // the result lands behind the panel that announced it (Codex, #393).
+    const tall = !panel.hidden && innerWidth <= 800 ? panel.getBoundingClientRect().top - r.top : r.height;
     px = room / 2 - x * scale;
-    py = r.height / 2 - y * scale;
+    py = tall / 2 - y * scale;
     paint();
   }
 

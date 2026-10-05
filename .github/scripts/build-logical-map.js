@@ -109,14 +109,14 @@ const P = 'plugins/directives-toolkit';
 const PLACE = {
   publish: ['self:ci', 'self:ops', '.claude-plugin/marketplace.json',
     `${P}/.claude-plugin/plugin.json`, `${P}/evals/`],
-  bootstrap: ['NEW-REPO-USER-INSTRUCTIONS.md', `${P}/commands/new-repo.md`,
+  bootstrap: ['NEW-REPO-USER-INSTRUCTIONS.md', `${P}/commands/kickoff.md`, `${P}/commands/new-repo.md`,
     'templates/CLAUDE-template.md', 'templates/claude-settings.json',
     'templates/claude-hooks/session-start.sh', 'docs/guides/ai-first-principles.md',
     'docs/guides/dev-pipeline.md', 'docs/guides/usage-guide.md'],
   session: ['scripts/install-toolkit.sh', `${P}/hooks/`, 'directives/global.md',
     'directives/git.md', 'directives/design.md', 'directives/test.md', 'directives/data.md',
     'docs/standards/session-mechanics.md', `${P}/commands/env-chk.md`, `${P}/skills/scope-chk/`],
-  build: [`${P}/commands/kickoff.md`, `${P}/commands/diagnose.md`, `${P}/commands/sdd-loop.md`,
+  build: [`${P}/commands/diagnose.md`, `${P}/commands/sdd-loop.md`,
     `${P}/commands/design-intake.md`, 'docs/guides/design-tooling.md', 'templates/styles/',
     `${P}/agents/qa-pipeline.md`, `${P}/agents/test-verifier.md`, `${P}/agents/ui-tester.md`,
     'templates/scripts/browser-ladder.js', `${P}/agents/supabase.md`,
@@ -282,7 +282,17 @@ function evidence(src, dst, only = null, quote = null, all = false) {
   // No line NUMBER is stored: a number shifts on any edit above it, which would
   // make the committed map stale on nearly every directive PR. The quoted text
   // only changes when that line itself does.
-  return hit ? { file: hit.file, text: hit.text.trim().replace(/\s+/g, ' ').slice(0, 180) } : null;
+  if (!hit) return null;
+  // A long line is cut AROUND what proves the connection — the quote if the
+  // line carries it, else the first name it affirms — never to its first 180
+  // characters, which can end before either (Codex, #393: a 381-character hook).
+  const text = hit.text.trim().replace(/\s+/g, ' ');
+  if (text.length <= 180) return { file: hit.file, text };
+  const at = quote && text.toLowerCase().includes(quote.toLowerCase())
+    ? text.toLowerCase().indexOf(quote.toLowerCase())
+    : Math.min(...res.map(r => text.search(new RegExp(r.source, r.flags.replace('g', '')))).filter(i => i >= 0));
+  const start = Math.max(0, Math.min(at - 60, text.length - 180));
+  return { file: hit.file, text: (start ? '…' : '') + text.slice(start, start + 180) + (start + 180 < text.length ? '…' : '') };
 }
 
 /* ------------------------------------------------------------------ nodes */
@@ -454,11 +464,13 @@ const FLOW = [
   ['hooks.json', 'update-pages', 'seq', 'after a Pages edit, prompts to apply', 'a', 'apply the'],
   ['/env-chk', '/refresh-repo', 'seq', 'on drift', 'a', 'run `/refresh-repo`'],
   // build
+  ['/kickoff', '/new-repo', 'run', 'runs first when CLAUDE.md is absent', 'a', 'Bootstrap if needed'],
   ['/kickoff', '/design-intake', 'seq', 'hands off to', 'a', 'Establish the look'],
   ['/kickoff', '/sdd-loop', 'seq', 'hands off to', 'a', 'Drive the loop'],
   ['/diagnose', '/sdd-loop', 'seq', 'hands the brief to', 'a', 'Hand off'],
   ['/diagnose', '/learn', 'det', 'reads the lessons /learn records'],
   ['design-tooling.md', '/design-intake', 'exp', 'tools for'],
+  ['/design-intake', '/sdd-loop', 'seq', 'hands off to', 'a', 'Next: `/sdd-loop`'],
   ['/design-intake', 'styles/', 'pro', 'writes the project\'s tokens.css', 'a', 'Writes:'],
   ['/sdd-loop', 'qa-pipeline', 'run', 'runs', 'a', 'run the `directives-toolkit:qa-pipeline`'],
   ['/sdd-loop', '/commit-chk', 'seq', 'before pushing', 'a', 'Pre-Push gate'],
@@ -618,13 +630,17 @@ for (const id of stageOf.keys()) {
 }
 // (d) vendor sockets.
 for (const [name, ext] of vendors) {
+  // Several sockets can sit in one box (a directory or a group): one connection
+  // per box, its evidence listing every socket (Codex, #393).
+  const byNode = new Map();
   for (const s of ext.sockets) {
     const node = fileToNode(s);
     if (!node) { fail(`vendor socket ${s} (${name}) is not on the map`); continue; }
-    // Carry the SOCKET path, not the node: a group or directory node is not
-    // what the manifest lists, and the panel must quote what it does (Codex, #393).
-    derived.push([node, `vendor:${name}`, 'del', `delegates to`, 'manifest', s]);
+    byNode.set(node, [...(byNode.get(node) ?? []), s]);
   }
+  // Carry the SOCKET paths, not the node: a group or directory node is not
+  // what the manifest lists, and the panel must quote what it does (Codex, #393).
+  for (const [node, socks] of byNode) derived.push([node, `vendor:${name}`, 'del', `delegates to`, 'manifest', socks.join(', ')]);
 }
 
 /* ---------------------------------------------------------- assemble edges */

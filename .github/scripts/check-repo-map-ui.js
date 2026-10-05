@@ -432,6 +432,18 @@ await page.click('#t_fit');
   if (overflow > 0) fail(`phone width scrolls sideways by ${overflow}px`);
   else if (p[0] < 0 || p[1] > p[2]) fail(`the panel leaves a phone screen (${p.join(', ')})`);
   else ok('at phone width: no sideways scroll, and the panel stays on screen');
+  // A search result is brought into view ABOVE the bottom-sheet panel, not
+  // centred behind it (Codex, #393).
+  await phone.fill('#search', 'qa-pipeline');
+  await phone.press('#search', 'Enter');
+  await phone.waitForTimeout(300);
+  const [boxR, panelTop, wrapTop] = await phone.evaluate(() => {
+    const b = document.querySelector('.n[data-id$="agents/qa-pipeline.md"]').getBoundingClientRect();
+    return [[b.top, b.bottom], document.getElementById('panel').getBoundingClientRect().top,
+      document.getElementById('wrap').getBoundingClientRect().top];
+  });
+  if (!(boxR[0] >= wrapTop && boxR[1] <= panelTop)) fail(`at phone width the revealed result sits behind the panel (box ${boxR.map(Math.round)}, panel top ${Math.round(panelTop)})`);
+  else ok('at phone width a search result is revealed above the panel');
   await phone.close();
 }
 

@@ -340,14 +340,23 @@
       "sockets": [
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
-        "directives/test.md"
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "directives/git.md",
+        "plugins/directives-toolkit/commands/sdd-loop.md",
+        "templates/CLAUDE-template.md",
+        "templates/pr-checklist.md"
       ]
     },
     "code-review-builtin": {
       "vendor": "Anthropic",
       "serves": "test.review",
       "sockets": [
-        "directives/test.md"
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "directives/git.md",
+        "plugins/directives-toolkit/commands/sdd-loop.md",
+        "plugins/directives-toolkit/commands/audit-repo.md"
       ]
     },
     "security-guidance": {
@@ -363,7 +372,10 @@
       "vendor": "Anthropic",
       "serves": "global.security",
       "sockets": [
-        "directives/test.md"
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "templates/CLAUDE-template.md",
+        "templates/pr-checklist.md"
       ]
     },
     "codex-reviews": {
@@ -381,7 +393,13 @@
       "sockets": [
         "directives/git.md",
         "docs/standards/pr-mechanics.md",
-        "docs/standards/session-mechanics.md"
+        "docs/standards/session-mechanics.md",
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "plugins/directives-toolkit/skills/update-pages/SKILL.md",
+        "directives/global.md",
+        "templates/claude-settings.json"
       ]
     },
     "github-conversation-resolution": {
@@ -398,7 +416,9 @@
       "serves": "test.ui-kit",
       "sockets": [
         "templates/ui-tests/package.json",
-        "templates/actions/ui-suite/action.yml"
+        "templates/actions/ui-suite/action.yml",
+        "templates/ui-tests/playwright.config.js",
+        "templates/ui-tests/tests/app.spec.js"
       ]
     },
     "frontend-design": {
@@ -407,14 +427,18 @@
       "sockets": [
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
-        "docs/guides/design-tooling.md"
+        "docs/guides/design-tooling.md",
+        "directives/design.md",
+        "plugins/directives-toolkit/commands/design-intake.md"
       ]
     },
     "stitch": {
       "vendor": "Google",
       "serves": "design.method",
       "sockets": [
-        "docs/guides/design-tooling.md"
+        "docs/guides/design-tooling.md",
+        "directives/design.md",
+        "plugins/directives-toolkit/commands/design-intake.md"
       ]
     },
     "supabase-mcp": {
@@ -422,7 +446,8 @@
       "serves": "data.core",
       "sockets": [
         "directives/data.md",
-        "plugins/directives-toolkit/agents/supabase.md"
+        "plugins/directives-toolkit/agents/supabase.md",
+        "templates/claude-settings.json"
       ]
     },
     "session-start-hook": {

@@ -56,7 +56,7 @@ same output.
 
 From the `qa.yml` bullet in *Self-test monitoring*: It also runs
 `build-logical-map.js --check`, so a committed map that no longer matches
-`EXPORTS.json` fails the build, and `node --check` over the exported JS templates
+the tree fails the build, and `node --check` over the exported JS templates
 — `Repo Map UI` exercises this repo's own map suite, not `templates/ui-tests/`, so
 without that step a syntax error in the largest file we ship would be found by a
 downstream project's CI rather than ours.

@@ -64,10 +64,12 @@ What evidence proves: the source file names the target. It does not prove the
 connection's KIND (copies vs governs). That is the declaration's job, and a
 reviewer's.
 
-Four families are **derived**, never declared, so none can be forgotten: a
+Five families are **derived**, never declared, so none can be forgotten: a
 workflow's `uses: ./.github/actions/<x>`, a `workflow_run` watcher and the
-workflow it watches, the scripts the plugin's hooks run, and every vendor socket
-in `EXPORTS.json` → `externals`. Declaring one of these by hand fails the build.
+workflow it watches, every shipped script a workflow or composite action runs
+(`node` / `python3` / `bash` / `sh` followed by its path — hand-declaring these
+missed two of qa.yml's four, Codex #393), the scripts the plugin's hooks run, and
+every vendor socket in `EXPORTS.json` → `externals`. Declaring one of these by hand fails the build.
 
 The manifest and the map files themselves are never evidence: they name every
 file.

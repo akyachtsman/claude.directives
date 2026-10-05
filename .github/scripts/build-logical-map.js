@@ -476,9 +476,6 @@ const FLOW = [
   ['ui-tests/', 'qa-response.yml', 'run', 'is run on demand by (tests-dir)', 'b', 'UI_TESTS_DIR'],
   ['styles/', 'check-contrast.js', 'val', 'is checked by', 'b', 'DEFAULT_CANDIDATES'],
   // pr & review
-  ['qa.yml', 'check-job-bounds.py', 'run', 'runs', 'a', 'run: python3'],
-  ['qa.yml', 'check-contrast.js', 'run', 'runs', 'a', 'run: node'],
-  ['ui-suite', 'check-ui-viewports.js', 'run', 'runs', 'a', 'run: node'],
   ['cicd-setup.md', 'workflow-ref-guard.py', 'gov', 'wires'],
   ['cicd-setup.md', 'check-job-bounds.py', 'gov', 'wires'],
   // upkeep
@@ -487,7 +484,6 @@ const FLOW = [
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with', 'a', 'Run `/refresh-repo`'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects', 'a', 'Delete'],
   ['notify-task.js', 'notify-email.js', 'run', 'sends through', 'a', 'require('],
-  ['cron-notify.yml', 'notify-task.js', 'run', 'runs', 'a', 'run: node'],
   ['notify-email.js', 'package.json', 'run', 'needs nodemailer from', 'a', 'require('],
   ['cron-email-notifications.md', 'notify-task.js', 'exp', 'sets up'],
   ['/refresh-repo', 'git.md', 'ret', 'Phase 0 re-reads the imported directives', 'a', 're-read every imported directive'],
@@ -524,6 +520,25 @@ for (const f of allWf) {
   }
 }
 void wfIds;
+// (b2) shipped scripts a workflow or composite action RUNS. Declaring these by
+// hand missed two of the four qa.yml runs (Codex, #393), so they are read from
+// the run steps: an interpreter followed by a path ending in a shipped script.
+{
+  const scripts = [...stageOf.keys()].filter(id => id.startsWith('templates/scripts/') && /\.(js|py|sh)$/.test(id));
+  const runners = [...allWf, ...readdirSync('templates/actions').map(a => `templates/actions/${a}/action.yml`)];
+  for (const f of runners) {
+    const owner = f.startsWith('templates/actions/') ? f.replace(/action\.yml$/, '') : f;
+    const lines = readFileSync(f, 'utf8').split('\n').filter(l => !/^\s*#/.test(l));
+    for (const id of scripts) {
+      const base = id.split('/').pop();
+      const re = new RegExp(`\\b(node|python3|bash|sh)\\s+["']?[^\\s"']*\\b${base.replace(/\./g, '\\.')}\\b`);
+      const hit = lines.map(l => l.match(re)).find(Boolean);
+      if (hit && !derived.some(([a, b]) => a === owner && b === id)) {
+        derived.push([owner, id, 'run', 'runs', 'a', [base], `${hit[1]} `]);
+      }
+    }
+  }
+}
 // (c) scripts the plugin's hooks run.
 const hooksJson = readFileSync(`${P}/hooks/hooks.json`, 'utf8');
 if (/scripts\/[\w-]+\.sh/.test(hooksJson)) derived.push([`${P}/hooks/`, `${P}/scripts/`, 'run', 'runs on every Bash call']);
@@ -581,7 +596,7 @@ function add(a, b, kind, words, side = 'a', declared = true, only = null, quote 
   seen.set(key, edges.length);
   edges.push({ a, b, kind, words, ev, side });
 }
-for (const [a, b, k, w, s, only] of derived) add(a, b, k, w, s ?? 'a', false, only ?? null);
+for (const [a, b, k, w, s, only, q] of derived) add(a, b, k, w, s ?? 'a', false, only ?? null, q ?? null);
 // `quote`, when given, pins the evidence to the line that ACTS: it must hold
 // both the other file's name and this phrase. Use it where the first mention
 // in the file is contrastive and the instruction comes later (Codex, #393).

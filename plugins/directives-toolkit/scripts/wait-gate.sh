@@ -55,15 +55,20 @@ esac
 # `sleep 10 10` as 10 (audit, 2026-10-06). Anything that is not a literal
 # duration (`sleep $DELAY`, `sleep $((60*5))`) is still a pure waiter, so it
 # fails CLOSED rather than slipping past the threshold.
-args=$(printf '%s' "$trimmed" | sed -E 's/^sleep[[:space:]]+//; s/[;&|].*$//')
+# The OPERANDS are the words after `sleep` on its own line, up to the first
+# separator or redirection: `sleep 2 >/dev/null`, `sleep 2 2>&1` and a command
+# on the next line are shell syntax around a 2-second sleep, not part of its
+# duration (Codex, #396 round 2). A redirection's fd number (`2>`) goes with it.
+args=$(printf '%s\n' "$trimmed" | head -n 1 | sed -E 's/^sleep[[:space:]]+//; s/[[:space:]]+[0-9]*&?[<>].*$//; s/[;&|<>].*$//')
+# GNU sleep reads each operand with strtod, so `.5`, `+.5`, `1e-1` and `2E1`
+# are all valid; `inf`/`infinity` sleeps forever, which is the purest waiter
+# of all. A form outside that (hex floats included) fails closed.
 set -f
 # shellcheck disable=SC2086
-# GNU sleep takes each argument as a floating-point number, so `.5`, `1e-1`
-# and `2E1` are all valid; `inf`/`infinity` sleeps forever, which is the purest
-# waiter of all. A form outside that (hex floats included) fails closed.
 secs=$(printf '%s\n' $args | awk '
   { a = $0; u = ""
     if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
+    sub(/^\+/, "", a)
     if (tolower(a) ~ /^inf(inity)?$/) { forever = 1; next }
     if (a !~ /^([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/) { bad = 1; exit }
     m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1

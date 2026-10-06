@@ -666,13 +666,16 @@ stamp only where that rule REQUIRES the file: a sibling of a composite that is i
 once `.claude/settings.json` exists, and a file of an installed ui-tests kit. An
 absent required file is unapplied (Codex, #397).
 
-A script is decided by **what names it, not by whether it is in the delta.** A
-changed caller can start naming a script whose own template did not change, and
-that script is never listed. So a dependency pass runs over every installed
-workflow and composite, plus the directives at the head: each upstream script
-they name, and each sibling a composite runs by `$GITHUB_ACTION_PATH`, must
-exist (Codex, #397 round 2, the #321 class). A path upstream does not ship is
-the project's own and is left alone. An absent workflow is
+A dependency is decided by **what names it, not by whether it is in the delta.**
+A changed caller can start naming a script or a composite whose own template did
+not change, and that file is never listed. So a dependency pass follows every
+by-path reference to closure: from the installed workflows and composites and
+the directives at the head, through each `.github/scripts/*` path, each
+`uses: ./.github/actions/<a>` (whose `action.yml` it then reads UPSTREAM, so a
+composite not yet installed still counts) and each `$GITHUB_ACTION_PATH`
+sibling. Every file reached that upstream ships must exist (Codex, #397 rounds
+2-3, the #321 class). A path upstream does not ship is the project's own and is
+left alone. An absent workflow is
 reported, not compared, because its absence can be deliberate (`pages-retry.yml`,
 a scheduled workflow with no task). A path the upstream deleted
 counts as unapplied while a local copy remains. A kit file applied hunk by hunk
@@ -764,24 +767,54 @@ fi
 # SIGPIPE hazard in Phase 1); `; true` keeps a no-match from ending the block
 # under errexit.
 if [ "$classified" = yes ]; then
-  refs=$(find .github/workflows .github/actions -type f \
-           -exec grep -hoE '\.github/scripts/[A-Za-z0-9_./-]+' {} + 2>/dev/null; true)
+  # A CLOSURE over by-path references, not a list of reference forms. Rounds 1-3
+  # of #397 each found one more form the check could not see (an absent file, an
+  # unchanged script, a composite named by `uses:`); this follows all three kinds
+  # from every seed instead. Seeds: the installed workflows and composites, and
+  # the directives at $head. Edges: a `.github/scripts/*` path, a
+  # `./.github/actions/<a>` use, and a `$GITHUB_ACTION_PATH/<file>` sibling. A
+  # composite reached this way is read UPSTREAM at $head, so one that is not
+  # installed yet still contributes what it runs.
+  deps=; queue=; seen=" "
+  scan() {   # $1 = text, $2 = the composite dir it belongs to (or empty)
+    deps="$deps
+$(printf '%s\n' "$1" | grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' | sed -E 's/[.]+$//' | grep -E '\.(js|py)$'; true)"
+    queue="$queue $(printf '%s\n' "$1" | grep -oE '\./\.github/actions/[A-Za-z0-9_.-]+' | sed 's|^\./||' | tr '\n' ' '; true)"
+    if [ -n "$2" ]; then
+      for f in $(printf '%s\n' "$1" | grep -oE 'GITHUB_ACTION_PATH[}]?/[A-Za-z0-9_.-]+' | sed 's|.*/||'; true); do
+        deps="$deps
+$2/$f"
+      done
+    fi
+  }
+  for w in .github/workflows/*; do [ -f "$w" ] && scan "$(cat "$w")" ""; done
+  for a in .github/actions/*/action.yml; do
+    [ -f "$a" ] || continue
+    scan "$(cat "$a")" "$(dirname "$a")"
+    queue="$queue $(dirname "$a")"
+  done
   for d in global git design test data; do
     if dtxt=$(curl -fsSL --connect-timeout 5 --max-time 60 "$raw/directives/$d.md"); then
-      refs="$refs
-$(printf '%s\n' "$dtxt" | grep -oE '\.github/scripts/[A-Za-z0-9_./-]+'; true)"
+      scan "$dtxt" ""
     else
-      echo "CANNOT VERIFY: directives/$d.md could not be fetched, so the scripts it names are unchecked"
+      echo "CANNOT VERIFY: directives/$d.md could not be fetched, so what it names is unchecked"
       unapplied=1
     fi
   done
-  deps=$(printf '%s\n' "$refs" | sed -E 's/[.]+$//' | grep -E '\.(js|py)$' | sort -u; true)
-  for a in .github/actions/*/action.yml; do
-    [ -f "$a" ] || continue
-    for f in $(grep -oE 'GITHUB_ACTION_PATH[}]?/[A-Za-z0-9_.-]+' "$a" | sed 's|.*/||'; true); do
-      deps="$deps
-$(dirname "$a")/$f"
-    done
+  while [ -n "${queue// /}" ]; do
+    set -- $queue; a=$1; shift; queue="$*"
+    case "$seen" in *" $a "*) continue ;; esac
+    seen="$seen$a "
+    deps="$deps
+$a/action.yml"
+    ut=$(mktemp) || ut=/dev/null
+    code=$(curl -sS -o "$ut" -w '%{http_code}' --connect-timeout 5 --max-time 60 \
+             "$raw/templates/actions/${a#.github/actions/}/action.yml" 2>/dev/null) || code=
+    if [ "$code" = 200 ]; then scan "$(cat "$ut")" "$a"; fi
+    [ "$ut" = /dev/null ] || rm -f "$ut"
+    case "$code" in 200|404) ;; *)
+      echo "CANNOT VERIFY: $a (could not read the upstream composite)"; unapplied=1 ;;
+    esac
   done
   while IFS= read -r p; do
     [ -n "$p" ] && [ ! -e "$p" ] || continue
@@ -796,7 +829,7 @@ $(dirname "$a")/$f"
     if [ -n "$kept" ]; then echo "KEPT: $p -- $kept"; continue; fi
     code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 60 "$raw/$t" 2>/dev/null) || code=
     case "$code" in
-      200) echo "UNAPPLIED: $p is absent but an installed caller or a directive names it"; unapplied=1 ;;
+      200) echo "UNAPPLIED: $p is absent but something installed, or a directive, names it"; unapplied=1 ;;
       404) ;;   # not an upstream file: the project's own, not this command's
       *)   echo "CANNOT VERIFY: $p (absent; could not tell whether upstream ships it)"; unapplied=1 ;;
     esac

@@ -357,7 +357,14 @@ feedback. The subscription is **harness-side and automatic** — no tool call:
 
 ---
 
-## Automation 6 — Cross-Session Messaging (session-to-session, manual)
+## Automation 6 — Cross-Session Messaging (session-to-session, standing)
+
+**A standing feature of this account (owner ruling, 2026-10-06), with a heads-up
+every time.** Before sending, tell the owner in your own session's chat which
+session you are messaging and why, in one line; then send. The message carries
+information only: the receiver acts in its own repo under its own rules
+(`directives/global.md` → *One Session, One Repo*). Find the target with
+`list_sessions` (read-only, pre-approved).
 
 One session can message another directly: `create_trigger` with the target's
 `persistent_session_id`, then `fire_trigger`, then `delete_trigger`. `ListAgents`

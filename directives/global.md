@@ -1150,12 +1150,24 @@ before reporting "no access":
 A session works in exactly the repository it was opened for. Never attach,
 clone, or write to another repository mid-session — not to "help", not because
 a request seems to belong there. When a request targets a different repo —
-including this directives repo — say which repo it belongs to and stop; the
-owner takes it to that repo's own session (a paste-ready hand-off message is
-welcome, per the Downstream-Finding Loop). A finding about an upstream file
+including this directives repo — say which repo it belongs to and do none of it
+here. Then get it to that repo's own session one of two ways: **message that
+session directly** when you know which one it is (heads-up to the owner first,
+below), or **write a paste-ready hand-off** for the owner to carry when you do
+not, or when the owner should judge it first (per the Downstream-Finding Loop). A finding about an upstream file
 names the **SHA it was verified at**, re-resolved from the upstream default
 branch as the finding is written — never the SHA fetched earlier. Read the
 file's header comments before reporting it. Read access is unchanged
 (→ *Repository Scope*): the mandatory session-start directive fetches and
 read-only inspection of public repos (`/do-repo`) stay open — and reading
 never becomes an attach.
+
+**Messaging another session is a standing feature of this account (owner
+ruling, 2026-10-06).** A session may send a message straight to another session
+on the account. That carries information and writes nothing in the other repo:
+the receiving session decides what to do and acts in its own repo, under its own
+rules. Use the procedure in `docs/standards/automations.md` → *Automation 6 — Cross-Session Messaging*.
+**Give the owner a heads-up every time:** before sending, say in this session's
+chat which session you are messaging and why, in one line, then send. The
+paste-ready hand-off above stays the route when the target session is unknown,
+or when the owner should judge the message before it goes.

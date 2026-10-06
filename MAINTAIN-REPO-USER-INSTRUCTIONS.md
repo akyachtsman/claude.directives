@@ -254,8 +254,10 @@ probes.
 ## Downstream-Finding Loop
 
 The standing procedure when a project session surfaces a bug, gap, or
-improvement that belongs upstream. Findings propagate **upstream by hand-off,
-never by cross-repo edits** (`global.md` → One Session, One Repo):
+improvement that belongs upstream. Findings propagate **upstream by message,
+never by cross-repo edits** (`global.md` → One Session, One Repo). The message
+travels either way: you paste a hand-off, or the session sends it straight to the
+target session and tells you first (owner ruling, 2026-10-06):
 
 1. **Capture** — the downstream session emits a hand-off block
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).
@@ -264,8 +266,9 @@ never by cross-repo edits** (`global.md` → One Session, One Repo):
    moves inside a session, so a correct fetch can be stale by the time the report
    is written. Read the file's **header comments** first: they often record the
    reported behaviour as a deliberate trade-off.
-2. **Relay** — you paste it into a `claude.directives` session and ask for
-   analysis first. The session verifies legitimacy against git history and
+2. **Relay** — one of two routes. Either the downstream session sends it
+   straight to a `claude.directives` session it knows, telling you first, or you
+   paste it into one. Either way the receiving session analyses before it acts. The session verifies legitimacy against git history and
    live state before implementing (`global.md` → *Behavior Rules* → evidence before assertions —
    downstream reports have been wrong before). Before dismissing one as stale,
    check what `main` held at the SHA the reporter names: a finding correct at
@@ -278,8 +281,9 @@ never by cross-repo edits** (`global.md` → One Session, One Repo):
    session to merge **when the run emits a wake at all** (see *ci-notify
    bootstrap gap* and the scheduling bullet below); otherwise arm a check-in.
 5. **Propagate** — run HUMAN STEPS above for the modes the PR touched.
-6. **Close the loop** — paste the prepared reply back to the reporting
-   session so it can proceed with corrected instructions.
+6. **Close the loop** — the prepared reply goes back to the reporting session,
+   pasted by you or sent directly with a heads-up, so it can proceed with
+   corrected instructions.
 
 ## Environment Maintenance
 

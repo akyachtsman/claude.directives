@@ -99,7 +99,7 @@ no unresolved review threads, diff limited to the intended files.
 Repo-specific deltas:
 - `main` here enforces **Require conversation resolution before merging**
   server-side (owner, 2026-08-26), so an unresolved thread refuses the merge
-  rather than depending on a GraphQL read that fails when the quota is out. It
+  rather than depending on a thread read that fails when the quota is out. It
   backstops exactly one gate: a blocked merge with CI green and no
   `codex-flagged` label is that rule firing — resolve the threads, do not retry
   the merge — and everything else in the list above is still checked by the

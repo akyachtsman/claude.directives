@@ -190,7 +190,7 @@ moves the rule server-side, where no shell form evades it.
 **Why conversation resolution is on that list (owner ruling, 2026-08-26).**
 `git.md`'s merge gates include *no unresolved review threads*, and until this
 rule that gate had no mechanism at all — it was satisfied by an agent remembering
-to make one call, the thread read is GraphQL, and it fails **exactly when** the
+to make one call, the thread read is GraphQL through the MCP, and it fails **exactly when** the
 pool is empty, while the `codex-flagged` label is REST and stays readable at that
 same moment. The cheap wrong path was always available precisely when the correct
 one was not, which is why a stronger warning could not fix it: `claude.prop`

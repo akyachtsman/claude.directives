@@ -21,7 +21,9 @@ Execute in order:
    THIS session, and report their presence as a capability fact only —
    `global.md` → *One Session, One Repo* forbids attaching another repository
    mid-session either way. A request targeting a different repo is answered by
-   naming the repo it belongs to and stopping, never by adding it.
+   naming the repo it belongs to and doing none of it here, never by adding it.
+   It reaches that repo's own session by a direct message (heads-up to the owner
+   first) or a paste-ready hand-off (`global.md` → *One Session, One Repo*).
 
 3. **READ scope is a different thing — and it is never restricted for public
    repos.** Raw URLs, the public GitHub API, and codeload tarballs work from

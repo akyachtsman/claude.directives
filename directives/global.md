@@ -1150,9 +1150,11 @@ before reporting "no access":
 A session works in exactly the repository it was opened for. Never attach,
 clone, or write to another repository mid-session — not to "help", not because
 a request seems to belong there. When a request targets a different repo —
-including this directives repo — say which repo it belongs to and stop; the
-owner takes it to that repo's own session (a paste-ready hand-off message is
-welcome, per the Downstream-Finding Loop). A finding about an upstream file
+including this directives repo — say which repo it belongs to and do none of it
+here. Then get it to that repo's own session one of two ways: **message that
+session directly** when you know which one it is (heads-up to the owner first,
+below), or **write a paste-ready hand-off** for the owner to carry when you do
+not, or when the owner should judge it first (per the Downstream-Finding Loop). A finding about an upstream file
 names the **SHA it was verified at**, re-resolved from the upstream default
 branch as the finding is written — never the SHA fetched earlier. Read the
 file's header comments before reporting it. Read access is unchanged

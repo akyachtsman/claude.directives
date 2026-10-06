@@ -46,8 +46,9 @@ Execute in order:
    Record the deployment target — **GitHub Pages** — in CLAUDE.md's Stack
    section. The steps below
    scaffold a single-page `index.html` app on GitHub Pages. That is the only
-   deployment path (`global.md` → *Hosting & Deployment*): no framework, no build
-   step, no tier to choose.
+   deployment path (`global.md` → *Hosting & Deployment*): no framework, no build,
+   no tier to choose. A CI build is a later per-project opt-in with the owner's
+   sign-off, never a bootstrap question.
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
    copy these workflow files from `claude.directives/templates/workflows/`

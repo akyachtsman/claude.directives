@@ -17,15 +17,15 @@ A `docs/…` path in these directives resolves against claude.directives:
 - Follow design.md's universal craft rules (cross-platform, accessibility,
   motion, copy); each project's *look* is its own, established via
   `/design-intake` — there is no shared company theme
-- Default stack: plain HTML + CSS + vanilla JS with **no *local* build**.
-  Development is browser-only (no terminal), so nothing may require a build on
-  your machine. This is a **dev-environment** rule, not a deployment ceiling.
-  Browser-only is also a fact about the OWNER, not only about the stack — see
+- Default stack: plain HTML + CSS + vanilla JS with **no build** — what is
+  committed is what is served. *Hosting & Deployment* owns this rule and its one
+  opt-in (a CI build, per project, with the owner's sign-off). A session's own
+  terminal does not lift it: the rule is about the site having one source of
+  truth, not about who can run npm. Browser-only is a fact about the OWNER — see
   → *A Blocked Command Is Not a Blocked Capability* for what that means for
   what you may ask him to do.
-- **No framework tier.** Don't add a framework or a build step; a static site
-  doesn't need one, and adopting one was evaluated and rejected
-  (→ *Hosting & Deployment*).
+- **No framework tier.** Don't add a framework; adopting one was evaluated and
+  rejected (→ *Hosting & Deployment*), and the build opt-in does not reopen it.
 - All code works responsively on every target platform — laptop, tablet (iPad),
   phone (iPhone/Android)
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
@@ -278,9 +278,26 @@ Two different scopes — never conflate them:
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
   the same verification at session start.
 
-## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26)
+## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26, 2026-10-06)
 **GitHub Pages is the deployment target.** Plain HTML/CSS/JS, dynamic via
-client-side Supabase + RLS. No build step.
+client-side Supabase + RLS.
+
+**No build by default; a CI build is a per-project opt-in (owner ruling,
+2026-10-06).**
+- **Why no build:** what is committed is what is served. Any file can be read or
+  edited anywhere, the owner's browser included, and is correct the moment it
+  lands; nothing stands between a merge and the live site that can fail.
+- **A session never builds and commits the output**, terminal or not. Generated
+  files committed beside their source drift from it, and an edit to either is
+  silently lost on the next build.
+- **The opt-in:** when a project has a concrete need a build serves —
+  TypeScript, a utility CSS framework, bundled npm libraries, minification,
+  image optimisation — it may build **in CI**: a GitHub Actions workflow that
+  builds on push and deploys through Actions-source Pages (below). It needs the
+  owner's sign-off, recorded with the need in the project's `CLAUDE.md`. Ask
+  only when that need is concrete; never as a setup question.
+- **Frameworks stay rejected either way** (below). An opted-in project's deploy
+  is no longer idempotent, so W3's retry exception does not apply to it.
 
 ⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one.**
 Branch-source publishes the **whole repository** at the public URL. Choose by

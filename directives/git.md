@@ -450,10 +450,13 @@ operations, which its error text names: `.../pulls/<n>/ccr/ready_for_review`,
 `.../ccr/review_threads`, `.../ccr/comments/<id>/resolve`. So:
 - **Un-draft as soon as CI goes green**, not at merge time. Draft-on-first-push
   still stands (*PR Lifecycle* above); this only moves *when* you leave draft,
-  so the GraphQL call happens while budget is likely available.
-- Tell REST from GraphQL by the failing verb: a 4xx from the merge/comment/label
-  endpoints is REST; a failure to un-draft, resolve a review thread, or read
-  review threads is GraphQL.
+  so the GraphQL call happens while budget is likely available. Through the
+  proxy's REST stand-in, un-drafting is a REST call and this timing concern
+  does not apply.
+- Tell REST from GraphQL by the **route**, then the verb: a call through the
+  proxy's REST stand-ins (`.../ccr/...`) is REST whatever it does. Otherwise a
+  4xx from the merge/comment/label endpoints is REST, and a failure to un-draft,
+  resolve a review thread, or read review threads through the MCP is GraphQL.
 
 **Diagnose from the error text** (rate-limit headers are usually invisible in MCP
 results):

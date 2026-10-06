@@ -39,8 +39,12 @@ fi
 [ "$bg" = "true" ] || exit 0
 [ -n "$cmd" ] || exit 0
 
-# Strip quoted segments: message text must never influence the verdict.
-stripped=$(printf '%s' "$cmd" | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+# Strip quoted segments: message text must never influence the verdict. A
+# single-WORD quoted token is unquoted first, so `sleep "30"` reads as the
+# 30-second sleep it is rather than as a sleep with no operand.
+stripped=$(printf '%s' "$cmd" \
+  | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
+  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
 # Trim leading whitespace and an optional leading no-op (`:;` / `true &&`).
 trimmed=$(printf '%s' "$stripped" | sed -E 's/^[[:space:]]*(:|true)[[:space:]]*(;|&&)?[[:space:]]*//; s/^[[:space:]]*//')
 
@@ -49,32 +53,45 @@ case "$trimmed" in
   sleep[[:space:]]*) ;;
   *) exit 0 ;;
 esac
-# Total the sleep's OWN arguments the way coreutils does: each may carry an
-# s/m/h/d suffix and a fraction, and several are summed. Reading only the
-# leading digits let `sleep 5m` and `sleep 2h` through as 5 and 2 seconds, and
-# `sleep 10 10` as 10 (audit, 2026-10-06). Anything that is not a literal
-# duration (`sleep $DELAY`, `sleep $((60*5))`) is still a pure waiter, so it
-# fails CLOSED rather than slipping past the threshold.
-# The OPERANDS are the words after `sleep` on its own line, up to the first
-# separator or redirection: `sleep 2 >/dev/null`, `sleep 2 2>&1` and a command
-# on the next line are shell syntax around a 2-second sleep, not part of its
-# duration (Codex, #396 round 2). A redirection's fd number (`2>`) goes with it.
-args=$(printf '%s\n' "$trimmed" | head -n 1 | sed -E 's/^sleep[[:space:]]+//; s/[[:space:]]+[0-9]*&?[<>].*$//; s/[;&|<>].*$//')
-# GNU sleep reads each operand with strtod, so `.5`, `+.5`, `1e-1` and `2E1`
-# are all valid; `inf`/`infinity` sleeps forever, which is the purest waiter
-# of all. A form outside that (hex floats included) fails closed.
-set -f
-# shellcheck disable=SC2086
-secs=$(printf '%s\n' $args | awk '
-  { a = $0; u = ""
-    if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
-    sub(/^\+/, "", a)
-    if (tolower(a) ~ /^inf(inity)?$/) { forever = 1; next }
-    if (a !~ /^([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/) { bad = 1; exit }
-    m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1
-    t += (a + 0) * m }
-  END { if (bad || NR == 0) print "X"; else if (forever) print 1e18; else print t }')
-set +f
+# Total the sleep's OWN operands the way GNU sleep does: each is a strtod
+# float (`.5`, `+.5`, `1e-1`, `2E1`) with an optional s/m/h/d suffix,
+# `inf`/`infinity` is forever, and several are summed. Reading only the leading
+# digits let `sleep 5m`, `sleep 2h` and `sleep 10 10` through as 5, 2 and 10
+# seconds (audit, 2026-10-06).
+#
+# STOP AT THE UNKNOWN (owner ruling, 2026-10-06). Operands are read while they
+# look like durations, and the first word that does not -- a comment, a
+# redirection, a separator, anything -- ENDS the reading; it never blocks. Three
+# Codex rounds on #396 each found shell syntax around a short sleep (`1e-1`,
+# `>/dev/null`, `+.5`, `# note`, a `\` continuation) that a fail-closed parser
+# refused, and the shell's syntax is not an enumerable list. This keeps the
+# header's fail-open contract: only a literal total >= 15s blocks, plus the one
+# fail-closed case the gate has always had -- a FIRST operand that is not a
+# literal at all (`$DELAY`, `$((60*5))`, a backtick), which is still a waiter.
+# Backslash-newlines are joined first (bash reads one command), shell
+# metacharacters are split into their own words, and a redirection's fd number
+# (`2>`) goes with it.
+secs=$(printf '%s' "$trimmed" | awk '
+  BEGIN { RS = "\001" }
+  { gsub(/\\\n/, " ")
+    line = $0; sub(/\n.*/, "", line)
+    gsub(/[0-9]*&?[<>]/, " > ", line)
+    gsub(/[;&|()]/, " & ", line)
+    n = split(line, w, /[ \t]+/)
+    for (i = 2; i <= n; i++) {
+      a = w[i]
+      if (a == "") continue
+      if (a ~ /[$`]/) { if (!seen) nonliteral = 1; break }
+      u = ""
+      if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
+      sub(/^\+/, "", a)
+      if (tolower(a) ~ /^inf(inity)?$/) { forever = 1; seen = 1; continue }
+      if (a !~ /^([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/) break
+      m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1
+      t += (a + 0) * m; seen = 1
+    }
+  }
+  END { if (nonliteral) print "X"; else if (forever) print 1e18; else print t + 0 }')
 if [ "$secs" != "X" ]; then
   awk -v s="$secs" 'BEGIN { exit !(s >= 15) }' || exit 0
 fi

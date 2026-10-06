@@ -81,6 +81,8 @@ WAIT_CASES = [
     ("a quoted variable duration", 'sleep "$DELAY"', True, BLOCK),
     ("a quoted command substitution with spaces", 'sleep "$(printf %s 30)"', True, BLOCK),
     ("the end-of-options marker before a long duration", "sleep -- 30", True, BLOCK),
+    ("a brace-expanded first operand (bash: sleep 8 8)", "sleep {8,8}", True, BLOCK),
+    ("an unrecognised first operand after --", "sleep -- {8,8}", True, BLOCK),
     ("a hexadecimal float past the threshold", "sleep 0x1p4", True, BLOCK),
     ("a hexadecimal float after --", "sleep -- 0x1p4", True, BLOCK),
     ("a hexadecimal fraction with an exponent", "sleep 0x.8p5", True, BLOCK),

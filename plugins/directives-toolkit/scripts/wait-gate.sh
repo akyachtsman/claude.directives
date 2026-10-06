@@ -63,15 +63,16 @@ esac
 # digits let `sleep 5m`, `sleep 2h` and `sleep 10 10` through as 5, 2 and 10
 # seconds (audit, 2026-10-06).
 #
-# STOP AT THE UNKNOWN (owner ruling, 2026-10-06). Operands are read while they
-# look like durations, and the first word that does not -- a comment, a
-# redirection, a separator, anything -- ENDS the reading; it never blocks. Three
-# Codex rounds on #396 each found shell syntax around a short sleep (`1e-1`,
-# `>/dev/null`, `+.5`, `# note`, a `\` continuation) that a fail-closed parser
-# refused, and the shell's syntax is not an enumerable list. This keeps the
-# header's fail-open contract: only a literal total >= 15s blocks, plus the one
-# fail-closed case the gate has always had -- a FIRST operand that is not a
-# literal at all (`$DELAY`, `$((60*5))`, a backtick), which is still a waiter.
+# STOP AT THE UNKNOWN (owner rulings, 2026-10-06). After a recognised
+# duration, the first word that is not one -- a comment, a redirection, a
+# separator, anything -- ENDS the reading; it never blocks. Three Codex rounds on
+# #396 each found shell syntax around a short sleep (`1e-1`, `>/dev/null`,
+# `+.5`, `# note`, a `\` continuation) that a fail-closed parser refused, and
+# the shell's syntax is not an enumerable list. The FIRST operand is the
+# exception: if it is not a recognised duration it is a duration given as an
+# expression (`$DELAY`, `$((60*5))`, a backtick, `{8,8}`, a glob), and that
+# blocks, as the original gate did. Every false block in those rounds was a
+# word AFTER a duration, so this does not bring them back.
 # Backslash-newlines are joined first (bash reads one command), shell
 # metacharacters are split into their own words, and a redirection's fd number
 # (`2>`) goes with it.
@@ -112,7 +113,7 @@ secs=$(printf '%s' "$trimmed" | awk '
       if (tolower(a) ~ /^inf(inity)?$/) { forever = 1; seen = 1; continue }
       if (a ~ /^0[xX]([0-9a-fA-F]+\.?[0-9a-fA-F]*|\.[0-9a-fA-F]+)([pP][-+]?[0-9]+)?$/) v = hexval(a)
       else if (a ~ /^([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/) v = a + 0
-      else break
+      else { if (!seen) nonliteral = 1; break }
       m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1
       t += v * m; seen = 1
     }

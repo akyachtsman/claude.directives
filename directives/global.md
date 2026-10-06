@@ -229,7 +229,7 @@ styles/          ← the committed design contract (tokens.css + components.css)
                    (→ *Hosting & Deployment*)
                  ← keepalive.yml is NOT standard: it pushes to main weekly, which
                    the required default-branch ruleset refuses, and a repo where
-                   PRs land never hits the 60-day inactivity limit it exists for
+                   PRs land never hits the public-repo 60-day inactivity limit it exists for
   scripts/
     ui-tests/
 ```

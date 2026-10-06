@@ -205,11 +205,11 @@ a repo, sessions there still treat the thread gate as theirs to check
 
 **The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
 with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
-60 days. Protection blocks that push, the workflow goes red, and ~60 days later
+60 days (a rule for public repositories only). Protection blocks that push, the workflow goes red, and ~60 days later
 every cron in that repo is disabled — a slow, quiet failure.
 
 **Delete `keepalive.yml`; do not bypass anything.** GitHub disables scheduled
-workflows after 60 days of *repository inactivity* — not on a timer. A repo where
+workflows in a public repository after 60 days of *repository inactivity* — not on a timer. A repo where
 PRs land never approaches that, so the workflow buys nothing there. Remove it and
 its `KEEPALIVE_PAT` secret, and keep the ruleset's bypass list **empty**. If a
 genuinely idle repo ever does trip the limit, GitHub emails and one click

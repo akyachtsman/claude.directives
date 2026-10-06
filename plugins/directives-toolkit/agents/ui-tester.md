@@ -217,7 +217,7 @@ Escalate: yes/no — reason if yes
 
 **`dvh` units are NOT a CI limitation under the kit's browsers**
 
-Dynamic viewport units (`dvh`, `svh`, `lvh`) need Chromium 108, WebKit/Safari 15.4 or Firefox 101 (MDN browser-compat-data). The kit's Playwright ships far newer builds: on 1.63.0, Chromium 153 rendered `min-height: 100dvh` at the full viewport height (measured 2026-10-06). So when an element present in the HTML is not visible to Playwright, a `dvh` rule is not the explanation by default. Diagnose it as an app bug like any other.
+Dynamic viewport units (`dvh`, `svh`, `lvh`) need Chromium 108, WebKit/Safari 15.4 or Firefox 101 (MDN browser-compat-data). The kit's Playwright ships far newer builds: on 1.63.0, Chromium 153 rendered `min-height: 100dvh` at the full viewport height (measured 2026-10-06). So when an element present in the HTML is not visible to Playwright, rule `dvh` out and resume normal triage: the selector (a hidden responsive duplicate matched instead of the visible one), the timing (an assertion before render or a transition finishes) and the layout. Do not blame the CI browser, and do not assume the app is wrong either.
 
 The old workaround (a `100vh` declaration before the `dvh` rule) applies only to a run pinned to a browser older than those versions.
 

@@ -1,6 +1,7 @@
 name: Keepalive
 
-# GitHub auto-disables scheduled workflows after 60 days with no repo commits.
+# GitHub auto-disables scheduled workflows in a PUBLIC repository after 60 days
+# with no repo activity. A private repository is not subject to it.
 # A weekly empty commit resets that clock for EVERY scheduled workflow in the repo.
 # Pushed with a PAT (secrets.KEEPALIVE_PAT) — GITHUB_TOKEN commits don't reliably
 # count as the activity that resets the timer.
@@ -43,7 +44,7 @@ jobs:
           KEEPALIVE_PAT: ${{ secrets.KEEPALIVE_PAT }}
         run: |
           if [ -z "$KEEPALIVE_PAT" ]; then
-            echo "::error::KEEPALIVE_PAT is not set, so the 60-day scheduler clock cannot be reset. Add the secret (Settings -> Secrets and variables -> Actions), or delete this workflow if the repo does not need it."
+            echo "::error::KEEPALIVE_PAT is not set, so the 60-day scheduler clock (public repositories only) cannot be reset. Add the secret (Settings -> Secrets and variables -> Actions), or delete this workflow if the repo does not need it."
             exit 1
           fi
       - uses: actions/checkout@v4

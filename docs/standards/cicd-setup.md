@@ -503,8 +503,8 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 **Do not install `keepalive.yml`.** It pushes to `main` weekly, and the
 default-branch ruleset every repo must have (with an empty bypass list) refuses
 that — so under this standard the workflow is red on every run, not merely
-unnecessary. It is also unnecessary: the 60-day auto-disable counts repository
-*inactivity*, which a repo where PRs land never approaches. If a genuinely idle
+unnecessary. It is also unnecessary: the 60-day auto-disable applies to public
+repositories only and counts repository *inactivity*, which a repo where PRs land never approaches. If a genuinely idle
 repo ever does trip the limit, GitHub emails admins and re-enabling is one click.
 The template is retained only for a repo outside this standard; see
 `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.

@@ -58,11 +58,17 @@ esac
 args=$(printf '%s' "$trimmed" | sed -E 's/^sleep[[:space:]]+//; s/[;&|].*$//')
 set -f
 # shellcheck disable=SC2086
+# GNU sleep takes each argument as a floating-point number, so `.5`, `1e-1`
+# and `2E1` are all valid; `inf`/`infinity` sleeps forever, which is the purest
+# waiter of all. A form outside that (hex floats included) fails closed.
 secs=$(printf '%s\n' $args | awk '
-  $0 !~ /^[0-9]+(\.[0-9]+)?[smhd]?$/ { bad = 1; exit }
-  { u = substr($0, length($0)); m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1
-    t += ($0 + 0) * m }
-  END { if (bad || NR == 0) print "X"; else print t }')
+  { a = $0; u = ""
+    if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
+    if (tolower(a) ~ /^inf(inity)?$/) { forever = 1; next }
+    if (a !~ /^([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/) { bad = 1; exit }
+    m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1
+    t += (a + 0) * m }
+  END { if (bad || NR == 0) print "X"; else if (forever) print 1e18; else print t }')
 set +f
 if [ "$secs" != "X" ]; then
   awk -v s="$secs" 'BEGIN { exit !(s >= 15) }' || exit 0

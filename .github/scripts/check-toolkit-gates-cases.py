@@ -65,9 +65,13 @@ WAIT_CASES = [
     ("arguments that sum past the threshold", "sleep 10 10", True, BLOCK),
     ("a variable duration fails closed", "sleep $DELAY", True, BLOCK),
     ("arithmetic fails closed", "sleep $((60*5))", True, BLOCK),
+    ("an exponent past the threshold", "sleep 2e1", True, BLOCK),
+    ("infinity", "sleep infinity", True, BLOCK),
     # ...and the complement.
     ("a short pause", "sleep 2", True, ALLOW),
     ("a fraction of a second", "sleep 0.5", True, ALLOW),
+    ("a leading-dot fraction", "sleep .5", True, ALLOW),
+    ("an exponent under the threshold (GNU float syntax, Codex #396)", "sleep 1e-1", True, ALLOW),
     ("a seconds suffix under the threshold", "sleep 10s", True, ALLOW),
     ("just under the threshold", "sleep 14", True, ALLOW),
     ("a foreground sleep is not this gate's", "sleep 300", False, ALLOW),

@@ -77,6 +77,9 @@ WAIT_CASES = [
     ("a quoted variable duration", 'sleep "$DELAY"', True, BLOCK),
     ("a quoted command substitution with spaces", 'sleep "$(printf %s 30)"', True, BLOCK),
     ("the end-of-options marker before a long duration", "sleep -- 30", True, BLOCK),
+    ("a hexadecimal float past the threshold", "sleep 0x1p4", True, BLOCK),
+    ("a hexadecimal float after --", "sleep -- 0x1p4", True, BLOCK),
+    ("a hexadecimal fraction with an exponent", "sleep 0x.8p5", True, BLOCK),
     # ...and the complement.
     ("a short pause", "sleep 2", True, ALLOW),
     ("a fraction of a second", "sleep 0.5", True, ALLOW),
@@ -88,6 +91,7 @@ WAIT_CASES = [
     ("a short sleep, then a command on the next line", "sleep 2\necho done", True, ALLOW),
     ("a short sleep with a trailing comment", "sleep 2 # short warm-up", True, ALLOW),
     ("the end-of-options marker before a short duration", "sleep -- 2", True, ALLOW),
+    ("a short hexadecimal float", "sleep 0xA", True, ALLOW),
     ("a short sleep, then a quoted message", 'sleep 2 && echo "all done now"', True, ALLOW),
     ("a short sleep split by a backslash-newline", "sleep 2 \\\n2", True, ALLOW),
     ("a seconds suffix under the threshold", "sleep 10s", True, ALLOW),

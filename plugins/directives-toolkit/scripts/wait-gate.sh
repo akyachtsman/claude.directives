@@ -76,6 +76,23 @@ esac
 # metacharacters are split into their own words, and a redirection's fd number
 # (`2>`) goes with it.
 secs=$(printf '%s' "$trimmed" | awk '
+  # strtod also reads HEX floats (`0x1p4` is 16 s; Codex, #396), which awk
+  # does not convert itself. With decimal and inf/infinity that completes the
+  # grammar GNU sleep accepts, so no number form is left to read as unknown.
+  function hexval(h,    i, c, d, v, frac, e, p) {
+    h = substr(h, 3); e = 0
+    p = index(tolower(h), "p")
+    if (p) { e = substr(h, p + 1) + 0; h = substr(h, 1, p - 1) }
+    v = 0; frac = 0
+    for (i = 1; i <= length(h); i++) {
+      c = tolower(substr(h, i, 1))
+      if (c == ".") { frac = 1; continue }
+      d = index("0123456789abcdef", c) - 1
+      v = v * 16 + d
+      if (frac) e -= 4
+    }
+    return v * (2 ^ e)
+  }
   BEGIN { RS = "\001" }
   { gsub(/\\\n/, " ")
     line = $0; sub(/\n.*/, "", line)
@@ -93,9 +110,11 @@ secs=$(printf '%s' "$trimmed" | awk '
       if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
       sub(/^\+/, "", a)
       if (tolower(a) ~ /^inf(inity)?$/) { forever = 1; seen = 1; continue }
-      if (a !~ /^([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/) break
+      if (a ~ /^0[xX]([0-9a-fA-F]+\.?[0-9a-fA-F]*|\.[0-9a-fA-F]+)([pP][-+]?[0-9]+)?$/) v = hexval(a)
+      else if (a ~ /^([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/) v = a + 0
+      else break
       m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1
-      t += (a + 0) * m; seen = 1
+      t += v * m; seen = 1
     }
   }
   END { if (nonliteral) print "X"; else if (forever) print 1e18; else print t + 0 }')

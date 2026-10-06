@@ -239,16 +239,12 @@ Go to the target repo's `Actions` tab. Confirm `pages-build-deployment` appears 
 
 ---
 
-## Step 8 — Verify the workflows trigger, through the setup PR
+## Step 8 — Keep the work on a branch
 
-Do NOT push to `main` to test this: the default-branch ruleset this procedure
-requires (Verification Checklist) refuses a direct push. Commit everything from
-Steps 1–7 and 9 on a `claude/<name>` branch and open the PR. That PR is the test:
-
-- [ ] `QA — Static + UI Tests` runs on the PR and goes green — a red static job
-      at a missing file means a Step 1 script was skipped
-- [ ] after the squash-merge, `QA — UI Tests (live)` runs once `pages-build-deployment` completes
-- [ ] `QA — Event-Driven Response` is visible in the Actions tab and ready for dispatch
+Everything from Steps 1–9 goes on one `claude/<name>` branch, never straight to
+`main`: the default-branch ruleset this procedure requires (Verification
+Checklist) refuses a direct push. Install the monitors (Step 9) on the same
+branch, then verify through the setup PR (Step 10).
 
 ---
 
@@ -509,6 +505,17 @@ The template is retained only for a repo outside this standard; see
 
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.
+
+---
+
+## Step 10 — Open the setup PR and verify the workflows trigger
+
+Open the PR from the branch that now holds Steps 1–9. That PR is the test:
+
+- [ ] `QA — Static + UI Tests` runs on the PR and goes green — a red static job
+      at a missing file means a Step 1 script was skipped
+- [ ] after the squash-merge, `QA — UI Tests (live)` runs once `pages-build-deployment` completes
+- [ ] `QA — Event-Driven Response` is visible in the Actions tab and ready for dispatch
 
 ---
 

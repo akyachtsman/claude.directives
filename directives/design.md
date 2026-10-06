@@ -42,7 +42,7 @@ Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack
 Plain HTML + CSS + vanilla JS on GitHub Pages, no build by default (a CI build
-is a per-project opt-in with the owner's sign-off) — set by
+is a per-project opt-in with the owner's sign-off, not open yet) — set by
 `global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21; build rule
 2026-10-06), which owns it.
 

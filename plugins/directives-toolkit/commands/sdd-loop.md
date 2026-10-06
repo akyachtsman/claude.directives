@@ -58,10 +58,12 @@ directive's stack, plain HTML + JS with no framework and no build
 (`global.md` → *Hosting & Deployment*). A CI build is allowed only when the
 `Build:` bullet under *Project Overview* in the project's `CLAUDE.md` records
 the opt-in, with its need and the owner's sign-off; read it there rather than
-asking again. No `Build:` bullet means no build. A plan that needs a build the
-project has not opted into follows the opt-in procedure in
-`global.md` → *Hosting & Deployment* (confirmation, record, and every switch
-obligation) before it plans on the build; it is not restated here.
+asking again. No `Build:` bullet means no build. The opt-in is **not open
+yet** (`global.md` → *Hosting & Deployment*, until claude.directives#402 lands),
+so a plan that needs a build the project has not opted into does not plan on
+one: raise the need with the owner instead. Once the opt-in opens, follow its
+procedure there (confirmation, record, and every switch obligation); it is not
+restated here.
 
 Application and UI frameworks stay out either way: a spec that asks for one
 (React, Vue) is not planned. Raise it per

@@ -19,7 +19,7 @@ A `docs/…` path in these directives resolves against claude.directives:
   `/design-intake` — there is no shared company theme
 - Default stack: plain HTML + CSS + vanilla JS with **no build** — what is
   committed is what is served. *Hosting & Deployment* owns this rule and its one
-  opt-in (a CI build, per project, with the owner's sign-off). A session's own
+  opt-in (a CI build, per project, with the owner's sign-off; not open yet). A session's own
   terminal does not lift it: the rule is about the site having one source of
   truth, not about who can run npm. Browser-only is a fact about the OWNER — see
   → *A Blocked Command Is Not a Blocked Capability* for what that means for
@@ -320,8 +320,15 @@ client-side Supabase + RLS.
     exception is closed to a build), and build the retry into the deploy
     workflow.
 
-  No project has taken the opt-in yet, so the first one that does checks every
-  workflow it ships against the rule above and reports any gap upstream. The
+  **Not open yet (owner ruling, 2026-10-06).** No project may take the opt-in
+  until [claude.directives#402](https://github.com/akyachtsman/claude.directives/issues/402) lands. Today's toolkit
+  still tests, serves, watches and recovers the site as committed (the
+  `ui-tester` agent serves the repo root; the `update-pages` stuck-run recovery
+  can switch to branch-source), so an opted-in project would be tested unbuilt
+  and could be recovered into publishing its unbuilt tree. Until then a concrete
+  need is raised with the owner and on that issue; the project does not switch.
+  Once it opens, the first project that opts in checks every workflow it ships
+  against the rule above and reports any gap upstream. The
   snippets: `/new-repo` step 5 and `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*. It needs the
   owner's sign-off, recorded with the need on the `Build:` bullet under
   *Project Overview* in the project's own `CLAUDE.md`; a missing bullet means

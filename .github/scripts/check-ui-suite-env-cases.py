@@ -861,8 +861,11 @@ def main():
         for label, body, args, expected, needle in (
             ("no exemption file: an unwired read is refused",
              None, [], 1, "RUNNER_ONLY_VAR is read by"),
-            ("the default exemption file, with a reason, exempts the read — accepted",
-             '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0, "spec env wired from inputs"),
+            ("the default exemption file, with a reason, exempts the read — accepted, and NOT credited as wired",
+             '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0, ': none read (read from'),
+            ("an exempted read is reported on its own line",
+             '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0,
+             "spec env exempted, NOT wired (each arrives another way, per its recorded reason): RUNNER_ONLY_VAR"),
             ("an exemption with an empty reason — refused, never read as one",
              '{"RUNNER_ONLY_VAR": "  "}', [], 1, "RUNNER_ONLY_VAR has no reason"),
             ("an exemption whose reason is not a string — refused",
@@ -888,6 +891,19 @@ def main():
                 failures.append(f"{label}\n      expected exit {expected} with {needle!r}; got {code}.\n      {out}")
             else:
                 print(f"OK:   {label} (exit {code})")
+
+        # An exemption left behind for a name the composite DOES wire from an input
+        # is reported as wired, never as "NOT wired" (Codex, #397).
+        (tests / "a.spec.js").write_text("const u = process.env.APP_URL;\n", encoding="utf-8")
+        exempt.write_text('{"APP_URL": "stale: arrived another way once"}', encoding="utf-8")
+        r = subprocess.run([sys.executable, str(GUARD)], capture_output=True, text=True, cwd=tmp)
+        code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
+        extra += 1
+        label = "a stale exemption for a name wired from an input is reported as wired"
+        if code != 0 or '": APP_URL (read from' not in out or "NOT wired" in out:
+            failures.append(f"{label}\n      expected exit 0, APP_URL on the wired line, no NOT-wired line; got {code}.\n      {out}")
+        else:
+            print(f"OK:   {label} (exit {code})")
 
     if failures:
         print("\ncheck-ui-suite-env-cases: FAILED\n")

@@ -271,7 +271,8 @@ head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/h
 # marker, match it against the unchanged head, and permanently advance the stamp
 # past a delta nobody dispositioned. SHA-binding alone does not catch that,
 # because the SHA is the same.
-rm -f "$(git rev-parse --git-path refresh-repo-classified)"
+rm -f "$(git rev-parse --git-path refresh-repo-classified)" \
+      "$(git rev-parse --git-path refresh-repo-delta)"
 
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
@@ -298,8 +299,12 @@ elif [ -n "$last" ] && [ "$last" != "$head" ]; then
   if [ -n "$objs" ] \
      && git -C "$objs" cat-file -e "$last^{commit}" 2>/dev/null \
      && git -C "$objs" cat-file -e "$head^{commit}" 2>/dev/null \
-     && git -C "$objs" diff --no-renames --name-status "$last" "$head"; then
-    classified=yes   # the delta was READ — Phase 3 may advance the stamp
+     && delta_list=$(git -C "$objs" diff --no-renames --name-status "$last" "$head"); then
+    printf '%s\n' "$delta_list"
+    # Kept for Phase 3, which re-checks every listed path was APPLIED before it
+    # stamps. Reading the delta is not applying it (claude.prop, PROP7 #2).
+    printf '%s\n' "$delta_list" > "$(git rev-parse --git-path refresh-repo-delta)"
+    classified=yes   # the delta was READ — Phase 3 still checks it was APPLIED
     # Written only AFTER the delta has actually been listed. Records WHICH head
     # was classified, so Phase 3 can refuse a verdict made against a different
     # head. `git rev-parse --git-path` because in a linked worktree .git is a
@@ -636,6 +641,64 @@ file-level delta. Two distinct failures make an unguarded stamp destructive:
 Set `classified=yes` in Phase 2 only on the branch where the delta listing was
 actually read (including "no files changed"); leave it unset otherwise.
 
+**Read is not applied.** A third failure gets past both guards above: a path the
+delta LISTED, dispositioned as New-upstream, and then never applied. The stamp
+moves past it and no later delta lists it again. claude.prop measured it
+(2026-10-06): `templates/scripts/check-job-bounds.py` was in the delta of the
+refresh that stamped `96c370f`, was not applied, and appeared in neither of the
+next two deltas. It stayed stale for five weeks, until a delta-independent diff
+found it. So before stamping, Phase 3 compares the installed copies with the
+templates **at the head being stamped** (one depth-1 git fetch of that head) and
+refuses the stamp while one differs or a required one is missing, unless the
+session recorded why it stays. A reason binds to the **template's blob id**,
+which the refusal prints:
+
+```bash
+jq --arg p "<local path>" --arg b "<blob id printed with it>" --arg r "<why it stays local>" \
+  '.refresh_kept[$p] = {blob: $b, reason: $r}' .claude/directive-sync.json \
+  > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
+```
+
+Binding to the blob, not the head, is what makes the question come back exactly
+when it should: when the template changes, the old reason stops matching and the
+path is asked about again; while it does not, a deliberate local version is
+asked about once, not on every refresh. A reason for a path upstream deleted
+binds to `deleted`.
+
+What is compared, delta or not:
+- **every path the delta lists** that has an installed location. A kit file maps
+  to each kit directory the workflows name in `UI_TESTS_DIR` (the default
+  `.github/scripts/ui-tests` only when none does), found exactly as *Kit
+  defects* finds it; a named kit directory that is missing cannot be checked and
+  refuses the stamp. A kit file applied hunk by hunk still differs afterwards, so
+  record its reason too: the hunks declined, and why.
+- **every dependency**, because a changed caller can start needing a file whose
+  own template did not change, which no delta lists (Codex, #397, the #321
+  class). The set is the one this command installs, no wider:
+  - every composite an installed workflow or composite reaches by
+    `uses: ./.github/actions/<a>`, plus every installed one, as its **whole
+    upstream directory**. That is how the composites row installs it, and why no
+    command is parsed for sibling names: `check-action-siblings.py` records the
+    four rounds that parsing cost.
+  - every script whose `.github/scripts/*` path something installed, or a
+    directive at the head, names: the pattern *Deriving the referenced-script
+    set* installs by. **Known boundary:** a script reached only through a
+    `working-directory: .github/scripts` step and a bare relative command —
+    `cron-notify.yml` running `node notify-task.js` — never names that path, so
+    neither the install nor this check sees it. Both are to be widened together
+    (#398), never this check alone: a check wider than the install refuses a
+    stamp the install can never satisfy (owner ruling, 2026-10-06).
+
+  A dependency that exists is compared like a delta path; a stale copy is as
+  broken as a missing one.
+
+An absent path is required where the skip rule makes it so: a dependency above,
+a file of an installed composite, the hook once `.claude/settings.json` exists,
+a file of an installed kit. Any other absent path is reported, not compared:
+an absent workflow can be deliberate (`pages-retry.yml`, a scheduled workflow
+with no task), and a path upstream does not ship is the project's own. A path
+the upstream deleted counts as unapplied while a local copy remains.
+
 ```bash
 # RE-DERIVED, not inherited. Every Bash call is a FRESH SHELL, so $head/$last/
 # $classified set in Phase 2's block are all empty here — the guard would take
@@ -644,13 +707,149 @@ actually read (including "no files changed"); leave it unset otherwise.
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
 head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
 marker=$(git rev-parse --git-path refresh-repo-classified)
-classified_head=$(cat "$marker" 2>/dev/null)
+classified_head=$(cat "$marker" 2>/dev/null) || classified_head=
 rm -f "$marker"
+delta_file=$(git rev-parse --git-path refresh-repo-delta)
+delta_list=$(cat "$delta_file" 2>/dev/null) || delta_list=
+rm -f "$delta_file"
 # The verdict is only valid for the SHA it was made against. If upstream moved
 # between the two Bash calls, or a stale marker survived an interrupted run,
 # this mismatch makes Phase 3 refuse rather than stamp a delta nobody read.
 classified=no
 [ -n "$classified_head" ] && [ "$classified_head" = "$head" ] && classified=yes
+
+# APPLIED, not just read (see above). One depth-1 fetch of $head serves every
+# comparison and the upstream listing; a fetch that fails refuses the stamp.
+# No `grep -q` fed by a pipe (the SIGPIPE hazard in Phase 1); `; true` keeps a
+# no-match from ending the block under errexit.
+unapplied=0; handled=" "; tree=no
+up=
+if [ "$classified" = yes ]; then
+  up=$(mktemp -d) || up=
+  if [ -n "$up" ] && git init -q --bare "$up" \
+     && git -C "$up" fetch -q --depth=1 https://github.com/akyachtsman/claude.directives.git "$head" \
+     && shipped=$(git -C "$up" ls-tree -r --name-only "$head" -- templates directives); then
+    tree=yes
+  else
+    echo "CANNOT VERIFY: the upstream tree at $head could not be fetched -- nothing compared"
+    unapplied=1
+  fi
+fi
+
+# check <local> <template> <why it is required>: compare one installed copy, honouring a blob-bound reason.
+check() {
+  handled="$handled$1 "
+  if [ "$2" = deleted ]; then b=deleted; else b=$(git -C "$up" rev-parse "$head:$2" 2>/dev/null) || b=; fi
+  kept=$(jq -r --arg p "$1" --arg b "$b" \
+    '.refresh_kept[$p] | select(.blob == $b) | .reason // empty' \
+    .claude/directive-sync.json 2>/dev/null) || kept=
+  if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
+  if [ "$b" = deleted ]; then
+    echo "UNAPPLIED: $1 -- upstream deleted it (blob deleted)"; unapplied=1
+  elif [ ! -e "$1" ]; then
+    echo "UNAPPLIED: $1 is absent but required -- $3 (blob $b)"; unapplied=1
+  elif ! git -C "$up" cat-file blob "$b" 2>/dev/null | cmp -s - "$1"; then
+    echo "UNAPPLIED: $1 differs from $2 at $head (blob $b)"; unapplied=1
+  fi
+}
+
+if [ "$tree" = yes ]; then
+  # The kit's installed location, exactly as Kit defects derives it.
+  kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null \
+    | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
+             -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
+             -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \
+             -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sort -u; true)
+  [ -n "$kit_dirs" ] || { [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests; }
+
+  # 1. Every path the delta lists.
+  while IFS=$(printf '\t') read -r st t; do
+    [ -n "${t:-}" ] || continue
+    case "$t" in
+      templates/ui-tests/package-lock.json) continue ;;   # never touched (row above)
+      templates/ui-tests/*)
+        while IFS= read -r k; do
+          [ -n "$k" ] || continue
+          if [ ! -d "$k" ]; then
+            echo "CANNOT VERIFY: kit dir $k is named by a workflow but missing"; unapplied=1; continue
+          fi
+          p="$k/${t#templates/ui-tests/}"
+          [ "$st" = D ] && { [ -e "$p" ] && check "$p" deleted; continue; }
+          check "$p" "$t" "the kit is installed"
+        done <<KITS
+$kit_dirs
+KITS
+        continue ;;
+      templates/workflows/*)    p=".github/workflows/${t#templates/workflows/}"; need= ;;
+      templates/actions/*)      p=".github/actions/${t#templates/actions/}"; a=${t#templates/actions/}
+                                need=; [ -d ".github/actions/${a%%/*}" ] && need="its composite is installed" ;;
+      templates/scripts/*)      p=".github/scripts/${t#templates/scripts/}"; need= ;;   # dependency pass decides absence
+      templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}"
+                                need=; [ -f .claude/settings.json ] && need="the settings row runs it" ;;
+      *) continue ;;   # merged, written once, or not installed: see the table above
+    esac
+    if [ "$st" = D ]; then
+      [ -e "$p" ] && check "$p" deleted
+      continue
+    fi
+    if [ ! -e "$p" ] && [ -z "$need" ]; then
+      case "$t" in templates/scripts/*) ;; *) echo "absent locally, not compared: $p" ;; esac
+      continue
+    fi
+    check "$p" "$t" "$need"
+  done <<DELTA
+$delta_list
+DELTA
+
+  # 2. Every dependency, delta or not.
+  deps=; queue=; seen=" "
+  scan() {   # names in $1: scripts into deps, composites onto the queue
+    deps="$deps
+$(printf '%s\n' "$1" | grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' | sed -E 's/[.]+$//' | grep -E '\.(js|py)$'; true)"
+    queue="$queue $(printf '%s\n' "$1" | grep -oE '\./\.github/actions/[A-Za-z0-9_.-]+' | sed 's|^\./||' | tr '\n' ' '; true)"
+  }
+  for w in .github/workflows/* .github/actions/*/action.yml; do
+    [ -f "$w" ] && scan "$(cat "$w")"
+  done
+  for a in .github/actions/*/; do [ -d "$a" ] && queue="$queue ${a%/}"; done
+  for d in global git design test data; do
+    scan "$(git -C "$up" show "$head:directives/$d.md" 2>/dev/null; true)"
+  done
+  while [ -n "${queue// /}" ]; do
+    set -- $queue; a=$1; shift; queue="$*"
+    case "$seen" in *" $a "*) continue ;; esac
+    seen="$seen$a "
+    t="templates/actions/${a#.github/actions/}"
+    files=$(printf '%s\n' "$shipped" | grep -F "$t/"; true)
+    [ -n "$files" ] || continue   # not an upstream composite: the project's own
+    deps="$deps
+$(printf '%s\n' "$files" | sed "s|^templates/actions/|.github/actions/|")"
+    scan "$(git -C "$up" show "$head:$t/action.yml" 2>/dev/null; true)"
+  done
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    case "$handled" in *" $p "*) continue ;; esac   # already checked from the delta
+    # A path under a kit directory is a KIT file, whose template is
+    # templates/ui-tests/, not templates/scripts/ (Codex, #397).
+    t=
+    while IFS= read -r k; do
+      [ -n "$k" ] || continue
+      case "$p" in "$k"/*) t="templates/ui-tests/${p#"$k"/}" ;; esac
+    done <<KITS
+${kit_dirs:-.github/scripts/ui-tests}
+KITS
+    [ -n "$t" ] || case "$p" in
+      .github/scripts/*) t="templates/scripts/${p#.github/scripts/}" ;;
+      .github/actions/*) t="templates/actions/${p#.github/actions/}" ;;
+      *) continue ;;
+    esac
+    grep -qxF "$t" <<<"$shipped" || continue   # not shipped upstream: the project's own
+    check "$p" "$t" "an installed composite ships it, or something installed or a directive names it"
+  done <<DEPS
+$(printf '%s\n' "$deps" | sort -u)
+DEPS
+fi
+[ -n "$up" ] && rm -rf "$up"
 
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — stamp unchanged, re-run /refresh-repo later"
@@ -658,6 +857,11 @@ elif [ "$classified" != "yes" ]; then
   echo "delta from $last to $head was NOT classified for THIS head — stamp"
   echo "left at $last on purpose, so the next run re-examines it. Classify by hand"
   echo "via MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix to clear it."
+elif [ "$unapplied" = 1 ]; then
+  echo "stamp left at $last: the paths above are unapplied -- they differ from the"
+  echo "template at $head, or are required and absent. Apply each one, or record why"
+  echo "it stays (refresh_kept, above), then re-run /refresh-repo. Stamping now would"
+  echo "hide them from every later delta."
 else
   # mktemp in the DESTINATION dir: a fixed /tmp name races a second session, and
   # a cross-filesystem mv degrades from an atomic rename to a copy — which is the

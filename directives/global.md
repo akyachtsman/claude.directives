@@ -1159,3 +1159,13 @@ file's header comments before reporting it. Read access is unchanged
 (→ *Repository Scope*): the mandatory session-start directive fetches and
 read-only inspection of public repos (`/do-repo`) stay open — and reading
 never becomes an attach.
+
+**Messaging another session is a standing feature of this account (owner
+ruling, 2026-10-06).** A session may send a message straight to another session
+on the account. That carries information and writes nothing in the other repo:
+the receiving session decides what to do and acts in its own repo, under its own
+rules. Use the procedure in `docs/standards/automations.md` → *Automation 6 — Cross-Session Messaging*.
+**Give the owner a heads-up every time:** before sending, say in this session's
+chat which session you are messaging and why, in one line, then send. The
+paste-ready hand-off above stays the route when the target session is unknown,
+or when the owner should judge the message before it goes.

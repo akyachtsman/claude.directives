@@ -254,8 +254,10 @@ probes.
 ## Downstream-Finding Loop
 
 The standing procedure when a project session surfaces a bug, gap, or
-improvement that belongs upstream. Findings propagate **upstream by hand-off,
-never by cross-repo edits** (`global.md` → One Session, One Repo):
+improvement that belongs upstream. Findings propagate **upstream by message,
+never by cross-repo edits** (`global.md` → One Session, One Repo). The message
+travels either way: you paste a hand-off, or the session sends it straight to the
+target session and tells you first (owner ruling, 2026-10-06):
 
 1. **Capture** — the downstream session emits a hand-off block
    (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).
@@ -278,8 +280,9 @@ never by cross-repo edits** (`global.md` → One Session, One Repo):
    session to merge **when the run emits a wake at all** (see *ci-notify
    bootstrap gap* and the scheduling bullet below); otherwise arm a check-in.
 5. **Propagate** — run HUMAN STEPS above for the modes the PR touched.
-6. **Close the loop** — paste the prepared reply back to the reporting
-   session so it can proceed with corrected instructions.
+6. **Close the loop** — the prepared reply goes back to the reporting session,
+   pasted by you or sent directly with a heads-up, so it can proceed with
+   corrected instructions.
 
 ## Environment Maintenance
 

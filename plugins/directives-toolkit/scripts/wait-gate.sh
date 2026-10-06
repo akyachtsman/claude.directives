@@ -21,7 +21,8 @@
 #    `sleep 2` after starting a local server are foreground and untouched);
 #  - only when the command *leads* with `sleep N` (the pure-waiter shape), so a
 #    real backgrounded job — a build, test run, or watcher — is never caught;
-#  - only when N >= 15s, so a brief backgrounded pause is left alone;
+#  - only when the total duration is >= 15s (suffixes and multiple
+#    arguments summed, as coreutils does), so a brief pause is left alone;
 #  - quoted strings are stripped first, so a message containing "sleep 100"
 #    cannot trigger it.
 
@@ -48,12 +49,23 @@ case "$trimmed" in
   sleep[[:space:]]*) ;;
   *) exit 0 ;;
 esac
-# A leading bg sleep with a non-literal duration (`sleep $DELAY`,
-# `sleep $((60*5))`) is still a pure waiter — fail CLOSED for those rather
-# than letting the unparseable duration slip past the threshold check.
-dur=$(printf '%s' "$trimmed" | grep -oE '^sleep[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1)
-if [ -n "$dur" ]; then
-  [ "$dur" -ge 15 ] 2>/dev/null || exit 0
+# Total the sleep's OWN arguments the way coreutils does: each may carry an
+# s/m/h/d suffix and a fraction, and several are summed. Reading only the
+# leading digits let `sleep 5m` and `sleep 2h` through as 5 and 2 seconds, and
+# `sleep 10 10` as 10 (audit, 2026-10-06). Anything that is not a literal
+# duration (`sleep $DELAY`, `sleep $((60*5))`) is still a pure waiter, so it
+# fails CLOSED rather than slipping past the threshold.
+args=$(printf '%s' "$trimmed" | sed -E 's/^sleep[[:space:]]+//; s/[;&|].*$//')
+set -f
+# shellcheck disable=SC2086
+secs=$(printf '%s\n' $args | awk '
+  $0 !~ /^[0-9]+(\.[0-9]+)?[smhd]?$/ { bad = 1; exit }
+  { u = substr($0, length($0)); m = (u == "m") ? 60 : (u == "h") ? 3600 : (u == "d") ? 86400 : 1
+    t += ($0 + 0) * m }
+  END { if (bad || NR == 0) print "X"; else print t }')
+set +f
+if [ "$secs" != "X" ]; then
+  awk -v s="$secs" 'BEGIN { exit !(s >= 15) }' || exit 0
 fi
 
 echo 'BLOCKED by directives wait-gate: do not background a `sleep` to wait. A backgrounded sleep orphans into a phantom "running" task when the session suspends/resumes, and it watches nothing. Instead: (1) for CI / PR / deploy outcomes, let the event wake the session (PR + CI webhooks) — and ARM A CHECK-IN ALONGSIDE IT, not instead of it: any run can be cancelled and a cancelled run emits no PR wake, so essentially every in-flight CI wait needs both, and you drop the check-in when THAT outcome is terminal; (2) that check-in is `send_later` (the pre-approved primary) or `ScheduleWakeup` where a session has that instead — verify which exists rather than assuming; (3) for a genuine condition-wait, use Monitor with an exit condition. See global.md -> Async Operations.' >&2

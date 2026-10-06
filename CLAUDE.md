@@ -258,13 +258,14 @@ python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name reso
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
+python3 .github/scripts/check-toolkit-gates-cases.py  # the push and wait gates block the shapes they claim (+main, an apostrophe-hidden push, `sleep 5m`) and allow the complements. Re-prove with PUSH_GATE_BIN / WAIT_GATE_BIN=<mutant>
 python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation still matches every shipped caller — it reads the pattern OUT of refresh-repo.md, so a copy cannot drift from it (PROP6)
 python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — 2 of its 3 checks never fire against THIS repo (no ragged caller, no missed match), so nothing else would notice them break
 python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT; it does NOT check that carriers install them, nor that a composite names a file that exists
 python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — real `git init` fixtures, each refusal with its accepting complement. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
 node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — failing branches injected, every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
 node .github/scripts/build-logical-map.js --check # the committed map still matches the tree; every connection has evidence, every file is wired from the start, no arrow crosses a box
-node --check templates/ui-tests/tests/app.spec.js # the exported spec still PARSES — nothing else in this repo reads it
+for f in templates/ui-tests/tests/*.js templates/ui-tests/*.js; do node --check "$f" || exit 1; done  # the exported spec and config still PARSE — nothing else in this repo reads them
 node .github/scripts/check-links.js --internal   # offline, against the working tree. Strictly SINGLE-LINE: only a reference wholly on one line is counted, and the run says so (#366)
 node .github/scripts/check-links-cases.js        # that checker's own guard. Re-prove with CHECK_LINKS_BIN=<mutant> — an ABSOLUTE path
 #   ⚠️ check-links rules (history in the check-links-cases.js header):

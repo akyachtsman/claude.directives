@@ -27,7 +27,10 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GUARD = REPO_ROOT / ".github" / "scripts" / "workflow-ref-guard.py"
+# Overridable so a MUTANT can be pointed at, like the other guards' suites;
+# resolved, so a relative path survives the temp-tree cwd.
+GUARD = Path(os.environ.get("WORKFLOW_REF_GUARD_BIN",
+                            REPO_ROOT / ".github" / "scripts" / "workflow-ref-guard.py")).resolve()
 NBSP = "\u00A0"
 
 JOBS = 'jobs: {a: {runs-on: ubuntu-latest, steps: [{run: "true"}]}}\n'
@@ -355,6 +358,48 @@ CASES = [
         None,
         "null or empty entry",
     ),
+    # THE TEMPLATE PASS (audit, 2026-10-06): the guard also scans
+    # templates/workflows/, where a broken watcher reaches every project, and no
+    # case had ever exercised it. A key with a "/" is written from the tree root.
+    (
+        "a template watching a name no template declares",
+        1,
+        {
+            "target.yml": TARGET,
+            "templates/workflows/w.yml": "name: W\non:\n  workflow_run:\n"
+            "    workflows: [Nobody]\n    types: [completed]\n" + JOBS,
+        },
+        None,
+        "which no template in templates/workflows/ declares",
+    ),
+    (
+        "a template with no usable name",
+        1,
+        {
+            "target.yml": TARGET,
+            "templates/workflows/w.yml": "on:\n  push:\n    branches: [main]\n" + JOBS,
+        },
+        None,
+        "has no usable top-level `name:`",
+    ),
+    (
+        "a template that is not parseable YAML",
+        1,
+        {"target.yml": TARGET, "templates/workflows/w.yml": "name: W\non: [\n"},
+        None,
+        "not parseable YAML",
+    ),
+    (
+        "a template watching a name another template declares",
+        0,
+        {
+            "target.yml": TARGET,
+            "templates/workflows/t.yml": TARGET,
+            "templates/workflows/w.yml": "name: W\non:\n  workflow_run:\n"
+            "    workflows: [Target]\n    types: [completed]\n" + JOBS,
+        },
+        None,
+    ),
 ]
 
 
@@ -365,7 +410,9 @@ def run_case(files, required):
         os.makedirs(os.path.join(tmp, ".github", "scripts"))
         shutil.copy(GUARD, os.path.join(tmp, ".github", "scripts", GUARD.name))
         for filename, body in files.items():
-            Path(tmp, ".github", "workflows", filename).write_text(body, encoding="utf-8")
+            dest = Path(tmp, filename) if "/" in filename else Path(tmp, ".github", "workflows", filename)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(body, encoding="utf-8")
         if required is not None:
             Path(tmp, ".github", "workflow-ref-required.json").write_text(json.dumps(required))
         proc = subprocess.run(

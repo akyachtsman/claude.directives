@@ -65,6 +65,21 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 # job dies at that step with "No such file".
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/validate-report-path.py \
   -o .github/actions/ui-suite/validate-report-path.py
+
+# qa.yml's static job runs these five scripts by path, so they install WITH it —
+# without them the job fails at its first missing file. What each one guards is
+# in 9c-bis, 9c-ter and design.md → *Accessibility*.
+mkdir -p .github/scripts
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-contrast.js \
+  -o .github/scripts/check-contrast.js
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.py \
+  -o .github/scripts/workflow-ref-guard.py
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-job-bounds.py \
+  -o .github/scripts/check-job-bounds.py
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-py-warnings.py \
+  -o .github/scripts/check-py-warnings.py
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
+  -o .github/scripts/check-ui-suite-env.py
 ```
 
 ⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
@@ -224,18 +239,16 @@ Go to the target repo's `Actions` tab. Confirm `pages-build-deployment` appears 
 
 ---
 
-## Step 8 — Push a test commit and verify workflows trigger
+## Step 8 — Verify the workflows trigger, through the setup PR
 
-Make a small no-op commit (e.g. add a blank line to `README.md`) and push to `main`:
+Do NOT push to `main` to test this: the default-branch ruleset this procedure
+requires (Verification Checklist) refuses a direct push. Commit everything from
+Steps 1–7 and 9 on a `claude/<name>` branch and open the PR. That PR is the test:
 
-```bash
-git commit --allow-empty -m "ci: verify QA workflows trigger" && git push
-```
-
-Confirm in the Actions tab that:
-- [ ] `QA — Static + UI Tests` triggers on push
-- [ ] `QA — UI Tests (live)` triggers after `pages-build-deployment` completes
-- [ ] `QA — Event-Driven Response` is visible and ready for dispatch
+- [ ] `QA — Static + UI Tests` runs on the PR and goes green — a red static job
+      at a missing file means a Step 1 script was skipped
+- [ ] after the squash-merge, `QA — UI Tests (live)` runs once `pages-build-deployment` completes
+- [ ] `QA — Event-Driven Response` is visible in the Actions tab and ready for dispatch
 
 ---
 
@@ -305,23 +318,14 @@ deduplicated `pages-deploy-failure` issue. Behavior detail: `docs/standards/auto
 
 A `workflow_run` trigger names another workflow's `name:` as a string, and GitHub
 raises **no error** when that name matches nothing — the watcher simply never
-fires. Install the guard so a broken cross-reference fails the build instead of
-going quiet:
-
-```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.py \
-  -o .github/scripts/workflow-ref-guard.py
-```
-
-`qa.yml` already invokes it. Populate `.github/workflow-ref-required.json` with
+fires. The guard (installed in Step 1) makes a broken cross-reference fail the
+build instead of going quiet. `qa.yml` already invokes it. Populate `.github/workflow-ref-required.json` with
 the watchers this project must not lose — the script is byte-identical in every
 repo, so its second rule is configured here rather than edited into the file:
 
 ```json
 { "qa-live.yml": ["My Deploy Workflow"] }
 ```
-
-Add to the static-checks job: `python3 .github/scripts/workflow-ref-guard.py`.
 
 It reads the workflows with PyYAML, which ships on GitHub's runner images and is
 already what `qa.yml` parses workflow YAML with — no install step. The guard was
@@ -340,16 +344,8 @@ file's own header.
 An unbounded job runs to GitHub's 6-hour default showing neither pass nor fail,
 and a bound set BELOW the work it bounds is worse: it cancels healthy runs, and
 a cancelled run reads as inconclusive rather than red, so nobody chases it.
-Install the guard:
-
-```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-job-bounds.py \
-  -o .github/scripts/check-job-bounds.py
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-py-warnings.py \
-  -o .github/scripts/check-py-warnings.py
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
-  -o .github/scripts/check-ui-suite-env.py
-```
+The guard, `check-py-warnings.py` and `check-ui-suite-env.py` are installed in
+Step 1.
 
 `check-ui-suite-env.py` keeps the ui-suite composite's viewport checks on the
 same environment as its Playwright run: the checks import the config, so a
@@ -564,6 +560,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/workflows/cron-notify.yml` present (projects with scheduled jobs); `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
+- [ ] `.github/scripts/` holds the five scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py` (Step 1)
 - [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it

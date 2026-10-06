@@ -62,17 +62,41 @@ fi
 [ -n "$cmd" ] || exit 0
 
 # Strip quoted segments: message text must never influence the verdict.
-# Single-WORD quoted tokens are unquoted first (so `push origin "main"` cannot
-# hide the ref), then any remaining quoted runs — which contain spaces, i.e.
-# message-like text — are removed entirely.
-# NOTE the ordering constraint: a DOUBLE-quoted span may contain a live command
-# substitution — bash expands $(...) and `...` inside double quotes — so removing
-# such a span would hide an executable push. Only spans with no substitution are
-# discarded. Single-quoted spans are inert and always safe to drop.
-stripped=$(printf '%s' "$cmd" \
-  | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
-  | sed -e "s/'[^']*'//g" \
-  | sed -E -e 's/"[^"$`]*"//g')
+# ONE left-to-right pass that tracks quote state, because the spans interact:
+# the earlier three sed passes stripped single-quoted spans before double-quoted
+# ones, so an apostrophe inside a double-quoted message ("fix the user's bug")
+# opened a "single-quoted span" that ran to the next apostrophe and swallowed the
+# push between them -- exit 0 on an ordinary commit (audit, 2026-10-06). The
+# rules are unchanged, only now applied in the order bash reads them:
+#  - a single-WORD quoted token is unquoted (`push origin "main"` cannot hide the ref);
+#  - a single-quoted span is inert, so one containing whitespace is dropped;
+#  - a double-quoted span containing `$` or a backtick may hold a live command
+#    substitution (bash expands both inside double quotes), so it is KEPT; any
+#    other multi-word double-quoted span is message text and is dropped;
+#  - an unterminated quote keeps its text, so a parse oddity errs toward checking.
+# A backslash-newline continuation is joined first: bash reads it as one command.
+stripped=$(printf '%s' "$cmd" | awk '
+  BEGIN { RS = "\001" }
+  {
+    gsub(/\\\n/, " ")
+    out = ""; q = ""; buf = ""
+    n = length($0)
+    for (i = 1; i <= n; i++) {
+      c = substr($0, i, 1)
+      if (q == "") {
+        if (c == "\047" || c == "\"") { q = c; buf = "" } else { out = out c }
+      } else if (q == "\"" && c == "\\" && i < n) {
+        buf = buf c substr($0, i + 1, 1); i++
+      } else if (c == q) {
+        if (buf !~ /[[:space:]]/ || (q == "\"" && buf ~ /[$`]/)) out = out buf
+        q = ""; buf = ""
+      } else {
+        buf = buf c
+      }
+    }
+    if (q != "") out = out buf
+    printf "%s", out
+  }')
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var
@@ -85,7 +109,7 @@ printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 pushparts=$(printf '%s' "$stripped" | grep -oE 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push[^|;&]*')
 
 # Any push that names main/master as a target ref (standalone word or after /).
-if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/])(main|master)([[:space:]`)]|$)'; then
+if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/+])(main|master)([[:space:]`)]|$)'; then
   echo 'BLOCKED by directives push-gate: direct push to main is never allowed — all main updates go through a claude/<name> branch and a PR (squash-merge on green CI). Push to your feature branch instead.' >&2
   exit 2
 fi

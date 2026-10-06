@@ -113,6 +113,11 @@ jobs:
       - name: Check the job-bounds guard itself reads workflows correctly
         run: python3 .github/scripts/check-job-bounds-cases.py
 
+      # The toolkit's PreToolUse gates had no case suite; the 2026-10-06 audit
+      # found three false allows inside the shapes they claim to catch.
+      - name: Check the toolkit's push and wait gates block what they claim
+        run: python3 .github/scripts/check-toolkit-gates-cases.py
+
       # The repo map is generated from the tree, so a committed page that no
       # longer matches it is drift — fail here rather than let the map quietly
       # describe a repo that has moved on. The build also fails on its own when
@@ -129,8 +134,12 @@ jobs:
       # "type": "module", which Node honours for these paths.
       - name: Check exported JS templates parse
         run: |
+          # `|| exit 1`, not `&&`: errexit does not fire on a failure inside an
+          # `&&` list, so the loop took the LAST file's status and a syntax error
+          # in the spec (checked first) left the step green (audit, 2026-10-06).
           for f in templates/ui-tests/tests/*.js templates/ui-tests/*.js; do
-            node --check "$f" && echo "OK: $f"
+            node --check "$f" || exit 1
+            echo "OK: $f"
           done
 
       - name: Validate workflow YAML

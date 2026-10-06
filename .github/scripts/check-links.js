@@ -182,9 +182,12 @@ if (mode !== '--external') {
     }
     return headingCache.get(file);
   };
-  // A heading matches if the referenced name appears in it — headings carry
-  // trailing qualifiers ("## Session start — required actions", "## Pipelined
-  // Execution (owner ruling, 2026-07-18)") that references legitimately omit.
+  // A heading matches if it BEGINS with the referenced name, at a word boundary —
+  // headings carry trailing qualifiers ("## Session start — required actions",
+  // "## Pipelined Execution (owner ruling, 2026-07-18)") that references
+  // legitimately omit. Anywhere-in-the-heading let `→ *Keys*` resolve against
+  // "## Monkeys" and a renamed section keep resolving against "## Deprecated X"
+  // (audit, 2026-10-06); check-sections.js has anchored it this way all along.
   const resolves = (file, section) => {
     const heads = headingsOf(file);
     if (heads === null) return null;               // file not found — reported elsewhere
@@ -193,7 +196,10 @@ if (mode !== '--external') {
     // reference resolves against any file that has a heading at all. The
     // delimiter rules below already reject `*   *`; this is the backstop.
     if (!want) return false;
-    return heads.some(h => h.toLowerCase().includes(want));
+    return heads.some(h => {
+      const head = h.toLowerCase();
+      return head.startsWith(want) && !/[a-z0-9]/.test(head.charAt(want.length));
+    });
   };
 
   // ── A reference lives on ONE line ───────────────────────────────────────────

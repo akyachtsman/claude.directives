@@ -46,8 +46,12 @@ from pathlib import Path
 # CHECK_CLAIMS_BIN are used elsewhere in this directory. A case that cannot be
 # shown to redden is a case nobody has measured -- and this guard's rules have
 # been rewritten four times, so "these cases still pass" says nothing on its own.
+# resolve(): the discovery and exemption cases run with cwd set to a temp tree,
+# so a RELATIVE mutant path stopped resolving there and every mutant failed
+# those cases for "can't open file" -- perfect discrimination, nothing tested
+# (audit, 2026-10-06; the trap check-links-cases.js documents).
 GUARD = Path(os.environ.get("CHECK_UI_SUITE_ENV_BIN",
-                            Path(__file__).resolve().parent / "check-ui-suite-env.py"))
+                            Path(__file__).resolve().parent / "check-ui-suite-env.py")).resolve()
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIVE = REPO_ROOT / "templates/actions/ui-suite/action.yml"
 

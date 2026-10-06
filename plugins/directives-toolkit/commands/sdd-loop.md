@@ -53,9 +53,13 @@ added a round trip.)
 
 ## Phase 2 — plan  (`/sdd-loop plan <feature>`)
 Now HOW. Write `specs/<slug>/plan.md`: tech stack, architecture, data shapes,
-key decisions and their trade-offs. Must honor the constitution — default to
-the global directive's stack (plain HTML + JS, no frameworks/build) unless the
-user explicitly chose otherwise here. Reference back to the spec's requirements;
+key decisions and their trade-offs. Must honor the constitution: the global
+directive's stack, plain HTML + JS with no framework and no build
+(`global.md` → *Hosting & Deployment*). A CI build is allowed only when the
+project's `CLAUDE.md` records the opt-in, with its need and the owner's sign-off;
+read it there rather than asking again. A plan that needs a build the project has
+not opted into puts that need to the owner, and on a yes records the opt-in in
+`CLAUDE.md` before planning on it. Frameworks stay out either way. Reference back to the spec's requirements;
 do not introduce scope the spec didn't ask for.
 
 **Build to the brief's ambition bar — don't reflexively minimize.** Honor the

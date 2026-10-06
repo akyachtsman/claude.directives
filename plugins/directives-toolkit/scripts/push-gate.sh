@@ -73,6 +73,7 @@ fi
 #  - a double-quoted span containing `$` or a backtick may hold a live command
 #    substitution (bash expands both inside double quotes), so it is KEPT; any
 #    other multi-word double-quoted span is message text and is dropped;
+#  - a backslash outside quotes escapes the next character, as in bash;
 #  - an unterminated quote keeps its text, so a parse oddity errs toward checking.
 # A backslash-newline continuation is joined first: bash reads it as one command.
 stripped=$(printf '%s' "$cmd" | awk '
@@ -84,7 +85,10 @@ stripped=$(printf '%s' "$cmd" | awk '
     for (i = 1; i <= n; i++) {
       c = substr($0, i, 1)
       if (q == "") {
-        if (c == "\047" || c == "\"") { q = c; buf = "" } else { out = out c }
+        # Outside quotes a backslash escapes the next character, so `\"` is a
+        # literal quote, not the start of a span (Codex, #396).
+        if (c == "\\" && i < n) { out = out c substr($0, i + 1, 1); i++ }
+        else if (c == "\047" || c == "\"") { q = c; buf = "" } else { out = out c }
       } else if (q == "\"" && c == "\\" && i < n) {
         buf = buf c substr($0, i + 1, 1); i++
       } else if (c == q) {

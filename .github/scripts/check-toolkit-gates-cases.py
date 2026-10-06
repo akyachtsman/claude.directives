@@ -45,6 +45,8 @@ PUSH_CASES = [
     ("a backslash-newline continuation", "git push origin \\\nmain", BLOCK),
     ("command substitution in backticks", "result=`git push origin main`", BLOCK),
     ("command substitution inside double quotes", 'out="$(git push origin main)"', BLOCK),
+    ("an escaped quote outside quotes before the push",
+     'echo \\" && git push origin main && echo "done"', BLOCK),
     # ...and the complement.
     ("a push to a claude/ branch", "git push -u origin claude/foo", ALLOW),
     ("a branch whose name contains main", "git push -u origin claude/main-fix", ALLOW),
@@ -57,6 +59,8 @@ PUSH_CASES = [
     ("an apostrophe in the message, then a branch push",
      'git commit -m "the user\'s fix" && git push -u origin claude/x', ALLOW),
     ("echoing the words in a quoted string", 'echo "git push origin main"', ALLOW),
+    ("an escaped quote, then a branch push",
+     'echo \\" && git push -u origin claude/x && echo "done"', ALLOW),
     ("not a push at all", "git log main..HEAD", ALLOW),
 ]
 

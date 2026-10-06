@@ -43,8 +43,8 @@ Execute in order:
    the [bracketed] sections as placeholders for the human to complete
    post-merge. The project's **look is established later by `/design-intake`**
    (per `directives/design.md`) — there is no shared company theme to pick.
-   Record the deployment target — **GitHub Pages** — in CLAUDE.md's Stack
-   section. The steps below
+   Record the deployment target — **GitHub Pages** — on CLAUDE.md's `Stack:`
+   bullet, and leave `Build:` at none. The steps below
    scaffold a single-page `index.html` app on GitHub Pages. That is the only
    deployment path (`global.md` → *Hosting & Deployment*): no framework, no build,
    no tier to choose. A CI build is a later per-project opt-in with the owner's

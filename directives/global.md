@@ -297,12 +297,18 @@ client-side Supabase + RLS.
 - **The opt-in:** when a project has a concrete need a build serves —
   TypeScript, a CSS utility library such as Tailwind, bundled npm libraries,
   minification, image optimisation — it may build **in CI**: a GitHub Actions
-  workflow that builds on push and deploys through Actions-source Pages. The
-  switch carries the monitoring obligations below (the `workflow_run` arm, and
-  `pages-retry.yml`); do them in the same change. It needs the owner's sign-off,
-  recorded with the need on the `Build:` line in the Stack section of the
-  project's own `CLAUDE.md`. The owner asking for it in a session is that sign-off; record it
-  there. Raise it only when the need is concrete; never as a setup question.
+  workflow that builds on push and deploys through Actions-source Pages. A
+  build therefore **forces Actions-source**, whatever the sourcing test below
+  says. Where that test also requires a filtered copy, the build runs first,
+  the deny-list filter then runs over its output, and the 200/404 assertions
+  stay in the deploy workflow. In the same change, do the switch's obligations
+  below: add the `workflow_run` arm to `pages-monitor.yml`, and **delete**
+  `pages-retry.yml` (W3's exception is closed to a build), building the retry
+  into the deploy workflow instead. It needs the owner's sign-off, recorded with
+  the need on the `Build:` bullet under *Project Overview* in the project's own
+  `CLAUDE.md`; a project whose `CLAUDE.md` has no `Build:` bullet has no build.
+  The owner asking for it in a session is that sign-off; record it there. Raise
+  it only when the need is concrete; never as a setup question.
 - **Application and UI frameworks stay rejected either way** (below). An
   opted-in project's deploy is no longer idempotent, so W3's retry exception
   does not apply to it.
@@ -316,7 +322,8 @@ this test, in order:
    problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
    rather than the tree: rsync the repo minus a deny-list, upload that artifact,
    deploy it.
-2. **Otherwise** → branch-source is fine and the push is the deploy.
+2. **Otherwise** → branch-source is fine and the push is the deploy, unless the
+   project has opted into a CI build, which forces Actions-source (above).
 
 - **The test is "must not be public", NOT "is internal-facing".** A file can be
   internal in purpose and harmless in public, and a repo whose internal files

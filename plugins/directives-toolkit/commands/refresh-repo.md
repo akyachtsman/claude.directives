@@ -781,7 +781,10 @@ if [ "$classified" = yes ]; then
 $(printf '%s\n' "$1" | grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' | sed -E 's/[.]+$//' | grep -E '\.(js|py)$'; true)"
     queue="$queue $(printf '%s\n' "$1" | grep -oE '\./\.github/actions/[A-Za-z0-9_.-]+' | sed 's|^\./||' | tr '\n' ' '; true)"
     if [ -n "$2" ]; then
-      for f in $(printf '%s\n' "$1" | grep -oE 'GITHUB_ACTION_PATH[}]?/[A-Za-z0-9_.-]+' | sed 's|.*/||'; true); do
+      # The WHOLE relative path: `$GITHUB_ACTION_PATH/bin/tool.py` is bin/tool.py,
+      # not bin (Codex, #397 round 4).
+      for f in $(printf '%s\n' "$1" | grep -oE 'GITHUB_ACTION_PATH[}]?/[A-Za-z0-9_./-]+' \
+                   | sed -E -e 's|^GITHUB_ACTION_PATH[}]?/||' -e 's/[.]+$//'; true); do
         deps="$deps
 $2/$f"
       done

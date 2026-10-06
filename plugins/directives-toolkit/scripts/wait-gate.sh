@@ -107,8 +107,13 @@ secs=$(printf '%s' "$trimmed" | awk '
       # 30s, and stopping at it let that through (Codex, #396).
       if (a == "--" && !seen && !dashdash) { dashdash = 1; continue }
       if (a ~ /[$`]/) { if (!seen) nonliteral = 1; break }
+      # The unit suffix. In a HEX number strtod reads `d` as a digit, so it is a
+      # suffix only after a `p` exponent: `0x0.001d` is a fraction of a second,
+      # not 0x0.001 days (Codex, #396).
       u = ""
-      if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
+      if (a ~ /^\+?0[xX]/) {
+        if (a ~ /[smh]$/ || a ~ /[pP][-+]?[0-9]+d$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
+      } else if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }
       sub(/^\+/, "", a)
       if (tolower(a) ~ /^inf(inity)?$/) { forever = 1; seen = 1; continue }
       if (a ~ /^0[xX]([0-9a-fA-F]+\.?[0-9a-fA-F]*|\.[0-9a-fA-F]+)([pP][-+]?[0-9]+)?$/) v = hexval(a)

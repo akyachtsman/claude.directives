@@ -86,6 +86,8 @@ WAIT_CASES = [
     ("a hexadecimal float past the threshold", "sleep 0x1p4", True, BLOCK),
     ("a hexadecimal float after --", "sleep -- 0x1p4", True, BLOCK),
     ("a hexadecimal fraction with an exponent", "sleep 0x.8p5", True, BLOCK),
+    ("a hex number whose last digit is d (0x10d = 269 s)", "sleep 0x10d", True, BLOCK),
+    ("a days suffix after a hex exponent", "sleep 0x1p0d", True, BLOCK),
     # ...and the complement.
     ("a short pause", "sleep 2", True, ALLOW),
     ("a fraction of a second", "sleep 0.5", True, ALLOW),
@@ -98,6 +100,7 @@ WAIT_CASES = [
     ("a short sleep with a trailing comment", "sleep 2 # short warm-up", True, ALLOW),
     ("the end-of-options marker before a short duration", "sleep -- 2", True, ALLOW),
     ("a short hexadecimal float", "sleep 0xA", True, ALLOW),
+    ("a hex number ending in the digit d (not days)", "sleep 0x0.001d", True, ALLOW),
     ("a short sleep, then a quoted message", 'sleep 2 && echo "all done now"', True, ALLOW),
     ("a short sleep split by a backslash-newline", "sleep 2 \\\n2", True, ALLOW),
     ("a seconds suffix under the threshold", "sleep 10s", True, ALLOW),

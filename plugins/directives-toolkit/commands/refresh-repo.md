@@ -682,7 +682,12 @@ What is compared, delta or not:
     four rounds that parsing cost.
   - every script whose `.github/scripts/*` path something installed, or a
     directive at the head, names: the pattern *Deriving the referenced-script
-    set* installs by.
+    set* installs by. **Known boundary:** a script reached only through a
+    `working-directory: .github/scripts` step and a bare relative command —
+    `cron-notify.yml` running `node notify-task.js` — never names that path, so
+    neither the install nor this check sees it. Both are to be widened together
+    (#398), never this check alone: a check wider than the install refuses a
+    stamp the install can never satisfy (owner ruling, 2026-10-06).
 
   A dependency that exists is compared like a delta path; a stale copy is as
   broken as a missing one.

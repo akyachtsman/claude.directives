@@ -304,12 +304,24 @@ client-side Supabase + RLS.
   build therefore **forces Actions-source**, whatever the sourcing test below
   says. Where that test also requires a filtered copy, the build runs first,
   the deny-list filter then runs over its output, and the 200/404 assertions
-  stay in the deploy workflow. In the same change, do the switch's
-  obligations, every one of them: add the deploy workflow's exact `name:` to
-  `qa-live.yml`'s `workflow_run.workflows` (or the live QA gate stops running)
-  and a `workflow_run` arm to `pages-monitor.yml`, and **delete**
-  `pages-retry.yml` and its `REQUIRED` entry (W3's exception is closed to a
-  build), building the retry into the deploy workflow instead. The list and the
+  stay in the deploy workflow. **One rule produces every obligation of the
+  switch, and it outranks any list:** whatever tests, serves or watches the site
+  must act on the **build output**, and whatever decides whether to run must
+  count **build inputs** as changes. Applied to today's workflows, in the same
+  change:
+  - **PR QA (`qa.yml`)** runs the same build, serves the build's output
+    directory instead of the repo root, and adds the build inputs (sources,
+    build config) to `UI_PATHS`. Otherwise a TypeScript- or Tailwind-only PR
+    skips the UI suite, or tests the unbuilt tree.
+  - **Live QA and the monitor:** add the deploy workflow's exact `name:` to
+    `qa-live.yml`'s `workflow_run.workflows`, and a `workflow_run` arm to
+    `pages-monitor.yml`.
+  - **The retry:** delete `pages-retry.yml` and its `REQUIRED` entry (W3's
+    exception is closed to a build), and build the retry into the deploy
+    workflow.
+
+  No project has taken the opt-in yet, so the first one that does checks every
+  workflow it ships against the rule above and reports any gap upstream. The
   snippets: `/new-repo` step 5 and `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*. It needs the
   owner's sign-off, recorded with the need on the `Build:` bullet under
   *Project Overview* in the project's own `CLAUDE.md`; a missing bullet means

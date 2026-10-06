@@ -190,7 +190,7 @@ moves the rule server-side, where no shell form evades it.
 **Why conversation resolution is on that list (owner ruling, 2026-08-26).**
 `git.md`'s merge gates include *no unresolved review threads*, and until this
 rule that gate had no mechanism at all — it was satisfied by an agent remembering
-to make one call, the thread read is GraphQL, and it fails **exactly when** the
+to make one call, the thread read is GraphQL through the MCP, and it fails **exactly when** the
 pool is empty, while the `codex-flagged` label is REST and stays readable at that
 same moment. The cheap wrong path was always available precisely when the correct
 one was not, which is why a stronger warning could not fix it: `claude.prop`
@@ -205,11 +205,11 @@ a repo, sessions there still treat the thread gate as theirs to check
 
 **The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
 with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
-60 days. Protection blocks that push, the workflow goes red, and ~60 days later
+60 days (a rule for public repositories only). Protection blocks that push, the workflow goes red, and ~60 days later
 every cron in that repo is disabled — a slow, quiet failure.
 
 **Delete `keepalive.yml`; do not bypass anything.** GitHub disables scheduled
-workflows after 60 days of *repository inactivity* — not on a timer. A repo where
+workflows in a public repository after 60 days of *repository inactivity* — not on a timer. A repo where
 PRs land never approaches that, so the workflow buys nothing there. Remove it and
 its `KEEPALIVE_PAT` secret, and keep the ruleset's bypass list **empty**. If a
 genuinely idle repo ever does trip the limit, GitHub emails and one click
@@ -409,7 +409,11 @@ Hard-won; each cost a real debugging session:
   `rate limit already exceeded` (GraphQL out). GitHub has no REST endpoint for
   marking a PR ready. So when a session says it is quota-blocked on a green PR,
   your single click on **Ready for review** may be all it needs — it can merge
-  over REST straight after, no need to wait out the hour.
+  over REST straight after, no need to wait out the hour. A web session's `gh`
+  proxy is the exception: it refuses GraphQL but serves REST stand-ins
+  (`.../ccr/ready_for_review` and the review-thread routes), so there un-drafting
+  is REST — diagnose by the route a call took, then the verb (`git.md` →
+  *GitHub API Quota Economy*).
 - **Plugin supply chain has no review point in our repos** — external plugin
   updates (even Anthropic-official) reach sessions automatically — every session
   now, via the `SessionStart` hook, rather than on the ~weekly cache rebuild —

@@ -161,6 +161,22 @@ A `docs/…` path in these directives resolves against claude.directives:
     not what it found: the verdict is in the review, inline comments and
     reactions above and below. (claude.prop#115 merged 16 s after un-draft, on
     the Running summary; the finding landed 3 min 37 s later, on a merged PR.)
+    **Completed can also mean no verdict at all** — no review, no inline
+    finding, no reaction — and Codex's prose can describe work that never
+    happened. On claude.prop#120 (2026-10-06) it reported committing `d8095dc`
+    and opening a follow-up PR: `GET /commits/d8095dc` returned 422, no follow-up
+    PR existed, the head was unchanged, and the lines it called its changes were
+    the PR's own. A re-requested `@codex review` then gave a normal all-clear on
+    the same SHA. So a verdict comes only from the artifacts this section names —
+    a review, a comment or inline reply, or a reaction read by the ladder below.
+    Prose is none of them however conclusive it reads, and work it claims is
+    checked before anything acts on it, each claim on its own. A commit must
+    exist (`GET /commits/<sha>`), be reachable from the branch or head it is
+    claimed on (`GET /compare/<sha>...<head>` reads `ahead` or `identical`), and
+    carry the change described. A PR needs a pull-request lookup or search that
+    shows that commit in it. A real SHA alone proves nothing: it may be unrelated
+    work, and it says nothing about a PR. Completed
+    with no artifact is *pending*: re-request once.
   - ⚠️ **A response is not a verdict.** Codex-authored and naming HEAD proves the
     head was REVIEWED — not that it PASSED. A review carrying live inline findings
     satisfies both tests while saying the opposite, so treating "a response at the
@@ -227,8 +243,10 @@ A `docs/…` path in these directives resolves against claude.directives:
     earlier one, so a clean verdict can sit above unaddressed findings on the
     same head. Findings arrive as review THREADS while the issue comments show
     nothing — judging from comments alone reads an unreviewed PR as clean.
-  - **Unreadable reviews do not clear the gate** — that call is GraphQL and fails
-    when the pool is empty. Wait or surface; never fall back to the label, which
+  - **Unreadable reviews do not clear the gate** — through the MCP that call is
+    GraphQL and fails when the pool is empty. In a web session, read the threads
+    over REST first (`.../pulls/<n>/ccr/review_threads`, → *GitHub API Quota
+    Economy*); only then wait or surface. Never fall back to the label, which
     is REST and stays readable at exactly the moment the correct check is
     blocked. Where the repo's ruleset requires conversation resolution the server
     refuses that merge for you (→ *Conditional Auto-Merge on Green*) — a backstop
@@ -332,7 +350,7 @@ default-branch ruleset ticks *Require conversation resolution before merging*
 (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*), GitHub refuses the
 merge while any review thread is unresolved — every unresolved thread, not just
 the current round's — with no model in the loop. That closes the failure this
-gate kept producing: the thread read is GraphQL and fails exactly when the pool
+gate kept producing: through the MCP the thread read is GraphQL and fails exactly when the pool
 is empty, while the `codex-flagged` label is REST and stays readable at that same
 moment, so the cheap wrong path was always available precisely when the correct
 one was not. Read it as a backstop, never a delegation:
@@ -346,9 +364,11 @@ one was not. Read it as a backstop, never a delegation:
 - **A merge refused as blocked with everything else green is this rule firing**,
   not a transient error and not a broken repo: go resolve the threads. Do not
   retry the merge.
-- **It converts a bad merge into a stalled PR, deliberately.** Resolving a thread
-  is GraphQL too, so a GraphQL-exhausted session can neither read nor resolve
-  them — wait out the rolling hour, or hand it to the owner's browser
+- **It converts a bad merge into a stalled PR, deliberately.** Through the MCP,
+  resolving a thread is GraphQL too, so a GraphQL-exhausted session can neither
+  read nor resolve them there. In a web session, use the proxy's REST stand-ins
+  first (`.../ccr/review_threads`, `.../ccr/comments/<id>/resolve`); otherwise
+  wait out the rolling hour, or hand it to the owner's browser
   (→ *GitHub API Quota Economy*). A stalled PR is the failure this standard
   prefers.
 
@@ -408,7 +428,7 @@ in the same session. Check at `/env-chk` or the session's first PR.
    Rulesets →` the default-branch ruleset `→ Require a pull request before
    merging → Require conversation resolution before merging`. This is the only
    mechanism the *no unresolved review threads* gate has; without it the gate is
-   one GraphQL call an agent must remember to make, and that call fails exactly
+   one call an agent must remember to make, GraphQL through the MCP, and that call fails exactly
    when the quota is out. If it is off, warn once with that path. Detection is
    usually unavailable: `GET /repos/{owner}/{repo}/rules/branches/{branch}`
    exposes it where `gh api` works, and in remote sessions it returns *"GitHub
@@ -418,7 +438,12 @@ in the same session. Check at `/env-chk` or the session's first PR.
 
 ## GitHub API Quota Economy (owner ruling, 2026-07-21)
 Every Claude session, in EVERY repo, acts on GitHub as one user identity and
-draws from that identity's single primary REST quota (5,000 calls/hour). Git
+draws from that identity's single primary REST quota: 5,000 calls/hour for a
+personal token, 15,000 for calls made through a GitHub App owned by an Enterprise
+Cloud organization (GraphQL: 5,000 and 10,000 points). The higher-limit route
+still draws down the budget the lower-limit ones share (GitHub docs, *Rate limits
+for the REST API*; a web session's proxy credential measured 15,000 / 10,000 on
+2026-10-06 via `GET /rate_limit`). Git
 transport (push/fetch/clone) is not metered; API/MCP reads and writes are. Quota
 hygiene is fleet-wide — one repo session's polling can starve another repo's
 merge in the same hour.
@@ -428,13 +453,19 @@ other, and the GitHub MCP silently mixes both: merging a PR is REST, but marking
 one ready-for-review is GraphQL-only (`markPullRequestReadyForReview` — GitHub
 exposes no REST equivalent). A GraphQL-exhausted session can still merge a PR
 that is already non-draft, while a draft one is stuck behind the one call it
-cannot make. So:
+cannot make. In a web session, `gh api` goes through a GitHub proxy that refuses
+GraphQL outright (measured 2026-10-06) and serves REST stand-ins for exactly those
+operations, which its error text names: `.../pulls/<n>/ccr/ready_for_review`,
+`.../ccr/review_threads`, `.../ccr/comments/<id>/resolve`. So:
 - **Un-draft as soon as CI goes green**, not at merge time. Draft-on-first-push
   still stands (*PR Lifecycle* above); this only moves *when* you leave draft,
-  so the GraphQL call happens while budget is likely available.
-- Tell REST from GraphQL by the failing verb: a 4xx from the merge/comment/label
-  endpoints is REST; a failure to un-draft, resolve a review thread, or read
-  review threads is GraphQL.
+  so the GraphQL call happens while budget is likely available. Through the
+  proxy's REST stand-in, un-drafting is a REST call and this timing concern
+  does not apply.
+- Tell REST from GraphQL by the **route**, then the verb: a call through the
+  proxy's REST stand-ins (`.../ccr/...`) is REST whatever it does. Otherwise a
+  4xx from the merge/comment/label endpoints is REST, and a failure to un-draft,
+  resolve a review thread, or read review threads through the MCP is GraphQL.
 
 **Diagnose from the error text** (rate-limit headers are usually invisible in MCP
 results):
@@ -481,6 +512,7 @@ results):
   sweeps in two repos within the same hour share one pot — sequence them.
 - **The owner's browser is the unmetered fallback**: for a green, gate-clean PR,
   "Ready for review → Squash and merge" in the UI costs no API budget and is
-  always the fastest path out of a throttle. When only GraphQL is exhausted, the
-  owner clicking *Ready for review* alone is enough — the session can then merge
-  over REST without waiting for the hour.
+  always the fastest path out of a throttle. When only GraphQL is exhausted, a
+  web session first tries the proxy's REST stand-in (`.../ccr/ready_for_review`);
+  failing that, the owner clicking *Ready for review* alone is enough — the
+  session can then merge over REST without waiting for the hour.

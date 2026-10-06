@@ -2,7 +2,7 @@
 
 A scheduled **GitHub Actions** job that runs a Node script and emails a
 notification. Transport-agnostic (any SMTP provider), DST-safe, and protected
-against GitHub's 60-day scheduler auto-disable.
+against GitHub's 60-day scheduler auto-disable (public repositories only).
 
 `/new-repo` scaffolds this kit into **every** project as standard, and the SMTP
 secrets are **mandatory repo setup** (NEW-REPO-USER-INSTRUCTIONS Step 1). The
@@ -77,7 +77,8 @@ of `notify-task.js` with your project's real notification.
   ```
 
 ## Keep it alive
-GitHub **disables scheduled workflows after 60 days of repository inactivity** —
+GitHub **disables scheduled workflows in a public repository after 60 days of
+repository inactivity** —
 inactivity, not elapsed time, so a repo where PRs land never approaches it and
 needs nothing here. GitHub emails repo admins before disabling, and re-enabling
 is one click.

@@ -215,16 +215,11 @@ Escalate: yes/no — reason if yes
 
 ### Known CI Compatibility Issues
 
-**`100dvh` not supported in older CI browser versions**
+**`dvh` units are NOT a CI limitation under the kit's browsers**
 
-The CSS unit `100dvh` (dynamic viewport height) is not supported in older Chromium and WebKit builds used by GitHub Actions runners. Elements using `min-height: 100dvh` may have zero computed height, causing Playwright `toBeVisible()` checks to fail even though the element is present in the DOM.
+Dynamic viewport units (`dvh`, `svh`, `lvh`) need Chromium 108, WebKit/Safari 15.4 or Firefox 101 (MDN browser-compat-data). The kit's Playwright ships far newer builds: on 1.63.0, Chromium 153 rendered `min-height: 100dvh` at the full viewport height (measured 2026-10-06). So when an element present in the HTML is not visible to Playwright, rule `dvh` out and resume normal triage: the selector (a hidden responsive duplicate matched instead of the visible one), the timing (an assertion before render or a transition finishes) and the layout. Do not blame the CI browser, and do not assume the app is wrong either.
 
-When diagnosing Phase 1 or Phase 2 failures where login screen elements appear in the HTML source but Playwright cannot see them as visible:
-1. Check the app's CSS for `dvh` units (`grep -r "dvh" --include="*.css"`)
-2. If found, replace `100dvh` with `100vh` in the affected rules
-3. Re-run the tests
-
-This is a CI environment limitation, not an app bug.
+The old workaround (a `100vh` declaration before the `dvh` rule) applies only to a run pinned to a browser older than those versions.
 
 ### Report Format
 

@@ -229,7 +229,7 @@ styles/          ← the committed design contract (tokens.css + components.css)
                    (→ *Hosting & Deployment*)
                  ← keepalive.yml is NOT standard: it pushes to main weekly, which
                    the required default-branch ruleset refuses, and a repo where
-                   PRs land never hits the 60-day inactivity limit it exists for
+                   PRs land never hits the public-repo 60-day inactivity limit it exists for
   scripts/
     ui-tests/
 ```
@@ -1008,7 +1008,8 @@ classes and no others:
 - **The six scheduling tools** (`send_later`, `create_trigger`,
   `update_trigger`, `delete_trigger`, `fire_trigger`, `list_triggers`).
 - **Read-only tools** that answer a question and change nothing:
-  `list_sessions`, `get_session`, `list_repos`, `list_environments`, and the
+  `list_sessions`, `get_session`, `get_trigger`, `read_documentation`,
+  `list_repos`, `list_environments`, and the
   GitHub MCP read surface (`pull_request_read`, `list_issues`, `issue_read`,
   `get_file_contents`, the `search_*` family, …). The test for admission is not
   "is it safe" but **"can it change anything a person would want to be asked

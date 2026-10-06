@@ -271,7 +271,8 @@ head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/h
 # marker, match it against the unchanged head, and permanently advance the stamp
 # past a delta nobody dispositioned. SHA-binding alone does not catch that,
 # because the SHA is the same.
-rm -f "$(git rev-parse --git-path refresh-repo-classified)"
+rm -f "$(git rev-parse --git-path refresh-repo-classified)" \
+      "$(git rev-parse --git-path refresh-repo-delta)"
 
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
@@ -298,8 +299,12 @@ elif [ -n "$last" ] && [ "$last" != "$head" ]; then
   if [ -n "$objs" ] \
      && git -C "$objs" cat-file -e "$last^{commit}" 2>/dev/null \
      && git -C "$objs" cat-file -e "$head^{commit}" 2>/dev/null \
-     && git -C "$objs" diff --no-renames --name-status "$last" "$head"; then
-    classified=yes   # the delta was READ — Phase 3 may advance the stamp
+     && delta_list=$(git -C "$objs" diff --no-renames --name-status "$last" "$head"); then
+    printf '%s\n' "$delta_list"
+    # Kept for Phase 3, which re-checks every listed path was APPLIED before it
+    # stamps. Reading the delta is not applying it (claude.prop, PROP7 #2).
+    printf '%s\n' "$delta_list" > "$(git rev-parse --git-path refresh-repo-delta)"
+    classified=yes   # the delta was READ — Phase 3 still checks it was APPLIED
     # Written only AFTER the delta has actually been listed. Records WHICH head
     # was classified, so Phase 3 can refuse a verdict made against a different
     # head. `git rev-parse --git-path` because in a linked worktree .git is a
@@ -636,6 +641,31 @@ file-level delta. Two distinct failures make an unguarded stamp destructive:
 Set `classified=yes` in Phase 2 only on the branch where the delta listing was
 actually read (including "no files changed"); leave it unset otherwise.
 
+**Read is not applied.** A third failure gets past both guards above: a path the
+delta LISTED, dispositioned as New-upstream, and then never applied. The stamp
+moves past it and no later delta lists it again. claude.prop measured it
+(2026-10-06): `templates/scripts/check-job-bounds.py` was in the delta of the
+refresh that stamped `96c370f`, was not applied, and appeared in neither of the
+next two deltas. It stayed stale for five weeks, until a delta-independent diff
+found it. So before stamping, Phase 3 compares each listed path that has an
+installed copy with the template **at the head being stamped**. It refuses the
+stamp while one differs, unless the session recorded for THIS head why it stays:
+
+```bash
+jq --arg p "<local path>" --arg h "<head>" --arg r "<why it stays local>" \
+  '.refresh_kept[$p] = {sha: $h, reason: $r}' .claude/directive-sync.json \
+  > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
+```
+
+A reason binds to one head. When a later delta touches the same path, the
+question comes back, so a decision made against one version of a template never
+stands in for a decision about the next. A stamp prunes reasons recorded for
+other heads. A path that is absent locally is reported and not compared: the
+skip rule above decides whether to install it. A path the upstream deleted
+counts as unapplied while a local copy remains. A kit file applied hunk by hunk
+(the `templates/ui-tests/**` row) still differs afterwards, so record its reason
+too: the hunks declined, and why.
+
 ```bash
 # RE-DERIVED, not inherited. Every Bash call is a FRESH SHELL, so $head/$last/
 # $classified set in Phase 2's block are all empty here — the guard would take
@@ -644,13 +674,52 @@ actually read (including "no files changed"); leave it unset otherwise.
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
 head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
 marker=$(git rev-parse --git-path refresh-repo-classified)
-classified_head=$(cat "$marker" 2>/dev/null)
+classified_head=$(cat "$marker" 2>/dev/null) || classified_head=
 rm -f "$marker"
+delta_file=$(git rev-parse --git-path refresh-repo-delta)
+delta_list=$(cat "$delta_file" 2>/dev/null) || delta_list=
+rm -f "$delta_file"
 # The verdict is only valid for the SHA it was made against. If upstream moved
 # between the two Bash calls, or a stale marker survived an interrupted run,
 # this mismatch makes Phase 3 refuse rather than stamp a delta nobody read.
 classified=no
 [ -n "$classified_head" ] && [ "$classified_head" = "$head" ] && classified=yes
+
+# APPLIED, not just read: every listed path with an installed copy must now match
+# the template at $head, or carry a reason recorded for $head (see above).
+unapplied=0
+if [ "$classified" = yes ] && [ -n "$delta_list" ]; then
+  raw="https://raw.githubusercontent.com/akyachtsman/claude.directives/$head"
+  while IFS=$(printf '\t') read -r st t; do
+    [ -n "${t:-}" ] || continue
+    case "$t" in
+      templates/ui-tests/package-lock.json) continue ;;   # never touched (row above)
+      templates/workflows/*)    p=".github/workflows/${t#templates/workflows/}" ;;
+      templates/actions/*)      p=".github/actions/${t#templates/actions/}" ;;
+      templates/scripts/*)      p=".github/scripts/${t#templates/scripts/}" ;;
+      templates/ui-tests/*)     p=".github/scripts/ui-tests/${t#templates/ui-tests/}" ;;
+      templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}" ;;
+      *) continue ;;   # merged, written once, or not installed: see the table above
+    esac
+    [ -e "$p" ] || { echo "absent locally, not compared: $p"; continue; }
+    kept=$(jq -r --arg p "$p" --arg h "$head" \
+      '.refresh_kept[$p] | select(.sha == $h) | .reason // empty' \
+      .claude/directive-sync.json 2>/dev/null) || kept=
+    if [ -n "$kept" ]; then echo "KEPT: $p -- $kept"; continue; fi
+    if [ "$st" = D ]; then
+      echo "UNAPPLIED: $p -- upstream deleted $t"; unapplied=1; continue
+    fi
+    tf=$(mktemp) || { echo "CANNOT VERIFY: $p (no temp file)"; unapplied=1; continue; }
+    if ! curl -fsSL --connect-timeout 5 --max-time 60 "$raw/$t" -o "$tf"; then
+      echo "CANNOT VERIFY: $p (template fetch failed)"; unapplied=1
+    elif ! cmp -s "$tf" "$p"; then
+      echo "UNAPPLIED: $p differs from $t at $head"; unapplied=1
+    fi
+    rm -f "$tf"
+  done <<DELTA
+$delta_list
+DELTA
+fi
 
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — stamp unchanged, re-run /refresh-repo later"
@@ -658,6 +727,11 @@ elif [ "$classified" != "yes" ]; then
   echo "delta from $last to $head was NOT classified for THIS head — stamp"
   echo "left at $last on purpose, so the next run re-examines it. Classify by hand"
   echo "via MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix to clear it."
+elif [ "$unapplied" = 1 ]; then
+  echo "stamp left at $last: the paths above are in the delta but do not match the"
+  echo "template at $head. Apply each one, or record why it stays (refresh_kept,"
+  echo "above), then re-run /refresh-repo. Stamping now would hide them from every"
+  echo "later delta."
 else
   # mktemp in the DESTINATION dir: a fixed /tmp name races a second session, and
   # a cross-filesystem mv degrades from an atomic rename to a copy — which is the
@@ -665,7 +739,9 @@ else
   tmp=$(mktemp .claude/.directive-sync.XXXXXX) || tmp=''
   if [ -n "$tmp" ] \
      && jq --arg sha "$head" --arg d "$(date -u +%F)" \
-          '.upstream = {sha: $sha, synced: $d}' .claude/directive-sync.json > "$tmp" \
+          '.upstream = {sha: $sha, synced: $d}
+           | if .refresh_kept then .refresh_kept |= with_entries(select(.value.sha == $sha)) else . end' \
+          .claude/directive-sync.json > "$tmp" \
      && [ -s "$tmp" ] \
      && mv "$tmp" .claude/directive-sync.json; then
     echo "stamped: $head"

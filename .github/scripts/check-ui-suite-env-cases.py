@@ -861,8 +861,11 @@ def main():
         for label, body, args, expected, needle in (
             ("no exemption file: an unwired read is refused",
              None, [], 1, "RUNNER_ONLY_VAR is read by"),
-            ("the default exemption file, with a reason, exempts the read — accepted",
-             '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0, "spec env wired from inputs"),
+            ("the default exemption file, with a reason, exempts the read — accepted, and NOT credited as wired",
+             '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0, ': none read (read from'),
+            ("an exempted read is reported on its own line",
+             '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0,
+             "spec env exempted, NOT wired (each arrives another way, per its recorded reason): RUNNER_ONLY_VAR"),
             ("an exemption with an empty reason — refused, never read as one",
              '{"RUNNER_ONLY_VAR": "  "}', [], 1, "RUNNER_ONLY_VAR has no reason"),
             ("an exemption whose reason is not a string — refused",

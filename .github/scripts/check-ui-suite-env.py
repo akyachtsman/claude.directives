@@ -808,15 +808,25 @@ def main():
     # catch, one level up. Launcher parity is not attainable from YAML and is
     # recorded on #335.
     shared = sorted(run_env)
+    # An EXEMPTED name is precisely one that is NOT wired from an input, so it is
+    # never credited on the "wired" line -- report it on its own (claude.prop,
+    # PROP7 #3: PW_EXECUTABLE was listed as wired by a composite that never names it).
+    wired = [name for name in spec_reads if name not in ENV_EXEMPT]
+    exempted = [name for name in spec_reads if name in ENV_EXEMPT]
     print(
         f"check-ui-suite-env: OK -- {len(SEQUENCE)} consecutive steps, same step-level "
         f"env and working directory ({', '.join(shared) if shared else 'empty'})"
     )
     print(
         f'  spec env wired from inputs into "{RUN_STEP}": '
-        + (", ".join(spec_reads) if spec_reads else "none read")
+        + (", ".join(wired) if wired else "none read")
         + f" (read from {', '.join(SPEC_FILES)})"
     )
+    if exempted:
+        print(
+            "  spec env exempted, NOT wired (each arrives another way, per its recorded reason): "
+            + ", ".join(exempted)
+        )
     print(
         "  (declared env only: the launchers differ -- `node` vs `npx` -- and the"
         " npm_* / INIT_CWD they add are outside what this file can see; see #335)"

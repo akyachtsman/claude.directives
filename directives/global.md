@@ -24,8 +24,10 @@ A `docs/…` path in these directives resolves against claude.directives:
   truth, not about who can run npm. Browser-only is a fact about the OWNER — see
   → *A Blocked Command Is Not a Blocked Capability* for what that means for
   what you may ask him to do.
-- **No framework tier.** Don't add a framework; adopting one was evaluated and
-  rejected (→ *Hosting & Deployment*), and the build opt-in does not reopen it.
+- **No framework tier.** Don't add an application or UI framework (React, Vue,
+  Next.js and the like); adopting one was evaluated and rejected
+  (→ *Hosting & Deployment*), and the build opt-in does not reopen it. A CSS
+  utility library compiled in CI (Tailwind, say) is not such a framework.
 - All code works responsively on every target platform — laptop, tablet (iPad),
   phone (iPhone/Android)
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
@@ -284,20 +286,26 @@ client-side Supabase + RLS.
 
 **No build by default; a CI build is a per-project opt-in (owner ruling,
 2026-10-06).**
-- **Why no build:** what is committed is what is served. Any file can be read or
-  edited anywhere, the owner's browser included, and is correct the moment it
-  lands; nothing stands between a merge and the live site that can fail.
+- **Why no build by default:** what is committed is what is served. Any file
+  can be read or edited anywhere, the owner's browser included, and is correct
+  the moment it lands; nothing stands between a merge and the live site that can
+  fail. An opted-in project gives that up knowingly, and its CI watches the
+  build.
 - **A session never builds and commits the output**, terminal or not. Generated
   files committed beside their source drift from it, and an edit to either is
   silently lost on the next build.
 - **The opt-in:** when a project has a concrete need a build serves —
-  TypeScript, a utility CSS framework, bundled npm libraries, minification,
-  image optimisation — it may build **in CI**: a GitHub Actions workflow that
-  builds on push and deploys through Actions-source Pages (below). It needs the
-  owner's sign-off, recorded with the need in the project's `CLAUDE.md`. Ask
-  only when that need is concrete; never as a setup question.
-- **Frameworks stay rejected either way** (below). An opted-in project's deploy
-  is no longer idempotent, so W3's retry exception does not apply to it.
+  TypeScript, a CSS utility library such as Tailwind, bundled npm libraries,
+  minification, image optimisation — it may build **in CI**: a GitHub Actions
+  workflow that builds on push and deploys through Actions-source Pages. The
+  switch carries the monitoring obligations below (the `workflow_run` arm, and
+  `pages-retry.yml`); do them in the same change. It needs the owner's sign-off,
+  recorded with the need on the `Build:` line in the Stack section of the
+  project's own `CLAUDE.md`. The owner asking for it in a session is that sign-off; record it
+  there. Raise it only when the need is concrete; never as a setup question.
+- **Application and UI frameworks stay rejected either way** (below). An
+  opted-in project's deploy is no longer idempotent, so W3's retry exception
+  does not apply to it.
 
 ⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one.**
 Branch-source publishes the **whole repository** at the public URL. Choose by
@@ -387,7 +395,7 @@ had. Do not re-propose it, and do not scaffold toward it.
 - **Needing a server is not a reason to reach for one.** The gap a framework
   tier would have filled is server-side execution — a real secret at request
   time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth Pattern*). **Supabase Edge Functions already cover that**, with no framework,
-  no build step and no new platform — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend Changes*).
+  no build and no new platform — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend Changes*).
 - **If a project ever genuinely outgrows Pages**, the owner's stated direction
   is **Cloudflare** — response time, caching, security. That names a direction,
   not a decision: it still needs explicit sign-off, against a real requirement.

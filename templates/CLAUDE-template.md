@@ -17,6 +17,8 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 - **Project name:** [fill in]
 - **Live URL:** https://akyachtsman.github.io/[repo-name]/
 - **Stack:** [fill in]
+- **Build:** none (the default). If a CI build is opted in: the need it serves,
+  and the owner's sign-off with its date (`global.md` → *Hosting & Deployment*)
 - **Branch policy:** Develop on a `claude/<name>` feature branch; PRs target `main`
 
 ## Design

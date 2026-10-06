@@ -56,10 +56,13 @@ Now HOW. Write `specs/<slug>/plan.md`: tech stack, architecture, data shapes,
 key decisions and their trade-offs. Must honor the constitution: the global
 directive's stack, plain HTML + JS with no framework and no build
 (`global.md` → *Hosting & Deployment*). A CI build is allowed only when the
-project's `CLAUDE.md` records the opt-in, with its need and the owner's sign-off;
-read it there rather than asking again. A plan that needs a build the project has
-not opted into puts that need to the owner, and on a yes records the opt-in in
-`CLAUDE.md` before planning on it. Frameworks stay out either way. Reference back to the spec's requirements;
+`Build:` line in the Stack section of the project's `CLAUDE.md` records the opt-in, with
+its need and the owner's sign-off; read it there rather than asking again. If
+the owner asks for a build-needing choice in this session (TypeScript, say),
+that request is the sign-off: record it on that line, then plan on it. A plan
+that needs a build nobody asked for puts the need to the owner first.
+Application and UI frameworks stay out either way. Reference back to the
+spec's requirements;
 do not introduce scope the spec didn't ask for.
 
 **Build to the brief's ambition bar — don't reflexively minimize.** Honor the

@@ -50,7 +50,8 @@ is a per-project opt-in with the owner's sign-off) — set by
 practice in every project, and **not a stamped ruling** — it has never been
 compared against a utility-class system (which, needing a build, would come
 through the CI-build opt-in). The Hosting ruling settles something narrower: no
-React, no build by default, no local server, no new platform. That is why frameworked generators are rejected
+React, no build by default, no local server, no new platform. That is why
+frameworked generators are rejected
 (`docs/guides/dev-pipeline.md` → AI UI generators; `/design-intake` → Figma
 codegen MCPs), but it does not decide the token mechanism. Take an alternative to
 the owner rather than adopting one — and do not cite this line as authority for

@@ -892,6 +892,19 @@ def main():
             else:
                 print(f"OK:   {label} (exit {code})")
 
+        # An exemption left behind for a name the composite DOES wire from an input
+        # is reported as wired, never as "NOT wired" (Codex, #397).
+        (tests / "a.spec.js").write_text("const u = process.env.APP_URL;\n", encoding="utf-8")
+        exempt.write_text('{"APP_URL": "stale: arrived another way once"}', encoding="utf-8")
+        r = subprocess.run([sys.executable, str(GUARD)], capture_output=True, text=True, cwd=tmp)
+        code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
+        extra += 1
+        label = "a stale exemption for a name wired from an input is reported as wired"
+        if code != 0 or '": APP_URL (read from' not in out or "NOT wired" in out:
+            failures.append(f"{label}\n      expected exit 0, APP_URL on the wired line, no NOT-wired line; got {code}.\n      {out}")
+        else:
+            print(f"OK:   {label} (exit {code})")
+
     if failures:
         print("\ncheck-ui-suite-env-cases: FAILED\n")
         for f in failures:

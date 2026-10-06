@@ -811,8 +811,16 @@ def main():
     # An EXEMPTED name is precisely one that is NOT wired from an input, so it is
     # never credited on the "wired" line -- report it on its own (claude.prop,
     # PROP7 #3: PW_EXECUTABLE was listed as wired by a composite that never names it).
-    wired = [name for name in spec_reads if name not in ENV_EXEMPT]
-    exempted = [name for name in spec_reads if name in ENV_EXEMPT]
+    # Classified by the ACTUAL wiring, not by exemption alone: a stale exemption
+    # for a name the composite now takes from an input is wired (Codex, #397).
+    declared = set((doc.get("inputs") or {}).keys())
+
+    def is_wired(name):
+        m = re.fullmatch(r"\$\{\{\s*inputs\.([\w-]+)\s*\}\}", str(run_env.get(name, "")))
+        return bool(m and m.group(1) in declared)
+
+    wired = [name for name in spec_reads if name not in ENV_EXEMPT or is_wired(name)]
+    exempted = [name for name in spec_reads if name in ENV_EXEMPT and not is_wired(name)]
     print(
         f"check-ui-suite-env: OK -- {len(SEQUENCE)} consecutive steps, same step-level "
         f"env and working directory ({', '.join(shared) if shared else 'empty'})"

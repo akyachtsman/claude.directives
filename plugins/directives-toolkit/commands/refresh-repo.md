@@ -829,7 +829,16 @@ $(printf '%s\n' "$files" | sed "s|^templates/actions/|.github/actions/|")"
   while IFS= read -r p; do
     [ -n "$p" ] || continue
     case "$handled" in *" $p "*) continue ;; esac   # already checked from the delta
-    case "$p" in
+    # A path under a kit directory is a KIT file, whose template is
+    # templates/ui-tests/, not templates/scripts/ (Codex, #397).
+    t=
+    while IFS= read -r k; do
+      [ -n "$k" ] || continue
+      case "$p" in "$k"/*) t="templates/ui-tests/${p#"$k"/}" ;; esac
+    done <<KITS
+${kit_dirs:-.github/scripts/ui-tests}
+KITS
+    [ -n "$t" ] || case "$p" in
       .github/scripts/*) t="templates/scripts/${p#.github/scripts/}" ;;
       .github/actions/*) t="templates/actions/${p#.github/actions/}" ;;
       *) continue ;;

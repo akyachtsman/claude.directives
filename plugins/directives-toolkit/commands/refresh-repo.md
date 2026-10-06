@@ -660,8 +660,14 @@ jq --arg p "<local path>" --arg h "<head>" --arg r "<why it stays local>" \
 A reason binds to one head. When a later delta touches the same path, the
 question comes back, so a decision made against one version of a template never
 stands in for a decision about the next. A stamp prunes reasons recorded for
-other heads. A path that is absent locally is reported and not compared: the
-skip rule above decides whether to install it. A path the upstream deleted
+other heads. A path that is absent locally has nothing to compare: the skip
+rule above decides whether to install it, so its absence counts against the
+stamp only where that rule REQUIRES the file: a sibling of a composite that is installed, the hook
+once `.claude/settings.json` exists, a file of an installed ui-tests kit, and a
+script an installed workflow or composite, or a directive at the head, names by
+path. An absent required file is unapplied (Codex, #397). An absent workflow is
+reported, not compared, because its absence can be deliberate (`pages-retry.yml`,
+a scheduled workflow with no task). A path the upstream deleted
 counts as unapplied while a local copy remains. A kit file applied hunk by hunk
 (the `templates/ui-tests/**` row) still differs afterwards, so record its reason
 too: the hunks declined, and why.
@@ -687,7 +693,7 @@ classified=no
 
 # APPLIED, not just read: every listed path with an installed copy must now match
 # the template at $head, or carry a reason recorded for $head (see above).
-unapplied=0
+unapplied=0; refs_done=; refs_ok=yes; refs=
 if [ "$classified" = yes ] && [ -n "$delta_list" ]; then
   raw="https://raw.githubusercontent.com/akyachtsman/claude.directives/$head"
   while IFS=$(printf '\t') read -r st t; do
@@ -701,11 +707,52 @@ if [ "$classified" = yes ] && [ -n "$delta_list" ]; then
       templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}" ;;
       *) continue ;;   # merged, written once, or not installed: see the table above
     esac
-    [ -e "$p" ] || { echo "absent locally, not compared: $p"; continue; }
     kept=$(jq -r --arg p "$p" --arg h "$head" \
       '.refresh_kept[$p] | select(.sha == $h) | .reason // empty' \
       .claude/directive-sync.json 2>/dev/null) || kept=
     if [ -n "$kept" ]; then echo "KEPT: $p -- $kept"; continue; fi
+    if [ ! -e "$p" ]; then
+      [ "$st" = D ] && continue   # deleted upstream, absent here: applied
+      # Absent is a choice only where the skip rule makes it one. A sibling of an
+      # installed composite, the hook once settings exist, a file of an installed
+      # kit and a script something names by path are REQUIRED (Codex, #397).
+      need=
+      case "$t" in
+        templates/actions/*)
+          a=${t#templates/actions/}; [ -d ".github/actions/${a%%/*}" ] && need="its composite is installed" ;;
+        templates/claude-hooks/*) [ -f .claude/settings.json ] && need="the settings row runs it" ;;
+        templates/ui-tests/*)     [ -d .github/scripts/ui-tests ] && need="the kit is installed" ;;
+        templates/scripts/*)
+          if [ -z "$refs_done" ]; then
+            refs_done=1
+            # The callers are INSTALLED by now, so the local copies are the ones to
+            # scan; the directives are not installed, so read them at $head. No
+            # `grep -q` fed by a pipe (the SIGPIPE hazard in Phase 1); `; true`
+            # keeps a no-match from ending the block under errexit.
+            refs=$(find .github/workflows .github/actions -type f \
+                     -exec grep -hoE '\.github/scripts/[A-Za-z0-9_./-]+' {} + 2>/dev/null; true)
+            for d in global git design test data; do
+              if dtxt=$(curl -fsSL --connect-timeout 5 --max-time 60 "$raw/directives/$d.md"); then
+                refs="$refs
+$(printf '%s\n' "$dtxt" | grep -oE '\.github/scripts/[A-Za-z0-9_./-]+'; true)"
+              else
+                refs_ok=no
+              fi
+            done
+            refs=$(printf '%s\n' "$refs" | sed -E 's/[.]+$//')
+          fi
+          if grep -qxF "$p" <<<"$refs"; then need="an installed caller or a directive names it"
+          elif [ "$refs_ok" = no ]; then
+            echo "CANNOT VERIFY: $p (absent; a directive could not be fetched)"; unapplied=1; continue
+          fi ;;
+      esac
+      if [ -n "$need" ]; then
+        echo "UNAPPLIED: $p is absent but required -- $need"; unapplied=1
+      else
+        echo "absent locally, not compared: $p"
+      fi
+      continue
+    fi
     if [ "$st" = D ]; then
       echo "UNAPPLIED: $p -- upstream deleted $t"; unapplied=1; continue
     fi

@@ -64,8 +64,9 @@ means a CI build and Actions-source Pages, record the yes on that bullet, and
 plan the switch's obligations with it: the deploy workflow, the monitor's
 `workflow_run` arm, and removing `pages-retry.yml` (`global.md` → *Hosting & Deployment*).
 A plan that needs a build nobody asked for puts the need to the owner first. Application and UI
-frameworks stay out either way: a spec that asks for one (React, Vue) is
-escalated to the owner, not planned. Reference back to the spec's requirements;
+frameworks stay out either way: a spec that asks for one (React, Vue) is not
+planned. Raise it per `global.md` → *A Knowing Deviation Is an Escalation*:
+quote the spec and the ruling, ask which stands, record the answer. Reference back to the spec's requirements;
 do not introduce scope the spec didn't ask for.
 
 **Build to the brief's ambition bar — don't reflexively minimize.** Honor the

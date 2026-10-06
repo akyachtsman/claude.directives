@@ -55,7 +55,8 @@ frameworked generators are rejected
 (`docs/guides/dev-pipeline.md` → AI UI generators; `/design-intake` → Figma
 codegen MCPs), but it does not decide the token mechanism. Take an alternative to
 the owner rather than adopting one — and do not cite this line as authority for
-refusing one.
+refusing one. The CI-build opt-in allows the build only: replacing `tokens.css`
+and `components.css` with a utility system is a separate owner decision.
 
 File layout:
 ```

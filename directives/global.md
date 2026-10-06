@@ -288,12 +288,15 @@ client-side Supabase + RLS.
 2026-10-06).**
 - **Why no build by default:** what is committed is what is served. Any file
   can be read or edited anywhere, the owner's browser included, and is correct
-  the moment it lands; nothing stands between a merge and the live site that can
-  fail. An opted-in project gives that up knowingly, and its CI watches the
-  build.
-- **A session never builds and commits the output**, terminal or not. Generated
-  files committed beside their source drift from it, and an edit to either is
-  silently lost on the next build.
+  the moment it lands; no project-owned build stage stands between a merge and
+  the live site. (GitHub's own Pages deploy can still fail; the Pages monitoring
+  below watches that.) An opted-in project gives that up knowingly, and its CI
+  watches the build.
+- **A session never builds the served site and commits the output**, terminal
+  or not. Generated files committed beside their source drift from it, and an
+  edit to either is silently lost on the next build. Generated documentation
+  that a CI `--check` keeps in step with its source (this repo's
+  `logical-map.html`) is not the site's build output.
 - **The opt-in:** when a project has a concrete need a build serves —
   TypeScript, a CSS utility library such as Tailwind, bundled npm libraries,
   minification, image optimisation — it may build **in CI**: a GitHub Actions

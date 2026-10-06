@@ -72,8 +72,8 @@ Corollaries worth memorizing:
   names the script by path, so a project that takes the new composite without the
   script fails every UI job at step resolution — not at test time, where it would
   at least say why. Same shape as `check-job-bounds.py`'s coupling to `qa.yml`
-  (`docs/standards/cicd-setup.md` → *9c-ter — Job bounds guard*, whose install
-  step exists because `qa.yml` already invokes that script by path). Disposition
+  (`docs/standards/cicd-setup.md` → *Step 1 — Copy workflow templates*, which
+  installs it WITH `qa.yml` because `qa.yml` invokes it by path). Disposition
   both files in the same `/refresh-repo` pass, or neither.
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement

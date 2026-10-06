@@ -672,6 +672,22 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     `exit=${plus.code} got ${JSON.stringify(parsed(plus.out))} out=${plus.out.trim()}`);
 }
 
+// Anchored heading match (audit, 2026-10-06). Anywhere-in-the-heading let a
+// name resolve against a heading that merely CONTAINS it — `→ *Keys*` against
+// "## Monkeys", a renamed section against "## Deprecated PR Lifecycle". The
+// complement keeps the trailing qualifiers references legitimately omit.
+{
+  const heads = '# Doc\n\n## Monkeys\n\n## Deprecated PR Lifecycle\n\n## Session start — required actions\n';
+  const r = run({ 'a.md': heads, 'b.md': 'see `a.md` → *Keys* and `a.md` → *PR Lifecycle*\n' });
+  check('a name INSIDE a heading does not resolve against it',
+    r.code !== 0 && parsed(r.out)?.good === 0 && parsed(r.out)?.total === 2,
+    `exit=${r.code} got ${JSON.stringify(parsed(r.out))} out=${r.out.trim()}`);
+  const ok = run({ 'a.md': heads, 'b.md': 'see `a.md` → *Session start*\n' });
+  check('…while a heading that BEGINS with the name, then a qualifier, still does',
+    ok.code === 0 && parsed(ok.out)?.good === 1 && parsed(ok.out)?.total === 1,
+    `exit=${ok.code} got ${JSON.stringify(parsed(ok.out))} out=${ok.out.trim()}`);
+}
+
 if (failed) {
   console.error(`\n${failed} case(s) failed`);
   process.exit(1);

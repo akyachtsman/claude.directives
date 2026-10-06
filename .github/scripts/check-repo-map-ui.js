@@ -25,8 +25,14 @@ const browser = await chromium.launch(
   process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1500, height: 950 }, hasTouch: true });
 const errors = [];
-page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
-page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+// Every page the suite opens is listened to: the final "no console or page
+// errors" case speaks for all of them, and the phone page once had no
+// listeners at all (audit, 2026-10-06).
+const listen = (p, tag) => {
+  p.on('console', m => { if (m.type() === 'error') errors.push(`${tag}console: ${m.text()}`); });
+  p.on('pageerror', e => errors.push(`${tag}pageerror: ${e.message}`));
+};
+listen(page, '');
 await page.goto(MAP);
 await page.waitForTimeout(400);
 
@@ -414,6 +420,7 @@ await page.click('#t_fit');
 /* ------------------------------------------------------------- phone size */
 {
   const phone = await browser.newPage({ viewport: { width: 390, height: 800 }, hasTouch: true });
+  listen(phone, 'phone ');
   await phone.goto(MAP);
   await phone.waitForTimeout(300);
   const overflow = await phone.evaluate(() => document.documentElement.scrollWidth - innerWidth);

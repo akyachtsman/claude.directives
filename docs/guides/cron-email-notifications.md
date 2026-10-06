@@ -19,12 +19,12 @@ of `notify-task.js` with your project's real notification.
 
 ## GitHub settings (Settings → Secrets and variables → Actions)
 
-**Secrets** (credentials only) → *Secrets* tab:
+**Secrets** (credentials only), in the **Secrets** tab:
 | Name | Value |
 |---|---|
 | `SMTP_PASS` | app password / API key |
 
-**Variables** (non-sensitive) → *Variables* tab:
+**Variables** (non-sensitive), in the **Variables** tab:
 | Name | Value |
 |---|---|
 | `SMTP_HOST` | e.g. `smtp.gmail.com` |

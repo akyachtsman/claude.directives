@@ -55,7 +55,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
    EXPORTS.json delivery mode. Classification needs the diff, which `ls-remote`
    cannot give — and **no GitHub MCP call compares two refs** (the surface is
    `list_commits` / `get_commit` / `search_commits` / `list_branches`; walking the
-   delta commit-by-commit is exactly the burn `git.md` → *Quota Economy* forbids).
+   delta commit-by-commit is exactly the burn `git.md` → *GitHub API Quota Economy* forbids).
    In a session scoped to claude.directives the objects are already local, so
    classify with plain git and no API at all. Keep the SHA `ls-remote` returned
    and diff against **that**, after `git fetch origin main` to make the object

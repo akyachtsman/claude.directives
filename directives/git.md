@@ -169,8 +169,10 @@ A `docs/…` path in these directives resolves against claude.directives:
     the PR's own. A re-requested `@codex review` then gave a normal all-clear on
     the same SHA. So a verdict comes only from the artifacts this section names —
     a review, a comment or inline reply, or a reaction read by the ladder below.
-    Prose is none of them however conclusive it reads, and a commit or PR it
-    claims is checked (`GET /commits/<sha>`) before anything acts on it. Completed
+    Prose is none of them however conclusive it reads, and work it claims is
+    checked before anything acts on it, each claim on its own: a commit with
+    `GET /commits/<sha>`, a PR with a pull-request lookup or search that also
+    shows the claimed commit in it. A real SHA proves nothing about a PR. Completed
     with no artifact is *pending*: re-request once.
   - ⚠️ **A response is not a verdict.** Codex-authored and naming HEAD proves the
     head was REVIEWED — not that it PASSED. A review carrying live inline findings

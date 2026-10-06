@@ -409,7 +409,11 @@ Hard-won; each cost a real debugging session:
   `rate limit already exceeded` (GraphQL out). GitHub has no REST endpoint for
   marking a PR ready. So when a session says it is quota-blocked on a green PR,
   your single click on **Ready for review** may be all it needs — it can merge
-  over REST straight after, no need to wait out the hour.
+  over REST straight after, no need to wait out the hour. A web session's `gh`
+  proxy is the exception: it refuses GraphQL but serves REST stand-ins
+  (`.../ccr/ready_for_review` and the review-thread routes), so there un-drafting
+  is REST — diagnose by the route a call took, then the verb (`git.md` →
+  *GitHub API Quota Economy*).
 - **Plugin supply chain has no review point in our repos** — external plugin
   updates (even Anthropic-official) reach sessions automatically — every session
   now, via the `SessionStart` hook, rather than on the ~weekly cache rebuild —

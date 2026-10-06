@@ -161,6 +161,17 @@ A `docs/…` path in these directives resolves against claude.directives:
     not what it found: the verdict is in the review, inline comments and
     reactions above and below. (claude.prop#115 merged 16 s after un-draft, on
     the Running summary; the finding landed 3 min 37 s later, on a merged PR.)
+    **Completed can also mean no verdict at all** — no review, no inline
+    finding, no reaction — and Codex's prose can describe work that never
+    happened. On claude.prop#120 (2026-10-06) it reported committing `d8095dc`
+    and opening a follow-up PR: `GET /commits/d8095dc` returned 422, no follow-up
+    PR existed, the head was unchanged, and the lines it called its changes were
+    the PR's own. A re-requested `@codex review` then gave a normal all-clear on
+    the same SHA. So a verdict comes only from the artifacts this section names —
+    a review, a comment or inline reply, or a reaction read by the ladder below.
+    Prose is none of them however conclusive it reads, and a commit or PR it
+    claims is checked (`GET /commits/<sha>`) before anything acts on it. Completed
+    with no artifact is *pending*: re-request once.
   - ⚠️ **A response is not a verdict.** Codex-authored and naming HEAD proves the
     head was REVIEWED — not that it PASSED. A review carrying live inline findings
     satisfies both tests while saying the opposite, so treating "a response at the

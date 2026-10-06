@@ -418,7 +418,12 @@ in the same session. Check at `/env-chk` or the session's first PR.
 
 ## GitHub API Quota Economy (owner ruling, 2026-07-21)
 Every Claude session, in EVERY repo, acts on GitHub as one user identity and
-draws from that identity's single primary REST quota (5,000 calls/hour). Git
+draws from that identity's single primary REST quota: 5,000 calls/hour for a
+personal token, 15,000 for calls made through a GitHub App owned by an Enterprise
+Cloud organization (GraphQL: 5,000 and 10,000 points). The higher-limit route
+still draws down the budget the lower-limit ones share (GitHub docs, *Rate limits
+for the REST API*; a web session's proxy credential measured 15,000 / 10,000 on
+2026-10-06 via `GET /rate_limit`). Git
 transport (push/fetch/clone) is not metered; API/MCP reads and writes are. Quota
 hygiene is fleet-wide — one repo session's polling can starve another repo's
 merge in the same hour.
@@ -428,7 +433,10 @@ other, and the GitHub MCP silently mixes both: merging a PR is REST, but marking
 one ready-for-review is GraphQL-only (`markPullRequestReadyForReview` — GitHub
 exposes no REST equivalent). A GraphQL-exhausted session can still merge a PR
 that is already non-draft, while a draft one is stuck behind the one call it
-cannot make. So:
+cannot make. In a web session, `gh api` goes through a GitHub proxy that refuses
+GraphQL outright (measured 2026-10-06) and serves REST stand-ins for exactly those
+operations, which its error text names: `.../pulls/<n>/ccr/ready_for_review`,
+`.../ccr/review_threads`, `.../ccr/comments/<id>/resolve`. So:
 - **Un-draft as soon as CI goes green**, not at merge time. Draft-on-first-push
   still stands (*PR Lifecycle* above); this only moves *when* you leave draft,
   so the GraphQL call happens while budget is likely available.

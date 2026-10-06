@@ -2,13 +2,10 @@
 // Credential comes from the TEST_AUTH_CREDENTIAL environment variable only.
 // Discovers app structure, exercises all interactive elements, captures API calls.
 //
-// ⚠️ Known CI compatibility issue — 100dvh not supported in older CI browsers:
-// The CSS unit 100dvh (dynamic viewport height) is not supported in older CI browser
-// versions (Chromium/WebKit in GitHub Actions). Elements using min-height: 100dvh may
-// have zero computed height, causing Playwright toBeVisible() checks to fail even though
-// the element is in the DOM. When diagnosing S1/S2 failures where login screen elements
-// are present in HTML but not visible to Playwright, check for dvh units in CSS and
-// replace with vh.
+// dvh units are supported by every browser this kit's Playwright ships (they need
+// Chromium 108 / WebKit 15.4 / Firefox 101; 1.63.0 ships Chromium 153, measured
+// 2026-10-06), so an element present in the HTML but not visible to Playwright is
+// diagnosed as an app bug, not blamed on dvh. See the ui-tester agent.
 
 import { test as base, expect } from '@playwright/test';
 

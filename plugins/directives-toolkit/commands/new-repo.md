@@ -85,8 +85,8 @@ Execute in order:
 
    **Do NOT copy `keepalive.yml`.** It pushes to `main` weekly, which the
    required default-branch ruleset refuses — so it would be red on every run.
-   It is also unnecessary: the 60-day auto-disable counts repository
-   *inactivity*, not elapsed time, and a repo where PRs land never approaches
+   It is also unnecessary: the 60-day auto-disable applies to public
+   repositories only and counts repository *inactivity*, not elapsed time, and a repo where PRs land never approaches
    it. See `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
    Drop-in for a **branch-source** Pages project — copy verbatim, no edits.

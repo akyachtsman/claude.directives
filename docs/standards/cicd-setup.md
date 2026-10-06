@@ -83,8 +83,11 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 ```
 
 ⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
-Actions cache SAVES are branch-scoped; RESTORES are not scoped the same way. A
-`workflow_run`-triggered job can READ a key it was denied WRITING — measured in
+Actions cache WRITE access is decided by the triggering event, not the branch:
+`workflow_run` (like `pull_request_target` and `issue_comment`) gets read-only
+access to the default branch's caches, while `push`, `workflow_dispatch` and
+`schedule` among others may write (GitHub docs, *Dependency caching*, re-checked
+2026-10-06). So a `workflow_run`-triggered job can READ a key it was denied WRITING — measured in
 `claude.insurance` on 2026-08-25 (run 32897692210), where a `qa-live` run
 restored the exact key a manual `workflow_dispatch` had written two days and
 three runs earlier. So narrow any statement of the limit to **saves**;

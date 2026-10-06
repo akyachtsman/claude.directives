@@ -85,6 +85,9 @@ secs=$(printf '%s' "$trimmed" | awk '
     for (i = 2; i <= n; i++) {
       a = w[i]
       if (a == "") continue
+      # `--` ends the options of sleep and is not a duration: `sleep -- 30` sleeps
+      # 30s, and stopping at it let that through (Codex, #396).
+      if (a == "--" && !seen && !dashdash) { dashdash = 1; continue }
       if (a ~ /[$`]/) { if (!seen) nonliteral = 1; break }
       u = ""
       if (a ~ /[smhd]$/) { u = substr(a, length(a)); a = substr(a, 1, length(a) - 1) }

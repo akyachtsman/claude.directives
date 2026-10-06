@@ -123,7 +123,9 @@ secs=$(printf '%s' "$trimmed" | awk '
       t += v * m; seen = 1
     }
   }
-  END { if (nonliteral) print "X"; else if (forever) print 1e18; else print t + 0 }')
+  # Full precision: a plain print rounds through OFMT (%.6g), so 14.99999 would
+  # come out as 15 and be blocked (Codex, #396).
+  END { if (nonliteral) print "X"; else if (forever) print 1e18; else printf "%.17g\n", t }')
 if [ "$secs" != "X" ]; then
   awk -v s="$secs" 'BEGIN { exit !(s >= 15) }' || exit 0
 fi

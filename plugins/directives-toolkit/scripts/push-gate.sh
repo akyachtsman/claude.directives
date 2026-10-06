@@ -112,10 +112,16 @@ printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 # than one push, and each must pass the gate.
 pushparts=$(printf '%s' "$stripped" | grep -oE 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push[^|;&]*')
 
+# The VALUE of an option that takes one is not a ref: `-o +main` is a push
+# option, so drop such values before looking for main (Codex, #396). The list is
+# the one names_ref() below skips.
+refparts=$(printf '%s\n' "$pushparts" \
+  | sed -E 's/[[:space:]](-o|--push-option|--repo|--receive-pack|--exec|--recurse-submodules)[[:space:]]+[^[:space:]]+/ \1/g')
+
 # Any push that names main/master as a target ref (standalone word, after `/` or
 # `:`, or with the force marker `+` -- which git reads only at the START of a
 # refspec, so `foo+main` and `claude/+main` are ordinary branch names; Codex, #396).
-if printf '%s\n' "$pushparts" | grep -qE '([[:space:]:/]|[[:space:]][+])(main|master)([[:space:]`)]|$)'; then
+if printf '%s\n' "$refparts" | grep -qE '([[:space:]:/]|[[:space:]][+])(main|master)([[:space:]`)]|$)'; then
   echo 'BLOCKED by directives push-gate: direct push to main is never allowed — all main updates go through a claude/<name> branch and a PR (squash-merge on green CI). Push to your feature branch instead.' >&2
   exit 2
 fi

@@ -53,6 +53,9 @@ PUSH_CASES = [
     ("a branch name with + before main mid-name (git: + is force only at a refspec's start)",
      "git push origin foo+main", ALLOW),
     ("a branch name with /+main", "git push origin claude/+main", ALLOW),
+    ("a push option whose value is +main", "git push -o +main origin claude/foo", ALLOW),
+    ("a push option, then main as the ref", "git push -o ci.skip origin main", BLOCK),
+    ("-o taking -o as its value, then main", "git push origin -o -o main", BLOCK),
     ("a commit message that says push to main", 'git commit -m "push to main later"', ALLOW),
     ("a single-quoted message, then a branch push",
      "git commit -m 'merge main into it' && git push -u origin claude/x", ALLOW),
@@ -105,6 +108,8 @@ WAIT_CASES = [
     ("a short sleep split by a backslash-newline", "sleep 2 \\\n2", True, ALLOW),
     ("a seconds suffix under the threshold", "sleep 10s", True, ALLOW),
     ("just under the threshold", "sleep 14", True, ALLOW),
+    ("a hair under the threshold (not rounded up)", "sleep 14.99999", True, ALLOW),
+    ("exactly the threshold", "sleep 15.000000", True, BLOCK),
     ("a foreground sleep is not this gate's", "sleep 300", False, ALLOW),
     ("a backgrounded job that is not a sleep", "npm test", True, ALLOW),
 ]

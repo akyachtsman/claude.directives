@@ -55,15 +55,16 @@ added a round trip.)
 Now HOW. Write `specs/<slug>/plan.md`: tech stack, architecture, data shapes,
 key decisions and their trade-offs. Must honor the constitution: the global
 directive's stack, plain HTML + JS with no framework and no build
-(`global.md` → *Hosting & Deployment*). A CI build is allowed only when the
-`Build:` bullet under *Project Overview* in the project's `CLAUDE.md` records
-the opt-in, with its need and the owner's sign-off; read it there rather than
-asking again. No `Build:` bullet means no build. The opt-in is **not open
-yet** (`global.md` → *Hosting & Deployment*, until claude.directives#402 lands),
-so a plan that needs a build the project has not opted into does not plan on
-one: raise the need with the owner instead. Once the opt-in opens, follow its
-procedure there (confirmation, record, and every switch obligation); it is not
-restated here.
+(`global.md` → *Hosting & Deployment*). The CI-build opt-in is **not open
+yet** (same section, until claude.directives#402 lands), and that gate is
+unconditional: **no plan plans on a build**, even where the project's `CLAUDE.md`
+already records one on its `Build:` bullet. Raise the need, or the recorded
+opt-in, with the owner instead. Once the opt-in opens, a build is allowed only
+when that `Build:` bullet under *Project Overview* records it, with its need and
+the owner's sign-off; read it there rather than asking again, and treat a
+missing bullet as no build. A plan that needs a build the project has not opted
+into then follows the opt-in procedure in `global.md` (confirmation, record, and
+every switch obligation); it is not restated here.
 
 Application and UI frameworks stay out either way: a spec that asks for one
 (React, Vue) is not planned. Raise it per

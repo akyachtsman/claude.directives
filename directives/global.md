@@ -327,6 +327,8 @@ client-side Supabase + RLS.
   can switch to branch-source), so an opted-in project would be tested unbuilt
   and could be recovered into publishing its unbuilt tree. Until then a concrete
   need is raised with the owner and on that issue; the project does not switch.
+  The gate binds every project: a `Build:` bullet recorded before #402 lands
+  does not open it, and nothing plans on, adds or runs a build on its strength.
   Once it opens, the first project that opts in checks every workflow it ships
   against the rule above and reports any gap upstream. The
   snippets: `/new-repo` step 5 and `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*. It needs the

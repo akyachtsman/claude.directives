@@ -288,15 +288,15 @@ client-side Supabase + RLS.
 2026-10-06).**
 - **Why no build by default:** what is committed is what is served. Any file
   can be read or edited anywhere, the owner's browser included, and is correct
-  the moment it lands; no project-owned build stage stands between a merge and
-  the live site. (GitHub's own Pages deploy can still fail; the Pages monitoring
-  below watches that.) An opted-in project gives that up knowingly, and its CI
+  the moment it lands; no compile or build stage stands between a merge and the
+  live site. (A deploy can still fail, GitHub's own or a filtered-copy workflow;
+  the Pages monitoring below watches that.) An opted-in project gives that up knowingly, and its CI
   watches the build.
 - **A session never builds the served site and commits the output**, terminal
   or not. Generated files committed beside their source drift from it, and an
-  edit to either is silently lost on the next build. Generated documentation
-  that a CI `--check` keeps in step with its source (this repo's
-  `logical-map.html`) is not the site's build output.
+  edit to either is silently lost on the next build. The exception is a
+  generated file that CI itself regenerates and compares with `--check` on every
+  run, so it cannot drift unseen; nothing else qualifies.
 - **The opt-in:** when a project has a concrete need a build serves —
   TypeScript, a CSS utility library such as Tailwind, bundled npm libraries,
   minification, image optimisation — it may build **in CI**: a GitHub Actions
@@ -304,17 +304,22 @@ client-side Supabase + RLS.
   build therefore **forces Actions-source**, whatever the sourcing test below
   says. Where that test also requires a filtered copy, the build runs first,
   the deny-list filter then runs over its output, and the 200/404 assertions
-  stay in the deploy workflow. In the same change, do the switch's obligations
-  below: add the `workflow_run` arm to `pages-monitor.yml`, and **delete**
+  stay in the deploy workflow. In the same change, do the switch's
+  obligations, every one of them: add the deploy workflow's exact `name:` to
+  `qa-live.yml`'s `workflow_run.workflows` (or the live QA gate stops running)
+  and a `workflow_run` arm to `pages-monitor.yml`, and **delete**
   `pages-retry.yml` and its `REQUIRED` entry (W3's exception is closed to a
-  build), building the retry into the deploy workflow instead. It needs the
+  build), building the retry into the deploy workflow instead. The list and the
+  snippets: `/new-repo` step 5 and `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*. It needs the
   owner's sign-off, recorded with the need on the `Build:` bullet under
   *Project Overview* in the project's own `CLAUDE.md`; a missing bullet means
   none is recorded, so the project has no build. An owner request for something
   that needs a build (TypeScript, Tailwind) starts it, but because the switch
   changes how Pages is sourced, confirm once in one line that it means a CI
   build and Actions-source Pages, then record the yes. Raise it only when the
-  need is concrete; never as a setup question.
+  need is concrete; never as a setup question. A Tailwind opt-in may compile
+  utilities on top of `tokens.css` and `components.css`; replacing those files
+  with a utility system is a further owner decision (`design.md` → *Stack*).
 - **Application and UI frameworks stay rejected either way** (below). An
   opted-in project's deploy is no longer idempotent, so W3's retry exception
   does not apply to it.

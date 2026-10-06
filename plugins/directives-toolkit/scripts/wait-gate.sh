@@ -41,10 +41,14 @@ fi
 
 # Strip quoted segments: message text must never influence the verdict. A
 # single-WORD quoted token is unquoted first, so `sleep "30"` reads as the
-# 30-second sleep it is rather than as a sleep with no operand.
+# 30-second sleep it is rather than as a sleep with no operand. A double-quoted
+# span holding `$` or a backtick is KEPT: bash expands it, so
+# `sleep "$(printf %s 30)"` is a 30-second sleep, and deleting the span left a
+# sleep with no operand that passed (Codex, #396). push-gate.sh keeps the same
+# spans for the same reason.
 stripped=$(printf '%s' "$cmd" \
   | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
-  | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g')
+  | sed -e "s/'[^']*'//g" -e 's/"[^"$`]*"//g')
 # Trim leading whitespace and an optional leading no-op (`:;` / `true &&`).
 trimmed=$(printf '%s' "$stripped" | sed -E 's/^[[:space:]]*(:|true)[[:space:]]*(;|&&)?[[:space:]]*//; s/^[[:space:]]*//')
 

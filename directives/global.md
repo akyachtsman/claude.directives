@@ -303,12 +303,15 @@ client-side Supabase + RLS.
   the deny-list filter then runs over its output, and the 200/404 assertions
   stay in the deploy workflow. In the same change, do the switch's obligations
   below: add the `workflow_run` arm to `pages-monitor.yml`, and **delete**
-  `pages-retry.yml` (W3's exception is closed to a build), building the retry
-  into the deploy workflow instead. It needs the owner's sign-off, recorded with
-  the need on the `Build:` bullet under *Project Overview* in the project's own
-  `CLAUDE.md`; a project whose `CLAUDE.md` has no `Build:` bullet has no build.
-  The owner asking for it in a session is that sign-off; record it there. Raise
-  it only when the need is concrete; never as a setup question.
+  `pages-retry.yml` and its `REQUIRED` entry (W3's exception is closed to a
+  build), building the retry into the deploy workflow instead. It needs the
+  owner's sign-off, recorded with the need on the `Build:` bullet under
+  *Project Overview* in the project's own `CLAUDE.md`; a missing bullet means
+  none is recorded, so the project has no build. An owner request for something
+  that needs a build (TypeScript, Tailwind) starts it, but because the switch
+  changes how Pages is sourced, confirm once in one line that it means a CI
+  build and Actions-source Pages, then record the yes. Raise it only when the
+  need is concrete; never as a setup question.
 - **Application and UI frameworks stay rejected either way** (below). An
   opted-in project's deploy is no longer idempotent, so W3's retry exception
   does not apply to it.

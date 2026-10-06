@@ -59,9 +59,11 @@ directive's stack, plain HTML + JS with no framework and no build
 `Build:` bullet under *Project Overview* in the project's `CLAUDE.md` records
 the opt-in, with its need and the owner's sign-off; read it there rather than
 asking again. No `Build:` bullet means no build. If the owner asks for a
-build-needing choice in this session (TypeScript, say), that request is the
-sign-off: record it on that bullet, then plan on it. A plan that needs a build
-nobody asked for puts the need to the owner first. Application and UI
+build-needing choice in this session (TypeScript, say), confirm once that it
+means a CI build and Actions-source Pages, record the yes on that bullet, and
+plan the switch's obligations with it: the deploy workflow, the monitor's
+`workflow_run` arm, and removing `pages-retry.yml` (`global.md` → *Hosting & Deployment*).
+A plan that needs a build nobody asked for puts the need to the owner first. Application and UI
 frameworks stay out either way: a spec that asks for one (React, Vue) is
 escalated to the owner, not planned. Reference back to the spec's requirements;
 do not introduce scope the spec didn't ask for.

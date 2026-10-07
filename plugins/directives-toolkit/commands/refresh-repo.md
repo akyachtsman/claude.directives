@@ -709,9 +709,8 @@ What is compared, delta or not:
   every `permissions.allow` entry (local `allow`, `ask` or `deny` all count,
   since a stricter local choice is still a choice), every `permissions.ask`
   entry (local `ask` or `deny`), every `permissions.deny` entry (local `deny`),
-  every `enabledPlugins` key at the template's value, and every
-  `extraKnownMarketplaces` key. The `SessionStart` row is Phase 1.5's. Local
-  extras are never compared. A project that deliberately leaves an entry out
+  and every `enabledPlugins` and `extraKnownMarketplaces` key at the template's
+  value. The `SessionStart` row is Phase 1.5's. Local extras are never compared. A project that deliberately leaves an entry out
   records why, keyed by the entry itself:
 
   ```bash
@@ -722,7 +721,9 @@ What is compared, delta or not:
 
   An entry's text IS its content, so the decline needs no blob: it holds while
   the template carries that exact entry, and matches nothing once the entry is
-  changed or dropped. A missing local `.claude/settings.json` is reported, not
+  changed or dropped. A keyed entry is printed, and declined, as `key=<value as
+  JSON>` (`frontend-design@claude-code-plugins=true`), so a decline made against
+  one value does not cover the next (Codex, #404). A missing local `.claude/settings.json` is reported, not
   compared; an unreadable one refuses the stamp.
 
 An absent path is required where the skip rule makes it so: a dependency above,
@@ -928,10 +929,10 @@ DEPS
           | {s: ("permissions." + $r.key), e: $e} ),
         ( ($t.enabledPlugins // {}) | to_entries[] as $p
           | select(($l.enabledPlugins // {})[$p.key] != $p.value)
-          | {s: "enabledPlugins", e: $p.key} ),
-        ( ($t.extraKnownMarketplaces // {}) | keys[] as $m
-          | select(($l.extraKnownMarketplaces // {}) | has($m) | not)
-          | {s: "extraKnownMarketplaces", e: $m} )
+          | {s: "enabledPlugins", e: "\($p.key)=\($p.value | tojson)"} ),
+        ( ($t.extraKnownMarketplaces // {}) | to_entries[] as $m
+          | select(($l.extraKnownMarketplaces // {})[$m.key] != $m.value)
+          | {s: "extraKnownMarketplaces", e: "\($m.key)=\($m.value | tojson)"} )
       | . as $x | ($d[$x.s][$x.e] // "") as $why
       | if ($why | type) == "string" and ($why | test("\\S")) then "KEPT\t\($x.s)\t\($x.e)\t\($why | gsub("[\t\n\r]"; " "))"
         else "MISSING\t\($x.s)\t\($x.e)" end' .claude/settings.json); then

@@ -289,9 +289,12 @@ runs:
         fi
         "$bin" "$SERVER_ROOT" -p 8080 --silent &
         pid=$!
-        for i in $(seq 1 30); do
+        # An ELAPSED deadline, not a count of polls: each probe may spend its own
+        # --max-time, so 30 polls could take far longer than 30s (Codex, #405).
+        start=$SECONDS
+        while [ $((SECONDS - start)) -lt 30 ]; do
           if curl -sf --max-time 2 -o /dev/null http://localhost:8080/; then
-            echo "Local server answered on :8080 after ${i}s."
+            echo "Local server answered on :8080 after $((SECONDS - start))s."
             exit 0
           fi
           if ! kill -0 "$pid" 2>/dev/null; then

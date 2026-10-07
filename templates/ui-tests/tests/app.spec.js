@@ -2621,7 +2621,7 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
         triggerCap: TRIGGER_CAP,
         triggersConsidered: TRIGGER_CAP,
         of: triggerTotal,
-        note: `Only the first ${TRIGGER_CAP} of ${triggerTotal} triggers were checked for overlay dismissal. The rest are a coverage gap, not a dismisser defect.`,
+        note: `Only the first ${TRIGGER_CAP} of ${triggerTotal} triggers were considered (a hidden or navigating one among them is skipped, not checked); triggers beyond them were never reached. A coverage gap, not a dismisser defect.`,
       }, null, 2),
       contentType: 'application/json',
     });

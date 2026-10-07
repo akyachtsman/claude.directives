@@ -73,10 +73,11 @@ A `docs/…` path in these directives resolves against claude.directives:
 - **Never unsubscribe from your own PR.** The harness drops the subscription
   itself when the PR merges or closes; `unsubscribe_pr_activity` is for a PR you
   were asked to stop watching, not for one you are driving.
-- **Codex is the required PR reviewer (owner ruling, 2026-10-07).** Every PR
-  merges on a clean Codex verdict on its head, or on the fallback reviewer's
-  when Codex cannot review (below); the rest of this section is how. Replacing
-  Codex is an owner decision.
+- **Codex is the required PR reviewer (owner ruling, 2026-10-07).** This names
+  the reviewer; it does not restate the gate. What counts as its verdict, every
+  exit included (the reaction ladder, and the fallback reviewer when Codex
+  cannot review), is the verdict gate below. Replacing Codex is an owner
+  decision.
 - A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
   apply the fix, then request another review pass (next bullet). Check the PR's
   labels on GitHub before merging.

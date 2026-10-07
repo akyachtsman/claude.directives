@@ -53,10 +53,26 @@ added a round trip.)
 
 ## Phase 2 — plan  (`/sdd-loop plan <feature>`)
 Now HOW. Write `specs/<slug>/plan.md`: tech stack, architecture, data shapes,
-key decisions and their trade-offs. Must honor the constitution — default to
-the global directive's stack (plain HTML + JS, no frameworks/build) unless the
-user explicitly chose otherwise here. Reference back to the spec's requirements;
-do not introduce scope the spec didn't ask for.
+key decisions and their trade-offs. Must honor the constitution: the global
+directive's stack, plain HTML + JS with no framework and no build
+(`global.md` → *Hosting & Deployment*). The CI-build opt-in is **not open
+yet** (same section, until claude.directives#402 lands), and that gate is
+unconditional: **no plan plans on a build**, even where the project's `CLAUDE.md`
+already records one on its `Build:` bullet. Raise the need, or the recorded
+opt-in, with the owner instead. Once the opt-in opens, a build is allowed only
+when that `Build:` bullet under *Project Overview* records it, with its need and
+the owner's sign-off; read it there rather than asking again, and treat a
+missing bullet as no build. A plan that needs a build the project has not opted
+into then follows the opt-in procedure in `global.md` (confirmation, record, and
+every switch obligation); it is not restated here.
+
+Application and UI frameworks stay out either way: a spec that asks for one
+(React, Vue) is not planned. Raise it per
+`global.md` → *A Knowing Deviation Is an Escalation*: quote the spec and the
+ruling, ask which stands, record the answer.
+
+Reference back to the spec's requirements; do not introduce scope the spec
+didn't ask for.
 
 **Build to the brief's ambition bar — don't reflexively minimize.** Honor the
 brief's **Ambition & references** and the project's established look (its

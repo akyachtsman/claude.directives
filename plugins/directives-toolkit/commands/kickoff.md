@@ -30,7 +30,8 @@ Execute in order:
    - **Explicit non-goals (MVP)** — what's out of scope for v1
 
    **Deployment is fixed, so it is not on that list:** GitHub Pages, plain
-   HTML/CSS/JS, no build. That still covers dynamic apps — auth and per-user data
+   HTML/CSS/JS, no build (a CI build is a later per-project opt-in, never a
+   kickoff question). That still covers dynamic apps — auth and per-user data
    via client-side Supabase + RLS, and server-side work (a secret at request time,
    rate limiting) via a Supabase Edge Function. There is no tier to choose
    (`global.md` → *Hosting & Deployment*). State it if the user asks; never put

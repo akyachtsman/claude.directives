@@ -17,15 +17,17 @@ A `docs/…` path in these directives resolves against claude.directives:
 - Follow design.md's universal craft rules (cross-platform, accessibility,
   motion, copy); each project's *look* is its own, established via
   `/design-intake` — there is no shared company theme
-- Default stack: plain HTML + CSS + vanilla JS with **no *local* build**.
-  Development is browser-only (no terminal), so nothing may require a build on
-  your machine. This is a **dev-environment** rule, not a deployment ceiling.
-  Browser-only is also a fact about the OWNER, not only about the stack — see
+- Default stack: plain HTML + CSS + vanilla JS with **no build** — what is
+  committed is what is served. *Hosting & Deployment* owns this rule and its one
+  opt-in (a CI build, per project, with the owner's sign-off; not open yet). A session's own
+  terminal does not lift it: the rule is about the site having one source of
+  truth, not about who can run npm. Browser-only is a fact about the OWNER — see
   → *A Blocked Command Is Not a Blocked Capability* for what that means for
   what you may ask him to do.
-- **No framework tier.** Don't add a framework or a build step; a static site
-  doesn't need one, and adopting one was evaluated and rejected
-  (→ *Hosting & Deployment*).
+- **No framework tier.** Don't add an application or UI framework (React, Vue,
+  Next.js and the like); adopting one was evaluated and rejected
+  (→ *Hosting & Deployment*), and the build opt-in does not reopen it. A CSS
+  utility library compiled in CI (Tailwind, say) is not such a framework.
 - All code works responsively on every target platform — laptop, tablet (iPad),
   phone (iPhone/Android)
 - Use `textContent` for all DOM text insertion — never `innerHTML` with backend
@@ -278,9 +280,70 @@ Two different scopes — never conflate them:
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
   the same verification at session start.
 
-## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26)
+## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26, 2026-10-06)
 **GitHub Pages is the deployment target.** Plain HTML/CSS/JS, dynamic via
-client-side Supabase + RLS. No build step.
+client-side Supabase + RLS.
+
+**No build by default; a CI build is a per-project opt-in (owner ruling,
+2026-10-06).**
+- **Why no build by default:** what is committed is what is served. Any file
+  can be read or edited anywhere, the owner's browser included, and is correct
+  the moment it lands; no compile or build stage stands between a merge and the
+  live site. (A deploy can still fail, GitHub's own or a filtered-copy workflow;
+  the Pages monitoring below watches that.) An opted-in project gives that up knowingly, and its CI
+  watches the build.
+- **A session never builds the served site and commits the output**, terminal
+  or not. Generated files committed beside their source drift from it, and an
+  edit to either is silently lost on the next build. The exception is a
+  generated file that CI itself regenerates and compares with `--check` on every
+  run, so it cannot drift unseen; nothing else qualifies.
+- **The opt-in:** when a project has a concrete need a build serves —
+  TypeScript, a CSS utility library such as Tailwind, bundled npm libraries,
+  minification, image optimisation — it may build **in CI**: a GitHub Actions
+  workflow that builds on push and deploys through Actions-source Pages. A
+  build therefore **forces Actions-source**, whatever the sourcing test below
+  says. Where that test also requires a filtered copy, the build runs first,
+  the deny-list filter then runs over its output, and the 200/404 assertions
+  stay in the deploy workflow. **One rule produces every obligation of the
+  switch, and it outranks any list:** whatever tests, serves or watches the site
+  must act on the **build output**, and whatever decides whether to run must
+  count **build inputs** as changes. Applied to today's workflows, in the same
+  change:
+  - **PR QA (`qa.yml`)** runs the same build, serves the build's output
+    directory instead of the repo root, and adds the build inputs (sources,
+    build config) to `UI_PATHS`. Otherwise a TypeScript- or Tailwind-only PR
+    skips the UI suite, or tests the unbuilt tree.
+  - **Live QA and the monitor:** add the deploy workflow's exact `name:` to
+    `qa-live.yml`'s `workflow_run.workflows`, and a `workflow_run` arm to
+    `pages-monitor.yml`.
+  - **The retry:** delete `pages-retry.yml` and its `REQUIRED` entry (W3's
+    exception is closed to a build), and build the retry into the deploy
+    workflow.
+
+  **Not open yet (owner ruling, 2026-10-06).** No project may take the opt-in
+  until [claude.directives#402](https://github.com/akyachtsman/claude.directives/issues/402) lands. Today's toolkit
+  still tests, serves, watches and recovers the site as committed (the
+  `ui-tester` agent serves the repo root; the `update-pages` stuck-run recovery
+  can switch to branch-source), so an opted-in project would be tested unbuilt
+  and could be recovered into publishing its unbuilt tree. Until then a concrete
+  need is raised with the owner and on that issue; the project does not switch.
+  The gate binds every project: a `Build:` bullet recorded before #402 lands
+  does not open it, and nothing plans on, adds or runs a build on its strength.
+  Once it opens, the first project that opts in checks every workflow it ships
+  against the rule above and reports any gap upstream. The
+  snippets: `/new-repo` step 5 and `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*. It needs the
+  owner's sign-off, recorded with the need on the `Build:` bullet under
+  *Project Overview* in the project's own `CLAUDE.md`; a missing bullet means
+  none is recorded, so the project has no build. An owner request for something
+  that needs a build (TypeScript, Tailwind) starts it, but because the switch
+  changes how Pages is sourced, confirm once in one line that it means a CI
+  build and Actions-source Pages, then record the yes. Raise it only when the
+  need is concrete; never as a setup question. A Tailwind opt-in may compile
+  utilities on top of `tokens.css` and `components.css`; replacing those files
+  with a utility system is a further owner decision (`design.md` → *Stack*).
+- **Application and UI frameworks stay rejected either way** (below). An
+  opted-in project's deploy is no longer idempotent, so W3's retry exception
+  does not apply to it.
 
 ⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one.**
 Branch-source publishes the **whole repository** at the public URL. Choose by
@@ -291,7 +354,8 @@ this test, in order:
    problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
    rather than the tree: rsync the repo minus a deny-list, upload that artifact,
    deploy it.
-2. **Otherwise** → branch-source is fine and the push is the deploy.
+2. **Otherwise** → branch-source is fine and the push is the deploy, unless the
+   project has opted into a CI build, which forces Actions-source (above).
 
 - **The test is "must not be public", NOT "is internal-facing".** A file can be
   internal in purpose and harmless in public, and a repo whose internal files
@@ -370,7 +434,7 @@ had. Do not re-propose it, and do not scaffold toward it.
 - **Needing a server is not a reason to reach for one.** The gap a framework
   tier would have filled is server-side execution — a real secret at request
   time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth Pattern*). **Supabase Edge Functions already cover that**, with no framework,
-  no build step and no new platform — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend Changes*).
+  no build and no new platform — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend Changes*).
 - **If a project ever genuinely outgrows Pages**, the owner's stated direction
   is **Cloudflare** — response time, caching, security. That names a direction,
   not a decision: it still needs explicit sign-off, against a real requirement.

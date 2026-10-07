@@ -17,6 +17,11 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 - **Project name:** [fill in]
 - **Live URL:** https://akyachtsman.github.io/[repo-name]/
 - **Stack:** [fill in]
+- **Build:** none
+  <!-- The default, and the only value while the CI-build opt-in is closed
+  (until claude.directives#402 lands). Once it opens, an opted-in build replaces
+  "none" with the need it serves and the owner's sign-off with its date
+  (global.md, Hosting & Deployment). -->
 - **Branch policy:** Develop on a `claude/<name>` feature branch; PRs target `main`
 
 ## Design

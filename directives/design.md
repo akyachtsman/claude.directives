@@ -41,18 +41,23 @@ project's `tokens.css`/`components.css`**, never invent a parallel system.
 Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack
-Plain HTML + CSS + vanilla JS on GitHub Pages, no *local* build — set by
-`global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21), which owns it.
+Plain HTML + CSS + vanilla JS on GitHub Pages, no build by default (a CI build
+is a per-project opt-in with the owner's sign-off, not open yet) — set by
+`global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21; build rule
+2026-10-06), which owns it.
 
 **Tokens are plain CSS custom properties; components are plain CSS.** Current
 practice in every project, and **not a stamped ruling** — it has never been
-compared against a utility-class system delivered without a build. The Hosting
-ruling settles something narrower: no React, no build step, no local server, no
-new platform. That is why frameworked generators are rejected
+compared against a utility-class system (which, needing a build, would come
+through the CI-build opt-in). The Hosting ruling settles something narrower: no
+React, no build by default, no local server, no new platform. That is why
+frameworked generators are rejected
 (`docs/guides/dev-pipeline.md` → AI UI generators; `/design-intake` → Figma
 codegen MCPs), but it does not decide the token mechanism. Take an alternative to
 the owner rather than adopting one — and do not cite this line as authority for
-refusing one.
+refusing one. The CI-build opt-in alone, once it opens, lets a utility library such as
+Tailwind compile on top of `tokens.css` and `components.css`; replacing those
+files with it is a further owner decision.
 
 File layout:
 ```

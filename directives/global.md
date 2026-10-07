@@ -1080,11 +1080,45 @@ classes and no others:
   `update_trigger`, `delete_trigger`, `fire_trigger`, `list_triggers`).
 - **Read-only tools** that answer a question and change nothing:
   `list_sessions`, `get_session`, `get_trigger`, `read_documentation`,
-  `list_repos`, `list_environments`, and the
-  GitHub MCP read surface (`pull_request_read`, `list_issues`, `issue_read`,
-  `get_file_contents`, the `search_*` family, …). The test for admission is not
-  "is it safe" but **"can it change anything a person would want to be asked
-  about"** — if no, it belongs here; if yes or unclear, it does not.
+  `list_repos`, `list_environments`, and the GitHub MCP getters whose content
+  only collaborators write (branches, tags, releases, labels, collaborators,
+  teams, issue types and fields, `get_me`).
+
+The test for admission is two questions, and a tool must pass both:
+1. not "is it safe" but **"can it change anything a person would want to be
+   asked about"** — if yes or unclear, it does not belong here;
+2. **"does it return content an outsider can write?"** (owner ruling,
+   2026-10-07, from claude.prop's finding). On a public repository anyone can
+   write issue and PR bodies and comments, a PR branch's files and commit
+   messages, and what a PR's CI prints, and search reaches beyond the repo. A
+   read that hands that text to an agent removes the prompt standing before
+   text an attacker may have written. Read-only is not the same as safe when
+   the author is untrusted. If yes, it does not belong here.
+
+The template is what a **public** repository carries, so it holds only tools
+that pass both. A **private** repository, where every writer is a
+collaborator, may add the outsider-content reads to its own `permissions.allow`:
+`get_file_contents`, `list_commits`, `get_commit`, `list_pull_requests`,
+`pull_request_read`, `list_issues`, `issue_read`, `get_check_run`,
+`get_job_logs`, `actions_get` and `actions_list`, each as
+`mcp__github__<name>`. `/refresh-repo` asks for a reason for every allow entry
+the template does not carry, so record "private repository" for each once. A
+repository that goes public removes them in the same change.
+
+**The `search_*` family stays gated everywhere, private repositories included**
+(owner ruling, 2026-10-07, from Codex on #404). A search is not bound to the
+repository a session works in: an unqualified query spans all of GitHub, so
+what it returns can be written by anyone whatever this repository's visibility.
+The other GitHub reads take the repository as an argument too. In a web session
+the GitHub access is scoped to the session's own repositories, so a call aimed
+elsewhere is refused. A local session has no such scope, and that leftover risk
+is accepted and recorded in `docs/internal/accepted-residuals.md`.
+
+A project's file holds every template entry: `/refresh-repo` keeps its stamp
+back while one is missing. Leaving an entry out deviates from this ruling, so it
+is raised with the owner (→ *A Knowing Deviation Is an Escalation*) and, once
+the owner agrees, recorded with its reason in `refresh_declined`, which that
+check reads.
 
 Remote-server entries carry BOTH server-name spellings, since the prefix differs
 between session surfaces and permission rules match names exactly. GitHub tools

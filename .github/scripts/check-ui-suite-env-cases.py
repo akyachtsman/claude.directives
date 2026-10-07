@@ -865,7 +865,7 @@ def main():
              '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0, ': none read (read from'),
             ("an exempted read is reported on its own line",
              '{"RUNNER_ONLY_VAR": "set by the self-hosted runner image"}', [], 0,
-             "spec env exempted, NOT wired (each arrives another way, per its recorded reason): RUNNER_ONLY_VAR"),
+             "spec env exempted, NOT wired (per its recorded reason): RUNNER_ONLY_VAR"),
             ("an exemption with an empty reason — refused, never read as one",
              '{"RUNNER_ONLY_VAR": "  "}', [], 1, "RUNNER_ONLY_VAR has no reason"),
             ("an exemption whose reason is not a string — refused",

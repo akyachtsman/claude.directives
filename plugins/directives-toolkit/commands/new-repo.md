@@ -183,7 +183,10 @@ Execute in order:
    `mcp__claude-code-remote__*`) and permission rules match exactly, so the
    template lists each tool in BOTH spellings — keep both. Riskier remote
    tools — attaching repos, creating or archiving sessions — must keep
-   prompting; do not add them. The guard hooks ship inside the plugin.
+   prompting; do not add them. If the new repository is **private**, also add
+   the outsider-content GitHub reads that `global.md` → *Scheduling Tools Never Prompt*
+   lists for private repositories; a public one never carries them. The guard
+   hooks ship inside the plugin.
 
    The settings template also registers a `SessionStart` hook, so copy
    `claude.directives/templates/claude-hooks/session-start.sh` to

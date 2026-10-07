@@ -46,7 +46,7 @@ Options:
     SPEC...             explicit spec/config files instead of discovering the kit
     --kit-dir DIR       the Playwright kit to discover (default .github/scripts/ui-tests)
     --exempt-file FILE  the project's exemptions (default .github/ui-suite-env-exempt.json,
-                        read only if present): {"NAME": "how it arrives without an input"}
+                        read only if present): {"NAME": "why it needs no input"}
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -145,9 +145,13 @@ if not SPEC_FILES:
     sys.exit(f"CANNOT CHECK: no JS/TS files found under {KIT_DIR} (run from the repo root)")
 # Variables a spec may read WITHOUT the composite wiring them, as {name: reason}.
 # Empty on purpose: every variable the shipped kit reads today is a per-project
-# value that only an input can carry. Add one only for something the RUNNER
-# itself sets (e.g. `CI`, `GITHUB_*`), and give the reason -- an entry is a claim
-# that the value arrives without this file, and nothing here can check it.
+# value that only an input can carry. An entry is one of two kinds, and its
+# reason says which (claude.prop, 2026-10-06):
+# - a name something OUTSIDE the composite sets: the runner (`CI`, `GITHUB_*`)
+#   or a self-hosted runner image;
+# - a name deliberately NEVER set in CI, because its reader handles it unset (a
+#   local-sandbox hatch such as a browser-executable override).
+# Either way the entry is a claim nothing here can check.
 ENV_EXEMPT = {}
 # A PROJECT extends it in its own file, never by editing this one: an edited copy
 # is drift /refresh-repo has to stop on, and the reason would be lost the next
@@ -168,8 +172,9 @@ if EXEMPT_FILE is not None or os.path.exists(_EXEMPT_PATH):
         if not re.fullmatch(r"[A-Za-z_]\w*", _name):
             sys.exit(f"CANNOT CHECK: {_EXEMPT_PATH}: {_name!r} is not an environment variable name")
         if not isinstance(_reason, str) or not _reason.strip():
-            sys.exit(f"CANNOT CHECK: {_EXEMPT_PATH}: {_name} has no reason -- say how it"
-                     " arrives without an input, or wire it through one")
+            sys.exit(f"CANNOT CHECK: {_EXEMPT_PATH}: {_name} has no reason -- say why it"
+                     " needs no input (set outside the composite, or never set in CI"
+                     " because its reader handles unset), or wire it through one")
     ENV_EXEMPT = {**ENV_EXEMPT, **_project_exempt}
 # `process.<prop>` forms accepted besides `process.env.*`: a CLOSED list of
 # properties that cannot hand back the process object (so cannot alias `env`).
@@ -528,7 +533,8 @@ def check_spec_env(doc, run_env, problems):
                 f'{name} is read by {where} but "{RUN_STEP}" does not set it'
                 + "\n    In CI it is then always unset, so whatever the spec does with it is"
                 + "\n    unreachable. Add an input and pass it into the run step's env, or"
-                + "\n    list it in ENV_EXEMPT with the reason it arrives another way (#320)."
+                + "\n    list it in ENV_EXEMPT with the reason it needs none: set outside the"
+                + "\n    composite, or never set in CI because its reader handles unset (#320)."
             )
             continue
         m = re.fullmatch(r"\$\{\{\s*inputs\.([\w-]+)\s*\}\}", str(value))
@@ -832,7 +838,7 @@ def main():
     )
     if exempted:
         print(
-            "  spec env exempted, NOT wired (each arrives another way, per its recorded reason): "
+            "  spec env exempted, NOT wired (per its recorded reason): "
             + ", ".join(exempted)
         )
     print(

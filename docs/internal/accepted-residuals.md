@@ -36,6 +36,27 @@ the GitHub MCP read surface (`pull_request_read`, `list_issues`, `issue_read`,
 getters). The admission test is **"can it change anything a person would want to
 be asked about"** — not "is it safe", which is a judgement call that drifts.
 
+**Narrowed 2026-10-07 (owner ruling, from claude.prop's finding).** That test
+models a call's side effects, not whether what it returns can be trusted. On a
+public repository the issue and PR reads, file and commit reads at any ref, CI
+run and log reads, and the `search_*` family return text outsiders write, so
+auto-allowing them removed the prompt before an agent read attacker-writable
+text. A second question now applies ("does it return content an outsider can
+write?"), the template keeps only reads whose content collaborators alone
+write, and a private repository may add the rest locally, except `search_*`,
+which spans all of GitHub and stays gated everywhere. The cost is accepted: on
+a public repository those reads prompt again.
+
+**Accepted residual (owner, 2026-10-07; Codex on #404).** Every GitHub MCP read
+takes the repository as a caller-supplied argument, so an allowed getter (a
+release or tag body, a label, a file in a private repository's allowed reads)
+can be pointed at a repository an attacker controls. In a web session the
+GitHub access is scoped to the session's repositories and such a call is
+refused; a local session has no such scope. The owner chose to keep the
+repository-targeted reads allowed rather than gate every GitHub read: steering
+an agent to an attacker's repository normally takes text the agent already read
+from an outsider, and those reads are now the ones that prompt.
+
 Refused, on the owner's own instruction and consistent with the 2026-07-12
 ruling: `mcp__Supabase__deploy_edge_function` and any other live-backend deploy
 (also given an explicit `permissions.ask` entry, belt-and-braces, since its gate

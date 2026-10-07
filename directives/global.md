@@ -236,6 +236,11 @@ styles/          ← the committed design contract (tokens.css + components.css)
     ui-tests/
 ```
 
+`codex-monitor.yml` is **required in every repo (owner ruling, 2026-10-07)**: it
+turns a flagged Codex round into the `codex-flagged` merge blocker that
+`git.md` → *PR Lifecycle* gates on, so a repo without it merges past Codex's
+findings unseen.
+
 ## Backend
 - All backend/data rules — provider, connection config, keys, RLS, MCP setup —
   are governed by `data.md`, the single source of truth for the backend. Read it
@@ -1043,7 +1048,9 @@ fetched into `.claude/`.
   installs.
 - **CLI / desktop:** run `scripts/install-toolkit.sh` (the same source the web
   setup script curls). The toolkit alone is NOT enough — `.claude/settings.json`
-  also enables the official review/security/design plugins it installs alongside.
+  also enables the official review/security/design plugins it installs alongside
+  (owner ruling, 2026-10-07: Anthropic-maintained over self-maintained;
+  `test.md` → *QA/data agents — ship in the directives-toolkit plugin*).
 - Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
   `enabledPlugins` (copy `templates/claude-settings.json`).
 

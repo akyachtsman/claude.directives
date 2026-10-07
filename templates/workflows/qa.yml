@@ -65,8 +65,9 @@ jobs:
       # ── Contrast guardrail ───────────────────────────────────────────────────
       # WCAG AA check against this project's design tokens — styles/tokens.css or
       # css/tokens.css by default; elsewhere, append `--tokens <file>` (repeat it
-      # per theme file). Exits with a notice (no failure) until /design-intake
-      # creates tokens.css.
+      # per theme file). With no stylesheet at all it exits with a notice (no
+      # failure) until /design-intake creates tokens.css; once the project has
+      # any CSS, a missing tokens file FAILS the check.
       - name: Contrast guardrail (WCAG AA)
         run: node .github/scripts/check-contrast.js
 
@@ -128,15 +129,19 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          # Per-project: paths whose changes warrant a browser run. Includes
-          # js/ and styles/ (a source-only change must not skip the browser
-          # job) and .github/actions/ (changes to the composites are exercised
-          # pre-merge).
+          # Per-project: paths whose changes warrant a browser run. Matches any
+          # .css, .js or .mjs file by extension, wherever it lives, plus js/ and
+          # styles/ (a source-only change must not skip the browser job): a
+          # css/app.css or a root-level app.js is a layout the kit supports
+          # (check-contrast.js looks in css/ by default), and a matcher listing
+          # only js/ and styles/ let such a PR set ui=false (audit, 2026-10-06).
+          # .github/actions/ is included so changes to the composites are
+          # exercised pre-merge.
           # ANY deployed .html is an entry point, nested ones included: APP_PAGES
           # advertises paths like vendor/console.html, and a matcher anchored to
           # root-level files let a PR touching only that page set ui=false and
           # skip the very ENTRY gate the page exists for.
-          UI_PATHS: '(\.html$|^js/|^styles/|^\.github/actions/|^\.github/scripts/ui-tests/|^\.github/workflows/qa\.yml$)'
+          UI_PATHS: '(\.(html|css|m?js)$|^js/|^styles/|^\.github/actions/|^\.github/scripts/ui-tests/|^\.github/workflows/qa\.yml$)'
         run: |
           # This job gates the LOCAL suite, which serves the repo root as static
           # files, so it needs a static entry point. Enabling it for a repo with

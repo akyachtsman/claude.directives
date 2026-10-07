@@ -2517,7 +2517,24 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
   };
 
   const findings = [];
-  const triggerCount = Math.min(await page.locator(TRIGGERS).count(), 30);
+  // The trigger cap is reported, not silent: overlays behind trigger 31 or
+  // later are never checked, so a page with more triggers says so in the same
+  // `dismiss-budget` attachment the reset cap below writes (test.md:
+  // "Dismissers are proven, not assumed"; audit, 2026-10-06).
+  const TRIGGER_CAP = 30;
+  const triggerTotal = await page.locator(TRIGGERS).count();
+  const triggerCount = Math.min(triggerTotal, TRIGGER_CAP);
+  if (triggerTotal > TRIGGER_CAP) {
+    test.info().attach('dismiss-budget', {
+      body: JSON.stringify({
+        triggerCap: TRIGGER_CAP,
+        triggersConsidered: TRIGGER_CAP,
+        of: triggerTotal,
+        note: `Only the first ${TRIGGER_CAP} of ${triggerTotal} triggers were checked for overlay dismissal. The rest are a coverage gap, not a dismisser defect.`,
+      }, null, 2),
+      contentType: 'application/json',
+    });
+  }
   // Cap the WASTED work, not the useful work. A navigating trigger is not an
   // overlay trigger, so it contributes nothing to this scenario's assertions —
   // the reset it forces is pure cost. Capping resets therefore loses no S9

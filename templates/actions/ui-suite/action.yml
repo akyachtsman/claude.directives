@@ -271,8 +271,35 @@ runs:
         TESTS_DIR: ${{ inputs.tests-dir }}
         SERVER_ROOT: ${{ inputs.server-root }}
       run: |
-        "./$TESTS_DIR/node_modules/.bin/http-server" "$SERVER_ROOT" -p 8080 --silent &
-        sleep 2
+        # Wait for the server to ANSWER rather than for a fixed delay: a slow start
+        # or a bind failure otherwise surfaces as every scenario failing with
+        # connection refused, not as a server error (audit, 2026-10-06).
+        case "$TESTS_DIR" in
+          /*) bin="$TESTS_DIR/node_modules/.bin/http-server" ;;
+          *) bin="./$TESTS_DIR/node_modules/.bin/http-server" ;;
+        esac
+        # Something ALREADY answering on :8080 would pass the readiness poll below
+        # while this server dies on EADDRINUSE, and the suite would test whatever
+        # that is. Refuse a busy port up front.
+        if curl -s -o /dev/null http://localhost:8080/; then
+          echo "::error::port 8080 is already in use, so this run cannot start its own server there."
+          exit 1
+        fi
+        "$bin" "$SERVER_ROOT" -p 8080 --silent &
+        pid=$!
+        for i in $(seq 1 30); do
+          if curl -sf -o /dev/null http://localhost:8080/; then
+            echo "Local server answered on :8080 after ${i}s."
+            exit 0
+          fi
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "::error::http-server exited before it answered: is $bin installed (tests-dir), and can it bind :8080?"
+            exit 1
+          fi
+          sleep 1
+        done
+        echo "::error::the local server did not answer on http://localhost:8080/ within 30s."
+        exit 1
 
     # IMMEDIATELY BEFORE THE RUN, and after the local server is up. This step
     # evaluates the config, and the run below evaluates it again; anything that

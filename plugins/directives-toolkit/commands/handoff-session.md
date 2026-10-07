@@ -62,10 +62,13 @@ A handoff over a messy tree is worthless:
 - Drive every open PR to a terminal state — merged or closed, nothing dangling.
 - Branch hygiene — **verify against the remote, never assert from local state**:
   `git ls-remote --heads origin` (local `git branch` says nothing about merged
-  refs still on the remote). Delete every merged/dead branch you can.
-  With **Settings → General → "Automatically delete head branches"** enabled
-  (the standard — recommend enabling it wherever it's off), merged branches
-  self-delete and this step is a no-op.
+  refs still on the remote). Unmerged work on a branch is yours to finish: push
+  it and drive its PR to a terminal state. A merged branch that is still there is
+  **not** yours to delete: a session's push scope covers its designated branch
+  only, so branch-delete pushes are refused, and `git.md` → *Repo-settings preflight*
+  says not to try. With **Settings → General → "Automatically delete head
+  branches"** enabled (the standard), merged branches self-delete; where it is
+  off, the deliverable is that preflight's one warning with the settings path.
 
 ## 2. Write the handoff
 **Deliver it as one self-contained, fenced block the user can paste verbatim
@@ -142,17 +145,17 @@ handoff.
 
 ## 3. Leave the remote clean (hard exit gate)
 Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` as the last act
-before handing off. Every stray branch is **this** session's work to finish, not
-a line item for the next one — the block never carries a "branches to delete"
-list, because a branch that still exists means §1 was not completed.
+before handing off. A branch carrying unmerged work is **this** session's to
+finish, not a line item for the next one: the block never carries a "branches to
+delete" list.
 
-If one genuinely cannot be removed (some proxied git remotes refuse branch
-deletion outright), that is a request for the **human, now** — put it in the
-chat reply, outside the block, with the reliable removal path: *its merged PR →
-"Delete branch"*, or the repo's **`/branches/all`** page (the plain Branches
-overview often omits merged branches; don't send them there). Never defer it
-into the handoff: the next session cannot action it either, so it would just be
-copied forward until someone happens to read it.
+A merged branch that is still there is a request for the **human, now**, since
+a session cannot delete it (§1). Put it in the chat reply, outside the block,
+with the reliable removal path: *its merged PR → "Delete branch"*, or the repo's
+**`/branches/all`** page (the plain Branches overview often omits merged
+branches; don't send them there), plus the auto-delete setting if it is off.
+Never defer it into the handoff: the next session cannot action it either, so
+it would just be copied forward until someone happens to read it.
 
 The same rule generalises — **anything only the human can do goes in the reply,
 not the block.** The block addresses the next session; if the next session cannot

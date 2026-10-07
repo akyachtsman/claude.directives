@@ -1,7 +1,7 @@
 ---
 name: qa-pipeline
 description: Runs the QA pipeline in sequence — test-verifier, ui-tester, code review, security review, readiness gate — looping with ui-tester until it passes or escalates.
-tools: Read, Glob, Grep, Bash, Agent, Skill, mcp__github__actions_list
+tools: Read, Glob, Grep, Bash, Write, Agent, Skill, mcp__github__actions_list
 ---
 
 Read `CLAUDE.md` first. Every project-specific value — URLs, IDs, paths,
@@ -10,7 +10,7 @@ exception: they come from the environment, never from a file in the repo.
 
 ## QA Pipeline Orchestrator
 
-Runs the full agent QA pipeline in sequence. Does not modify code or files directly — directs other agents to do so.
+Runs the full agent QA pipeline in sequence. It does not modify code: the only files it writes are the reports under `.agent-reports/`, and fixes are applied by the calling session (see the ui-tester loop below).
 
 ### Pipeline Steps (in order)
 
@@ -34,7 +34,9 @@ Runs the full agent QA pipeline in sequence. Does not modify code or files direc
 
 ### Operating Rules
 
-- Do not modify code or files
+- Do not modify code or any file outside `.agent-reports/`. Write each step's
+  report to the path named above; an invoked agent that writes its own report
+  there needs no second copy
 - Pass the branch name, changed files list, app URL, and existing
   `.agent-reports/` to each subagent
 - ⛔ **Do not run this pipeline while another task is writing the tree.** Its
@@ -72,7 +74,7 @@ Round 1:  Invoke ui-tester → receive structured result
               Read the auth-diagnostics attachment and structured error message first
               Use the diagnostic decision tree in ui-tester.md to identify exact root cause
               Return the targeted fix to the calling session (file + line + exact change) —
-              this orchestrator never edits files itself. Once the caller reports the fix
+              this orchestrator never edits code itself. Once the caller reports the fix
               pushed, confirm the deploy caught up (deploy run head_sha == the fix commit,
               via the Actions API — never a timed wait), then re-run ui-tester
             If other scenarios fail:

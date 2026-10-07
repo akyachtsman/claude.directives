@@ -109,7 +109,10 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      have run: a request rejected before any review began is the exit. Any
      admitted state clears the verdict only with the **fallback reviewer**'s clean review
      of HEAD recorded on the PR (`git.md` → *PR Lifecycle*); without that
-     comment the row stays **Pending**. A
+     comment the row stays **Pending**. In an admitted state WITH that review
+     recorded, the next step is removing the label with that evidence: reporting
+     "request another pass" would keep a mergeable PR Conditional forever, since no
+     pass can succeed. Read the PR before choosing which. A
      reaction-only round is **not** one of these; where a label is still present
      that rule escalates it. **An absent label removes only the label
      blocker.** It is written asynchronously and proves nothing about the head,
@@ -119,10 +122,7 @@ You are the final gate before a pull request or merge. Confirm that the branch i
      otherwise produce Ready for an unreviewed head. Report the label as
      not-a-blocker and leave the verdict to its own evidence. What follows from
      that for the MERGE is the merger's call under `git.md`, not a conclusion
-     this agent draws or restates. There
-     the next step is removal with that evidence, and reporting "request another pass" would keep
-     a mergeable PR Conditional forever, since no pass can succeed. Read the PR
-     before choosing which.
+     this agent draws or restates.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

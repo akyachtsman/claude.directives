@@ -239,10 +239,13 @@ Execute in order:
 9. **Commit and PR.** Commit all scaffolding to the `claude/<name>`
    branch and push. **Ensure the base branch exists first:** if the repo was
    created empty (no README, so `git ls-remote --heads origin main` is empty),
-   establish `main` before opening the PR — create it from an empty root commit
-   (`git commit --allow-empty`) and push it, then rebase the scaffolding branch
-   onto it so the PR shows a clean diff. (Prevention: have the human create the
-   repo with a README per `NEW-REPO-USER-INSTRUCTIONS.md` Step 1.) Then open a
+   stop and ask the human to add a README on GitHub ("Add a README" on the empty
+   repo's page), which creates `main`. Do not push `main` yourself: a session
+   pushes only its designated `claude/` branch (`git.md` → *Repo-settings preflight*),
+   and the toolkit's push gate blocks it. Once `main` exists, rebase the
+   scaffolding branch onto it so the PR shows a clean diff. (Prevention: have the
+   human create the repo with a README per `NEW-REPO-USER-INSTRUCTIONS.md` Step 1.)
+   Then open a
    **draft** PR targeting `main` — its activity is subscribed harness-side, no
    tool call needed (`git.md` → *PR Lifecycle*). Fix
    any CI failures before marking ready — note the `UI Tests` job is **skipped

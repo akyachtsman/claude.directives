@@ -67,6 +67,15 @@ const test = base.extend({
 });
 // <<< render-witness
 
+// Every structured finding this suite records goes through here, so each one is
+// pretty-printed JSON under the same content type.
+function attachJson(name, data) {
+  return test.info().attach(name, {
+    body: JSON.stringify(data, null, 2),
+    contentType: 'application/json',
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CREDENTIAL — environment only
 // ─────────────────────────────────────────────────────────────────────────────
@@ -775,8 +784,7 @@ async function detectAndAuth(page, credential) {
   // about a windowed result dressed as a proven one.
   let credentialSource = null;
   const done = (mechanism) => {
-    if (steps.length) test.info().attach('auth-steps', {
-      body: JSON.stringify({ mechanism, steps }, null, 2), contentType: 'application/json' });
+    if (steps.length) attachJson('auth-steps', { mechanism, steps });
     return { mechanism, credentialSource, viewBefore, snapBefore, steps };
   };
   for (let step = 0; step < AUTH_STEP_CAP; step++) {
@@ -1124,12 +1132,9 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   // PIN and password verdicts stand: their signals are element-kind checks
   // under Playwright's real visibility, which review did not break.
   if (mechanism === 'text-input') {
-    test.info().attach('auth-unverified', {
-      body: JSON.stringify({
-        mechanism,
-        note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
-      }, null, 2),
-      contentType: 'application/json',
+    attachJson('auth-unverified', {
+      mechanism,
+      note: 'Text/access-code attempts are not verified post-attempt: the text-gate heuristic (single visible auth-ish input) fails in both directions as a verdict, so neither its presence nor its absence is treated as proof. If this scenario then measures a rejection screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
     });
     return;
   }
@@ -1161,14 +1166,11 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   // The set is the carrier so the next mechanism of this kind cannot be added
   // to detectAndAuth and forgotten here.
   if (AUTH_INCOMPLETE.has(mechanism)) {
-    test.info().attach('auth-unverified', {
-      body: JSON.stringify({
-        mechanism,
-        note: mechanism === 'no-credential'
-          ? 'An auth gate was on screen, TEST_AUTH_CREDENTIAL is unset, and the form shipped no credential of its own — so nothing was submitted. NO CREDENTIAL WAS ENTERED and nothing is claimed about the app. Set TEST_AUTH_CREDENTIAL, or — if this app\'s login legitimately ships a working credential and a human signs in by clicking the button — check that the prefilled field is a visible, editable input[type=password]: a prefilled TEXT or PIN gate is deliberately NOT read as a credential source, because a non-empty text input cannot be told from a search box with a default query (directives#312).'
-          : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
-      }, null, 2),
-      contentType: 'application/json',
+    attachJson('auth-unverified', {
+      mechanism,
+      note: mechanism === 'no-credential'
+        ? 'An auth gate was on screen, TEST_AUTH_CREDENTIAL is unset, and the form shipped no credential of its own — so nothing was submitted. NO CREDENTIAL WAS ENTERED and nothing is claimed about the app. Set TEST_AUTH_CREDENTIAL, or — if this app\'s login legitimately ships a working credential and a human signs in by clicking the button — check that the prefilled field is a visible, editable input[type=password]: a prefilled TEXT or PIN gate is deliberately NOT read as a credential source, because a non-empty text input cannot be told from a search box with a default query (directives#312).'
+        : 'An identifier-first step was filled and submitted, but no credential step (password, PIN or text) appeared before the settle. NO CREDENTIAL WAS ENTERED. Causes this suite cannot tell apart: a rejected identifier, a passwordless/magic-link login, a credential step that rendered after LOAD_SETTLE_MS, or a submit control that did nothing. Scenarios that need an authenticated view skip on this rather than measuring the login screen. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
     });
     return;
   }
@@ -1191,14 +1193,11 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   const pwNow  = await passwordGateVisible(page);
   if (!pwNow) {
     if (pinNow) {
-      test.info().attach(mechanism === 'pin-keypad' ? 'auth-unverified' : 'auth-second-factor-suspected', {
-        body: JSON.stringify({
-          mechanism,
-          note: mechanism === 'pin-keypad'
-            ? 'PIN-keypad-like signals (>=9 digit buttons plus a dot/pin-class element) are still visible after the PIN attempt. This is EITHER the retained gate (rejected PIN) OR the app\'s own post-login numeric UI — a PIN-gated calculator or dial pad satisfies the same page-wide signals — and the signal cannot associate itself with the attempted gate, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.'
-            : 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
-        }, null, 2),
-        contentType: 'application/json',
+      attachJson(mechanism === 'pin-keypad' ? 'auth-unverified' : 'auth-second-factor-suspected', {
+        mechanism,
+        note: mechanism === 'pin-keypad'
+          ? 'PIN-keypad-like signals (>=9 digit buttons plus a dot/pin-class element) are still visible after the PIN attempt. This is EITHER the retained gate (rejected PIN) OR the app\'s own post-login numeric UI — a PIN-gated calculator or dial pad satisfies the same page-wide signals — and the signal cannot associate itself with the attempted gate, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.'
+          : 'The password attempt cleared the password field, but PIN-keypad-like signals are visible (>=9 digit buttons plus a dot/pin-class element). This is EITHER a second auth factor this suite cannot pass with a single credential, OR ordinary numeric UI (calculator, dial pad) on the post-login view — the signal cannot distinguish the two, so this is a diagnostic rather than a failure. If downstream scenarios then measure a PIN screen, start here. Set TEST_AUTH_SUCCESS_SELECTOR to verify this (directives#379): S2 asserts it after the attempt.',
       });
     }
     return; // no password gate on screen — cleared, still the WINDOW (#302) stated above
@@ -1548,10 +1547,7 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
         ? `rows returned, first field "${firstKey}"`
         : (apiCalls[0]?.status >= 400 ? `non-2xx (${apiCalls[0]?.status})` : 'no rows returned — check query / RLS / auth'),
     };
-    test.info().attach('auth-diagnostics', {
-      body: JSON.stringify(diag, null, 2),
-      contentType: 'application/json',
-    });
+    attachJson('auth-diagnostics', diag);
     return diag;
   };
 
@@ -1624,15 +1620,12 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
   }
 
   // Auth passed or no auth required — record mechanism
-  test.info().attach('auth-result', {
-    body: JSON.stringify({ mechanism, credentialSource: credentialSource ?? 'none', domChanged,
-      successProven: s2SuccessProven,
-      // 'windowed' = no gate was VISIBLE before the settle expired; 'proven' =
-      // this project's own readiness condition resolved first. Recorded because
-      // the two were indistinguishable, which is the whole of #302.
-      gateEvidence: s2Evidence }),
-    contentType: 'application/json',
-  });
+  attachJson('auth-result', { mechanism, credentialSource: credentialSource ?? 'none', domChanged,
+    successProven: s2SuccessProven,
+    // 'windowed' = no gate was VISIBLE before the settle expired; 'proven' =
+    // this project's own readiness condition resolved first. Recorded because
+    // the two were indistinguishable, which is the whole of #302.
+    gateEvidence: s2Evidence });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1721,10 +1714,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
   }
 
   const elements = await discoverElements(page);
-  test.info().attach('element-map', {
-    body: JSON.stringify(elements, null, 2),
-    contentType: 'application/json',
-  });
+  attachJson('element-map', elements);
 
   const findings = [];
 
@@ -1837,10 +1827,7 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // gap, in both workflows. Said plainly because the false reassurance was
   // written INTO the commit that admitted the limit.
 
-  test.info().attach('interaction-findings', {
-    body: JSON.stringify(findings, null, 2),
-    contentType: 'application/json',
-  });
+  attachJson('interaction-findings', findings);
 
   const blocking = findings.filter(f => f.apiErrors.some(c => c.status >= 500) || f.consoleErrors.length > 0);
   expect(blocking, `Blocking anomalies found:\n${JSON.stringify(blocking, null, 2)}`).toHaveLength(0);
@@ -2274,14 +2261,11 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page, renderWit
   // Report the budget outcome UNCONDITIONALLY — before the skip check, and
   // whether or not the traversal found enough to assert on.
   if (capExhausted) {
-    test.info().attach('nav-budget', {
-      body: JSON.stringify({
-        attemptCap: ATTEMPT_CAP,
-        attempts,
-        levelsFound: forward.length - 1,
-        note: `Stopped after ${ATTEMPT_CAP} candidate attempts. Traversal was TRUNCATED: levels deeper than those found were never reached, so a passing result here covers only the prefix listed. Raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`,
-      }, null, 2),
-      contentType: 'application/json',
+    attachJson('nav-budget', {
+      attemptCap: ATTEMPT_CAP,
+      attempts,
+      levelsFound: forward.length - 1,
+      note: `Stopped after ${ATTEMPT_CAP} candidate attempts. Traversal was TRUNCATED: levels deeper than those found were never reached, so a passing result here covers only the prefix listed. Raise ATTEMPT_CAP and this scenario's timeout together if the app is control-dense.`,
     });
   }
 
@@ -2319,7 +2303,7 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page, renderWit
     await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
     const now = await viewSignature(page);
     trail.push({ stepFromDeepest: forward.length - i, expected, left, got: now });
-    test.info().attach('back-flow-trail', { body: JSON.stringify(trail, null, 2), contentType: 'application/json' });
+    attachJson('back-flow-trail', trail);
     expect(now,
       `Back from level ${i} returned to the level it just left — circular/ping-pong back navigation.`
     ).not.toBe(left);
@@ -2554,15 +2538,12 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
         // navigation-heavy app whose overlays are fine and were simply never
         // reached. "Not silent" must not mean "counted as a defect": S6 already
         // makes this distinction and S9 did not.
-        test.info().attach('dismiss-budget', {
-          body: JSON.stringify({
-            navResetCap: NAV_RESET_CAP,
-            stoppedAtTrigger: name,
-            triggersConsidered: i + 1,
-            of: triggerTotal,
-            note: `Stopped after ${NAV_RESET_CAP} navigation resets. Triggers beyond this point were NOT checked for overlay dismissal — a coverage gap, not a dismisser defect. Raise NAV_RESET_CAP and this scenario's timeout together if the app is navigation-heavy.`,
-          }, null, 2),
-          contentType: 'application/json',
+        attachJson('dismiss-budget', {
+          navResetCap: NAV_RESET_CAP,
+          stoppedAtTrigger: name,
+          triggersConsidered: i + 1,
+          of: triggerTotal,
+          note: `Stopped after ${NAV_RESET_CAP} navigation resets. Triggers beyond this point were NOT checked for overlay dismissal — a coverage gap, not a dismisser defect. Raise NAV_RESET_CAP and this scenario's timeout together if the app is navigation-heavy.`,
         });
         stoppedByResets = true;
         break;
@@ -2617,21 +2598,15 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
   }
 
   if (!stoppedByResets && triggerTotal > TRIGGER_CAP) {
-    test.info().attach('dismiss-budget', {
-      body: JSON.stringify({
-        triggerCap: TRIGGER_CAP,
-        triggersConsidered: TRIGGER_CAP,
-        of: triggerTotal,
-        note: `Only the first ${TRIGGER_CAP} of ${triggerTotal} triggers were considered (a hidden or navigating one among them is skipped, not checked); triggers beyond them were never reached. A coverage gap, not a dismisser defect.`,
-      }, null, 2),
-      contentType: 'application/json',
+    attachJson('dismiss-budget', {
+      triggerCap: TRIGGER_CAP,
+      triggersConsidered: TRIGGER_CAP,
+      of: triggerTotal,
+      note: `Only the first ${TRIGGER_CAP} of ${triggerTotal} triggers were considered (a hidden or navigating one among them is skipped, not checked); triggers beyond them were never reached. A coverage gap, not a dismisser defect.`,
     });
   }
 
-  test.info().attach('dismisser-findings', {
-    body: JSON.stringify(findings, null, 2),
-    contentType: 'application/json',
-  });
+  attachJson('dismisser-findings', findings);
   expect(findings, `Overlay dismisser failures:\n${JSON.stringify(findings, null, 2)}`).toHaveLength(0);
 });
 

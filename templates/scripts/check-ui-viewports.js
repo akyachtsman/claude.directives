@@ -585,19 +585,38 @@ function witnessWidth(a) {
   return typeof w === 'number' && Number.isFinite(w) && w > 0 ? w : null;
 }
 
-// For the parent's payload diagnostics: same one-word answer, at module scope,
-// because `describe` above is local to readReport() (#347 round 25).
-function describeTop(v) {
+// For diagnostics, in both processes: what a value IS, in one word, without
+// dumping it.
+function describe(v) {
   if (v === null) return 'null';
   if (Array.isArray(v)) return 'an array';
   return `a ${typeof v}`;
 }
 
-// For the diagnostics above: what a value IS, in one word, without dumping it.
-function describe(v) {
-  if (v === null) return 'null';
-  if (Array.isArray(v)) return 'an array';
-  return `a ${typeof v}`;
+// ONE LABEL FOR THE EMPTY KEY, and it is only ever a LABEL. The join runs on the
+// raw name, so a project actually named `(no name)` is a different key from a
+// project with none — Codex reported the reverse for the old `(unnamed)`
+// sentinel (#347 round 3), which was a real collision because the two sides of
+// the join disagreed. They agree now (both use the empty string), and this only
+// decides what gets printed. Without it a `declared by:` line for an unnamed
+// project printed empty.
+function label(n) {
+  return n === '' ? '(no name)' : n;
+}
+
+// THE ROW SHAPE, checked wherever rows cross into a decision: the carried
+// mapping, the child's payload, and decideFromRows itself. Every row an object
+// with a string name; `width` optional (the UNCLASSIFIABLE rows carry none) but,
+// when present, a finite number.
+function isRowList(list) {
+  return Array.isArray(list) && list.every(r => r && typeof r === 'object'
+    && !Array.isArray(r) && typeof r.name === 'string'
+    && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+}
+
+// How many tests the run left with a non-skipped result, across all projects.
+function executedSum(run) {
+  return [...run.executed.values()].reduce((a, b) => a + b, 0);
 }
 
 
@@ -607,6 +626,12 @@ function describe(v) {
 // diagnostics, and a bound whose stated value drifts from its enforced one sends
 // the reader looking for the wrong thing.
 const EVAL_TIMEOUT_MS = 120000;
+// What a killed-on-timeout evaluation means, for both diagnostics that report one.
+const LEFT_RUNNING = [
+  '  Importing the config left something running — a timer, a socket, a',
+  '  watcher. Playwright will still list such a config; this gate cannot',
+  '  wait for one, and a gate that hangs reports nothing at all.',
+];
 
 // ONE READER FOR THE BAND FLAGS, USED BY BOTH PROCESSES. Round 11 gave the
 // parent its own parser so a band bound could not be taken from the child's
@@ -768,15 +793,15 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
   // object prototype that reshapes the entries, fails here rather than
   // arriving as a plausible-looking cover map.
   const rowList = Array.isArray(ROWS) ? ROWS : null;
-  const rowsWellFormed = rowList !== null && rowList.every(r => r && typeof r === 'object'
-    && !Array.isArray(r) && typeof r.name === 'string'
-    && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+  const rowsWellFormed = isRowList(rowList);
   const cover = { laptop: [], tablet: [], phone: [] };
-  // ONE BANDING RULE, for the declared widths AND the witnessed ones (#348), so
-  // RENDERED and DECLARED can never disagree about what "tablet" means.
+  // ONE BANDING RULE IN THIS PROCESS, for the declared widths AND the witnessed
+  // ones (#348), so RENDERED and DECLARED can never disagree about what "tablet"
+  // means. The child bands too, for its own display and refusal; that copy is
+  // kept apart on purpose, because the verdict must not rest on arithmetic done
+  // where the config ran (see above).
   const bandOf = w => (w >= laptopMin ? 'laptop' : w >= tabletMin ? 'tablet' : 'phone');
-  if (rowsWellFormed && Number.isFinite(tabletMin) && Number.isFinite(laptopMin)
-      && tabletMin < laptopMin) {
+  if (rowsWellFormed) {
     for (const r of rowList) {
       if (typeof r.width !== 'number' || !Number.isFinite(r.width)) continue;
       cover[bandOf(r.width)].push(r.name);
@@ -846,14 +871,6 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
         console.error(`check-ui-viewports: FAIL (code ${run.code})`);
           process.exit(run.code);
       }
-      // ONE LABEL FOR THE EMPTY KEY, and it is only ever a LABEL. The join
-      // runs on the raw name, so a project actually named `(no name)` is a
-      // different key from a project with none — Codex reported the reverse
-      // for the old `(unnamed)` sentinel (#347 round 3), which was a real
-      // collision because the two sides of the join disagreed. They agree now
-      // (both use the empty string), and this only decides what gets printed.
-      // Without it a `declared by:` line for an unnamed project printed empty.
-      const label = n => (n === '' ? '(no name)' : n);
       const ranIn = n => (run.executed.get(n) || 0) > 0;
       const missing = bands.filter(b => !cover[b].some(ranIn));
       if (missing.length) {
@@ -870,7 +887,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
         // LESS than the evidence, not more. Nothing scheduled entails nothing
         // executed, so the negative direction is sound where the positive is
         // not — which is the whole asymmetry this verdict is named for.
-        console.error(`  the run left ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) with a non-skipped result: ${ran || '(none)'}`);
+        console.error(`  the run left ${executedSum(run)} of ${run.total} test(s) with a non-skipped result: ${ran || '(none)'}`);
         console.error('  This is the run\'s own report, not an inference: the widths are declared');
         console.error('  correctly and the run scheduled nothing at them. A filter, an ignore');
         console.error('  rule, a shard, a reporter, a focused test, a global setup — this gate');
@@ -917,7 +934,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
       console.log('  (evidence: the run\'s own report, written by the process the config');
       console.log('   runs in. A config that REPLACES it defeats this — the gate catches');
       console.log('   drift, not forgery. directives#349.)');
-      console.log(`  (from the run's own report: ${[...run.executed.values()].reduce((a, b2) => a + b2, 0)} of ${run.total} test(s) with a non-skipped result)`);
+      console.log(`  (from the run's own report: ${executedSum(run)} of ${run.total} test(s) with a non-skipped result)`);
     } else {
       // THE PRE-RUN INVOCATION. Write the mapping so the post-run one joins
       // against the widths the config declared BEFORE the suite ran, rather than
@@ -947,7 +964,7 @@ function decideFromRows(ROWS, TESTS, SOURCE) {
           process.exit(20);
         }
       }
-      const shown = b => cover[b].map(n => (n === '' ? '(no name)' : n)).join('/');
+      const shown = b => cover[b].map(label).join('/');
       console.log(`check-ui-viewports: OK — DECLARED laptop:${shown('laptop')}  tablet:${shown('tablet')}  phone:${shown('phone')}`);
       bandsUsed();
       // WHAT --report BUYS, IN THE SAME WORDS THE VERDICT USES. This line said
@@ -1070,9 +1087,7 @@ if (!VERDICT_FILE) {
     // same partial check as `x || []`.
     const ok = carried && typeof carried === 'object' && !Array.isArray(carried)
       && typeof carried.testsDir === 'string' && carried.testsDir !== ''
-      && Array.isArray(carried.rows) && carried.rows.every(r => r
-      && typeof r === 'object' && !Array.isArray(r) && typeof r.name === 'string'
-      && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
+      && isRowList(carried.rows);
     if (!ok) {
       console.error('CANNOT CHECK: the declared mapping from before the run could not be read.');
       console.error(`  --declared ${declaredIdx.path}`);
@@ -1230,9 +1245,7 @@ if (!VERDICT_FILE) {
     console.error('CANNOT CHECK: the config evaluation recorded a pass and then failed.');
     if (timedOut) {
       console.error(`  it wrote its verdict and then did not finish within ${EVAL_TIMEOUT_MS / 1000}s, so it was killed`);
-      console.error('  Importing the config left something running — a timer, a socket, a');
-      console.error('  watcher. Playwright will still list such a config; this gate cannot');
-      console.error('  wait for one, and a gate that hangs reports nothing at all.');
+      for (const line of LEFT_RUNNING) console.error(line);
     } else {
       console.error(child.signal
         ? `  it was killed by ${child.signal} after writing its verdict`
@@ -1294,13 +1307,10 @@ if (!VERDICT_FILE) {
       // rows and left the sibling field. Hoisted so BOTH callers of
       // `decideFromRows` pass through it, which is round 20's rule — put the
       // check where every path must cross it, not in each path.
-      const wellFormed = list => Array.isArray(list) && list.every(r => r
-        && typeof r === 'object' && !Array.isArray(r) && typeof r.name === 'string'
-        && (r.width === undefined || (typeof r.width === 'number' && Number.isFinite(r.width))));
-      if (!wellFormed(rows.rows) || typeof rows.testsDir !== 'string' || rows.testsDir === '') {
+      if (!isRowList(rows.rows) || typeof rows.testsDir !== 'string' || rows.testsDir === '') {
         console.error('CANNOT CHECK: the config evaluation returned a payload this gate cannot read.');
-        console.error(`  rows: ${wellFormed(rows.rows) ? 'well-formed' : 'not a list of {name, width}'}`);
-        console.error(`  testsDir: ${typeof rows.testsDir === 'string' ? 'empty' : describeTop(rows.testsDir)}`);
+        console.error(`  rows: ${isRowList(rows.rows) ? 'well-formed' : 'not a list of {name, width}'}`);
+        console.error(`  testsDir: ${typeof rows.testsDir === 'string' ? 'empty' : describe(rows.testsDir)}`);
         console.error('  A nonce says who wrote a payload, never that it is shaped like one');
         console.error('  (#347 round 11).');
         console.error('check-ui-viewports: FAIL (code 14)');
@@ -1348,9 +1358,7 @@ if (!VERDICT_FILE) {
     console.error('CANNOT CHECK: the config evaluation did not report a verdict.');
     if (timedOut) {
       console.error(`  it did not finish within ${EVAL_TIMEOUT_MS / 1000}s and was killed`);
-      console.error('  Importing the config left something running — a timer, a socket, a');
-      console.error('  watcher. Playwright will still list such a config; this gate cannot');
-      console.error('  wait for one, and a gate that hangs reports nothing at all.');
+      for (const line of LEFT_RUNNING) console.error(line);
     } else if (child && child.signal) console.error(`  the evaluation was killed by ${child.signal}`);
     else if (child && child.error) console.error(`  ${child.error.message}`);
     else console.error(`  it ended with status ${child ? child.status : 'unknown'} and wrote nothing`);
@@ -1856,7 +1864,7 @@ console.log(`config:    ${configPath}`);
   const badEntry = projects.findIndex(p => !p || typeof p !== 'object');
   if (badEntry !== -1) {
     die(5, [
-      `CANNOT CHECK: project ${badEntry} is ${describeTop(projects[badEntry])}, not an object.`,
+      `CANNOT CHECK: project ${badEntry} is ${describe(projects[badEntry])}, not an object.`,
       '  Playwright refuses this config itself ("config.projects[N] must be an',
       '  object"), so no run can have produced results for it. Read as a project,',
       '  it would take the empty key and Playwright\'s default 1280x720 viewport —',
@@ -1879,7 +1887,7 @@ console.log(`config:    ${configPath}`);
   if (badName !== -1) {
     die(5, [
       `CANNOT CHECK: project ${badName} has a name that is not a string.`,
-      `  name: ${describeTop(RAW_NAMES[badName])}`,
+      `  name: ${describe(RAW_NAMES[badName])}`,
       '  Playwright refuses this config itself ("config.projects[N].name must be a',
       '  string"), so no run can have produced results for it. Coercing it to the',
       '  empty key would join it against a legitimately UNNAMED project\'s results',
@@ -1900,7 +1908,7 @@ console.log(`config:    ${configPath}`);
   ].find(([, u]) => !u || typeof u !== 'object');
   if (badUse) {
     die(5, [
-      `CANNOT CHECK: ${badUse[0]} has a \`use\` that is ${describeTop(badUse[1])}, not an object.`,
+      `CANNOT CHECK: ${badUse[0]} has a \`use\` that is ${describe(badUse[1])}, not an object.`,
       '  Playwright refuses this config itself ("use must be an object"), so no run',
       '  can have produced results for it. Read as a project, an unusable `use`',
       '  falls through to the root or default viewport — a width this config never',
@@ -1922,7 +1930,7 @@ console.log(`config:    ${configPath}`);
   const RAW_ROOT_NAME = cfg.name;
   if (RAW_ROOT_NAME !== undefined && typeof RAW_ROOT_NAME !== 'string') {
     die(5, [
-      `CANNOT CHECK: the root config's name is ${describeTop(RAW_ROOT_NAME)}, not a string.`,
+      `CANNOT CHECK: the root config's name is ${describe(RAW_ROOT_NAME)}, not a string.`,
       '  Playwright refuses this config itself ("config.name must be a string"),',
       '  so no run can have produced results for it. Coercing it to the empty key',
       '  would let a report from a nameless project certify these bands.',
@@ -1934,7 +1942,7 @@ console.log(`config:    ${configPath}`);
   if (dupes.length) {
     die(18, [
       'CANNOT CHECK: two or more projects share a name.',
-      `  ${dupes.map(n => (n === '' ? '(no name)' : n)).join(', ')}`,
+      `  ${dupes.map(label).join(', ')}`,
       '  This gate joins each result to its project by NAME, so tests belonging to',
       '  one of them would certify the other\'s band. Give every project a distinct name;',
       '  Playwright accepts any string and the names appear in the run\'s output.',
@@ -1973,7 +1981,6 @@ console.log(`config:    ${configPath}`);
   // authenticated channel out of a process you do not control. A stateful
   // accessor is that limit on the DECLARATION side rather than the report side.
   // Recorded here so the next round reads the verdict instead of re-deriving it.
-  const cover = { laptop: [], tablet: [], phone: [] };
   const rows = [];
   for (const [i, p] of projects.entries()) {
     const name = keys[i];
@@ -2052,10 +2059,9 @@ console.log(`config:    ${configPath}`);
     // `width` is the NUMBER, for the parent to band; `w` and `band` are this
     // process's own display strings and the parent reads neither.
     rows.push({ name, w: `${width}x${height}`, band, width });
-    cover[band].push(name);
   }
   for (const r of rows) {
-    console.log(`  ${String(r.name === '' ? '(no name)' : r.name).padEnd(18)} ${String(r.w).padEnd(12)} ${r.band}`);
+    console.log(`  ${String(label(r.name)).padEnd(18)} ${String(r.w).padEnd(12)} ${r.band}`);
   }
 
   // TWO DIFFERENT VERDICTS, because they are different facts. A band with no
@@ -2089,15 +2095,14 @@ console.log(`config:    ${configPath}`);
   // decides. A corrupted child can only produce WORSE data — fewer rows, missing
   // bands — which the parent turns into a refusal. It cannot manufacture a pass,
   // because the pass is computed by code the config never touched.
-  // configPath travels with the rows so the PARENT can observe discovery. The
-  // parent never imports the config; it hands the path to Playwright and reads
-  // what comes back, which is the whole point of #335.
-  // NO `cover`. The parent bands the rows itself (#347 round 11): a map computed
-  // here is a conclusion drawn with whatever the config left of the runtime, and
-  // the nonce proves only who wrote it. `cover` is still used BELOW for this
-  // process's own refusal message, which is allowed to be wrong in the safe
-  // direction — a corrupted child refusing is not a false pass.
-  report({ rows, configPath, testsDir: TESTS_DIR });
+  // ROWS ONLY, NO `cover`. The parent bands the rows itself (#347 round 11): a
+  // map computed here is a conclusion drawn with whatever the config left of the
+  // runtime, and the nonce proves only who wrote it. The parent never imports the
+  // config; it decides from these rows and, after the run, from the run's own
+  // `--report`. The `band` strings are still used BELOW for this process's own
+  // refusal message, which is allowed to be wrong in the safe direction — a
+  // corrupted child refusing is not a false pass.
+  report({ rows, testsDir: TESTS_DIR });
   const bandProjects = b => rows.filter(r => r.band === b);
   const undeclared = ['laptop', 'tablet', 'phone'].filter(b => bandProjects(b).length === 0);
   if (undeclared.length) {
@@ -2115,13 +2120,13 @@ console.log(`config:    ${configPath}`);
   // config read could not tell whether a project's selection keys excluded the
   // suite, so a band with only restricted projects got its own refusal (exit 12,
   // CANNOT CHECK). Stage two answers that question outright, so the refusal is
-  // gone and exit 12 now means something PROVEN: the band is declared and
-  // Playwright discovers nothing for it. The code is reused deliberately — it was
-  // always "this band is not established"; what changed is that the gate can now
-  // say why with evidence instead of declining to say.
+  // gone and exit 12 now means something PROVEN: the band is declared and the
+  // run's own report shows nothing scheduled at it. The code is reused
+  // deliberately — it was always "this band is not established"; what changed is
+  // that the gate can now say why with evidence instead of declining to say.
   // NO VERDICT LINE HERE. Declaring the bands is half the question; the other
-  // half is whether Playwright discovers anything for them, and only the parent
-  // can ask (it never imported the config). A success printed here would be the
+  // half is whether the run scheduled anything at them, and only the parent
+  // answers it, from the run's own report (it never imported the config). A success printed here would be the
   // "declared, not executed" claim #335 was filed to replace — and worse, it
   // would print BEFORE the observation that can still refuse it.
   verdict = true;

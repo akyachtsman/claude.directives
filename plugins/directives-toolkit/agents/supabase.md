@@ -33,9 +33,16 @@ relax its security rules to make something work.
   defaults to the last 24h, so pass `iso_timestamp_start`/`iso_timestamp_end`
   when the question names a time range. Never poll it in a loop. Example:
   `select * from logs where source = 'postgres_logs' order by timestamp desc limit 50`.
-- Make migrations idempotent and reversible where practical (`if not exists`,
-  explicit policy names). Every new table ships with RLS enabled and explicit
-  policies — never leave a table with RLS off.
+- Every migration follows `data.md` → *Reversible-by-Design Backend Changes*,
+  which is mandatory, not "where practical": make it idempotent (`if not exists`,
+  explicit policy names), give it a header comment naming its inverse ("revert:
+  DROP FUNCTION x; restore y from migration desk_004"), and prefer additive
+  changes over destructive ones. The migration source must land in the same PR
+  as the change. This agent has no Write tool, so hand the full migration SQL,
+  header included, back to the caller to commit BEFORE calling
+  `apply_migration`, and say in the report that it is the caller's to commit.
+  Every new table ships with RLS enabled and explicit policies — never leave a
+  table with RLS off.
 - Stay in scope: operate only on the project named in `CLAUDE.md`. Stop and ask
   before disabling RLS, before using the service-role key anywhere a browser can
   reach it, or before destructive SQL (`drop`, `truncate`, unbounded `delete`).

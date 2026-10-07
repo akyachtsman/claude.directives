@@ -2517,7 +2517,16 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
   };
 
   const findings = [];
-  const triggerCount = Math.min(await page.locator(TRIGGERS).count(), 30);
+  // The trigger cap is reported, not silent: overlays behind trigger 31 or
+  // later are never checked, so a page with more triggers says so in a
+  // `dismiss-budget` attachment after the loop (test.md: "Dismissers are
+  // proven, not assumed"; audit, 2026-10-06). ONE record per run: when the
+  // reset cap below stops the loop first, its own record is the true stopping
+  // point and this one is not written (Codex, #405).
+  const TRIGGER_CAP = 30;
+  const triggerTotal = await page.locator(TRIGGERS).count();
+  const triggerCount = Math.min(triggerTotal, TRIGGER_CAP);
+  let stoppedByResets = false;
   // Cap the WASTED work, not the useful work. A navigating trigger is not an
   // overlay trigger, so it contributes nothing to this scenario's assertions —
   // the reset it forces is pure cost. Capping resets therefore loses no S9
@@ -2549,11 +2558,12 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
             navResetCap: NAV_RESET_CAP,
             stoppedAtTrigger: name,
             triggersConsidered: i + 1,
-            of: triggerCount,
+            of: triggerTotal,
             note: `Stopped after ${NAV_RESET_CAP} navigation resets. Triggers beyond this point were NOT checked for overlay dismissal — a coverage gap, not a dismisser defect. Raise NAV_RESET_CAP and this scenario's timeout together if the app is navigation-heavy.`,
           }, null, 2),
           contentType: 'application/json',
         });
+        stoppedByResets = true;
         break;
       }
       await gotoAndAuth(page);
@@ -2603,6 +2613,18 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
 
     await page.keyboard.press('Escape').catch(() => {});   // leave closed for the next round
     await page.waitForTimeout(200);
+  }
+
+  if (!stoppedByResets && triggerTotal > TRIGGER_CAP) {
+    test.info().attach('dismiss-budget', {
+      body: JSON.stringify({
+        triggerCap: TRIGGER_CAP,
+        triggersConsidered: TRIGGER_CAP,
+        of: triggerTotal,
+        note: `Only the first ${TRIGGER_CAP} of ${triggerTotal} triggers were considered (a hidden or navigating one among them is skipped, not checked); triggers beyond them were never reached. A coverage gap, not a dismisser defect.`,
+      }, null, 2),
+      contentType: 'application/json',
+    });
   }
 
   test.info().attach('dismisser-findings', {

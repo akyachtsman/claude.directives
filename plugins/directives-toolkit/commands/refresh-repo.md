@@ -101,13 +101,23 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     .claude/hooks/*)     t="templates/claude-hooks/$(basename "$f")";;
     *)                   t="templates/actions/$(basename "$(dirname "$f")")/$(basename "$f")";;
   esac
-  tmpl=$(curl -fsSL "$raw/$t") \
-    || { echo "NO-TEMPLATE: $f (project-specific — skip)"; continue; }
-  diff -q <(printf '%s\n' "$tmpl") "$f" >/dev/null 2>&1 || echo "DRIFT: $f"
+  # The status decides, never curl's exit alone: only a 404 means upstream ships
+  # no such template. A blocked host, a timeout or a 5xx is CANNOT-VERIFY, and
+  # reading it as NO-TEMPLATE skipped a file that may well have drifted (audit,
+  # 2026-10-06).
+  tmpl=$(mktemp)
+  code=$(curl -sSL -o "$tmpl" -w '%{http_code}' "$raw/$t" 2>/dev/null) || code=000
+  case "$code" in
+    200) diff -q "$tmpl" "$f" >/dev/null 2>&1 || echo "DRIFT: $f" ;;
+    404) echo "NO-TEMPLATE: $f (project-specific — skip)" ;;
+    *)   echo "CANNOT-VERIFY: $f (fetch returned $code) — not compared, not DRIFT" ;;
+  esac
+  rm -f "$tmpl"
 done
 ```
-(raw.githubusercontent.com is CDN-served and works from remote sessions; a
-failed fetch is "cannot verify", never DRIFT.)
+(raw.githubusercontent.com is CDN-served and works from remote sessions. Only a
+404 is `NO-TEMPLATE`; any other failed fetch is `CANNOT-VERIFY`, never DRIFT and
+never a skip.)
 
 `.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
 `ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first

@@ -214,6 +214,18 @@ jobs:
     timeout-minutes: 120
 
     steps:
+      # Fail in seconds, not after a cold install: with no URL the config falls
+      # back to its placeholder and every scenario fails on an invalid address
+      # (audit, 2026-10-06; qa-response.yml carries the same guard).
+      - name: Require APP_URL
+        env:
+          URL: ${{ github.event.inputs.app_url || vars.APP_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "::error::APP_URL repository variable is not set, and no app_url input was given — cannot run the live suite."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 

@@ -38,6 +38,10 @@ look:
 
 Generators (`frontend-design`, Stitch) are always instructed to **use this
 project's `tokens.css`/`components.css`**, never invent a parallel system.
+Naming Stitch, here and in the import options above, is **current practice, not
+a stamped ruling** (owner, 2026-10-07): sessions follow it, but may propose
+another generator to the owner. The rule binding every generator is the one
+above: use this project's contract.
 Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack

@@ -30,8 +30,10 @@ Agents arrive via the `directives-toolkit` plugin (see `global.md` → *Skill Bo
 - `supabase` — data/backend specialist (per `data.md`)
 
 Code review and security review are **not** toolkit agents — they come from
-Anthropic-official sources, enabled in each project's `.claude/settings.json`
-and installed by the environment setup script:
+Anthropic-official sources (owner ruling, 2026-10-07), enabled in each project's
+`.claude/settings.json` and installed by the environment setup script. The
+reason is the native-first rule: a capability Anthropic ships and maintains is
+preferred over one this toolkit would have to keep current itself.
 - Code review → `pr-review-toolkit:code-reviewer`; deep test-coverage critique →
   `pr-review-toolkit:pr-test-analyzer`
 - Security review → the built-in `/security-review` skill on demand, plus the

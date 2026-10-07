@@ -113,11 +113,9 @@ See `docs/standards/ci-triage.md` for expected vs. real failure classification a
 
 CI monitoring is infra-resident and event-driven — not session-scoped:
 - `ci-monitor.yml` fires on `workflow_run` events (+ `workflow_dispatch` for manual scans)
-- `codex-monitor.yml` fires on Codex PR reviews and Codex issue comments — it
-  adds `codex-flagged` on concerns and clears it on a SHA-matched all-clear
-  **comment**. A clean rerun can instead be a 👍 reaction or an inline
-  review-thread reply, and the monitor watches neither, so a still-present label
-  may mean nothing is wrong — read the PR's comments AND its review threads
+- `codex-monitor.yml` fires on Codex PR reviews and Codex issue comments and
+  adds/clears `codex-flagged`; what the label does and does not prove is
+  `git.md` → *PR Lifecycle* — read the PR's comments AND its review threads
 For a quick in-session CI snapshot, call `mcp__github__actions_list` directly
 (one pass — report failures and the last success, then move on).
 

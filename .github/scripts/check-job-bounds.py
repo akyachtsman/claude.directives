@@ -23,8 +23,9 @@ THREE RULES, because presence alone proves nothing:
          REPLACES its healthy run with the ceiling and THEN retries at the
          ceiling, so one failing profile costs ~+22min, two cost ~+44min. A
          bound reached is a job CANCELLED, i.e. a definite test failure
-         downgraded to an inconclusive run — see the callers' comment for the
-         full arithmetic and for what 120 deliberately does NOT cover.
+         downgraded to an inconclusive run — see the CALLER BOUND section of
+         the ui-suite composite's header (action.yml) for the full arithmetic
+         and for what 120 deliberately does NOT cover.
          a structured field with one correct answer.
        - a job running `playwright install` DIRECTLY pays the install: >= 30.
          ADVISORY ONLY — it prints, it never fails the build.

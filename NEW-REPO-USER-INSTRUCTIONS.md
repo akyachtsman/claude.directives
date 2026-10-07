@@ -135,12 +135,7 @@ once locally — it persists.
    - `APP_URL` = `https://akyachtsman.github.io/[repo-name]/`
    - `DB_URL` — your backend project/connection URL (required before the project's scheduled data workflow, if any, can run)
    - Email variables — needed only if the project sends email; the full list is in `docs/guides/cron-email-notifications.md`
-7. **Protect `main`** (**Settings → Rules → Rulesets → New branch ruleset**).
-   This is the only thing that actually stops a direct push to the default
-   branch — the toolkit's `push-gate` hook is a local speed bump with a bypass
-   surface that is not enumerable, so a repo without this ruleset is unprotected
-   no matter what the hook reports. `/new-repo` cannot set it; only you can.
-   Settings, reasoning and the two probes to run afterwards:
+7. **Protect `main`** with a branch ruleset — only you can set it, and nothing else stops a direct push. Settings, reasoning and the two probes to run afterwards:
    `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
 ### Step 2 — Build the app
@@ -180,9 +175,7 @@ re-theme. Details: `directives/design.md` and `docs/guides/design-tooling.md`.
 ---
 
 ### Scheduled email notifications (standard)
-`/new-repo` already scaffolds the email kit (`cron-notify.yml`,
-`notify-email.js`, `notify-task.js`) into every project. You just set the secrets
-and variables in items 5–6 of Step 1 above, then edit `.github/scripts/notify-task.js` to
-send your project's actual notification. Until the SMTP secrets are set, the job
-emits a notice and skips (no failure). Provider setup (Gmail app password, Resend,
-SendGrid) is in `docs/guides/cron-email-notifications.md`.
+`/new-repo` already scaffolds the email kit into every project; until the SMTP
+secrets are set, the job emits a notice and skips (no failure). To turn it on, set
+the secrets and variables, then replace the body of `.github/scripts/notify-task.js`.
+The settings tables, provider setup and scheduling: `docs/guides/cron-email-notifications.md`.

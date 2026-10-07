@@ -50,79 +50,32 @@ You are the final gate before a pull request or merge. Confirm that the branch i
 
 4. **Reviewer issues**
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
-   - Codex is judged from its **response**, not the label. `codex-monitor` writes
-     `codex-flagged` asynchronously, so an absent label proves nothing (`git.md` → *PR Lifecycle*). **Never report Clear from label state.** With the PR number the
-     orchestrator supplies, use `mcp__github__pull_request_read`: `get_reviews` for a
-     review whose reviewed-commit SHA matches HEAD — by SHA, never by timestamp, since a
-     review of an older commit can land after a newer push — then `get_review_comments`
-     for its inline substance, which the envelope hides; and `get_comments` for a clean
-     comment naming the reviewed commit. A review with unresolved findings is **Flagged**;
-     a clean comment is **Clear** only when it both SHA-matches HEAD **and** was authored
-     by the Codex bot identity — text and SHA alone are forgeable by any commenter.
-     **The *Codex Review Summary* comment is never that clean comment**, whatever its
-     status or prose. It is a progress table: *Running* is in flight, and *Completed*
-     can carry no verdict at all, while its prose can claim commits that do not exist
-     (`git.md` → *PR Lifecycle*). Skip any comment headed *Codex Review Summary*, or
-     carrying `codex-pull-request-review-summary`, when classifying. If it is all that
-     names HEAD, report **Pending**.
-     **A clean INLINE reply counts on the same terms.** Codex also delivers verdicts by
-     replying inside a review thread, and `get_review_comments` — which you already call
-     — returns those. One that SHA-matches HEAD, is authored by the Codex bot, and
-     reports no outstanding issues is **Clear**: the author and SHA checks are identical
-     to the comment case, so the evidence is identical. Do not leave it Pending merely
-     because it arrived on a different endpoint — `codex-monitor` cannot see that form,
-     so the label may still be present, and treating the label as the signal is the
-     error this whole item forbids. A bare
-     👍 read from the EMBEDDED SUMMARY cannot be used: `issue_read` → `get` returns
-     counts only — no author, no timestamp — so a 👍 from an earlier clean round
-     survives every later push indistinguishably, and reporting Clear from it would
-     pass an **unreviewed head**. Report **Pending**, not Clear — and do not report it
-     as impossible: the reaction LIST endpoint carries `user` and `created_at`, and
-     `git.md` → *PR Lifecycle* defines the clean-round ladder over it (the test is the
-     ORDERING push → request → reaction, since a review of an older commit can land
-     after a newer push — and ordering alone is not enough: it clears only when no
-     earlier review request is still unanswered, since that one's reaction would
-     satisfy the same timestamps while describing the old commit). This agent has no tool for that endpoint, so the judgement
-     belongs to the merger, who has the ladder. That case, a missing PR number, or unreadable reviews/comments are all
-     **Pending**, with the merger applying `git.md`'s gate. Pending is a correct output of
-     this item, not a failure of it — but it **caps Final Status at Conditional**: never
-     report Ready while the Codex row is Pending, since Ready aggregates every row and
-     would otherwise carry an unverified one.
-   - The label is **asymmetric**: its absence proves nothing, but a `codex-flagged` label
-     that is still present IS a blocker (`git.md` → *PR Lifecycle*). `codex-monitor`
-     clears it itself on a Codex all-clear **comment** naming the current head — the only
-     form it can act on — but never on a 👍, nor on an inline review-thread reply, since
-     neither fires a trigger it watches, and which form arrives is not predictable. So a label still
-     present means concerns not yet re-reviewed, a clean round delivered in a form the
-     monitor cannot see, an all-clear that failed the SHA match,
-     or a monitor run that has not landed yet — never treat it as leftover noise.
-     Look for the verdict in the PR's comments **and its review threads**: an inline
-     reply never enters the comment list, so a comments-only check reports Pending on
-     a head Codex has cleared. While
-     it is present, report the PR **Conditional** at best. The next step is
-     **requesting another review pass** so the verdict lands as the comment the
-     monitor clears on — UNLESS the PR already records an **observable terminal
-     state** `git.md` → *PR Lifecycle*'s **unreachable-review test** admits. The two states are an
-     *unavailable* reply still inside its reset window, or a
-     request that could not be made or accepted at all — never elapsed silence.
-     Neither needs a pass to
-     have run: a request rejected before any review began is the exit. Any
-     admitted state clears the verdict only with the **fallback reviewer**'s clean review
-     of HEAD recorded on the PR (`git.md` → *PR Lifecycle*); without that
-     comment the row stays **Pending**. In an admitted state WITH that review
-     recorded, the next step is removing the label with that evidence: reporting
-     "request another pass" would keep a mergeable PR Conditional forever, since no
-     pass can succeed. Read the PR before choosing which. A
-     reaction-only round is **not** one of these; where a label is still present
-     that rule escalates it. **An absent label removes only the label
-     blocker.** It is written asynchronously and proves nothing about the head,
-     and this agent has no tool for the reaction endpoint so it cannot run the
-     ladder: with no verdict it reports **Pending** exactly as above, and never
-     upgrades a row on label absence — an old or human-authored reaction would
-     otherwise produce Ready for an unreviewed head. Report the label as
-     not-a-blocker and leave the verdict to its own evidence. What follows from
-     that for the MERGE is the merger's call under `git.md`, not a conclusion
-     this agent draws or restates.
+   - **Codex** is judged from its response, never the label — the gate, the reaction
+     ladder, the fallback reviewer and the exits are `git.md` → *PR Lifecycle*. With the
+     PR number the orchestrator supplies, use `mcp__github__pull_request_read`:
+     `get_reviews` (reviewed-commit SHA vs HEAD — by SHA, never timestamp),
+     `get_review_comments` (inline findings and inline-reply verdicts, which the
+     envelope hides) and `get_comments`. Look for the verdict in the PR's comments **and its review threads**:
+     an inline reply never enters the comment list.
+     - **Clear** only on a clean verdict (comment, inline reply, or a review whose every
+       finding is fixed or dismissed) that matches HEAD's SHA **and** is authored by the
+       Codex bot — text and SHA alone are forgeable by any commenter.
+     - **Flagged** — a review at HEAD with unresolved findings.
+     - **Pending** — anything else: nothing Codex-authored names HEAD; only the *Codex
+       Review Summary* comment (or one carrying `codex-pull-request-review-summary`)
+       does — a progress table, never a verdict; a bare 👍 from the EMBEDDED SUMMARY
+       (`issue_read` → `get` has no author or timestamp); a missing PR number; unreadable
+       reviews/comments. Pending is a correct output, but it **caps Final Status at
+       Conditional**.
+     - **Label:** a `codex-flagged` label still present is a blocker — **Conditional** at
+       best, whatever the row says; an absent one proves nothing and never upgrades a row.
+     - The ladder and the exits are the **merger's** to apply; this agent has no tool for
+       the reaction endpoint. Its Required Next Step with the label present: request
+       another review pass — unless the PR records a state `git.md` → *PR Lifecycle*'s **unreachable-review test** admits.
+       The two states are an *unavailable* reply still inside its reset window, or a
+       request that could not be made or accepted at all — never elapsed silence. With
+       the fallback reviewer's clean review of HEAD also recorded, the next step is
+       removing the label with that evidence; without it the row stays Pending.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

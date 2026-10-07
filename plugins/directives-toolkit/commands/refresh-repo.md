@@ -15,7 +15,7 @@ and CI validates references.
 
 The session's working rules were loaded at session start and do NOT update
 themselves. Re-fetch and re-read every imported directive URL from
-CLAUDE.md (five as of `git.md`: `global.md`, `git.md`, `design.md`, `test.md`,
+CLAUDE.md (currently five: `global.md`, `git.md`, `design.md`, `test.md`,
 `data.md`), and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
 load at session start only — a mid-session upstream merge never reaches THIS
 session. With `.claude/hooks/session-start.sh` installed it reaches the next one;
@@ -30,9 +30,8 @@ against the upstream tree:
 
 ```bash
 # Runs the same under ANY shell options a session has set (`-e`, `-u`,
-# `-o pipefail`): each was a separate Codex finding on #394, so the block is
-# tested against all of them rather than fixed one option at a time. The fetch
-# sits in an `if`, so errexit cannot end the block before the guard reports.
+# `-o pipefail`). The fetch sits in an `if`, so errexit cannot end the block
+# before the guard reports.
 if tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
   --jq '"TREE \(.sha) truncated=\(.truncated)", (.tree[] | select(.type=="blob") | .path)'); then
   rc=0
@@ -41,13 +40,13 @@ else
 fi
 # GUARD: a failed fetch makes EVERY path look BROKEN. Emptiness is not enough:
 # a 403 from a project-scoped session can land its JSON error body in $tree,
-# which is non-empty, and every reference then printed BROKEN (claude.prop,
-# 2026-10-05: five false alarms). So require a clean exit AND a first line that
-# only a TREE OBJECT produces: the marker this --jq writes from the response's
-# own sha and truncated flag. Never test for a path being present: a renamed or
-# deleted path is exactly what this phase reports, so using one as the sentinel
-# would turn the breakage into CANNOT CHECK. A truncated tree is also refused —
-# it omits paths, and each omission would print BROKEN.
+# which is non-empty, and every reference then prints BROKEN. So require a
+# clean exit AND a first line that only a TREE OBJECT produces: the marker this
+# --jq writes from the response's own sha and truncated flag. Never test for a
+# path being present: a renamed or deleted path is exactly what this phase
+# reports, so using one as the sentinel would turn the breakage into CANNOT
+# CHECK. A truncated tree is also refused — it omits paths, and each omission
+# would print BROKEN.
 # No early-closing PIPE (`head`, `grep -q` fed by `echo`): under pipefail the
 # writer of a large tree dies of SIGPIPE when the reader stops early, and the
 # pipeline fails although the match succeeded. Read the first line by
@@ -69,15 +68,14 @@ else
   done <<<"$refs"
 fi
 ```
-**Remote-session transport (verified 2026-07-18, apfp.claude):** `gh` is usually
-absent and sandbox curl to `api.github.com` may be proxy-blocked (per the environment's network policy) or rate-limited
-(unauthenticated per-IP limits on a shared fleet IP — expect 403s after a call
-or two). Use **WebFetch** for the api.github.com calls (server-side, own egress),
-and spend the budget on the ONE `git/trees` call — it carries everything Phase 1
-needs. Individual raw-URL spot-checks (`raw.githubusercontent.com`, CDN-served,
-not rate-limited the same way) are the fallback for a handful of paths. A failed
-fetch is "CANNOT CHECK", never "BROKEN" — and a fetch that returned *something*
-has not succeeded until the content is a file listing.
+**Remote-session transport:** `gh` is usually absent, and sandbox curl to
+`api.github.com` may be proxy-blocked or rate-limited (unauthenticated per-IP
+limits on a shared fleet IP — expect 403s after a call or two). Use **WebFetch**
+(server-side, own egress) and spend the budget on the ONE `git/trees` call — it
+carries everything Phase 1 needs. Raw-URL spot-checks (`raw.githubusercontent.com`,
+CDN-served) are the fallback for a handful of paths. A failed fetch is "CANNOT
+CHECK", never "BROKEN" — and a fetch that returned *something* has not succeeded
+until the content is a file listing.
 
 For each BROKEN path, search the tree for its basename (rename candidate) and
 propose the fix; deletions get "content was folded — check upstream docs/README.md".
@@ -85,10 +83,9 @@ propose the fix; deletions get "content was folded — check upstream docs/READM
 ## Phase 1.5 — Installed-copy integrity (delta-independent drift check)
 
 Phase 2 only examines files UPSTREAM changed since the stamp — a locally
-corrupted copy of an *unchanged* template is invisible to it forever
-(identified gap, 2026-07-19: an accidental session edit to a project's qa.yml
-would never be flagged). This pass compares every installed verbatim drop-in
-against the CURRENT upstream template, regardless of delta:
+corrupted copy of an *unchanged* template is invisible to it forever. This pass
+compares every installed verbatim drop-in against the CURRENT upstream template,
+regardless of delta:
 
 ```bash
 repo="akyachtsman/claude.directives"
@@ -102,9 +99,8 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     *)                   t="templates/actions/$(basename "$(dirname "$f")")/$(basename "$f")";;
   esac
   # The status decides, never curl's exit alone: only a 404 means upstream ships
-  # no such template. A blocked host, a timeout or a 5xx is CANNOT-VERIFY, and
-  # reading it as NO-TEMPLATE skipped a file that may well have drifted (audit,
-  # 2026-10-06).
+  # no such template. A blocked host, a timeout or a 5xx is CANNOT-VERIFY;
+  # reading it as NO-TEMPLATE would skip a file that may well have drifted.
   tmpl=$(mktemp)
   code=$(curl -sSL -o "$tmpl" -w '%{http_code}' "$raw/$t" 2>/dev/null) || code=000
   case "$code" in
@@ -115,36 +111,32 @@ for f in .github/workflows/*.yml .github/actions/*/* \
   rm -f "$tmpl"
 done
 ```
-(raw.githubusercontent.com is CDN-served and works from remote sessions. Only a
-404 is `NO-TEMPLATE`; any other failed fetch is `CANNOT-VERIFY`, never DRIFT and
-never a skip.)
+(raw.githubusercontent.com is CDN-served and works from remote sessions.)
 
 `.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
 `ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
 step — so a locally corrupted sibling next to an unmodified `action.yml` is
-exactly the invisible-drift case this pass exists for. The copy row below moved
-to whole directories in #347 round 35; this scan did not, and round 36 caught
-the half that was left. Same shape as the miss it corrected: a fix applied at
-one level and not the one under it.
+exactly the invisible-drift case this pass exists for.
 
 **`DRIFT` is a question, not a verdict — and it is what makes a curated
-exception list unnecessary.** This pass already knows, per file, whether the
-local copy differs from the template. An allow-list of files *permitted* to
-differ is the same failure shape as a watch list pinned to one workflow name:
+exception list unnecessary.** An allow-list of files *permitted* to differ is
 correct the day it is written, silently wrong after the next local improvement,
-and nothing detects the gap. `pages-retry.yml` earned an exemption on
-2026-08-17 and the list never learned; a verbatim refresh would have deleted
-that hardening and re-broken the trigger it also fixed (raised by apfp.claude,
-2026-08-19). So there is no list: a diff is self-maintaining, and every
-`DRIFT` file is resolved by looking at it.
+and nothing detects the gap. So there is no list: a diff is self-maintaining,
+and every `DRIFT` file is resolved by looking at it. (The incidents behind this
+and the other Phase 1.5 rules: `docs/internal/gate-history.md` → *Refresh-repo history*.)
 
-**Hook repair (runs before the loop, delta-independent).** Three broken states,
-not one: the script absent, present but unregistered, and present but not
-executable. `/env-chk` now reports all three and names `/refresh-repo` as the
-repair, so all three must be repairable here — Phase 1.5 never inspects
-`.claude/settings.json`, and Phase 2 only sees upstream changes, so a
-current-stamped project would otherwise refresh forever without being fixed.
-After the install block below, repair registration and the exec bit:
+**Hook repair (runs before the loop, delta-independent).** This is the single
+home of the hook checks `/env-chk` reports. Three broken states, not one: the
+script absent, present but unregistered, and present but not executable. The
+last two are the trap — the hook looks installed and never runs, and a content
+diff sees nothing wrong with either. `/env-chk` reports all three and names
+`/refresh-repo` as the repair, so all three must be repairable here — the loop
+above never inspects `.claude/settings.json`, and Phase 2 only sees upstream
+changes, so a current-stamped project would otherwise refresh forever without
+being fixed. After the install block below, repair registration and the exec
+bit. The registration test is the same `jq` expression `/env-chk` runs; it
+parses the `SessionStart` array rather than grepping the file, for the reason
+the comment in the block gives:
 
 ```bash
 # exec bit: invisible to a content diff, and a non-executable hook never runs
@@ -166,18 +158,13 @@ if [ -f .claude/hooks/session-start.sh ] \
 fi
 ```
 
-**Absent-hook install (also delta-independent).** A legacy
-project has no `.claude/hooks/session-start.sh` at all, and neither pass would
-ever create one: the loop below skips absent files, and Phase 2 only processes
-templates that changed upstream since the stamp — which a project stamped after
-the hook shipped never sees. Without this step the offer `/env-chk` makes cannot
-be honoured and the project stays legacy through every refresh.
-
-Download to a temporary file and rename only after it validates. Writing the
-final path directly would leave a truncated or invalid hook behind on a failed
-fetch — and because the absent-hook test is `[ ! -f ]`, that wreckage then reads
-as "already installed" on every later refresh while `/env-chk` reports the
-project hook-enabled. A half-install is worse than no install here.
+**Absent-hook install (also delta-independent).** A legacy project has no
+`.claude/hooks/session-start.sh` at all, and neither the drift loop (it skips
+absent files) nor Phase 2 (it sees only templates changed since the stamp) would
+ever create one — so without this step the project stays legacy through every
+refresh. Download to a temporary file and rename only after it validates: a
+truncated hook written to the final path would pass the `[ ! -f ]` test as
+"already installed" on every later refresh. A half-install is worse than none.
 
 ```bash
 repo="akyachtsman/claude.directives"
@@ -206,16 +193,14 @@ fi
 Install the settings row in the same pass, so the registration and its target
 always land together.
 
-`session-start.sh` is also in the loop below rather than only in Phase 2, because
-Phase 2 sees only what changed UPSTREAM: a locally truncated hook whose template never
-moved would otherwise stay broken through every refresh, failing session start
-each time. Restore it from the template rather than hand-editing, and re-run
+`session-start.sh` is also in the drift loop, not only in Phase 2: a locally
+truncated hook whose template never moved would otherwise stay broken through
+every refresh. Restore it from the template rather than hand-editing, and re-run
 `bash -n` on it.
 
-Disposition each DRIFT by READING THE DIFF. There is no list of files allowed
-to differ and no blind default in either direction — a rule that says "restore"
-without looking deletes improvements, and one that says "keep" without looking
-preserves tampering. Both are the same mistake.
+Disposition each DRIFT by READING THE DIFF, with no blind default in either
+direction: "restore" without looking deletes improvements, and "keep" without
+looking preserves tampering.
 1. **The diff is only a `workflow_run` watch list in a file whose list is
    MEANT to vary per project** — `ci-monitor.yml`, `ci-notify.yml`,
    `qa-live.yml`, `pages-monitor.yml` — or the project's CLAUDE.md records the
@@ -228,22 +213,19 @@ preserves tampering. Both are the same mistake.
    build. A watch-list diff there is therefore never auto-kept — it needs the
    project's CLAUDE.md to record why its deploy is safe to replay (idempotent,
    no build or test steps) **and a revisit trigger** naming the condition that
-   ends the exception — the reasoning describes the deploy today, so without an
-   end condition the customization outlives its own justification. Both are
-   required; the pair routes it through the documented-customization path above
-   instead of being preserved silently. ⚠️ When that trigger fires, the watcher
+   ends the exception, so the customization cannot outlive its justification.
+   ⚠️ When that trigger fires, the watcher
    is **deleted, not narrowed** — narrowing leaves a file that passes every
    check and watches a name that can no longer fire (W3).
 2. **Anything else** — show the full diff and ask. An unexplained workflow drift
    can be an accidental session edit or tampering (git.md requires eyes-on-the-
    diff for every workflow PR precisely so this class stays rare), and it can
-   equally be a hardening this repo has not absorbed yet — 2026-08-19 produced
-   one of each. Only the diff separates them.
+   equally be a hardening this repo has not absorbed yet. Only the diff
+   separates them.
 3. **If the answer is genuinely unclear, keep local and report it.** The costs
    are asymmetric: a wrongly-kept bad edit is caught by the next review or CI
    run, while a wrongly-restored improvement is deleted with nothing left to
-   notice. Never silently preserve — keeping without reporting is how a fix
-   spends two days in one repo.
+   notice. Never silently preserve.
 
 ## Phase 2 — Upstream delta since last sync (installed templates)
 
@@ -251,12 +233,11 @@ The actionable signal for the project's installed template copies is what
 changed UPSTREAM since this project's last sync — stamped in
 `.claude/directive-sync.json` under `upstream.sha` (Phase 3).
 
-Get the head SHA over **git transport**, not the API: `gh` is absent in most
-remote/web sessions and `api.github.com` may be refused at the proxy or
-rate-limited, so the API route can return empty in exactly the sessions that run this command (`/env-chk`
-uses `ls-remote` for the same reason). The file-level delta comes over git
-transport too — `/env-chk` step 6's route, adapted: never `api.github.com`, and
-no GitHub MCP call compares two refs. `/refresh-repo` runs in a DOWNSTREAM
+Get the head SHA AND the file-level delta over **git transport**, never the
+API: `gh` is absent in most remote/web sessions, `api.github.com` may be refused
+at the proxy or rate-limited, and no GitHub MCP call compares two refs. This is
+the single home of the fetch rules below; `/env-chk` step 6 follows them for its
+staleness alarm. `/refresh-repo` runs in a DOWNSTREAM
 project, so claude.directives' objects are not local and `git fetch origin`
 fetches the wrong repo. Fetch the classified SHA from the claude.directives URL
 into a **scratch bare repo** instead — never into the project's own `.git`,
@@ -350,8 +331,8 @@ project** — map each to its installed location before dispositioning:
 |---|---|---|
 | `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ **EXCEPT `pages-retry.yml`, whose ABSENCE can be deliberate — never batch-install it.** An Actions-source project is required to delete it (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered deploy on a visibility flip. Decide it in both branches rather than as a single condition: **branch-source** → install it and restore its `REQUIRED` entry in the same edit; **Actions-source** → leave it absent, **unless** the project has taken W3's idempotent exception, in which case it carries a repointed copy whose `REQUIRED` entry names the project's own deploy — never overwrite that with the template or drop that entry. This row is the reason that deletion needs a rule at all: without it, the first refresh that touches the retry template undoes the fix silently. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
-| `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: `claude.insurance` was told exactly that on 2026-08-26 and diffing first is the only reason their `LIVE_TARGET` reachability split survived — a locally-defined guard, absent upstream, without which three scenarios would have run against a backend-less server on a blocking job. A kit file a project extended is invisible to whoever wrote the instruction. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
-| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. A hand-list here has now fallen behind its own general form twice: `check-ui-viewports.js` was missing when `claude.insurance` refreshed, and every UI job there would have died at step resolution had they applied this row literally (directives#321) |
+| `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
+| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
@@ -366,46 +347,29 @@ names by path is not optional, and skipping it ships a broken reference.
   `templates/scripts/*` row, whose absence breaks whatever names them once that
   caller is updated — `static-checks` for a script `qa.yml` names directly,
   **every UI job** for one only the `ui-suite` composite names
-  (`check-ui-viewports.js` is that case, and reading this list as "qa-invoked" is
-  what let it be skipped: directives#321), and a **documented command** for one
-  only a directive names.
+  (`check-ui-viewports.js` — so this is not a "qa-invoked" list), and a
+  **documented command** for one only a directive names (`browser-ladder.js`,
+  named by `test.md`). Deriving a path is not installing it: the derivation
+  below and this exception must name the same set.
 
-  A DIRECTIVE IS A CALLER. `test.md` tells a session to run
-  `.github/scripts/browser-ladder.js`, which no workflow or composite invokes.
-  Scoped to callers alone, the derivation found it and this rule then skipped it
-  as an absent local path — so a refresh installed a directive naming a file it
-  had not delivered, and the documented command died with MODULE_NOT_FOUND
-  (Codex, directives#355). Deriving a path is not installing it: the derivation
-  and this exception have to name the same set, and they did not.
-
-⚠️ **And one absence that must be RESPECTED rather than filled — the inverse
-case, which the rows above and this rule read oppositely.** The
-`templates/workflows/<wf>.yml` row batch-installs files "absent locally"; this
-rule skips paths that do not exist. For most workflows those agree, because
-installing a watcher that was merely never installed restores coverage. For a
-workflow carrying a **`schedule:`** trigger they do not: installing it does not
-restore coverage, it **creates recurring work**, and there is no dormant option
-because `schedule:` fires.
-
-So: **an absent SCHEDULED workflow is skipped unless the project has a task for
-it.** `cron-notify.yml` is the worked case — `claude.trading` correctly declined
-it on 2026-08-26, because its `notify-task.js` is still the bootstrap stub that
-prints a placeholder and exits, no SMTP vars are set, and its real scheduled work
-runs as `pg_cron` inside Supabase. Installing it would have bought a daily
-checkout, a daily `npm install`, and a no-op, forever. They verified it was not
-load-bearing first: no `workflow_run` names it, and `workflow-ref-guard` reports
-all required watchers intact without it.
-
-This is the same principle as `pages-retry.yml`'s carve-out above and belongs
-beside it: **"absent locally" is not a fact about the project's intent.** Ask
+⚠️ **And one absence that must be RESPECTED rather than filled.** The
+`templates/workflows/<wf>.yml` row batch-installs files "absent locally", which
+for most workflows restores coverage. For a workflow carrying a **`schedule:`**
+trigger it does not: installing it **creates recurring work**, and there is no
+dormant option because `schedule:` fires. So: **an absent SCHEDULED workflow is
+skipped unless the project has a task for it** (`cron-notify.yml` with a
+bootstrap-stub `notify-task.js` is the worked case). Before declining, confirm it
+is not load-bearing: no `workflow_run` names it, and `workflow-ref-guard` reports
+all required watchers intact without it. Same principle as `pages-retry.yml`'s
+carve-out: **"absent locally" is not a fact about the project's intent.** Ask
 what installing it *starts*, not only what it restores.
 
 ### Kit defects
 
 The per-file rule above protects local kit edits, and it also stops a kit BUG
 fix from arriving: a defect shipped in `templates/ui-tests/` is in every
-downstream copy, and a session weighing the fix hunk as "evolution" keeps the bug
-(#327 — S2's fail-open reached projects that followed this table exactly). So,
+downstream copy, and a session weighing the fix hunk as "evolution" keeps the bug,
+even in a project that follows this table exactly. So,
 whenever the project carries the kit — **every refresh, before any kit diff,
 whether or not the delta touches the kit**. The kit may live elsewhere
 (`cicd-setup.md` lets `UI_TESTS_DIR` point anywhere), so find it from the
@@ -472,28 +436,26 @@ hunk, and everything else in the kit is still dispositioned by the row above.
 ⚠️ **Derive from the UPSTREAM files you are installing — fetched, not local.**
 `/refresh-repo` runs inside a *project*, where `templates/workflows/` and
 `templates/actions/` do not exist; those are upstream paths. And scanning the
-project's own `.github/` copies is worse than useless here: it would miss
-precisely the case this exists for — **a script newly referenced by the caller
-you are about to install**, which by definition the installed copy does not yet
-mention.
+project's own `.github/` copies would miss precisely the case this exists for —
+**a script newly referenced by the caller you are about to install**, which by
+definition the installed copy does not yet mention.
 
 So the input is the fetched upstream text, using the same `$raw` this command
 already establishes, over **every caller this refresh INSTALLS** — not a fixed
-list (that is the mistake one level up), and **not only the changed ones**:
+list, and **not only the changed ones**:
 
-⚠️ **The installed set is WIDER than the delta, and the gap is exactly where
-#321 lives.** The composites row above installs `templates/actions/*/**` — the
-whole directory since round 35, `action.yml` and every sibling it runs —
-**with any qa workflow update**, so a refresh whose delta touches only `qa.yml`
-still installs an *unchanged* `ui-suite/action.yml` — and `ui-suite` is the only
-caller that names `check-ui-viewports.js`. Scope the derivation to the delta and
-that script is never derived, on a project where it is absent, and every UI job
-dies at step resolution. **That is #321 again, reproduced by the command written
-to prevent it.**
+⚠️ **The installed set is WIDER than the delta.** The composites row above
+installs `templates/actions/*/**` — the whole directory, `action.yml` and every
+sibling it runs — **with any qa workflow update**, so a refresh whose delta
+touches only `qa.yml` still installs an *unchanged* `ui-suite/action.yml` — and
+`ui-suite` is the only caller that names `check-ui-viewports.js`. Scope the
+derivation to the delta and that script is never derived; on a project where it
+is absent, every UI job dies at step resolution.
 
-**This PR's own delta is the worked case**, which is how it was caught: it
-changes `templates/workflows/qa.yml` and does not touch
-`templates/actions/ui-suite/action.yml`.
+**The directives are callers too**: `test.md` names
+`.github/scripts/browser-ladder.js`, which no workflow or composite invokes, so
+a derivation scoped to the YAML callers ships a directive naming a file it never
+delivered. Widen the derivation; never hand-list the file.
 
 So: **changed callers ∪ callers co-installed unchanged by the rules above.**
 
@@ -518,117 +480,53 @@ rm -f "$buf"
 printf '%s\n' "$refs"
 ```
 
-**THE DIRECTIVES ARE CALLERS TOO.** A script is not reachable only from a
-workflow: `test.md` tells a session to run `.github/scripts/browser-ladder.js`,
-which no workflow or composite invokes. Scoped to the two YAML globs, the
-derivation returned nothing for it, so a refresh installed a directive naming a
-file it had not delivered and the documented command died with MODULE_NOT_FOUND
-(Codex, directives#355). Same class as #321 and #353 a third time: a script
-something we install references BY PATH, invisible to the set that decides what
-gets installed. The remedy is the same one — widen the derivation, never
-hand-list the file.
+Seven things about that shape, each of which a shorter version got wrong (the
+failures themselves: `docs/internal/gate-history.md` → *Refresh-repo history*):
 
-Seven things about that shape, each of which a shorter version got wrong:
-
-- **It matches the script PATH, never the invocation prefix.** The earlier form
-  required `node ` or `python3 ` *immediately* before `.github/`, so
-  `node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"` — the real
-  line in `ui-suite/action.yml` — returned **no match at all**, and the
-  derivation silently omitted the one script that composite cannot run without.
-  Reported by PROP6, 2026-09-01, and measured here before the fix. The failure is
-  invisible in outcome wherever the script already exists, and installs a red
-  build wherever it does not — `claude.insurance`'s exact situation in #321.
-  A prefix is a form; the path is the fact. Note the two-stage filter: grabbing
-  the whole token and *then* requiring a `.js`/`.py` ending is what keeps
-  `.github/scripts/package-lock.json` out, since an unterminated `\.(js|py)`
-  matches the `.js` inside `.json`. That defect was latent in the old pattern
-  too — the prefix requirement just kept it from ever being reached.
-  `check-refresh-derivation.py` now runs this exact pattern, read out of this
-  file, against every shipped caller, so the next invocation-form change fails
-  CI instead of shipping.
-
+- **It matches the script PATH, never the invocation prefix.** A prefix is a
+  form; the path is the fact. `node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"`
+  — the real line in `ui-suite/action.yml` — has no `node .github/` in it. The
+  two-stage filter, grabbing the whole token and *then* requiring a `.js`/`.py`
+  ending, is what keeps `.github/scripts/package-lock.json` out, since an
+  unterminated `\.(js|py)` matches the `.js` inside `.json`.
+  `check-refresh-derivation.py` runs this exact pattern, read out of this file,
+  against every shipped caller, so an invocation-form change fails CI.
 - **It matches a MENTION, not only an invocation, and that is the accepted
   cost.** A comment reading `# replaced .github/scripts/legacy.py` puts
-  `legacy.py` in the set. The extension filter already excludes the two cases
-  that used to justify prefix-matching — bare directories and
-  `package-lock.json` — so what remains is comment-only paths, and the asymmetry
-  runs the right way: a spare installed file is inert, a missing one is a red
-  build at step resolution. The earlier prose here said the opposite
-  ("Match on the INVOCATION, not the bare path"); it was left standing when the
-  pipeline was inverted, and Codex caught the contradiction on #345.
+  `legacy.py` in the set. The asymmetry runs the right way: a spare installed
+  file is inert, a missing one is a red build at step resolution.
+- **The fetch loop appends a newline after every caller.** `>>` concatenates,
+  and a YAML file need not end in one: without the delimiter,
+  `.github/scripts/a.js` + `name:` becomes `.github/scripts/a.jsname`, which the
+  token grep consumes whole and the extension filter drops — with no error, and
+  invisible to any per-caller scan.
 - **The character class admits `/`, so a NESTED script is reachable.**
   `templates/ui-tests/` installs to `.github/scripts/ui-tests/`, so a script one
-  directory down is a reference waiting to happen — and while the class excluded
-  `/`, `.github/scripts/nested/a.py` truncated to `.github/scripts/nested`, which
-  the extension filter then dropped. The script vanished, with no error: PROP6's
-  failure again, one directory down. A bare directory reference like
-  `.github/scripts/ui-tests/` is still excluded, because the extension filter is
-  anchored. Found by Codex on #345 round 2, which caught it as a guard bug — the
-  guard's own ground truth was slash-blind too, so neither scan could see it.
-
-- **The fetch loop appends a newline after every caller.** `>>` concatenates,
-  and a YAML file need not end in one. Without the delimiter a caller whose last
-  scalar ends in a script path merges into the next file's first word —
-  `.github/scripts/a.js` + `name:` becomes `.github/scripts/a.jsname`, which the
-  token grep consumes whole and the extension filter then drops. The script
-  disappears from the set with no error anywhere. Measured on #345; a per-caller
-  scan cannot see it, because the defect only exists in the concatenation.
-
+  directory down is a reference waiting to happen. A bare directory reference
+  like `.github/scripts/ui-tests/` is still excluded, because the extension
+  filter is anchored.
 - **Every fetch is checked individually, and a failure exits before the
-  pipeline.** Putting the loop *inside* `refs=$(…)` does not work: the `exit 1`
-  leaves only the subshell, `sort` still succeeds, and `refs` comes back
-  **non-empty from the callers that did fetch** — so a 404 on
-  `ui-suite/action.yml` after `qa.yml` succeeded yields a partial set that passes
-  any emptiness check, silently omitting `check-ui-viewports.js`. That is the
-  precise failure this block exists to prevent.
+  pipeline.** Inside `refs=$(…)` the `exit 1` would leave only the subshell, and
+  `refs` would come back **non-empty from the callers that did fetch** — a
+  partial set that passes any emptiness check.
 - **An empty result is not automatically wrong.** If the only changed caller
   invokes no script — `pages-monitor.yml` and `secret-scan/action.yml` are both
-  like this today — then the correct derivation *is* empty. Asserting non-empty
-  makes the procedure fail closed on a legitimate delta. **Emptiness is only
-  suspicious when a fetch failed**, which is why the check belongs on the fetch
-  and not on the result.
+  like this today — the correct derivation *is* empty, and asserting non-empty
+  fails closed on a legitimate delta. **Emptiness is only suspicious when a
+  fetch failed**, which is why the check belongs on the fetch, not the result.
 - **Pin the fetch to the SHA Phase 2 classified, never `main`.** `main` can
   advance mid-refresh, or between two caller requests, so the derived set can
   come from a newer or mixed revision than the callers you are installing — and
-  Phase 3's head check only refuses the *stamp* afterwards; it does not un-install
-  anything.
+  Phase 3's head check only refuses the *stamp* afterwards; it does not
+  un-install anything.
 
-Match on the PATH and filter by extension — see the bullets below for why the
-invocation-matching form was wrong, and what the path form costs.
+**The output is the answer for THAT refresh, and it moves** with the callers it
+reads. That is the derivation working. **The output is never the rule.**
 
-**The output is the answer for THAT refresh, and it moves.** Run against
-`main` on 2026-08-26 with `qa.yml` + `ui-suite/action.yml` as the callers it
-yields four — `check-contrast.js`, `workflow-ref-guard.py`,
-`check-job-bounds.py`, `check-ui-viewports.js` — and five once directives#325
-lands, which adds `check-py-warnings.py` to `qa.yml`. That is the derivation
-working: it reports what the callers you are installing actually reference, not
-what a list-writer remembered. **The output is never the rule.**
-
-⚠️ **This command has now failed FIVE ways, every one silent, and the history
-is the argument for the shape above.** None were hypothetical:
-
-1. Written in the table cell with its pipes escaped for markdown — `\|` in
-   `grep -E` matches a **literal pipe character**, so it matched nothing and
-   exited 0.
-2. Pointed at `templates/workflows/` and `templates/actions/`, which **do not
-   exist in a project** — *No such file or directory*, and `sort` exited 0
-   regardless.
-3. Ran the fetch loop *inside* `refs=$(…)`, so a mid-loop `exit 1` left only the
-   subshell: a failed caller yielded a **partial** set that passed an emptiness
-   check and silently dropped the scripts only that caller names.
-4. Asserted the result must be non-empty — which **fails closed** on a
-   legitimate delta whose only changed caller invokes no script.
-5. Scoped the input to the refresh's **delta** rather than to everything it
-   **installs** — so a delta touching only `qa.yml` never derives
-   `check-ui-viewports.js`, because the caller that names it
-   (`ui-suite/action.yml`) is co-installed *unchanged*. #321 exactly, by the
-   command written to prevent it. Caught on this PR's own delta.
-
-Four of the five came from *fixing* the one before it. A derivation that fails
-open is strictly worse than the hand-list it replaced, because a hand-list at
-least tells you what somebody once believed; and one that fails closed gets
-muted, which returns it to failing open by another route. **Check the fetch,
-report the result, and let an honestly-empty answer be empty.**
+A derivation that fails open is strictly worse than the hand-list it replaced,
+and one that fails closed gets muted, which returns it to failing open by
+another route. **Check the fetch, report the result, and let an honestly-empty
+answer be empty.**
 
 The general form, worth applying to any row added later: **if the thing being
 installed REFERENCES a path, that path installs with it, present or not.** The
@@ -653,12 +551,10 @@ actually read (including "no files changed"); leave it unset otherwise.
 
 **Read is not applied.** A third failure gets past both guards above: a path the
 delta LISTED, dispositioned as New-upstream, and then never applied. The stamp
-moves past it and no later delta lists it again. claude.prop measured it
-(2026-10-06): `templates/scripts/check-job-bounds.py` was in the delta of the
-refresh that stamped `96c370f`, was not applied, and appeared in neither of the
-next two deltas. It stayed stale for five weeks, until a delta-independent diff
-found it. So before stamping, Phase 3 compares the installed copies with the
-templates **at the head being stamped** (one depth-1 git fetch of that head) and
+moves past it and no later delta lists it again, so it stays stale until a
+delta-independent diff happens to find it. So before stamping, Phase 3 compares
+the installed copies with the templates **at the head being stamped** (one
+depth-1 git fetch of that head) and
 refuses the stamp while one differs or a required one is missing, unless the
 session recorded why it stays. A reason binds to the **template's blob id**,
 which the refusal prints:
@@ -702,20 +598,18 @@ What is compared, delta or not:
   - **every installed kit, as its whole upstream directory**: each kit
     directory found as above gets every file `templates/ui-tests/` ships except
     `package-lock.json`. Workflows name kit files by bare filename, so nothing
-    derives them by path, and a kit whose template did not change was never
-    compared: claude.prop's two longest-standing kit divergences were never
-    named by any refresh (claude.prop, 2026-10-06). The kit row installs the
-    whole kit, hunk by hunk, so the check covers what the install does. A named
-    kit directory that is missing refuses the stamp here too.
+    derives them by path, and a kit whose template did not change would never
+    be compared. The kit row installs the whole kit, hunk by hunk, so the check
+    covers what the install does. A named kit directory that is missing refuses
+    the stamp here too.
 
   A dependency that exists is compared like a delta path; a stale copy is as
   broken as a missing one.
-- **`.claude/settings.json`, as sets, every run** (claude.prop, 2026-10-06).
-  The settings row merges rather than copies, so a byte comparison would refuse
-  every project that added its own keys, and leaving the file out let a read but
-  unapplied settings delta be stamped: claude.prop's file sat 42 permission
-  entries behind for six weeks, and this file decides what an agent may do
-  unprompted. So each entry the template carries must be in the local file:
+- **`.claude/settings.json`, as sets, every run.** The settings row merges
+  rather than copies, so a byte comparison would refuse every project that added
+  its own keys, and leaving the file out would let a read but unapplied settings
+  delta be stamped — and this file decides what an agent may do unprompted.
+  So each entry the template carries must be in the local file:
   every `permissions.allow` entry (local `allow`, `ask` or `deny` all count,
   since a stricter local choice is still a choice), every `permissions.ask`
   entry (local `ask` or `deny`), every `permissions.deny` entry (local `deny`),

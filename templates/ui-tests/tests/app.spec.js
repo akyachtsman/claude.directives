@@ -1389,7 +1389,8 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
   //
   // 240_000 left ~6s at N=8 on a split-step gate — an implicit zero dressed as
   // slack, the same defect S1's budget names. 300_000 covers it with ~66s
-  // spare and keeps S2 inside the SHORT-ceiling class in the three qa carriers:
+  // spare and keeps S2 inside the SHORT-ceiling class (the ui-suite composite's
+  // CALLER BOUND header section):
   // that class's maximum is 300s already (ENTRY's cap), so its "a failure costs
   // <=10min" claim is UNCHANGED — S2 joins the ceiling, it does not raise it.
   //

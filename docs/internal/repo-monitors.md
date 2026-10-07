@@ -51,6 +51,12 @@ zero-model counterpart to the `update-pages` skill: the deploy already happens o
 (branch-source Pages), and this adds the verify + notify layer with no session required.
 The live URL is derived generically, so the file is portable to any project as-is.
 
+**pages-retry.yml** — fires on `workflow_run` completion of the managed
+`pages-build-deployment` workflow. On a failure (typically GitHub's transient
+"Deployment failed, try again later.") it re-runs the whole deploy, bounded by
+`run_attempt` so a genuinely broken deploy cannot loop; after a few tries it stops
+and leaves the tracking issue to `pages-monitor.yml`. It re-runs, never pushes.
+
 See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
 `.github/workflows/codex-monitor.yml`, `.github/workflows/pages-monitor.yml`, and
 `.github/workflows/pages-retry.yml` — the five the checklist below expects.

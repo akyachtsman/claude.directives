@@ -168,7 +168,9 @@ that it binds every actor including the session. Do it once per repo.
 **Why it exists.** The toolkit's `push-gate` hook catches a direct push to main
 only in the session running it, and only for shapes it can parse — three review
 rounds on #256 found the bypass surface is not enumerable (#257). A ruleset
-moves the rule server-side, where no shell form evades it.
+moves the rule server-side, where no shell form evades it; it is the only thing
+that actually stops a direct push to the default branch, so a repo without it is
+unprotected no matter what the hook reports.
 
 **Setup** — *Settings → Rules → Rulesets → New branch ruleset*:
 1. Name it (e.g. `main protection`); **Enforcement status: Active**.

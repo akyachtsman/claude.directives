@@ -689,8 +689,41 @@ What is compared, delta or not:
     (#398), never this check alone: a check wider than the install refuses a
     stamp the install can never satisfy (owner ruling, 2026-10-06).
 
+  - **every installed kit, as its whole upstream directory**: each kit
+    directory found as above gets every file `templates/ui-tests/` ships except
+    `package-lock.json`. Workflows name kit files by bare filename, so nothing
+    derives them by path, and a kit whose template did not change was never
+    compared: claude.prop's two longest-standing kit divergences were never
+    named by any refresh (claude.prop, 2026-10-06). The kit row installs the
+    whole kit, hunk by hunk, so the check covers what the install does. A named
+    kit directory that is missing refuses the stamp here too.
+
   A dependency that exists is compared like a delta path; a stale copy is as
   broken as a missing one.
+- **`.claude/settings.json`, as sets, every run** (claude.prop, 2026-10-06).
+  The settings row merges rather than copies, so a byte comparison would refuse
+  every project that added its own keys, and leaving the file out let a read but
+  unapplied settings delta be stamped: claude.prop's file sat 42 permission
+  entries behind for six weeks, and this file decides what an agent may do
+  unprompted. So each entry the template carries must be in the local file:
+  every `permissions.allow` entry (local `allow`, `ask` or `deny` all count,
+  since a stricter local choice is still a choice), every `permissions.ask`
+  entry (local `ask` or `deny`), every `permissions.deny` entry (local `deny`),
+  every `enabledPlugins` key at the template's value, and every
+  `extraKnownMarketplaces` key. The `SessionStart` row is Phase 1.5's. Local
+  extras are never compared. A project that deliberately leaves an entry out
+  records why, keyed by the entry itself:
+
+  ```bash
+  jq --arg s "<section printed>" --arg e "<entry printed>" --arg r "<why this project leaves it out>" \
+    '.refresh_declined[$s][$e] = $r' .claude/directive-sync.json \
+    > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
+  ```
+
+  An entry's text IS its content, so the decline needs no blob: it holds while
+  the template carries that exact entry, and matches nothing once the entry is
+  changed or dropped. A missing local `.claude/settings.json` is reported, not
+  compared; an unreadable one refuses the stamp.
 
 An absent path is required where the skip rule makes it so: a dependency above,
 a file of an installed composite, the hook once `.claude/settings.json` exists,
@@ -698,6 +731,15 @@ a file of an installed kit. Any other absent path is reported, not compared:
 an absent workflow can be deliberate (`pages-retry.yml`, a scheduled workflow
 with no task), and a path upstream does not ship is the project's own. A path
 the upstream deleted counts as unapplied while a local copy remains.
+
+**What a clean run proves, and what it does not.** A stamp that goes through
+means: no path the delta lists is unapplied, no dependency above (script,
+composite, kit file) is stale or missing, and no settings entry is missing,
+each unless a recorded reason covers it. It does **not** mean the project
+matches upstream. A workflow, or any file outside the dependency set, whose
+template did not change in the delta is compared only by Phase 1.5, which
+reports `DRIFT` without holding the stamp. So "nothing named" is not "no
+divergence"; read Phase 1.5's report beside this one.
 
 ```bash
 # RE-DERIVED, not inherited. Every Bash call is a FRESH SHELL, so $head/$last/
@@ -722,7 +764,8 @@ classified=no
 # comparison and the upstream listing; a fetch that fails refuses the stamp.
 # No `grep -q` fed by a pipe (the SIGPIPE hazard in Phase 1); `; true` keeps a
 # no-match from ending the block under errexit.
-unapplied=0; handled=" "; tree=no
+unapplied=0; handled=" "; tree=no; kit_missing="
+"
 up=
 if [ "$classified" = yes ]; then
   up=$(mktemp -d) || up=
@@ -771,7 +814,12 @@ if [ "$tree" = yes ]; then
         while IFS= read -r k; do
           [ -n "$k" ] || continue
           if [ ! -d "$k" ]; then
-            echo "CANNOT VERIFY: kit dir $k is named by a workflow but missing"; unapplied=1; continue
+            case "$kit_missing" in *"
+$k
+"*) ;; *) echo "CANNOT VERIFY: kit dir $k is named by a workflow but missing"; unapplied=1
+                     kit_missing="$kit_missing$k
+" ;; esac
+            continue
           fi
           p="$k/${t#templates/ui-tests/}"
           [ "$st" = D ] && { [ -e "$p" ] && check "$p" deleted; continue; }
@@ -812,6 +860,21 @@ $(printf '%s\n' "$1" | grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' | sed -E 's/
     [ -f "$w" ] && scan "$(cat "$w")"
   done
   for a in .github/actions/*/; do [ -d "$a" ] && queue="$queue ${a%/}"; done
+  # Every installed kit, as its whole upstream directory (see above).
+  kit_files=$(printf '%s\n' "$shipped" | grep '^templates/ui-tests/' | grep -vxF templates/ui-tests/package-lock.json; true)
+  while IFS= read -r k; do
+    [ -n "$k" ] || continue
+    if [ ! -d "$k" ]; then
+      case "$kit_missing" in *"
+$k
+"*) ;; *) echo "CANNOT VERIFY: kit dir $k is named by a workflow but missing"; unapplied=1 ;; esac
+      continue
+    fi
+    deps="$deps
+$(printf '%s\n' "$kit_files" | sed "s|^templates/ui-tests/|$k/|")"
+  done <<KITS
+$kit_dirs
+KITS
   for d in global git design test data; do
     scan "$(git -C "$up" show "$head:directives/$d.md" 2>/dev/null; true)"
   done
@@ -844,10 +907,49 @@ KITS
       *) continue ;;
     esac
     grep -qxF "$t" <<<"$shipped" || continue   # not shipped upstream: the project's own
-    check "$p" "$t" "an installed composite ships it, or something installed or a directive names it"
+    check "$p" "$t" "an installed composite or kit ships it, or something installed or a directive names it"
   done <<DEPS
 $(printf '%s\n' "$deps" | sort -u)
 DEPS
+
+  # 3. .claude/settings.json, as sets (see above).
+  st_tpl=$(git -C "$up" show "$head:templates/claude-settings.json" 2>/dev/null) || st_tpl=
+  if [ -z "$st_tpl" ]; then
+    :   # no settings template at this head: nothing to compare
+  elif [ ! -f .claude/settings.json ]; then
+    echo "absent locally, not compared: .claude/settings.json"
+  elif ! st_out=$(jq -r --argjson t "$st_tpl" \
+        --argjson d "$(jq -c '.refresh_declined // {}' .claude/directive-sync.json 2>/dev/null || echo '{}')" '
+      def held($l; $ks; $e): any($ks[]; . as $k | any(($l.permissions[$k] // [])[]; . == $e));
+      . as $l
+      | ( ( {allow: ["allow","ask","deny"], ask: ["ask","deny"], deny: ["deny"]} | to_entries[] ) as $r
+          | ($t.permissions[$r.key] // [])[] as $e
+          | select(held($l; $r.value; $e) | not)
+          | {s: ("permissions." + $r.key), e: $e} ),
+        ( ($t.enabledPlugins // {}) | to_entries[] as $p
+          | select(($l.enabledPlugins // {})[$p.key] != $p.value)
+          | {s: "enabledPlugins", e: $p.key} ),
+        ( ($t.extraKnownMarketplaces // {}) | keys[] as $m
+          | select(($l.extraKnownMarketplaces // {}) | has($m) | not)
+          | {s: "extraKnownMarketplaces", e: $m} )
+      | . as $x | ($d[$x.s][$x.e] // "") as $why
+      | if ($why | type) == "string" and ($why | test("\\S")) then "KEPT\t\($x.s)\t\($x.e)\t\($why | gsub("[\t\n\r]"; " "))"
+        else "MISSING\t\($x.s)\t\($x.e)" end' .claude/settings.json); then
+    echo "CANNOT VERIFY: .claude/settings.json (or the template at $head) is not readable JSON"
+    unapplied=1
+  else
+    while IFS=$(printf '\t') read -r kind sec e why; do
+      [ -n "${kind:-}" ] || continue
+      if [ "$kind" = KEPT ]; then
+        echo "KEPT: .claude/settings.json $sec $e -- $why"
+      else
+        echo "UNAPPLIED: .claude/settings.json lacks $sec entry: $e (templates/claude-settings.json at $head)"
+        unapplied=1
+      fi
+    done <<SETTINGS
+$st_out
+SETTINGS
+  fi
 fi
 [ -n "$up" ] && rm -rf "$up"
 
@@ -860,8 +962,9 @@ elif [ "$classified" != "yes" ]; then
 elif [ "$unapplied" = 1 ]; then
   echo "stamp left at $last: the paths above are unapplied -- they differ from the"
   echo "template at $head, or are required and absent. Apply each one, or record why"
-  echo "it stays (refresh_kept, above), then re-run /refresh-repo. Stamping now would"
-  echo "hide them from every later delta."
+  echo "it stays (refresh_kept for a file, refresh_declined for a settings entry,"
+  echo "above), then re-run /refresh-repo. Stamping now would hide them from every"
+  echo "later delta."
 else
   # mktemp in the DESTINATION dir: a fixed /tmp name races a second session, and
   # a cross-filesystem mv degrades from an atomic rename to a copy — which is the

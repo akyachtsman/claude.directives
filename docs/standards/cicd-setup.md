@@ -353,9 +353,12 @@ Step 1.
 same environment as its Playwright run: the checks import the config, so a
 variable added to the run step alone makes them read a different config from the
 one that runs. It also checks that every `process.env` read in the kit is wired
-from an input. A variable that arrives another way goes in
-`.github/ui-suite-env-exempt.json` as `{"NAME": "how it arrives"}`; an entry with
-no reason is refused.
+from an input. A variable that needs no input goes in
+`.github/ui-suite-env-exempt.json` as `{"NAME": "why it needs none"}`; an entry
+with no reason is refused. Two kinds qualify: a name set outside the composite
+(the runner's `CI` and `GITHUB_*`, or a self-hosted runner image), and a name
+deliberately never set in CI because the code reading it handles it unset (a
+local-sandbox hatch such as a browser-executable override).
 
 `qa.yml` already invokes it. It needs no config file — the three rules are the
 same in every repo:

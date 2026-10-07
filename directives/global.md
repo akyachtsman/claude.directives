@@ -1086,6 +1086,12 @@ classes and no others:
   "is it safe" but **"can it change anything a person would want to be asked
   about"** — if no, it belongs here; if yes or unclear, it does not.
 
+A project's file holds every template entry: `/refresh-repo` keeps its stamp
+back while one is missing. Leaving an entry out deviates from this ruling, so it
+is raised with the owner (→ *A Knowing Deviation Is an Escalation*) and, once
+the owner agrees, recorded with its reason in `refresh_declined`, which that
+check reads.
+
 Remote-server entries carry BOTH server-name spellings, since the prefix differs
 between session surfaces and permission rules match names exactly. GitHub tools
 have one spelling and take one entry.

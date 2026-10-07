@@ -106,7 +106,11 @@ just its staleness, is the finding — and do not wait for a prompt you will
 never observe.
 
 Read-only tools joined the allowlist later. Added 2026-08-26 on the owner's
-instruction, after prompt fatigue reached four figures.
+instruction, after prompt fatigue reached four figures. Narrowed 2026-10-07:
+the reads that return outsider-writable content left the template, which is
+what a public repository carries, and a private repository may add them back
+(`global.md` → *Scheduling Tools Never Prompt*). On a public repository those
+reads prompt again; that cost was accepted.
 
 Settings load at session start, so a widened allowlist reaches a session only on
 its NEXT start — every session already running keeps prompting until restarted,

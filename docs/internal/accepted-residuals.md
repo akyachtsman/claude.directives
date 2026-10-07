@@ -36,6 +36,16 @@ the GitHub MCP read surface (`pull_request_read`, `list_issues`, `issue_read`,
 getters). The admission test is **"can it change anything a person would want to
 be asked about"** — not "is it safe", which is a judgement call that drifts.
 
+**Narrowed 2026-10-07 (owner ruling, from claude.prop's finding).** That test
+models a call's side effects, not whether what it returns can be trusted. On a
+public repository the issue and PR reads, file and commit reads at any ref, CI
+run and log reads, and the `search_*` family return text outsiders write, so
+auto-allowing them removed the prompt before an agent read attacker-writable
+text. A second question now applies ("does it return content an outsider can
+write?"), the template keeps only reads whose content collaborators alone
+write, and a private repository may add the rest locally. The cost is accepted:
+on a public repository those reads prompt again.
+
 Refused, on the owner's own instruction and consistent with the 2026-07-12
 ruling: `mcp__Supabase__deploy_edge_function` and any other live-backend deploy
 (also given an explicit `permissions.ask` entry, belt-and-braces, since its gate

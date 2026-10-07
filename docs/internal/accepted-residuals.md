@@ -43,8 +43,19 @@ run and log reads, and the `search_*` family return text outsiders write, so
 auto-allowing them removed the prompt before an agent read attacker-writable
 text. A second question now applies ("does it return content an outsider can
 write?"), the template keeps only reads whose content collaborators alone
-write, and a private repository may add the rest locally. The cost is accepted:
-on a public repository those reads prompt again.
+write, and a private repository may add the rest locally, except `search_*`,
+which spans all of GitHub and stays gated everywhere. The cost is accepted: on
+a public repository those reads prompt again.
+
+**Accepted residual (owner, 2026-10-07; Codex on #404).** Every GitHub MCP read
+takes the repository as a caller-supplied argument, so an allowed getter (a
+release or tag body, a label, a file in a private repository's allowed reads)
+can be pointed at a repository an attacker controls. In a web session the
+GitHub access is scoped to the session's repositories and such a call is
+refused; a local session has no such scope. The owner chose to keep the
+repository-targeted reads allowed rather than gate every GitHub read: steering
+an agent to an attacker's repository normally takes text the agent already read
+from an outsider, and those reads are now the ones that prompt.
 
 Refused, on the owner's own instruction and consistent with the 2026-07-12
 ruling: `mcp__Supabase__deploy_edge_function` and any other live-backend deploy

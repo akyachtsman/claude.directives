@@ -1100,10 +1100,19 @@ that pass both. A **private** repository, where every writer is a
 collaborator, may add the outsider-content reads to its own `permissions.allow`:
 `get_file_contents`, `list_commits`, `get_commit`, `list_pull_requests`,
 `pull_request_read`, `list_issues`, `issue_read`, `get_check_run`,
-`get_job_logs`, `actions_get`, `actions_list`, and the `search_*` family, each
-as `mcp__github__<name>`. `/refresh-repo` asks for a reason for every allow
-entry the template does not carry, so record "private repository" for each
-once. A repository that goes public removes them in the same change.
+`get_job_logs`, `actions_get` and `actions_list`, each as
+`mcp__github__<name>`. `/refresh-repo` asks for a reason for every allow entry
+the template does not carry, so record "private repository" for each once. A
+repository that goes public removes them in the same change.
+
+**The `search_*` family stays gated everywhere, private repositories included**
+(owner ruling, 2026-10-07, from Codex on #404). A search is not bound to the
+repository a session works in: an unqualified query spans all of GitHub, so
+what it returns can be written by anyone whatever this repository's visibility.
+The other GitHub reads take the repository as an argument too. In a web session
+the GitHub access is scoped to the session's own repositories, so a call aimed
+elsewhere is refused. A local session has no such scope, and that leftover risk
+is accepted and recorded in `docs/internal/accepted-residuals.md`.
 
 A project's file holds every template entry: `/refresh-repo` keeps its stamp
 back while one is missing. Leaving an entry out deviates from this ruling, so it

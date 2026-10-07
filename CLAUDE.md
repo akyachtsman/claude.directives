@@ -180,15 +180,15 @@ A directive repo must pass its own CI before it can be trusted downstream.
   interactive Pages artifact, `docs/site/logical-map.html`. What each case covers and why it exists is in
   `docs/internal/repo-map-ui.md`; read that before changing the map, the router,
   or the suite.
-- `ci-monitor.yml` — opens/updates a deduplicated `ci-failure` issue when QA fails; detail: `docs/internal/repo-monitors.md`.
-- `ci-notify.yml` — comments on the PR when QA goes green, to wake a watching session. ⚠️ A unique match is not a guaranteed wake for YOUR session — it can hit an unrelated PR, which gets the comment instead. Arm the check-in whenever the run's SHA is not your PR's head; detail: `docs/internal/repo-monitors.md`.
-- `codex-monitor.yml` — adds/clears the `codex-flagged` label from Codex's verdict comments; it misses 👍 and inline-reply verdicts, so check the PR's comments AND its review threads; detail: `docs/internal/repo-monitors.md`.
-- `pages-monitor.yml` — verifies each Pages build is live and opens/updates a `pages-deploy-failure` issue on a problem; detail: `docs/internal/repo-monitors.md`.
+- `ci-monitor.yml` — opens/updates a deduplicated `ci-failure` issue when QA fails.
+- `ci-notify.yml` — comments on the PR when QA goes green, to wake a watching session. ⚠️ A unique match is not a guaranteed wake for YOUR session — it can hit an unrelated PR, which gets the comment instead. Arm the check-in whenever the run's SHA is not your PR's head.
+- `codex-monitor.yml` — adds/clears the `codex-flagged` label from Codex's verdict comments; it misses 👍 and inline-reply verdicts, so check the PR's comments AND its review threads.
+- `pages-monitor.yml` — verifies each Pages build is live and opens/updates a `pages-deploy-failure` issue on a problem; `pages-retry.yml` re-runs a transiently failed deploy, bounded.
+- `watcher-liveness.yml` — advisory weekly check that each watcher still fires; not a gate.
 
-See `docs/internal/repo-monitors.md` for this repo's monitor detail and self-test
-triage (the `ci-failure` / `codex-flagged` flow), and `docs/standards/automations.md` for
-escalation rules and the exported automation standard.
-See `docs/standards/ci-triage.md` for the exported **project** CI triage rules.
+Per-workflow detail (canonical) and self-test triage (`ci-failure` / `codex-flagged`):
+`docs/internal/repo-monitors.md`. Exported automation standard and escalation rules:
+`docs/standards/automations.md`; exported **project** CI triage: `docs/standards/ci-triage.md`.
 
 ## Toolkit (commands, skills, agents, hooks)
 Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit/`
@@ -286,10 +286,6 @@ test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)
-#   the UI-suite ceilings comment is byte-identical across the three qa carriers and NOTHING ENFORCES IT —
-#   whole-file diff cannot be used (they legitimately differ elsewhere), so diff the block:
-diff <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa.yml) <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa-live.yml)
-diff <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa.yml) <(sed -n '/A FAILING run is where the spare goes/,/Raise this BEFORE adding/p' templates/workflows/qa-response.yml)
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed

@@ -33,7 +33,4 @@ match. Phases mirror `docs/guides/dev-pipeline.md`."
 Scope: this lists the **directives-toolkit** (our custom toolkit) only. For the
 full set including built-ins and other plugins, use Claude Code's `/help`.
 
-
-> The closing format above ends the BODY. The status line required by
-> `global.md` → *Status Line on Every Stop* still follows it as the message's
-> final line.
+The message still ends with the status line (`global.md` → *Status Line on Every Stop*).

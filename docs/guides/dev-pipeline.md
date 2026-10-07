@@ -218,8 +218,9 @@ What `/new-repo` scaffolds in **every** project:
   `check-contrast.js`, `package.json`)
 
 **Mandatory setup** (NEW-REPO-USER-INSTRUCTIONS Step 1): data secrets (`DB_URL`,
-`DB_SERVICE_KEY`), the test credential (`TEST_AUTH_CREDENTIAL`), and the email
-transport (`SMTP_PASS` secret; `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` variables).
+`DB_SERVICE_KEY`) and the test credential (`TEST_AUTH_CREDENTIAL`). The email
+transport (`SMTP_PASS` secret; `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` variables) is
+needed only if the project sends email (owner ruling, 2026-10-07).
 No `KEEPALIVE_PAT`: `keepalive.yml` is not scaffolded, so a standard repo has no
 consumer for that Contents-write PAT and should not hold one. The Supabase connection (`.claude/mcp.json`) stays
 per-repo + gitignored by the data directive's security rule — the one thing never
@@ -249,8 +250,8 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
   scaffolds the full set (all nine standard workflows + Playwright kit +
   scheduled-job scripts; `keepalive.yml` is excluded).
-  The email kit is standard + active with mandatory secrets and a config-guard
-  notice in `notify-task.js`. See "Complete standard scaffold" above.
+  The email kit is standard + active, with a config-guard notice in
+  `notify-task.js`; its secrets are needed only if the project sends email. See "Complete standard scaffold" above.
 - **Design — per-project generative (done):** the fixed company design system
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;
   `design.md` is now a thin method, `/design-intake` establishes each project's

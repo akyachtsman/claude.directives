@@ -47,42 +47,30 @@ verdict. Read-only — do NOT modify files. Execute in order:
    — git transport, so it needs no auth, no MCP and no quota, and works from a
    session scoped to any repo. Do **not** depend on `api.github.com`: whether the
    proxy lets it through depends on the environment's network policy (refused in
-   some fleet environments, reachable unauthenticated here on 2026-09-24), an
-   unauthenticated call shares a small per-IP limit, and the GitHub MCP is scoped
-   to the session's own repo — so in most downstream projects the API route fails.
+   some fleet environments, reachable unauthenticated here on 2026-09-24), and the
+   GitHub MCP is scoped to the session's own repo and compares no two refs.
    If the stamp differs, or none exists, report a ⚠️ finding.
    Then classify the delta by top-level path and state the action per
-   EXPORTS.json delivery mode. Classification needs the diff, which `ls-remote`
-   cannot give — and **no GitHub MCP call compares two refs** (the surface is
-   `list_commits` / `get_commit` / `search_commits` / `list_branches`; walking the
-   delta commit-by-commit is exactly the burn `git.md` → *GitHub API Quota Economy* forbids).
-   In a session scoped to claude.directives the objects are already local, so
-   classify with plain git and no API at all. Keep the SHA `ls-remote` returned
-   and diff against **that**, after `git fetch origin main` to make the object
-   available: `ls-remote` does not update remote-tracking refs, so `origin/main`
-   is only as fresh as this session's last fetch, and classifying against a
-   lagging ref silently under-reports the delta whose SHA the alarm just
-   reported — dropping `plugins/` turns "toolkit is behind" into "docs only,
-   informational". Then, guarded by `git cat-file -e <sha>^{commit}` for both
-   ends: `git diff --name-only <stamp-sha>..<live-sha> | cut -d/ -f1 | sort -u`.
-   The guard matters because these clones are frequently shallow — a commit
-   outside the fetch depth makes `git diff` fail outright rather than degrade.
-   One bounded `git fetch --deepen 100` is worth trying; bare `--deepen` exits
-   129 because it requires a value. If the object is STILL missing after that one
-   attempt, stop retrying. Anywhere else, or when the object is still missing, report the SHA
-   delta **uncategorised and say classification was unavailable**, pointing at
-   `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*. Never clone the repo
-   to classify — the alarm is a diagnostic and must cost less than what it warns
-   about. Degrading loudly is correct; inheriting a blocked or nonexistent call
-   one line after the SHA fetch is not.
+   EXPORTS.json delivery mode. Only in a session scoped to claude.directives,
+   where the objects are local: `git fetch origin main`, then
+   `git diff --name-only <stamp-sha>..<live-sha> | cut -d/ -f1 | sort -u` against
+   the SHA `ls-remote` returned — never `origin/main`, which `ls-remote` does not
+   update, so a lagging ref under-reports the delta — behind the
+   `git cat-file -e` guard and the one bounded deepen, exactly as `/refresh-repo`
+   Phase 2 states them (that is their single home, with the reasons). Anywhere
+   else, or when the object is still missing, report the SHA delta
+   **uncategorised and say classification was unavailable**, pointing at
+   `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*. Never clone the
+   repo or walk the delta commit by commit to classify — the alarm is a
+   diagnostic and must cost less than what it warns about.
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
    - `templates/` → installed copies may be stale → run `/refresh-repo`
    - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it.
-     Whether the project self-heals depends on the hook being RUNNABLE, which
-     existence alone does not establish — an unregistered or non-executable
-     script never runs, a content-only integrity diff sees nothing wrong with
-     either, and the hook is web-gated so it never runs locally at all. Require
-     all four:
+     Whether the project self-heals depends on the hook being RUNNABLE, not
+     merely present: on the web, executable, and registered in the
+     `SessionStart` array. `/refresh-repo` Phase 1.5 (*Hook repair*) is the
+     single home of those checks, their repair and the reasons; here, only
+     report:
      ```bash
      [ "${CLAUDE_CODE_REMOTE:-}" = true ] \
        && [ -x .claude/hooks/session-start.sh ] \
@@ -91,23 +79,14 @@ verdict. Read-only — do NOT modify files. Execute in order:
        .claude/settings.json >/dev/null 2>&1 \
        && echo "self-updating" || echo "needs remediation"
      ```
-     The registration test parses the SessionStart array rather than grepping the
-     file: two independent greps are satisfiable by unrelated entries — an
-     unrelated `SessionStart` command plus this script under `PreToolUse` — which
-     reports self-updating for a project whose updater never runs at session
-     start.
      On CLI/desktop the first condition is false by design — the hook exits early
-     off the web (`global.md` → *Skill Bootstrap* keeps local installs manual). Do
-     not report a local session as self-updating: tell it to run
-     `scripts/install-toolkit.sh` itself, and say the hook covers its web
-     sessions only.
-     Self-updating → the next session picks the toolkit up on its own; say so and
-     prescribe nothing. Otherwise → force the env cache rebuild (see
+     off the web (`global.md` → *Skill Bootstrap* keeps local installs manual): tell
+     a local session to run `scripts/install-toolkit.sh` itself. Self-updating →
+     say so and prescribe nothing. Otherwise → name which condition failed (absent,
+     unregistered or non-executable), offer `/refresh-repo` to install or repair
+     the hook, or force the env cache rebuild (see
      `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0 — One-time: turn the toolkit on (you may already be done)*,
-     "Force a toolkit update") or wait for the ~weekly expiry, and offer `/refresh-repo` to install or repair the hook so
-     the manual step stops recurring. Name which of the three failed: a present
-     but unregistered or non-executable hook is the trap — it looks installed and
-     never runs.
+     "Force a toolkit update") or wait for the ~weekly expiry.
    - **Permission allowlist present?** Report it, because nothing else will.
      ```bash
      jq -e '.permissions.allow | index("mcp__Claude_Code_Remote__create_trigger")' \
@@ -172,7 +151,4 @@ with a one-line "ready / not ready" verdict and any actions needed before
 starting work, then append the step-8 connectors/tools inventory below the
 verdict (reference info, not pass/fail).
 
-
-> The closing format above ends the BODY. The status line required by
-> `global.md` → *Status Line on Every Stop* still follows it as the message's
-> final line.
+The message still ends with the status line: `global.md` → *Status Line on Every Stop*.

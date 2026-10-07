@@ -4,8 +4,9 @@ A scheduled **GitHub Actions** job that runs a Node script and emails a
 notification. Transport-agnostic (any SMTP provider), DST-safe, and protected
 against GitHub's 60-day scheduler auto-disable (public repositories only).
 
-`/new-repo` scaffolds this kit into **every** project as standard, and the SMTP
-secrets are **mandatory repo setup** (NEW-REPO-USER-INSTRUCTIONS Step 1). The
+`/new-repo` scaffolds this kit into **every** project as standard; the SMTP
+secrets and variables are needed only if the project sends email
+(NEW-REPO-USER-INSTRUCTIONS Step 1). The
 shipped entry point `notify-task.js` **guards on the config and emits a GitHub
 Actions notice (not a crash) if a required secret/variable is missing**, then
 skips — so an unconfigured repo is obvious in the Actions log. Replace the body

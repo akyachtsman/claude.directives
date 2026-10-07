@@ -34,7 +34,4 @@ superpowers `brainstorming` — alternatives mandatory, one question per turn):
    reads `brief.md`." Stopping at the gate is deliberate; the user starts the
    next phase.
 
-
-> The closing format above ends the BODY. The status line required by
-> `global.md` → *Status Line on Every Stop* still follows it as the message's
-> final line.
+The message still ends with the status line (`global.md` → *Status Line on Every Stop*).

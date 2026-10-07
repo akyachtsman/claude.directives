@@ -58,7 +58,4 @@ Always end with a compact verdict: for `inspect`, the file count and tree; for
 `compare`, the three-way only-left / only-right / differs summary; for `audit`,
 a pass/fail list of checks. Keep it scannable. Never modify the target repo.
 
-
-> The closing format above ends the BODY. The status line required by
-> `global.md` → *Status Line on Every Stop* still follows it as the message's
-> final line.
+The message still ends with the status line (`global.md` → *Status Line on Every Stop*).

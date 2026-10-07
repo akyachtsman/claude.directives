@@ -7,25 +7,15 @@ handoff file (anything durable belongs in CLAUDE.md, not a sidecar that goes
 stale the moment the repo changes).
 
 ## 0. The only test for including anything
-The rule itself is `global.md` → *Handoffs Carry Only What Dies With the Session*, which applies whether or not this command is installed. What follows
-is how to apply it.
-
-> **Would this be lost forever the moment this session ends?**
+The rule — the test, what fails it, and where everything else routes (durable →
+a file, human-actionable → the reply, declined twice → decided) — is
+`global.md` → *Handoffs Carry Only What Dies With the Session*, which applies whether or not this command is installed. What follows
+is how this command applies it, to every line *before* writing it.
 
 Not "is it useful", not "is it relevant", not "would it save time" — those let
-everything through. Only what lives *solely* in this session's memory qualifies.
-Apply it to every line before writing it, not as a pass afterwards.
-
-**Almost nothing survives this test. That is the intended outcome.** A handoff of
-two lines is a good handoff. A handoff of twenty is a session that failed to
-apply the test.
-
-Fails the test — the repo already holds it, and the next session reads the repo:
-- what changed, and why → the diff, the commit messages, the PR body
-- the current state of anything → the working tree, the live site, CI, `main`
-- open PRs / issues / labels / branches → GitHub, which the next session queries
-- any rule from CLAUDE.md or an imported directive → re-fetched at Session Start
-- what was tried and shipped → the merged history
+everything through. **Almost nothing survives, and that is the intended
+outcome:** a handoff of two lines is a good handoff; one of twenty is a session
+that failed to apply the test.
 
 Passes the test — said aloud, never written down:
 - a question you asked the user that they have **not answered yet**
@@ -36,21 +26,7 @@ Passes the test — said aloud, never written down:
 - a constraint you were **told**, not read (access limits, vendor quirks, "don't
   touch X")
 
-Two traps that pass the literal test but are still wrong:
-
-- **A dead end worth remembering is worth a FILE.** If an abandoned approach
-  should outlive the next session, `/learn` it into `learnings.jsonl` or record
-  the decision in CLAUDE.md — a handoff dies when the next session ends, so
-  parking a durable decision there loses it one session later. If it is not
-  worth a file, it is not worth the block either.
-- **A concern the owner has declined to act on is not unresolved — it is
-  decided.** Raised twice with no answer means no. Do not carry your own
-  proposals forward as if they were open questions; a later session can raise
-  them fresh from the repo if they still matter.
-
-If nothing passes, say exactly that in one line and stop. "Nothing to hand off —
-the repo holds everything" is a **correct and complete** output of this command.
-Never pad to fill the format.
+If nothing passes, say exactly that in one line and stop.
 
 **Hard cap: 5 items, ~15 lines inside the block.** If more seem to qualify, the
 test is being applied too loosely — re-apply it and keep the ones that would
@@ -72,23 +48,15 @@ A handoff over a messy tree is worthless:
 
 ## 2. Write the handoff
 **Deliver it as one self-contained, fenced block the user can paste verbatim
-into the new session** — never prose scattered around the reply. It leads with
-**Unresolved**: decisions still in the air, questions the user has not answered,
-positions taken but not recorded.
-
-Do **not** substitute a status summary when nothing is pending — the repo states
-its own status better than a paraphrase of it can. Nothing pending means a
-one-line block saying so.
+into the new session** — never prose scattered around the reply.
 
 **The block uses this exact visual format** — same header, same dividers, same
-framing, in every repo. When the block carries sections at all, UNRESOLVED comes
-first, and an empty section is dropped rather than left blank — but a session
-with nothing to hand off emits the one-line block from §0 with no sections
-whatsoever, which is not an exception to be worked around but the expected
-result. Nothing in the block restates a standing
-instruction — the receiving session already reads CLAUDE.md and the directives
-at Session Start, so a header saying so is a paraphrased directive rule and
-belongs nowhere near a handoff:
+framing, in every repo. UNRESOLVED (decisions still in the air, questions the
+user has not answered, positions taken but not recorded) comes first; an empty
+section is dropped rather than left blank. Nothing pending means the one-line
+block from §0 with no sections at all — never a status summary, which the repo
+states better than a paraphrase can. No header restates a standing instruction:
+the receiving session reads CLAUDE.md and the directives at Session Start.
 
 ```text
 ════════════════════ SESSION HANDOFF — <repo-name> ════════════════════
@@ -118,30 +86,17 @@ Framing rules for UNRESOLVED items — the part that makes a handoff usable:
   session can simply look and see it, cut the bullet.
 - **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
   session would otherwise burn a round-trip re-deriving.
-- **A claim about an UPSTREAM file names the SHA it was verified at**, and that
-  SHA is **re-resolved from the upstream default branch as the item is written** —
-  never the one you fetched at earlier. Re-reading your cached copy proves nothing
-  about the current tip: fetch the tip, verify the file there, name that SHA.
-  Upstream moves inside a session, so "I fetched it from main" and "it was current
-  when I filed" are different claims and only the second supports a finding. Read
-  the file's header comments first — they often record the behaviour as a
-  deliberate trade-off.
+- **A claim about an UPSTREAM file names the SHA it was verified at**, re-resolved from the upstream tip as the item is written: `global.md` → *One Session, One Repo*.
 
 Self-check every line against §0. If it's already in CLAUDE.md, the README, a
 workflow file, **a PR body, a commit message, an issue thread, the diff**, or an
 imported directive (`global.md`, `git.md`, `test.md`, `design.md`, `data.md`),
-drop it — or move it THERE and drop it. A merged PR is not session memory: the
-next session can read it, so restating its reasoning is the single most common
-way this command bloats. Never paraphrase a directive rule into the handoff —
-not in an item, and not in a header: the receiving session's own
-Session Start already re-fetches the live directive text, and a paraphrase
-can drift stale or lossy in the meantime — the receiving session then
-treats the paraphrase as authoritative and skips the real fetch (observed
-2026-07-22: a session worked off a stale handoff paraphrase of `git.md`'s
-merge-authorization rule instead of reading the live file, and mis-applied
-it until it read the source directly). If a directive's *application* to
-this repo needs a decision record, that belongs in CLAUDE.md, not a
-handoff.
+drop it — or move it THERE and drop it. Restating a merged PR's reasoning is the
+single most common way this command bloats. Never paraphrase a directive rule,
+in an item or a header: the receiving session treats the paraphrase as
+authoritative and skips the live text (observed 2026-07-22, a stale paraphrase
+of `git.md`'s merge-authorization rule mis-applied until the source was read). A
+decision about a directive's *application* to this repo goes in CLAUDE.md.
 
 ## 3. Leave the remote clean (hard exit gate)
 Re-run `git ls-remote --heads origin 'refs/heads/claude/*'` as the last act
@@ -157,11 +112,4 @@ branches; don't send them there), plus the auto-delete setting if it is off.
 Never defer it into the handoff: the next session cannot action it either, so
 it would just be copied forward until someone happens to read it.
 
-The same rule generalises — **anything only the human can do goes in the reply,
-not the block.** The block addresses the next session; if the next session cannot
-act on a line, it does not belong in it.
-
-
-> The closing format above ends the BODY. The status line required by
-> `global.md` → *Status Line on Every Stop* still follows it as the message's
-> final line.
+The message still ends with the status line (`global.md` → *Status Line on Every Stop*).

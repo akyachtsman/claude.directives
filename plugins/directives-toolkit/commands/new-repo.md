@@ -106,17 +106,25 @@ Execute in order:
    live QA gate and the deploy monitor silently inert, which reads as healthy.
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 
-   **Static-check scripts (required by qa.yml).** Copy ALL FOUR —
-   `claude.directives/templates/scripts/workflow-ref-guard.py` and
-   `check-job-bounds.py` and `check-py-warnings.py` and `check-ui-suite-env.py`
-   into `.github/scripts/` — `qa.yml` runs all four, so the job
-   fails at step resolution without them. `check-ui-suite-env.py` needs no config;
-   a variable the kit reads that arrives without an input goes in
-   `.github/ui-suite-env-exempt.json` with its reason, never in the script. `check-job-bounds.py` needs no config;
-   it is what keeps the ui-suite callers' 120-minute bound from drifting back to a
-   value that cancels healthy runs. Populate `.github/workflow-ref-required.json` with any watcher the
-   project must not lose (absent file = none, which is the right default at
-   bootstrap). Rules: `docs/standards/automations.md` → *Watcher Rules*.
+   **Scripts the installed files name by path — DERIVE the set, never hand-list
+   it** (a hand list falls behind: #321, #353, #355). Run the pipeline `/refresh-repo` uses,
+   `refresh-repo.md` → *Deriving the referenced-script set*, with every file this bootstrap installs as a caller — the
+   workflows above, `templates/actions/*/action.yml`, and the five
+   `directives/*.md` from step 1 (a directive is a caller too) — all fetched at
+   ONE `main` SHA resolved for this run, never a moving `main`. Copy each derived
+   `.github/scripts/<f>` from `claude.directives/templates/scripts/<f>`. A missing
+   one fails its caller at step resolution, so a failed caller or script fetch
+   stops the bootstrap; never install a caller without what it names. Config
+   lives beside the scripts, never in them: a variable the kit reads that arrives
+   without an input goes in `.github/ui-suite-env-exempt.json` with its reason
+   (`check-ui-suite-env.py`); `check-job-bounds.py` needs none — it is what keeps
+   the ui-suite callers' 120-minute bound from drifting back to a value that
+   cancels healthy runs; `.github/workflow-ref-required.json` lists any watcher
+   the project must not lose (absent file = none, the right default at
+   bootstrap; rules: `docs/standards/automations.md` → *Watcher Rules*); and
+   `check-contrast.js`, the WCAG guardrail `qa.yml` runs against the design
+   tokens, reads `styles/tokens.css` or `css/tokens.css` by default — elsewhere,
+   append `--tokens <file>` (repeat it per theme file).
 
    **Composite actions (required by the qa workflows).** Copy
    `claude.directives/templates/actions/<a>/**` → `.github/actions/<a>/**` —
@@ -138,19 +146,19 @@ Execute in order:
    installs them, because that is not decidable from prose (#354). Keeping this
    correct is a review responsibility.
 
-   **Scheduled-job scripts.** Copy `claude.directives/templates/scripts/`
-   (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `package.json`) into
-   `.github/scripts/`, then run `npm install` there and **commit** the generated
+   **Scheduled-job scripts — the derivation's known blind spot, so copy them by
+   hand.** `cron-notify.yml` runs `node notify-task.js` from
+   `working-directory: .github/scripts`, never naming the path, so the derivation
+   cannot see it (#398, until the derivation is widened). Copy
+   `claude.directives/templates/scripts/` (`notify-email.js`, `notify-task.js`,
+   `package.json`) into `.github/scripts/`, then run `npm install` there and **commit** the generated
    `package-lock.json` (`cron-notify.yml`'s `cache:` step needs
    `.github/scripts/package-lock.json`, same policy as the Playwright kit).
    `notify-task.js` ships as a starter that emails via `notify-email.js`; it
    **guards on the SMTP config and emits a notice if it is missing**, so the
-   scheduled job never crashes cryptically. The email secrets are **mandatory repo
-   setup** (NEW-REPO-USER-INSTRUCTIONS Step 1); the project replaces the task body
-   with its real notification. `check-contrast.js` is the WCAG guardrail `qa.yml`
-   runs against the project's design tokens — `styles/tokens.css` or
-   `css/tokens.css` by default; elsewhere, append `--tokens <file>` (repeat it per
-   theme file).
+   scheduled job never crashes cryptically. The email secrets and variables are
+   needed only if the project sends email (NEW-REPO-USER-INSTRUCTIONS Step 1); the
+   project replaces the task body with its real notification.
 
    **Design starter.** Copy `claude.directives/templates/styles/` (`tokens.css`,
    `components.css`) into `styles/`. These are neutral starters that pass the
@@ -197,25 +205,15 @@ Execute in order:
    environment's Setup script by hand. It is web-gated and always exits 0, so
    a failed install degrades the session rather than blocking it.
 
-7. **Install the Playwright kit.** Copy `claude.directives/templates/ui-tests/`
-   into `.github/scripts/ui-tests/`:
-   - `playwright.config.js`
-   - `tests/app.spec.js`
-   - `package.json`
-
-   Then copy TWO scripts from `claude.directives/templates/scripts/` into
-   `.github/scripts/`, both of which serve this kit and neither of which arrives
-   with it:
-   - `check-ui-viewports.js` — the `ui-suite` composite names it by path, so
-     **every UI job fails at step resolution without it**. This is the #321
-     failure, and it was found by a downstream project's red CI rather than here.
-   - `browser-ladder.js` — `directives/test.md` → *Sandboxed local runs* tells
-     every project to re-derive its agent-sandbox ceiling by running this file.
-     A directive is fetched live and a script is copied, so without this line a
-     freshly bootstrapped project reads the instruction and gets
-     `MODULE_NOT_FOUND` (Codex, #355). `/refresh-repo` now installs it for
-     EXISTING projects; this is the same delivery gap on the other carrier, which
-     is the two-carriers-one-fixed shape #353 exists for.
+7. **Install the Playwright kit.** Copy every file
+   `claude.directives/templates/ui-tests/` ships at step 5's SHA (list it from the
+   upstream tree; never a remembered file list) into `.github/scripts/ui-tests/`,
+   keeping its layout. The scripts that serve the kit do NOT arrive with it:
+   `check-ui-viewports.js` (the `ui-suite` composite names it by path — without it
+   every UI job fails at step resolution, #321) and `browser-ladder.js`
+   (`directives/test.md` → *Sandboxed local runs* tells every project to run it —
+   without it the documented command dies with `MODULE_NOT_FOUND`, #355) come from
+   step 5's derivation; confirm both are in `.github/scripts/` before going on.
 
    The template kit ships no lockfile on purpose — run `npm install`
    inside `.github/scripts/ui-tests/` to generate a fresh one **and commit it**.

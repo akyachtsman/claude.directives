@@ -280,15 +280,17 @@ runs:
         esac
         # Something ALREADY answering on :8080 would pass the readiness poll below
         # while this server dies on EADDRINUSE, and the suite would test whatever
-        # that is. Refuse a busy port up front.
-        if curl -s -o /dev/null http://localhost:8080/; then
+        # that is. Refuse a busy port up front. Every probe carries --max-time: a
+        # port that accepts but never answers would otherwise hang the step until
+        # the job timeout, not the 30s this loop advertises (Codex, #405).
+        if curl -s --max-time 2 -o /dev/null http://localhost:8080/; then
           echo "::error::port 8080 is already in use, so this run cannot start its own server there."
           exit 1
         fi
         "$bin" "$SERVER_ROOT" -p 8080 --silent &
         pid=$!
         for i in $(seq 1 30); do
-          if curl -sf -o /dev/null http://localhost:8080/; then
+          if curl -sf --max-time 2 -o /dev/null http://localhost:8080/; then
             echo "Local server answered on :8080 after ${i}s."
             exit 0
           fi

@@ -710,8 +710,8 @@ What is compared, delta or not:
   since a stricter local choice is still a choice), every `permissions.ask`
   entry (local `ask` or `deny`), every `permissions.deny` entry (local `deny`),
   and every `enabledPlugins` and `extraKnownMarketplaces` key at the template's
-  value. The `SessionStart` row is Phase 1.5's. Local extras are never compared. A project that deliberately leaves an entry out
-  records why, keyed by the entry itself:
+  value. The `SessionStart` row is Phase 1.5's. A project that deliberately
+  leaves an entry out records why, keyed by the entry itself:
 
   ```bash
   jq --arg s "<section printed>" --arg e "<entry printed>" --arg r "<why this project leaves it out>" \
@@ -719,13 +719,17 @@ What is compared, delta or not:
     > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
   ```
 
-  The reverse holds too: an `allow` entry the template **dropped** since the
-  last stamp, still granted locally, holds the stamp until it is removed or its
-  reason is recorded under the section `permissions.allow (dropped upstream)`
-  (Codex, #404). A local extra is otherwise never compared, so without this a
-  narrowing, such as the 2026-10-07 removal of outsider-content reads, would
-  never reach a project that missed applying it. A private repository keeping
-  those reads records that once.
+  The reverse holds for `allow` alone, the one section that grants anything:
+  **every local `allow` entry the template does not carry needs a recorded
+  reason**, under the section `permissions.allow (local extra)` (Codex, #404).
+  An entry the template dropped looks exactly like one the project added, so
+  without this a narrowing, such as the 2026-10-07 removal of
+  outsider-content reads, would never reach a project that missed applying it.
+  It is judged on the current file and template alone, with no history to
+  compare, so no sequence of refreshes can hide an entry. A private repository
+  keeping those reads records each once, and so does a project's own addition.
+  Extras in the other sections are never compared: they restrict, or they
+  enable a plugin, which grants nothing on its own.
 
   An entry's text IS its content, so the decline needs no blob: it holds while
   the template carries that exact entry, and matches nothing once the entry is
@@ -964,40 +968,32 @@ DEPS
     done <<SETTINGS
 $st_out
 SETTINGS
-    # Allow entries the template DROPPED since the last stamp but the local file
-    # still grants (Codex, #404). A local extra is otherwise never compared, so
-    # without this a narrowing never reaches a project that missed applying it.
-    if [ -z "$last" ]; then
-      echo "no previous stamp: allow entries the template dropped are not checked"
-    elif ! git -C "$up" fetch -q --depth=1 https://github.com/akyachtsman/claude.directives.git "$last" 2>/dev/null; then
-      echo "CANNOT VERIFY: the template at the last stamp $last could not be fetched"
+    # Every LOCAL allow entry the template does not carry needs a recorded
+    # reason (Codex, #404). allow is the one section that grants anything, so an
+    # unexplained extra there is how a narrowed template fails to arrive: an
+    # entry the template dropped looks exactly like a local addition. Judged on
+    # the current file and template alone, so no history can hide one.
+    if ! extra=$(jq -r --argjson t "$st_tpl" \
+          --argjson d "$(jq -c '.refresh_declined // {}' .claude/directive-sync.json 2>/dev/null || echo '{}')" '
+        (.permissions.allow // [])[] as $e
+        | select(any(($t.permissions.allow // [])[]; . == $e) | not)
+        | ($d["permissions.allow (local extra)"][$e] // "") as $why
+        | if ($why | type) == "string" and ($why | test("\\S"))
+          then "KEPT\t\($e)\t\($why | gsub("[\t\n\r]"; " "))" else "EXTRA\t\($e)" end' .claude/settings.json 2>/dev/null); then
+      echo "CANNOT VERIFY: the local allow entries could not be read"
       unapplied=1
     else
-      old_tpl=$(git -C "$up" show "$last:templates/claude-settings.json" 2>/dev/null) || old_tpl='{}'
-      if ! dropped=$(jq -r --argjson o "$old_tpl" --argjson t "$st_tpl" \
-            --argjson d "$(jq -c '.refresh_declined // {}' .claude/directive-sync.json 2>/dev/null || echo '{}')" '
-          . as $l
-          | ($o.permissions.allow // [])[] as $e
-          | select(any(($t.permissions.allow // [])[]; . == $e) | not)
-          | select(any(($l.permissions.allow // [])[]; . == $e))
-          | ($d["permissions.allow (dropped upstream)"][$e] // "") as $why
-          | if ($why | type) == "string" and ($why | test("\\S"))
-            then "KEPT\t\($e)\t\($why | gsub("[\t\n\r]"; " "))" else "DROPPED\t\($e)" end' .claude/settings.json); then
-        echo "CANNOT VERIFY: the allow entries dropped since $last could not be computed"
-        unapplied=1
-      else
-        while IFS=$(printf '\t') read -r kind e why; do
-          [ -n "${kind:-}" ] || continue
-          if [ "$kind" = KEPT ]; then
-            echo "KEPT: .claude/settings.json still allows $e -- $why"
-          else
-            echo "UNAPPLIED: .claude/settings.json still allows $e, which the template dropped after $last"
-            unapplied=1
-          fi
-        done <<DROPPED
-$dropped
-DROPPED
-      fi
+      while IFS=$(printf '\t') read -r kind e why; do
+        [ -n "${kind:-}" ] || continue
+        if [ "$kind" = KEPT ]; then
+          echo "KEPT: .claude/settings.json allows $e -- $why"
+        else
+          echo "UNAPPLIED: .claude/settings.json allows $e, which the template at $head does not carry -- remove it, or record why it stays"
+          unapplied=1
+        fi
+      done <<EXTRA
+$extra
+EXTRA
     fi
   fi
 fi

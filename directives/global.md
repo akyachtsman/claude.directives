@@ -1101,8 +1101,9 @@ collaborator, may add the outsider-content reads to its own `permissions.allow`:
 `get_file_contents`, `list_commits`, `get_commit`, `list_pull_requests`,
 `pull_request_read`, `list_issues`, `issue_read`, `get_check_run`,
 `get_job_logs`, `actions_get`, `actions_list`, and the `search_*` family, each
-as `mcp__github__<name>`. A local extra is never flagged by `/refresh-repo`. A
-repository that goes public removes them in the same change.
+as `mcp__github__<name>`. `/refresh-repo` asks for a reason for every allow
+entry the template does not carry, so record "private repository" for each
+once. A repository that goes public removes them in the same change.
 
 A project's file holds every template entry: `/refresh-repo` keeps its stamp
 back while one is missing. Leaving an entry out deviates from this ruling, so it

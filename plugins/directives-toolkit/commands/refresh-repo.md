@@ -719,6 +719,14 @@ What is compared, delta or not:
     > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
   ```
 
+  The reverse holds too: an `allow` entry the template **dropped** since the
+  last stamp, still granted locally, holds the stamp until it is removed or its
+  reason is recorded under the section `permissions.allow (dropped upstream)`
+  (Codex, #404). A local extra is otherwise never compared, so without this a
+  narrowing, such as the 2026-10-07 removal of outsider-content reads, would
+  never reach a project that missed applying it. A private repository keeping
+  those reads records that once.
+
   An entry's text IS its content, so the decline needs no blob: it holds while
   the template carries that exact entry, and matches nothing once the entry is
   changed or dropped. A keyed entry is printed, and declined, as `key=<value as
@@ -871,8 +879,14 @@ $k
 "*) ;; *) echo "CANNOT VERIFY: kit dir $k is named by a workflow but missing"; unapplied=1 ;; esac
       continue
     fi
-    deps="$deps
-$(printf '%s\n' "$kit_files" | sed "s|^templates/ui-tests/|$k/|")"
+    # Plain string surgery, never `sed` with $k in the replacement: a legal path
+    # character such as `&` or `|` is sed syntax there (Codex, #404).
+    while IFS= read -r f; do
+      [ -n "$f" ] && deps="$deps
+$k/${f#templates/ui-tests/}"
+    done <<FILES
+$kit_files
+FILES
   done <<KITS
 $kit_dirs
 KITS
@@ -950,6 +964,41 @@ DEPS
     done <<SETTINGS
 $st_out
 SETTINGS
+    # Allow entries the template DROPPED since the last stamp but the local file
+    # still grants (Codex, #404). A local extra is otherwise never compared, so
+    # without this a narrowing never reaches a project that missed applying it.
+    if [ -z "$last" ]; then
+      echo "no previous stamp: allow entries the template dropped are not checked"
+    elif ! git -C "$up" fetch -q --depth=1 https://github.com/akyachtsman/claude.directives.git "$last" 2>/dev/null; then
+      echo "CANNOT VERIFY: the template at the last stamp $last could not be fetched"
+      unapplied=1
+    else
+      old_tpl=$(git -C "$up" show "$last:templates/claude-settings.json" 2>/dev/null) || old_tpl='{}'
+      if ! dropped=$(jq -r --argjson o "$old_tpl" --argjson t "$st_tpl" \
+            --argjson d "$(jq -c '.refresh_declined // {}' .claude/directive-sync.json 2>/dev/null || echo '{}')" '
+          . as $l
+          | ($o.permissions.allow // [])[] as $e
+          | select(any(($t.permissions.allow // [])[]; . == $e) | not)
+          | select(any(($l.permissions.allow // [])[]; . == $e))
+          | ($d["permissions.allow (dropped upstream)"][$e] // "") as $why
+          | if ($why | type) == "string" and ($why | test("\\S"))
+            then "KEPT\t\($e)\t\($why | gsub("[\t\n\r]"; " "))" else "DROPPED\t\($e)" end' .claude/settings.json); then
+        echo "CANNOT VERIFY: the allow entries dropped since $last could not be computed"
+        unapplied=1
+      else
+        while IFS=$(printf '\t') read -r kind e why; do
+          [ -n "${kind:-}" ] || continue
+          if [ "$kind" = KEPT ]; then
+            echo "KEPT: .claude/settings.json still allows $e -- $why"
+          else
+            echo "UNAPPLIED: .claude/settings.json still allows $e, which the template dropped after $last"
+            unapplied=1
+          fi
+        done <<DROPPED
+$dropped
+DROPPED
+      fi
+    fi
   fi
 fi
 [ -n "$up" ] && rm -rf "$up"

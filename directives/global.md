@@ -1112,7 +1112,7 @@ what it returns can be written by anyone whatever this repository's visibility.
 The other GitHub reads take the repository as an argument too. In a web session
 the GitHub access is scoped to the session's own repositories, so a call aimed
 elsewhere is refused. A local session has no such scope, and that leftover risk
-is accepted and recorded in `docs/internal/accepted-residuals.md`.
+is accepted and recorded in https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/accepted-residuals.md.
 
 A project's file holds every template entry: `/refresh-repo` keeps its stamp
 back while one is missing. Leaving an entry out deviates from this ruling, so it
@@ -1139,7 +1139,7 @@ which is not a misconfiguration. **A repo with no `.claude/settings.json` at all
 pre-approves nothing**: check for the file's existence before diagnosing
 anything subtler (`docs/standards/session-mechanics.md` → *The settings block nobody noticed*).
 The security trade-offs the owner accepted are recorded in
-`docs/internal/accepted-residuals.md`.
+https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/accepted-residuals.md.
 
 ## Imported Directives
 These directives inherit from this file — they are downstream consumers, not overrides.

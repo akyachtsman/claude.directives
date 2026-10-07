@@ -123,7 +123,9 @@ exception list unnecessary.** An allow-list of files *permitted* to differ is
 correct the day it is written, silently wrong after the next local improvement,
 and nothing detects the gap. So there is no list: a diff is self-maintaining,
 and every `DRIFT` file is resolved by looking at it. (The incidents behind this
-and the other Phase 1.5 rules: `docs/internal/gate-history.md` → *Refresh-repo history*.)
+and the other Phase 1.5 rules are in claude.directives' internal history, which a
+downstream checkout does not carry: the *Refresh-repo history* section of
+https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-history.md.)
 
 **Hook repair (runs before the loop, delta-independent).** This is the single
 home of the hook checks `/env-chk` reports. Three broken states, not one: the
@@ -481,7 +483,8 @@ printf '%s\n' "$refs"
 ```
 
 Seven things about that shape, each of which a shorter version got wrong (the
-failures themselves: `docs/internal/gate-history.md` → *Refresh-repo history*):
+failures themselves: the *Refresh-repo history* section of
+https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-history.md, which a downstream checkout does not carry):
 
 - **It matches the script PATH, never the invocation prefix.** A prefix is a
   form; the path is the fact. `node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js"`

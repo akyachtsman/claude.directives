@@ -169,13 +169,36 @@ function tags(src) {
   }
   return out;
 }
+// The candidate URLs of a srcset, by the HTML spec's "parse a srcset attribute":
+// a URL runs to the next whitespace (so a data: URL keeps its commas); trailing
+// commas on it end the candidate; otherwise its descriptors run to a comma that
+// is NOT inside parentheses. A raw split on "," cut data: URLs apart (Codex, #415).
+function srcsetUrls(v) {
+  const urls = []; const ws = /[\t\n\f\r ]/; let i = 0;
+  while (i < v.length) {
+    while (i < v.length && (ws.test(v[i]) || v[i] === ',')) i++;
+    if (i >= v.length) break;
+    let j = i;
+    while (j < v.length && !ws.test(v[j])) j++;
+    let url = v.slice(i, j); i = j;
+    if (url.endsWith(',')) { urls.push(url.replace(/,+$/, '')); continue; }
+    urls.push(url);
+    let inParens = false;
+    for (; i < v.length; i++) {
+      if (inParens) { if (v[i] === ')') inParens = false; }
+      else if (v[i] === '(') inParens = true;
+      else if (v[i] === ',') { i++; break; }
+    }
+  }
+  return urls.filter(Boolean);
+}
 // The URL values one tag carries: URL attributes, each srcset candidate, and a
 // meta refresh's target, parsed as the spec's refresh algorithm reads it.
 function linksOf({ tag, attrs }) {
   const urls = [];
   for (const [name, v] of attrs) {
     if (!URL_ATTRS.has(name)) continue;
-    if (name === 'srcset') urls.push(...v.split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean));
+    if (name === 'srcset') urls.push(...srcsetUrls(v));
     else urls.push(v);
   }
   if (tag === 'meta' && (attrs.get('http-equiv') || '').trim().toLowerCase() === 'refresh') {
@@ -216,7 +239,14 @@ for (const page of htmlPages) {
     console.error(`UNREADABLE: ${page}: ${e.message} -- its links cannot be checked`);
     failed = true; continue;
   }
-  const base = new URL(page, ROOT);
+  // The document base URL, as a browser sets it: the first <base> element that
+  // HAS an href, resolved against the page's own address; the page's address
+  // when there is none or it does not parse. A raw page address ignored a
+  // <base href="docs/"> that re-roots every relative link (Codex, #415).
+  const pageUrl = new URL(page, ROOT);
+  const baseHref = pageTags.find((t) => t.tag === 'base' && t.attrs.has('href'))?.attrs.get('href');
+  let base = pageUrl;
+  if (baseHref !== undefined) { try { base = new URL(baseHref, pageUrl); } catch { base = pageUrl; } }
   for (const raw of pageTags.flatMap(linksOf)) {
     let url;
     try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }

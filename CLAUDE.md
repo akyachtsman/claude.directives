@@ -170,7 +170,8 @@ A directive repo must pass its own CI before it can be trusted downstream.
   kit's witness, CALLED as the first statement of a test body, proves that body started at that width (#348, #384);
   it catches DRIFT, not FORGERY) and its guard,
   job bounds, the contrast guardrail's guard, `/refresh-repo`'s script
-  derivation, the workflow-ref guard, and a paired-file diff check, plus a
+  derivation, the workflow-ref guard, the run-quoting guard (an apostrophe read
+  as a shell quote) and its guard, and a paired-file diff check, plus a
   warn-only external-link job, `build-logical-map.js --check`, and `node --check`
   over the exported JS templates. Each guard's design history is in its own
   header comment; what has no single script home is in
@@ -263,6 +264,8 @@ python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script de
 python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — 2 of its 3 checks never fire against THIS repo (no ragged caller, no missed match), so nothing else would notice them break
 python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT; it does NOT check that carriers install them, nor that a composite names a file that exists
 python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — real `git init` fixtures, each refusal with its accepting complement. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
+python3 .github/scripts/check-run-quoting.py       # no apostrophe in a bash `run:` block is read as a shell quote (a quote boundary between two letters, or a quote left open) — the #264 ci-monitor defect, which `bash -n` cannot see
+python3 .github/scripts/check-run-quoting-cases.py # that guard's own guard — the #264 block verbatim, each refusal with its complement. Re-prove with CHECK_RUN_QUOTING_BIN=<mutant>
 node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — failing branches injected, every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
 node .github/scripts/build-logical-map.js --check # the committed map still matches the tree; every connection has evidence, every file is wired from the start, no arrow crosses a box
 for f in templates/ui-tests/tests/*.js templates/ui-tests/*.js; do node --check "$f" || exit 1; done  # the exported spec and config still PARSE — nothing else in this repo reads them

@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+r"""Guard the run-quoting guard: pinned fixtures, each refusal with its complement.
+
+WHY THIS EXISTS. `check-run-quoting.py` passes against this repo today and would
+pass just as quietly if its scanner stopped tracking quotes at all -- nothing
+here currently carries the defect, so a guard that looked at nothing prints the
+same OK. That is the fail-open family (#323).
+
+It runs the REAL guard against fixture files rather than re-implementing its
+rule. Every refusal has an accepting complement, so none can be bought by
+over-tightening, and the first case is the #264 block itself, as it shipped:
+two apostrophes in a jq comment that keep the quotes balanced, which is why
+`bash -n` never saw it.
+
+Re-prove discrimination with a mutant:
+
+    CHECK_RUN_QUOTING_BIN=/tmp/mutant.py python3 .github/scripts/check-run-quoting-cases.py
+"""
+
+import os
+import subprocess
+import sys
+import tempfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+GUARD = os.environ.get(
+    "CHECK_RUN_QUOTING_BIN",
+    os.path.join(ROOT, ".github", "scripts", "check-run-quoting.py"),
+)
+
+
+def workflow(run, shell=None, defaults=None):
+    """A one-step workflow whose step runs `run` (a literal block)."""
+    body = "\n".join("          " + line if line else "" for line in run.split("\n"))
+    head = "on: workflow_dispatch\n"
+    if defaults:
+        head += f"defaults:\n  run:\n    shell: {defaults}\n"
+    step_shell = f"        shell: {shell}\n" if shell else ""
+    return (head + "jobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n"
+            "      - name: s\n" + step_shell + "        run: |\n" + body + "\n")
+
+
+# The #264 defect, verbatim from ci-monitor.yml before #405 (trimmed to the
+# program's opening lines), and #405's rewording of the same comment.
+BUG_264 = """runs=$(echo "$runs" | jq '[
+  # Grouped by REPO too. Without it, two forks using the same branch
+  # name share a group, and fork B's run can suppress fork A's cancelled
+  # one — silently dropping a real failure.
+  ( group_by([.workflow_id, .head_branch, .repo]) | .[] ) as $g
+  | $g[]
+]')"""
+FIX_405 = BUG_264.replace(
+    "fork B's run can suppress fork A's cancelled",
+    "a run from fork B can suppress a cancelled run from fork A")
+
+COMPOSITE = """name: c
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        RUN
+"""
+
+# (name, files {relname: text}, expected exit, text the output must contain)
+CASES = [
+    ("the #264 jq comment — two apostrophes, balanced, FAIL on the right line",
+     {"w.yml": workflow(BUG_264)}, 1, "w.yml:10: an apostrophe CLOSES"),
+    ("the same block as #405 reworded it — OK",
+     {"w.yml": workflow(FIX_405)}, 0, "1 bash run block(s)"),
+    ("an unquoted contraction OPENS a quote — FAIL",
+     {"w.yml": workflow("echo don't panic'")}, 1, "OPENS"),
+    ("the contraction inside double quotes is a literal — OK",
+     {"w.yml": workflow("echo \"don't panic\"")}, 0, "OK"),
+    ("a lone apostrophe leaves the block open — FAIL",
+     {"w.yml": workflow("echo runs' output")}, 1, "never closed"),
+    ("an unclosed double quote — FAIL",
+     {"w.yml": workflow('echo "half')}, 1, "double quote opened here"),
+    ("a shell comment is not shell — OK",
+     {"w.yml": workflow("# don't run this twice\necho ok")}, 0, "OK"),
+    ("a # inside a word is not a comment — FAIL",
+     {"w.yml": workflow("echo a#b don't'")}, 1, "OPENS"),
+    ("a heredoc body is literal text — OK",
+     {"w.yml": workflow("cat <<'EOF'\nit's fine here\nEOF\necho done")}, 0, "OK"),
+    ("the heredoc ends at its delimiter — an apostrophe after it is shell, FAIL",
+     {"w.yml": workflow("cat <<-EOF\nit's fine\nEOF\necho it's'")}, 1, "OPENS"),
+    ("a here-string is not a heredoc — FAIL",
+     {"w.yml": workflow("cat <<< 'x'\necho it's'")}, 1, "OPENS"),
+    ("quotes inside a ${{ }} expression never reach the shell — OK",
+     {"w.yml": workflow("echo \"${{ inputs.x || 'it' }}\"\necho ${{ github.event_name == 'push' }}")},
+     0, "OK"),
+    ("$'...' with an escaped quote — OK",
+     {"w.yml": workflow("printf $'it\\'s\\n'")}, 0, "OK"),
+    ("single quotes inside $( ) inside double quotes — OK",
+     {"w.yml": workflow("x=\"$(jq -r '.a' f.json)\"\necho \"$x\"")}, 0, "OK"),
+    ("an apostrophe inside $( ) inside double quotes is shell — FAIL",
+     {"w.yml": workflow("x=\"$(echo it's')\"")}, 1, "OPENS"),
+    ("a step with shell: python is not shell — skipped",
+     {"w.yml": workflow("print(\"x\")\nprint('don''t')", shell="python")
+      + "      - run: echo ok\n"}, 0, "1 non-bash skipped"),
+    ("a workflow defaulting to pwsh is skipped — only the bash step counts",
+     {"w.yml": workflow("Write-Host it's", defaults="pwsh")
+      + "      - shell: bash\n        run: echo ok\n"}, 0, "1 bash run block(s) in 1 file(s) (1 non-bash skipped)"),
+    ("a job defaulting to pwsh is skipped too",
+     {"w.yml": workflow("Write-Host it's").replace(
+         "    runs-on: ubuntu-latest\n",
+         "    runs-on: ubuntu-latest\n    defaults:\n      run:\n        shell: pwsh\n")
+      + "      - shell: bash\n        run: echo ok\n"}, 0, "(1 non-bash skipped)"),
+    ("a step's own shell: bash overrides a pwsh default — FAIL",
+     {"w.yml": workflow("echo it's'", shell="bash", defaults="pwsh")}, 1, "OPENS"),
+    ("shell: bash -euo pipefail {0} is bash — FAIL",
+     {"w.yml": workflow("echo it's'", shell="bash -euo pipefail {0}")}, 1, "OPENS"),
+    ("a composite action's steps are scanned — FAIL",
+     {"action.yml": COMPOSITE.replace("RUN", "echo it's'")}, 1, "action.yml:7: an apostrophe OPENS"),
+    ("the composite reworded — OK",
+     {"action.yml": COMPOSITE.replace("RUN", "echo it is")}, 0, "OK"),
+    ("no run block at all is a did-not-look — CANNOT CHECK",
+     {"w.yml": "on: push\njobs:\n  j:\n    runs-on: x\n    steps:\n      - uses: actions/checkout@v4\n"},
+     2, "no bash `run:` block"),
+    ("unparseable YAML — CANNOT CHECK",
+     {"w.yml": "jobs: [\n"}, 2, "could not be read as YAML"),
+    ("one clean file and one bad — the bad one still FAILS",
+     {"a.yml": workflow("echo ok"), "b.yml": workflow("echo it's'")}, 1, "b.yml:"),
+]
+
+
+def main():
+    failures = 0
+    for name, files, want_code, want_text in CASES:
+        with tempfile.TemporaryDirectory() as d:
+            paths = []
+            for rel, text in files.items():
+                p = os.path.join(d, rel)
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write(text)
+                paths.append(p)
+            r = subprocess.run([sys.executable, GUARD, *paths],
+                               capture_output=True, text=True)
+            out = r.stdout + r.stderr
+            if r.returncode == want_code and want_text in out:
+                print(f"OK:   {name} (exit {r.returncode})")
+            else:
+                failures += 1
+                print(f"FAIL: {name}")
+                print(f"  wanted exit {want_code} with {want_text!r}; got exit {r.returncode}:")
+                for line in out.splitlines()[:8]:
+                    print(f"    {line}")
+    if failures:
+        print(f"check-run-quoting-cases: FAIL — {failures} of {len(CASES)} case(s)")
+        return 1
+    print(f"check-run-quoting-cases: OK — {len(CASES)} pinned fixtures read correctly.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

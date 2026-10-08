@@ -347,6 +347,21 @@ jobs:
       - name: Check the sibling guard enforces what it claims
         run: python3 .github/scripts/check-action-siblings-cases.py
 
+      # An apostrophe inside a single-quoted shell string ENDS the quote. Two of
+      # them keep the quotes balanced, so YAML parses and `bash -n` passes while
+      # the program gets cut in half: ci-monitor's manual scan handed jq half a
+      # program from #264 until #405 found it by reading. Every bash `run:`
+      # block in every workflow and composite is scanned for a quote boundary
+      # between two letters, and for a quote left open.
+      - name: Check no apostrophe is read as a shell quote
+        run: python3 .github/scripts/check-run-quoting.py
+
+      # Nothing here carries the defect today, so the guard above prints the
+      # same OK whether its scanner works or does nothing. Drive a mutated copy
+      # with CHECK_RUN_QUOTING_BIN to re-prove discrimination.
+      - name: Check the quoting guard enforces what it claims
+        run: python3 .github/scripts/check-run-quoting-cases.py
+
       # The exported browser ladder (#332). Nothing else in this repo runs it —
       # the map suite drives chromium directly — and its branches worth pinning
       # are the FAILING ones (no privileges, a blocked download, a binary that

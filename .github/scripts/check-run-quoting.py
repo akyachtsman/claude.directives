@@ -30,14 +30,16 @@ construction. shfmt is found as $SHFMT or on PATH; qa.yml downloads a pinned,
 checksum-verified release. Without it this is CANNOT CHECK, never a pass.
 
 WHAT IS NOT SHELL, AND IS SKIPPED:
-  - `${{ ... }}` expressions: GitHub substitutes them before the shell starts,
-    so their quotes never reach it;
+  - `${{ ... }}` expressions are masked: GitHub substitutes them before the
+    shell starts. Their VALUE is not known here, so one inside a single-quoted
+    string is CANNOT CHECK (an apostrophe in the value would end the quote);
   - steps whose effective `shell:` (step, then job `defaults.run.shell`, then the
     workflow's) is not bash or sh, judged by the executable's BASENAME, so
     `/bin/bash -e {0}` is bash; with no shell named, a Windows job's default is
     PowerShell and is skipped. A shell this file cannot settle -- an
-    expression, a `runs-on` expression with no `shell:`, a composite step with
-    none -- is CANNOT CHECK, never a guess (Codex, #408).
+    expression, a `runs-on` whose labels do not name an OS (`self-hosted`), a
+    composite step with no shell -- is CANNOT CHECK, never a guess (Codex,
+    #408).
 
 WHAT A CLEAN RUN PROVES. Only that every block parses as bash and no
 single-quote boundary in it sits between two letters. It does NOT prove any
@@ -47,7 +49,8 @@ leaves the block unbalanced, which IS reported. It also does NOT look at `.sh`
 files, at the toolkit's Markdown bash, or at `actions/github-script` bodies.
 
 Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file, no
-shfmt, a block whose shell is unknown, or no `run:` block found at all (a did-not-look must not print the same
+shfmt, a block whose shell is unknown, an expression inside single quotes, or
+no `run:` block found at all (a did-not-look must not print the same
 OK as a pass).
 
 Usage: check-run-quoting.py [--root DIR] [FILE ...]   (default: every workflow
@@ -110,15 +113,26 @@ def single_quoted(node, out):
 
 
 def scan(text, shfmt):
-    """Return (line index within the block, message) for each finding."""
-    src = EXPR.sub("EXPR", text).encode("utf-8")
+    """Return (findings, unknowns): each a list of (line index in the block, message).
+
+    A `${{ }}` expression is masked before parsing, to the same length so every
+    offset stays true. GitHub substitutes its VALUE before bash starts, and that
+    value is not known here: inside double quotes or unquoted an apostrophe in it
+    is harmless, but inside a single-quoted span it ENDS the quote --
+    `'${{ 'It''s' }}'` runs as `'It's'` (Codex, #408), and a PR title does the
+    same. So an expression inside single quotes is UNKNOWN, never assumed safe.
+    """
+    masked = EXPR.sub(lambda m: "_" * len(m.group(0).encode("utf-8")), text)
+    exprs = [(len(text[:m.start()].encode("utf-8")), len(text[:m.end()].encode("utf-8")))
+             for m in EXPR.finditer(text)]
+    src = masked.encode("utf-8")
     r = subprocess.run([shfmt, "--to-json", "-ln", "bash"], input=src,
                        capture_output=True)
     if r.returncode != 0:
         msg = r.stderr.decode("utf-8", "replace").strip().splitlines() or ["(no message)"]
         m = SHFMT_ERROR.match(msg[0])
         line = int(m.group(1)) - 1 if m else 0
-        return [(line, f"does not parse as bash: {m.group(3) if m else msg[0]}")]
+        return [(line, f"does not parse as bash: {m.group(3) if m else msg[0]}")], []
     spans = []
     single_quoted(json.loads(r.stdout), spans)
     findings = []
@@ -128,7 +142,14 @@ def scan(text, shfmt):
                 snippet = src[max(0, at - 12):at + 12].decode("utf-8", "replace")
                 findings.append((src.count(b"\n", 0, at),
                                  f"an apostrophe {what} a single-quoted span: ...{snippet!r}..."))
-    return findings
+    unknowns = []
+    for e_start, e_end in exprs:
+        if any(start < e_end and e_start < end for start, end, _ in spans):
+            unknowns.append((src.count(b"\n", 0, e_start),
+                             "a ${{ }} expression inside a single-quoted string: its value is"
+                             " not known here, and an apostrophe in it would end the quote."
+                             " Pass it through `env:` and quote the variable instead."))
+    return findings, unknowns
 
 
 def shell_of(mapping):
@@ -155,7 +176,14 @@ def platform_of(job):
         return "unknown"
     if any("${{" in x for x in labels):
         return "unknown"
-    return "windows" if any("windows" in x.lower() for x in labels) else "other"
+    # POSITIVE EVIDENCE ONLY. `self-hosted` or `[self-hosted, prod]` can select a
+    # Windows runner, so the absence of "windows" proves nothing (Codex, #408).
+    lower = [x.lower() for x in labels]
+    windows = any("windows" in x for x in lower)
+    unix = any(k in x for x in lower for k in ("ubuntu", "linux", "macos"))
+    if windows != unix:
+        return "windows" if windows else "other"
+    return "unknown"
 
 
 # THE SHELL A STEP RUNS IN IS ONE OF THREE THINGS, NEVER A GUESS. Codex found
@@ -250,17 +278,19 @@ def main(argv):
                 skipped += 1
                 continue
             if kind == "unknown":
-                unknown.append(f"{rel}:{first}")
+                unknown.append(f"{rel}:{first}: cannot tell which shell runs this block (an"
+                               " expression, a `runs-on` that does not name an OS with no"
+                               " `shell:`, or a composite step with none). Name the shell"
+                               " on the step.")
                 continue
             total += 1
-            for line, msg in scan(text, shfmt):
-                bad.append(f"{rel}:{first + line}: {msg}")
+            findings, unknowns = scan(text, shfmt)
+            bad.extend(f"{rel}:{first + line}: {msg}" for line, msg in findings)
+            unknown.extend(f"{rel}:{first + line}: {msg}" for line, msg in unknowns)
     for u in unknown:
-        print(f"CANNOT CHECK: {u}: cannot tell which shell runs this block (an expression,")
-        print("  a `runs-on` expression with no `shell:`, or a composite step with none).")
+        print(f"CANNOT CHECK: {u}")
     if unknown:
-        print("  Name the shell on the step. A block whose shell is unknown is neither")
-        print("  skipped nor guessed.")
+        print("  What this file cannot settle is neither skipped nor guessed.")
     if total == 0 and not bad and not unknown:
         print(f"CANNOT CHECK: no bash `run:` block found in {len(paths)} file(s).")
         print("  A scan that looked at nothing is not a pass.")

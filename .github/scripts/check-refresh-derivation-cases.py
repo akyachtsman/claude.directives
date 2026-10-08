@@ -427,6 +427,47 @@ case("the same option-first caller naming package.json passes",
          comment="      # npm reads .github/scripts/package.json\n")},
      expect_exit=0, needle="  .github/scripts/package.json")
 
+# Codex, #411 round 3: npm is read as TOKENS, so any config option may precede
+# the subcommand, and a `cd` earlier in the block sets the directory.
+def npm_case(name, steps, expect_exit, needle):
+    case(name, command_text=command_md(),
+         callers={"templates/workflows/n.yml": "jobs:\n  t:\n    steps:\n" + steps
+                  + "      - run: node .github/scripts/a.js\n"},
+         expect_exit=expect_exit, needle=needle)
+
+npm_case("`npm --silent install` in .github/scripts needs package.json named",
+         "      - working-directory: .github/scripts\n        run: npm --silent install\n",
+         1, "UNNAMED: .github/scripts/package.json")
+npm_case("`cd .github/scripts && npm --loglevel warn ci` needs package.json named",
+         "      - run: cd .github/scripts && npm --loglevel warn ci\n",
+         1, "UNNAMED: .github/scripts/package.json")
+npm_case("`CI=1 npm ci` (an env prefix) in .github/scripts needs package.json named",
+         "      - working-directory: .github/scripts\n        run: CI=1 npm ci\n",
+         1, "UNNAMED: .github/scripts/package.json")
+npm_case("a `${{ github.workspace }}/.github/scripts` working-directory still counts",
+         "      - working-directory: ${{ github.workspace }}/.github/scripts\n        run: npm ci\n",
+         1, "UNNAMED: .github/scripts/package.json")
+npm_case("`npm --silent install` in ANOTHER directory needs nothing",
+         "      - working-directory: .github/scripts/ui-tests\n        run: npm --silent install\n",
+         0, "1 referenced script(s)")
+
+# Codex, #411 round 3: an extensionless require resolves as Node does.
+LIB_DIR = {"templates/scripts/main.js": "const lib = require('./lib');\n",
+           "templates/scripts/lib/index.js": "module.exports = {};\n"}
+JS_CALLER = ("jobs:\n  t:\n    steps:\n"
+             "      - run: node .github/scripts/main.js\n{comment}")
+
+case("`require('./lib')` resolving to lib/index.js must name lib/index.js",
+     command_text=command_md(),
+     callers={**LIB_DIR, "templates/workflows/j.yml": JS_CALLER.format(comment="")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/lib/index.js")
+
+case("the same caller naming lib/index.js passes (no phantom lib.js asked for)",
+     command_text=command_md(),
+     callers={**LIB_DIR, "templates/workflows/j.yml": JS_CALLER.format(
+         comment="      # loads .github/scripts/lib/index.js\n")},
+     expect_exit=0, needle="  .github/scripts/lib/index.js")
+
 # Codex, #411: Python imports are read with `ast`, so every form counts.
 PY_CALLER = ("jobs:\n  t:\n    steps:\n"
              "      - run: python3 .github/scripts/main.py\n"

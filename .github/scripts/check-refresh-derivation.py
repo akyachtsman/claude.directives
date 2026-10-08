@@ -111,8 +111,10 @@ path or a dependency loaded any other way is invisible to it.
 #   than copying it, PROP6 2026-09-01;
 
 import ast
+import json
 import posixpath
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -258,38 +260,100 @@ SCRIPTS = ".github/scripts"
 TEMPLATE_SCRIPTS = "templates/scripts"   # where a .github/scripts/<x> comes from
 # A literal relative module path: require('./x'), import ... from './x', import('./x').
 JS_LOCAL = re.compile(r"""(?:\brequire\s*\(|\bfrom|\bimport\s*\(?)\s*['"](\.{1,2}/[^'"]+)['"]""")
-NPM = re.compile(r"\bnpm\s+(?:install|ci|i)\b")
-_ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/|\$\{\{\s*github\.workspace\s*\}\}/)?"""
+_ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/)?"""
 SCRIPTS_DIR = re.compile(rf"^{_ROOT}\.github/scripts/?$")
-CD_NPM = re.compile(rf"""\bcd\s+["']?{_ROOT}\.github/scripts/?["']?\s*(?:&&|;|\n)\s*npm\s+(?:install|ci|i)\b""")
-# `--prefix` is an npm CONFIG option, so it may sit on either side of the
-# subcommand (`npm ci --prefix X` and `npm --prefix X ci` both read X/package.json;
-# Codex, #411): both are lookaheads over the one command line, in either order.
-# Not read, by design: NPM_CONFIG_PREFIX in `env:`, `pushd`, a subshell `(cd X;
-# npm ci)` -- none occurs in a shipped caller; add a form here when one does.
-PREFIX_NPM = re.compile(rf"""\bnpm\s(?=[^\n]*?(?<![\w-])(?:install|ci|i)\b)(?=[^\n]*?--prefix[= ]["']?{_ROOT}\.github/scripts/?["']?(?:\s|$))""")
+# npm's own aliases for the two commands that read package.json (npm docs,
+# `npm help install` / `npm help ci`).
+NPM_INSTALL = {"install", "add", "i", "in", "ins", "inst", "insta", "instal",
+               "isnt", "isnta", "isntal", "isntall",
+               "ci", "clean-install", "ic", "install-clean", "isntall-clean"}
+SEGMENT = re.compile(r"\n|&&|\|\||;|\|")
+
+
+def npm_reads_scripts_pkg(run, wd):
+    """True when a command in `run` is npm install/ci with .github/scripts as its
+    directory -- the step's working-directory, a `cd` earlier in the block, or
+    `--prefix`. Read as TOKENS, not a regex over the line: npm takes config
+    options anywhere, so `npm --silent install` and `npm --prefix X ci` are the
+    same command as `npm install` (Codex, #411 rounds 1 and 3). A non-option
+    token that names an install alias counts, so `npm run ci` over-reads --
+    harmless, since it asks only that package.json be named, which `npm run`
+    reads too. Not read, by design: NPM_CONFIG_PREFIX in `env:`, `pushd`, a
+    subshell `(cd X; npm ci)`, a relative `cd` chain -- none occurs in a
+    shipped caller; add a form here when one does."""
+    def unexpr(text):   # the expression form tokenises badly; name it as bash does
+        return re.sub(r"\$\{\{\s*github\.workspace\s*\}\}", "$GITHUB_WORKSPACE", text)
+    run = unexpr(run)
+    cwd = unexpr(wd) if isinstance(wd, str) else None
+    for seg in SEGMENT.split(run):
+        try:
+            toks = shlex.split(seg, comments=True)
+        except ValueError:
+            toks = seg.split()
+        while toks and re.match(r"^[A-Za-z_]\w*=", toks[0]):   # VAR=x npm ci
+            toks = toks[1:]
+        if not toks:
+            continue
+        if toks[0] == "cd" and len(toks) > 1:
+            cwd = toks[1]
+            continue
+        if toks[0] != "npm":
+            continue
+        args, target = toks[1:], cwd
+        for i, arg in enumerate(args):
+            if arg == "--prefix" and i + 1 < len(args):
+                target = args[i + 1]
+            elif arg.startswith("--prefix="):
+                target = arg.split("=", 1)[1]
+        if not any(arg in NPM_INSTALL for arg in args if not arg.startswith("-")):
+            continue
+        if isinstance(target, str) and SCRIPTS_DIR.match(target.strip()):
+            return True
+    return False
 
 
 def npm_in_scripts(doc):
-    """True when some step runs npm with .github/scripts as its directory --
-    `npm install` there reads .github/scripts/package.json."""
+    """True when some step runs npm install/ci with .github/scripts as its
+    directory -- `npm install` there reads .github/scripts/package.json."""
     def walk(node, wd):
         if isinstance(node, dict):
             d = node.get("defaults")
             if isinstance(d, dict) and isinstance(d.get("run"), dict):
                 wd = d["run"].get("working-directory", wd)
             run = node.get("run")
-            if isinstance(run, str):
-                here = node.get("working-directory", wd)
-                if CD_NPM.search(run) or PREFIX_NPM.search(run):
-                    return True
-                if NPM.search(run) and isinstance(here, str) and SCRIPTS_DIR.match(here.strip()):
-                    return True
+            if isinstance(run, str) and npm_reads_scripts_pkg(run, node.get("working-directory", wd)):
+                return True
             return any(walk(v, wd) for v in node.values())
         if isinstance(node, list):
             return any(walk(v, wd) for v in node)
         return False
     return walk(doc, None)
+
+
+def js_resolve(dep):
+    """The file Node loads for `require(dep)` (a .github/scripts/ path), checked
+    against the template tree: the path itself, `.js`, `.json`, then a
+    directory's package.json `main` or its index.js (Codex, #411). With no
+    candidate present it stays `<dep>.js`, so a require of a file nothing
+    ships is still reported rather than dropped."""
+    def tpl(p):
+        return Path(TEMPLATE_SCRIPTS) / p[len(SCRIPTS) + 1:]
+    cands = [dep] if posixpath.splitext(dep)[1] else []
+    cands += [dep + ".js", dep + ".json"]
+    pkg = tpl(posixpath.join(dep, "package.json"))
+    if pkg.is_file():
+        try:
+            main = json.loads(pkg.read_text(encoding="utf-8")).get("main")
+        except (ValueError, AttributeError):
+            main = None
+        if isinstance(main, str):
+            m = posixpath.normpath(posixpath.join(dep, main))
+            cands += [m, m + ".js", posixpath.join(m, "index.js")]
+    cands.append(posixpath.join(dep, "index.js"))
+    for c in cands:
+        if tpl(c).is_file():
+            return c
+    return dep if posixpath.splitext(dep)[1] else dep + ".js"
 
 
 def py_local_deps(rel, body):
@@ -345,9 +409,7 @@ def local_deps(script):
     deps = {}
     if script.endswith(".js"):
         for m in JS_LOCAL.finditer(body):
-            dep = posixpath.normpath(posixpath.join(here, m.group(1)))
-            if not posixpath.splitext(dep)[1]:
-                dep += ".js"
+            dep = js_resolve(posixpath.normpath(posixpath.join(here, m.group(1))))
             deps[dep] = m.group(0)
     elif script.endswith(".py"):
         for dep, why in py_local_deps(rel, body).items():

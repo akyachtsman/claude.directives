@@ -214,9 +214,13 @@ function tags(src) {
     while (j < n && !/[\s/>]/.test(src[j])) j++;
     const tag = lower.slice(i + 1, j); const attrs = new Map(); let selfClosing = false;
     for (;;) {
-      while (j < n && /[\s/]/.test(src[j])) j++;
+      // Self-closing only when the TOKENIZER consumes "/" between attributes and
+      // ">" follows it at once; in <svg data-x=foo/> the "/" is part of the
+      // unquoted value, so the element stays open (Codex on #415).
+      let slash = false;
+      while (j < n && /[\s/]/.test(src[j])) { slash = src[j] === '/'; j++; }
       if (j >= n) throw new Error(`unterminated <${tag}> at offset ${i}`);
-      if (src[j] === '>') { selfClosing = src[j - 1] === '/'; j++; break; }
+      if (src[j] === '>') { selfClosing = slash; j++; break; }
       let k = j;
       while (k < n && !/[\s/>=]/.test(src[k])) k++;
       const name = lower.slice(j, k); j = k;

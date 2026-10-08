@@ -444,6 +444,12 @@ npm_case("`cd .github/scripts && npm --loglevel warn ci` needs package.json name
 npm_case("`CI=1 npm ci` (an env prefix) in .github/scripts needs package.json named",
          "      - working-directory: .github/scripts\n        run: CI=1 npm ci\n",
          1, "UNNAMED: .github/scripts/package.json")
+npm_case("`npm cit` (install-ci-test) in .github/scripts needs package.json named",
+         "      - working-directory: .github/scripts\n        run: npm cit\n",
+         1, "UNNAMED: .github/scripts/package.json")
+npm_case("`npm test` in .github/scripts needs package.json named (no alias list)",
+         "      - working-directory: .github/scripts\n        run: npm test\n",
+         1, "UNNAMED: .github/scripts/package.json")
 npm_case("a `${{ github.workspace }}/.github/scripts` working-directory still counts",
          "      - working-directory: ${{ github.workspace }}/.github/scripts\n        run: npm ci\n",
          1, "UNNAMED: .github/scripts/package.json")
@@ -461,6 +467,14 @@ case("`require('./lib')` resolving to lib/index.js must name lib/index.js",
      command_text=command_md(),
      callers={**LIB_DIR, "templates/workflows/j.yml": JS_CALLER.format(comment="")},
      expect_exit=1, needle="UNNAMED: .github/scripts/lib/index.js")
+
+case("`require('./helper')` with an EXTENSIONLESS helper file must name that file",
+     command_text=command_md(),
+     callers={"templates/scripts/main.js": "require('./helper');\n",
+              "templates/scripts/helper": "module.exports = 1;\n",
+              "templates/workflows/j.yml": JS_CALLER.format(
+                  comment="      # loads .github/scripts/helper.js\n")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/helper")
 
 case("the same caller naming lib/index.js passes (no phantom lib.js asked for)",
      command_text=command_md(),

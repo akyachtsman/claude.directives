@@ -262,23 +262,19 @@ TEMPLATE_SCRIPTS = "templates/scripts"   # where a .github/scripts/<x> comes fro
 JS_LOCAL = re.compile(r"""(?:\brequire\s*\(|\bfrom|\bimport\s*\(?)\s*['"](\.{1,2}/[^'"]+)['"]""")
 _ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/)?"""
 SCRIPTS_DIR = re.compile(rf"^{_ROOT}\.github/scripts/?$")
-# npm's own aliases for the two commands that read package.json (npm docs,
-# `npm help install` / `npm help ci`).
-NPM_INSTALL = {"install", "add", "i", "in", "ins", "inst", "insta", "instal",
-               "isnt", "isnta", "isntal", "isntall",
-               "ci", "clean-install", "ic", "install-clean", "isntall-clean"}
 SEGMENT = re.compile(r"\n|&&|\|\||;|\|")
 
 
 def npm_reads_scripts_pkg(run, wd):
-    """True when a command in `run` is npm install/ci with .github/scripts as its
-    directory -- the step's working-directory, a `cd` earlier in the block, or
-    `--prefix`. Read as TOKENS, not a regex over the line: npm takes config
+    """True when a command in `run` is ANY npm invocation with .github/scripts as
+    its directory -- the step's working-directory, a `cd` earlier in the block,
+    or `--prefix`. Read as TOKENS, not a regex over the line: npm takes config
     options anywhere, so `npm --silent install` and `npm --prefix X ci` are the
-    same command as `npm install` (Codex, #411 rounds 1 and 3). A non-option
-    token that names an install alias counts, so `npm run ci` over-reads --
-    harmless, since it asks only that package.json be named, which `npm run`
-    reads too. Not read, by design: NPM_CONFIG_PREFIX in `env:`, `pushd`, a
+    same command (Codex, #411 rounds 1 and 3). No subcommand list: install, ci,
+    cit, it, test, run and their aliases all read the project manifest, and a
+    list was one more review round per alias it missed (round 4). Over-reading
+    (`npm --version` there) only asks that package.json be named, which a
+    directory npm runs in is expected to ship anyway. Not read, by design: NPM_CONFIG_PREFIX in `env:`, `pushd`, a
     subshell `(cd X; npm ci)`, a relative `cd` chain -- none occurs in a
     shipped caller; add a form here when one does."""
     def unexpr(text):   # the expression form tokenises badly; name it as bash does
@@ -305,8 +301,6 @@ def npm_reads_scripts_pkg(run, wd):
                 target = args[i + 1]
             elif arg.startswith("--prefix="):
                 target = arg.split("=", 1)[1]
-        if not any(arg in NPM_INSTALL for arg in args if not arg.startswith("-")):
-            continue
         if isinstance(target, str) and SCRIPTS_DIR.match(target.strip()):
             return True
     return False
@@ -333,13 +327,14 @@ def npm_in_scripts(doc):
 def js_resolve(dep):
     """The file Node loads for `require(dep)` (a .github/scripts/ path), checked
     against the template tree: the path itself, `.js`, `.json`, then a
-    directory's package.json `main` or its index.js (Codex, #411). With no
+    directory's package.json `main` or its index.js (Codex, #411 rounds 3-4 --
+    an extensionless FILE is a valid target, so the exact path is always tried
+    first). With no
     candidate present it stays `<dep>.js`, so a require of a file nothing
     ships is still reported rather than dropped."""
     def tpl(p):
         return Path(TEMPLATE_SCRIPTS) / p[len(SCRIPTS) + 1:]
-    cands = [dep] if posixpath.splitext(dep)[1] else []
-    cands += [dep + ".js", dep + ".json"]
+    cands = [dep, dep + ".js", dep + ".json"]   # Node tries the exact path first
     pkg = tpl(posixpath.join(dep, "package.json"))
     if pkg.is_file():
         try:

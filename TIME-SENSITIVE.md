@@ -90,6 +90,7 @@ is added by the pass that finds it.
 | Built-in `anthropic-skills:docx` and `anthropic-skills:pdf` (text extraction, OCR for scanned PDFs) | `plugins/directives-toolkit/skills/doc-comp/SKILL.md` | 2026-10-08 | This session's skill list: both skills listed, and the `pdf` skill's own description still names OCR for scanned PDFs |
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
 | The Anthropic-authored LSP plugin set (twelve names) | `EXPORTS.json` → `considered.lsp-plugins` | 2026-10-08 | the `claude-plugins-official` `marketplace.json` |
+| `discord`, `telegram`, `imessage`, `fakechat` are third-party plugins listed under the official marketplace's `external_plugins/`, not Anthropic-built | `EXPORTS.json` → `considered.messaging-channels` | 2026-10-08 | In the `claude-plugins-official` `marketplace.json`, each plugin's `source` path still starts `./external_plugins/`; if one moves under `./plugins/` or gains Anthropic authorship, re-judge the entry |
 
 ## GitHub
 | Topic | Source | Last checked | Check |

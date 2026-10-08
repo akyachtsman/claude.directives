@@ -476,6 +476,21 @@ case("`require('./helper')` with an EXTENSIONLESS helper file must name that fil
                   comment="      # loads .github/scripts/helper.js\n")},
      expect_exit=1, needle="UNNAMED: .github/scripts/helper")
 
+case("`require('./lib')` with a package.json `main` pointing at a .json file names THAT file",
+     command_text=command_md(),
+     callers={"templates/scripts/main.js": "require('./lib');\n",
+              "templates/scripts/lib/package.json": '{"main": "entry"}\n',
+              "templates/scripts/lib/entry.json": "{}\n",
+              "templates/workflows/j.yml": JS_CALLER.format(comment="")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/lib/entry.json")
+
+case("`require('./lib')` with only lib/index.json names lib/index.json",
+     command_text=command_md(),
+     callers={"templates/scripts/main.js": "require('./lib');\n",
+              "templates/scripts/lib/index.json": "{}\n",
+              "templates/workflows/j.yml": JS_CALLER.format(comment="")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/lib/index.json")
+
 case("the same caller naming lib/index.js passes (no phantom lib.js asked for)",
      command_text=command_md(),
      callers={**LIB_DIR, "templates/workflows/j.yml": JS_CALLER.format(

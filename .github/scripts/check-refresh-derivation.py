@@ -324,27 +324,41 @@ def npm_in_scripts(doc):
     return walk(doc, None)
 
 
+# Node's documented algorithm for a relative require (nodejs.org/api/modules.html,
+# "All together"), in its own order -- the whole algorithm, not a candidate list
+# grown one review round at a time (Codex, #411 rounds 3-5).
+NODE_EXTS = ("", ".js", ".json", ".node")         # LOAD_AS_FILE: X, X.js, X.json, X.node
+NODE_INDEX = ("index.js", "index.json", "index.node")  # LOAD_INDEX
+
+
 def js_resolve(dep):
     """The file Node loads for `require(dep)` (a .github/scripts/ path), checked
-    against the template tree: the path itself, `.js`, `.json`, then a
-    directory's package.json `main` or its index.js (Codex, #411 rounds 3-4 --
-    an extensionless FILE is a valid target, so the exact path is always tried
-    first). With no
-    candidate present it stays `<dep>.js`, so a require of a file nothing
-    ships is still reported rather than dropped."""
+    against the template tree: LOAD_AS_FILE(X), then LOAD_AS_DIRECTORY(X) --
+    package.json `main` M as LOAD_AS_FILE(M) then LOAD_INDEX(M), then
+    LOAD_INDEX(X). With no candidate present it stays `<dep>.js`, so a require
+    of a file nothing ships is still reported rather than dropped. (The install
+    contract takes .js/.py only, so a JSON, .node or extensionless target is
+    reported by its REAL name and refused until it is one -- never as a phantom.)"""
     def tpl(p):
         return Path(TEMPLATE_SCRIPTS) / p[len(SCRIPTS) + 1:]
-    cands = [dep, dep + ".js", dep + ".json"]   # Node tries the exact path first
+
+    def as_file(x):
+        return [x + e for e in NODE_EXTS]
+
+    def as_index(x):
+        return [posixpath.join(x, i) for i in NODE_INDEX]
+
+    cands = as_file(dep)
     pkg = tpl(posixpath.join(dep, "package.json"))
     if pkg.is_file():
         try:
             main = json.loads(pkg.read_text(encoding="utf-8")).get("main")
         except (ValueError, AttributeError):
             main = None
-        if isinstance(main, str):
+        if isinstance(main, str) and main:
             m = posixpath.normpath(posixpath.join(dep, main))
-            cands += [m, m + ".js", posixpath.join(m, "index.js")]
-    cands.append(posixpath.join(dep, "index.js"))
+            cands += as_file(m) + as_index(m)
+    cands += as_index(dep)
     for c in cands:
         if tpl(c).is_file():
             return c

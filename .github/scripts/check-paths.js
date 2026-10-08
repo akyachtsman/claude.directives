@@ -190,6 +190,10 @@ function tags(src) {
       out.push({ tag: `/${lower.slice(i + 2, e).split(/[\t\n\f\r />]/)[0]}`, attrs: new Map() });
       i = e + 1; continue;
     }
+    // CDATA is character data through "]]>" in SVG/MathML but a bogus comment
+    // ending at the first ">" in HTML -- which one applies is tree construction,
+    // so it is refused rather than guessed (Codex on #415). Nothing here uses it.
+    if (src.startsWith('<![CDATA[', i)) throw new Error(`a <![CDATA[ section at offset ${i} -- its extent depends on foreign-content parsing this check does not do; use text or a character reference instead`);
     if ('!?/'.includes(src[i + 1] ?? 'x')) { i = upTo('>', i, 'declaration') + 1; continue; }
     if (!/[A-Za-z]/.test(src[i + 1] ?? '')) { i++; continue; } // a bare "<" in text
     let j = i + 1;

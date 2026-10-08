@@ -118,6 +118,7 @@
         "templates/actions/ui-suite/",
         "templates/ui-tests/",
         "docs/standards/kit-defects.md",
+        "docs/standards/viewport-classes-history.md",
         "templates/scripts/check-ui-viewports.js",
         "templates/scripts/check-ui-suite-env.py",
         "templates/scripts/browser-ladder.js",
@@ -330,7 +331,8 @@
         "docs/guides/cron-email-notifications.md",
         "docs/guides/design-tooling.md",
         "NEW-REPO-USER-INSTRUCTIONS.md",
-        "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        "docs/standards/viewport-classes-history.md"
       ]
     }
   },

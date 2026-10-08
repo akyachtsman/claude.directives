@@ -18,13 +18,20 @@ Never overwrite an existing workflow, agent, or test file.
 
 Execute in order:
 
-1. **Fetch and internalize all five directives.** Read each fully before
-   proceeding:
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md`
-   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md`
+1. **Pin one upstream SHA, then fetch and internalize all five directives at
+   it.** Resolve `main` ONCE for this run —
+   `git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1`
+   — and fetch every upstream file this bootstrap reads at that `<SHA>`
+   (`https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/<path>`),
+   never at a moving `main`: a merge landing mid-run would otherwise install two
+   revisions of the standard side by side. Every `claude.directives/<path>`
+   source in the steps below means `<path>` at this SHA. Read each directive
+   fully before proceeding:
+   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/global.md`
+   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/git.md`
+   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/design.md`
+   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/test.md`
+   - `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/directives/data.md`
 
 2. **Verify the directives-toolkit plugin attached** (it carries this very
    command, all skills, the QA/data agents, and the guard hooks). If its
@@ -36,18 +43,20 @@ Execute in order:
    `claude/<name>` branch; otherwise create `claude/<name>`. Never work on `main`.
 
 4. **Create `CLAUDE.md`** in the repo root from the canonical scaffold
-   `templates/CLAUDE-template.md` in this repo — fetch it raw:
-   `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/CLAUDE-template.md`
+   `templates/CLAUDE-template.md` in this repo — fetch it raw at step 1's SHA:
+   `https://raw.githubusercontent.com/akyachtsman/claude.directives/<SHA>/templates/CLAUDE-template.md`
    Write it as `CLAUDE.md`, drop the scaffold's HTML comment, fill in the repo
    name and live URL from context (`APP_URL` variable / repo name), and leave
    the [bracketed] sections as placeholders for the human to complete
    post-merge. The project's **look is established later by `/design-intake`**
    (per `directives/design.md`) — there is no shared company theme to pick.
    Record the deployment target — **GitHub Pages** — on CLAUDE.md's `Stack:`
-   bullet, and leave `Build:` at none. The steps below
-   scaffold a single-page `index.html` app on GitHub Pages. That is the only
-   deployment path (`global.md` → *Hosting & Deployment*): no framework, no build,
-   no tier to choose. A CI build is a later per-project opt-in with the owner's
+   bullet, and leave `Build:` at none. The project is a single-page
+   `index.html` app on GitHub Pages — the only deployment path
+   (`global.md` → *Hosting & Deployment*): no framework, no build, no tier to
+   choose. This command does NOT write `index.html`; the build does
+   (`/kickoff` → `/sdd-loop`), so until then the steps below find none
+   (steps 8 and 9). A CI build is a later per-project opt-in with the owner's
    sign-off, never a bootstrap question.
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
@@ -111,7 +120,7 @@ Execute in order:
    `refresh-repo.md` → *Deriving the referenced-script set*, with every file this bootstrap installs as a caller — the
    workflows above, `templates/actions/*/action.yml`, and the five
    `directives/*.md` from step 1 (a directive is a caller too) — all fetched at
-   ONE `main` SHA resolved for this run, never a moving `main`. Copy each derived
+   step 1's SHA, never a moving `main`. Copy each derived
    `.github/scripts/<f>` from `claude.directives/templates/scripts/<f>`. A missing
    one fails its caller at step resolution, so a failed caller or script fetch
    stops the bootstrap; never install a caller without what it names. Config
@@ -119,9 +128,11 @@ Execute in order:
    without an input goes in `.github/ui-suite-env-exempt.json` with its reason
    (`check-ui-suite-env.py`); `check-job-bounds.py` needs none — it is what keeps
    the ui-suite callers' 120-minute bound from drifting back to a value that
-   cancels healthy runs; `.github/workflow-ref-required.json` lists any watcher
-   the project must not lose (absent file = none, the right default at
-   bootstrap; rules: `docs/standards/automations.md` → *Watcher Rules*); and
+   cancels healthy runs; `.github/workflow-ref-required.json` lists every
+   watcher the project must not lose, in both branches of W3: **branch-source**
+   → write it at bootstrap as `{ "pages-retry.yml": ["pages-build-deployment"] }`;
+   **Actions-source** → no retry entry, **or**, under W3's exception, the entry
+   naming the repointed deploy (rules: `docs/standards/automations.md` → *Watcher Rules*); and
    `check-contrast.js`, the WCAG guardrail `qa.yml` runs against the design
    tokens, reads `styles/tokens.css` or `css/tokens.css` by default — elsewhere,
    append `--tokens <file>` (repeat it per theme file).
@@ -166,8 +177,8 @@ Execute in order:
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains
    (create `.gitignore` if absent; append any missing line):
-   - `.claude/mcp.json` — per-repo MCP/backend config; holds connection details
-     and must never be committed (see the data directive)
+   - `.mcp.json` — per-repo MCP/backend config at the repo root; holds
+     connection details and must never be committed (see the data directive)
    - `.env` and `.env.*` — local key/secret files must never be committed
 
    Add **only** these entries. In particular, do **not** gitignore
@@ -177,9 +188,11 @@ Execute in order:
    Also copy `claude.directives/templates/claude-settings.json` to
    `.claude/settings.json` (merge into any existing one): it registers the
    claude-directives marketplace, enables the directives-toolkit plugin
-   for every session on this repo, and pre-approves all six Claude Code
+   for every session on this repo, and pre-approves the two classes
+   `global.md` → *Scheduling Tools Never Prompt* admits: the six Claude Code
    Remote scheduling tools (`send_later`, `create_trigger`, `delete_trigger`,
-   `update_trigger`, `fire_trigger`, `list_triggers`) per `global.md` → *Scheduling Tools Never Prompt* (owner ruling, 2026-08-18; its accepted
+   `update_trigger`, `fire_trigger`, `list_triggers`) and the read-only tools it
+   lists (owner ruling, 2026-08-18; its accepted
    residuals record the persistence-vector trade-off) — self-scheduling is how
    a session resumes after CI and re-arms check-ins, and per-call permission
    prompts defeat unattended monitoring. It is NOT how a session heartbeats:
@@ -191,8 +204,13 @@ Execute in order:
    tools — attaching repos, creating or archiving sessions — must keep
    prompting; do not add them. If the new repository is **private**, also add
    the outsider-content GitHub reads that `global.md` → *Scheduling Tools Never Prompt*
-   lists for private repositories; a public one never carries them. The guard
-   hooks ship inside the plugin.
+   lists for private repositories, and record `private repository` as the
+   reason for each in `.claude/directive-sync.json`, with the same `jq` form
+   `/refresh-repo` gives (`refresh-repo.md` → *Phase 3 — Stamp and report*),
+   section `permissions.allow (local extra)`, creating the file as `{}` if it
+   is absent. Unrecorded, the first `/refresh-repo` reports each one as an
+   unexplained extra and holds its stamp back. A public repository never
+   carries them. The guard hooks ship inside the plugin.
 
    The settings template also registers a `SessionStart` hook, so copy
    `claude.directives/templates/claude-hooks/session-start.sh` to
@@ -204,7 +222,7 @@ Execute in order:
    a failed install degrades the session rather than blocking it.
 
 7. **Install the Playwright kit.** Copy every file
-   `claude.directives/templates/ui-tests/` ships at step 5's SHA (list it from the
+   `claude.directives/templates/ui-tests/` ships at step 1's SHA (list it from the
    upstream tree; never a remembered file list) into `.github/scripts/ui-tests/`,
    keeping its layout. The scripts that serve the kit do NOT arrive with it:
    `check-ui-viewports.js` (the `ui-suite` composite names it by path — without it
@@ -228,7 +246,8 @@ Execute in order:
    (`cicd-setup.md` Step 5).
 
 8. **Pre-push verification.** Run the local gate before pushing:
-   - `npx html-validate index.html` (and any other HTML entry points)
+   - `npx html-validate` on each HTML entry point that exists — none yet at
+     bootstrap (step 4), so this runs from the first build onward
    - syntax-check the Playwright scripts (`node --check` on each `.js`)
    - validate every workflow's YAML
      (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/<file>'))"`)

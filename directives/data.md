@@ -19,8 +19,10 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   explicit approval at the project level.
 
 ## MCP Configuration
-- Each repo configures its own Supabase MCP access in `.claude/mcp.json`.
-- `.claude/mcp.json` is **per-repo and gitignored** — it holds connection setup
+- Each repo configures its own Supabase MCP access in `.mcp.json` at the repo
+  root — the project-scope file Claude Code reads (`.claude/mcp.json` is never
+  read; verified 2026-10-08 against code.claude.com/docs/en/mcp).
+- `.mcp.json` is **per-repo and gitignored** — it holds connection setup
   and must never be committed. Add it to the project `.gitignore` during
   bootstrap.
 - Treat MCP config as local session setup, not shared project state.
@@ -103,4 +105,4 @@ here.)
   second one alongside it (→ *Preferred Backend*).
 - Stop and ask before disabling RLS on any table.
 - Stop and ask before using the service-role key anywhere a browser can reach it.
-- Stop and ask before committing `.claude/mcp.json` or any key material.
+- Stop and ask before committing `.mcp.json` or any key material.

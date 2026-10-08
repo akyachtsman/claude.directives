@@ -211,10 +211,12 @@ the states that rule's test admits.
   documented reaction model rather than from measurement here; treat it as the
   conservative reading until someone observes otherwise.)
 
-  Verify reachability rather than assuming it; from a Claude Code remote session
+  Verify reachability rather than assuming it. From a Claude Code remote session
   on 2026-08-23 the list was not reachable — direct REST to `api.github.com`
   returned *"GitHub access is not enabled for this session"*, WebFetch returned
-  403, and the MCP surface exposes only the summary.
+  403, and the MCP surface exposes only the summary. On 2026-10-08 a web
+  session's `gh api` (its GitHub proxy) returned the list, `user` and
+  `created_at` included — so it can change either way between sessions.
 
 ## The reaction ladder
 

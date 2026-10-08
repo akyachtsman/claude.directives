@@ -97,9 +97,10 @@ Agents write evidence to `.agent-reports/`:
 
 ## Scheduling Permissions
 Per `global.md` → *Scheduling Tools Never Prompt*: this repo's committed
-`.claude/settings.json` carries the six-tool scheduling allowlist under both
-server-name spellings, installed verbatim from `claude.directives`'
-`templates/claude-settings.json` at bootstrap. Riskier remote tools — attaching
+`.claude/settings.json` carries the allowlist installed verbatim from
+`claude.directives`' `templates/claude-settings.json` at bootstrap: the six
+scheduling tools and the read-only tools that ruling admits, every remote one
+under both server-name spellings. Riskier remote tools — attaching
 repos, creating or archiving sessions — must keep prompting. Do not hand-edit
 the list here; copy it from the template so the two cannot drift.
 

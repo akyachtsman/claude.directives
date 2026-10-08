@@ -501,7 +501,7 @@
     }
   },
   "considered": {
-    "_comment": "Native capabilities evaluated by the upkeep mandate (CLAUDE.md -> Purpose) and NOT adopted wholesale. externals records what we depend on; this records what we looked at and declined, so an audit reads the verdict instead of re-deriving it. verdict: borrowed (an idea taken, the implementation stays) | rejected (does not fit) | deferred (fits, not yet done). stays = the path that keeps the job; must exist (validated).",
+    "_comment": "Native capabilities evaluated by the upkeep mandate (CLAUDE.md -> Purpose) and NOT adopted wholesale. externals records what we depend on; this records what we looked at and declined, so an audit reads the verdict instead of re-deriving it. verdict: borrowed (an idea taken, the implementation stays) | rejected (does not fit) | deferred (fits, not yet done). stays = the path that keeps the job; must exist (validated). names = for an entry recording several natives under one key, the manifest or inventory name of each, so the parity diff can match every one of them.",
     "commit-commands": {
       "vendor": "Anthropic",
       "verdict": "rejected",
@@ -541,7 +541,7 @@
     "fewer-permission-prompts": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "Built-in skill that mines transcripts for common tool calls and proposes an allowlist. Our allowlist is not discovered from usage - it is an owner ruling (global.md -> Scheduling Tools Never Prompt) naming exactly six tools with recorded accepted residuals, deliberately excluding the riskier remote tools a usage-mined list would surface. Adopting it would widen the grant by exactly the mechanism the ruling rejects.",
+      "rationale": "Built-in skill that mines transcripts for common tool calls and proposes an allowlist. Our allowlist is not discovered from usage - it is an owner ruling (global.md -> Scheduling Tools Never Prompt) admitting two classes only - the six scheduling tools and read-only tools that change nothing and return no outsider-written content - with recorded accepted residuals, deliberately excluding the riskier remote tools a usage-mined list would surface. Adopting it would widen the grant by exactly the mechanism the ruling rejects.",
       "stays": "directives/global.md"
     },
     "init": {
@@ -553,13 +553,13 @@
     "claude-code-setup": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "Sets up Claude Code in an existing repo. /new-repo bootstraps against THIS fleet's standard: the workflow set, the composite actions, the Playwright kit, styles/, the marketplace + plugin enablement, and the SessionStart hook. Generic setup delivers none of it.",
+      "rationale": "Analyses a codebase and recommends Claude Code automations for it - hooks, skills, MCP servers, subagents. This fleet's automation set is not derived per codebase: /new-repo installs one standard (the workflow set, the composite actions, the Playwright kit, styles/, the marketplace + plugin enablement, and the SessionStart hook), and owner rulings decide what joins it. Per-repo recommendations are the per-project drift that standard exists to prevent.",
       "stays": "plugins/directives-toolkit/commands/new-repo.md"
     },
     "session-report": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "Summarises a session. /handoff-session is deliberately the opposite: global.md -> Handoffs Carry Only What Dies With the Session makes it delta-only, and a comprehensive summary is precisely the failure mode that ruling exists to prevent.",
+      "rationale": "Generates an explorable HTML report of session usage - tokens, cache efficiency, subagents, skills and the costliest prompts - from local transcripts. A usage report, the same job as receipts under out-of-domain, which this repo does not have. Recorded on its own because the name reads like a session summary: it is not a handoff, and /handoff-session stays delta-only (global.md -> Handoffs Carry Only What Dies With the Session).",
       "stays": "plugins/directives-toolkit/commands/handoff-session.md"
     },
     "code-simplifier": {
@@ -583,12 +583,14 @@
     "lsp-plugins": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "The twelve Anthropic language-server plugins (typescript-lsp, pyright-lsp, gopls-lsp, ...). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive eleven verdicts.",
+      "names": ["clangd-lsp", "csharp-lsp", "gopls-lsp", "jdtls-lsp", "kotlin-lsp", "lua-lsp", "php-lsp", "pyright-lsp", "ruby-lsp", "rust-analyzer-lsp", "swift-lsp", "typescript-lsp"],
+      "rationale": "The twelve Anthropic language-server plugins listed in names (liquid-lsp, in the same marketplace, is Shopify's and outside the parity pass). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive twelve verdicts.",
       "stays": "CLAUDE.md"
     },
     "output-styles": {
       "vendor": "Anthropic",
       "verdict": "rejected",
+      "names": ["explanatory-output-style", "learning-output-style"],
       "rationale": "explanatory-output-style and learning-output-style change how a session narrates. global.md -> Plain Language First and Say It in Verbs already own that, as owner rulings; a plugin that overrides them would contradict the directives.",
       "stays": "directives/global.md"
     },
@@ -643,8 +645,21 @@
     "out-of-domain": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "Plugins agent-sdk-dev, claude-opus-4-5-migration, code-modernization, cwc-makers, math-olympiad, mcp-apps, mcp-server-dev, mcp-tunnels and receipts, and built-in skills claude-api, workflow-authoring and keybindings-help. Each serves a job this repo and its toolkit do not have (SDK or MCP development, model migration, legacy modernisation, hardware onboarding, competition math, usage reports, API reference, Workflow scripts, keybindings). Recorded as one entry so a future parity pass does not re-derive twelve verdicts.",
+      "names": ["agent-sdk-dev", "claude-opus-4-5-migration", "code-modernization", "cwc-makers", "math-olympiad", "mcp-apps", "mcp-server-dev", "mcp-tunnels", "receipts", "claude-api", "workflow-authoring", "keybindings-help"],
+      "rationale": "The nine plugins and three built-in skills listed in names. Each serves a job this repo and its toolkit do not have (SDK or MCP development, model migration, legacy modernisation, hardware onboarding, competition math, usage reports, API reference, Workflow scripts, keybindings). Recorded as one entry so a future parity pass does not re-derive twelve verdicts.",
       "stays": "CLAUDE.md"
+    },
+    "math-proof": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "Two skills that work a hard mathematics problem to a self-contained proof.md, solo or in rounds of judge and worker sub-agents. Out of scope: no job in this repo or its toolkit is mathematical proof. Recorded on its own rather than under out-of-domain because it arrived after that entry's audit.",
+      "stays": "CLAUDE.md"
+    },
+    "plugin-authoring": {
+      "vendor": "Anthropic (built-in skill)",
+      "verdict": "rejected",
+      "rationale": "Built-in skill that writes a mod - a pane, band, status line, toast or hook - as function hooks that hot-reload in the CURRENT session. The toolkit's guard hooks (the push and wait gates among them) must reach every session in every downstream repo, so they ship through the claude-directives marketplace as plugin files under plugins/directives-toolkit/hooks/; a session-local mod reaches no other session. plugin-dev stays the authoring authority (CLAUDE.md -> Toolkit changes).",
+      "stays": "plugins/directives-toolkit/hooks/hooks.json"
     }
   }
 }

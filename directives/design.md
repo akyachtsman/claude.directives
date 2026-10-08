@@ -56,8 +56,8 @@ compared against a utility-class system (which, needing a build, would come
 through the CI-build opt-in). The Hosting ruling settles something narrower: no
 React, no build by default, no local server, no new platform. That is why
 frameworked generators are rejected
-(`docs/guides/dev-pipeline.md` → AI UI generators; `/design-intake` → Figma
-codegen MCPs), but it does not decide the token mechanism. Take an alternative to
+(`docs/guides/dev-pipeline.md` → *Deliberate rejects (simplicity discipline)*;
+the Figma bullet in step 1 of `/design-intake`), but it does not decide the token mechanism. Take an alternative to
 the owner rather than adopting one — and do not cite this line as authority for
 refusing one. The CI-build opt-in alone, once it opens, lets a utility library such as
 Tailwind compile on top of `tokens.css` and `components.css`; replacing those

@@ -67,7 +67,7 @@ not edit workflows chasing a bug that isn't there.
 ### Two-tier CI architecture
 
 Every project using these agents runs two Playwright workflows:
-- `qa.yml` — static checks + Playwright against local server (runs on every PR/push)
+- `qa.yml` — static checks + Playwright against local server (runs on PRs targeting `main` and on pushes to `main`)
 - `qa-live.yml` — Playwright against live deployed URL (runs after deployment, authoritative gate)
 
 ### Expected outcomes — do not investigate

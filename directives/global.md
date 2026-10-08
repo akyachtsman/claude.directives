@@ -442,7 +442,7 @@ had. Do not re-propose it, and do not scaffold toward it.
 - **Needing a server is not a reason to reach for one.** The gap a framework
   tier would have filled is server-side execution — a real secret at request
   time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth Pattern*). **Supabase Edge Functions already cover that**, with no framework,
-  no build and no new platform — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling (`data.md` → *Reversible-by-Design Backend Changes*).
+  no build and no new platform (`data.md` → *Reversible-by-Design Backend Changes*) — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling.
 - **If a project ever genuinely outgrows Pages**, the owner's stated direction
   is **Cloudflare** — response time, caching, security. That names a direction,
   not a decision: it still needs explicit sign-off, against a real requirement.
@@ -731,8 +731,12 @@ agent's definition names none; the call's `model` and the frontmatter both
 outrank it. ⚠️ **While it is set, leaving `model` out no longer inherits the
 session's model** — a build agent runs the variable's model instead — so the
 build tier above holds only with it unset (or set to `inherit`).
-`CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` goes further: every subagent runs the
-variable's model and a call's `model` is ignored, so none of the tiers apply.
+`CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` goes further: a call's `model` and an
+agent definition's `model:` are both ignored, and subagents run the variable's
+model — or, with FORCE set alone, the session's (the built-in Explore agent keeps
+its own) — so none of the tiers apply. A fork, and a skill run in a subagent with
+`model: inherit`, still run the session's model (verified 2026-10-08 against
+code.claude.com/docs/en/sub-agents).
 Both are environment settings the owner changes; a session never sets either.
 
 ## Burst Intake — Multiple Asks at Once (owner ruling, 2026-08-18)
@@ -1235,16 +1239,24 @@ before reporting "no access":
    even when access exists.
 3. **WebSearch** — runs server-side and bypasses the container's network policy
    entirely. Use for documentation, examples, and corroborating facts.
-4. **WebFetch** — also server-side with its own egress rules. A 403 here may be
-   the target site's bot protection, not the environment policy.
+4. **WebFetch** — subject to the environment's egress policy too: a host the
+   policy denies fails with `EGRESS_BLOCKED` ("blocked by the network egress
+   proxy"; measured 2026-10-08 on a host curl also gets a CONNECT 403 for), so
+   it is not a way around rung 5. A 403 from a host it does reach may be the
+   target site's bot protection, not the environment policy.
 5. **curl/CLI in the sandbox** — goes through the agent proxy; the environment
    allowlist applies. A 403 on CONNECT is a policy denial: report it, never
    route around it. The owner can add the host in the environment's network
    settings, which takes effect in RUNNING sessions immediately — no new
    session needed. Diagnose with
    `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
-6. **Sandbox browser (Playwright)** — launch with executablePath
-   '/opt/pw-browsers/chromium'. Known gateway quirk: some hosts reset
+6. **Sandbox browser (Playwright)** — launch the browser the project's own
+   Playwright resolves (`PLAYWRIGHT_BROWSERS_PATH` points it at
+   `/opt/pw-browsers`), and do not pin `executablePath` to
+   `/opt/pw-browsers/chromium`: that symlink names one fixed build (1194,
+   Chromium 141, measured 2026-10-08) beside newer ones, whatever version the
+   project's Playwright expects. When the launch fails, run the ladder
+   (`test.md` → *Sandboxed local runs*). Known gateway quirk: some hosts reset
    BROWSER-originated connections even when allowlisted —
    ERR_CONNECTION_RESET while curl succeeds means use curl for
    content, and for UI verification serve the project locally

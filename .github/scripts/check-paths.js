@@ -112,11 +112,16 @@ for (const [ref, citedBy] of [...refs].sort()) {
 //   single-quoted, unquoted or bare; comments and raw-text elements skipped;
 //   the first of a duplicate attribute wins -- and THROWS on markup it cannot
 //   read, which fails the run rather than skipping the page.
-// - each link is resolved by WHATWG URL against the page's own address under a
-//   sentinel project root, exactly as a browser resolves it on the deployed
-//   site. Another origin is external and skipped; same origin but outside the
-//   root (a root-relative "/x", or too many "..") FAILS, since on the project
-//   site it leaves the repo's pages altogether.
+// - each link is resolved by WHATWG URL against the page's own DEPLOYED address,
+//   exactly as a browser resolves it there. pagesRoot() derives that address
+//   the way GitHub Pages assigns it -- a tracked CNAME's domain, else
+//   <owner>.github.io/<repo>/ (or / for a <owner>.github.io repo) -- so an
+//   absolute link spelling this site's own URL is checked like a relative one
+//   (Codex on #415: a canonical or card URL to a missing page). A URL inside
+//   that root must name a file. A RELATIVE reference that resolves outside it
+//   (a root-relative "/x", or too many "..") FAILS, since on the project site it
+//   leaves the repo's pages altogether; an absolute URL outside it is someone
+//   else's page, external like any other origin.
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
 const URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'action', 'formaction', 'data', 'cite', 'manifest', 'longdesc', 'background']);
@@ -179,7 +184,29 @@ function linksOf({ tag, attrs }) {
   }
   return urls;
 }
-const ROOT = new URL('https://pages.invalid/__project_root__/');
+// The site's deployed root. Underivable is a refusal, not a guess: guessing
+// would check every link against the wrong place and pass.
+function pagesRoot() {
+  if (isFile('CNAME')) {
+    const domain = readFileSync('CNAME', 'utf8').trim().split(/\s+/)[0];
+    if (domain) return new URL(`https://${domain}/`);
+  }
+  let slug = process.env.GITHUB_REPOSITORY || '';
+  if (!slug) {
+    try {
+      const remote = execFileSync('git', ['remote', 'get-url', 'origin'], { encoding: 'utf8' }).trim();
+      slug = remote.replace(/\.git$/, '').split(/[/:]/).slice(-2).join('/');
+    } catch { slug = ''; }
+  }
+  const [owner, repo] = slug.split('/');
+  if (!owner || !repo) {
+    console.error('CANNOT CHECK: no CNAME, no GITHUB_REPOSITORY and no readable origin remote -- the HTML links have no deployed base to resolve against');
+    process.exit(2);
+  }
+  const host = `${owner.toLowerCase()}.github.io`;
+  return new URL(repo.toLowerCase() === host ? `https://${host}/` : `https://${host}/${repo}/`);
+}
+const ROOT = pagesRoot();
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
@@ -193,12 +220,16 @@ for (const page of htmlPages) {
   for (const raw of pageTags.flatMap(linksOf)) {
     let url;
     try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }
-    if (url.origin !== ROOT.origin) continue; // another site, any scheme: not this tree's to check
-    htmlLinks++;
-    if (!url.pathname.startsWith(ROOT.pathname)) {
-      console.error(`MISSING: ${page} links "${raw}", which resolves to ${url.pathname} -- outside the Pages project root, so it leaves this repo's site`);
+    // http and https are one site: Pages redirects the first to the second.
+    const inside = /^https?:$/.test(url.protocol) && url.host === ROOT.host && url.pathname.startsWith(ROOT.pathname);
+    if (!inside) {
+      // Written with a scheme or as "//host": it names its own destination -- external.
+      if (/^\s*(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)) continue;
+      htmlLinks++;
+      console.error(`MISSING: ${page} links "${raw}", which resolves to ${url.href} -- outside ${ROOT.href}, so it leaves this repo's site`);
       failed = true; continue;
     }
+    htmlLinks++;
     const rel = decodeURIComponent(url.pathname.slice(ROOT.pathname.length));
     const target = rel === '' || rel.endsWith('/') ? `${rel}index.html` : rel;
     if (isFile(target) || isFile(join(target, 'index.html'))) continue;

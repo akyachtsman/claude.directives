@@ -70,9 +70,9 @@ relocate the export into this file.
 ## Self-application
 This repo eats its own cooking: **whenever a directive or template change ships,
 check whether it applies to THIS repo too**, in the same PR. Two patterns:
-- **Byte-identical copy**, enforced by qa.yml's paired-file check — every pair
-  the Local gate below `diff`s (workflows, guard scripts, settings, the
-  `SessionStart` hook) — the template IS the live copy.
+- **Byte-identical copy**, enforced by `.github/scripts/check-pairs.py` — the
+  one list of pairs lives in that script; add a pair there — the template IS the
+  live copy.
 - **Adapted with documented divergence** where roles differ (`ci-monitor.yml` /
   `ci-notify.yml` watch this repo's workflow name; `qa.yml` here is directive
   validation, not app CI — so the app-shaped pieces like the ui-tests kit and
@@ -265,16 +265,8 @@ node .github/scripts/check-links-cases.js        # that checker's own guard. Re-
 #   - Do NOT suppress the self form after a code span naming a `.md` file (#367 rounds 12-16, withdrawn by owner ruling 2026-09-18)
 #   - Keep the `\x60` in `(?<![\x60\w])`; do NOT reintroduce the flanking rule; line endings are normalised ONCE by `readSource()`
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for p in ('.github/workflows/*', 'templates/workflows/*', 'templates/actions/*/action') for e in ('.yml', '.yaml') for f in glob.glob(p + e)]"
-diff .claude/settings.json templates/claude-settings.json
-diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
-diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
-diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
-diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
-diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
-diff .github/scripts/check-py-warnings.py templates/scripts/check-py-warnings.py
-diff .github/scripts/check-ui-suite-env.py templates/scripts/check-ui-suite-env.py
-diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
-test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
+python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable
+python3 .github/scripts/check-pairs-cases.py    # that check's own guard — every pair drifted in turn, each mode refusal with its complement. Re-prove with CHECK_PAIRS_BIN=<mutant>
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)

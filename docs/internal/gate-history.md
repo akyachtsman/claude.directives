@@ -5,7 +5,7 @@ purpose per command and the hard rules a session must follow; the round-by-round
 history and evidence behind those lines lives with the script it is about, in that
 script's header comment under **HISTORY MOVED FROM CLAUDE.md (2026-09-23)**. This
 file holds the part with no single script home: history about a byte-identical
-pair (editing one copy would break the paired-file diff), about a step that is not
+pair (editing one copy would break the paired-file check), about a step that is not
 a script, and about the gate as a whole. Moved verbatim on 2026-09-23 (owner
 ruling: slim `CLAUDE.md`, move history to script headers or `docs/internal/`).
 Since 2026-10-07 it also holds the incident history behind `/refresh-repo`'s

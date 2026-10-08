@@ -155,39 +155,26 @@ jobs:
           "
 
       # These pairs are intentionally byte-identical (the template IS the live copy).
-      # ci-monitor.yml is exempt: its watched-workflow list intentionally differs.
+      # The list lives in the script and nowhere else; it also checks the modes a
+      # content diff cannot see, including that both SessionStart hook copies are
+      # executable. ci-monitor.yml is exempt: its watched-workflow list differs.
       - name: Check intentionally-identical file pairs
-        run: |
-          diff .claude/settings.json templates/claude-settings.json
-          diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
-          diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
-          diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
-          # The guard ships to projects from templates/; this repo runs the .github/
-          # copy. Without this diff a repair could land in the copy we execute while
-          # the shipped one stays broken — and QA would stay green either way.
-          diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
-          diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
-          diff .github/scripts/check-py-warnings.py templates/scripts/check-py-warnings.py
-          diff .github/scripts/check-ui-suite-env.py templates/scripts/check-ui-suite-env.py
-          diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
-          echo "OK: paired files in sync"
+        run: python3 .github/scripts/check-pairs.py
+
+      # Every pair is in sync today, so the check above prints the same OK
+      # whether its comparison works or not. Drive a mutated copy with
+      # CHECK_PAIRS_BIN to re-prove discrimination.
+      - name: Check the pair check enforces what it claims
+        run: python3 .github/scripts/check-pairs-cases.py
 
       # The SessionStart hook runs at the start of every web session in this repo
       # and in every project scaffolded from the template. A syntax error there
       # breaks session startup, so parse it here rather than discovering it live.
-      - name: Check SessionStart hook parses and stays executable
+      # Its executable bit is asserted by check-pairs.py above.
+      - name: Check SessionStart hook parses
         run: |
           bash -n .claude/hooks/session-start.sh
-          # A mode-only change slips past everything else here: `bash -n` reads a
-          # non-executable file happily and the paired-file `diff` compares content,
-          # not modes. The registered hook would then fail permission-denied at every
-          # session start. Assert the bit on the live hook AND the template projects
-          # copy, since a non-executable template propagates the fault downstream.
-          test -x .claude/hooks/session-start.sh \
-            || { echo "FAIL: .claude/hooks/session-start.sh is not executable"; exit 1; }
-          test -x templates/claude-hooks/session-start.sh \
-            || { echo "FAIL: templates/claude-hooks/session-start.sh is not executable"; exit 1; }
-          echo "OK: SessionStart hook parses and both copies are executable"
+          echo "OK: SessionStart hook parses"
 
       # The two Pages landing pages (site root + /docs/ gallery) deliberately
       # duplicate one :root palette block; keep the copies from drifting.

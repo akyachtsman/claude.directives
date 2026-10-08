@@ -508,11 +508,6 @@ def needs(caller, body, named):
     return need
 
 
-def derive(stages, text):
-    """Run the SHIPPED install pipeline's stages over `text` using real grep/sed."""
-    return run_stages(stages, text)
-
-
 def truth(text):
     # A trailing period is sentence punctuation, not part of the path.
     return {h.rstrip(".") for h in TRUTH_RE.findall(text) if in_contract(h.rstrip("."))}
@@ -618,7 +613,7 @@ def main():
     missed = []
     documented_all = set()
     for caller in callers:
-        got, err = derive(install, bodies[caller])
+        got, err = run_stages(install, bodies[caller])
         if err:
             return engine_error(err, f"token: {token_pat}   filter: {filter_pat}")
         got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
@@ -659,7 +654,7 @@ def main():
             if second is first:
                 continue
             buf = bodies[first] + joiner + bodies[second] + joiner
-            got, err = derive(install, buf)
+            got, err = run_stages(install, buf)
             if err:
                 return fail(f"the documented pattern failed on the concatenated buffer: {err}")
             got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
@@ -744,7 +739,7 @@ def main():
     # ---- check 6: every caller NAMES what it needs ----------------------------
     unnamed = []
     for caller in callers:
-        got, err = derive(install, bodies[caller])
+        got, err = run_stages(install, bodies[caller])
         if err:
             return engine_error(err, f"token: {token_pat}   filter: {filter_pat}")
         named = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}

@@ -21,6 +21,7 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 | `check-job-bounds-cases.py`, `check-contrast-cases.js` | each script's header |
 | `check-refresh-derivation.py`, `check-refresh-derivation-cases.py` | each script's header |
 | `check-action-siblings.py`, `check-action-siblings-cases.py` | each script's header |
+| `check-run-quoting.py`, `check-run-quoting-cases.py` | each script's header |
 | `check-browser-ladder-cases.js` | that script's header |
 | `check-links.js`, `check-links-cases.js` | each script's header |
 | `check-py-warnings.py` (byte-identical pair), the ui-tests `npm install` step, the gate as a whole | this file |

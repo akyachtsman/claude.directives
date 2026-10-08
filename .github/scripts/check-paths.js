@@ -321,12 +321,22 @@ if (JEKYLL && tracked.has('_config.yml')) {
   process.exit(2);
 }
 const JEKYLL_EXCLUDED = /^(?:node_modules|vendor\/(?:bundle|cache|gems|ruby)|gemfiles|Gemfile(?:\.lock)?)(?:\/|$)/;
-const jekyllPublishes = (p) => !JEKYLL || !(p.split('/').some((seg) => /^[._]/.test(seg)) || JEKYLL_EXCLUDED.test(p));
-const published = (p) => tracked.has(p) && isFile(p) && jekyllPublishes(p);
+// Jekyll's reserved prefixes are ".", "_", "#" and "~" (jekyllrb.com/docs/structure).
+const jekyllPublishes = (p) => !JEKYLL || !(p.split('/').some((seg) => /^[._#~]/.test(seg)) || JEKYLL_EXCLUDED.test(p));
+// A file opening with front matter is PROCESSED by Jekyll, and its permalink
+// can move it anywhere -- so neither the links it contains nor links to it can
+// be resolved from its source path. Refused rather than modelled (Codex on
+// #415); no page here has front matter.
+const hasFrontMatter = (p) => { try { return JEKYLL && /^---[ \t]*\r?\n/.test(readFileSync(p, 'utf8')); } catch { return false; } };
+const published = (p) => tracked.has(p) && isFile(p) && jekyllPublishes(p) && !hasFrontMatter(p);
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
 for (const page of htmlPages) {
+  if (hasFrontMatter(page)) {
+    console.error(`UNREADABLE: ${page} opens with Jekyll front matter -- Jekyll processes it and a permalink can move it, so its links cannot be resolved from its source path`);
+    failed = true; continue;
+  }
   let pageTags;
   try { pageTags = tags(readFileSync(page, 'utf8')); } catch (e) {
     console.error(`UNREADABLE: ${page}: ${e.message} -- its links cannot be checked`);

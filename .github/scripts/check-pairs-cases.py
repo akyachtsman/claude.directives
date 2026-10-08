@@ -21,13 +21,14 @@ Run: python3 .github/scripts/check-pairs-cases.py
 import importlib.util
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 
+from cases_lib import Cases, bin_path, run
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REAL = os.path.join(ROOT, ".github", "scripts", "check-pairs.py")
-GUARD = os.environ.get("CHECK_PAIRS_BIN", REAL)
+GUARD = bin_path("CHECK_PAIRS_BIN", REAL)
 
 # The pair list is read from the REAL check, never copied here: a list held in
 # this file would test the copy. A mutant that drops a pair is then caught by
@@ -58,12 +59,6 @@ def append(root, rel, text="# drift\n"):
 
 def chmod(root, rel, mode):
     os.chmod(os.path.join(root, rel), mode)
-
-
-def run(root):
-    proc = subprocess.run([sys.executable, GUARD, root], capture_output=True)
-    decode = lambda b: b.decode("utf-8", "surrogateescape")
-    return proc.returncode, decode(proc.stdout) + decode(proc.stderr)
 
 
 def cases():
@@ -101,37 +96,17 @@ def cases():
 
 
 def main():
-    failures = []
+    c = Cases("check-pairs-cases")
     all_cases = cases()
     with tempfile.TemporaryDirectory() as tmp:
         for label, mutate, expected, needle in all_cases:
             root = fixture(tmp)
             mutate(root)
-            code, out = run(root)
-            if code != expected:
-                failures.append(f"{label}\n      expected exit {expected}; got {code}.\n      {out.strip()}")
-            elif needle not in out:
-                failures.append(
-                    f"{label}\n      exited {code} as expected, but for the wrong stated reason."
-                    f"\n      expected the output to contain: {needle!r}\n      {out.strip()}")
-            else:
-                print(f"OK:   {label} (exit {code})")
-
+            c.expect(label, *run([sys.executable, GUARD, root]), expected, needle)
     # And the live repo. A suite that only ever sees fixtures can be green while
     # the real pairs have drifted.
-    code, out = run(ROOT)
-    if code != 0:
-        failures.append(f"the live repo passes\n      expected exit 0; got {code}.\n      {out.strip()}")
-    else:
-        print("OK:   the live repo passes (exit 0)")
-
-    if failures:
-        print("\ncheck-pairs-cases: FAILED")
-        for failure in failures:
-            print(f"  - {failure}")
-        return 1
-    print(f"\ncheck-pairs-cases: OK — {len(all_cases) + 1} pinned trees read correctly.")
-    return 0
+    c.expect("the live repo passes", *run([sys.executable, GUARD, ROOT]), 0)
+    return c.finish(f"{len(all_cases) + 1} pinned trees read correctly.")
 
 
 if __name__ == "__main__":

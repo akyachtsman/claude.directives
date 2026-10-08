@@ -21,16 +21,16 @@ Run: python3 .github/scripts/check-workflow-ref-guard.py
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from cases_lib import Cases, bin_path, run, write_tree
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Overridable so a MUTANT can be pointed at, like the other guards' suites;
 # resolved, so a relative path survives the temp-tree cwd.
-GUARD = Path(os.environ.get("WORKFLOW_REF_GUARD_BIN",
-                            REPO_ROOT / ".github" / "scripts" / "workflow-ref-guard.py")).resolve()
+GUARD = bin_path("WORKFLOW_REF_GUARD_BIN", REPO_ROOT / ".github" / "scripts" / "workflow-ref-guard.py")
 NBSP = "\u00A0"
 
 JOBS = 'jobs: {a: {runs-on: ubuntu-latest, steps: [{run: "true"}]}}\n'
@@ -409,41 +409,19 @@ def run_case(files, required):
         os.makedirs(os.path.join(tmp, ".github", "workflows"))
         os.makedirs(os.path.join(tmp, ".github", "scripts"))
         shutil.copy(GUARD, os.path.join(tmp, ".github", "scripts", GUARD.name))
-        for filename, body in files.items():
-            dest = Path(tmp, filename) if "/" in filename else Path(tmp, ".github", "workflows", filename)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(body, encoding="utf-8")
+        # A bare filename is a workflow; a path is placed where it says.
+        write_tree(tmp, {(f if "/" in f else f".github/workflows/{f}"): body
+                         for f, body in files.items()})
         if required is not None:
             Path(tmp, ".github", "workflow-ref-required.json").write_text(json.dumps(required))
-        proc = subprocess.run(
-            [sys.executable, os.path.join(tmp, ".github", "scripts", GUARD.name)],
-            capture_output=True,
-            text=True,
-        )
-        return proc.returncode, (proc.stdout + proc.stderr).strip()
+        return run([sys.executable, os.path.join(tmp, ".github", "scripts", GUARD.name)])
     finally:
         shutil.rmtree(tmp)
 
 
-failures = []
+c = Cases("check-workflow-ref-guard")
 for case in CASES:
     label, expected, files, required = case[:4]
     diagnostic = case[4] if len(case) > 4 else None
-    code, output = run_case(files, required)
-    if code != expected:
-        want = "pass" if expected == 0 else "fail"
-        got = "passed" if code == 0 else "failed"
-        failures.append(f"{label}\n      expected the guard to {want}; it {got}.\n      {output}")
-    elif diagnostic and diagnostic not in output:
-        failures.append(
-            f"{label}\n      exited {code} as expected, but for the wrong stated reason.\n"
-            f"      expected the output to contain: {diagnostic!r}\n      {output}"
-        )
-
-if failures:
-    sys.stderr.write("❌ check-workflow-ref-guard: FAILED\n\n")
-    for failure in failures:
-        sys.stderr.write("  • " + failure + "\n\n")
-    raise SystemExit(1)
-
-print(f"✅ check-workflow-ref-guard: {len(CASES)} pinned YAML forms read correctly.")
+    c.expect(label, *run_case(files, required), expected, diagnostic or None)
+sys.exit(c.finish(f"{len(CASES)} pinned YAML forms read correctly."))

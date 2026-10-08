@@ -24,16 +24,18 @@ Run: python3 .github/scripts/check-toolkit-gates-cases.py
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from cases_lib import Cases, bin_path
+from cases_lib import run as run_argv
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "plugins/directives-toolkit/scripts"
-PUSH = Path(os.environ.get("PUSH_GATE_BIN", SCRIPTS / "push-gate.sh")).resolve()
-WAIT = Path(os.environ.get("WAIT_GATE_BIN", SCRIPTS / "wait-gate.sh")).resolve()
-LIB = Path(os.environ.get("GATE_LIB_BIN", SCRIPTS / "gate-lib.sh")).resolve()
+PUSH = bin_path("PUSH_GATE_BIN", SCRIPTS / "push-gate.sh")
+WAIT = bin_path("WAIT_GATE_BIN", SCRIPTS / "wait-gate.sh")
+LIB = bin_path("GATE_LIB_BIN", SCRIPTS / "gate-lib.sh")
 
 BLOCK, ALLOW = 2, 0
 
@@ -146,9 +148,7 @@ def run(gate, command, background=None):
     if background is not None:
         tool_input["run_in_background"] = background
     payload = json.dumps({"tool_name": "Bash", "tool_input": tool_input})
-    r = subprocess.run(["bash", str(gate)], input=payload, capture_output=True,
-                       text=True, cwd=ROOT)
-    return r.returncode, f"{r.stdout}{r.stderr}".strip()
+    return run_argv(["bash", gate], input=payload.encode(), cwd=ROOT)
 
 
 def main():
@@ -156,8 +156,9 @@ def main():
         if not path.is_file():
             print(f"CANNOT RUN: {path} does not exist")
             return 1
+    c = Cases("check-toolkit-gates-cases")
     with tempfile.TemporaryDirectory() as tmp:
-        failures = check(*install(tmp))
+        check(c, *install(tmp))
         # A gate that cannot load its library must ALLOW, quietly: fail-open is
         # the design (each gate's header), and an error exit here would surface
         # on every Bash call. Both payloads below are ones the gates block.
@@ -165,36 +166,24 @@ def main():
         for gate, command, background in ((PUSH, "git push origin main", None),
                                            (WAIT, "sleep 30", True)):
             code, out = run(Path(tmp) / gate.name, command, background)
+            label = f"{gate.name} with no gate-lib.sh beside it fails open, silently"
             if code != ALLOW or out:
-                failures.append(f"{gate.name}: with no gate-lib.sh beside it\n      expected a silent allow (exit 0); got {code}\n      {out}")
+                c.fail(label, f"expected a silent allow (exit 0); got {code}\n      {out}")
             else:
-                print(f"OK:   {gate.name} with no gate-lib.sh beside it fails open, silently")
-    if failures:
-        print("\ncheck-toolkit-gates-cases: FAILED\n")
-        for f in failures:
-            print(f"  - {f}")
-        return 1
-    print(f"\ncheck-toolkit-gates-cases: OK — {len(PUSH_CASES) + len(WAIT_CASES) + 2} gate payloads read correctly.")
-    return 0
+                c.ok(label)
+    return c.finish(f"{len(PUSH_CASES) + len(WAIT_CASES) + 2} gate payloads read correctly.")
 
 
-def check(push, wait):
-    failures = []
-    for label, command, expected in PUSH_CASES:
-        code, out = run(push, command)
-        verdict = "block" if expected == BLOCK else "allow"
-        if code != expected:
-            failures.append(f"push-gate: {label}\n      expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
-        else:
-            print(f"OK:   push-gate {verdict}s {label}")
-    for label, command, background, expected in WAIT_CASES:
-        code, out = run(wait, command, background)
-        verdict = "block" if expected == BLOCK else "allow"
-        if code != expected:
-            failures.append(f"wait-gate: {label}\n      expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
-        else:
-            print(f"OK:   wait-gate {verdict}s {label}")
-    return failures
+def check(c, push, wait):
+    for name, gate, cases in (("push-gate", push, [(l, cmd, None, e) for l, cmd, e in PUSH_CASES]),
+                              ("wait-gate", wait, WAIT_CASES)):
+        for label, command, background, expected in cases:
+            code, out = run(gate, command, background)
+            verdict = "block" if expected == BLOCK else "allow"
+            if code != expected:
+                c.fail(f"{name}: {label}", f"expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
+            else:
+                c.ok(f"{name} {verdict}s {label}")
 
 
 if __name__ == "__main__":

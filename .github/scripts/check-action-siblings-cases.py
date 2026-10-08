@@ -47,11 +47,12 @@ import subprocess
 import sys
 import tempfile
 
+from cases_lib import Cases, bin_path
+from cases_lib import run as run_argv
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GUARD = os.environ.get(
-    "CHECK_ACTION_SIBLINGS_BIN",
-    os.path.join(ROOT, ".github", "scripts", "check-action-siblings.py"),
-)
+GUARD = bin_path("CHECK_ACTION_SIBLINGS_BIN",
+                 os.path.join(ROOT, ".github", "scripts", "check-action-siblings.py"))
 
 COMPOSITE = """\
 name: 'ui-suite'
@@ -213,17 +214,16 @@ def run(root, unprivileged=False, env_overrides=None):
         env.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="safe.directory",
                    GIT_CONFIG_VALUE_0="*", HOME="/tmp")
         argv = ["setpriv", "--reuid=65534", "--regid=65534", "--clear-groups"] + argv
-    # DECODED LENIENTLY, for the same reason the guard writes leniently: a
-    # non-UTF-8 filename reaches this harness through the guard's own output, and
-    # `text=True` made THIS FILE raise UnicodeDecodeError while testing the fix
-    # for exactly that. The defect was one level up from where it was found.
-    proc = subprocess.run(argv, capture_output=True, env=env)
-    decode = lambda b: b.decode("utf-8", "surrogateescape")
-    return proc.returncode, decode(proc.stdout) + decode(proc.stderr)
+    # DECODED LENIENTLY (cases_lib.run), for the same reason the guard writes
+    # leniently: a non-UTF-8 filename reaches this harness through the guard's
+    # own output, and `text=True` made THIS FILE raise UnicodeDecodeError while
+    # testing the fix for exactly that. The defect was one level up from where
+    # it was found.
+    return run_argv(argv, env=env)
 
 
 def main():
-    failures = []
+    c = Cases("check-action-siblings-cases")
     with tempfile.TemporaryDirectory() as tmp:
         cases = [
             # ── the shipped shape ────────────────────────────────────────────
@@ -429,35 +429,13 @@ def main():
             unprivileged = bool(kwargs.pop("unreadable_case", False))
             env_overrides = kwargs.pop("env", None)
             root = build(tmp, **kwargs)
-            code, out = run(root, unprivileged=unprivileged, env_overrides=env_overrides)
-            if code != expected:
-                failures.append(
-                    f"{label}\n      expected exit {expected}; got {code}.\n      {out.strip()}"
-                )
-            elif needle not in out:
-                failures.append(
-                    f"{label}\n      exited {code} as expected, but for the wrong stated reason."
-                    f"\n      expected the output to contain: {needle!r}\n      {out.strip()}"
-                )
-            else:
-                print(f"OK:   {label} (exit {code})")
+            c.expect(label, *run(root, unprivileged=unprivileged, env_overrides=env_overrides),
+                     expected, needle)
 
     # And it must still pass against the REAL repo. A suite that only ever sees
     # fixtures can be perfectly green while the shipped tree is broken.
-    code, out = run(ROOT)
-    if code != 0:
-        failures.append(f"the live repo passes\n      expected exit 0; got {code}.\n      {out.strip()}")
-    else:
-        print("OK:   the live repo passes (exit 0)")
-
-    if failures:
-        print("\ncheck-action-siblings-cases: FAILED")
-        for failure in failures:
-            print(f"  - {failure}")
-        return 1
-
-    print(f"\ncheck-action-siblings-cases: OK — {len(cases)} pinned trees read correctly.")
-    return 0
+    c.expect("the live repo passes", *run(ROOT), 0)
+    return c.finish(f"{len(cases)} pinned trees read correctly.")
 
 
 if __name__ == "__main__":

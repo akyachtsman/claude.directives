@@ -74,6 +74,7 @@ is added by the pass that finds it.
 | Scheduling-tool names the settings pre-approve | `global.md` → *Scheduling Tools Never Prompt* | 2026-10-08 | This session's tool list against `templates/claude-settings.json` |
 | Wake envelopes cannot be switched off | `CLAUDE.md` → *Notifications* | 2026-10-08 | Claude Code settings docs |
 | `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-10-08 | `claude plugin eval --help` |
+| How `plugin eval` scores a `tool_used: Skill` grader in a two-arm run (`arm: both`) | `docs/internal/skill-eval-notes.md` → *What the score and Δ mean* | 2026-10-08 | `claude plugin eval --help` (the `--ablation` option), and code.claude.com/docs/en/plugin-evals, section *Compare against a no-plugin baseline* |
 | Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-10-08 | Claude Code on the web docs, network access |
 | When a network-allowlist change reaches running sessions | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-08 | code.claude.com/docs/en/cloud-environments, section *Network access* |
 | Claude Code reads the project-scope MCP file from `.mcp.json` at the repo root (its docs suggest committing one that holds no secrets; this standard keeps it gitignored) | `data.md` → *MCP Configuration* | 2026-10-08 | code.claude.com/docs/en/mcp (owner ruling 2026-10-08: it stays gitignored, `data.md` → *MCP Configuration*) |

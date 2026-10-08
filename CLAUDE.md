@@ -198,13 +198,18 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 drifts stops firing silently — no error, just absence. `claude plugin eval`
 (Anthropic) is the harness: cases live in `plugins/directives-toolkit/evals/`,
 each a `prompt.md` plus a skill-fired grader under its own `graders/` dir, using
-(`type: tool_used`, `tool: Skill`, `input_match` on the skill name). Run it from
+(`type: tool_used`, `tool: Skill`, `input_match` on the skill name, `arm: both`). Run it from
 the plugin directory:
 `claude plugin eval --no-publish .`
 It defaults to `--ablation with-without`, running every case twice — with the
-plugin and without it — so the Δ column shows the skill CAUSED the behaviour
-rather than the model doing it anyway. It costs real tokens and is NOT in CI;
-run it when a description changes.
+plugin and without it. **`arm: both` is load-bearing:** in a two-arm run the
+harness excludes a `tool_used: Skill` grader from the score and shows it only as
+a "plugin-fired indicator", unless the grader says `arm: both` (or it is the
+case's only grader). Every grader here says it, so the score IS whether the
+skill fired. The without arm has no plugin, so a should-fire case scores 0 there
+by construction and its Δ is simply the with-arm firing rate; a should-not-fire
+case passes in both arms at Δ 0. Read the score, not Δ, as the result. It costs
+real tokens and is NOT in CI; run it when a description changes.
 
 Availability: `plugin eval` is early access, enabled per organization. On a
 machine that cannot receive that rollout, `CLAUDE_CODE_WALNUT_SPIRE=1` enables
@@ -214,7 +219,7 @@ commit it to this repo's `.claude/settings.json` — a committed value leaves th
 command gated off anyway.
 
 Measured baseline (2026-09-29, 3 runs/case, with/without arms): **12 of 12 pass**,
-mean Δ +0.75 — neither under- nor over-triggering. The durable lesson, and the
+mean Δ +0.75 (9 should-fire cases at +1, 3 negatives at 0) — neither under- nor over-triggering. The durable lesson, and the
 reason to keep measuring: **a description triggers on the WORDS a request
 actually uses, not on what the skill is for.** All three gaps found were fixed by
 rewriting the description against the measurement; the worked cases are in

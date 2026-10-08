@@ -101,7 +101,7 @@ downstream project's CI rather than ours.
 
 | Gate | Retired | Why |
 |---|---|---|
-| `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it. Its other half — each card's target is a regular file — was NOT retired: it moved into `check-paths.js`'s third pass, widened to every same-site link in every tracked `.html` page, read by a spec tokenizer and resolved as a browser would (Codex on #415) |
+| `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it. Its single-page assertions were NOT retired: they moved into `check-paths.js`'s third pass — each card is an `<a>` with an `href` of the shape `docs/site/<filename>.html`, closed by `</a>`, the root page has at least one card, and every target is a tracked regular file; the target check widened to every same-site link in every tracked `.html` page, read by a spec tokenizer and resolved as a browser would (Codex on #415). Only the sync half (count, order, attributes, content across two pages) went |
 
 ## Refresh-repo history
 

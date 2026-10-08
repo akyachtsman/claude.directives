@@ -348,7 +348,14 @@ for (const page of htmlPages) {
     if (!(t.attrs.get('class') || '').split(/[\t\n\f\r ]+/).includes('demo-card')) return;
     cards++;
     if (t.tag !== 'a') return cardFail(`has a .demo-card <${t.tag}>, not a link -- cards must be anchors`);
-    if (!(t.attrs.get('href') || '').trim()) cardFail('has a .demo-card <a> with no href -- the card links nowhere');
+    const href = (t.attrs.get('href') || '').trim();
+    if (!href) cardFail('has a .demo-card <a> with no href -- the card links nowhere');
+    // A root card is a demo, and demos live in docs/site/ -- the shape the root
+    // markup documents and check-landing-cards.js enforced. A README or an
+    // external URL is navigable but is not a demo (Codex on #415).
+    else if (page === 'index.html' && !/^docs\/site\/[A-Za-z0-9][A-Za-z0-9._-]*\.html$/.test(href)) {
+      cardFail(`has a .demo-card href="${href}" -- a root card must be docs/site/<filename>.html`);
+    }
     const close = pageTags.slice(k + 1).find((u) => u.tag === 'a' || u.tag === '/a');
     if (!close || close.tag !== '/a') cardFail('has a .demo-card <a> not closed by </a> before the next <a>');
   });

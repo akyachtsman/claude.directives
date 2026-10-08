@@ -277,9 +277,12 @@ Two different scopes — never conflate them:
   there is no attach path around it: work targeting another repo belongs to
   that repo's own session (→ *One Session, One Repo*) — say so plainly.
 - **READ scope (unrestricted for public repos):** any public repo is always
-  readable — `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`,
-  `https://api.github.com/repos/<owner>/<repo>/...`, or the codeload tarball —
-  no MCP, no `gh`, no clone needed. `/do-repo` packages this. **NEVER claim a
+  readable — a file at `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`,
+  refs and listings over git transport (`git ls-remote`, or a blob-less shallow
+  clone into a scratch directory) — no MCP, no `gh`, no attach needed. Not
+  `api.github.com` or the codeload tarball: a web session's proxy refuses both
+  for any repo the session was not opened on (verified 2026-10-08, 403 "not
+  enabled for this session"). `/do-repo` packages this. **NEVER claim a
   public repo "can't be seen"** — that confuses ACT scope with READ scope;
   verify by fetching, then answer from data.
 - The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs

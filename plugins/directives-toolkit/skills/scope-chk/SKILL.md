@@ -26,14 +26,17 @@ Execute in order:
    first) or a paste-ready hand-off (`global.md` → *One Session, One Repo*).
 
 3. **READ scope is a different thing — and it is never restricted for public
-   repos.** Raw URLs, the public GitHub API, and codeload tarballs work from
-   any session (`/do-repo` packages this). The MCP limit constrains ACTING
+   repos.** Raw URLs (`raw.githubusercontent.com`) for files and git transport
+   (`git ls-remote`, a blob-less shallow clone into a scratch directory) for
+   refs and listings work from any session (`/do-repo` packages this). The
+   GitHub API and codeload tarballs do NOT: the proxy refuses them for a repo
+   the session was not opened on (`global.md` → *Repository Scope*). The MCP limit constrains ACTING
    (branch/push/PR/merge), not reading. Never report a public repo as
    inaccessible — fetch it and answer from data.
 
 4. **Report** a compact verdict:
    - **In scope (can ACT on):** `<owner/repo …>`
-   - **Readable regardless:** any public repo, via raw/API/tarball (`/do-repo`)
+   - **Readable regardless:** any public repo, via raw URLs and git (`/do-repo`)
    - **Add-repo tools:** present | absent — either way attaching is off-policy
      (`global.md` → *One Session, One Repo*)
    - **Rule:** never offer to add, reach, or act on any repo not listed in

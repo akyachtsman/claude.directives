@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 r"""Guard /refresh-repo's referenced-script derivation against the real callers.
 
-WHY IT EXISTS. refresh-repo Phase 4 derives WHICH .github/scripts/* files a
-refresh must install, by grepping the caller workflows/actions it is installing.
+WHY IT EXISTS. refresh-repo Phase 2 (*Deriving the referenced-script set*)
+derives WHICH .github/scripts/* files a refresh must install, by grepping the
+caller workflows/actions it is installing; Phase 3's applied-check carries a
+second copy of the same derivation.
 That derivation is a PATTERN in a markdown file; the callers are YAML edited
 independently. Nothing tied the two together, so a caller could change the FORM
 of an invocation and silently fall out of the derivation.
@@ -26,8 +28,8 @@ level up, inside the fix for it.
 
 WHAT THIS CHECKS. The pattern is read OUT OF refresh-repo.md rather than copied
 here; a copy is the same drift one file over. It is then run -- through real
-`grep -E`, see below -- against every shipped caller and compared with a
-form-independent scan, THREE ways:
+`grep -E`, see below -- against every shipped caller, a fixed probe set and a
+form-independent scan, these ways:
 
   1. PER CALLER. A script a caller references must be found in THAT caller. An
      aggregate set hides a miss: if `shared.py` is matched in qa.yml but its
@@ -52,6 +54,26 @@ form-independent scan, THREE ways:
      the outputs compared, so the check can never be wider or narrower than the
      install (#398). Comparing one field at a time left the next one open
      through three Codex rounds on #409.
+  5. ON CONTRACT. Check 4 compares the copies with EACH OTHER, so two copies
+     widened -- or narrowed -- the same way agree, and pass it. Each copy's
+     output over PROBES must therefore equal PROBES_CONTRACT, the set the
+     contract in check 3 admits from those inputs, exactly. Check 3 only sees
+     what the shipped callers happen to contain; the probes carry the shapes
+     at each edge of the contract whether a caller has them today or not.
+  6. NEEDS NAMED. The derivation finds only what a caller NAMES, so a caller
+     must name every file it needs by its `.github/scripts/` path -- and the
+     name may sit in a comment, because the token grep reads mentions too.
+     cron-notify.yml names notify-email.js and package.json ONLY in a comment:
+     reword it and both drop out of the derivation with no error. So the
+     dependencies are derived from the files that CREATE them, never from a
+     hand-list here: a local `require`/`import` in the template source of a
+     script the caller names (followed transitively), and `npm install|ci` run
+     with `.github/scripts` as its directory (needs package.json). Each must be
+     in the install derivation over THAT caller, or this fails. Chosen over
+     moving the names out of the comment: any spot in the YAML is just as
+     rewordable, while a dependency read from the `require` line and the npm
+     step moves when they move -- the guard follows the facts, not a list
+     someone has to remember to update.
 
 WHY grep AND NOT `re`. An earlier version compiled the extracted patterns with
 Python's `re` and matched with Python. The shipped pipeline runs GNU `grep -E`,
@@ -70,7 +92,11 @@ appears in a caller". A caller that referenced a script by some other root, or
 built the path by string concatenation, would be invisible to BOTH scans and
 this guard would report green. It pins the derivation against invocation-FORM
 drift, which is the failure that actually happened; it does not prove the
-derivation finds every script a caller could conceivably need.
+derivation finds every script a caller could conceivably need. Check 6 reads
+only the dependency shapes it names: a literal relative `require`/`import`, a
+sibling Python `import`, and npm run in `.github/scripts` by `working-directory`
+(step, job or workflow `defaults`), `cd`, or `--prefix`. A computed `require`
+path or a dependency loaded any other way is invisible to it.
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -84,10 +110,13 @@ derivation finds every script a caller could conceivably need.
 #   out of it; the guard reads the shipped pattern out of the command rather
 #   than copying it, PROP6 2026-09-01;
 
+import posixpath
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+import yaml
 
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")
 # directives/*.md joined the set in directives#355: `test.md` names
@@ -105,8 +134,6 @@ CALLER_GLOBS = ("templates/workflows/*.yml", "templates/actions/*/action.yml",
 TOKEN_LINE = re.compile(r"grep -oE '([^']+)' \"\$buf\"")
 FILTER_LINE = re.compile(r"grep -E '([^']+)'")
 
-# Does the fetch loop put a boundary between concatenated callers? Read, not
-# assumed -- this guard models whatever the command actually does.
 # EVERY copy of the token grep, wherever it sits: the install pipeline and the
 # Phase 3 applied-check each carry one. #398's constraint is that they name the
 # SAME set -- a check wider than the install refuses a stamp the install can
@@ -134,6 +161,19 @@ PROBES = "\n".join([
     "never .github/scripts/ui-tests/package.json",
     "a bare directory .github/scripts/ui-tests/",
 ]) + "\n"
+
+# What every copy must derive from PROBES -- the contract (check 3) applied to
+# them, written out rather than computed so it cannot drift with in_contract().
+# Each probe above is in it or deliberately out of it: the lockfile and the
+# kit's package.json are other rows' files, and a bare directory is no file.
+PROBES_CONTRACT = {
+    ".github/scripts/a.js",
+    ".github/scripts/b.py",
+    ".github/scripts/c.js",
+    ".github/scripts/nested/d.py",
+    ".github/scripts/e.js",
+    ".github/scripts/package.json",
+}
 
 
 def stages_of(text, start):
@@ -178,6 +218,8 @@ def pipeline(text, start):
         end = nl + 1
 
 
+# Does the fetch loop put a boundary between concatenated callers? Read, not
+# assumed -- this guard models whatever the command actually does.
 DELIMITER_LINE = re.compile(r"(printf\s+'\\n'|echo)\s*>>\s*\"\$buf\"")
 
 # Form-independent: the path token anywhere in the file, whatever precedes it.
@@ -208,6 +250,90 @@ def in_contract(path):
 def fail(msg):
     print(f"FAIL: {msg}", file=sys.stderr)
     return 1
+
+
+# ---- check 6 helpers: what a caller NEEDS, read from the files that create it --
+SCRIPTS = ".github/scripts"
+TEMPLATE_SCRIPTS = "templates/scripts"   # where a .github/scripts/<x> comes from
+# A literal relative module path: require('./x'), import ... from './x', import('./x').
+JS_LOCAL = re.compile(r"""(?:\brequire\s*\(|\bfrom|\bimport\s*\(?)\s*['"](\.{1,2}/[^'"]+)['"]""")
+PY_IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_]\w*)\s+import|import\s+([A-Za-z_][\w, ]*))", re.M)
+NPM = re.compile(r"\bnpm\s+(?:install|ci|i)\b")
+_ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/|\$\{\{\s*github\.workspace\s*\}\}/)?"""
+SCRIPTS_DIR = re.compile(rf"^{_ROOT}\.github/scripts/?$")
+CD_NPM = re.compile(rf"""\bcd\s+["']?{_ROOT}\.github/scripts/?["']?\s*(?:&&|;|\n)\s*npm\s+(?:install|ci|i)\b""")
+PREFIX_NPM = re.compile(rf"""\bnpm\s+(?:install|ci|i)\b[^\n]*--prefix[= ]["']?{_ROOT}\.github/scripts/?["']?(?:\s|$)""")
+
+
+def npm_in_scripts(doc):
+    """True when some step runs npm with .github/scripts as its directory --
+    `npm install` there reads .github/scripts/package.json."""
+    def walk(node, wd):
+        if isinstance(node, dict):
+            d = node.get("defaults")
+            if isinstance(d, dict) and isinstance(d.get("run"), dict):
+                wd = d["run"].get("working-directory", wd)
+            run = node.get("run")
+            if isinstance(run, str):
+                here = node.get("working-directory", wd)
+                if CD_NPM.search(run) or PREFIX_NPM.search(run):
+                    return True
+                if NPM.search(run) and isinstance(here, str) and SCRIPTS_DIR.match(here.strip()):
+                    return True
+            return any(walk(v, wd) for v in node.values())
+        if isinstance(node, list):
+            return any(walk(v, wd) for v in node)
+        return False
+    return walk(doc, None)
+
+
+def local_deps(script):
+    """What `script` (a .github/scripts/ path) loads from beside it, read from
+    its template source: {dependency path: the line that creates it}."""
+    rel = script[len(SCRIPTS) + 1:]
+    src = Path(TEMPLATE_SCRIPTS) / rel
+    if not src.is_file():
+        return {}
+    body = src.read_text(encoding="utf-8")
+    here = posixpath.dirname(script)
+    deps = {}
+    if script.endswith(".js"):
+        for m in JS_LOCAL.finditer(body):
+            dep = posixpath.normpath(posixpath.join(here, m.group(1)))
+            if not posixpath.splitext(dep)[1]:
+                dep += ".js"
+            deps[dep] = m.group(0)
+    elif script.endswith(".py"):
+        for m in PY_IMPORT.finditer(body):
+            for name in (m.group(1) or m.group(2)).split(","):
+                name = name.strip().split(" ")[0]
+                if name and (Path(TEMPLATE_SCRIPTS) / posixpath.dirname(rel) / f"{name}.py").is_file():
+                    deps[posixpath.join(here, f"{name}.py")] = m.group(0).strip()
+    return {d: why for d, why in deps.items() if d.startswith(SCRIPTS + "/")}
+
+
+def needs(caller, body, named):
+    """{dependency: reason} for everything `caller` needs that the install must
+    derive. `named` is what the derivation found in it; local loads are
+    followed transitively from there."""
+    need = {}
+    if caller.suffix in (".yml", ".yaml"):
+        try:
+            doc = yaml.safe_load(body)
+        except yaml.YAMLError as e:
+            raise ValueError(f"{caller} is not readable YAML ({e.__class__.__name__})")
+        if npm_in_scripts(doc):
+            need[PACKAGE_JSON] = "read by `npm install` run in .github/scripts"
+    todo, seen = sorted(named), set()
+    while todo:
+        script = todo.pop()
+        if script in seen:
+            continue
+        seen.add(script)
+        for dep, why in local_deps(script).items():
+            need.setdefault(dep, f"loaded by {script} via `{why}`")
+            todo.append(dep)
+    return need
 
 
 def derive(stages, text):
@@ -316,7 +442,7 @@ def main():
 
     bodies = {c: c.read_text(encoding="utf-8") for c in callers}
 
-    # ---- check 1: per caller -------------------------------------------------
+    # ---- check 1: per caller (check 4, in step, ran above) ---------------------
     missed = []
     documented_all = set()
     for caller in callers:
@@ -421,10 +547,56 @@ def main():
     for script in extra:
         print(f"note: derivation also matches {script}, which the truth scan does not reach")
 
+    # ---- check 5: every copy derives exactly the contract from PROBES ---------
+    # Check 4 compares the copies with each other, so two copies that widened
+    # (or narrowed) the SAME way agree and pass it. Measure each against the
+    # contract instead.
+    for i, m in enumerate(copies):
+        stages = stages_of(text, m.start())
+        got, err = run_stages(stages, PROBES)
+        if err:
+            return engine_error(err, f"copy {i + 1} stages: {stages}")
+        if got != PROBES_CONTRACT:
+            which = "the install pipeline" if m.start() == token_m.start() else f"copy {i + 1}"
+            return fail(
+                f"{which} in {COMMAND} derives OFF ITS CONTRACT from the probe inputs.\n"
+                "      The contract is .js/.py under .github/scripts/ plus exactly\n"
+                f"      {PACKAGE_JSON}. Agreeing with the other copy is not enough: both can\n"
+                "      widen or narrow together, and check 4 then passes them.\n"
+                + "".join(f"      only {which} derives: {s}\n" for s in sorted(got - PROBES_CONTRACT))
+                + "".join(f"      only the contract admits: {s}\n" for s in sorted(PROBES_CONTRACT - got))
+                + f"      stages: {stages}\n"
+                f"      Fix the pattern in {COMMAND}, not this guard."
+            )
+
+    # ---- check 6: every caller NAMES what it needs ----------------------------
+    unnamed = []
+    for caller in callers:
+        got, err = derive(install, bodies[caller])
+        if err:
+            return engine_error(err, f"token: {token_pat}   filter: {filter_pat}")
+        named = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
+        try:
+            need = needs(caller, bodies[caller], named)
+        except ValueError as e:
+            return fail(f"cannot derive what a caller needs: {e}. A caller this guard\n"
+                        "      cannot read is not one it can pass.")
+        unnamed += [(dep, str(caller), why) for dep, why in sorted(need.items()) if dep not in named]
+    if unnamed:
+        return fail(
+            "a shipped caller NEEDS file(s) it does not name, so the derivation drops them.\n"
+            "      /refresh-repo installs only what a caller names by its .github/scripts/\n"
+            "      path, so a refresh would install the caller and leave these out.\n\n"
+            + "".join(f"      UNNAMED: {d}\n              needed by {c}: {w}\n" for d, c, w in unnamed)
+            + "\n      Name each path in the caller (a comment is enough -- the token grep reads\n"
+            "      mentions), as cron-notify.yml does. Do not widen the derivation instead."
+        )
+
     print(
         f"check-refresh-derivation: OK — {len(per_caller)} referenced script(s) across "
         f"{len(callers)} caller(s), found per-caller, via grep -E"
     )
+    print(f"  contract: every copy derives exactly the {len(PROBES_CONTRACT)}-path contract set from the probes")
     if ragged:
         print(
             f"  concatenation: {len(ragged)} caller(s) lack a trailing newline, each paired "

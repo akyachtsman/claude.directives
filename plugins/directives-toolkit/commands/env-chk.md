@@ -18,10 +18,15 @@ verdict. Read-only — do NOT modify files. Execute in order:
 3. CI & deploy status — Check for any open CI-failure or reviewer-flagged
    tracking issues/PRs and list them (a broken deploy surfaces here as a
    `pages-deploy-failure` issue). Run the `directives/git.md` repo-settings
-   preflight: if "Allow auto-merge" or "Automatically delete head branches"
-   is off (`allow_auto_merge` / `delete_branch_on_merge` via the repo API, or
-   the documented MCP-rejection signal), warn once with the exact settings
-   path — don't block, don't re-nag this session. Also flag any open issues tagged @claude
+   preflight (`git.md` → *Repo-settings preflight (warn once per session)*) —
+   all THREE settings: if "Allow auto-merge" or "Automatically delete head
+   branches" is off (`allow_auto_merge` / `delete_branch_on_merge` from
+   `gh api repos/{owner}/{repo}`, or the documented MCP-rejection signal), or
+   "Require conversation resolution before merging" is off (the `pull_request`
+   rule's `required_review_thread_resolution` in
+   `gh api repos/{owner}/{repo}/rules/branches/<default branch>`), warn once with
+   the exact settings path — don't block, don't re-nag this session. A setting
+   whose read is refused is reported as NOT READ, never as on or off. Also flag any open issues tagged @claude
    with no linked PR yet. For a deploy-backed project (e.g. Pages), confirm the
    live site is serving the latest commit: match the deploy run's `head_sha` to
    the head of the Pages source branch (`git rev-parse origin/main` — NOT the
@@ -45,10 +50,12 @@ verdict. Read-only — do NOT modify files. Execute in order:
    claude.directives `main`. Get that HEAD with
    `git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main`
    — git transport, so it needs no auth, no MCP and no quota, and works from a
-   session scoped to any repo. Do **not** depend on `api.github.com`: whether the
-   proxy lets it through depends on the environment's network policy (refused in
-   some fleet environments, reachable unauthenticated here on 2026-09-24), and the
-   GitHub MCP is scoped to the session's own repo and compares no two refs.
+   session scoped to any repo. Do **not** depend on `api.github.com`: the proxy
+   refuses it — and so `gh api`, curl and WebFetch alike — for any repository the
+   session was not opened on, which from a downstream project includes
+   claude.directives (verified 2026-10-08: 403, "GitHub access to this
+   repository is not enabled for this session"), and the GitHub MCP is scoped to
+   the session's own repo and compares no two refs.
    If the stamp differs, or none exists, report a ⚠️ finding.
    Then classify the delta by top-level path and state the action per
    EXPORTS.json delivery mode. Only in a session scoped to claude.directives,
@@ -87,31 +94,36 @@ verdict. Read-only — do NOT modify files. Execute in order:
      the hook, or force the env cache rebuild (see
      `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0 — One-time: turn the toolkit on (you may already be done)*,
      "Force a toolkit update") or wait for the ~weekly expiry.
-   - **Permission allowlist present?** Report it, because nothing else will.
-     ```bash
-     jq -e '.permissions.allow | index("mcp__Claude_Code_Remote__create_trigger")' \
-       .claude/settings.json >/dev/null 2>&1 \
-       && echo "pre-approved" || echo "PROMPTS ON EVERY SCHEDULING CALL"
-     ```
-     This check exists because the rule it enforces went unfollowed for a month
-     with no signal. `global.md` → *Async Operations* tells a session to PR the
-     allowlist in the FIRST time it hits a scheduling prompt — but a session
-     never observes that prompt. The owner clicks it, silently, in a different
-     window, forever; claude.insurance reached four-figure click counts that way
-     while its sibling repos were fine. The failure is invisible to the only
-     party who can fix it, so it must be reported unprompted rather than waited
-     for. Note the two distinct states: the file MISSING pre-approves nothing at
-     all, while a file present with a stale or partial `permissions` block
-     pre-approves only what it lists. Missing is the more common and the more
-     expensive. Remediation either way is one small PR carrying the current
-     `templates/claude-settings.json` → `permissions` block verbatim; say plainly
-     that it takes effect from the NEXT session, never this one, so the owner is
-     not surprised to keep clicking today.
    - `docs/` only → informational
    Exception: if upstream.sha trails HEAD by exactly the commit(s) that recorded the
-   stamp/baselines themselves, report current, not behind. Session Start
-   bootstrap skips existing files, so without this alarm a project can run
-   indefinitely on stale skills/agents.
+   stamp/baselines themselves, report current, not behind. Nothing else refreshes
+   a project's installed `templates/` copies, and the toolkit updates itself only
+   where the `SessionStart` hook is runnable (the `plugins/` item above) — the
+   environment's setup script performs only the FIRST install — so without this
+   alarm a project can run indefinitely on stale scaffolding or a stale toolkit.
+
+   **Permission allowlist present?** — on EVERY run, whatever the staleness
+   alarm found: it is not a delta item, and a project whose stamp is current
+   can lack it just as well. Report it, because nothing else will.
+   ```bash
+   jq -e '.permissions.allow | index("mcp__Claude_Code_Remote__create_trigger")' \
+     .claude/settings.json >/dev/null 2>&1 \
+     && echo "pre-approved" || echo "PROMPTS ON EVERY SCHEDULING CALL"
+   ```
+   This check exists because the rule it enforces went unfollowed for a month
+   with no signal. `global.md` → *Async Operations* tells a session to PR the
+   allowlist in the FIRST time it hits a scheduling prompt — but a session
+   never observes that prompt. The owner clicks it, silently, in a different
+   window, forever; claude.insurance reached four-figure click counts that way
+   while its sibling repos were fine. The failure is invisible to the only
+   party who can fix it, so it must be reported unprompted rather than waited
+   for. Note the two distinct states: the file MISSING pre-approves nothing at
+   all, while a file present with a stale or partial `permissions` block
+   pre-approves only what it lists. Missing is the more common and the more
+   expensive. Remediation either way is one small PR carrying the current
+   `templates/claude-settings.json` → `permissions` block verbatim; say plainly
+   that it takes effect from the NEXT session, never this one, so the owner is
+   not surprised to keep clicking today.
 7. Skill shadowing — Personal skills (`~/.claude/skills/`, synced from the
    user's Claude account) sit outside every repo, so `/audit-repo` and every
    other repo-scoped check are blind to them while they shadow toolkit commands
@@ -144,7 +156,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
 
    ## Limits
    - <key access limit, e.g. GitHub single-repo scope>
-   - <key access limit, e.g. no send_later / no gh / no browser>
+   - <key access limit, e.g. no send_later / `gh api` only / no browser>
 
 Output a compact checklist with a checkmark or X per item for steps 1–7. End
 with a one-line "ready / not ready" verdict and any actions needed before

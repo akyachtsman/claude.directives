@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 r"""Guard check-refresh-derivation.py — the guard on /refresh-repo's derivation.
 
-WHY THIS EXISTS. check-refresh-derivation.py makes three checks, and TWO OF THEM
-ARE NEVER EXERCISED BY THIS REPO. Every shipped caller ends in a newline, so the
+WHY THIS EXISTS. Of check-refresh-derivation.py's checks, TWO ARE NEVER
+EXERCISED BY THIS REPO. Every shipped caller ends in a newline, so the
 concatenation check has nothing to bite on; every shipped caller is matched by
 the current pattern, so the per-caller check never has a miss to report. The
 guard says so on its own success line -- "concatenation: NOT EXERCISED" -- but a
@@ -60,6 +60,16 @@ That is the second decorative case in two PRs (#344 had one too), and both were
 found the same way: by running the case against a mutant instead of trusting a
 green line. A case built from a fixture that cannot express the condition it
 names will pass forever.
+
+The contract check (5) and the needs-named check (6) are pinned the same way,
+each refusal beside its accepting complement: two copies widened or narrowed
+IDENTICALLY agree with each other, so only the probe-vs-contract check can
+refuse them; and a caller whose comment stops naming a file its script
+`require`s, or the package.json its `npm install` reads, is refused while the
+same caller naming them passes. MEASURED 2026-10-08 via
+CHECK_REFRESH_DERIVATION_BIN: with check 5's comparison disabled, exactly the
+two "identically" refusals fail; with check 6's, exactly the two "reworded
+comment" refusals.
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -117,7 +127,7 @@ def phase3_md(token, ext, sed=True):
 KEEP = object()
 
 
-def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line=True,
+def command_md(token=SLASHED, ext=EXT_SHIPPED, delimited=True, token_line=True, ext_line=True,
                phase3=KEEP, sed=True, phase3_token=None, phase3_sed=None):
     """Build a refresh-repo.md carrying the chosen pipeline, plus a Phase 3 copy
     that mirrors it -- same token, sed and filter -- unless told otherwise:
@@ -225,7 +235,7 @@ DIRREF = {
 }
 # Ragged too, but the dangling token is not a script path, so nothing can be lost.
 RAGGED_SAFE = {
-    "templates/workflows/one.yml": "steps:\n  - run: node .github/scripts/a.js\n  name: tail",
+    "templates/workflows/one.yml": "steps:\n  - run: node .github/scripts/a.js\n    name: tail",
     "templates/actions/x/action.yml": "runs:\n  - run: python3 .github/scripts/b.py\n",
 }
 
@@ -354,6 +364,65 @@ case("a script named at the end of a sentence is derived",
 case("a command with NO Phase 3 copy at all is refused, not compared against itself",
      command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,
      needle="applied-check's copy of the derivation is missing")
+
+# Check 5 -- both copies move TOGETHER, so check 4 (copy vs copy) is blind.
+case("both copies WIDENED identically are refused against the contract",
+     command_text=command_md(ext=EXT_PKG_UNANCHORED), callers=PKG, expect_exit=1,
+     needle="only the install pipeline derives: .github/scripts/ui-tests/package.json")
+
+case("both copies NARROWED identically are refused against the contract",
+     command_text=command_md(ext=EXT), callers=GOOD, expect_exit=1,
+     needle="only the contract admits: .github/scripts/package.json")
+
+case("both copies on the contract pass the probe check",
+     command_text=command_md(ext=EXT_SHIPPED), callers=GOOD, expect_exit=0,
+     needle="derives exactly the 6-path contract set")
+
+# Check 6 -- the cron-notify shape: a script that require()s a sibling, and
+# `npm install` run in .github/scripts. The names live only in a comment.
+NOTIFY_TASK = {"templates/scripts/notify-task.js":
+               "const { sendEmail } = require('./notify-email.js');\n"}
+CRON_STEPS = ("jobs:\n  run:\n    steps:\n"
+              "      - name: Install deps\n"
+              "        working-directory: .github/scripts\n"
+              "        run: npm install\n"
+              "{comment}"
+              "      - name: Run task\n"
+              "        working-directory: .github/scripts\n"
+              '        run: node "$GITHUB_WORKSPACE/.github/scripts/notify-task.js"\n')
+NAMED = ("      # needs .github/scripts/notify-email.js (required by the task)\n"
+         "      # and .github/scripts/package.json (what npm install reads)\n")
+CRON_NAMED = {**NOTIFY_TASK, "templates/workflows/cron.yml": CRON_STEPS.format(comment=NAMED)}
+
+case("a caller that names what its script requires and npm reads passes",
+     command_text=command_md(), callers=CRON_NAMED, expect_exit=0,
+     needle="  .github/scripts/notify-email.js")
+
+case("a reworded comment that drops the required sibling is refused",
+     command_text=command_md(),
+     callers={**NOTIFY_TASK, "templates/workflows/cron.yml": CRON_STEPS.format(
+         comment="      # needs the email helper and .github/scripts/package.json\n")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/notify-email.js")
+
+case("a reworded comment that drops package.json is refused",
+     command_text=command_md(),
+     callers={**NOTIFY_TASK, "templates/workflows/cron.yml": CRON_STEPS.format(
+         comment="      # needs .github/scripts/notify-email.js and the manifest\n")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/package.json")
+
+case("npm run in ANOTHER directory needs no .github/scripts/package.json",
+     command_text=command_md(),
+     callers={"templates/workflows/kit.yml":
+              "jobs:\n  t:\n    steps:\n"
+              "      - working-directory: .github/scripts/ui-tests\n"
+              "        run: npm install\n"
+              "      - run: node .github/scripts/a.js\n"},
+     expect_exit=0, needle="1 referenced script(s)")
+
+case("an unreadable YAML caller is refused, not passed",
+     command_text=command_md(),
+     callers={"templates/workflows/bad.yml": "steps: [\n  - run: node .github/scripts/a.js\n"},
+     expect_exit=1, needle="not readable YAML")
 
 case("no callers at all is refused, never a vacuous pass",
      command_text=command_md(), callers={}, expect_exit=1,

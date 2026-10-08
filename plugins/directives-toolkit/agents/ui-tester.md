@@ -189,15 +189,22 @@ authoritative list of what needs coverage beyond the generic suite.
 For each row in that table, add a numbered scenario to `app.spec.js`:
 
 ```javascript
-test('S5: <feature> renders correctly', async ({ page }) => {
-  await login(page);
+test('S5: <feature> renders correctly', async ({ page, renderWitness }) => {
+  renderWitness();          // FIRST statement — the kit's viewport witness
+  test.setTimeout(300_000); // gotoAndAuth() alone can take minutes; see BUDGET SIZING in app.spec.js
+  await gotoAndAuth(page);  // loads the app, authenticates, or skips when gated with no credential
   // navigate to the feature
   // assert the expected structure is present
   // assert no fallback or error state is shown
 });
 ```
 
-If the table is missing from `CLAUDE.md`, stop and ask the human to add it before proceeding — do not guess at project-specific scenarios.
+Use the kit's own helpers — `gotoAndAuth()` and the `renderWitness` fixture in
+`templates/ui-tests/tests/app.spec.js`; there is no `login()`. A scenario that
+requests `renderWitness` without CALLING it as its first statement records no
+witness and can only ever count as SCHEDULED (`test.md` → *UI coverage gates (blocking)*).
+
+If the table is missing from `CLAUDE.md`, stop and report that to the orchestrator in the Feedback Loop result (`Escalate: yes`, reason: the table is missing) — you cannot ask anyone mid-run, and project-specific scenarios are not guessed.
 
 ### Feedback Loop Protocol
 

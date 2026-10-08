@@ -34,6 +34,15 @@ Runs the full agent QA pipeline in sequence. It does not modify code: the only f
 
 ### Operating Rules
 
+- **This agent spawns subagents, so it relies on nesting.** Claude Code lets a
+  subagent spawn its own up to a depth limit — by default three layers below
+  the main conversation (v2.1.219 and later; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`
+  changes it, and `1` turns nesting off), per code.claude.com/docs/en/sub-agents,
+  *Let subagents spawn their own subagents* (read 2026-10-08). Invoked from the
+  main session, this agent is layer one and its steps layer two. If `Agent` is
+  missing from this agent's tools when it runs, nesting is off or exhausted: do
+  not run the steps yourself in their place — stop and report to the caller that
+  the pipeline must be driven from the main session, step by step
 - Do not modify code or any file outside `.agent-reports/`. Write each step's
   report to the path named above; an invoked agent that writes its own report
   there needs no second copy
@@ -75,8 +84,10 @@ Round 1:  Invoke ui-tester → receive structured result
               Use the diagnostic decision tree in ui-tester.md to identify exact root cause
               Return the targeted fix to the calling session (file + line + exact change) —
               this orchestrator never edits code itself. Once the caller reports the fix
-              pushed, confirm the deploy caught up (deploy run head_sha == the fix commit,
-              via the Actions API — never a timed wait), then re-run ui-tester
+              pushed, confirm the deploy caught up (deploy run head_sha == the commit that
+              deploy publishes — for a deploy from `main`, the squash-merge commit, never the
+              branch head (`update-pages` step 2) — via the Actions API, never a timed
+              wait), then re-run ui-tester
             If other scenarios fail:
               Read the structured error message, return the targeted fix to the caller,
               re-run ui-tester after the same head_sha deploy check

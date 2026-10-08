@@ -59,6 +59,7 @@ is added by the pass that finds it.
 | Model aliases the Agent tool accepts, and alias resolution | `global.md` → *Subagent Model Selection* | 2026-10-06 | This session's Agent tool `model` values; code.claude.com/docs/en/sub-agents |
 | How a sub-agent's model is chosen (call, frontmatter, env var, fork) | `global.md` → *Subagent Model Selection* | 2026-10-06 | code.claude.com/docs/en/sub-agents |
 | Agent frontmatter `model:` field | `plugins/directives-toolkit/agents/test-verifier.md` | 2026-10-06 | code.claude.com/docs/en/sub-agents |
+| Sub-agents spawning sub-agents (nesting depth limit) | `plugins/directives-toolkit/agents/qa-pipeline.md` | 2026-10-08 | code.claude.com/docs/en/sub-agents, section "Let subagents spawn their own subagents" |
 
 ## Claude Code & cloud sessions
 | Topic | Source | Last checked | Check |

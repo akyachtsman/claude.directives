@@ -393,8 +393,11 @@ Hard-won; each cost a real debugging session:
   not the UI prose title.
 - **Mid-session staleness** — `CLAUDE.md` → *Mid-session change semantics*:
   what a live session sees when files change under it. Don't expect hot reload.
-- **api.github.com rate limits in remote sessions** — shared-fleet IP; use
-  WebFetch or raw URLs, and a failed fetch is "cannot verify", never "broken".
+- **api.github.com is refused in remote sessions for any repo the session was
+  not opened on** — curl, `gh api` and WebFetch alike (403, verified
+  2026-10-08); read another repo over raw URLs or git transport
+  (`global.md` → *Repository Scope*), and a failed fetch is "cannot verify",
+  never "broken".
 - **The GitHub App token's hourly quota is shared and exhaustible** — distinct
   from the bullet above: every session and monitor draws authenticated REST
   calls from ONE identity (the error names it: `API rate limit already

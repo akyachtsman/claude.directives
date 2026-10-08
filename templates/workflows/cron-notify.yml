@@ -44,7 +44,9 @@ jobs:
       # (which it requires) and .github/scripts/package.json (what `npm install`
       # above reads). /refresh-repo and /new-repo derive the scripts to install
       # from the `.github/scripts/<file>` paths a workflow names, so a bare
-      # `node notify-task.js` left all three out (#398). The working directory
+      # `node notify-task.js` left all three out (#398). These names ARE the
+      # dependency record: claude.directives' derivation guard fails its CI if
+      # a file this job needs stops being named in this workflow. The working directory
       # stays .github/scripts: a project's own task body may use paths relative
       # to it, as notify-task.js documents (Codex, #409).
       - name: Run task

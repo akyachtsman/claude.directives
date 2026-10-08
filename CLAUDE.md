@@ -233,7 +233,7 @@ Before committing or pushing, verify locally — this list mirrors what `qa.yml`
 runs, so keep the two in sync:
 ```
 python3 -c "import yaml; print(yaml.safe_load(open('templates/actions/secret-scan/action.yml'))['runs']['steps'][0]['run'])" | bash -eo pipefail   # qa.yml's Secret scan step: runs the composite's own block, so the pattern has no third copy here
-node .github/scripts/check-paths.js               # backtick paths in CLAUDE.md, doc citations in shipped files, and every same-site link in a tracked .html page (spec-tokenized, URL-resolved, never outside the Pages root) names a regular file
+node .github/scripts/check-paths.js               # backtick paths in CLAUDE.md, doc citations in shipped files, and every same-site link in a tracked .html page (spec-tokenized, URL-resolved, never outside the Pages root) names a regular file; needs python3 for the WHATWG entity table
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js

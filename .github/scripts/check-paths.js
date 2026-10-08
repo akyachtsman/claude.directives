@@ -134,12 +134,49 @@ const URL_ATTRS = new Set(['href', 'src', 'action', 'formaction', 'cite', 'data'
   'manifest', 'longdesc', 'background', 'lowsrc', 'dynsrc', 'profile', 'xlink:href']);
 const SRCSET_ATTRS = new Set(['srcset', 'imagesrcset']);
 const URL_LIST_ATTRS = new Set(['ping']); // space-separated URLs
-const NAMED_REFS = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
-const decodeRefs = (v) => v.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|quot|apos|lt|gt);?/gi, (m, r) => {
-  const k = r.toLowerCase();
-  if (k[0] !== '#') return NAMED_REFS[k];
-  return String.fromCodePoint(k[1] === 'x' ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10));
-});
+// Character references, decoded as the HTML tokenizer decodes them inside an
+// attribute value. The named table is the WHATWG one in full (2231 names), read
+// from Python's standard library (html.entities.html5) rather than copied here
+// -- a five-name subset resolved "docs&sol;site&sol;x.html" to a different path
+// than the browser did (Codex on #415). Unavailable is a refusal, not a guess.
+let NAMED_REFS;
+try {
+  NAMED_REFS = JSON.parse(execFileSync('python3', ['-c',
+    'import json, html.entities; print(json.dumps(html.entities.html5))'], { encoding: 'utf8' }));
+} catch (e) {
+  console.error(`CANNOT CHECK: python3's html.entities table is unavailable (${e.message.split('\n')[0]}) -- attribute values cannot be decoded as a browser decodes them`);
+  process.exit(2);
+}
+// Numeric references the spec remaps: C1 controls by windows-1252.
+const C1 = { 0x80: 0x20AC, 0x82: 0x201A, 0x83: 0x0192, 0x84: 0x201E, 0x85: 0x2026, 0x86: 0x2020,
+  0x87: 0x2021, 0x88: 0x02C6, 0x89: 0x2030, 0x8A: 0x0160, 0x8B: 0x2039, 0x8C: 0x0152, 0x8E: 0x017D,
+  0x91: 0x2018, 0x92: 0x2019, 0x93: 0x201C, 0x94: 0x201D, 0x95: 0x2022, 0x96: 0x2013, 0x97: 0x2014,
+  0x98: 0x02DC, 0x99: 0x2122, 0x9A: 0x0161, 0x9B: 0x203A, 0x9C: 0x0153, 0x9E: 0x017E, 0x9F: 0x0178 };
+function decodeRefs(v) {
+  let out = ''; let i = 0;
+  while (i < v.length) {
+    if (v[i] !== '&') { out += v[i++]; continue; }
+    const num = /^&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));?/.exec(v.slice(i));
+    if (num) {
+      let cp = num[1] !== undefined ? parseInt(num[1], 16) : parseInt(num[2], 10);
+      if (cp === 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) cp = 0xFFFD;
+      else if (C1[cp]) cp = C1[cp];
+      out += String.fromCodePoint(cp); i += num[0].length; continue;
+    }
+    // The longest table name matching here (names run to 32 characters).
+    let match = '';
+    for (let len = Math.min(32, v.length - i - 1); len > 0; len--) {
+      const cand = v.substr(i + 1, len);
+      if (Object.hasOwn(NAMED_REFS, cand)) { match = cand; break; }
+    }
+    const next = v[i + 1 + match.length];
+    // In an attribute, a match without ";" followed by "=" or an alphanumeric is
+    // left as written (the spec's "historical reasons" rule): "?a=1&copy=2" stays.
+    if (!match || (!match.endsWith(';') && next !== undefined && /[=A-Za-z0-9]/.test(next))) { out += v[i++]; continue; }
+    out += NAMED_REFS[match]; i += 1 + match.length;
+  }
+  return out;
+}
 function tags(src) {
   const out = []; const lower = src.toLowerCase(); const n = src.length; let i = 0;
   const upTo = (s, from, what) => { const e = src.indexOf(s, from); if (e < 0) throw new Error(`unterminated ${what} at offset ${from}`); return e; };

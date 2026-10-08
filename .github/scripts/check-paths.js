@@ -123,6 +123,7 @@ for (const [ref, citedBy] of [...refs].sort()) {
 //   leaves the repo's pages altogether; an absolute URL outside it is someone
 //   else's page, external like any other origin.
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
+const HEAD_OK = new Set(['html', 'head', 'base', 'link', 'meta', 'title', 'style', 'script', 'noscript', 'template']);
 const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
 // Which attributes carry URLs, by the HTML spec's attribute index -- every
 // attribute it types as a URL, a URL list or a srcset -- plus the obsolete URL
@@ -400,10 +401,17 @@ for (const page of htmlPages) {
     if (t.tag === 'svg' || t.tag === 'math') stack.push({ tag: t.tag, ns: t.tag });
     else if (t.foreign && POINTS[top().ns].includes(t.tag)) stack.push({ tag: t.tag, ns: 'html' });
   }
+  let inHead = true;
   for (const t of pageTags) {
+    // Head content ends at the first start tag that cannot live in <head> (or
+    // at </head>). Only a <base> before that point is honoured as written; past
+    // it -- inside <select>, a table, after body content -- whether the parser
+    // inserts it depends on insertion mode, which this check does not model, so
+    // it is refused (Codex on #415, a <base> in <select>).
+    if (!t.inert && (t.tag === '/head' || (!t.tag.startsWith('/') && !HEAD_OK.has(t.tag)))) inHead = false;
     if (t.tag !== 'base') continue;
-    if (t.inert || t.underForeign) {
-      console.error(`UNREADABLE: ${page}: a <base> inside <template>, <noscript>, SVG or MathML -- whether it sets the document base depends on tree construction this check does not do; move it into <head>`);
+    if (t.inert || t.underForeign || !inHead) {
+      console.error(`UNREADABLE: ${page}: a <base> outside <head>, or inside <template>, <noscript>, SVG or MathML -- whether it sets the document base depends on tree construction this check does not do; move it into <head>`);
       failed = true; continue;
     }
     if (baseHref === undefined && t.attrs.has('href')) baseHref = t.attrs.get('href');

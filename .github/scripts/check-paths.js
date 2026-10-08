@@ -219,6 +219,7 @@ function tags(src) {
       if (!attrs.has(name)) attrs.set(name, decodeRefs(value));
     }
     out.push({ tag, attrs });
+    if (tag === 'plaintext') break; // no end tag exists: the rest of the document is text (spec)
     if (RAW_TEXT.has(tag)) {
       // Raw text ends only at an APPROPRIATE end tag: "</name" followed by
       // whitespace, "/" or ">". A bare prefix match ended <script> at

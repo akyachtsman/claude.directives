@@ -176,21 +176,6 @@ jobs:
           bash -n .claude/hooks/session-start.sh
           echo "OK: SessionStart hook parses"
 
-      # The two Pages landing pages (site root + /docs/ gallery) deliberately
-      # duplicate one :root palette block; keep the copies from drifting.
-      - name: Check landing-page palette blocks in sync
-        run: |
-          extract() { sed -n '/:root {/,/^    }/p' "$1"; }
-          diff <(extract index.html) <(extract docs/site/index.html)
-          echo "OK: landing-page palette blocks in sync"
-
-      # Both landing pages hand-carry the same demo list. The script is the
-      # single implementation -- CLAUDE.md's local gate invokes the same file,
-      # so the two cannot drift (they did: round 1 fixed this step and left the
-      # local gate on the old logic).
-      - name: Check landing-page demo cards in sync
-        run: node .github/scripts/check-landing-cards.js
-
       # Self-application of test.md's fifth UI coverage gate to the kit we SHIP.
       # The exported suite's entire viewport coverage is playwright.config.js's
       # `projects` list, and a list that drifts to phone-only leaves nothing

@@ -97,6 +97,12 @@ the tree fails the build, and `node --check` over the exported JS templates
 without that step a syntax error in the largest file we ship would be found by a
 downstream project's CI rather than ours.
 
+## Retired gates
+
+| Gate | Retired | Why |
+|---|---|---|
+| `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it |
+
 ## Refresh-repo history
 
 Moved from `plugins/directives-toolkit/commands/refresh-repo.md` on 2026-10-07

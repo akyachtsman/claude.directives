@@ -36,7 +36,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
 | `TIME-SENSITIVE.md` | The register of facts the directives rely on about something OUTSIDE this repo — models, Claude Code, GitHub, Codex, the test environment, outside services — with where it is stated, when it was last verified and how to re-check it. Kept apart from the owner's standing directives, which never expire. Walked by every `/audit-repo` run |
-| `index.html` | The repo's GitHub Pages landing page (links to the repo map and the commands reference); its demo-card list is kept in sync with `docs/site/index.html` by `check-landing-cards.js` |
+| `index.html` | The repo's GitHub Pages landing page (links to the repo map and the commands reference) — the site's only one: `docs/site/index.html` is a redirect stub back to it (merged 2026-10-08) |
 | `docs/site/logical-map.html` | The repo map — a lifecycle flow, stage by stage, with every connection read out of the files. **Generated** by `.github/scripts/build-logical-map.js` from `EXPORTS.json` and the files themselves; never hand-edit it. Its behaviour (pan/zoom, search, trace a file's chain with the evidence for each link) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions do not attach plugins by themselves** — an environment's setup script performs the FIRST install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0); after that the `SessionStart` hook re-runs the same installer each session and moves it to current |
@@ -50,7 +50,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
-| `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths; see `docs/README.md` for the index |
+| `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and the advisory weekly `watcher-liveness.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
@@ -268,8 +268,6 @@ python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for p in ('.github/workf
 python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable
 python3 .github/scripts/check-pairs-cases.py    # that check's own guard — every pair drifted in turn, each mode refusal with its complement. Re-prove with CHECK_PAIRS_BIN=<mutant>
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
-diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
-node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed

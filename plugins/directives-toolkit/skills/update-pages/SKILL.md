@@ -10,7 +10,7 @@ change is done only once the deploy reaches a green terminal state and the live 
 serves the new content.**
 
 **Apply this automatically whenever a change updates the Pages site** — any edit to
-a file GitHub Pages serves (root `index.html`, `docs/site/index.html`,
+a file GitHub Pages serves (root `index.html`, `docs/site/commands.html`,
 `docs/site/logical-map.html`, other served HTML/CSS/assets) or to the Pages
 configuration. Don't wait to be asked: if the change you just made will change
 what `*.github.io` serves, run these steps and report when it's live.

@@ -258,8 +258,66 @@ def fail(msg):
 # ---- check 6 helpers: what a caller NEEDS, read from the files that create it --
 SCRIPTS = ".github/scripts"
 TEMPLATE_SCRIPTS = "templates/scripts"   # where a .github/scripts/<x> comes from
-# A literal relative module path: require('./x'), import ... from './x', import('./x').
-JS_LOCAL = re.compile(r"""(?:\brequire\s*\(|\bfrom|\bimport\s*\(?)\s*['"](\.{1,2}/[^'"]+)['"]""")
+def js_tokens(src):
+    """A minimal JavaScript lexer: identifiers, string literals (quotes and
+    template literals without `${`), single-char punctuation -- with // and /* */
+    comments DROPPED and every string kept whole. Enough to tell a live
+    `require('./x')` from one in a comment or inside another string (Codex,
+    #411 round 6). Known limit: a regex literal holding a quote or `//` can
+    mis-lex what follows it; no shipped template has one."""
+    toks, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j == -1 else j
+        elif src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            i = n if j == -1 else j + 2
+        elif c in "'\"`":
+            j, buf = i + 1, []
+            while j < n and src[j] != c:
+                if src[j] == "\\" and j + 1 < n:
+                    buf.append(src[j + 1])
+                    j += 2
+                    continue
+                buf.append(src[j])
+                j += 1
+            text = "".join(buf)
+            toks.append(("str", None if (c == "`" and "${" in text) else text))
+            i = j + 1
+        elif c.isalpha() or c in "_$":
+            j = i
+            while j < n and (src[j].isalnum() or src[j] in "_$"):
+                j += 1
+            toks.append(("id", src[i:j]))
+            i = j
+        elif c.isspace():
+            i += 1
+        else:
+            toks.append(("p", c))
+            i += 1
+    return toks
+
+
+def js_local_requests(src):
+    """{relative specifier: evidence} for each LIVE load of a relative path:
+    require('./x'), import('./x'), import ... from './x', import './x'."""
+    toks, out = js_tokens(src), {}
+    for k, (kind, val) in enumerate(toks):
+        nxt = toks[k + 1] if k + 1 < len(toks) else None
+        nxt2 = toks[k + 2] if k + 2 < len(toks) else None
+        spec = None
+        if kind == "id" and val in ("require", "import") and nxt == ("p", "(") \
+                and nxt2 and nxt2[0] == "str":
+            spec, how = nxt2[1], f"{val}('{nxt2[1]}')"
+        elif kind == "id" and val in ("from", "import") and nxt and nxt[0] == "str":
+            spec, how = nxt[1], f"{val} '{nxt[1]}'"
+        if spec and re.match(r"^\.{1,2}/", spec):
+            out[spec] = how
+    return out
+
+
 _ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/)?"""
 SCRIPTS_DIR = re.compile(rf"^{_ROOT}\.github/scripts/?$")
 SEGMENT = re.compile(r"\n|&&|\|\||;|\|")
@@ -417,9 +475,9 @@ def local_deps(script):
     here = posixpath.dirname(script)
     deps = {}
     if script.endswith(".js"):
-        for m in JS_LOCAL.finditer(body):
-            dep = js_resolve(posixpath.normpath(posixpath.join(here, m.group(1))))
-            deps[dep] = m.group(0)
+        for spec, how in js_local_requests(body).items():
+            dep = js_resolve(posixpath.normpath(posixpath.join(here, spec)))
+            deps[dep] = how
     elif script.endswith(".py"):
         for dep, why in py_local_deps(rel, body).items():
             deps[posixpath.join(SCRIPTS, dep)] = why

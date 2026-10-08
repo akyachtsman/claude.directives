@@ -491,6 +491,24 @@ case("`require('./lib')` with only lib/index.json names lib/index.json",
               "templates/workflows/j.yml": JS_CALLER.format(comment="")},
      expect_exit=1, needle="UNNAMED: .github/scripts/lib/index.json")
 
+# Codex, #411 round 6: JS is LEXED -- a require in a comment or a string is not a load.
+for label, src in (("a // comment", "// require('./legacy')\nmodule.exports = 1;\n"),
+                   ("a /* block */ comment", "/* const old = require('./legacy'); */\n"),
+                   ("a string literal", "const msg = \"require('./legacy')\";\n")):
+    case(f"a require inside {label} is not a dependency",
+         command_text=command_md(),
+         callers={"templates/scripts/main.js": src,
+                  "templates/scripts/legacy.js": "module.exports = 1;\n",
+                  "templates/workflows/j.yml": JS_CALLER.format(comment="")},
+         expect_exit=0, needle="1 referenced script(s)")
+
+case("a LIVE ES import is still a dependency after lexing",
+     command_text=command_md(),
+     callers={"templates/scripts/main.js": "import { x } from './legacy.js';\n",
+              "templates/scripts/legacy.js": "export const x = 1;\n",
+              "templates/workflows/j.yml": JS_CALLER.format(comment="")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/legacy.js")
+
 case("the same caller naming lib/index.js passes (no phantom lib.js asked for)",
      command_text=command_md(),
      callers={**LIB_DIR, "templates/workflows/j.yml": JS_CALLER.format(

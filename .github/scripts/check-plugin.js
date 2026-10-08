@@ -109,6 +109,10 @@ if (!(statSync(`${ROOT}/scripts/push-gate.sh`).mode & 0o111)) fail('push-gate.sh
 else ok('push-gate.sh executable');
 if (!(statSync(`${ROOT}/scripts/wait-gate.sh`).mode & 0o111)) fail('wait-gate.sh not executable');
 else ok('wait-gate.sh executable');
+// Both gates SOURCE this from their own directory and fail open without it, so
+// a missing library would silently turn both into no-ops.
+if (!existsSync(`${ROOT}/scripts/gate-lib.sh`)) fail('gate-lib.sh missing (both gates source it)');
+else ok('gate-lib.sh present');
 
 
 if (failCount) process.exit(1);

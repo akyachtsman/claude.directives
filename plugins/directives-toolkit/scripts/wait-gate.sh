@@ -28,27 +28,28 @@
 
 in=$(cat) || exit 0
 
-# Extract command + run_in_background flag (jq when available, sed/grep fallback).
+# The shared parsing lives beside this file; without it, allow (fail-open above).
+# shellcheck source=gate-lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/gate-lib.sh" 2>/dev/null || exit 0
+
+# Extract command + run_in_background flag (jq when available, grep fallback).
+cmd=$(gate_command "$in") || exit 0
 if command -v jq >/dev/null 2>&1; then
-  cmd=$(printf '%s' "$in" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
   bg=$(printf '%s' "$in" | jq -r '.tool_input.run_in_background // false' 2>/dev/null) || exit 0
-else
-  cmd=$(printf '%s' "$in" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  if printf '%s' "$in" | grep -qE '"run_in_background"[[:space:]]*:[[:space:]]*true'; then bg=true; else bg=false; fi
-fi
+elif printf '%s' "$in" | grep -qE '"run_in_background"[[:space:]]*:[[:space:]]*true'; then bg=true; else bg=false; fi
 [ "$bg" = "true" ] || exit 0
 [ -n "$cmd" ] || exit 0
 
-# Strip quoted segments: message text must never influence the verdict. A
-# single-WORD quoted token is unquoted first, so `sleep "30"` reads as the
-# 30-second sleep it is rather than as a sleep with no operand. A double-quoted
-# span holding `$` or a backtick is KEPT: bash expands it, so
-# `sleep "$(printf %s 30)"` is a 30-second sleep, and deleting the span left a
-# sleep with no operand that passed (Codex, #396). push-gate.sh keeps the same
-# spans for the same reason.
-stripped=$(printf '%s' "$cmd" \
-  | sed -E -e 's/"([^"[:space:]]*)"/\1/g' -e "s/'([^'[:space:]]*)'/\1/g" \
-  | sed -e "s/'[^']*'//g" -e 's/"[^"$`]*"//g')
+# Strip quoted segments: message text must never influence the verdict. This
+# is push-gate.sh's parser, shared in gate-lib.sh -> gate_strip_quotes, whose
+# header gives the rules. Two of them matter most here: a single-WORD quoted
+# token is unquoted, so `sleep "30"` reads as the 30-second sleep it is; and a
+# double-quoted span holding `$` or a backtick is KEPT, so
+# `sleep "$(printf %s 30)"` is a 30-second sleep rather than one with no operand
+# (Codex, #396). The sed passes it replaces stripped single-quoted spans first,
+# so an apostrophe in a double-quoted note swallowed everything up to the next
+# apostrophe -- the defect push-gate.sh had already shed (audit, 2026-10-06).
+stripped=$(gate_strip_quotes "$cmd")
 # Trim leading whitespace and an optional leading no-op (`:;` / `true &&`).
 trimmed=$(printf '%s' "$stripped" | sed -E 's/^[[:space:]]*(:|true)[[:space:]]*(;|&&)?[[:space:]]*//; s/^[[:space:]]*//')
 

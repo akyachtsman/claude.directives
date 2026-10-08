@@ -14,20 +14,26 @@ the owner ruling of 2026-08-22, #257): the server-side ruleset is the control.
 These cases pin only the shapes the gate says it catches — a push naming main
 as a literal ref — not the open-ended bypass surface #257 records.
 
-Overridable so a MUTANT can be pointed at: PUSH_GATE_BIN / WAIT_GATE_BIN.
+Both gates source gate-lib.sh from their own directory, so every run copies
+the gate under test and the library into one temp directory -- the installed
+layout -- which lets each be swapped for a MUTANT independently:
+PUSH_GATE_BIN / WAIT_GATE_BIN / GATE_LIB_BIN.
 
 Run: python3 .github/scripts/check-toolkit-gates-cases.py
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "plugins/directives-toolkit/scripts"
 PUSH = Path(os.environ.get("PUSH_GATE_BIN", SCRIPTS / "push-gate.sh")).resolve()
 WAIT = Path(os.environ.get("WAIT_GATE_BIN", SCRIPTS / "wait-gate.sh")).resolve()
+LIB = Path(os.environ.get("GATE_LIB_BIN", SCRIPTS / "gate-lib.sh")).resolve()
 
 BLOCK, ALLOW = 2, 0
 
@@ -112,7 +118,27 @@ WAIT_CASES = [
     ("exactly the threshold", "sleep 15.000000", True, BLOCK),
     ("a foreground sleep is not this gate's", "sleep 300", False, ALLOW),
     ("a backgrounded job that is not a sleep", "npm test", True, ALLOW),
+    # ── the quote parser push-gate.sh uses, shared since 2026-10-08 ─────────
+    # The sed passes stripped single-quoted spans BEFORE double-quoted ones, so
+    # the apostrophe in a double-quoted note opened a "span" that ran to the
+    # next apostrophe and swallowed the sleep: both of these exited 0.
+    ("an apostrophe in a double-quoted note, then a long sleep and a quoted echo",
+     ": \"it's a note\"; sleep 30; echo 'all done'", True, BLOCK),
+    ("an escaped quote inside a double-quoted note, then a long sleep",
+     ': "a \\" b"; sleep 30', True, BLOCK),
+    # ...and the complement.
+    ("an apostrophe in a double-quoted note, then a short sleep and a quoted echo",
+     ": \"it's a note\"; sleep 2; echo 'all done'", True, ALLOW),
+    ("an escaped quote inside a double-quoted note, then a short sleep",
+     ': "a \\" b"; sleep 2', True, ALLOW),
 ]
+
+
+def install(tmp):
+    """The plugin's scripts/ layout: each gate beside the library it sources."""
+    for src, name in ((PUSH, "push-gate.sh"), (WAIT, "wait-gate.sh"), (LIB, "gate-lib.sh")):
+        shutil.copyfile(src, Path(tmp) / name)
+    return Path(tmp) / "push-gate.sh", Path(tmp) / "wait-gate.sh"
 
 
 def run(gate, command, background=None):
@@ -126,32 +152,49 @@ def run(gate, command, background=None):
 
 
 def main():
-    failures = []
-    for gate in (PUSH, WAIT):
-        if not gate.is_file():
-            print(f"CANNOT RUN: {gate} does not exist")
+    for path in (PUSH, WAIT, LIB):
+        if not path.is_file():
+            print(f"CANNOT RUN: {path} does not exist")
             return 1
+    with tempfile.TemporaryDirectory() as tmp:
+        failures = check(*install(tmp))
+        # A gate that cannot load its library must ALLOW, quietly: fail-open is
+        # the design (each gate's header), and an error exit here would surface
+        # on every Bash call. Both payloads below are ones the gates block.
+        os.remove(Path(tmp) / "gate-lib.sh")
+        for gate, command, background in ((PUSH, "git push origin main", None),
+                                           (WAIT, "sleep 30", True)):
+            code, out = run(Path(tmp) / gate.name, command, background)
+            if code != ALLOW or out:
+                failures.append(f"{gate.name}: with no gate-lib.sh beside it\n      expected a silent allow (exit 0); got {code}\n      {out}")
+            else:
+                print(f"OK:   {gate.name} with no gate-lib.sh beside it fails open, silently")
+    if failures:
+        print("\ncheck-toolkit-gates-cases: FAILED\n")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
+    print(f"\ncheck-toolkit-gates-cases: OK — {len(PUSH_CASES) + len(WAIT_CASES) + 2} gate payloads read correctly.")
+    return 0
+
+
+def check(push, wait):
+    failures = []
     for label, command, expected in PUSH_CASES:
-        code, out = run(PUSH, command)
+        code, out = run(push, command)
         verdict = "block" if expected == BLOCK else "allow"
         if code != expected:
             failures.append(f"push-gate: {label}\n      expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
         else:
             print(f"OK:   push-gate {verdict}s {label}")
     for label, command, background, expected in WAIT_CASES:
-        code, out = run(WAIT, command, background)
+        code, out = run(wait, command, background)
         verdict = "block" if expected == BLOCK else "allow"
         if code != expected:
             failures.append(f"wait-gate: {label}\n      expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
         else:
             print(f"OK:   wait-gate {verdict}s {label}")
-    if failures:
-        print("\ncheck-toolkit-gates-cases: FAILED\n")
-        for f in failures:
-            print(f"  - {f}")
-        return 1
-    print(f"\ncheck-toolkit-gates-cases: OK — {len(PUSH_CASES) + len(WAIT_CASES)} gate payloads read correctly.")
-    return 0
+    return failures
 
 
 if __name__ == "__main__":

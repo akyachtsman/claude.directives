@@ -170,7 +170,9 @@ a failure there must be fixed before work is done.
   from the live backend (e.g. a Supabase `403` at the proxy), so local Playwright
   cannot render authenticated views. Seed a test account and test against the
   deploy.
-- Any app with an auth gate must wire `qa-live.yml` + the seeded credential. An
+- Any app with an auth gate must wire `qa-live.yml` + the seeded credential —
+  unless its login ships a working credential, which the suite submits as it
+  stands; setting the secret there overwrites a value that works (directives#312). An
   authenticated flow with no live coverage is a **coverage gap, not
   "untestable"** — and a UI change shipped without a `ui-tester` run is a
   readiness blocker (see the `pr-readiness-reviewer` gate).

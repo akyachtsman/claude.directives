@@ -192,7 +192,17 @@ function decodeRefs(v) {
   }
   return out;
 }
+// SVG/MathML HTML integration points: their children parse as HTML again.
+const POINTS = { svg: ['foreignobject', 'desc', 'title'], math: ['mi', 'mo', 'mn', 'ms', 'mtext', 'annotation-xml'] };
 function tags(src) {
+  // The namespace stack lives in the tokenizer because raw text depends on it:
+  // <title>, <style>, <script> are raw text only as HTML elements, and inside
+  // SVG/MathML a self-closing tag is honoured (Codex on #415: <svg><title/>).
+  // Each tag records t.foreign (it is in SVG/MathML) and t.underForeign (some
+  // <svg>/<math> is open); <svg>/<math> push foreign content, an integration
+  // point pushes HTML, a nested <svg> re-enters foreign, end tags pop.
+  const stack = [];
+  const top = () => stack[stack.length - 1];
   // ASCII-only folding, as the spec folds tag and attribute names. toLowerCase()
   // can change the string's LENGTH (U+0130 becomes two code units), shifting
   // every later offset so links after it were silently never read (Codex, #415).
@@ -202,7 +212,10 @@ function tags(src) {
     if (src.startsWith('<!--', i)) { i = upTo('-->', i + 4, 'comment') + 3; continue; }
     if (src[i + 1] === '/' && /[A-Za-z]/.test(src[i + 2] ?? '')) { // end tag: kept, so a card's </a> can be checked
       const e = upTo('>', i, 'end tag');
-      out.push({ tag: `/${lower.slice(i + 2, e).split(/[\t\n\f\r />]/)[0]}`, attrs: new Map() });
+      const name = lower.slice(i + 2, e).split(/[\t\n\f\r />]/)[0];
+      out.push({ tag: `/${name}`, attrs: new Map(), foreign: top() !== undefined && top().ns !== 'html', underForeign: stack.length > 0 });
+      const k = stack.map((x) => x.tag).lastIndexOf(name);
+      if (k >= 0) stack.length = k;
       i = e + 1; continue;
     }
     // CDATA is character data through "]]>" in SVG/MathML but a bogus comment
@@ -241,7 +254,13 @@ function tags(src) {
       }
       if (!attrs.has(name)) attrs.set(name, decodeRefs(value));
     }
-    out.push({ tag, attrs, selfClosing });
+    const foreign = top() !== undefined && top().ns !== 'html';
+    out.push({ tag, attrs, selfClosing, foreign, underForeign: stack.length > 0 });
+    if (!selfClosing) {
+      if (tag === 'svg' || tag === 'math') stack.push({ tag, ns: tag });
+      else if (foreign && POINTS[top().ns].includes(tag)) stack.push({ tag, ns: 'html' });
+    }
+    if (foreign) { i = j; continue; } // no raw text and no plaintext in SVG/MathML
     if (tag === 'plaintext') break; // no end tag exists: the rest of the document is text (spec)
     if (RAW_TEXT.has(tag)) {
       // Raw text ends only at an APPROPRIATE end tag: "</name" followed by
@@ -354,7 +373,8 @@ const jekyllPublishes = (p) => !JEKYLL || !(p.split('/').some((seg) => /^[._#~]/
 const hasFrontMatter = (p) => { try { return JEKYLL && /^---[ \t]*\r?\n/.test(readFileSync(p, 'utf8')); } catch { return false; } };
 const published = (p) => tracked.has(p) && isFile(p) && jekyllPublishes(p) && !hasFrontMatter(p);
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
-  .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
+  .split('\0').filter(Boolean).filter(isFile)  // a deleted or replaced page is not read -- the pages linking to it report it
+  .filter(jekyllPublishes);  // nor is a page Jekyll never publishes: its links are unreachable (Codex on #415)
 let htmlLinks = 0;
 for (const page of htmlPages) {
   if (hasFrontMatter(page)) {
@@ -378,28 +398,13 @@ for (const page of htmlPages) {
   // which this tokenizer deliberately does not reimplement. So such a <base> is
   // REFUSED, never guessed at: a guess either way can hide a missing link or
   // invent one. The remedy is one move: put <base> in <head>.
-  // One pass marks each tag's context; the base lookup, the link attributes and
-  // the card checks read it. A stack, because an SVG/MathML integration point
-  // (<foreignObject>, <desc>, <title>; MathML's text points and annotation-xml)
-  // parses its children as HTML again, and a nested <svg> re-enters foreign
-  // content (Codex on #415). t.foreign: this element is in SVG/MathML now;
-  // t.underForeign: some <svg>/<math> is an ancestor at all.
-  const POINTS = { svg: ['foreignobject', 'desc', 'title'], math: ['mi', 'mo', 'mn', 'ms', 'mtext', 'annotation-xml'] };
-  const stack = []; let inert = 0; let baseHref;
-  const top = () => stack[stack.length - 1];
+  // Namespace context (t.foreign / t.underForeign) comes from the tokenizer.
+  // This pass adds t.inert: inside <template> or <noscript>.
+  let inert = 0; let baseHref;
   for (const t of pageTags) {
-    t.inert = inert > 0; t.foreign = top()?.ns !== undefined && top().ns !== 'html';
-    t.underForeign = stack.length > 0;
-    if (t.tag === '/template' || t.tag === '/noscript') { inert = Math.max(0, inert - 1); continue; }
-    if (t.tag === 'template' || t.tag === 'noscript') { inert++; continue; }
-    if (t.tag.startsWith('/')) {
-      const k = stack.map((e) => e.tag).lastIndexOf(t.tag.slice(1));
-      if (k >= 0) stack.length = k;
-      continue;
-    }
-    if (t.selfClosing) continue;
-    if (t.tag === 'svg' || t.tag === 'math') stack.push({ tag: t.tag, ns: t.tag });
-    else if (t.foreign && POINTS[top().ns].includes(t.tag)) stack.push({ tag: t.tag, ns: 'html' });
+    t.inert = inert > 0;
+    if (t.tag === '/template' || t.tag === '/noscript') inert = Math.max(0, inert - 1);
+    else if (t.tag === 'template' || t.tag === 'noscript') inert++;
   }
   let inHead = true;
   for (const t of pageTags) {

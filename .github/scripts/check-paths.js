@@ -320,19 +320,25 @@ for (const page of htmlPages) {
   // when there is none or it does not parse. A raw page address ignored a
   // <base href="docs/"> that re-roots every relative link (Codex, #415).
   const pageUrl = new URL(page, ROOT);
-  // Only a <base> that is an HTML element of the document tree sets the base:
-  // not one inside <template> (its contents are a separate, inert fragment), in
-  // SVG/MathML foreign content (not an HTML base element), or in <noscript>
-  // (text when scripting is on). A flat token list picked the first one anywhere
-  // (Codex on #415). Links in those places are still checked -- they are real
-  // URLs once used -- only the base is restricted.
+  // The document base is the first <base href> that is an HTML element of the
+  // document tree. Whether a <base> inside <template>, <noscript>, SVG or MathML
+  // is one depends on tree construction -- integration points like
+  // <foreignObject> parse their children as HTML again (Codex on #415, twice) --
+  // which this tokenizer deliberately does not reimplement. So such a <base> is
+  // REFUSED, never guessed at: a guess either way can hide a missing link or
+  // invent one. The remedy is one move: put <base> in <head>.
   let inert = 0; let foreign = 0; let baseHref;
   for (const t of pageTags) {
     if (t.tag === '/template' || t.tag === '/noscript') { inert = Math.max(0, inert - 1); continue; }
     if (t.tag === '/svg' || t.tag === '/math') { foreign = Math.max(0, foreign - 1); continue; }
     if (t.tag === 'template' || t.tag === 'noscript') { inert++; continue; }
     if ((t.tag === 'svg' || t.tag === 'math') && !t.selfClosing) { foreign++; continue; }
-    if (t.tag === 'base' && !inert && !foreign && t.attrs.has('href')) { baseHref = t.attrs.get('href'); break; }
+    if (t.tag !== 'base') continue;
+    if (inert || foreign) {
+      console.error(`UNREADABLE: ${page}: a <base> inside <template>, <noscript>, SVG or MathML -- whether it sets the document base depends on tree construction this check does not do; move it into <head>`);
+      failed = true; continue;
+    }
+    if (baseHref === undefined && t.attrs.has('href')) baseHref = t.attrs.get('href');
   }
   let base = pageUrl;
   if (baseHref !== undefined) { try { base = new URL(baseHref, pageUrl); } catch { base = pageUrl; } }

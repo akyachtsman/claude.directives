@@ -31,8 +31,9 @@ checksum-verified release. Without it this is CANNOT CHECK, never a pass.
 
 WHAT IS NOT SHELL, AND IS SKIPPED:
   - `${{ ... }}` expressions are masked: GitHub substitutes them before the
-    shell starts. Their VALUE is not known here, so one inside a single-quoted
-    string is CANNOT CHECK (an apostrophe in the value would end the quote);
+    shell starts. Their VALUE is not known here, so one is CANNOT CHECK unless
+    its innermost context is double quotes or a heredoc body -- unquoted or
+    single-quoted, an apostrophe in the value is shell syntax;
   - steps whose effective `shell:` (step, then job `defaults.run.shell`, then the
     workflow's) is not bash or sh, judged by the executable's BASENAME, so
     `/bin/bash -e {0}` is bash; with no shell named, a Windows job's default is
@@ -49,8 +50,8 @@ leaves the block unbalanced, which IS reported. It also does NOT look at `.sh`
 files, at the toolkit's Markdown bash, or at `actions/github-script` bodies.
 
 Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file, no
-shfmt, a block whose shell is unknown, an expression inside single quotes, or
-no `run:` block found at all (a did-not-look must not print the same
+shfmt, a block whose shell is unknown, an expression outside double quotes and
+heredoc bodies, or no `run:` block found at all (a did-not-look must not print the same
 OK as a pass).
 
 Usage: check-run-quoting.py [--root DIR] [FILE ...]   (default: every workflow
@@ -81,7 +82,37 @@ DEFAULT_GLOBS = (
     "templates/actions/*/action.yml",
     "templates/actions/*/action.yaml",
 )
-EXPR = re.compile(r"\$\{\{.*?\}\}")
+
+
+def expressions(text):
+    """(start, end) character spans of each `${{ ... }}` in `text`.
+
+    QUOTE-AWARE: GitHub expression strings are '...' with '' for a literal quote,
+    and a `}}` inside one does not end the expression --
+    `${{ format('{{Hello {0}!}}', x) }}` (Codex, #408). An expression with no
+    closing `}}` runs to the end of the block.
+    """
+    spans, i = [], 0
+    while True:
+        i = text.find("${{", i)
+        if i < 0:
+            return spans
+        j, in_str = i + 3, False
+        while j < len(text):
+            if in_str:
+                if text.startswith("''", j):
+                    j += 2
+                    continue
+                if text[j] == "'":
+                    in_str = False
+            elif text[j] == "'":
+                in_str = True
+            elif text.startswith("}}", j):
+                j += 2
+                break
+            j += 1
+        spans.append((i, j))
+        i = j
 SHFMT_ERROR = re.compile(r"^(?:<standard input>:)?(\d+):(\d+): (.*)$")
 
 
@@ -112,20 +143,49 @@ def single_quoted(node, out):
             single_quoted(v, out)
 
 
+# The nodes that change what an apostrophe means. Inside DblQuoted, or in a
+# heredoc body, it is a character; under any of the others -- or none -- it is
+# shell syntax.
+CONTEXTS = {"DblQuoted", "SglQuoted", "CmdSubst", "ArithmExp", "ProcSubst", "ParamExp"}
+
+
+def contexts(node, out):
+    """Collect (kind, start, end) for each quoting context in a shfmt JSON AST."""
+    if isinstance(node, dict):
+        if node.get("Type") in CONTEXTS:
+            out.append((node["Type"], node["Pos"]["Offset"], node["End"]["Offset"]))
+        hdoc = node.get("Hdoc")
+        if isinstance(hdoc, dict) and hdoc.get("Parts"):
+            parts = hdoc["Parts"]
+            out.append(("Hdoc", parts[0]["Pos"]["Offset"], parts[-1]["End"]["Offset"]))
+        for v in node.values():
+            contexts(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            contexts(v, out)
+
+
 def scan(text, shfmt):
     """Return (findings, unknowns): each a list of (line index in the block, message).
 
-    A `${{ }}` expression is masked before parsing, to the same length so every
-    offset stays true. GitHub substitutes its VALUE before bash starts, and that
-    value is not known here: inside double quotes or unquoted an apostrophe in it
-    is harmless, but inside a single-quoted span it ENDS the quote --
-    `'${{ 'It''s' }}'` runs as `'It's'` (Codex, #408), and a PR title does the
-    same. So an expression inside single quotes is UNKNOWN, never assumed safe.
+    A `${{ }}` expression is masked before parsing, byte for byte and keeping its
+    newlines, so every offset and line stays true. GitHub substitutes its VALUE
+    before bash starts, and that value is not known here. An apostrophe in it is
+    a plain character only when the innermost context around the expression is
+    double quotes or a heredoc body. Inside single quotes it ENDS the quote
+    (`'${{ 'It''s' }}'`), and unquoted it OPENS one (`echo ${{ 'It''s' }}` runs
+    `echo It's`). Both are Codex, #408, and a PR title does the same. So every
+    other position is UNKNOWN, never assumed safe.
     """
-    masked = EXPR.sub(lambda m: "_" * len(m.group(0).encode("utf-8")), text)
-    exprs = [(len(text[:m.start()].encode("utf-8")), len(text[:m.end()].encode("utf-8")))
-             for m in EXPR.finditer(text)]
-    src = masked.encode("utf-8")
+    exprs, masked, last = [], [], 0
+    for a, b in expressions(text):
+        masked.append(text[last:a])
+        masked.append("".join("\n" if ch == "\n" else "_" * len(ch.encode("utf-8"))
+                              for ch in text[a:b]))
+        exprs.append((len(text[:a].encode("utf-8")), len(text[:b].encode("utf-8"))))
+        last = b
+    masked.append(text[last:])
+    src = "".join(masked).encode("utf-8")
     r = subprocess.run([shfmt, "--to-json", "-ln", "bash"], input=src,
                        capture_output=True)
     if r.returncode != 0:
@@ -142,13 +202,19 @@ def scan(text, shfmt):
                 snippet = src[max(0, at - 12):at + 12].decode("utf-8", "replace")
                 findings.append((src.count(b"\n", 0, at),
                                  f"an apostrophe {what} a single-quoted span: ...{snippet!r}..."))
+    ctx = []
+    contexts(json.loads(r.stdout), ctx)
     unknowns = []
     for e_start, e_end in exprs:
-        if any(start < e_end and e_start < end for start, end, _ in spans):
+        around = [c for c in ctx if c[1] <= e_start and e_end <= c[2]]
+        inner = min(around, key=lambda c: c[2] - c[1])[0] if around else "unquoted"
+        if inner not in ("DblQuoted", "Hdoc"):
+            inner = {"SglQuoted": "single-quoted", "CmdSubst": "$( )", "ArithmExp": "$(( ))",
+                     "ProcSubst": "<( )", "ParamExp": "${ }"}.get(inner, inner)
             unknowns.append((src.count(b"\n", 0, e_start),
-                             "a ${{ }} expression inside a single-quoted string: its value is"
-                             " not known here, and an apostrophe in it would end the quote."
-                             " Pass it through `env:` and quote the variable instead."))
+                             f"a ${{{{ }}}} expression in a {inner} position: its value is not"
+                             " known here, and an apostrophe in it would be shell syntax."
+                             " Pass it through `env:` and use the variable in double quotes."))
     return findings, unknowns
 
 
@@ -228,7 +294,11 @@ def blocks(path):
     jobs = value_node(node, "jobs")
     if isinstance(jobs, yaml.MappingNode):
         for k, job in jobs.value:
-            job_data = data.get("jobs", {}).get(k.value)
+            # From the job's OWN node: safe_load resolves YAML 1.1 keys, so a job
+            # named `yes`, `no` or `on` becomes a boolean key and a lookup by its
+            # name finds nothing (Codex, #408).
+            job_data = (yaml.safe_load(yaml.serialize(job))
+                        if isinstance(job, yaml.MappingNode) else None)
             step_lists.append((steps_of(job) if isinstance(job, yaml.MappingNode) else [],
                                shell_of(job_data) or top_shell, platform_of(job_data)))
     runs = value_node(node, "runs")

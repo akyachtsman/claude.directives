@@ -34,9 +34,11 @@ Do not edit the templates in place in `claude.directives` — copy to the target
 
 - Target repo exists on GitHub with source files committed to `main`
 - `claude.directives` is accessible (public repo) for fetching templates
-- The app URL is known, and the test credential is ready to store as the
-  `TEST_AUTH_CREDENTIAL` repository secret — never in `CLAUDE.md` or any
-  committed file (`global.md` → *Security*)
+- The app URL is known
+- If the app's login needs a credential supplied from outside, it is ready to
+  store as the `TEST_AUTH_CREDENTIAL` repository secret — never in `CLAUDE.md`
+  or any committed file (`global.md` → *Security*). An app with no login, or
+  one whose login ships a working credential, needs none (Step 5)
 - Claude Code session is active with GitHub MCP access to the target repo
 
 ---

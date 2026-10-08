@@ -178,7 +178,10 @@ function decodeRefs(v) {
   return out;
 }
 function tags(src) {
-  const out = []; const lower = src.toLowerCase(); const n = src.length; let i = 0;
+  // ASCII-only folding, as the spec folds tag and attribute names. toLowerCase()
+  // can change the string's LENGTH (U+0130 becomes two code units), shifting
+  // every later offset so links after it were silently never read (Codex, #415).
+  const out = []; const lower = src.replace(/[A-Z]+/g, (m) => m.toLowerCase()); const n = src.length; let i = 0;
   const upTo = (s, from, what) => { const e = src.indexOf(s, from); if (e < 0) throw new Error(`unterminated ${what} at offset ${from}`); return e; };
   while ((i = src.indexOf('<', i)) >= 0) {
     if (src.startsWith('<!--', i)) { i = upTo('-->', i + 4, 'comment') + 3; continue; }
@@ -342,8 +345,13 @@ for (const page of htmlPages) {
     // http and https are one site: Pages redirects the first to the second.
     const inside = /^https?:$/.test(url.protocol) && url.host === ROOT.host && url.pathname.startsWith(ROOT.pathname);
     if (!inside) {
-      // Written with a scheme or as "//host": it names its own destination -- external.
+      // Written with a scheme or as "//host", it names its own destination; under
+      // a <base> on ANOTHER origin, a relative one deliberately resolves there
+      // (Codex on #415: a CDN base). Both are external. A relative reference that
+      // escapes the root from a base on THIS host still fails: there it can only
+      // be a mistake that leaves the project site.
       if (/^\s*(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)) continue;
+      if (!(/^https?:$/.test(base.protocol) && base.host === ROOT.host)) continue;
       htmlLinks++;
       console.error(`MISSING: ${page} links "${raw}", which resolves to ${url.href} -- outside ${ROOT.href}, so it leaves this repo's site`);
       failed = true; continue;

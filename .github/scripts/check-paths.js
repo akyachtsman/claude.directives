@@ -352,35 +352,21 @@ const ROOT = pagesRoot();
 // "docs%2F..%2F..%2Fetc%2Fpasswd" passed the root check and then reached
 // /etc/passwd once decoded (Codex on #415).
 const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean));
-// And tracked is not yet published: this site is built by Jekyll (no tracked
-// .nojekyll), which leaves out every path with a segment starting "." or "_"
-// and its default exclude list -- measured live 2026-10-08: .github/... and
-// .claude/... 404 while CLAUDE.md is served (Codex on #415). A tracked
-// .nojekyll lifts that; a _config.yml can re-include or exclude anything, so
-// its presence is refused until this check models it.
-const JEKYLL = !tracked.has('.nojekyll');
-if (JEKYLL && tracked.has('_config.yml')) {
-  console.error('CANNOT CHECK: a tracked _config.yml can change what Jekyll publishes (include/exclude) -- teach check-paths.js its rules first');
+// Tracked IS published, because the site publishes the tree verbatim: a
+// tracked .nojekyll turns Jekyll off (owner call, 2026-10-08). Without it,
+// Jekyll drops "."/"_"/"#"/"~" paths, processes front matter, honours
+// permalinks and _config.yml -- a model this check would have to reimplement
+// to stay sound, which #415's review rounds showed has no end. So the file is
+// REQUIRED: its absence is a refusal, not a guess.
+if (!tracked.has('.nojekyll')) {
+  console.error('CANNOT CHECK: no tracked .nojekyll -- Pages would run Jekyll, and what it publishes is not the tracked tree this check resolves links against');
   process.exit(2);
 }
-const JEKYLL_EXCLUDED = /^(?:node_modules|vendor\/(?:bundle|cache|gems|ruby)|gemfiles|Gemfile(?:\.lock)?)(?:\/|$)/;
-// Jekyll's reserved prefixes are ".", "_", "#" and "~" (jekyllrb.com/docs/structure).
-const jekyllPublishes = (p) => !JEKYLL || !(p.split('/').some((seg) => /^[._#~]/.test(seg)) || JEKYLL_EXCLUDED.test(p));
-// A file opening with front matter is PROCESSED by Jekyll, and its permalink
-// can move it anywhere -- so neither the links it contains nor links to it can
-// be resolved from its source path. Refused rather than modelled (Codex on
-// #415); no page here has front matter.
-const hasFrontMatter = (p) => { try { return JEKYLL && /^---[ \t]*\r?\n/.test(readFileSync(p, 'utf8')); } catch { return false; } };
-const published = (p) => tracked.has(p) && isFile(p) && jekyllPublishes(p) && !hasFrontMatter(p);
+const published = (p) => tracked.has(p) && isFile(p);
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
-  .split('\0').filter(Boolean).filter(isFile)  // a deleted or replaced page is not read -- the pages linking to it report it
-  .filter(jekyllPublishes);  // nor is a page Jekyll never publishes: its links are unreachable (Codex on #415)
+  .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
 for (const page of htmlPages) {
-  if (hasFrontMatter(page)) {
-    console.error(`UNREADABLE: ${page} opens with Jekyll front matter -- Jekyll processes it and a permalink can move it, so its links cannot be resolved from its source path`);
-    failed = true; continue;
-  }
   let pageTags;
   try { pageTags = tags(readFileSync(page, 'utf8')); } catch (e) {
     console.error(`UNREADABLE: ${page}: ${e.message} -- its links cannot be checked`);

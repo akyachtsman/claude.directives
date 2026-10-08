@@ -369,18 +369,32 @@ for (const page of htmlPages) {
   // which this tokenizer deliberately does not reimplement. So such a <base> is
   // REFUSED, never guessed at: a guess either way can hide a missing link or
   // invent one. The remedy is one move: put <base> in <head>.
-  // One pass marks each tag's context; the base lookup and the card checks read it.
-  let inert = 0; let foreign = 0; let baseHref;
+  // One pass marks each tag's context; the base lookup, the link attributes and
+  // the card checks read it. A stack, because an SVG/MathML integration point
+  // (<foreignObject>, <desc>, <title>; MathML's text points and annotation-xml)
+  // parses its children as HTML again, and a nested <svg> re-enters foreign
+  // content (Codex on #415). t.foreign: this element is in SVG/MathML now;
+  // t.underForeign: some <svg>/<math> is an ancestor at all.
+  const POINTS = { svg: ['foreignobject', 'desc', 'title'], math: ['mi', 'mo', 'mn', 'ms', 'mtext', 'annotation-xml'] };
+  const stack = []; let inert = 0; let baseHref;
+  const top = () => stack[stack.length - 1];
   for (const t of pageTags) {
-    t.inert = inert > 0; t.foreign = foreign > 0;
-    if (t.tag === '/template' || t.tag === '/noscript') inert = Math.max(0, inert - 1);
-    else if (t.tag === '/svg' || t.tag === '/math') foreign = Math.max(0, foreign - 1);
-    else if (t.tag === 'template' || t.tag === 'noscript') inert++;
-    else if ((t.tag === 'svg' || t.tag === 'math') && !t.selfClosing) foreign++;
+    t.inert = inert > 0; t.foreign = top()?.ns !== undefined && top().ns !== 'html';
+    t.underForeign = stack.length > 0;
+    if (t.tag === '/template' || t.tag === '/noscript') { inert = Math.max(0, inert - 1); continue; }
+    if (t.tag === 'template' || t.tag === 'noscript') { inert++; continue; }
+    if (t.tag.startsWith('/')) {
+      const k = stack.map((e) => e.tag).lastIndexOf(t.tag.slice(1));
+      if (k >= 0) stack.length = k;
+      continue;
+    }
+    if (t.selfClosing) continue;
+    if (t.tag === 'svg' || t.tag === 'math') stack.push({ tag: t.tag, ns: t.tag });
+    else if (t.foreign && POINTS[top().ns].includes(t.tag)) stack.push({ tag: t.tag, ns: 'html' });
   }
   for (const t of pageTags) {
     if (t.tag !== 'base') continue;
-    if (t.inert || t.foreign) {
+    if (t.inert || t.underForeign) {
       console.error(`UNREADABLE: ${page}: a <base> inside <template>, <noscript>, SVG or MathML -- whether it sets the document base depends on tree construction this check does not do; move it into <head>`);
       failed = true; continue;
     }

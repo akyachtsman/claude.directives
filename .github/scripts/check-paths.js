@@ -182,7 +182,12 @@ function tags(src) {
   const upTo = (s, from, what) => { const e = src.indexOf(s, from); if (e < 0) throw new Error(`unterminated ${what} at offset ${from}`); return e; };
   while ((i = src.indexOf('<', i)) >= 0) {
     if (src.startsWith('<!--', i)) { i = upTo('-->', i + 4, 'comment') + 3; continue; }
-    if ('!?/'.includes(src[i + 1] ?? 'x')) { i = upTo('>', i, 'declaration or end tag') + 1; continue; }
+    if (src[i + 1] === '/' && /[A-Za-z]/.test(src[i + 2] ?? '')) { // end tag: kept, so a card's </a> can be checked
+      const e = upTo('>', i, 'end tag');
+      out.push({ tag: `/${lower.slice(i + 2, e).split(/[\t\n\f\r />]/)[0]}`, attrs: new Map() });
+      i = e + 1; continue;
+    }
+    if ('!?/'.includes(src[i + 1] ?? 'x')) { i = upTo('>', i, 'declaration') + 1; continue; }
     if (!/[A-Za-z]/.test(src[i + 1] ?? '')) { i++; continue; } // a bare "<" in text
     let j = i + 1;
     while (j < n && !/[\s/>]/.test(src[j])) j++;
@@ -314,16 +319,23 @@ for (const page of htmlPages) {
   const baseHref = pageTags.find((t) => t.tag === 'base' && t.attrs.has('href'))?.attrs.get('href');
   let base = pageUrl;
   if (baseHref !== undefined) { try { base = new URL(baseHref, pageUrl); } catch { base = pageUrl; } }
-  // A landing card is a link by definition: one that loses its href is a dead
-  // card, and validating only the targets PRESENT would just see one link fewer
-  // (Codex on #415; check-landing-cards.js failed on it, and still does here).
-  pageTags.forEach((t) => {
-    const classes = (t.attrs.get('class') || '').split(/[\t\n\f\r ]+/);
-    if (classes.includes('demo-card') && !(t.attrs.get('href') || '').trim()) {
-      console.error(`MISSING: ${page} has a .demo-card <${t.tag}> with no href -- the card links nowhere`);
-      failed = true;
-    }
+  // The landing-card assertions check-landing-cards.js made that still mean
+  // something with one page (its sync half went with the second page). A card
+  // is a link by definition, so each .demo-card must be an <a> with a non-blank
+  // href, closed by </a> before the next <a> opens; and the root page must HAVE
+  // a card, or every one of these passes vacuously. Validating only the targets
+  // present saw a dead card as one link fewer (Codex on #415, twice).
+  const cardFail = (msg) => { console.error(`MISSING: ${page} ${msg}`); failed = true; };
+  let cards = 0;
+  pageTags.forEach((t, k) => {
+    if (!(t.attrs.get('class') || '').split(/[\t\n\f\r ]+/).includes('demo-card')) return;
+    cards++;
+    if (t.tag !== 'a') return cardFail(`has a .demo-card <${t.tag}>, not a link -- cards must be anchors`);
+    if (!(t.attrs.get('href') || '').trim()) cardFail('has a .demo-card <a> with no href -- the card links nowhere');
+    const close = pageTags.slice(k + 1).find((u) => u.tag === 'a' || u.tag === '/a');
+    if (!close || close.tag !== '/a') cardFail('has a .demo-card <a> not closed by </a> before the next <a>');
   });
+  if (page === 'index.html' && cards === 0) cardFail('has no .demo-card -- the landing-card checks would pass vacuously');
   for (const raw of pageTags.flatMap(linksOf)) {
     let url;
     try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }

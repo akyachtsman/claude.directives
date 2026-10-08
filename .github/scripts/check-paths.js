@@ -314,6 +314,16 @@ for (const page of htmlPages) {
   const baseHref = pageTags.find((t) => t.tag === 'base' && t.attrs.has('href'))?.attrs.get('href');
   let base = pageUrl;
   if (baseHref !== undefined) { try { base = new URL(baseHref, pageUrl); } catch { base = pageUrl; } }
+  // A landing card is a link by definition: one that loses its href is a dead
+  // card, and validating only the targets PRESENT would just see one link fewer
+  // (Codex on #415; check-landing-cards.js failed on it, and still does here).
+  pageTags.forEach((t) => {
+    const classes = (t.attrs.get('class') || '').split(/[\t\n\f\r ]+/);
+    if (classes.includes('demo-card') && !(t.attrs.get('href') || '').trim()) {
+      console.error(`MISSING: ${page} has a .demo-card <${t.tag}> with no href -- the card links nowhere`);
+      failed = true;
+    }
+  });
   for (const raw of pageTags.flatMap(linksOf)) {
     let url;
     try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }

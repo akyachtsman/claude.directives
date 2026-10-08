@@ -211,6 +211,10 @@ Used by `qa-live.yml` and `qa-response.yml`.
 
 ## Step 5 — Add TEST_AUTH_CREDENTIAL secret
 
+Skip this step if the app has no login: with the secret unset, the
+authenticated scenarios self-skip. For a login that ships a working credential,
+see the exception below.
+
 In the target repo on GitHub:
 
 `Settings → Secrets and variables → Actions → Secrets → New repository secret`
@@ -545,7 +549,7 @@ Required repository secrets:
 
 | Secret | Purpose |
 |---|---|
-| `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test — OMIT when the app's login ships a working one of its own, which the suite then submits as-is and reports as `credentialSource: prefilled` (directives#312) |
+| `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test — OMIT when the app has no login, or when its login ships a working one of its own, which the suite then submits as-is and reports as `credentialSource: prefilled` (directives#312) |
 | `TEST_AUTH_EMAIL` | Matching identifier for email+password gates (directives#304) and for identifier-first/split-step gates, which are not detected without it (directives#310); omit otherwise. Recorded in failure screenshots — throwaway address only |
 | `DB_SERVICE_KEY` | Backend service-role key — server-side only (required by the project's scheduled data workflow, if any) |
 
@@ -585,7 +589,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it
 - [ ] `APP_URL` set as repository variable
-- [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app's login ships a working credential and the suite submits what the form holds (directives#312)
+- [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app has no login, or because its login ships a working credential and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)
 - [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions
 - [ ] At least one successful run of each workflow confirmed

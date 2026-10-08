@@ -194,11 +194,11 @@ function tags(src) {
     if (!/[A-Za-z]/.test(src[i + 1] ?? '')) { i++; continue; } // a bare "<" in text
     let j = i + 1;
     while (j < n && !/[\s/>]/.test(src[j])) j++;
-    const tag = lower.slice(i + 1, j); const attrs = new Map();
+    const tag = lower.slice(i + 1, j); const attrs = new Map(); let selfClosing = false;
     for (;;) {
       while (j < n && /[\s/]/.test(src[j])) j++;
       if (j >= n) throw new Error(`unterminated <${tag}> at offset ${i}`);
-      if (src[j] === '>') { j++; break; }
+      if (src[j] === '>') { selfClosing = src[j - 1] === '/'; j++; break; }
       let k = j;
       while (k < n && !/[\s/>=]/.test(src[k])) k++;
       const name = lower.slice(j, k); j = k;
@@ -218,7 +218,7 @@ function tags(src) {
       }
       if (!attrs.has(name)) attrs.set(name, decodeRefs(value));
     }
-    out.push({ tag, attrs });
+    out.push({ tag, attrs, selfClosing });
     if (tag === 'plaintext') break; // no end tag exists: the rest of the document is text (spec)
     if (RAW_TEXT.has(tag)) {
       // Raw text ends only at an APPROPRIATE end tag: "</name" followed by
@@ -320,7 +320,20 @@ for (const page of htmlPages) {
   // when there is none or it does not parse. A raw page address ignored a
   // <base href="docs/"> that re-roots every relative link (Codex, #415).
   const pageUrl = new URL(page, ROOT);
-  const baseHref = pageTags.find((t) => t.tag === 'base' && t.attrs.has('href'))?.attrs.get('href');
+  // Only a <base> that is an HTML element of the document tree sets the base:
+  // not one inside <template> (its contents are a separate, inert fragment), in
+  // SVG/MathML foreign content (not an HTML base element), or in <noscript>
+  // (text when scripting is on). A flat token list picked the first one anywhere
+  // (Codex on #415). Links in those places are still checked -- they are real
+  // URLs once used -- only the base is restricted.
+  let inert = 0; let foreign = 0; let baseHref;
+  for (const t of pageTags) {
+    if (t.tag === '/template' || t.tag === '/noscript') { inert = Math.max(0, inert - 1); continue; }
+    if (t.tag === '/svg' || t.tag === '/math') { foreign = Math.max(0, foreign - 1); continue; }
+    if (t.tag === 'template' || t.tag === 'noscript') { inert++; continue; }
+    if ((t.tag === 'svg' || t.tag === 'math') && !t.selfClosing) { foreign++; continue; }
+    if (t.tag === 'base' && !inert && !foreign && t.attrs.has('href')) { baseHref = t.attrs.get('href'); break; }
+  }
   let base = pageUrl;
   if (baseHref !== undefined) { try { base = new URL(baseHref, pageUrl); } catch { base = pageUrl; } }
   // The landing-card assertions check-landing-cards.js made that still mean

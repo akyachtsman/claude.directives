@@ -5,7 +5,7 @@
 // claude.directives CI, where those files are committed. (Downstream projects,
 // where dot-paths may not exist until bootstrap, do not run this script.)
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, posix } from 'path';
 import { execFileSync } from 'child_process';
 
 const raw = readFileSync('CLAUDE.md', 'utf8');
@@ -211,7 +211,19 @@ function tags(src) {
       if (!attrs.has(name)) attrs.set(name, decodeRefs(value));
     }
     out.push({ tag, attrs });
-    i = RAW_TEXT.has(tag) ? (() => { const e = lower.indexOf(`</${tag}`, j); if (e < 0) throw new Error(`unterminated <${tag}> at offset ${i}`); return e; })() : j;
+    if (RAW_TEXT.has(tag)) {
+      // Raw text ends only at an APPROPRIATE end tag: "</name" followed by
+      // whitespace, "/" or ">". A bare prefix match ended <script> at
+      // "</scripture>" and read the rest of the script as markup (Codex, #415).
+      let e = j;
+      for (;;) {
+        e = lower.indexOf(`</${tag}`, e);
+        if (e < 0) throw new Error(`unterminated <${tag}> at offset ${i}`);
+        if (/^[\t\n\f\r />]$/.test(src[e + 2 + tag.length] ?? '')) break;
+        e += 2;
+      }
+      i = e;
+    } else i = j;
   }
   return out;
 }
@@ -278,6 +290,13 @@ function pagesRoot() {
   return new URL(repo.toLowerCase() === host ? `https://${host}/` : `https://${host}/${repo}/`);
 }
 const ROOT = pagesRoot();
+// What Pages publishes is the tracked tree, so a link target must be a TRACKED
+// regular file -- not merely something on this disk. Containment is checked on
+// the decoded path too: WHATWG URL resolves "%2F" as data, not a separator, so
+// "docs%2F..%2F..%2Fetc%2Fpasswd" passed the root check and then reached
+// /etc/passwd once decoded (Codex on #415).
+const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean));
+const published = (p) => tracked.has(p) && isFile(p);
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
@@ -308,10 +327,16 @@ for (const page of htmlPages) {
       failed = true; continue;
     }
     htmlLinks++;
-    const rel = decodeURIComponent(url.pathname.slice(ROOT.pathname.length));
-    const target = rel === '' || rel.endsWith('/') ? `${rel}index.html` : rel;
-    if (isFile(target) || isFile(join(target, 'index.html'))) continue;
-    console.error(`MISSING: ${page} links "${raw}" -> ${target}, which is not a regular file — the published link would 404`);
+    let rel;
+    try { rel = decodeURIComponent(url.pathname.slice(ROOT.pathname.length)); } catch {
+      console.error(`MISSING: ${page} links "${raw}", whose path is not valid percent-encoding`); failed = true; continue;
+    }
+    const target = posix.normalize(rel === '' || rel.endsWith('/') ? `${rel}index.html` : rel);
+    if (target === '..' || target.startsWith('../') || posix.isAbsolute(target) || target.includes('\0')) {
+      console.error(`MISSING: ${page} links "${raw}", which decodes to ${target} -- outside the repository`); failed = true; continue;
+    }
+    if (published(target) || published(posix.join(target, 'index.html'))) continue;
+    console.error(`MISSING: ${page} links "${raw}" -> ${target}, which is not a tracked regular file — the published link would 404`);
     failed = true;
   }
 }

@@ -110,6 +110,7 @@ path or a dependency loaded any other way is invisible to it.
 #   out of it; the guard reads the shipped pattern out of the command rather
 #   than copying it, PROP6 2026-09-01;
 
+import ast
 import posixpath
 import re
 import subprocess
@@ -257,7 +258,6 @@ SCRIPTS = ".github/scripts"
 TEMPLATE_SCRIPTS = "templates/scripts"   # where a .github/scripts/<x> comes from
 # A literal relative module path: require('./x'), import ... from './x', import('./x').
 JS_LOCAL = re.compile(r"""(?:\brequire\s*\(|\bfrom|\bimport\s*\(?)\s*['"](\.{1,2}/[^'"]+)['"]""")
-PY_IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_]\w*)\s+import|import\s+([A-Za-z_][\w, ]*))", re.M)
 NPM = re.compile(r"\bnpm\s+(?:install|ci|i)\b")
 _ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/|\$\{\{\s*github\.workspace\s*\}\}/)?"""
 SCRIPTS_DIR = re.compile(rf"^{_ROOT}\.github/scripts/?$")
@@ -292,6 +292,47 @@ def npm_in_scripts(doc):
     return walk(doc, None)
 
 
+def py_local_deps(rel, body):
+    """{template-relative path: import line} for every module a template .py
+    loads from its own tree, resolved as the interpreter would with the script's
+    directory on sys.path. Read with `ast`, not a regex, so EVERY import form
+    counts -- dotted (`from a.b import c`), relative (`from .b import c`), a
+    submodule named in the import list (`from a import b`), and the packages a
+    dotted import loads on the way (Codex, #411). A file that does not parse is
+    a refusal, never "no imports"."""
+    base = posixpath.dirname(rel)
+    try:
+        tree = ast.parse(body)
+    except SyntaxError as e:
+        raise ValueError(f"{TEMPLATE_SCRIPTS}/{rel} does not parse as Python ({e.msg}, line {e.lineno})")
+    found = {}
+
+    def resolve(parts, start, why):
+        for i in range(1, len(parts) + 1):          # a.b loads a, then a.b
+            stem = posixpath.join(start, *parts[:i])
+            for cand in (stem + ".py", posixpath.join(stem, "__init__.py")):
+                if (Path(TEMPLATE_SCRIPTS) / cand).is_file():
+                    found[posixpath.normpath(cand)] = why
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        why = (ast.get_source_segment(body, node) or "").strip()
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                resolve(a.name.split("."), base, why)
+            continue
+        start = base
+        for _ in range(max(node.level - 1, 0)):
+            start = posixpath.dirname(start)
+        mod = node.module.split(".") if node.module else []
+        resolve(mod, start, why)
+        for a in node.names:
+            if a.name != "*":
+                resolve(mod + [a.name], start, why)
+    return found
+
+
 def local_deps(script):
     """What `script` (a .github/scripts/ path) loads from beside it, read from
     its template source: {dependency path: the line that creates it}."""
@@ -309,11 +350,8 @@ def local_deps(script):
                 dep += ".js"
             deps[dep] = m.group(0)
     elif script.endswith(".py"):
-        for m in PY_IMPORT.finditer(body):
-            for name in (m.group(1) or m.group(2)).split(","):
-                name = name.strip().split(" ")[0]
-                if name and (Path(TEMPLATE_SCRIPTS) / posixpath.dirname(rel) / f"{name}.py").is_file():
-                    deps[posixpath.join(here, f"{name}.py")] = m.group(0).strip()
+        for dep, why in py_local_deps(rel, body).items():
+            deps[posixpath.join(SCRIPTS, dep)] = why
     return {d: why for d, why in deps.items() if d.startswith(SCRIPTS + "/")}
 
 

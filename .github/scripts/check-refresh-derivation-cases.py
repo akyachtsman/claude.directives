@@ -427,6 +427,32 @@ case("the same option-first caller naming package.json passes",
          comment="      # npm reads .github/scripts/package.json\n")},
      expect_exit=0, needle="  .github/scripts/package.json")
 
+# Codex, #411: Python imports are read with `ast`, so every form counts.
+PY_CALLER = ("jobs:\n  t:\n    steps:\n"
+             "      - run: python3 .github/scripts/main.py\n"
+             "{comment}")
+
+def py_case(name, main_src, extra, comment, expect_exit, needle):
+    case(name, command_text=command_md(),
+         callers={"templates/scripts/main.py": main_src, **extra,
+                  "templates/workflows/py.yml": PY_CALLER.format(comment=comment)},
+         expect_exit=expect_exit, needle=needle)
+
+HELPER = {"templates/scripts/nested/helper.py": "def run(): pass\n"}
+py_case("a DOTTED Python import of a nested helper must be named",
+        "from nested.helper import run\n", HELPER, "",
+        1, "UNNAMED: .github/scripts/nested/helper.py")
+py_case("the same dotted import, helper named, passes",
+        "from nested.helper import run\n", HELPER,
+        "      # imports .github/scripts/nested/helper.py\n",
+        0, "  .github/scripts/nested/helper.py")
+py_case("`from pkg import submodule` must name the submodule",
+        "from nested import helper\n", HELPER, "",
+        1, "UNNAMED: .github/scripts/nested/helper.py")
+py_case("a template .py that does not parse is refused, not read as import-free",
+        "from nested.helper import (\n", HELPER, "",
+        1, "does not parse as Python")
+
 case("npm run in ANOTHER directory needs no .github/scripts/package.json",
      command_text=command_md(),
      callers={"templates/workflows/kit.yml":

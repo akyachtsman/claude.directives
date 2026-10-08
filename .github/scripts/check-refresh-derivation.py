@@ -213,8 +213,23 @@ def main():
         )
     token_pat, filter_pat = token_m.group(1), filter_m.group(1)
 
+    # THE PHASE 3 COPY MUST EXIST. Comparing filters proves nothing if one side
+    # is gone: deleting or reshaping the Phase 3 scan left one copy, one filter,
+    # and a pass -- while the applied-check stopped verifying unchanged
+    # dependencies such as package.json (Codex, #409). The install pipeline is
+    # the copy that reads "$buf"; any other copy is the applied-check's.
+    copies = list(ANY_TOKEN.finditer(text))
+    if not [m for m in copies if m.start() != token_m.start()]:
+        return fail(
+            f"the Phase 3 applied-check's copy of the derivation is missing from {COMMAND}.\n"
+            "      Only the install pipeline's token grep was found. Phase 3 verifies every\n"
+            "      script dependency, delta or not, with its own copy of this pattern; without\n"
+            "      it a stale or missing dependency no longer blocks the refresh stamp.\n"
+            "      Restore it, or update this guard in the same change if it moved."
+        )
+
     filters = []
-    for m in ANY_TOKEN.finditer(text):
+    for m in copies:
         f = FILTER_LINE.search(pipeline(text, m.end()))
         filters.append(f.group(1) if f else None)
     if None in filters:

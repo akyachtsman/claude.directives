@@ -99,8 +99,26 @@ EXT_PY_ONLY = r"\.(?:js|py)$"
 DELIM = """  printf '\\n' >>"$buf" """.rstrip()
 
 
-def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line=True):
-    """Build a refresh-repo.md carrying the chosen pipeline."""
+# The Phase 3 applied-check's own copy of the derivation, in its real shape.
+# Every fixture carries one by default: the guard refuses a command without it.
+PHASE3 = ("\n```bash\nscan() {{\n  deps=\"$(printf '%s\\n' \"$1\" | "
+          "grep -oE '\\.github/scripts/[A-Za-z0-9_./-]+'{rest}; true)\"\n}}\n```\n")
+
+
+def phase3_md(ext):
+    """The Phase 3 copy, filtering with `ext` -- or with no filter when ext is None."""
+    rest = "" if ext is None else f" | sed -E 's/[.]+$//' | grep -E '{ext}'"
+    return PHASE3.format(rest=rest)
+
+
+KEEP = object()
+
+
+def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line=True,
+               phase3=KEEP):
+    """Build a refresh-repo.md carrying the chosen pipeline, plus a Phase 3 copy
+    filtering like it (phase3=KEEP), with another filter, None for no filter,
+    or False for no Phase 3 copy at all."""
     pipe = "refs=$("
     pipe += f"grep -oE '{token}' \"$buf\"" if token_line else "rg -o 'whatever' \"$buf\""
     if ext_line:
@@ -114,6 +132,7 @@ def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line
         + "done\n"
         + pipe + "\n"
         "```\n"
+        + ("" if phase3 is False else phase3_md(ext if phase3 is KEEP else phase3))
     )
 
 
@@ -289,26 +308,30 @@ case("the shipped filter leaves the kit's package.json and the lockfile out",
      command_text=command_md(ext=EXT_SHIPPED), callers=KIT_PKG, expect_exit=0,
      needle="1 referenced script(s)")
 
-PHASE3 = ("\n```bash\nscan() {\n  deps=\"$(printf '%s\\n' \"$1\" | "
-          "grep -oE '\\.github/scripts/[A-Za-z0-9_./-]+' | sed -E 's/[.]+$//' | "
-          "grep -E '{ext}'; true)\"\n}}\n```\n")
-
 case("the Phase 3 copy filtering like the install passes",
-     command_text=command_md(ext=EXT_SHIPPED) + PHASE3.replace("{ext}", EXT_SHIPPED).replace("}}", "}"),
-     callers=PKG, expect_exit=0, needle="referenced script(s)")
+     command_text=command_md(ext=EXT_SHIPPED), callers=PKG, expect_exit=0,
+     needle="referenced script(s)")
 
 case("a Phase 3 copy that filters DIFFERENTLY from the install is refused",
-     command_text=command_md(ext=EXT_SHIPPED) + PHASE3.replace("{ext}", EXT).replace("}}", "}"),
-     callers=PKG, expect_exit=1, needle="filter DIFFERENTLY")
+     command_text=command_md(ext=EXT_SHIPPED, phase3=EXT), callers=PKG, expect_exit=1,
+     needle="filter DIFFERENTLY")
 
 case("an install pipeline that LOST its filter is refused, not read from Phase 3's",
-     command_text=command_md(ext_line=False) + PHASE3.replace("{ext}", EXT_SHIPPED).replace("}}", "}"),
-     callers=PKG, expect_exit=1, needle="not the `grep -E")
+     command_text=command_md(ext_line=False, phase3=EXT_SHIPPED), callers=PKG, expect_exit=1,
+     needle="not the `grep -E")
 
 case("a Phase 3 copy that LOST its filter is refused",
-     command_text=command_md(ext=EXT_SHIPPED)
-     + PHASE3.replace(" | sed -E 's/[.]+$//' | grep -E '{ext}'", "").replace("}}", "}"),
+     command_text=command_md(ext=EXT_SHIPPED, phase3=None), callers=PKG, expect_exit=1,
+     needle="NO extension filter of its own")
+
+case("a filterless Phase 3 copy does not borrow an identical filter from LATER in the file",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=None)
+     + f"\n```bash\nls | grep -E '{EXT_SHIPPED}'\n```\n",
      callers=PKG, expect_exit=1, needle="NO extension filter of its own")
+
+case("a command with NO Phase 3 copy at all is refused, not compared against itself",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,
+     needle="applied-check's copy of the derivation is missing")
 
 case("no callers at all is refused, never a vacuous pass",
      command_text=command_md(), callers={}, expect_exit=1,

@@ -22,7 +22,7 @@ travels determines what YOU must do when it changes:
 | What changed | Delivery mode | What you do | When it lands downstream | How you verify |
 |---|---|---|---|---|
 | `directives/*.md` | **Inherited** — fetched live by raw URL | Nothing | Next session start in each repo; mid-session via `/refresh-repo` (Phase 0 re-reads the rules) | `/env-chk` directive-freshness check |
-| `plugins/`, `.claude-plugin/marketplace.json`, `scripts/install-toolkit.sh` | **Installed** — `SessionStart` hook per session; env setup script for the first install | Nothing, for a project carrying `.claude/hooks/session-start.sh`. For a legacy project without it: **re-save that environment's setup script** (see Environment Maintenance), or install the hook once via `/refresh-repo` so the step stops recurring | With the hook: the next **new** session. Without it: after that environment's cache rebuilds. Never mid-session either way | `/env-chk` toolkit-attached check |
+| `plugins/`, `.claude-plugin/marketplace.json`, `scripts/install-toolkit.sh` | **Installed** — `SessionStart` hook per session; env setup script for the first install | Nothing, for a project carrying `.claude/hooks/session-start.sh`. For a legacy project without it: **edit and save that environment's setup script** — a real change such as a `#` comment line; an unchanged save rebuilds nothing (see Environment Maintenance), or install the hook once via `/refresh-repo` so the step stops recurring | With the hook: the next **new** session. Without it: after that environment's cache rebuilds. Never mid-session either way | `/env-chk` toolkit-attached check |
 | `templates/**` | **Copied** — snapshotted into projects at bootstrap | Run `/refresh-repo` in a session of each project and approve the per-file dispositions | On approval, that session | The refresh report + `.claude/directive-sync.json` stamp |
 | `docs/**`, the two `*-USER-INSTRUCTIONS.md` files | **Referenced** — read on demand by link | Nothing | Immediately (nothing is stored downstream) | — |
 
@@ -78,7 +78,8 @@ Corollaries worth memorizing:
 - **Swapping a toolkit/plugin is two halves in ONE PR**: the install side
   (`marketplace.json` / plugin dir / `install-toolkit.sh`) AND the enablement
   side (`templates/claude-settings.json` → each project's `.claude/settings.json`).
-  Then re-save environments (install half) AND run `/refresh-repo` per project
+  Then edit-and-save each environment's setup script (install half; →
+  *Environment Maintenance*) AND run `/refresh-repo` per project
   (enablement half). Shipping one half leaves projects installed-but-not-enabled
   or enabled-but-not-installed.
 - **A validator and the rule it enforces arrive in the same pull, so first
@@ -151,8 +152,8 @@ Corollaries worth memorizing:
 1. Look at the merged PR's file list and classify each file with the matrix.
 2. **Inherited only** → done; the fleet is current at next session start.
 3. **Installed touched** → nothing to do for projects carrying the `SessionStart`
-   hook; they self-update next session. For legacy projects without it, re-save
-   that environment's setup script (below), or install the hook once via
+   hook; they self-update next session. For legacy projects without it, edit and
+   save that environment's setup script (below), or install the hook once via
    `/refresh-repo` so this step stops recurring.
 4. **Copied touched** → in each project, run `/refresh-repo` and approve the
    dispositions it proposes.
@@ -291,18 +292,27 @@ target session and tells you first (owner ruling, 2026-10-06):
 
 This section applies to **legacy projects only** — one carrying
 `.claude/hooks/session-start.sh` re-runs the installer every session and needs
-nothing here. The installed-tooling cache is **per environment** and is *meant* to
-rebuild on any environment-config change or ~weekly expiry. Since the whole fleet
+nothing here. The installed-tooling cache is **per environment** and rebuilds
+when that environment's setup script or allowed network hosts CHANGE, or when it
+expires after ~7 days (code.claude.com/docs/en/cloud-environments → *Environment
+caching*, read 2026-10-08). A save with nothing changed is not a change and
+rebuilds nothing. Since the whole fleet
 shares the single `fleet` environment, this is **one action that reaches every
 repo**:
 
 1. Open the `fleet` environment (Claude Code on the web → the environment your
    sessions run in — NOT a global account setting).
-2. Choose **Edit environment** and **re-save the setup script unchanged**.
+2. Choose **Edit environment**, **make a real edit to the setup script** —
+   appending a `#` comment line is enough (a trailing blank line may be trimmed
+   on save, leaving nothing changed) — and save. Saving it
+   unchanged does not rebuild the cache.
 3. Start a NEW session and run `/env-chk` to confirm what actually attached.
 
-**Step 3 is a verification step, not a formality — the re-save is best-effort.**
-Measured 2026-08-19: the owner re-saved `fleet`, and the next new session in a
+**Step 3 is a verification step, not a formality — the documented rebuild has
+not yet been measured here.**
+Measured 2026-08-19: the owner re-saved `fleet` UNCHANGED, as step 2 then said
+to — which, by the documented rule above, is no change and so no rebuild — and
+the next new session in a
 legacy project still carried a plugin the current installer had already removed
 (`hookify` was live in `~/.claude/plugins/installed_plugins.json` and
 `~/.claude/settings.json`), spewing an import error on every tool call. A
@@ -311,9 +321,12 @@ clean — because it commits the hook and re-runs the installer itself. One repo
 broken and one repo clean in one environment is the signature: the difference is
 the hook, not the environment, and no further re-saving fixes it.
 
-So treat the re-save as a nudge that may not land, and treat the hook as the
-cure. If `/env-chk` still reports a stale or unwanted plugin after a re-save,
-stop re-saving and **install the hook once** in that project — `/refresh-repo`
+So an edit-and-save followed by a NEW session is the documented rebuild, and
+step 3 confirms it landed. Check from a new session only: reopening an existing
+one after it idled does not count, because its VM is restored rather than
+rebuilt and keeps the old cache. The hook is still the lasting cure. If
+`/env-chk` in a new session after an edit-and-save still reports a stale or
+unwanted plugin, stop repeating it and **install the hook once** in that project — `/refresh-repo`
 does it (Phase 2 installs `.claude/hooks/session-start.sh` and merges the
 `SessionStart` row even when the local path does not exist). From then on the
 project heals itself every session and never needs this section again.

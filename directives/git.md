@@ -461,9 +461,11 @@ one ready-for-review is GraphQL-only (`markPullRequestReadyForReview` — GitHub
 exposes no REST equivalent). A GraphQL-exhausted session can still merge a PR
 that is already non-draft, while a draft one is stuck behind the one call it
 cannot make. In a web session, `gh api` goes through a GitHub proxy that refuses
-GraphQL outright (measured 2026-10-06) and serves REST stand-ins for exactly those
-operations, which its error text names: `.../pulls/<n>/ccr/ready_for_review`,
-`.../ccr/review_threads`, `.../ccr/comments/<id>/resolve`. So:
+GraphQL outright (measured 2026-10-06) and serves REST stand-ins for those
+operations and a few neighbours, which its error text names (re-read 2026-10-08):
+`.../pulls/<n>/ccr/ready_for_review`, `.../ccr/convert_to_draft`,
+`.../ccr/review_threads`, `.../ccr/comments/<id>/resolve` (and `/unresolve`),
+and `.../ccr/auto_merge` (PUT/DELETE). So:
 - **Un-draft as soon as CI goes green**, not at merge time. Draft-on-first-push
   still stands (*PR Lifecycle* above); this only moves *when* you leave draft,
   so the GraphQL call happens while budget is likely available. Through the

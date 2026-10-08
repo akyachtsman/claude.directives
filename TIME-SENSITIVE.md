@@ -75,7 +75,10 @@ is added by the pass that finds it.
 | Wake envelopes cannot be switched off | `CLAUDE.md` → *Notifications* | 2026-10-08 | Claude Code settings docs |
 | `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-10-08 | `claude plugin eval --help` |
 | Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-10-08 | Claude Code on the web docs, network access |
-| When a network-allowlist change reaches running sessions | `global.md` → *Network Access Playbook (cloud sessions)* | undated | code.claude.com/docs/en/cloud-environments, section *Network access* |
+| When a network-allowlist change reaches running sessions | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-08 | code.claude.com/docs/en/cloud-environments, section *Network access* |
+| The project-scope MCP file is `.mcp.json` at the repo root, meant to be committed | `data.md` → *MCP Configuration* | 2026-10-08 | code.claude.com/docs/en/mcp (this repo keeps the gitignore rule; the owner has not ruled on committing it) |
+| WebFetch obeys the egress policy | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-08 | WebFetch a policy-denied host and expect `EGRESS_BLOCKED` ("blocked by the network egress proxy") |
+| `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` semantics | `global.md` → *Subagent Model Selection* | 2026-10-08 | code.claude.com/docs/en/sub-agents, "Run every subagent on one model" |
 
 ## Anthropic plugins & built-in skills
 | Topic | Source | Last checked | Check |
@@ -86,6 +89,7 @@ is added by the pass that finds it.
 | Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | 2026-10-08 | This session's skill list |
 | Built-in `anthropic-skills:docx` and `anthropic-skills:pdf` (text extraction, OCR for scanned PDFs) | `plugins/directives-toolkit/skills/doc-comp/SKILL.md` | 2026-10-08 | This session's skill list: both skills listed, and the `pdf` skill's own description still names OCR for scanned PDFs |
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
+| The Anthropic-authored LSP plugin set (twelve names) | `EXPORTS.json` → `considered.lsp-plugins` | 2026-10-08 | the `claude-plugins-official` `marketplace.json` |
 
 ## GitHub
 | Topic | Source | Last checked | Check |
@@ -103,6 +107,7 @@ is added by the pass that finds it.
 | What the GitHub MCP reads return for reactions and labels on a PR | `docs/standards/pr-mechanics.md` → *Reading reactions* | 2026-10-08 | `issue_read` (`get`, `get_labels`) and `pull_request_read` (`get`) on a merged PR of this repo |
 | What each GitHub MCP write tool commits | `global.md` → *A Blocked Command Is Not a Blocked Capability* | 2026-10-08 | The descriptions and parameters of `create_or_update_file`, `push_files`, `delete_file` and `create_branch` in this session's tool list |
 | When ci-notify's PR lookup misses | `git.md` → *PR Lifecycle* | undated | ⏳ The next PR whose green-CI wake does not arrive |
+| Branch-rules and reactions APIs are readable through a web session's `gh api`; the proxy's `ccr/` stand-in routes | `git.md` → *Repo-settings preflight*, `git.md` → *GitHub API Quota*; `pr-mechanics.md` → *Reading reactions* | 2026-10-08 | `gh api repos/<o>/<r>/rules/branches/main`; `gh api repos/<o>/<r>/issues/<n>/reactions`; `gh api repos/<o>/<r>/pulls/<n>/ccr/x` prints the route list |
 
 ## Codex
 | Topic | Source | Last checked | Check |
@@ -126,6 +131,7 @@ is added by the pass that finds it.
 | `dvh` support in the browsers the kit ships | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | 2026-10-08 | MDN browser-compat data for `dvh` against the runner image's browser versions |
 | shfmt v3.12.0 is the newest mvdan/sh release that publishes `sha256sums.txt` (v3.11.0 and v3.12.0 do; v3.13.0 through v3.14.1 do not) | `.github/workflows/qa.yml`, the `Install shfmt` step | 2026-10-08 | For each newer release: `curl -sSfL https://github.com/mvdan/sh/releases/download/<tag>/sha256sums.txt`; if one now publishes it, move the pin and its checksum, then re-run `check-run-quoting-cases.py` |
 | Web-session git fetch cost | `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-09-23 | ⏳ The next `/refresh-repo` run |
+| `/opt/pw-browsers/chromium` symlink target (build 1194, Chromium 141 on 2026-10-08) | `global.md` → *Network Access Playbook (cloud sessions)*, rung 6 | 2026-10-08 | `ls -la /opt/pw-browsers` |
 
 ## Outside services & standards
 | Topic | Source | Last checked | Check |

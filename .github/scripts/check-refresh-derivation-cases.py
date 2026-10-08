@@ -91,16 +91,42 @@ PREFIXED = r"(node|python3) \.github/scripts/[A-Za-z0-9_.-]+"
 SLASHED = r"\.github/scripts/[A-Za-z0-9_./-]+"      # the shipped shape
 SLASHFREE = r"\.github/scripts/[A-Za-z0-9_.-]+"      # pre-#345-round-2
 EXT = r"\.(js|py)$"
+EXT_SHIPPED = r"\.(js|py)$|^\.github/scripts/package\.json$"   # #398
+EXT_PKG_UNANCHORED = r"\.(js|py)$|package\.json$"
 EXT_LOOSE = r"\.(js|py)"
 EXT_PY_ONLY = r"\.(?:js|py)$"
 
 DELIM = """  printf '\\n' >>"$buf" """.rstrip()
 
 
-def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line=True):
-    """Build a refresh-repo.md carrying the chosen pipeline."""
+# The Phase 3 applied-check's own copy of the derivation, in its real shape.
+# Every fixture carries one by default: the guard refuses a command without it.
+PHASE3 = ("\n```bash\nscan() {{\n  deps=\"$(printf '%s\\n' \"$1\" | "
+          "grep -oE '{token}'{rest}; true)\"\n}}\n```\n")
+STRIP = r"s/[.]+$//"
+
+
+def phase3_md(token, ext, sed=True):
+    """The Phase 3 copy: `token`, the trailing-period sed when `sed`, then `ext`
+    -- or no filter when ext is None."""
+    rest = f" | sed -E '{STRIP}'" if sed else ""
+    rest += "" if ext is None else f" | grep -E '{ext}'"
+    return PHASE3.format(token=token, rest=rest)
+
+
+KEEP = object()
+
+
+def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line=True,
+               phase3=KEEP, sed=True, phase3_token=None, phase3_sed=None):
+    """Build a refresh-repo.md carrying the chosen pipeline, plus a Phase 3 copy
+    that mirrors it -- same token, sed and filter -- unless told otherwise:
+    phase3 is a different filter, None for no filter, or False for no Phase 3
+    copy at all; phase3_token and phase3_sed override those stages alone."""
     pipe = "refs=$("
     pipe += f"grep -oE '{token}' \"$buf\"" if token_line else "rg -o 'whatever' \"$buf\""
+    if sed:
+        pipe += f" \\\n       | sed -E '{STRIP}'"
     if ext_line:
         pipe += f" \\\n       | grep -E '{ext}'"
     pipe += " | sort -u)"
@@ -112,6 +138,9 @@ def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line
         + "done\n"
         + pipe + "\n"
         "```\n"
+        + ("" if phase3 is False else phase3_md(
+            phase3_token or token, ext if phase3 is KEEP else phase3,
+            sed if phase3_sed is None else phase3_sed))
     )
 
 
@@ -261,6 +290,70 @@ case("a reshaped pipeline the extractor cannot read is refused",
 case("a pipeline with no extension filter is refused",
      command_text=command_md(ext_line=False), callers=GOOD, expect_exit=1,
      needle="not the `grep -E")
+
+# #398: exactly .github/scripts/package.json joins the contract.
+PKG = {"templates/workflows/cron.yml":
+       "steps:\n  - run: npm install  # reads .github/scripts/package.json\n"
+       "  - run: node .github/scripts/notify-task.js\n"}
+KIT_PKG = {"templates/workflows/q.yml":
+           "steps:\n  - run: node .github/scripts/a.js\n"
+           "  # kit: .github/scripts/ui-tests/package.json\n"
+           "  # lock: .github/scripts/package-lock.json\n"}
+
+case("the shipped filter derives .github/scripts/package.json",
+     command_text=command_md(ext=EXT_SHIPPED), callers=PKG, expect_exit=0,
+     needle="  .github/scripts/package.json")
+
+case("a .js/.py-only filter MISSES package.json, which the contract now includes",
+     command_text=command_md(ext=EXT), callers=PKG, expect_exit=1,
+     needle="MISSED: .github/scripts/package.json")
+
+case("an UNANCHORED package.json takes the kit's ui-tests/package.json — refused",
+     command_text=command_md(ext=EXT_PKG_UNANCHORED), callers=KIT_PKG, expect_exit=1,
+     needle="OFF-CONTRACT: .github/scripts/ui-tests/package.json")
+
+case("the shipped filter leaves the kit's package.json and the lockfile out",
+     command_text=command_md(ext=EXT_SHIPPED), callers=KIT_PKG, expect_exit=0,
+     needle="1 referenced script(s)")
+
+case("the Phase 3 copy filtering like the install passes",
+     command_text=command_md(ext=EXT_SHIPPED), callers=PKG, expect_exit=0,
+     needle="referenced script(s)")
+
+case("a Phase 3 copy that filters DIFFERENTLY from the install is refused",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=EXT), callers=PKG, expect_exit=1,
+     needle="derive DIFFERENTLY")
+
+case("an install pipeline that LOST its filter is refused, not read from Phase 3's",
+     command_text=command_md(ext_line=False, phase3=EXT_SHIPPED), callers=PKG, expect_exit=1,
+     needle="not the `grep -E")
+
+case("a Phase 3 copy that LOST its filter is refused",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=None), callers=PKG, expect_exit=1,
+     needle="NO extension filter of its own")
+
+case("a filterless Phase 3 copy does not borrow an identical filter from LATER in the file",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=None)
+     + f"\n```bash\nls | grep -E '{EXT_SHIPPED}'\n```\n",
+     callers=PKG, expect_exit=1, needle="NO extension filter of its own")
+
+# Codex, #409 round 4: the copies are compared by RUNNING them, every stage.
+case("a Phase 3 token that cannot reach a nested path is refused, same filter or not",
+     command_text=command_md(ext=EXT_SHIPPED, phase3_token=SLASHFREE), callers=PKG,
+     expect_exit=1, needle="only the install derives: .github/scripts/nested/d.py")
+
+case("an install without the trailing-period stage derives LESS than Phase 3 — refused",
+     command_text=command_md(ext=EXT_SHIPPED, sed=False, phase3_sed=True), callers=PKG,
+     expect_exit=1, needle="derives: .github/scripts/e.js")
+
+case("a script named at the end of a sentence is derived",
+     command_text=command_md(ext=EXT_SHIPPED),
+     callers={"directives/test.md": "Run it with .github/scripts/browser-ladder.js.\n"},
+     expect_exit=0, needle="  .github/scripts/browser-ladder.js")
+
+case("a command with NO Phase 3 copy at all is refused, not compared against itself",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,
+     needle="applied-check's copy of the derivation is missing")
 
 case("no callers at all is refused, never a vacuous pass",
      command_text=command_md(), callers={}, expect_exit=1,

@@ -188,9 +188,10 @@ const ALIASES = {
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
   'templates/ui-tests/': ['templates/ui-tests', '.github/scripts/ui-tests'],
-  'templates/scripts/package.json': ['nodemailer',
-    // the scheduled-job scripts list in /new-repo: "(`notify-email.js`, …, `package.json`) into"
-    /`package\.json`\) into/],
+  // A bare `package.json` is ambiguous (the kit ships one too), so only the
+  // installed path names this file: cron-notify.yml and /new-repo both write
+  // `.github/scripts/package.json` since #398.
+  'templates/scripts/package.json': ['nodemailer', '.github/scripts/package.json'],
   // /new-repo copies every composite action by one generic instruction,
   // "`templates/actions/<a>/**` → `.github/actions/<a>/**`", which names each.
   'templates/actions/secret-scan/': ['templates/actions/<a>/'],

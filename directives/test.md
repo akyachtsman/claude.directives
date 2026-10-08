@@ -70,7 +70,8 @@ Execute these before any task work:
 - Normalize `APP_URL` to end with `/` in `playwright.config.js`
 - `API status: no call` is expected for a local run that cannot reach the backend;
   the auth-gated scenarios self-skip when no credential is available from EITHER
-  source — the env var, or a login form that ships a working one. The
+  source — the env var, or a login form that ships a working one in a
+  visible, editable password field. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
 - **A scenario that can skip needs a budget sized for the day it stops
@@ -171,8 +172,11 @@ a failure there must be fixed before work is done.
   cannot render authenticated views. Seed a test account and test against the
   deploy.
 - Any app with an auth gate must wire `qa-live.yml` + the seeded credential —
-  unless its login ships a working credential, which the suite submits as it
-  stands; setting the secret there overwrites a value that works (directives#312). An
+  unless its login ships a working credential in a visible, editable password
+  field, which the suite submits as it stands; setting the secret there
+  overwrites a value that works (directives#312). A prefilled text or PIN field
+  is not read as one, so that gate still needs the secret
+  (`cicd-setup.md` Step 5). An
   authenticated flow with no live coverage is a **coverage gap, not
   "untestable"** — and a UI change shipped without a `ui-tester` run is a
   readiness blocker (see the `pr-readiness-reviewer` gate).

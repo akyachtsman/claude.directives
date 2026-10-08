@@ -118,7 +118,7 @@ once locally — it persists.
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):
    - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests. Set
      NEITHER this nor `TEST_AUTH_EMAIL` if the app has no login, or if its
-     login ships a working credential of its own (both fields prefilled, a human just clicks Log in):
+     login ships a working credential of its own (both fields prefilled, the secret one a visible, editable password field, and a human just clicks Log in — a prefilled text or PIN field does not count):
      the suite submits the form as it stands and records
      `credentialSource: prefilled`, where supplying a secret would overwrite a
      value that works (directives#312)

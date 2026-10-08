@@ -17,14 +17,14 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 |---|---|
 | `check-claims.js`, `check-claims-cases.js` | each script's header |
 | `check-ui-viewports-cases.js` (incl. the viewport gate's design history from the `qa.yml` bullet) | that script's header |
-| `check-ui-suite-env.py`, `check-ui-suite-env-cases.py`, `check-report-path-cases.py` | each script's header |
+| `check-ui-suite-env-cases.py`, `check-report-path-cases.py` | each script's header |
 | `check-job-bounds-cases.py`, `check-contrast-cases.js` | each script's header |
 | `check-refresh-derivation.py`, `check-refresh-derivation-cases.py` | each script's header |
 | `check-action-siblings.py`, `check-action-siblings-cases.py` | each script's header |
 | `check-run-quoting.py`, `check-run-quoting-cases.py` | each script's header |
 | `check-browser-ladder-cases.js` | that script's header |
 | `check-links.js`, `check-links-cases.js` | each script's header |
-| `check-py-warnings.py` (byte-identical pair), the ui-tests `npm install` step, the gate as a whole | this file |
+| `check-py-warnings.py` and `check-ui-suite-env.py` (byte-identical pairs), the ui-tests `npm install` step, the gate as a whole | this file |
 | the `Repo Map UI` suite | `docs/internal/repo-map-ui.md` |
 | `/refresh-repo`'s rules (the command `check-refresh-derivation.py` reads its pattern out of) | this file, *Refresh-repo history* |
 
@@ -40,6 +40,38 @@ guard stops running and stops checking.
 From the `qa.yml` bullet in *Self-test monitoring*: a clean-compile check over
 every tracked `.py` (`.github/scripts/check-py-warnings.py` — a guard that warns
 at compile time is a guard that stops running on a future interpreter).
+
+## `check-ui-suite-env.py`
+
+It ships to projects from `templates/scripts/` and has a byte-identical twin in
+`.github/scripts/`, so its history lives here rather than in either header,
+where every downstream copy would carry it. Moved from the script's header on
+2026-10-08, where it had landed verbatim from `CLAUDE.md` on 2026-09-23.
+
+From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-ui-suite-env.py`:
+  the ui-suite composite gives BOTH viewport checks — pre-run and post-run
+  (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate
+  IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round
+  8). Since #347 round 18 it also pins two variables by NAME (REPORT_PATH,
+  PLAYWRIGHT_JSON_OUTPUT_FILE) — parity is relative, and three steps that all
+  dropped a variable agree perfectly. Round 19: requiring them EQUAL was the
+  same relative mistake one level up (three steps agreeing on `other.json`
+  pass while the stale-report clear and the upload still read the validated
+  output), so both are pinned to the LITERAL `${{
+  steps.report-path.outputs.relative }}`. Round 20: the same mistake a third
+  time, on `working-directory` — three steps moved together satisfied every
+  relative rule while the validator and the stale-report clear still resolved
+  from the input — so each guarded step's cwd is pinned to the literal `${{
+  inputs.tests-dir }}` too. Round 21: the stale-report CLEAR step joined the
+  sequence — it was outside it, so skipping it, making it advisory or changing
+  its `rm` all left the guard green while an uncleared report satisfied the
+  post-run gate. Round 36: the artifact UPLOAD was pinned by four attributes
+  and no execution control, so `continue-on-error: true` on it passed every
+  one of them while an upload failure vanished behind a green job — the
+  round-11 defect, one step outside the sequence round 11 fixed. Pinned by
+  PROPERTY there (absent or `false`), not by absence, since an explicit
+  `false` blocks identically and refusing it would be another
+  form-for-construct false refusal
 
 ## The ui-tests `npm install` step
 

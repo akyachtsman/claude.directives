@@ -15,7 +15,8 @@
 // enumerate — so it cannot answer this question at all (apfp.claude, 2026-08-23).
 // A third reason found 2026-08-27: `--reporter=json` REPLACES the config's
 // reporters rather than adding to one, so a custom reporter's preprocess() never
-// runs under that command. Measured on 1.62.1 — a config whose reporter excludes
+// runs under that command. Measured on 1.62.1, and again on 1.64.0 (2026-10-08)
+// — a config whose reporter excludes
 // every test listed all three projects and exited 0 with the flag, and exited 1
 // having excluded 3 tests without it. Any future rewrite that shells out to
 // `--list` must NOT override the reporter, or it reproduces the very false green
@@ -51,7 +52,8 @@
 // started, and Playwright gives a fixture none. The lead #348 left unmeasured
 // held: Playwright creates a test-scoped fixture when it is first REQUESTED, and
 // one requested only by the test body is created after the beforeAll/beforeEach
-// hooks. Measured on 1.63.0 with a fixture depending on `page`: a beforeEach
+// hooks. Measured on 1.63.0, and again on 1.64.0 (2026-10-08), with a fixture
+// depending on `page`: a beforeEach
 // that throws, a beforeEach that requests `page`, navigates and throws, and a
 // throwing beforeAll on a test marked to fail — none created it; an honest
 // failing body did. Only a hook that requests the fixture ITSELF creates it
@@ -61,7 +63,8 @@
 // fixture SETUP is still not body entry (Codex, #384 round 1): a sibling
 // test-scoped fixture set up after the witness can throw, Playwright then never
 // invokes the test callback, and a witness recorded at setup was already on the
-// result — a false RENDERED, reproduced on 1.63.0. So the kit's `renderWitness`
+// result — a false RENDERED, reproduced on 1.63.0 and 1.64.0. So the kit's
+// `renderWitness`
 // fixture records NOTHING at setup: it yields a function, and each scenario
 // body CALLS it as its first statement. The call pushes
 // `{ type: 'rendered-viewport', description: '{"width":…}' }` (once per test)
@@ -451,8 +454,9 @@ function readReport(reportPath) {
   // returned a verdict (Codex, #347 round 24). Rounds 20-23 fixed one field per
   // round this way; this is the schema instead of a fifth instance.
   //
-  // Measured against a real 1.62.1 report rather than assumed — the shapes below
-  // are what its JSON reporter actually emits:
+  // Measured against a real 1.62.1 report rather than assumed, and re-checked
+  // against a 1.64.0 one (2026-10-08) — the shapes below are what its JSON
+  // reporter actually emits:
   //   suite   specs REQUIRED, suites OPTIONAL (absent when a suite has no children)
   //   spec    tests REQUIRED
   //   test    projectName REQUIRED string, results REQUIRED
@@ -464,7 +468,7 @@ function readReport(reportPath) {
   // lines above it, which says the opposite: on 1.44.0 the key is absent from
   // every RESULT while `tests[].annotations` CARRIES THE MARKER. The fallback
   // exists because the per-result field is missing there — the test-level one is
-  // what it falls back TO, and is emitted by 1.44 and 1.62.1 alike. Treating it
+  // what it falls back TO, and is emitted by 1.44, 1.62.1 and 1.64.0 alike. Treating it
   // as optional let a report omit the field that carries `viewport-override`
   // evidence and read as an empty list (Codex, #347 round 25).
   //
@@ -1571,7 +1575,8 @@ try {
 }
 
 // --- 2. Resolve the config in PLAYWRIGHT'S OWN precedence order. Measured
-// 2026-08-26 against @playwright/test 1.62.1: a .ts config shadows a .js one, and
+// 2026-08-26 against @playwright/test 1.62.1, and again 2026-10-08 against
+// 1.64.0: a .ts config shadows a .js one, and
 // a .js config shadows a .mjs one. Reading the file Playwright does NOT read is
 // #281's bug wearing a different hat, so name every shadowed file.
 const CONFIG_NAMES = ['playwright.config.ts', 'playwright.config.js', 'playwright.config.mts',
@@ -1588,7 +1593,7 @@ if (explicit) {
     die(3, [`CANNOT CHECK: --config path does not exist: ${configPath}`, '  This is NOT a pass.']);
   }
   // Playwright's own --config is "Configuration file, OR a test directory with
-  // optional playwright.config" (1.62.1 --help). Treating a directory as a file
+  // optional playwright.config" (1.62.1 and 1.64.0 --help). Treating a directory as a file
   // made import() fail and the gate exit 4 on a config Playwright loads fine —
   // a refusal on a valid invocation, not a fail-open, but still a false alarm.
   // Codex, round 12. Same precedence list as the implicit search below, so the
@@ -1775,7 +1780,7 @@ console.log(`config:    ${configPath}`);
   // plugin from this gate, and the point of the last eight rounds is that this
   // program should stop trying to reproduce Playwright's behaviour.
   // BOTH VARIABLES, because Playwright applies the transform only when both are
-  // set (transformHook, 1.62.1). Round 14 refused on the transform variable
+  // set (transformHook, 1.62.1; the same in 1.64.0). Round 14 refused on the transform variable
   // alone; Codex round 18 reproduced an inherited transform path with no scope
   // where Playwright loaded all three projects and this gate refused a valid
   // setup. A refusal on a config the run accepts is a false alarm, and false
@@ -1816,7 +1821,7 @@ console.log(`config:    ${configPath}`);
   // THE JOIN IS BY PROJECT NAME, so two projects that share one are
   // indistinguishable TO THIS GATE — whichever ran would certify both bands.
   // An earlier version of this comment said the report identifies a result only
-  // by `projectName`. That was FALSE: measured on 1.62.1, `config.projects[]`
+  // by `projectName`. That was FALSE: measured on 1.62.1 and 1.64.0, `config.projects[]`
   // carries `id` as well as `name` (`same`, `same1`, `phone` for names `same`,
   // `same`, `phone`, in config order) and every test carries `projectId` beside
   // `projectName`. #357 tried rejoining by id and its review found six ways that
@@ -1833,7 +1838,8 @@ console.log(`config:    ${configPath}`);
   //
   // AND AN EXPLICIT NON-STRING NAME IS NOT "unnamed". `typeof p.name === 'string'
   // ? p.name : ''` coerced `name: 42` to the SAME key a legitimately unnamed
-  // project uses, so a config Playwright refuses outright — measured on 1.62.1:
+  // project uses, so a config Playwright refuses outright — measured on 1.62.1
+  // and 1.64.0:
   // `config.projects[0].name must be a string` — was joined against a leftover
   // report carrying `projectName: ""` and certified at exit 0. Nothing could
   // have run against that config; the run that produced the report was a
@@ -1857,7 +1863,7 @@ console.log(`config:    ${configPath}`);
   // null guard — nothing more. Round 27 added `Array.isArray` here and I called
   // it "Playwright's own rule rather than an approximation" in the same breath;
   // it was an approximation, and a stricter one. An array carrying `name` and
-  // `use` is LISTED normally by 1.62.1 (measured), so refusing it blocks a config
+  // `use` is LISTED normally by 1.62.1 and 1.64.0 (measured), so refusing it blocks a config
   // the run accepts (Codex, #347 round 28). A gate that refuses what the run
   // accepts is the same defect as one that certifies what the run refuses — it
   // just fails loudly, which is why it survived a round.
@@ -1901,7 +1907,7 @@ console.log(`config:    ${configPath}`);
   // `use: null` (or a primitive) was accepted here, and the viewport fallback
   // then read it as an OMITTED viewport and assigned the root or default width —
   // a declaration from a config Playwright refuses outright
-  // ("config.projects[0].use must be an object", measured on 1.62.1).
+  // ("config.projects[0].use must be an object", measured on 1.62.1 and 1.64.0).
   const badUse = [
     ...(cfg.use !== undefined ? [['the root config', cfg.use]] : []),
     ...projects.flatMap((p, i) => (p.use !== undefined ? [[`project ${i}`, p.use]] : [])),
@@ -1917,7 +1923,7 @@ console.log(`config:    ${configPath}`);
   }
   // AND THE ROOT `name` IS INHERITED. Playwright resolves a project's reported
   // name as project.name, then the ROOT config's name, then "" — measured on
-  // 1.62.1: a root `name: 'desktop-root'` with an unnamed project reports
+  // 1.62.1 and 1.64.0: a root `name: 'desktop-root'` with an unnamed project reports
   // `[desktop-root]` and writes `projectName: "desktop-root"`. This keyed such a
   // project as "" unconditionally, so the join looked for a row the report never
   // carries and the band read as NOTHING RAN (Codex, #347 round 30). Predates
@@ -1953,17 +1959,21 @@ console.log(`config:    ${configPath}`);
   // SEQUENCE, and cannot — that is a recorded limit, not an open defect.
   //
   // Measured against the installed 1.62.1 with a three-project config whose
-  // every field was a counting accessor:
+  // every field was a counting accessor, and re-measured 2026-10-08 on 1.62.1,
+  // 1.63.0 and 1.64.0 with the same probe (main process, `test` and `--list`):
   //
   //   cfg.projects   read  4 times
   //   project.name   read  9 times   (3 per project)
-  //   project.use    read 12 times   (4 per project)
+  //   project.use    read 12 times   (4 per project) on 1.62.1 — and 15 times
+  //                                  (5 per project) from 1.63.0 on, which
+  //                                  added a `projectConfig.use?.trace` read
   //   viewport.width read  0 times   in this process — the worker reads it when
   //                                  it builds the browser context
   //
   // So "read it the same number of times, in the same order, and use the same
   // one Playwright uses" means reproducing counts that depend on the project
-  // count, on which internal validation paths run, and on the version — and for
+  // count, on which internal validation paths run, and on the version (the
+  // `use` row moved in a minor release) — and for
   // `width`, reproducing a read that happens in a different process entirely.
   // That is reimplementing Playwright's config loader and keeping it bit-exact
   // forever; every version bump would be a fresh divergence.
@@ -2002,7 +2012,8 @@ console.log(`config:    ${configPath}`);
     // enumerability, undefined-skipping, read count and read order all fall out
     // of the loop instead of being asserted around it.
     // THE TWO LAYERS ARE NOT MERGED THE SAME WAY, and round 32 treated them as if
-    // they were. Read out of the installed 1.62.1 rather than reasoned about:
+    // they were. Read out of the installed 1.62.1 rather than reasoned about
+    // (unchanged in 1.64.0, re-read 2026-10-08):
     //
     //   function mergeObjects(a, b, c) {
     //     const result = { ...a };

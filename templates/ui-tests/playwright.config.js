@@ -20,7 +20,7 @@ export default defineConfig({
   // beats the `outputFile` below — so under the composite this path need not
   // match `report-path`, and changing it changes nothing. What still matters is
   // that a json reporter is DECLARED at all: the variable redirects one, it does
-  // not add one (measured on 1.62.1). Without it the post-run check has no
+  // not add one (measured on 1.62.1 and 1.64.0). Without it the post-run check has no
   // report to read, reports CANNOT CHECK and fails the job — deliberately, so a
   // missing report is never read as a covered band. Running Playwright by hand,
   // outside the composite, this path IS where the report lands.

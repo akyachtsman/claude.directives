@@ -258,7 +258,7 @@ const CASES = [
   // old blanket refusal come back.
   //
   // Every expectation below was measured against Playwright 1.62.1 and agrees
-  // with what the key means. The fixture's one spec is `tests/gate.spec.js`,
+  // with what the key means; all still hold on 1.64.0 (this suite, 2026-10-08). The fixture's one spec is `tests/gate.spec.js`,
   // whose test title is `present` — which is why /smoke/ matches nothing.
   ...[
     ["testIgnore: []", '  testIgnore: [],\n'],
@@ -363,7 +363,7 @@ const CASES = [
   // REPORTER: THREE CASES, ONE PER OUTCOME. Rounds 7-8 on #333.
   //
   // A reporter's preprocess() can call testRun.exclude() on every test, so a run
-  // executes nothing while all three bands are declared (reproduced 1.62.1).
+  // executes nothing while all three bands are declared (reproduced 1.62.1 and 1.64.0).
   // Round 7 shipped this as a KNOWN false green, on the reasoning that telling
   // custom from built-in needed a hand-maintained name list. Round 8 showed the
   // installed Playwright EXPORTS the list, so it is DERIVED and version-matched:
@@ -566,7 +566,7 @@ const CASES = [
   // `typeof p.name === 'string' ? p.name : ''` coerced these to the SAME key a
   // legitimately unnamed project uses, so a leftover report carrying
   // `projectName: ""` joined against them and certified at exit 0 — while
-  // Playwright 1.62.1 refuses the config outright (`config.projects[0].name must
+  // Playwright 1.62.1 (and 1.64.0) refuses the config outright (`config.projects[0].name must
   // be a string`, measured), so no run could have produced those results at all.
   // Round 24 made the REPORT's projectName refuse a non-string and left the
   // CONFIG's key coercing one: the same defect on the other side of the join.
@@ -583,7 +583,7 @@ const CASES = [
   // ENTRY was read as an unnamed project at Playwright's default 1280x720 and
   // certified the LAPTOP band from a `projectName: ""` row — a declaration the
   // config never made. Playwright refuses these too ("config.projects[0] must be
-  // an object", measured on 1.62.1).
+  // an object", measured on 1.62.1 and 1.64.0).
   // `['an array', '[]']` WAS PINNED HERE IN ROUND 27 AND IS GONE IN ROUND 28.
   // Arrays are objects to Playwright, which accepts and runs them; the case
   // asserted a refusal this gate should never have made. Overturning a case I
@@ -599,7 +599,7 @@ const CASES = [
 
   // ── ROUND 27'S ENTRY RULE WAS STRICTER THAN PLAYWRIGHT'S (#347 round 28) ──
   // `Array.isArray` was not Playwright's check. An array carrying `name` and
-  // `use` is LISTED and RUN normally by 1.62.1 (measured), so refusing it blocked
+  // `use` is LISTED and RUN normally by 1.62.1 and 1.64.0 (measured), so refusing it blocked
   // a config the run accepts. A gate that refuses what the run accepts is the
   // same defect as one that certifies what the run refuses — it just fails
   // loudly, which is how it survived a round.
@@ -718,7 +718,7 @@ const CASES = [
     0, 'laptop:laptop'],
 
   // …AND THE FIRST LAYER IS A SPREAD, NOT `Object.entries` (#347 round 33).
-  // Read out of 1.62.1's `mergeObjects`: `const result = { ...a }` for the first
+  // Read out of 1.62.1's `mergeObjects` (unchanged in 1.64.0): `const result = { ...a }` for the first
   // layer, `Object.entries` only for the later ones. A spread evaluates
   // enumerable SYMBOL properties; `Object.entries` does not. Round 32 sent both
   // layers through entries, so a root symbol accessor with side effects never
@@ -916,7 +916,7 @@ const CASES = [
   // hypothetical.
   //
   // The report carries no viewport, so the test DECLARES the deviation and the
-  // gate reads it. Measured on 1.62.1: annotations reach the JSON report both
+  // gate reads it. Measured on 1.62.1 and 1.64.0: annotations reach the JSON report both
   // per-test and per-result.
   ['every executed test declares a viewport override — no band is certified',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
@@ -1280,7 +1280,7 @@ const CASES = [
     { subdir: 'suite', configArg: 'configdir', configArgRelative: true }],
 
   // Codex round 12: Playwright's --config is "Configuration file, OR a test
-  // directory with optional playwright.config" (1.62.1 --help). Treating a
+  // directory with optional playwright.config" (1.62.1 and 1.64.0 --help). Treating a
   // directory as a file made import() fail and the gate exit 4 on an invocation
   // Playwright handles — a refusal on a valid config, so it counts against the
   // muting risk. Same precedence list as the implicit search, so the two paths
@@ -1934,7 +1934,8 @@ const CASES = [
   // ── REQUIRED IS NOT PRESENT-AND-VALID (#347 round 24) ──────────────────
   // `arr(undefined)` read an OMITTED `specs` as a legitimately empty suite, so a
   // malformed branch was skipped in silence beside a valid one and the gate
-  // still returned a verdict. Measured against a real 1.62.1 report: every suite
+  // still returned a verdict. Measured against a real 1.62.1 report, re-checked on
+  // 1.64.0: every suite
   // carries `specs`; only nested `suites` is omitted when empty. Rounds 20-23
   // fixed one field per round — this is the schema instead of a fifth instance.
   ...[

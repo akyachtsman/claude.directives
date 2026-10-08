@@ -243,7 +243,7 @@ DECLARED = '--declared "$RUNNER_TEMP/ui-viewports-declared.json"'
 # refuse, so the variables whose PRESENCE is load-bearing are named here.
 #
 # PLAYWRIGHT_JSON_OUTPUT_FILE takes precedence over the json reporter's
-# configured `outputFile` (measured, 1.62.1: with it set the configured file is
+# configured `outputFile` (measured on 1.62.1 and 1.64.0: with it set the configured file is
 # not written at all). Unset, a caller job that exports it redirects the report
 # away from the validated path and the post-run gate exits 15 on a run that
 # passed (Codex, #347 round 18). Its value must be the SAME expression as

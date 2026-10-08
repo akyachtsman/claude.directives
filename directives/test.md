@@ -118,8 +118,9 @@ Execute these before any task work:
   Poll from Node instead: `expect.poll()`, or a loop over `page.evaluate`, both of
   which await.
 
-  Measured on `playwright-core` 1.62.1, and again on 1.63.0 (2026-10-06: 303ms
-  `true`, 7ms `false`, `TimeoutError` at 1207ms). A page flag flipped to `true` at 300ms,
+  Measured on `playwright-core` 1.62.1, again on 1.63.0 (2026-10-06: 303ms
+  `true`, 7ms `false`, `TimeoutError` at 1207ms) and on 1.64.0 (2026-10-08:
+  295–314ms `true`, 3–4ms `false`, `TimeoutError` at 1205ms). A page flag flipped to `true` at 300ms,
   2000ms budget, one character between the two rows — and identical in every
   polling mode (`raf`, default, and a fixed interval):
 

@@ -15,11 +15,15 @@
 #                   opt-out — and flip it back once the blocking issue is fixed.
 #
 # Required setup:
-#   - Add TEST_AUTH_CREDENTIAL as a repository secret — skip if the project has
-#     (email+password AND identifier-first/split-step gates need TEST_AUTH_EMAIL
-#      as well — directives#304, #310; without it a split-step gate is not even
-#      DETECTED and the authenticated scenarios run against the identifier screen)
-#     no auth; the empty secret makes auth tests self-skip
+#   - Add TEST_AUTH_CREDENTIAL as a repository secret only when the app's login
+#     needs a credential supplied from outside (and TEST_AUTH_EMAIL as well for
+#     email+password and identifier-first/split-step gates — directives#304,
+#     #310; without it a split-step gate is not even DETECTED and the
+#     authenticated scenarios run against the identifier screen). Leave both
+#     unset when the app has no auth (auth tests self-skip) or when its login
+#     ships a working credential in a visible, editable password field (the
+#     suite submits it; a secret would overwrite it — directives#312).
+#     docs/standards/cicd-setup.md -> Step 5.
 #   - Set UI_TESTS_DIR below to the path of your Playwright test directory
 #   - Adjust the UI_PATHS regex in the ui-changes job to your project layout
 
@@ -196,8 +200,9 @@ jobs:
       # local server. A template that shipped 'true' handed every new project a
       # UI suite whose failures show green. Set it 'true' ONLY in a project with
       # a known open UI failure mid-fix, and flip it back as soon as that lands.
-      # Auth/backend-gated scenarios self-skip on an empty TEST_AUTH_CREDENTIAL,
-      # and qa-live.yml stays the live gate.
+      # Auth/backend-gated scenarios self-skip when no credential is available
+      # (TEST_AUTH_CREDENTIAL empty and the login form ships none), and
+      # qa-live.yml stays the live gate.
       - uses: ./.github/actions/ui-suite
         with:
           tests-dir: ${{ env.UI_TESTS_DIR }}

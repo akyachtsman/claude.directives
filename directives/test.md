@@ -161,7 +161,8 @@ Execute these before any task work:
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach
 the backend**, so auth-gated views (login, portal, drill-downs) are untestable
-there and those scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
+there and those scenarios self-skip when no credential is available (an empty
+`TEST_AUTH_CREDENTIAL` and a login form that ships none). The
 `ui-tests` job itself stays **blocking** for everything it can reach (→ *CI triage*); only the auth-gated scenarios are exempt, by skipping. The **canonical
 mechanism for testing authenticated flows is `qa-live.yml`**: it runs Playwright
 against the deployed URL and logs in with a per-project seeded test account

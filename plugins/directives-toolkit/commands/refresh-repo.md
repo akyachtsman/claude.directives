@@ -32,30 +32,31 @@ against the upstream tree:
 # Runs the same under ANY shell options a session has set (`-e`, `-u`,
 # `-o pipefail`). The fetch sits in an `if`, so errexit cannot end the block
 # before the guard reports.
-if tree=$(gh api "repos/akyachtsman/claude.directives/git/trees/main?recursive=1" \
-  --jq '"TREE \(.sha) truncated=\(.truncated)", (.tree[] | select(.type=="blob") | .path)'); then
+src=https://github.com/akyachtsman/claude.directives.git
+sha= tree= rc=1
+# A blob-less shallow clone into a SCRATCH dir: trees only, no file contents,
+# no checkout, nothing written to this project's .git. An EMPTY $objs must stop
+# everything: `git -C ""` is a no-op, so every call would run against THIS
+# project instead.
+objs=$(mktemp -d) || objs=
+if [ -n "$objs" ] \
+   && git clone -q --depth 1 --filter=blob:none --no-checkout "$src" "$objs" \
+   && sha=$(git -C "$objs" rev-parse HEAD) \
+   && tree=$(git -C "$objs" ls-tree -r --name-only HEAD); then
   rc=0
-else
-  rc=$?
 fi
-# GUARD: a failed fetch makes EVERY path look BROKEN. Emptiness is not enough:
-# a 403 from a project-scoped session can land its JSON error body in $tree,
-# which is non-empty, and every reference then prints BROKEN. So require a
-# clean exit AND a first line that only a TREE OBJECT produces: the marker this
-# --jq writes from the response's own sha and truncated flag. Never test for a
-# path being present: a renamed or deleted path is exactly what this phase
-# reports, so using one as the sentinel would turn the breakage into CANNOT
-# CHECK. A truncated tree is also refused — it omits paths, and each omission
-# would print BROKEN.
-# No early-closing PIPE (`head`, `grep -q` fed by `echo`): under pipefail the
-# writer of a large tree dies of SIGPIPE when the reader stops early, and the
-# pipeline fails although the match succeeded. Read the first line by
-# expansion; feed grep with here-strings.
-first=${tree%%$'\n'*}
-if [ "$rc" -ne 0 ] || ! grep -qE '^TREE [0-9a-f]{40} truncated=false$' <<<"$first"; then
-  echo "CANNOT CHECK: upstream tree not readable (or truncated) from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
+if [ -n "$objs" ]; then rm -rf "$objs"; fi
+# GUARD: a failed fetch makes EVERY path look BROKEN. So require a clean exit,
+# a HEAD that is a commit SHA, and a non-empty listing. Never test for a path
+# being present: a renamed or deleted path is exactly what this phase reports,
+# so using one as the sentinel would turn the breakage into CANNOT CHECK.
+# `git ls-tree` is never truncated (the API's recursive tree could be, and was
+# refused when it was), and a failed clone leaves $tree empty rather than
+# filling it with an error body. Feed grep with here-strings: under pipefail an
+# early-closing reader fed by `echo` can fail a pipeline whose match succeeded.
+if [ "$rc" -ne 0 ] || ! grep -qE '^[0-9a-f]{40}$' <<<"$sha" || [ -z "$tree" ]; then
+  echo "CANNOT CHECK: upstream tree not readable from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
 else
-  tree=$(printf '%s\n' "$tree" | tail -n +2)
   # `|| true`: a project with no upstream references is a grep that matched
   # nothing, not a failure to stop on.
   refs=$(grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
@@ -68,14 +69,16 @@ else
   done <<<"$refs"
 fi
 ```
-**Remote-session transport:** `gh` is usually absent, and sandbox curl to
-`api.github.com` may be proxy-blocked or rate-limited (unauthenticated per-IP
-limits on a shared fleet IP — expect 403s after a call or two). Use **WebFetch**
-(server-side, own egress) and spend the budget on the ONE `git/trees` call — it
-carries everything Phase 1 needs. Raw-URL spot-checks (`raw.githubusercontent.com`,
-CDN-served) are the fallback for a handful of paths. A failed fetch is "CANNOT
-CHECK", never "BROKEN" — and a fetch that returned *something* has not succeeded
-until the content is a file listing.
+**Transport is git, never the API.** A web session's proxy refuses
+`api.github.com` for every repository the session was not opened on — from a
+downstream project, that includes claude.directives itself (verified 2026-10-08:
+403, "GitHub access to this repository is not enabled for this session") — and
+`gh` there is only `gh api`, so it fails the same way. Git transport needs no
+auth, no MCP and no quota, and the blob-less clone above fetches the tree
+without a single file's contents. Raw-URL spot-checks (`raw.githubusercontent.com`,
+CDN-served, readable for any public repo) are the fallback for a handful of
+paths. A failed fetch is "CANNOT CHECK", never "BROKEN" — and a fetch that
+returned *something* has not succeeded until the content is a file listing.
 
 For each BROKEN path, search the tree for its basename (rename candidate) and
 propose the fix; deletions get "content was folded — check upstream docs/README.md".
@@ -236,8 +239,8 @@ changed UPSTREAM since this project's last sync — stamped in
 `.claude/directive-sync.json` under `upstream.sha` (Phase 3).
 
 Get the head SHA AND the file-level delta over **git transport**, never the
-API: `gh` is absent in most remote/web sessions, `api.github.com` may be refused
-at the proxy or rate-limited, and no GitHub MCP call compares two refs. This is
+API: the proxy refuses `api.github.com` — and so `gh api` — for a repository the
+session was not opened on (Phase 1), and no GitHub MCP call compares two refs. This is
 the single home of the fetch rules below; `/env-chk` step 6 follows them for its
 staleness alarm. `/refresh-repo` runs in a DOWNSTREAM
 project, so claude.directives' objects are not local and `git fetch origin`
@@ -331,7 +334,7 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ **EXCEPT `pages-retry.yml`, whose ABSENCE can be deliberate — never batch-install it.** An Actions-source project is required to delete it (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered deploy on a visibility flip. Decide it in both branches rather than as a single condition: **branch-source** → install it and restore its `REQUIRED` entry in the same edit; **Actions-source** → leave it absent, **unless** the project has taken W3's idempotent exception, in which case it carries a repointed copy whose `REQUIRED` entry names the project's own deploy — never overwrite that with the template or drop that entry. This row is the reason that deletion needs a rule at all: without it, the first refresh that touches the retry template undoes the fix silently. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ **EXCEPT `pages-retry.yml`, whose ABSENCE can be deliberate — never batch-install it.** An Actions-source project is required to delete it (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered deploy on a visibility flip. Decide it in both branches rather than as a single condition: **branch-source** → install it and restore its `REQUIRED` entry in the same edit; **Actions-source** → leave it absent, **unless** the project has taken W3's idempotent exception, in which case it carries a repointed copy whose `REQUIRED` entry names the project's own deploy — never overwrite that with the template or drop that entry. This row is the reason that deletion needs a rule at all: without it, the first refresh that touches the retry template undoes the fix silently. ⚠️ **And NEVER `keepalive.yml`, absent or present:** `/new-repo` deliberately does not scaffold it — it pushes to `main` weekly, which the required default-branch ruleset refuses, so installed it fails every week (`cicd-setup.md` → *9f — Scheduled-job notifications*); an installed copy is a finding to delete, not a template to refresh. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
@@ -507,7 +510,9 @@ https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-hi
   the end of a sentence still names it. The Phase 3 check below already did
   this, so the install derived LESS than the check verified (Codex, #409).
   `check-refresh-derivation.py` now runs both copies, stage by stage, over the
-  same inputs and refuses any difference in what they derive.
+  same inputs and refuses any difference in what they derive — and holds each
+  copy to the contract over a fixed probe set, so two copies that widen or
+  narrow together still fail.
   `check-refresh-derivation.py` runs this exact pattern, read out of this file,
   against every shipped caller, so an invocation-form change fails CI.
 - **It matches a MENTION, not only an invocation, and that is the accepted
@@ -611,7 +616,12 @@ What is compared, delta or not:
     what it needs by that path: `cron-notify.yml` runs
     `node "$GITHUB_WORKSPACE/.github/scripts/notify-task.js"` (still from
     `working-directory: .github/scripts`) and names `notify-email.js` and
-    `package.json` the same way, which closed #398. A step that runs a bare
+    `package.json` the same way, which closed #398. It names those two only in
+    a comment, which a rewording would drop with no error, so
+    `check-refresh-derivation.py` derives what each shipped caller needs — a
+    sibling its scripts `require`, the `package.json` an `npm install` run in
+    `.github/scripts` reads — and fails CI when the caller stops naming one.
+    A step that runs a bare
     relative command under `working-directory: .github/scripts` is invisible to
     both, so the fix for one is to name the path, never to widen this check
     alone: a check wider than the install refuses a stamp the install can never

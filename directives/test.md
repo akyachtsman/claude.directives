@@ -62,8 +62,8 @@ Execute these before any task work:
 3. Read the last run's status ONCE via `mcp__github__actions_list` to catch up on
    failures since the last session — a single catch-up read, never a poll loop
    (`git.md` → *GitHub API Quota Economy*)
-4. Confirm `ci-monitor.yml`, `codex-monitor.yml`, and (for Pages projects) `pages-monitor.yml`
-   are present in `.github/workflows/` — add any missing from `templates/workflows/`
+4. Confirm `ci-monitor.yml`, `codex-monitor.yml` and `pages-monitor.yml` (every project
+   is on Pages — `global.md` → *Hosting & Deployment*) are present in `.github/workflows/` — add any missing from `templates/workflows/`
 
 ## Playwright (owner ruling, 2026-09-24)
 - Always use `page.goto('./')`, never `page.goto('/')`

@@ -7,12 +7,9 @@
 # ACTION: if Settings -> Pages -> Source is "GitHub Actions", add your own deploy
 # workflow's exact `name:` to the list below. Do not invent one.
 # ACTION: the job's `if:` gate needs NO workflow-name condition — it reads
-# workflow_run.conclusion, which is agnostic to which workflow fired it.
-# Why: docs/standards/automations.md -> Watcher Rules (W2).
-#
-# The job's `if:` gate below needs NO workflow-name condition — it reads
 # `github.event.workflow_run.conclusion`, which is agnostic to which workflow
 # fired it. Do not "helpfully" add one; that re-breaks exactly what this fixes.
+# Why: docs/standards/automations.md -> Watcher Rules (W2).
 #
 # Required setup:
 #   - Add TEST_AUTH_CREDENTIAL as a repository secret only when the app's login

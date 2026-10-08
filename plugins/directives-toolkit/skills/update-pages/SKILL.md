@@ -23,27 +23,39 @@ Run in order:
    `check-sections`, `check-links.js --internal`; a project will have its own) — plus `npx html-validate <changed .html>` for
    any HTML touched. Fix failures before pushing.
 
-2. **Commit, push, capture the SHA.** Commit to the working branch (or `main`
-   per repo policy), push, and record `git rev-parse HEAD` — this is the SHA the
-   deploy must publish. Also confirm the homepage file is present: `index.html`
+2. **Commit, push, merge — then capture the MERGE commit's SHA.** Commit to the
+   working branch and ship it through the PR flow (`git.md` → *PR Lifecycle*);
+   never push to the Pages source branch directly. Pages publishes the source
+   branch (`main`), so the SHA the deploy must publish is the **squash-merge
+   commit**, not the branch head: a squash merge creates a new commit, so the
+   branch head never appears as a deploy's `head_sha`, and watching for it makes
+   a healthy deploy look stuck (step 5). Take it from the merge result (the
+   `sha` the merge call returns, or the PR's `merge_commit_sha` once `merged` is
+   true), or after the merge from `git fetch origin main` then
+   `git rev-parse origin/main`. Also confirm the homepage file is present: `index.html`
    beats `README.md` as the directory index, so a missing root `index.html`
    means the site will fall back to rendering `README.md`.
 
 3. **Identify the deploy workflow.** GitHub Pages "Deploy from a branch" runs as
-   the managed **`pages-build-deployment`** workflow (that file slug IS its
-   `name` — verified via the Actions API; the UI's prose title "pages build and
-   deployment" never matches in `workflow_run` filters). A custom Actions deploy
+   the managed **`pages-build-deployment`** workflow. That slug is the WORKFLOW's
+   `name` (the workflows endpoint), which is what `workflow_run` filters match;
+   each RUN object instead reports the prose title "pages build and deployment"
+   (both verified via the Actions API, 2026-10-08), so find runs by `head_sha`
+   with `event=dynamic` or by `workflow_id`, never by run name. A custom Actions deploy
    runs as its own named workflow. Know which the repo uses.
 
 4. **Watch to a terminal state — never a blocking or backgrounded sleep.** Find
-   the deploy run whose `head_sha` == the pushed SHA and re-check until
-   `status == completed`:
+   the deploy run whose `head_sha` == the merge commit's SHA from step 2 and
+   re-check until `status == completed`:
    - Query via the GitHub Actions API — github MCP `actions_list` with
      `method: "list_workflow_runs"` plus `owner`/`repo`, then match the run whose
-     `head_sha` is the pushed SHA. There is no top-level `event` argument (it
+     `head_sha` is that SHA. There is no top-level `event` argument (it
      lives under `workflow_runs_filter`, and `dynamic` is not one of its values),
-     so do not try to filter the managed Pages deploy by event — match on the
-     SHA. `gh run list` where `gh` is available.
+     so do not try to filter the managed Pages deploy by event there — match on
+     the SHA. With `gh api` (the only `gh` form a web session has; `gh run list`
+     is not available): `gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>&event=dynamic"`
+     returns the managed deploy's run for that SHA (drop `&event=dynamic` for a
+     custom Actions deploy and match its workflow).
    - Re-check proactively: schedule the next check with `send_later` — the
      pre-approved primary per `global.md` → *Async Operations* — or with
      `ScheduleWakeup` where a session has that instead. Verify which exists per
@@ -52,7 +64,9 @@ Run in order:
      phantom "running" task on session resume (see `global.md` → *Async Operations*;
      the `wait-gate` hook blocks it).
 
-5. **Stuck detection.** If no run for the pushed SHA appears within ~2 minutes,
+5. **Stuck detection.** If no run for the merge commit's SHA appears within
+   ~2 minutes of the merge — check first that it IS the merge commit, not the
+   branch head (step 2), or a healthy deploy reads as stuck —
    the branch-source build is not auto-firing (common right after enabling Pages,
    or when the pipeline is wedged). This needs a **human action you cannot do** —
    message the user the exact fix and then keep watching for the new run:
@@ -94,8 +108,11 @@ Run in order:
 - **Pushes produce no builds** → stuck pipeline → the None→main toggle (step 5).
 - **Same old page after a successful deploy** → browser/CDN cache → cache-bust
   with `?v=` or incognito (step 6); `/` catches up when the CDN TTL expires.
-- **A green build for the wrong SHA** → confirm `head_sha` matches the commit you
-  just pushed, not an older enable-time build.
+- **A green build for the wrong SHA** → confirm `head_sha` matches the merge
+  commit from step 2, not an older enable-time build.
+- **A healthy deploy that looks stuck** → the watch is on the branch head, which
+  a squash merge never publishes. Watch the merge commit (step 2) before
+  asking anyone for the step-5 toggle.
 - **Returning visitors get a broken layout after a deploy** → render-blocking
   assets don't share **one** cache-busting scheme (e.g. a versioned `app.js?v=8`
   loaded against a static `styles.css`). **All render-blocking CSS + JS must use the

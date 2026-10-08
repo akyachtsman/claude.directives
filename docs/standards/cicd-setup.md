@@ -19,11 +19,11 @@ Three GitHub Actions workflows replace manual agent invocation for the mechanica
 
 | Workflow | Trigger | What it runs |
 |---|---|---|
-| `qa.yml` | PR to main, push to feature branches | Static checks + Playwright against local server |
+| `qa.yml` | PR to main, push to main, manual dispatch | Static checks + Playwright against local server |
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
 | `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-Five event-driven monitors run alongside them: `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and `ci-notify.yml` (Step 9), plus `cron-notify.yml` for scheduled jobs (`keepalive.yml` is NOT installed — Step 9f).
+Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — plus the scheduled `cron-notify.yml` (Step 9f), so all eight are standard (`global.md` → *Repo Structure Standard*). `pages-retry.yml` is the one conditional file (Step 9d; `automations.md` → *Watcher Rules* W3): **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name. `keepalive.yml` is NOT installed (Step 9f).
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -277,7 +277,7 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 
 Edit `workflow_run.workflows` only to rename (change the workflow and every
 watcher of it in the same PR), to watch an additional workflow, or to REMOVE a
-name for a standard workflow you chose not to install — every entry must resolve
+name for a standard workflow the owner agreed to leave out (W1) — every entry must resolve
 to a workflow this repo has (`grep '^name:' .github/workflows/*.yml`).
 Rules: `docs/standards/automations.md` → *Watcher Rules* (W1).
 
@@ -337,6 +337,11 @@ repo, so its second rule is configured here rather than edited into the file:
 ```json
 { "qa-live.yml": ["My Deploy Workflow"] }
 ```
+
+For the retry, state both branches (Step 9d; `automations.md` → *Watcher Rules* W3):
+**branch-source** → `"pages-retry.yml": ["pages-build-deployment"]`;
+**Actions-source** → no entry, **or**, under W3's exception, the entry naming the
+project's own deploy.
 
 It reads the workflows with PyYAML, which ships on GitHub's runner images and is
 already what `qa.yml` parses workflow YAML with — no install step. The guard was
@@ -453,11 +458,17 @@ it at that deploy, recording the reasoning **and a revisit trigger** in its
 `CLAUDE.md` and **updating** — not dropping — its `REQUIRED` entry
 (`automations.md` → *Watcher Rules* W3).
 
-On a branch-source project, drop-in, portable as-is:
+On a branch-source project, drop-in, portable as-is — and add its `REQUIRED`
+entry to `.github/workflow-ref-required.json` in the same edit (Step 9c-bis), so
+the guard fails if the retry ever stops watching the managed build:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-retry.yml \
   -o .github/workflows/pages-retry.yml
+```
+
+```json
+{ "pages-retry.yml": ["pages-build-deployment"] }
 ```
 
 **What it does:** watches the managed `pages-build-deployment` run (that file
@@ -502,7 +513,7 @@ call it a dud.
 
 ### 9f — Scheduled-job notifications
 
-A drop-in; install it if the project has scheduled workflows:
+A drop-in, standard in every project (`global.md` → *Repo Structure Standard*): its starter `notify-task.js` exits 0 — with a warning while the email config is unset — until the project replaces its task body, so installing it before there is a task costs nothing:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
@@ -559,7 +570,7 @@ Required repository variables:
 | Variable | Purpose |
 |---|---|
 | `APP_URL` | Live GitHub Pages URL (e.g. `https://<username>.github.io/<repo>/`) |
-| `DB_URL` | Backend project/connection URL (safe in a variable; the client/anon key relies on RLS) |
+| `DB_URL` | Backend project/connection URL (safe in a variable; the client/anon key relies on RLS) — required by the project's scheduled data workflow, if any |
 
 Optional repository variables (the qa workflows pass them through the `ui-suite` composite; unset keeps the default behaviour):
 
@@ -574,15 +585,15 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 
 ## Verification Checklist
 
-- [ ] `.github/workflows/qa.yml` present and triggering on push/PR
+- [ ] `.github/workflows/qa.yml` present and triggering on PRs to `main` and pushes to `main`
 - [ ] `.github/workflows/qa-live.yml` present and triggering after Pages deploy
-- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch — part of the standard set; if omitted, remove `QA — Event-Driven Response` from the `ci-monitor.yml` and `ci-notify.yml` watch lists
+- [ ] `.github/workflows/qa-response.yml` present and ready for dispatch — part of the standard set, and `ci-monitor.yml` and `ci-notify.yml` watch it
 - [ ] `.github/workflows/ci-monitor.yml` present, `workflow_run.workflows` filled in, manual dispatch verified
 - [ ] `.github/workflows/codex-monitor.yml` present
 - [ ] `.github/workflows/pages-monitor.yml` present, and — if Pages is Actions-sourced — carrying a `workflow_run` trigger naming the deploy workflow
-- [ ] `.github/workflows/pages-retry.yml` present (branch-source Pages projects)
+- [ ] `.github/workflows/pages-retry.yml`: **branch-source** → present, with its `REQUIRED` entry; **Actions-source** → absent with no entry, **or** repointed under W3's exception with the entry updated to the deploy's name (Step 9d)
 - [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
-- [ ] `.github/workflows/cron-notify.yml` present (projects with scheduled jobs); `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
+- [ ] `.github/workflows/cron-notify.yml` present; `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
 - [ ] `.github/scripts/` holds the five scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py` (Step 1)

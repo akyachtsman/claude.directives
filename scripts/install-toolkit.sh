@@ -2,13 +2,16 @@
 # install-toolkit.sh — install the claude.directives toolkit and the Anthropic-
 # official review/security plugins into a Claude Code environment.
 #
-# Intended to be fetched and run from a Claude Code web environment's Setup script
-# (see NEW-REPO-USER-INSTRUCTIONS.md Step 0):
+# Fetched and run from a Claude Code web environment's Setup script for the FIRST
+# install (see NEW-REPO-USER-INSTRUCTIONS.md Step 0):
 #
 #   curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/scripts/install-toolkit.sh | bash
 #
+# and re-run on every web session by the SessionStart hook
+# (.claude/hooks/session-start.sh), which is what moves an install to current.
 # This file is the single source of truth for the install set — update the plugin
-# list here and every environment picks it up on its next setup-script run.
+# list here and every project carrying that hook picks it up on its next session;
+# one without the hook waits for its environment's next setup-script run.
 # Re-runnable: the marketplace 'add' steps tolerate an already-registered marketplace.
 # set -e so a failed plugin install aborts the run with a non-zero status —
 # otherwise the script prints the success line and `curl | bash` callers
@@ -51,15 +54,11 @@ soft "" claude plugin marketplace update
 claude plugin install directives-toolkit@claude-directives
 claude plugin install pr-review-toolkit@claude-plugins-official
 claude plugin install security-guidance@claude-plugins-official
-# frontend-design: the design generator the new design.md relies on (per
-# design.md / docs/guides/design-tooling.md). || true so a marketplace-name drift can't
-# break the whole setup run.
+# frontend-design: the design generator design.md names (per
+# docs/guides/design-tooling.md). Wrapped in soft() so a marketplace-name drift
+# warns instead of breaking the whole setup run.
 soft "" claude plugin install frontend-design@claude-code-plugins   # optional
-# plugin-dev: the authoring authority for this toolkit's own commands, agents and
-# hooks (CLAUDE.md -> Toolkit changes). Registering a marketplace does NOT attach
-# its plugins, so naming it as an authority without installing it left the
-# requirement unmeetable in a clean environment.
-# hookify is deliberately NOT installed -- see EXPORTS.json -> considered.
+# hookify is deliberately NOT installed -- see EXPORTS.json -> considered --
 # and is actively REMOVED: dropping the install lines only stops NEW installs.
 # Any environment that ran the previous installer still has it, and its hooks keep
 # failing on every tool call forever. This runs on every web session via the
@@ -68,6 +67,10 @@ soft "" claude plugin install frontend-design@claude-code-plugins   # optional
 # hold a second copy. "not found in installed plugins" is the expected steady state.
 soft "not found in installed plugins" claude plugin uninstall hookify@claude-code-plugins
 soft "not found in installed plugins" claude plugin uninstall hookify@claude-code-plugins --scope project
+# plugin-dev: the authoring authority for this toolkit's own commands, agents and
+# hooks (CLAUDE.md -> Toolkit changes). Registering a marketplace does NOT attach
+# its plugins, so naming it as an authority without installing it left the
+# requirement unmeetable in a clean environment.
 soft "" claude plugin install plugin-dev@claude-code-plugins        # optional
 
 # 4) Move each plugin to its marketplace's current head. `install` is a NO-OP when
@@ -93,8 +96,8 @@ soft "" claude plugin update plugin-dev@claude-code-plugins --scope user
 # its own .claude/settings.json gets — stays pinned at whatever sha it first
 # installed, and that stale copy is what the session resolves. This is why an
 # environment could re-run a "self-updating" setup script and still serve a
-# months-old toolkit. || true: most projects have no project-scope copy, and its
-# absence must not fail the run.
+# months-old toolkit. soft() with the "not installed" pattern: most projects
+# have no project-scope copy, and its absence must neither fail the run nor warn.
 soft "not installed at scope project" claude plugin update directives-toolkit@claude-directives --scope project
 soft "not installed at scope project" claude plugin update pr-review-toolkit@claude-plugins-official --scope project
 soft "not installed at scope project" claude plugin update security-guidance@claude-plugins-official --scope project

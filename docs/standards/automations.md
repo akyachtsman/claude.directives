@@ -42,7 +42,10 @@ project-owned.
   `'QA — UI Tests (live)'` and `'QA — Event-Driven Response'` all resolve in a
   standard scaffold, and `ci-monitor`/`ci-notify` ship watching all three.
 - A project that deliberately omits `qa-response.yml` must remove
-  `'QA — Event-Driven Response'` from **both** watchers in the same edit.
+  `'QA — Event-Driven Response'` from **both** watchers in the same edit. The
+  omission itself is the owner's call: `global.md` → *Repo Structure Standard* lists
+  it as unconditional, so leaving it out is raised first
+  (`global.md` → *A Knowing Deviation Is an Escalation*).
 - Rename a workflow's `name:` and every watcher of it in the **same pull
   request**. A `name:` is also its check name, so a rename can additionally
   break branch-protection required checks.
@@ -192,7 +195,7 @@ no session required, no polling, no Gmail.
 `qa-response.yml` → `QA — Event-Driven Response`), so copying them verbatim
 needs no edits. Change `workflow_run.workflows` to rename (workflow and every
 watcher in the same PR), to watch an extra workflow, or to REMOVE the name of a
-standard workflow you chose not to install — see *Watcher Rules* (W1) above.
+standard workflow the owner agreed to leave out — see *Watcher Rules* (W1) above.
 Optionally verify with a manual `workflow_dispatch` run.
 
 **To install:** `docs/standards/cicd-setup.md` → Step 9a (that doc is the single

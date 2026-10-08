@@ -3,8 +3,9 @@
 # actions from templates/actions/ into .github/actions/ (secret-scan, ui-suite).
 #
 # Jobs:
-#   static-checks — secret scan (composite) + contrast guardrail; the blocking
-#                   gate, runs on every trigger.
+#   static-checks — secret scan (composite), contrast guardrail, and the
+#                   workflow-ref, job-bounds, Python-compile and ui-suite env
+#                   guards; the blocking gate, runs on every trigger.
 #   ui-changes    — diffs the PR against its base and decides whether the
 #                   browser job is needed. Non-PR events (push to main)
 #                   always run UI tests.

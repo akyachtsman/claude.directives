@@ -1,5 +1,9 @@
 # Node dependencies
 node_modules/
+.mcp.json
+# The legacy path an earlier data.md named. Claude Code never read it, but a
+# copy made under that directive may hold connection details, so it stays
+# ignored (Codex, #411).
 .claude/mcp.json
 plugins/directives-toolkit/evals/results/
 

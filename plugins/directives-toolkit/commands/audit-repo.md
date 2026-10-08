@@ -46,6 +46,18 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   approval like any other fix; a source's date is touched only where it carries
   its own verification stamp, never an `(owner ruling, <date>)` stamp. Also
   report anything the directives rely on about an outside system that has no row.
+- **Native parity.** Prefer a native Anthropic capability over one this repo
+  maintains. Inventory from what is installed, never recall: the registered
+  marketplaces' manifests (`claude plugin marketplace list`, and the
+  `marketplace.json` in each clone under `~/.claude/plugins/marketplaces/`) plus
+  this session's own skill and tool list. Count only Anthropic-owned entries —
+  the `anthropics/*` marketplaces and the built-in skills — and skip the
+  `claude-directives` marketplace: the toolkit's own parity is claude.directives'
+  pass (its `CLAUDE.md` → *Session Start*, step 5, against `EXPORTS.json` →
+  `externals` + `considered`). In a downstream project, compare that inventory
+  with the project's OWN commands, skills, agents and hooks (`.claude/`, and
+  any scripts doing the same job); each one a native covers is a finding naming
+  the native, unless the project's `CLAUDE.md` records why it was declined.
 - Errors — syntax errors, broken references, dead imports, invalid config,
   malformed data, things that won't run. For per-file correctness depth, run
   `/code-review --effort high` (read-only, reports findings) and fold its

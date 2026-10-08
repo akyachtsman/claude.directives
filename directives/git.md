@@ -415,9 +415,10 @@ in the same session. Check at `/env-chk` or the session's first PR.
 1. **Allow auto-merge** — `Settings → General → Pull Requests → Allow
    auto-merge`. If off, warn once with that path. Until it's enabled, the
    *Conditional Auto-Merge on Green* fallback applies: the agent watches CI and
-   squash-merges itself once green. Detection: where `gh api` works,
-   `GET /repos/{owner}/{repo}` exposes `allow_auto_merge`; in remote sessions
-   where api.github.com is blocked, the practical signal is the
+   squash-merges itself once green. Detection: where `gh api` works — a web
+   session's included, through its GitHub proxy (measured 2026-10-08) —
+   `GET /repos/{owner}/{repo}` exposes `allow_auto_merge`; where no API read is
+   available, the practical signal is the
    `enable_pr_auto_merge` MCP call being rejected with "Auto-merge is not
    enabled for this repository" — treat that rejection as the trigger to warn,
    not an error to retry.
@@ -434,12 +435,13 @@ in the same session. Check at `/env-chk` or the session's first PR.
    merging → Require conversation resolution before merging`. This is the only
    mechanism the *no unresolved review threads* gate has; without it the gate is
    one call an agent must remember to make, GraphQL through the MCP, and that call fails exactly
-   when the quota is out. If it is off, warn once with that path. Detection is
-   usually unavailable: `GET /repos/{owner}/{repo}/rules/branches/{branch}`
-   exposes it where `gh api` works, and in remote sessions it returns *"GitHub
-   access is not enabled for this session"* (measured 2026-08-26). Absent a
-   reading, do not report either way — check the threads yourself and treat a
-   blocked merge with every other gate green as the rule being present.
+   when the quota is out. If it is off, warn once with that path. Detection:
+   `GET /repos/{owner}/{repo}/rules/branches/{branch}` returns the `pull_request`
+   rule with `required_review_thread_resolution`, and a web session reaches it
+   through `gh api` (measured 2026-10-08; on 2026-08-26 the same call returned
+   *"GitHub access is not enabled for this session"*). Where the read fails, do
+   not report either way — check the threads yourself and treat a blocked merge
+   with every other gate green as the rule being present.
 
 ## GitHub API Quota Economy (owner ruling, 2026-07-21)
 Every Claude session, in EVERY repo, acts on GitHub as one user identity and
@@ -505,7 +507,7 @@ results):
     unobserved, so "will anything wake me" answers yes and hides the gap.
 - **Reads:** request small pages (`per_page` 5–10, minimal output); reuse
   already-fetched payloads (jq the saved file) instead of re-fetching; when
-  throttled, route reads through WebFetch (server-side — does not draw on the
+  throttled, route reads through WebFetch (unauthenticated — does not draw on the
   shared quota).
 - **Writes:** batch related changes into fewer PR cycles — one PR carrying three
   changes beats three PRs. On a throttled write, arm ONE scheduled completion

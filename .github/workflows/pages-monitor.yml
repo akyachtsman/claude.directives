@@ -115,9 +115,11 @@ jobs:
 
           # 2) Liveness: the live URL must return 200 (cache-busted, with retries
           #    so we wait out CDN propagation rather than false-alarming).
+          # A failed curl still prints 000 through -w, so the fallback REPLACES
+          # the captured code; appending one (`|| echo 000`) reported "000000".
           code="000"
           for attempt in 1 2 3 4 5; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${url}?cb=${GITHUB_RUN_ID}-${attempt}" || echo "000")
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${url}?cb=${GITHUB_RUN_ID}-${attempt}") || code="000"
             [ "$code" = "200" ] && break
             sleep $((attempt * 6))
           done
@@ -157,12 +159,12 @@ jobs:
               first=()
               for i in "${!paths[@]}"; do
                 p="${paths[$i]}"
-                first[$i]=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d1" || echo "000")
+                first[$i]=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d1") || first[$i]="000"
               done
               sleep 30
               for i in "${!paths[@]}"; do
                 p="${paths[$i]}"
-                dcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d2" || echo "000")
+                dcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d2") || dcode="000"
                 if [ "${first[$i]}" != "404" ] || [ "$dcode" != "404" ]; then
                   problems="${problems}- Forbidden path served HTTP ${first[$i]} then ${dcode}, expected 404 on both: ${url}${p}\n"
                 fi

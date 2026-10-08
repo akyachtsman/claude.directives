@@ -117,7 +117,9 @@ ALLOWED_EXTERNAL = {
 # rule that exists on paper and nowhere else.
 #
 # Format: { "qa-live.yml": ["My Deploy Workflow"], ... }
-# Absent file = no required watchers, which is the correct default for a fresh repo.
+# Absent file = no required watchers. A fresh repo is not exempt: a branch-source
+# project carries `"pages-retry.yml": ["pages-build-deployment"]` from bootstrap
+# on (docs/standards/automations.md, Watcher Rules W3).
 def _load_required():
     cfg = REPO_ROOT / ".github" / "workflow-ref-required.json"
     if not cfg.exists():

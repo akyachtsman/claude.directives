@@ -19,8 +19,10 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   explicit approval at the project level.
 
 ## MCP Configuration
-- Each repo configures its own Supabase MCP access in `.claude/mcp.json`.
-- `.claude/mcp.json` is **per-repo and gitignored** — it holds connection setup
+- Each repo configures its own Supabase MCP access in `.mcp.json` at the repo
+  root — the project-scope file Claude Code reads (`.claude/mcp.json` is never
+  read; verified 2026-10-08 against code.claude.com/docs/en/mcp).
+- `.mcp.json` is **per-repo and gitignored** — it holds connection setup
   and must never be committed. Add it to the project `.gitignore` during
   bootstrap.
 - Treat MCP config as local session setup, not shared project state.
@@ -46,8 +48,13 @@ from Pages, anon key in the client, no Supabase Auth. Never ship `USING (true)`
 write policies instead of this.
 - **Login** goes through a `SECURITY DEFINER` function (e.g.
   `login_with_pin(text)`): pin `search_path`, return only the columns the app
-  actually consumes, and revoke EXECUTE from `authenticated` (Supabase
-  default-grants functions broadly) so only `anon` can call it.
+  actually consumes, and make `anon` the only caller:
+  `REVOKE EXECUTE ON FUNCTION login_with_pin(text) FROM PUBLIC, authenticated;`
+  then `GRANT EXECUTE ON FUNCTION login_with_pin(text) TO anon;`. Revoking from
+  `authenticated` alone is not enough: Postgres grants EXECUTE on every new
+  function to `PUBLIC`, which `authenticated` inherits, and Supabase also
+  default-grants it to `anon`, `authenticated` and `service_role` (Supabase
+  advisor lints 0028/0029, which pair for exactly this reason).
 - **The credential column is never anon-readable**: revoke table SELECT and
   re-grant column-level SELECT on everything except the credential. Filtering on
   a column requires SELECT on it — which is why login must be the function, not
@@ -103,4 +110,4 @@ here.)
   second one alongside it (→ *Preferred Backend*).
 - Stop and ask before disabling RLS on any table.
 - Stop and ask before using the service-role key anywhere a browser can reach it.
-- Stop and ask before committing `.claude/mcp.json` or any key material.
+- Stop and ask before committing `.mcp.json` or any key material.

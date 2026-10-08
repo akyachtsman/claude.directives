@@ -373,8 +373,9 @@ Hard-won; each cost a real debugging session:
   since the config change" alone is equally consistent with an idle repository,
   and treating it as proof manufactures false alarms in exactly the repos nobody
   is touching.
-- **Scheduling tools are pre-approved via committed settings** (`global.md` → *Scheduling Tools Never Prompt*, 2026-08-18): the six-tool allowlist in
-  `.claude/settings.json` loads at session start; a one-time prompt in an
+- **Scheduling tools are pre-approved via committed settings** (`global.md` → *Scheduling Tools Never Prompt*, 2026-08-18): the allowlist in
+  `.claude/settings.json` (the six scheduling tools plus the read-only tools that
+  ruling admits) loads at session start; a one-time prompt in an
   already-running session is accepted. ci-notify's webhook wake covers a
   PR-attached completion **only when that completion emits one** — success
   conclusion, watched workflow, and one of its two lookups resolving exactly one
@@ -393,8 +394,11 @@ Hard-won; each cost a real debugging session:
   not the UI prose title.
 - **Mid-session staleness** — `CLAUDE.md` → *Mid-session change semantics*:
   what a live session sees when files change under it. Don't expect hot reload.
-- **api.github.com rate limits in remote sessions** — shared-fleet IP; use
-  WebFetch or raw URLs, and a failed fetch is "cannot verify", never "broken".
+- **api.github.com is refused in remote sessions for any repo the session was
+  not opened on** — curl, `gh api` and WebFetch alike (403, verified
+  2026-10-08); read another repo over raw URLs or git transport
+  (`global.md` → *Repository Scope*), and a failed fetch is "cannot verify",
+  never "broken".
 - **The GitHub App token's hourly quota is shared and exhaustible** — distinct
   from the bullet above: every session and monitor draws authenticated REST
   calls from ONE identity (the error names it: `API rate limit already
@@ -407,7 +411,8 @@ Hard-won; each cost a real debugging session:
   session has its own separate quota — a UI "Ready for review → Squash and
   merge" is the instant fallback. Economize the budget: small `per_page`,
   jq-summarize oversized saved payloads instead of re-fetching, WebFetch
-  (server-side, own egress) for reads when the MCP is throttled. The full
+  (unauthenticated, so off the shared quota — the environment's egress policy
+  still applies) for reads when the MCP is throttled. The full
   fleet-wide rulebook is exported to every repo as `directives/git.md` → *GitHub API Quota Economy* (inherited live at session start).
 - **REST and GraphQL quotas are separate, and un-drafting needs GraphQL** —
   observed 2026-08-01: `merge_pull_request` returned a clean `405 still a

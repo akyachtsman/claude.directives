@@ -25,7 +25,8 @@ permissions:
   # (repos/.../contents/...) to test for cancel-in-progress. An explicit
   # permissions block zeroes every unlisted scope, so without this the probe
   # 403s, falls to can_supersede=no, and every HEALTHY supersede alarms — the
-  # pairing with qa-live.yml's concurrency block breaks in the noisy direction.
+  # pairing with qa.yml's concurrency block breaks in the noisy direction.
+  # (This repo has no qa-live.yml; the template's pairing is with that file.)
   contents: read
 
 jobs:
@@ -57,7 +58,7 @@ jobs:
             echo "workflow_run: $WR_NAME concluded $WR_CONCLUSION"
             # `cancelled` needs a question asked before it is judged. GitHub reports
             # BOTH a job killed by its timeout AND a run superseded by
-            # cancel-in-progress as "cancelled" — and qa-live.yml uses exactly that
+            # cancel-in-progress as "cancelled" — and this repo's qa.yml uses exactly that
             # concurrency setting, so treating every cancellation as a failure would
             # spam the tracking issue on healthy supersedes. Treating none of them as
             # a failure is how a timeout-killed authoritative gate reports nothing at
@@ -67,7 +68,7 @@ jobs:
             # ⚠️ "A newer run exists" is COINCIDENCE, not causation, and using it alone
             # re-creates the silent timeout this exists to fix. A workflow with no
             # concurrency block has overlapping runs on a branch as a matter of
-            # course — qa.yml is exactly that, and its jobs carry their own timeouts —
+            # course — the template qa.yml is exactly that, and its jobs carry their own timeouts —
             # so an older run CAN time out while a newer one merely happens to exist.
             # (Caught downstream, apfp.claude 2026-08-19, against this same first
             # attempt.) Suppression therefore requires BOTH:
@@ -150,7 +151,7 @@ jobs:
             since=$(date -u -d "-${LOOKBACK} minutes" +%Y-%m-%dT%H:%M:%SZ)
             echo "Scanning $REPO for failed runs since $since"
             # Same discriminator as the event branch, or the scan re-reports what
-            # that branch correctly suppressed: with qa-live.yml carrying
+            # that branch correctly suppressed: with qa.yml carrying
             # cancel-in-progress, every healthy supersede in the window is a
             # `cancelled` run — flagging them all makes a manual scan cry wolf
             # after any burst of pushes. A cancelled run is suppressed only when

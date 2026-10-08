@@ -7,7 +7,7 @@ canonical exported directives live in `../directives/` (`global.md`, `git.md`,
 **Provenance is now the directory structure** (the split `EXPORTS.json` encodes):
 `standards/` and `guides/` are **exported** (downstream projects inherit or
 reference them), `site/` holds the **GitHub Pages assets**, `internal/` is
-**this-repo-only**. The four `*.html` files at this root are legacy-URL redirect
+**this-repo-only**. The three `*.html` files at this root are legacy-URL redirect
 stubs kept so published `/docs/*.html` links keep resolving — edit the real pages
 in `site/`.
 
@@ -50,7 +50,7 @@ Referenced by the exported directives and the qa agents.
 | `site/logical-map.js` | The map's hand-written behaviour — pan/zoom, search, and trace (click a file to light its whole chain, with the line in the files behind each link). The layout is computed by the generator, not here. Generated HTML loads it; never generated itself |
 | `site/logical-map.html` | The repo map — a lifecycle flow from *Publish* to *Upkeep*, every exported file in its stage, every connection backed by a line in the files, vendors as the last column; self-contained (no CDN). **Generated** by `.github/scripts/build-logical-map.js` — never hand-edit it; `qa.yml` fails a committed copy that no longer matches. Replaced the class view 2026-10-05; the physical-folders view was retired 2026-07-21 |
 | `site/commands.html` | Commands reference — all 13 toolkit slash commands by pipeline phase, what each does and when to use it |
-| `site/index.html` | Demo gallery — links to the repo map, React preview, and commands reference (same list as the site-root `../index.html`) |
+| `site/index.html` | Demo gallery — links to the repo map and the commands reference (same list as the site-root `../index.html`) |
 | `site/.htmlvalidate.json` | html-validate config for the site pages |
 
 > Fill-in **templates** (project CLAUDE.md scaffold, PR checklist, test plan,

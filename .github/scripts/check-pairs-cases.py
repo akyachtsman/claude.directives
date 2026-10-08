@@ -88,6 +88,13 @@ def cases():
          f"{HOOK[0]} is not executable"),
         ("a plain pair whose modes disagree — refused",
          lambda r: chmod(r, PLAIN[1], 0o755), 1, "executable bit differs"),
+        # Git records a file executable from the OWNER bit alone (Codex, #412):
+        # group/other execute without it is "not executable" to git, and so here.
+        ("both hook copies executable for group/other only (0655) — refused",
+         lambda r: (chmod(r, HOOK[0], 0o655), chmod(r, HOOK[1], 0o655)), 1,
+         f"{HOOK[0]} is not executable"),
+        ("a plain pair 0644 vs 0655 — git records both 100644 — accepted",
+         lambda r: chmod(r, PLAIN[1], 0o655), 0, "pairs byte-identical"),
         # The complement: a plain pair needs AGREEMENT, not a particular mode.
         ("a plain pair executable on both sides — accepted",
          lambda r: (chmod(r, PLAIN[0], 0o755), chmod(r, PLAIN[1], 0o755)), 0, "pairs byte-identical"),

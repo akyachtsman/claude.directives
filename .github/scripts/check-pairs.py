@@ -34,6 +34,7 @@ ROOT defaults to the repository this file lives in (the cases pass a fixture).
 
 import difflib
 import os
+import stat
 import sys
 
 # (live copy, template copy, both must be executable)
@@ -51,7 +52,10 @@ PAIRS = [
 
 
 def is_exec(path):
-    return bool(os.stat(path).st_mode & 0o111)
+    # The OWNER execute bit, which is the one git reads when it records a file's
+    # mode (100755 vs 100644). Group/other bits alone (0011) leave git storing
+    # it non-executable, so they must not satisfy this check (Codex, #412).
+    return bool(os.stat(path).st_mode & stat.S_IXUSR)
 
 
 def check(root):

@@ -102,25 +102,31 @@ DELIM = """  printf '\\n' >>"$buf" """.rstrip()
 # The Phase 3 applied-check's own copy of the derivation, in its real shape.
 # Every fixture carries one by default: the guard refuses a command without it.
 PHASE3 = ("\n```bash\nscan() {{\n  deps=\"$(printf '%s\\n' \"$1\" | "
-          "grep -oE '\\.github/scripts/[A-Za-z0-9_./-]+'{rest}; true)\"\n}}\n```\n")
+          "grep -oE '{token}'{rest}; true)\"\n}}\n```\n")
+STRIP = r"s/[.]+$//"
 
 
-def phase3_md(ext):
-    """The Phase 3 copy, filtering with `ext` -- or with no filter when ext is None."""
-    rest = "" if ext is None else f" | sed -E 's/[.]+$//' | grep -E '{ext}'"
-    return PHASE3.format(rest=rest)
+def phase3_md(token, ext, sed=True):
+    """The Phase 3 copy: `token`, the trailing-period sed when `sed`, then `ext`
+    -- or no filter when ext is None."""
+    rest = f" | sed -E '{STRIP}'" if sed else ""
+    rest += "" if ext is None else f" | grep -E '{ext}'"
+    return PHASE3.format(token=token, rest=rest)
 
 
 KEEP = object()
 
 
 def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line=True,
-               phase3=KEEP):
+               phase3=KEEP, sed=True, phase3_token=None, phase3_sed=None):
     """Build a refresh-repo.md carrying the chosen pipeline, plus a Phase 3 copy
-    filtering like it (phase3=KEEP), with another filter, None for no filter,
-    or False for no Phase 3 copy at all."""
+    that mirrors it -- same token, sed and filter -- unless told otherwise:
+    phase3 is a different filter, None for no filter, or False for no Phase 3
+    copy at all; phase3_token and phase3_sed override those stages alone."""
     pipe = "refs=$("
     pipe += f"grep -oE '{token}' \"$buf\"" if token_line else "rg -o 'whatever' \"$buf\""
+    if sed:
+        pipe += f" \\\n       | sed -E '{STRIP}'"
     if ext_line:
         pipe += f" \\\n       | grep -E '{ext}'"
     pipe += " | sort -u)"
@@ -132,7 +138,9 @@ def command_md(token=SLASHED, ext=EXT, delimited=True, token_line=True, ext_line
         + "done\n"
         + pipe + "\n"
         "```\n"
-        + ("" if phase3 is False else phase3_md(ext if phase3 is KEEP else phase3))
+        + ("" if phase3 is False else phase3_md(
+            phase3_token or token, ext if phase3 is KEEP else phase3,
+            sed if phase3_sed is None else phase3_sed))
     )
 
 
@@ -314,7 +322,7 @@ case("the Phase 3 copy filtering like the install passes",
 
 case("a Phase 3 copy that filters DIFFERENTLY from the install is refused",
      command_text=command_md(ext=EXT_SHIPPED, phase3=EXT), callers=PKG, expect_exit=1,
-     needle="filter DIFFERENTLY")
+     needle="derive DIFFERENTLY")
 
 case("an install pipeline that LOST its filter is refused, not read from Phase 3's",
      command_text=command_md(ext_line=False, phase3=EXT_SHIPPED), callers=PKG, expect_exit=1,
@@ -328,6 +336,20 @@ case("a filterless Phase 3 copy does not borrow an identical filter from LATER i
      command_text=command_md(ext=EXT_SHIPPED, phase3=None)
      + f"\n```bash\nls | grep -E '{EXT_SHIPPED}'\n```\n",
      callers=PKG, expect_exit=1, needle="NO extension filter of its own")
+
+# Codex, #409 round 4: the copies are compared by RUNNING them, every stage.
+case("a Phase 3 token that cannot reach a nested path is refused, same filter or not",
+     command_text=command_md(ext=EXT_SHIPPED, phase3_token=SLASHFREE), callers=PKG,
+     expect_exit=1, needle="only the install derives: .github/scripts/nested/d.py")
+
+case("an install without the trailing-period stage derives LESS than Phase 3 — refused",
+     command_text=command_md(ext=EXT_SHIPPED, sed=False, phase3_sed=True), callers=PKG,
+     expect_exit=1, needle="derives: .github/scripts/e.js")
+
+case("a script named at the end of a sentence is derived",
+     command_text=command_md(ext=EXT_SHIPPED),
+     callers={"directives/test.md": "Run it with .github/scripts/browser-ladder.js.\n"},
+     expect_exit=0, needle="  .github/scripts/browser-ladder.js")
 
 case("a command with NO Phase 3 copy at all is refused, not compared against itself",
      command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,

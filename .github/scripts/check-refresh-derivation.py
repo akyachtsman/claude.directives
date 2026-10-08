@@ -45,9 +45,13 @@ form-independent scan, THREE ways:
   3. OFF-CONTRACT. Anything the pattern accepts that is not .js/.py under
      .github/scripts/, or exactly .github/scripts/package.json (#398) -- see the
      extras split below.
-  4. IN STEP. Every copy of the token grep in the command -- the install
-     pipeline and the Phase 3 applied-check -- applies the SAME extension
-     filter, so the check can never be wider or narrower than the install (#398).
+  4. IN STEP. The command carries two copies of the derivation -- the install
+     pipeline and the Phase 3 applied-check -- and both must exist and DERIVE
+     the same set. Each copy's stages (grep -oE, sed -E, grep -E) are run with
+     real grep and sed over a fixed probe set plus every shipped caller, and
+     the outputs compared, so the check can never be wider or narrower than the
+     install (#398). Comparing one field at a time left the next one open
+     through three Codex rounds on #409.
 
 WHY grep AND NOT `re`. An earlier version compiled the extracted patterns with
 Python's `re` and matched with Python. The shipped pipeline runs GNU `grep -E`,
@@ -107,7 +111,56 @@ FILTER_LINE = re.compile(r"grep -E '([^']+)'")
 # Phase 3 applied-check each carry one. #398's constraint is that they name the
 # SAME set -- a check wider than the install refuses a stamp the install can
 # never satisfy -- so the extension filter after each copy must be identical.
-ANY_TOKEN = re.compile(r"grep -oE '\\\.github/scripts/[^']*'")
+ANY_TOKEN = re.compile(r"grep -oE '[^']*\\\.github/scripts/[^']*'")
+
+# Every stage of a copy's pipeline, in order. Comparing one field at a time --
+# first the filter, then whether Phase 3 exists, then the token pattern -- left
+# the next field open each round (Codex, #409, three rounds). So each copy's
+# stages are RUN over the same inputs and their outputs compared: a difference
+# in the token class, a sed stage, or the filter all show up as a difference in
+# what is derived.
+STAGE_RE = re.compile(r"(grep -oE|sed -E|grep -E) '([^']+)'")
+
+# Inputs every copy must derive identically, beside the shipped callers: the
+# shapes each stage exists for.
+PROBES = "\n".join([
+    "run: node .github/scripts/a.js",
+    "run: python3 .github/scripts/b.py",
+    'run: node "$GITHUB_WORKSPACE/.github/scripts/c.js"',
+    "the nested .github/scripts/nested/d.py",
+    "a sentence that ends in .github/scripts/e.js.",
+    "npm install reads .github/scripts/package.json",
+    "never .github/scripts/package-lock.json",
+    "never .github/scripts/ui-tests/package.json",
+    "a bare directory .github/scripts/ui-tests/",
+]) + "\n"
+
+
+def stages_of(text, start):
+    return STAGE_RE.findall(pipeline(text, start))
+
+
+def run_stages(stages, data):
+    """Run a copy's stages over `data` with real grep and sed.
+
+    grep exits 1 for "no matches", which is not an error. It exits 2 -- and,
+    for some malformed-but-accepted constructs, exits 1 while WARNING on
+    stderr -- for a pattern it cannot honour. That warning is the only signal
+    distinguishing "matched nothing" from "could not match", and the shipped
+    pipeline throws it away, so any stderr is fatal here.
+    """
+    for kind, pat in stages:
+        args = kind.split() + [pat]
+        p = subprocess.run(args, input=data, capture_output=True, text=True)
+        if p.stderr.strip():
+            return None, f"{args[0]} wrote to stderr: {p.stderr.strip()}"
+        if p.returncode not in (0, 1):
+            return None, f"{args[0]} exited {p.returncode}"
+        data = p.stdout
+        if not data:
+            return set(), None
+    return {ln for ln in data.split("\n") if ln}, None
+
 
 def pipeline(text, start):
     """The rest of the shell pipeline that begins at `start`: its own line plus
@@ -157,38 +210,26 @@ def fail(msg):
     return 1
 
 
-def run_grep(args, data):
-    """Run one grep stage on `data`. Returns (lines, error_or_None).
-
-    grep exits 1 for "no matches", which is not an error. It exits 2 -- and,
-    for some malformed-but-accepted constructs, exits 1 while WARNING on
-    stderr -- for a pattern it cannot honour. That warning is the only signal
-    distinguishing "matched nothing" from "could not match", and the shipped
-    pipeline throws it away, so treat any stderr as fatal here.
-    """
-    p = subprocess.run(args, input=data, capture_output=True, text=True)
-    if p.stderr.strip():
-        return [], f"grep wrote to stderr: {p.stderr.strip()}"
-    if p.returncode not in (0, 1):
-        return [], f"grep exited {p.returncode}"
-    return [ln for ln in p.stdout.split("\n") if ln], None
-
-
-def derive(token_pat, filter_pat, text):
-    """Run the SHIPPED two-stage pipeline over `text` using real grep."""
-    hits, err = run_grep(["grep", "-oE", token_pat], text)
-    if err:
-        return None, err
-    if not hits:
-        return set(), None
-    kept, err = run_grep(["grep", "-E", filter_pat], "\n".join(hits) + "\n")
-    if err:
-        return None, err
-    return set(kept), None
+def derive(stages, text):
+    """Run the SHIPPED install pipeline's stages over `text` using real grep/sed."""
+    return run_stages(stages, text)
 
 
 def truth(text):
-    return {h for h in TRUTH_RE.findall(text) if in_contract(h)}
+    # A trailing period is sentence punctuation, not part of the path.
+    return {h.rstrip(".") for h in TRUTH_RE.findall(text) if in_contract(h.rstrip("."))}
+
+
+def engine_error(err, what):
+    return fail(
+        f"the documented pattern is not usable by the engine that RUNS it.\n"
+        f"      {err}\n"
+        "      GNU grep -E is not Python's `re`: a construct `re` accepts (e.g. `(?:`)\n"
+        "      makes grep warn and match NOTHING, and the pipeline's trailing `sort`\n"
+        "      swallows the failure — an empty derivation reported as success.\n"
+        f"      {what}\n"
+        f"      Fix the pattern in {COMMAND}, not this guard."
+    )
 
 
 def main():
@@ -212,6 +253,7 @@ def main():
             "      because an unterminated `\\.(js|py)` matches the `.js` inside `.json`."
         )
     token_pat, filter_pat = token_m.group(1), filter_m.group(1)
+    install = stages_of(text, token_m.start())
 
     # THE PHASE 3 COPY MUST EXIST. Comparing filters proves nothing if one side
     # is gone: deleting or reshaping the Phase 3 scan left one copy, one filter,
@@ -239,17 +281,32 @@ def main():
             "      filter in its own pipeline; without one it accepts package-lock.json.\n"
             + "".join(f"      copy {i + 1}: {f or '(none)'}\n" for i, f in enumerate(filters))
         )
-    if len(set(filters)) > 1:
-        return fail(
-            f"the derivation's copies in {COMMAND} filter DIFFERENTLY.\n"
-            "      The install pipeline and the Phase 3 applied-check must name the same\n"
-            "      set (#398): a check wider than the install refuses a stamp the install\n"
-            "      can never satisfy, and a narrower one passes a dependency it never saw.\n"
-            + "".join(f"      filter {i + 1}: {f}\n" for i, f in enumerate(filters))
-            + "      Widen or narrow them together."
-        )
 
     callers = sorted({p for g in CALLER_GLOBS for p in Path().glob(g)})
+    corpus = PROBES + "".join(c.read_text(encoding="utf-8") + "\n" for c in callers)
+    want, err = run_stages(install, corpus)
+    if err:
+        return engine_error(err, f"install stages: {install}")
+    for i, m in enumerate(copies):
+        if m.start() == token_m.start():
+            continue
+        got, err = run_stages(stages_of(text, m.start()), corpus)
+        if err:
+            return engine_error(err, f"copy {i + 1} stages: {stages_of(text, m.start())}")
+        if got != want:
+            return fail(
+                f"the derivation's copies in {COMMAND} derive DIFFERENTLY.\n"
+                "      The install pipeline and the Phase 3 applied-check must name the same\n"
+                "      set (#398): a check wider than the install refuses a stamp the install\n"
+                "      can never satisfy, and a narrower one passes a dependency it never saw.\n"
+                "      Run over the same probes and shipped callers:\n"
+                + "".join(f"      only the install derives: {s}\n" for s in sorted(want - got))
+                + "".join(f"      only copy {i + 1} derives: {s}\n" for s in sorted(got - want))
+                + f"      install stages: {install}\n"
+                + f"      copy {i + 1} stages: {stages_of(text, m.start())}\n"
+                + "      Change every stage of both copies together."
+            )
+
     if not callers:
         return fail(
             "no caller files matched "
@@ -263,17 +320,9 @@ def main():
     missed = []
     documented_all = set()
     for caller in callers:
-        got, err = derive(token_pat, filter_pat, bodies[caller])
+        got, err = derive(install, bodies[caller])
         if err:
-            return fail(
-                f"the documented pattern is not usable by the engine that RUNS it.\n"
-                f"      {err}\n"
-                "      GNU grep -E is not Python's `re`: a construct `re` accepts (e.g. `(?:`)\n"
-                "      makes grep warn and match NOTHING, and the pipeline's trailing `sort`\n"
-                "      swallows the failure — an empty derivation reported as success.\n"
-                f"      token: {token_pat}   filter: {filter_pat}\n"
-                f"      Fix the pattern in {COMMAND}, not this guard."
-            )
+            return engine_error(err, f"token: {token_pat}   filter: {filter_pat}")
         got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
         documented_all |= got
         for script in sorted(truth(bodies[caller]) - got):
@@ -312,7 +361,7 @@ def main():
             if second is first:
                 continue
             buf = bodies[first] + joiner + bodies[second] + joiner
-            got, err = derive(token_pat, filter_pat, buf)
+            got, err = derive(install, buf)
             if err:
                 return fail(f"the documented pattern failed on the concatenated buffer: {err}")
             got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}

@@ -95,7 +95,8 @@ When auth fails (no DOM transition after credential entry), attach structured di
 
 ```
 auth-diagnostics attachment:
-  credentialUsed: <"TEST_AUTH_CREDENTIAL (masked)" or "none — variable empty, auth phase skipped">
+  credentialSource: <"env" | "prefilled" | "none" — the suite's own `credentialSource` value>
+  credentialUsed: <"TEST_AUTH_CREDENTIAL (masked)" | "shipped by the login form (masked)" | "none — variable empty and the form ships none, auth phase skipped">
   authMechanism: <detected type>
   apiCalls: <from captureApiCalls>
   responseShape: <rows returned, first field "<name>" | no rows — check query/RLS/auth | non-2xx>

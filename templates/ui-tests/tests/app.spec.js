@@ -1,5 +1,6 @@
 // Generic exploratory UI test — no project-specific selectors or credentials.
-// Credential comes from the TEST_AUTH_CREDENTIAL environment variable only.
+// Credential comes from the TEST_AUTH_CREDENTIAL environment variable, or from a
+// login form that ships one in a password field (gateShipsCredential) — never a file.
 // Discovers app structure, exercises all interactive elements, captures API calls.
 //
 // dvh units are supported by every browser this kit's Playwright ships (they need
@@ -77,9 +78,11 @@ function attachJson(name, data) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CREDENTIAL — environment only
+// CREDENTIAL — environment, or a credential the form itself ships
 // ─────────────────────────────────────────────────────────────────────────────
-// The credential comes from the TEST_AUTH_CREDENTIAL secret and nowhere else.
+// The credential comes from the TEST_AUTH_CREDENTIAL secret, or — only when that
+// is unset — from a visible, editable password field the login form prefills
+// (gateShipsCredential, directives#312). Never from a file in the repo.
 // This used to fall back to scraping CLAUDE.md, which was both a standing
 // instruction to commit a credential (global.md -> Security) and a live hazard:
 // the regex matched the TABLE LABEL, so prose in the row returned a bogus

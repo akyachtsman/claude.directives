@@ -220,9 +220,12 @@ Execute in order:
    never add it to `.gitignore`. Confirm
    `playwright.config.js` resolves the live URL from the `APP_URL` variable, and
    update any project-specific selector constants in `app.spec.js` to match the
-   actual UI (the kit is generic/exploratory by default and reads the credential
-   from the `TEST_AUTH_CREDENTIAL` secret at runtime, so it may need no selector
-   edits; it never reads `CLAUDE.md`).
+   actual UI (the kit is generic/exploratory by default and takes the credential
+   at runtime from the `TEST_AUTH_CREDENTIAL` secret or, when that is unset,
+   from a login form that ships a working one in a visible, editable password
+   field, so it may need no selector edits; it never reads `CLAUDE.md`). Set the
+   secret only when the app's login needs a credential supplied from outside
+   (`cicd-setup.md` Step 5).
 
 8. **Pre-push verification.** Run the local gate before pushing:
    - `npx html-validate index.html` (and any other HTML entry points)

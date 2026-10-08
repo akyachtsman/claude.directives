@@ -15,14 +15,16 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 ### Operating Rules
 
 1. Read `CLAUDE.md` first for the app URL, test directory and project scenarios. Take the
-   credential from the `TEST_AUTH_CREDENTIAL` environment variable ONLY (plus
+   credential from the `TEST_AUTH_CREDENTIAL` environment variable, or — only when that
+   is empty — from a login form that ships a working one in a visible, editable
+   password field (below) (plus
    `TEST_AUTH_EMAIL` for email+password gates — without it the identifier is
    submitted blank and the rejection reads as a bad credential — and for
    identifier-first (split-step) gates, where without it the gate is not
    DETECTED at all and the authenticated phases run against the identifier
    screen (directives#310)) — never from
    `CLAUDE.md`, which must not contain it (`global.md` → *Security*). If the variable is
-   empty, there is no authenticated run: skip the auth phase and say so in the report,
+   empty and the form ships no credential, there is no authenticated run: skip the auth phase and say so in the report,
    rather than guessing a value or asking for one to be written into the repo
 2. Check for pre-installed Playwright browsers before running `npx playwright install` — look under `$PLAYWRIGHT_BROWSERS_PATH` if set, else `ls /opt/pw-browsers/` (the bundled version changes with the runner image; never assume a specific `chromium-<build>` directory)
 3. Install npm dependencies: `cd <Playwright test directory from CLAUDE.md> && npm install`

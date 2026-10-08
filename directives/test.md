@@ -18,6 +18,7 @@ touch.
 - `docs/standards/pr-mechanics.md` — evidence and edge cases behind `git.md` → *PR Lifecycle* (missing wakes, verdict-gate exits, the reaction ladder, review metering)
 - `docs/standards/session-mechanics.md` — evidence and edge cases behind `global.md`'s session-behaviour rules
 - `docs/standards/hosting-mechanics.md` — evidence and edge cases behind `global.md` → *Hosting & Deployment*
+- `docs/standards/viewport-classes-history.md` — measurements, withdrawn designs and review rounds behind the three-viewport-classes gate (→ *UI coverage gates*)
 
 ### QA/data agents — ship in the directives-toolkit plugin
 Agents arrive via the `directives-toolkit` plugin (see `global.md` → *Skill Bootstrap*) and are namespaced `directives-toolkit:*`. Nothing is fetched into
@@ -365,195 +366,65 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
 - **Three viewport classes, declared in the runner's project list.**
   `global.md` requires laptop, tablet AND phone, so `playwright.config.js` must
   declare a project in each class. Two phone profiles read as coverage and are
-  not — and what a phone-only list costs is every OTHER scenario, which runs at
-  whatever widths the list declares: S1, S3, DISMISS and ENTRY simply never
-  execute at laptop or tablet width, so a breakpoint regression there is
-  untested. (S4 is the exception and not the evidence: it sets 390 explicitly,
-  so it runs the same in every project — a phone-only list makes it redundant,
-  not skipped.) Because this gate lives in the config and not in any scenario, a
-  green suite is not evidence for it: read the `projects` list — or let
-  `check-ui-viewports.js` read it for you, which the `ui-suite` composite does on
-  every UI job. It checks width CLASSES (defaults: tablet from 768, laptop from
-  1024), **not the project's own breakpoints**, and its OK line prints the bands
-  it used: a design whose widest tier starts at 1400 passes with a 1024 laptop
-  that never renders it. Compare those bands with your design's tiers; the
-  composite does not yet pass a project's own breakpoints in (#328).
-  That gate works in two stages, and both are needed. It IMPORTS the config, so
-  Node expands `...devices[…]` and the declared widths are read rather than
-  pattern-matched — a static read does not work and is not worth retrying, three
-  attempts produced twelve findings. That half runs before the suite and answers
-  what is DECLARED — and it writes that reading to a `--declared` mapping, which
-  the post-run invocation passes back. **Both flags, every time: `--report`
-  without `--declared` is refused (exit 22).** A verdict rests on two independent
-  observations — the widths declared before the run, and a fresh import after —
-  and a single import taken after the run is one observation wearing the shape of
-  two, so a config that changes what it declares during the run certifies itself
-  (measured: 390/390/390 before, 1280/900/390 after, exit 0 for all three bands).
-  Then, after the run, it is invoked again with
-  `--report <playwright json>` and reads the run's own report: a band is covered
-  only when a project declared at that width has a NON-SKIPPED result — a test
-  the run scheduled under it. That is not the same as one that ran: a hook
-  failing before the test body starts still produces a result, which is why the
-  verdict is named SCHEDULED and why proving the stronger thing is #348.
-  Since #348 the same line also prints a per-class disposition: **RENDERED**
-  where a project declaring that class has a result carrying the kit's
-  `rendered-viewport` witness at a width inside the class — a test *body* started
-  with the page that wide — and **SCHEDULED-only** for the rest. It never changes
-  the exit code, so a suite that predates the witness passes as before.
-  Predicting discovery from the config was tried for eight rounds and
-  produced twenty findings, every one a rule correct for its example and wrong
-  one step out: a `.gitignore` under `testDir`, a per-project `respectGitIgnore`,
-  a symlinked `testDir`, a reporter excluding every test, a `shard` set only when
-  a credential is present. Each is now caught without the gate knowing the
-  mechanism exists.
-  **The verdict is SCHEDULED, and the word is chosen carefully.** A Playwright
-  report names the PROJECT that owned each result and carries no viewport, so it
-  establishes that a test was *scheduled in a project declaring* a width — not
-  that a page was ever that wide, and not even that the test body ran, since a
-  hook failing first still leaves a non-skipped result. The gate says exactly
-  that and no more.
+  not: every other scenario runs only at the widths the list declares, so a
+  phone-only list leaves S1, S3, DISMISS and ENTRY never executing at laptop or
+  tablet width. (S4 sets 390 explicitly, so it runs the same everywhere.) This
+  gate lives in the config, so a green suite is not evidence for it: read the
+  `projects` list — or let `check-ui-viewports.js` read it, which the `ui-suite`
+  composite does on every UI job. What that check requires of you:
+  - **Bands are width CLASSES, not your breakpoints** (defaults: tablet from 768,
+    laptop from 1024). Its OK line prints the bands it used — compare them with
+    your design's tiers: a design whose widest tier starts at 1400 passes with a
+    1024 laptop that never renders it. The composite does not yet pass a
+    project's own breakpoints in (#328).
+  - **Two stages, both flags, every time.** The pre-run pass IMPORTS the config
+    (so `...devices[…]` is expanded, never pattern-matched) and writes what it
+    DECLARES to a `--declared` mapping; the post-run pass passes that mapping
+    back and reads the run's JSON report with `--report`. **`--report` without
+    `--declared` is refused (exit 22).** The post-run pass imports the config
+    again: where the two readings differ it reports CANNOT CHECK (exit 21), and
+    where they agree the verdict is computed from the pre-run reading. So the
+    config must still import after the run — a suite that leaves it unable to
+    load refuses even though its widths never changed.
+  - **The verdict is SCHEDULED.** A band is covered only when a project declared
+    at that width has a NON-SKIPPED result — a test the run scheduled, not proof
+    that a page was that wide or that the body ran. A report with no non-skipped
+    result FAILS, and so does one where every test is skipped; passing is not the
+    converse, so a green SCHEDULED verdict does not say a test executed.
+  - **RENDERED needs the witness, CALLED first.** The same line prints a
+    per-class disposition: **RENDERED** where a project declaring that class has a
+    result carrying the kit's `rendered-viewport` witness at a width inside the
+    class, **SCHEDULED-only** otherwise; it never changes the exit code. Request
+    the kit's `renderWitness` fixture and call `renderWitness();` as the first
+    statement of any test you write — requesting it without calling it stays
+    SCHEDULED-only. Keep it non-`auto`; it does not see a later
+    `setViewportSize()`, and a hook or fixture that calls it forges it (#349).
+  - **A test that can end up at a width its project did not declare must say so.**
+    Push `{ type: 'viewport-override' }` onto `test.info().annotations` and the
+    gate stops counting its result; the kit's S4 carries it. `setViewportSize()`
+    in the body, `test.use({ viewport })` and `base.extend({ viewport })` all do
+    it and Playwright marks none of them, but the rule is the PROPERTY, not that
+    list. Skip the marker and a run selecting only such tests certifies every band.
+  - **Declare a json reporter.** Without one the post-run check has no report to
+    read: CANNOT CHECK, and the job fails, so a missing report is never mistaken
+    for a covered band. Its `outputFile` need not match `report-path`: the
+    composite sets `PLAYWRIGHT_JSON_OUTPUT_FILE`, which redirects a json reporter
+    but does not add one. Do not substitute a `playwright test --list` listing —
+    it is not the run.
+  - **It catches DRIFT, not FORGERY.** A config that narrows silently — a shard, a
+    `.gitignore`, a filter, a device spread overwriting a literal, a project
+    quietly deleted — is what it catches. A config written to deceive it defeats
+    it; do not read a green SCHEDULED verdict as a security property
+    (directives#349).
+  - **One spec set, one viewport source.** The kit runs one suite against the
+    local server (`qa.yml`) and the live URL (`qa-live.yml` / `qa-response.yml`),
+    both inheriting the SAME `projects` list, so that list alone decides what
+    widths the app is ever rendered at. A laptop-width safety net independent of
+    it is an offline/stubbed harness tier with explicit per-test viewports, which
+    you build; the kit does not provide one.
 
-  Three mechanisms for the stronger claim were built and withdrawn across #347
-  rounds 5-7: a `viewport-override` marker, a fixture recording the viewport at
-  test teardown, and one recording it at navigation. Three variants of a single
-  finding defeated all three — a `beforeAll` that throws, a `beforeEach` that
-  throws, and a `beforeEach` that navigates *then* throws — each producing
-  evidence for a test whose body never ran. Every fix was right for the variant
-  that motivated it and wrong one step out, which is the same pattern that made
-  config-prediction unworkable in the first place. Proving a page rendered needs
-  a signal tied to the test body starting, and only the body itself gives one.
-  The kit's `renderWitness` fixture yields a function and records nothing at
-  setup; each scenario body CALLS `renderWitness();` as its first statement, and
-  that call records `page.viewportSize()` as the witness. Only code inside the
-  test callback can make the call, so a witness proves the callback was entered
-  with the page at that width. Requesting the fixture proves nothing: #348 first
-  recorded at setup, and a sibling fixture set up after it that throws leaves a
-  witness for a body Playwright never invoked (Codex, #384 round 1) — so a test
-  that requests it but never calls it stays SCHEDULED-only. It does not see a
-  `setViewportSize()` later in the body; keep it non-`auto`, and a hook or
-  fixture that calls it forges it (#349). Request it and call it first in any
-  test you write.
-
-  **What this gate catches is DRIFT, not FORGERY, and that boundary is stated
-  rather than defended.** The evidence it reads — the JSON report, and the
-  project list it imports — is produced by processes the config runs in, and
-  there is no authenticated channel out of a process you do not control. A
-  config's own exit handler can replace the report after the reporter has
-  written it; a corrupted array primitive can put a forged row among the declared
-  ones. Both were reproduced (#347 round 11). Six rounds of hardening moved the
-  exit path, the timeout, the kill signal, the verdict file and the band
-  arithmetic out of the config's reach, and every one of those closed a way to
-  subvert code the gate OWNS — neither of these is that. They are the config
-  lying about itself, in the only evidence that exists about it.
-
-  So: a config that narrows silently is what this gate exists for and what it
-  catches — a shard, a `.gitignore`, a filter, a device spread overwriting a
-  literal, a project quietly deleted. A config written to deceive it defeats it,
-  as it would defeat any check that reads a run through the run's own output.
-  Do not read a green SCHEDULED verdict as a security property. Tracked as
-  directives#349; reopen it only with a mechanism, since every candidate so far
-  either lives inside the same process or is an enumeration.
-
-  **The declaration is checked twice, and the two must agree.** The pre-run pass
-  writes the widths it read; the post-run pass imports the config again and
-  compares. Where they differ the gate reports CANNOT CHECK (exit 21) rather than
-  a verdict, because the widths it would band by are not the ones the run used.
-  The verdict, when they agree, is still computed from the PRE-RUN reading.
-
-  ⚠️ **This makes post-run importability a prerequisite, which it was not
-  before.** A suite that leaves the config unable to load — a deleted fixture, a
-  marker a test writes, a `globalTeardown` — now refuses even though its widths
-  never changed. That is a real cost and the opposite direction from what
-  `--declared` originally bought. It is kept because the alternative, falling back
-  to the carried mapping when the second import fails, would certify without
-  corroboration *and* be the way to evade the check.
-
-  This exists because the gate creates the difference itself: the `--declared`
-  sidecar does not exist when the pre-run pass imports your config and does exist
-  when Playwright imports it, so a config that reads the filesystem can answer
-  the two differently. Agreement proves the config answered **consistently**, not
-  that it answered **honestly** — a config that lies the same way twice is
-  believed, which is directives#349's family.
-
-  **A test that sets its own viewport must still say so — by EITHER route.**
-  Two things replace the project's viewport, and the rule named only one of them
-  until directives#347 round 31:
-  - `setViewportSize()` inside the test body.
-  - `test.use({ viewport })` at file or `describe` scope — the fixture form.
-    Measured on 1.62.1, and again on 1.63.0 (2026-10-06): a spec carrying it ran at 390px in the laptop, tablet
-    AND phone projects, and the JSON report carried **no annotation at all** —
-    neither per-test nor per-result. Playwright does not mark it, so nothing
-    downstream can infer it.
-  - `base.extend({ viewport })` — a fixture EXTENSION replacing the built-in
-    option, and any other route that replaces it. Measured the same way and with
-    the same result: 390px in all three projects, empty annotation arrays, exit 0
-    certifying every band.
-
-  The list is deliberately open-ended. Round 31 of directives#347 named
-  `setViewportSize()` and `test.use()`; round 32 found `test.extend()` the next
-  hour, because the rule was written as an enumeration of routes and Playwright
-  has more of them than an enumeration can hold. **The test to apply is the
-  property, not the list: if a test can end up at a width its project did not
-  declare, it must carry the marker.**
-
-  Either way that test runs at the width IT chose in *every* project. Push
-  `{ type: 'viewport-override' }` onto `test.info().annotations` in any such test
-  and the gate stops counting the result; the kit's S4 (the 390px overflow check)
-  carries it. Skip it and a run selecting only viewport-overriding tests
-  certifies every band.
-
-  This is the marker rule doing the work the verdict cannot. The gate's verdict
-  is **SCHEDULED** — a non-skipped result in a project *declaring* that width —
-  and it says so; it has never established that a page was rendered at it. The
-  RENDERED disposition (directives#348) records the width a test body STARTED
-  at, so it misses a later `setViewportSize()` as well. The marker is how an
-  author states the one thing the report does not carry, so a rule that names
-  only half the ways to override it leaves the other half silent.
-
-  **Your config must declare a json reporter.** The shipped kit declares
-  `['json', { outputFile: '../../../.agent-reports/playwright-results.json' }]`
-  alongside its `list` reporter. A config that declares no json reporter leaves
-  the composite's post-run check unable to read one, which is CANNOT CHECK and
-  fails the job — deliberately, so that a missing report is never mistaken for a
-  covered band.
-
-  The `outputFile` itself need not match `report-path`: the composite exports
-  `PLAYWRIGHT_JSON_OUTPUT_FILE` set to the validated path, and that variable
-  takes precedence over the configured `outputFile` (measured on 1.62.1 and 1.63.0 — with
-  it set, the configured file is not written at all). The composite pins it for
-  the opposite reason too: a job that already exported that variable used to
-  redirect the report away from the path the gate reads, failing an otherwise
-  valid run. Note the precedence runs one way only — the variable redirects a
-  json reporter, it does not add one, so declaring the reporter stays on you.
-  A listing (`playwright test --list`) was the first design and was measured out.
-  It is not the run: it announces itself in `process.argv`, it loads with
-  `filterOnly:false` so a stray `test.only` over-counts, it skips `globalSetup`,
-  and it carries no disposition at all — a reporter calling `testRun.skip()` on
-  every test lists a full inventory. Don't reintroduce it.
-  Three consequences worth knowing before you see them in CI. A suite whose
-  report carries **no non-skipped result** FAILS, where it used to pass on
-  declared widths alone. Tests that are all SKIPPED fail the same way — a skipped
-  test is not evidence of anything. Note the direction: the gate fails on the
-  ABSENCE of a non-skipped result, and passing is not the converse — hooks that
-  fail before every test body still leave non-skipped results, so a green
-  SCHEDULED verdict does not say a test executed. And a selection key that
-  narrows nothing —
-  `testIgnore: []`, `grep: /(?:)/`, `shard: {current:1,total:1}` — no longer
-  trips anything; the gate used to refuse those on presence because it could not
-  tell.
-
-  **One spec set, one viewport source.** This kit ships a single suite —
-  `tests/app.spec.js` under `playwright.config.js` — and runs it against two
-  targets: the bundled local server in `qa.yml`, and the live URL in
-  `qa-live.yml` / `qa-response.yml`. Both targets inherit the SAME `projects`
-  list, and exactly one test in the kit sets a viewport of its own. So the
-  `projects` list is the only thing deciding what widths this app is ever
-  rendered at, and there is no second tier to compensate: drift it to phone-only
-  and nothing anywhere renders the app at laptop width. A project that wants a
-  laptop-width safety net independent of that list has to build one — an
-  offline/stubbed harness tier with explicit per-test viewports, which this kit
-  does not provide. `apfp.claude` built exactly that, which is why its own drift
-  stayed catchable; a project running the standard kit alone has no such margin.
+  The measurements, withdrawn designs and review rounds behind each of these are
+  in `docs/standards/viewport-classes-history.md`.
 
 These are **completion gates, not sequencing gates**: everything must pass before
 the work is called done, but a task never waits for the previous task's suite to

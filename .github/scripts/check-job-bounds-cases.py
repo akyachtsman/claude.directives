@@ -37,10 +37,11 @@ Run: python3 .github/scripts/check-job-bounds-cases.py
 #   job bounds (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding
 #   it — an unreadable bound on a job carrying a floor must REFUSE, and the
 #   exemption for jobs carrying no floor must survive, #334)
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from cases_lib import Cases, run, write_tree
 
 GUARD = Path(__file__).resolve().parent / "check-job-bounds.py"
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -165,50 +166,25 @@ CASES = [
 
 
 def run_guard(root, extra_args=()):
-    r = subprocess.run([sys.executable, str(GUARD), str(root), *extra_args],
-                       capture_output=True, text=True, cwd=REPO_ROOT)
-    return r.returncode, f"{r.stdout}{r.stderr}".strip()
+    return run([sys.executable, GUARD, root, *extra_args], cwd=REPO_ROOT)
 
 
 def main():
-    failures = []
+    c = Cases("check-job-bounds-cases")
     for label, workflows, expected, needle, extra in CASES:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".github/workflows").mkdir(parents=True)
-            for name, body in workflows.items():
-                (root / ".github/workflows" / name).write_text(body, encoding="utf-8")
-            for rel, body in extra.items():
-                dest = root / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(body, encoding="utf-8")
-            code, out = run_guard(root)
-        if code != expected:
-            failures.append(f"{label}\n      expected exit {expected}; got {code}.\n      {out}")
-        elif needle not in out:
-            failures.append(
-                f"{label}\n      exited {code} as expected, but for the wrong stated reason."
-                f"\n      expected the output to contain: {needle!r}\n      {out}"
-            )
-        else:
-            print(f"OK:   {label} (exit {code})")
+            write_tree(root / ".github/workflows", workflows)
+            write_tree(root, extra)
+            c.expect(label, *run_guard(root), expected, needle)
 
     # The guard must also still pass against THIS repo's real workflows. A suite
     # that only ever sees fixtures can be perfectly green while the shipped
     # workflows are broken -- and this is the run qa.yml actually performs.
-    code, out = run_guard(REPO_ROOT, ("--include-templates",))
-    if code != 0:
-        failures.append(f"this repo's own workflows no longer pass\n      exit {code}\n      {out}")
-    else:
-        print("OK:   this repo's workflows + templates pass (exit 0)")
-
-    if failures:
-        print("\ncheck-job-bounds-cases: FAILED\n")
-        for f in failures:
-            print(f"  - {f}")
-        return 1
-    print(f"\ncheck-job-bounds-cases: OK — {len(CASES) + 1} pinned workflow shapes read correctly.")
-    return 0
+    c.expect("this repo's workflows + templates pass",
+             *run_guard(REPO_ROOT, ("--include-templates",)), 0)
+    return c.finish(f"{len(CASES) + 1} pinned workflow shapes read correctly.")
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ Referenced by the exported directives and the qa agents.
 | `standards/kit-defects.md` | UI-test kit defects that shipped downstream — one entry per bug, each with a mechanical check and the minimal fix; `/refresh-repo` reads it from the upstream head before every kit diff, so it lives here rather than inside the kit a refresh copies (#327) |
 | `standards/session-mechanics.md` | The mechanism and evidence behind session rules in `global.md` — provenance and sinks, parallel-tasking boundaries, wake coverage and the in-flight test, stale recorded SHAs, the scheduling-allowlist history, and the API equivalents for a blocked command; read on demand (#299) |
 | `standards/hosting-mechanics.md` | The mechanism and evidence behind `global.md` → *Hosting & Deployment* — choosing the Pages source, deny-list verification, monitoring after a switch to Actions-source, observers versus re-runners, and the incident behind them; read on demand (#299) |
+| `standards/viewport-classes-history.md` | The evidence behind `test.md`'s three-viewport-classes gate (*UI coverage gates*, fifth gate) — why the config is imported, why both flags, why the verdict is SCHEDULED and how RENDERED was earned, DRIFT not FORGERY, the override routes; read on demand |
 
 ## `guides/` — exported working guidance and setup
 | File | What it covers |

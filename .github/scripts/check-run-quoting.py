@@ -54,7 +54,16 @@ on #408 each found a real corner of bash or GitHub Actions semantics, and every
 one was fixed. From here on, a review finding whose shape does not occur in this
 repo's workflows is answered on its thread and listed here, with no code. A
 finding that occurs here, or that would let this repo's workflows pass when they
-should not, is still fixed. Listed so far: (none yet).
+should not, is still fixed. Listed so far:
+  - an empty `shell:` crashes `classify()` (IndexError) instead of CANNOT CHECK;
+  - `shell: env bash`, `dash` or `zsh` is classed non-bash and skipped unread;
+  - a `"` in the VALUE of a double-quoted `${{ }}` ends the quote, which the
+    DblQuoted pass cannot see (this repo's one bash expression is
+    `steps.pw-cache.outputs.cache-hit`);
+  - in a folded `>` scalar, blank lines fold away, so a reported line can sit
+    above the real one;
+  - a `${{ }}` in a shell comment is CANNOT CHECK, though a comment keeps its
+    value inert unless the value carries a newline.
 
 Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file, no
 shfmt, a block whose shell is unknown, an expression outside double quotes and
@@ -200,8 +209,8 @@ def scan(text, shfmt):
         m = SHFMT_ERROR.match(msg[0])
         line = int(m.group(1)) - 1 if m else 0
         return [(line, f"does not parse as bash: {m.group(3) if m else msg[0]}")], []
-    spans = []
-    single_quoted(json.loads(r.stdout), spans)
+    ast, spans = json.loads(r.stdout), []
+    single_quoted(ast, spans)
     findings = []
     for start, end, dollar in spans:
         for at, what in ((start + (1 if dollar else 0), "OPENS"), (end - 1, "CLOSES")):
@@ -210,7 +219,7 @@ def scan(text, shfmt):
                 findings.append((src.count(b"\n", 0, at),
                                  f"an apostrophe {what} a single-quoted span: ...{snippet!r}..."))
     ctx = []
-    contexts(json.loads(r.stdout), ctx)
+    contexts(ast, ctx)
     unknowns = []
     for e_start, e_end in exprs:
         around = [c for c in ctx if c[1] <= e_start and e_end <= c[2]]

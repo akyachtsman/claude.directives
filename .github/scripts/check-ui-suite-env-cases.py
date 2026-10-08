@@ -36,22 +36,21 @@ Run: python3 .github/scripts/check-ui-suite-env-cases.py
 #   that env guard's own guard — every branch that can print, incl. the failure
 #   paths (a NameError shipped in one, #333 round 11). Its rules have been
 #   rewritten four times, so re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
-import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from cases_lib import Cases, bin_path, run
 
 # Overridable so a MUTANT can be pointed at, the way CHECK_UI_VIEWPORTS_BIN and
 # CHECK_CLAIMS_BIN are used elsewhere in this directory. A case that cannot be
 # shown to redden is a case nobody has measured -- and this guard's rules have
 # been rewritten four times, so "these cases still pass" says nothing on its own.
-# resolve(): the discovery and exemption cases run with cwd set to a temp tree,
+# resolve() (bin_path does it): the discovery and exemption cases run with cwd set to a temp tree,
 # so a RELATIVE mutant path stopped resolving there and every mutant failed
 # those cases for "can't open file" -- perfect discrimination, nothing tested
 # (audit, 2026-10-06; the trap check-links-cases.js documents).
-GUARD = Path(os.environ.get("CHECK_UI_SUITE_ENV_BIN",
-                            Path(__file__).resolve().parent / "check-ui-suite-env.py")).resolve()
+GUARD = bin_path("CHECK_UI_SUITE_ENV_BIN", Path(__file__).resolve().parent / "check-ui-suite-env.py")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIVE = REPO_ROOT / "templates/actions/ui-suite/action.yml"
 
@@ -763,13 +762,11 @@ SPEC_CASES = [
 
 
 def run_guard(path, spec):
-    r = subprocess.run([sys.executable, str(GUARD), str(path), str(spec)],
-                       capture_output=True, text=True, cwd=REPO_ROOT)
-    return r.returncode, f"{r.stdout}{r.stderr}".strip()
+    return run([sys.executable, GUARD, path, spec], cwd=REPO_ROOT)
 
 
 def main():
-    failures = []
+    c = Cases("check-ui-suite-env-cases")
     with tempfile.TemporaryDirectory() as tmp:
         no_reads = Path(tmp) / "no-reads.spec.js"
         no_reads.write_text("// reads no environment\n", encoding="utf-8")
@@ -782,27 +779,13 @@ def main():
         for i, (label, body, expected, needle, spec) in enumerate(cases):
             path = Path(tmp) / f"case{i}.yml"
             path.write_text(body, encoding="utf-8")
-            code, out = run_guard(path, spec)
-            if code != expected:
-                failures.append(f"{label}\n      expected exit {expected}; got {code}.\n      {out}")
-            elif needle not in out:
-                failures.append(
-                    f"{label}\n      exited {code} as expected, but for the wrong stated reason."
-                    f"\n      expected the output to contain: {needle!r}\n      {out}"
-                )
-            else:
-                print(f"OK:   {label} (exit {code})")
+            c.expect(label, *run_guard(path, spec), expected, needle)
 
     # The guard must also still pass against the REAL composite. A suite that only
     # ever sees fixtures can be perfectly green while the shipped file is broken.
     # With the SHIPPED spec and config, so the #320 wiring is checked for real.
-    r = subprocess.run([sys.executable, str(GUARD), str(LIVE), "--kit-dir", "templates/ui-tests"],
-                       capture_output=True, text=True, cwd=REPO_ROOT)
-    code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
-    if code != 0:
-        failures.append(f"the live composite no longer passes\n      exit {code}\n      {out}")
-    else:
-        print("OK:   the live ui-suite composite passes (exit 0)")
+    c.expect("the live ui-suite composite passes",
+             *run([sys.executable, GUARD, LIVE, "--kit-dir", "templates/ui-tests"], cwd=REPO_ROOT), 0)
 
     # DISCOVERY (#372): with no spec arguments the guard must find every JS/TS
     # file under the kit, so a spec added later is covered without being named.
@@ -835,16 +818,12 @@ def main():
             if not cwd_files:
                 for f in tests.iterdir():
                     f.unlink()
-            r = subprocess.run([sys.executable, str(GUARD)],
-                               capture_output=True, text=True, cwd=tmp)
-            code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
+            code, out = run([sys.executable, GUARD], cwd=tmp)
             extra += 1
-            if code != expected or needle not in out:
-                failures.append(f"{label}\n      expected exit {expected} with {needle!r}; got {code}.\n      {out}")
-            elif "IGNORED_IN_NODE_MODULES" in out:
-                failures.append(f"{label}\n      node_modules was scanned.\n      {out}")
+            if "IGNORED_IN_NODE_MODULES" in out:
+                c.fail(label, f"node_modules was scanned.\n      {out}")
             else:
-                print(f"OK:   {label} (exit {code})")
+                c.expect(label, code, out, expected, needle)
 
     # PROJECT EXEMPTIONS (PROP6): a project extends ENV_EXEMPT in its own file,
     # never by editing the guard, and every entry must carry a reason. Each
@@ -883,35 +862,22 @@ def main():
                 exempt.unlink(missing_ok=True)
             else:
                 exempt.write_text(body, encoding="utf-8")
-            r = subprocess.run([sys.executable, str(GUARD), *args],
-                               capture_output=True, text=True, cwd=tmp)
-            code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
             extra += 1
-            if code != expected or needle not in out:
-                failures.append(f"{label}\n      expected exit {expected} with {needle!r}; got {code}.\n      {out}")
-            else:
-                print(f"OK:   {label} (exit {code})")
+            c.expect(label, *run([sys.executable, GUARD, *args], cwd=tmp), expected, needle)
 
         # An exemption left behind for a name the composite DOES wire from an input
         # is reported as wired, never as "NOT wired" (Codex, #397).
         (tests / "a.spec.js").write_text("const u = process.env.APP_URL;\n", encoding="utf-8")
         exempt.write_text('{"APP_URL": "stale: arrived another way once"}', encoding="utf-8")
-        r = subprocess.run([sys.executable, str(GUARD)], capture_output=True, text=True, cwd=tmp)
-        code, out = r.returncode, f"{r.stdout}{r.stderr}".strip()
+        code, out = run([sys.executable, GUARD], cwd=tmp)
         extra += 1
         label = "a stale exemption for a name wired from an input is reported as wired"
-        if code != 0 or '": APP_URL (read from' not in out or "NOT wired" in out:
-            failures.append(f"{label}\n      expected exit 0, APP_URL on the wired line, no NOT-wired line; got {code}.\n      {out}")
+        if "NOT wired" in out:
+            c.fail(label, f"expected no NOT-wired line.\n      {out}")
         else:
-            print(f"OK:   {label} (exit {code})")
+            c.expect(label, code, out, 0, '": APP_URL (read from')
 
-    if failures:
-        print("\ncheck-ui-suite-env-cases: FAILED\n")
-        for f in failures:
-            print(f"  - {f}")
-        return 1
-    print(f"\ncheck-ui-suite-env-cases: OK — {len(CASES) + len(SPEC_CASES) + 1 + extra} pinned shapes read correctly.")
-    return 0
+    return c.finish(f"{len(CASES) + len(SPEC_CASES) + 1 + extra} pinned shapes read correctly.")
 
 
 if __name__ == "__main__":

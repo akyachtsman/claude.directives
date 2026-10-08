@@ -19,8 +19,8 @@ CLAUDE.md (currently five: `global.md`, `git.md`, `design.md`, `test.md`,
 `data.md`), and CLAUDE.md itself. Note: plugin content and `.claude/settings.json`
 load at session start only — a mid-session upstream merge never reaches THIS
 session. With `.claude/hooks/session-start.sh` installed it reaches the next one;
-without it, only when the environment's cached setup script rebuilds (web: on an
-env-config change or ~weekly cache expiry).
+without it, only when the environment's cached setup script rebuilds (web: on a
+change to the setup script or allowed network hosts, or the ~weekly cache expiry).
 
 ## Phase 1 — Broken upstream references
 

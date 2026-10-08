@@ -18,15 +18,14 @@ Re-prove discrimination with a mutant:
 """
 
 import os
-import subprocess
 import sys
 import tempfile
 
+from cases_lib import Cases, bin_path, run, write_tree
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GUARD = os.environ.get(
-    "CHECK_RUN_QUOTING_BIN",
-    os.path.join(ROOT, ".github", "scripts", "check-run-quoting.py"),
-)
+GUARD = bin_path("CHECK_RUN_QUOTING_BIN",
+                 os.path.join(ROOT, ".github", "scripts", "check-run-quoting.py"))
 
 
 def workflow(run, shell=None, defaults=None, runs_on="ubuntu-latest"):
@@ -264,37 +263,17 @@ CASES = [
 
 
 def main():
-    failures = 0
+    c = Cases("check-run-quoting-cases")
     for name, files, want_code, want_text, *how in CASES:
         with tempfile.TemporaryDirectory() as d:
-            paths = []
-            for rel, text in files.items():
-                p = os.path.join(d, rel)
-                os.makedirs(os.path.dirname(p), exist_ok=True)
-                with open(p, "w", encoding="utf-8") as f:
-                    f.write(text)
-                paths.append(p)
+            write_tree(d, files)
             # "root": no file arguments, so the guard's own discovery runs.
-            args = ["--root", d] if how == ["root"] else paths
+            args = ["--root", d] if how == ["root"] else [os.path.join(d, rel) for rel in files]
             env = dict(os.environ)
             if how == ["noparser"]:
                 env["SHFMT"] = os.path.join(d, "no-such-shfmt")
-            r = subprocess.run([sys.executable, GUARD, *args],
-                               capture_output=True, text=True, env=env)
-            out = r.stdout + r.stderr
-            if r.returncode == want_code and want_text in out:
-                print(f"OK:   {name} (exit {r.returncode})")
-            else:
-                failures += 1
-                print(f"FAIL: {name}")
-                print(f"  wanted exit {want_code} with {want_text!r}; got exit {r.returncode}:")
-                for line in out.splitlines()[:8]:
-                    print(f"    {line}")
-    if failures:
-        print(f"check-run-quoting-cases: FAIL — {failures} of {len(CASES)} case(s)")
-        return 1
-    print(f"check-run-quoting-cases: OK — {len(CASES)} pinned fixtures read correctly.")
-    return 0
+            c.expect(name, *run([sys.executable, GUARD, *args], env=env), want_code, want_text)
+    return c.finish(f"{len(CASES)} pinned fixtures read correctly.")
 
 
 if __name__ == "__main__":

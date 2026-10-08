@@ -1247,7 +1247,7 @@ before reporting "no access":
 5. **curl/CLI in the sandbox** — goes through the agent proxy; the environment
    allowlist applies. A 403 on CONNECT is a policy denial: report it, never
    route around it. The owner can add the host in the environment's network
-   settings, which takes effect in RUNNING sessions immediately — no new
+   settings, which running sessions follow within about a minute — no new
    session needed. Diagnose with
    `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
 6. **Sandbox browser (Playwright)** — launch the browser the project's own

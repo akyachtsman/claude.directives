@@ -11,7 +11,7 @@ import { execFileSync } from 'child_process';
 // others; round 35 found "check the PR's comments" in nine files while the
 // source said "comments AND review threads". This repo's established answer to
 // that class is a checker, not vigilance (check-exports, check-landing-cards,
-// check-secret-scan, the paired-file diffs all exist for the same reason).
+// check-secret-scan, check-pairs all exist for the same reason).
 //
 // ── WHY IT LOOKS LIKE THIS: THE INFERENCE LAYER WAS DELETED (#341) ──────────
 // The previous version decided whether a carrier's claim was CONDITIONED —

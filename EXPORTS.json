@@ -118,6 +118,7 @@
         "templates/actions/ui-suite/",
         "templates/ui-tests/",
         "docs/standards/kit-defects.md",
+        "docs/standards/viewport-classes-history.md",
         "templates/scripts/check-ui-viewports.js",
         "templates/scripts/check-ui-suite-env.py",
         "templates/scripts/browser-ladder.js",
@@ -225,10 +226,7 @@
       "blurb": "State blocking criteria a change must satisfy. Model-independent: a smarter model still has to meet them.",
       "paths": [
         "directives/global.md",
-        "docs/standards/session-mechanics.md",
-        "docs/standards/hosting-mechanics.md",
         "directives/git.md",
-        "docs/standards/pr-mechanics.md",
         "docs/standards/automations.md",
         "docs/standards/cicd-setup.md",
         "directives/design.md",
@@ -330,7 +328,11 @@
         "docs/guides/cron-email-notifications.md",
         "docs/guides/design-tooling.md",
         "NEW-REPO-USER-INSTRUCTIONS.md",
-        "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        "docs/standards/viewport-classes-history.md",
+        "docs/standards/session-mechanics.md",
+        "docs/standards/hosting-mechanics.md",
+        "docs/standards/pr-mechanics.md"
       ]
     }
   },

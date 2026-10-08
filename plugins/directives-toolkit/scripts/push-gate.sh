@@ -53,54 +53,17 @@
 
 in=$(cat) || exit 0
 
-# Extract the Bash tool's command string (jq when available, sed fallback).
-if command -v jq >/dev/null 2>&1; then
-  cmd=$(printf '%s' "$in" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
-else
-  cmd=$(printf '%s' "$in" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-fi
+# The shared parsing lives beside this file; without it, allow (fail-open above).
+# shellcheck source=gate-lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/gate-lib.sh" 2>/dev/null || exit 0
+
+cmd=$(gate_command "$in") || exit 0
 [ -n "$cmd" ] || exit 0
 
-# Strip quoted segments: message text must never influence the verdict.
-# ONE left-to-right pass that tracks quote state, because the spans interact:
-# the earlier three sed passes stripped single-quoted spans before double-quoted
-# ones, so an apostrophe inside a double-quoted message ("fix the user's bug")
-# opened a "single-quoted span" that ran to the next apostrophe and swallowed the
-# push between them -- exit 0 on an ordinary commit (audit, 2026-10-06). The
-# rules are unchanged, only now applied in the order bash reads them:
-#  - a single-WORD quoted token is unquoted (`push origin "main"` cannot hide the ref);
-#  - a single-quoted span is inert, so one containing whitespace is dropped;
-#  - a double-quoted span containing `$` or a backtick may hold a live command
-#    substitution (bash expands both inside double quotes), so it is KEPT; any
-#    other multi-word double-quoted span is message text and is dropped;
-#  - a backslash outside quotes escapes the next character, as in bash;
-#  - an unterminated quote keeps its text, so a parse oddity errs toward checking.
-# A backslash-newline continuation is joined first: bash reads it as one command.
-stripped=$(printf '%s' "$cmd" | awk '
-  BEGIN { RS = "\001" }
-  {
-    gsub(/\\\n/, " ")
-    out = ""; q = ""; buf = ""
-    n = length($0)
-    for (i = 1; i <= n; i++) {
-      c = substr($0, i, 1)
-      if (q == "") {
-        # Outside quotes a backslash escapes the next character, so `\"` is a
-        # literal quote, not the start of a span (Codex, #396).
-        if (c == "\\" && i < n) { out = out c substr($0, i + 1, 1); i++ }
-        else if (c == "\047" || c == "\"") { q = c; buf = "" } else { out = out c }
-      } else if (q == "\"" && c == "\\" && i < n) {
-        buf = buf c substr($0, i + 1, 1); i++
-      } else if (c == q) {
-        if (buf !~ /[[:space:]]/ || (q == "\"" && buf ~ /[$`]/)) out = out buf
-        q = ""; buf = ""
-      } else {
-        buf = buf c
-      }
-    }
-    if (q != "") out = out buf
-    printf "%s", out
-  }')
+# Strip quoted segments: message text must never influence the verdict. The
+# rules, and the apostrophe defect that made them one stateful pass, are in
+# gate-lib.sh -> gate_strip_quotes.
+stripped=$(gate_strip_quotes "$cmd")
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var

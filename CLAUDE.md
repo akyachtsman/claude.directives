@@ -46,7 +46,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
-| `templates/scripts/` | Optional project scripts (`notify-email.js`, `notify-task.js`, `check-contrast.js`, `check-ui-viewports.js`, `check-py-warnings.py`) projects copy into `.github/scripts/`. `check-ui-viewports.js` is run here straight from this path by `qa.yml`, so unlike `workflow-ref-guard.py` / `check-job-bounds.py` it has NO byte-identical `.github/scripts/` twin |
+| `templates/scripts/` | Project scripts — guards, notifiers, the browser ladder, and the `package.json` the notifiers install from — that projects copy into `.github/scripts/`; which ones a project gets is derived from the workflows and directives that name them (`/new-repo`, `/refresh-repo`). Only the four on `check-pairs.py`'s pair list have a byte-identical `.github/scripts/` twin here; `check-ui-viewports.js` is run straight from this path by `qa.yml`, so it has none |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
@@ -70,9 +70,9 @@ relocate the export into this file.
 ## Self-application
 This repo eats its own cooking: **whenever a directive or template change ships,
 check whether it applies to THIS repo too**, in the same PR. Two patterns:
-- **Byte-identical copy**, enforced by qa.yml's paired-file check
-  (`codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`,
-  `.claude/settings.json`) — the template IS the live copy.
+- **Byte-identical copy**, enforced by `.github/scripts/check-pairs.py` — the
+  one list of pairs lives in that script; add a pair there — the template IS the
+  live copy.
 - **Adapted with documented divergence** where roles differ (`ci-monitor.yml` /
   `ci-notify.yml` watch this repo's workflow name; `qa.yml` here is directive
   validation, not app CI — so the app-shaped pieces like the ui-tests kit and
@@ -80,7 +80,7 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 `/audit-repo` treats a shipped-downstream-but-applicable-here miss as drift.
 
 ## Branch policy
-`global.md` → *GitHub Workflow* + *PR Lifecycle* apply here unchanged:
+`global.md` → *GitHub Workflow* and `git.md` → *PR Lifecycle* apply here unchanged:
 `claude/<name>` branches, never commit to `main`, draft PR on first push,
 squash-merge on green — no approval is sought.
 
@@ -159,22 +159,9 @@ everything hot-reloads:
 
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.
-- `qa.yml` — `QA — Directive Validation`: internal link check (hard fail,
-  verified against the local working tree, including `→ *Section*`
-  cross-references), path-existence, required-section headings, workflow YAML
-  validation, secret-scan pattern+filter sync, the export boundary
-  (`check-exports.js`, both directions), the canonical-claim guard
-  (`check-claims.js` — it proves a claim TRAVELLED, never that it is TRUE) and
-  its guard, a clean-compile check over every tracked `.py`, the viewport gate on
-  the shipped Playwright config (`check-ui-viewports.js` — its verdict is
-  **SCHEDULED**, not EXECUTED, with a per-class **RENDERED** disposition where the
-  kit's witness, CALLED as the first statement of a test body, proves that body started at that width (#348, #384);
-  it catches DRIFT, not FORGERY) and its guard,
-  job bounds, the contrast guardrail's guard, `/refresh-repo`'s script
-  derivation, the workflow-ref guard, the run-quoting guard (an apostrophe read
-  as a shell quote) and its guard, and a paired-file diff check, plus a
-  warn-only external-link job, `build-logical-map.js --check`, and `node --check`
-  over the exported JS templates. Each guard's design history is in its own
+- `qa.yml` — `QA — Directive Validation`: every check the *Local gate* below
+  lists (that list mirrors it), plus a warn-only external-link job. Each
+  guard's design history is in its own
   header comment; what has no single script home is in
   `docs/internal/gate-history.md`.
   It also runs a **Playwright UI test** (`Repo Map UI`) — this repo dogfooding
@@ -240,6 +227,7 @@ failure mode a broader description buys, and it is invisible without them.
 Before committing or pushing, verify locally — this list mirrors what `qa.yml`
 runs, so keep the two in sync:
 ```
+python3 -c "import yaml; print(yaml.safe_load(open('templates/actions/secret-scan/action.yml'))['runs']['steps'][0]['run'])" | bash -eo pipefail   # qa.yml's Secret scan step: runs the composite's own block, so the pattern has no third copy here
 node .github/scripts/check-paths.js
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
@@ -260,7 +248,7 @@ python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name reso
 python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
-python3 .github/scripts/check-toolkit-gates-cases.py  # the push and wait gates block the shapes they claim (+main, an apostrophe-hidden push, `sleep 5m`) and allow the complements. Re-prove with PUSH_GATE_BIN / WAIT_GATE_BIN=<mutant>
+python3 .github/scripts/check-toolkit-gates-cases.py  # the push and wait gates block the shapes they claim (+main, an apostrophe-hidden push, `sleep 5m`) and allow the complements; both share gate-lib.sh's quote parser. Re-prove with PUSH_GATE_BIN / WAIT_GATE_BIN / GATE_LIB_BIN=<mutant>
 python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation still matches every shipped caller — it reads the pattern OUT of refresh-repo.md, so a copy cannot drift from it (PROP6)
 python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — most of its checks never fire against THIS repo (no ragged caller, no missed match, no widened copy), so nothing else would notice them break
 python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT; it does NOT check that carriers install them, nor that a composite names a file that exists
@@ -276,22 +264,14 @@ node .github/scripts/check-links-cases.js        # that checker's own guard. Re-
 #   - DO NOT teach it to read across a line break (#365 and #367 both tried, both reverted); keep every `file.md` → *Name* reference on ONE line
 #   - Do NOT suppress the self form after a code span naming a `.md` file (#367 rounds 12-16, withdrawn by owner ruling 2026-09-18)
 #   - Keep the `\x60` in `(?<![\x60\w])`; do NOT reintroduce the flanking rule; line endings are normalised ONCE by `readSource()`
-python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml') + glob.glob('templates/workflows/*.yml') + glob.glob('templates/actions/*/action.yml')]"
-diff .claude/settings.json templates/claude-settings.json
-diff .github/workflows/codex-monitor.yml templates/workflows/codex-monitor.yml
-diff .github/workflows/pages-monitor.yml templates/workflows/pages-monitor.yml
-diff .github/workflows/pages-retry.yml templates/workflows/pages-retry.yml
-diff .github/scripts/workflow-ref-guard.py templates/scripts/workflow-ref-guard.py
-diff .github/scripts/check-job-bounds.py templates/scripts/check-job-bounds.py
-diff .github/scripts/check-py-warnings.py templates/scripts/check-py-warnings.py
-diff .github/scripts/check-ui-suite-env.py templates/scripts/check-ui-suite-env.py
-diff .claude/hooks/session-start.sh templates/claude-hooks/session-start.sh
-test -x .claude/hooks/session-start.sh && test -x templates/claude-hooks/session-start.sh   # exec bit: a content diff cannot see it
+python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for p in ('.github/workflows/*', 'templates/workflows/*', 'templates/actions/*/action') for e in ('.yml', '.yaml') for f in glob.glob(p + e)]"
+python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable
+python3 .github/scripts/check-pairs-cases.py    # that check's own guard — every pair drifted in turn, each mode refusal with its complement. Re-prove with CHECK_PAIRS_BIN=<mutant>
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
 node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
-node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright && npx playwright install chromium`
+node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json, the map, or any file a drawn connection quotes, regenerate first: node .github/scripts/build-logical-map.js
@@ -310,16 +290,21 @@ local skip is fine for non-map changes.
 
 **This repo's agent-sandbox ceiling: NONE, measured 2026-08-26, re-derived
 2026-09-05 with the ladder** — `templates/scripts/browser-ladder.js`, run as
-`node <that path> chromium` from `templates/ui-tests`: **LAUNCHES at rung
-"as-is"** — chromium starts
-here with no install at all. The ladder is the instrument to re-derive this line
+`node <that path> chromium` from `templates/ui-tests`: **LAUNCHES**. The rung
+depends on the container, not the repo: re-run 2026-10-08 with the kit resolving
+Playwright 1.64.0, it launched at rung "install" — the image's chromium is the
+build for its own global Playwright, not the kit's, so a run that finds the kit's
+build absent installs it — and at rung "as-is" on the next run. That install also
+prunes `/opt/pw-browsers` builds no surviving install references, so a later
+`ls` there is not the image's contents. The ladder is the instrument to re-derive this line
 with from now on; it grades on the launch and quotes the error when there is one,
 which is what `test.md` asks the record to carry.
 `test.md` → *Sandboxed local runs* asks every project to record its own limit with
 the date, the causes and what would make it wrong. Ours: `check-repo-map-ui.js`
 **PASS, all cases, exit 0**. `docs/site/logical-map.html` loads no external
 resource of any kind, so the blocked-CDN cause that dominates the fleet's app
-repos cannot reach it, and the suite drives chromium, which the image ships. So a
+repos cannot reach it, and the suite drives chromium, which installs and launches
+here. So a
 local failure here is evidence about the map, not the environment — the opposite
 of the downstream default.
 
@@ -331,7 +316,9 @@ the line:
   a binary check.
 - the suite's **browser matrix or runner changing** — adding a webkit or firefox
   project would put the ceiling back in question even with chromium fine and the
-  map still self-contained. (The image ships neither preinstalled, which per
+  map still self-contained. (The image ships neither preinstalled — a webkit
+  build under `/opt/pw-browsers` was put there by a session's install, not the
+  image — which per
   `test.md` is **not** the same as unavailable: attempt the install and check
   whether it launches.)
 - the map gaining **any external resource**.
@@ -375,6 +362,6 @@ a SKILL.md in its own directory; agents are flat md files with unique `name:`
 frontmatter), run the plugin check from the Local gate above, and ship through
 the normal PR flow. Downstream projects carrying the `SessionStart` hook pick it
 up on their next session; legacy projects without it wait for their environment's
-cached setup script to rebuild (web: on an env-config change or ~weekly expiry). The
+cached setup script to rebuild (web: on a setup-script or network-allowlist change, or ~weekly expiry). The
 install/distribution model lives in
 `directives/global.md` → Skill Bootstrap.

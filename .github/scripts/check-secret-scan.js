@@ -56,34 +56,43 @@ if (!values.every((v) => v === values[0])) {
 
 // The regex is only half the contract: two copies can share it and still scan
 // DIFFERENT FILE SETS, so a coverage fix (adding *.ts, say) can land in one copy
-// and CI stays green while the other keeps its blind spot. Compare the filters
-// too. They cannot be compared byte-for-byte across a one-line Markdown command
-// and a backslash-continued YAML block, so compare the normalized flag SET.
-const FLAG_RE = /--(?:include|exclude-dir)=(?:"[^"\n]*"|[^\s\\]+)/g;
+// and CI stays green while the other keeps its blind spot. Compare the file set
+// too: the command must be `git grep --untracked` in every copy (tracked files
+// plus untracked ones that are not ignored — what could enter a PR, #410), and
+// the single-quoted pathspecs after its `--` must be the same SET. They cannot be
+// compared byte-for-byte across a one-line Markdown command and a
+// backslash-continued YAML block, so compare the normalized set.
+const COMMAND_RE = /git grep --untracked -lE\s/;
+const PATHSPEC_RE = /'([^'\n]*)'/g;
 const flagsOf = (text) => {
   const idx = text.search(PATTERN);
   if (idx === -1) return null;
-  // Look only at the invocation: from the pattern to the end of the command
-  // (the directive ends at a backtick, the action at the redirect/`|| rc=`).
+  // The command must precede the pattern on its own invocation.
+  if (!COMMAND_RE.test(text.slice(Math.max(0, idx - 200), idx))) return null;
+  // Look only at the invocation: from the `--` after the pattern to the end of
+  // the command (the directive ends at a backtick, the action at the `)` before
+  // `|| rc=`).
   const tail = text.slice(idx, idx + 800);
-  return [...tail.matchAll(FLAG_RE)]
-    .map((m) => m[0].replace(/"/g, ''))
-    .sort()
-    .join(' ');
+  const sep = tail.search(/\s--\s/);
+  if (sep === -1) return null;
+  const rest = tail.slice(sep);
+  const end = rest.search(/[`)]/);
+  const specs = [...(end === -1 ? rest : rest.slice(0, end)).matchAll(PATHSPEC_RE)].map((m) => m[1]);
+  return specs.length ? specs.sort().join(' ') : null;
 };
 
 const flags = {};
 for (const file of SOURCES) flags[file] = flagsOf(readFileSync(file, 'utf8'));
 const flagValues = Object.values(flags);
 if (flagValues.some((v) => !v)) {
-  console.error('check-secret-scan: FAIL — could not read scan filters from every source');
+  console.error('check-secret-scan: FAIL — could not read a `git grep --untracked` command and its pathspecs from every source');
   process.exit(1);
 }
 if (!flagValues.every((v) => v === flagValues[0])) {
-  console.error('check-secret-scan: FAIL — secret-scan FILE FILTERS have diverged (same regex, different coverage):');
+  console.error('check-secret-scan: FAIL — secret-scan PATHSPECS have diverged (same regex, different coverage):');
   for (const [file, value] of Object.entries(flags)) console.error(`  ${file}: ${value}`);
   process.exit(1);
 }
 
-console.log(`check-secret-scan: OK — pattern and file filters identical across ${values.length} sources`);
-console.log(`  filters: ${flagValues[0]}`);
+console.log(`check-secret-scan: OK — pattern and pathspecs identical across ${values.length} sources`);
+console.log(`  pathspecs: ${flagValues[0]}`);

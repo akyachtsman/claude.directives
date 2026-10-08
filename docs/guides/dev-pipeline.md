@@ -218,7 +218,10 @@ What `/new-repo` scaffolds in **every** project:
   `check-contrast.js`, `package.json`)
 
 **Mandatory setup** (NEW-REPO-USER-INSTRUCTIONS Step 1): data secrets (`DB_URL`,
-`DB_SERVICE_KEY`) and the test credential (`TEST_AUTH_CREDENTIAL`). The email
+`DB_SERVICE_KEY`) and the test credential (`TEST_AUTH_CREDENTIAL`), unless the
+app has no login or its login ships a working credential in a password field,
+which needs none
+(`cicd-setup.md` Step 5). The email
 transport (`SMTP_PASS` secret; `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` variables) is
 needed only if the project sends email (owner ruling, 2026-10-07).
 No `KEEPALIVE_PAT`: `keepalive.yml` is not scaffolded, so a standard repo has no

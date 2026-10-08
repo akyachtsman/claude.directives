@@ -229,7 +229,7 @@ inputs:
     description: 'URL the suite targets (local server or live deploy)'
     required: true
   test-auth-credential:
-    description: 'Seeded test credential; empty makes auth tests self-skip'
+    description: 'Seeded test credential; when empty, auth tests use a credential the login form ships in a password field, or self-skip if it ships none'
     required: false
     default: ''
   test-auth-email:

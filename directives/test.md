@@ -70,7 +70,8 @@ Execute these before any task work:
 - Normalize `APP_URL` to end with `/` in `playwright.config.js`
 - `API status: no call` is expected for a local run that cannot reach the backend;
   the auth-gated scenarios self-skip when no credential is available from EITHER
-  source — the env var, or a login form that ships a working one. The
+  source — the env var, or a login form that ships a working one in a
+  visible, editable password field. The
   `UI Tests (local server)` job itself is **blocking** — only those skipped
   scenarios are exempt, never a real Playwright failure (→ *CI triage*)
 - **A scenario that can skip needs a budget sized for the day it stops
@@ -160,7 +161,8 @@ Execute these before any task work:
 ## Authenticated flows (auth-gated apps)
 Local CI (`qa.yml`) runs Playwright against a local server that **cannot reach
 the backend**, so auth-gated views (login, portal, drill-downs) are untestable
-there and those scenarios self-skip on an empty `TEST_AUTH_CREDENTIAL`. The
+there and those scenarios self-skip when no credential is available (an empty
+`TEST_AUTH_CREDENTIAL` and a login form that ships none). The
 `ui-tests` job itself stays **blocking** for everything it can reach (→ *CI triage*); only the auth-gated scenarios are exempt, by skipping. The **canonical
 mechanism for testing authenticated flows is `qa-live.yml`**: it runs Playwright
 against the deployed URL and logs in with a per-project seeded test account
@@ -170,7 +172,12 @@ a failure there must be fixed before work is done.
   from the live backend (e.g. a Supabase `403` at the proxy), so local Playwright
   cannot render authenticated views. Seed a test account and test against the
   deploy.
-- Any app with an auth gate must wire `qa-live.yml` + the seeded credential. An
+- Any app with an auth gate must wire `qa-live.yml` + the seeded credential —
+  unless its login ships a working credential in a visible, editable password
+  field, which the suite submits as it stands; setting the secret there
+  overwrites a value that works (directives#312). A prefilled text or PIN field
+  is not read as one, so that gate still needs the secret
+  (`cicd-setup.md` Step 5). An
   authenticated flow with no live coverage is a **coverage gap, not
   "untestable"** — and a UI change shipped without a `ui-tester` run is a
   readiness blocker (see the `pr-readiness-reviewer` gate).

@@ -1,5 +1,6 @@
 // Generic exploratory UI test — no project-specific selectors or credentials.
-// Credential comes from the TEST_AUTH_CREDENTIAL environment variable only.
+// Credential comes from the TEST_AUTH_CREDENTIAL environment variable, or from a
+// login form that ships one in a password field (gateShipsCredential) — never a file.
 // Discovers app structure, exercises all interactive elements, captures API calls.
 //
 // dvh units are supported by every browser this kit's Playwright ships (they need
@@ -77,14 +78,17 @@ function attachJson(name, data) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CREDENTIAL — environment only
+// CREDENTIAL — environment, or a credential the form itself ships
 // ─────────────────────────────────────────────────────────────────────────────
-// The credential comes from the TEST_AUTH_CREDENTIAL secret and nowhere else.
+// The credential comes from the TEST_AUTH_CREDENTIAL secret, or — only when that
+// is unset — from a visible, editable password field the login form prefills
+// (gateShipsCredential, directives#312). Never from a file in the repo.
 // This used to fall back to scraping CLAUDE.md, which was both a standing
 // instruction to commit a credential (global.md -> Security) and a live hazard:
 // the regex matched the TABLE LABEL, so prose in the row returned a bogus
 // "credential" that S3 then typed into the first text input it found. An unset
-// secret must mean "no credential" — auth tests self-skip, and nothing is typed.
+// secret must mean "no supplied credential" — unless the form ships its own in a
+// password field (below), auth tests self-skip, and nothing is typed.
 const AUTH_CREDENTIAL = process.env.TEST_AUTH_CREDENTIAL || null;
 // Optional second field for email+password gates (directives#304): without it,
 // heuristic 2 below fills only the password, an email+password form submits a

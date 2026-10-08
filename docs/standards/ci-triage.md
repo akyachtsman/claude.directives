@@ -94,7 +94,8 @@ Every project using these agents runs two Playwright workflows:
   sub-route while the suite navigated to the baseURL. Check `APP_URL` first.
 - `UI Tests (local server)` **skips** in the auth scenario or interaction sweep
   (upstream kit: S2/S3) when no credential is available from either source
-  (`TEST_AUTH_CREDENTIAL`, or a login form that ships a working one)
+  (`TEST_AUTH_CREDENTIAL`, or a login form that ships a working one in a
+  visible, editable password field)
   → The kit self-skips these rather than failing; a skip is the exemption, and it
   is the ONLY one. `advisory-run` ships `'false'`, so the job is blocking: an
   actual red in those scenarios — a credential IS supplied and the backend is

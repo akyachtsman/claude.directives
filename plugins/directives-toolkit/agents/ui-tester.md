@@ -15,14 +15,16 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 ### Operating Rules
 
 1. Read `CLAUDE.md` first for the app URL, test directory and project scenarios. Take the
-   credential from the `TEST_AUTH_CREDENTIAL` environment variable ONLY (plus
+   credential from the `TEST_AUTH_CREDENTIAL` environment variable, or — only when that
+   is empty — from a login form that ships a working one in a visible, editable
+   password field (below) (plus
    `TEST_AUTH_EMAIL` for email+password gates — without it the identifier is
    submitted blank and the rejection reads as a bad credential — and for
    identifier-first (split-step) gates, where without it the gate is not
    DETECTED at all and the authenticated phases run against the identifier
    screen (directives#310)) — never from
    `CLAUDE.md`, which must not contain it (`global.md` → *Security*). If the variable is
-   empty, there is no authenticated run: skip the auth phase and say so in the report,
+   empty and the form ships no credential, there is no authenticated run: skip the auth phase and say so in the report,
    rather than guessing a value or asking for one to be written into the repo
 2. Check for pre-installed Playwright browsers before running `npx playwright install` — look under `$PLAYWRIGHT_BROWSERS_PATH` if set, else `ls /opt/pw-browsers/` (the bundled version changes with the runner image; never assume a specific `chromium-<build>` directory)
 3. Install npm dependencies: `cd <Playwright test directory from CLAUDE.md> && npm install`
@@ -50,7 +52,8 @@ skips rather than certifying auth, because no credential was ever entered (direc
 
 The credential comes from `TEST_AUTH_CREDENTIAL` in the environment — never from a file in
 the repo, and never hardcoded — with ONE other legitimate source: a login form that already
-holds a working credential. Where the app prefills both fields and a human signs in by
+holds a working credential in a visible, editable password field (a prefilled text or PIN
+field is not read as one). Where the app prefills both fields and a human signs in by
 clicking the button, set neither secret; the suite submits what the form holds and reports
 `credentialSource: prefilled`, because supplying a secret there overwrites a value that
 works and reports the resulting failure against the app (directives#312). After an auth attempt, check for any visible DOM transition
@@ -92,7 +95,8 @@ When auth fails (no DOM transition after credential entry), attach structured di
 
 ```
 auth-diagnostics attachment:
-  credentialUsed: <"TEST_AUTH_CREDENTIAL (masked)" or "none — variable empty, auth phase skipped">
+  credentialSource: <"env" | "prefilled" | "none" — the suite's own `credentialSource` value>
+  credentialUsed: <"TEST_AUTH_CREDENTIAL (masked)" | "shipped by the login form (masked)" | "none — variable empty and the form ships none, auth phase skipped">
   authMechanism: <detected type>
   apiCalls: <from captureApiCalls>
   responseShape: <rows returned, first field "<name>" | no rows — check query/RLS/auth | non-2xx>

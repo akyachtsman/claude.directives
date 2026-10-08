@@ -34,7 +34,12 @@ Do not edit the templates in place in `claude.directives` — copy to the target
 
 - Target repo exists on GitHub with source files committed to `main`
 - `claude.directives` is accessible (public repo) for fetching templates
-- Project's `CLAUDE.md` contains the app URL and auth credential
+- The app URL is known
+- If the app's login needs a credential supplied from outside, it is ready to
+  store as the `TEST_AUTH_CREDENTIAL` repository secret — never in `CLAUDE.md`
+  or any committed file (`global.md` → *Security*). An app with no login, or
+  one whose login ships a working credential in a password field, needs none
+  (Step 5)
 - Claude Code session is active with GitHub MCP access to the target repo
 
 ---
@@ -207,13 +212,17 @@ Used by `qa-live.yml` and `qa-response.yml`.
 
 ## Step 5 — Add TEST_AUTH_CREDENTIAL secret
 
+Skip this step if the app has no login: with the secret unset, the
+authenticated scenarios self-skip. For a login that ships a working credential
+in a password field, see the exception below.
+
 In the target repo on GitHub:
 
 `Settings → Secrets and variables → Actions → Secrets → New repository secret`
 
 | Name | Value |
 |---|---|
-| `TEST_AUTH_CREDENTIAL` | Auth credential from `CLAUDE.md` (PIN, password, or token) |
+| `TEST_AUTH_CREDENTIAL` | The test account's PIN, password or token — set it here only, never in a committed file |
 | `TEST_AUTH_EMAIL` | The matching identifier — REQUIRED when the gate is email+password (directives#304) OR identifier-first/split-step, i.e. an email step before any password field (directives#310) — without it a split-step gate is not detected at all; omit for PIN/password-only gates. Not truly secret: failure screenshots record it, so use a throwaway test-account address |
 
 **Exception — a login that already holds a working credential.** Some apps ship a
@@ -541,7 +550,7 @@ Required repository secrets:
 
 | Secret | Purpose |
 |---|---|
-| `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test — OMIT when the app's login ships a working one of its own, which the suite then submits as-is and reports as `credentialSource: prefilled` (directives#312) |
+| `TEST_AUTH_CREDENTIAL` | Valid credential for Playwright login test — OMIT when the app has no login, or when its login ships a working one of its own in a visible, editable password field (a prefilled text or PIN field does not count), which the suite then submits as-is and reports as `credentialSource: prefilled` (directives#312) |
 | `TEST_AUTH_EMAIL` | Matching identifier for email+password gates (directives#304) and for identifier-first/split-step gates, which are not detected without it (directives#310); omit otherwise. Recorded in failure screenshots — throwaway address only |
 | `DB_SERVICE_KEY` | Backend service-role key — server-side only (required by the project's scheduled data workflow, if any) |
 
@@ -581,7 +590,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it
 - [ ] `APP_URL` set as repository variable
-- [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app's login ships a working credential and the suite submits what the form holds (directives#312)
+- [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app has no login, or because its login ships a working credential in a visible, editable password field and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)
 - [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions
 - [ ] At least one successful run of each workflow confirmed

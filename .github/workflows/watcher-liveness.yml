@@ -90,8 +90,12 @@ jobs:
           SINCE = NOW - timedelta(days=WINDOW)
 
 
+          # ISO 8601 in every form the API returns: with or without
+          # milliseconds, `Z` or a numeric offset. A fixed strptime format
+          # rejected the workflows endpoint's `2026-06-08T16:58:07.000Z`, so
+          # every run before 2026-10-08 raised here and reported NOT CHECKED.
           def ts(s):
-              return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+              return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
           def gh(*args, paginate=False):

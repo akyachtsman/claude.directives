@@ -29,14 +29,14 @@ GUARD = os.environ.get(
 )
 
 
-def workflow(run, shell=None, defaults=None):
+def workflow(run, shell=None, defaults=None, runs_on="ubuntu-latest"):
     """A one-step workflow whose step runs `run` (a literal block)."""
     body = "\n".join("          " + line if line else "" for line in run.split("\n"))
     head = "on: workflow_dispatch\n"
     if defaults:
         head += f"defaults:\n  run:\n    shell: {defaults}\n"
     step_shell = f"        shell: {shell}\n" if shell else ""
-    return (head + "jobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n"
+    return (head + f"jobs:\n  j:\n    runs-on: {runs_on}\n    steps:\n"
             "      - name: s\n" + step_shell + "        run: |\n" + body + "\n")
 
 
@@ -167,6 +167,34 @@ CASES = [
     ("shell: /usr/bin/python3 {0} is not — skipped",
      {"w.yml": workflow("print('it''s')", shell="/usr/bin/python3 {0}")
       + "      - run: echo ok\n"}, 0, "(1 non-bash skipped)"),
+
+    # Codex, #408 round 3 — a shell the file cannot settle is UNKNOWN, never a guess.
+    ("a matrix-selected default shell — CANNOT CHECK, not skipped",
+     {"w.yml": workflow("echo it's'", defaults="${{ matrix.shell }}")}, 2,
+     "w.yml:11: cannot tell which shell"),
+    ("a step shell from an expression — CANNOT CHECK",
+     {"w.yml": workflow("echo ok", shell="${{ inputs.shell }}")}, 2, "cannot tell which shell"),
+    ("an unknown block does not hide a real finding elsewhere — FAIL wins",
+     {"a.yml": workflow("echo ok", shell="${{ inputs.shell }}"),
+      "b.yml": workflow("echo it's'")}, 1, "b.yml:8: an apostrophe OPENS"),
+    ("a Windows job with no shell runs PowerShell — skipped, not parsed as bash",
+     {"w.yml": workflow("Write-Host (Get-Date) it's", runs_on="windows-latest")
+      + "      - shell: bash\n        run: echo ok\n"}, 0, "(1 non-bash skipped)"),
+    ("a Windows job that names bash IS bash — FAIL",
+     {"w.yml": workflow("echo it's'", shell="bash", runs_on="windows-latest")}, 1, "OPENS"),
+    ("runs-on as a label list naming Windows — skipped",
+     {"w.yml": workflow("Write-Host (Get-Date)", runs_on="[self-hosted, Windows]")
+      + "      - shell: bash\n        run: echo ok\n"}, 0, "(1 non-bash skipped)"),
+    ("runs-on as a runner group with Windows labels — skipped",
+     {"w.yml": workflow("Write-Host (Get-Date)", runs_on="{group: g, labels: [windows-2022]}")
+      + "      - shell: bash\n        run: echo ok\n"}, 0, "(1 non-bash skipped)"),
+    ("runs-on from an expression with no shell — CANNOT CHECK",
+     {"w.yml": workflow("echo ok", runs_on="${{ matrix.os }}")}, 2, "cannot tell which shell"),
+    ("runs-on from an expression WITH shell: bash — scanned, FAIL",
+     {"w.yml": workflow("echo it's'", shell="bash", runs_on="${{ matrix.os }}")}, 1, "OPENS"),
+    ("a composite step with no shell — CANNOT CHECK",
+     {"action.yml": COMPOSITE.replace("    - shell: bash\n      run: |", "    - run: |")
+      .replace("RUN", "echo ok")}, 2, "cannot tell which shell"),
 
     # `<<` inside arithmetic is a shift, not a heredoc.
     ("$((1<<2)) is a shift — the next line is still scanned, FAIL",

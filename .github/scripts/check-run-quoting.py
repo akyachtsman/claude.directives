@@ -34,7 +34,10 @@ WHAT IS NOT SHELL, AND IS SKIPPED:
     so their quotes never reach it;
   - steps whose effective `shell:` (step, then job `defaults.run.shell`, then the
     workflow's) is not bash or sh, judged by the executable's BASENAME, so
-    `/bin/bash -e {0}` is bash (Codex, #408).
+    `/bin/bash -e {0}` is bash; with no shell named, a Windows job's default is
+    PowerShell and is skipped. A shell this file cannot settle -- an
+    expression, a `runs-on` expression with no `shell:`, a composite step with
+    none -- is CANNOT CHECK, never a guess (Codex, #408).
 
 WHAT A CLEAN RUN PROVES. Only that every block parses as bash and no
 single-quote boundary in it sits between two letters. It does NOT prove any
@@ -44,7 +47,7 @@ leaves the block unbalanced, which IS reported. It also does NOT look at `.sh`
 files, at the toolkit's Markdown bash, or at `actions/github-script` bodies.
 
 Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file, no
-shfmt, or no `run:` block found at all (a did-not-look must not print the same
+shfmt, a block whose shell is unknown, or no `run:` block found at all (a did-not-look must not print the same
 OK as a pass).
 
 Usage: check-run-quoting.py [--root DIR] [FILE ...]   (default: every workflow
@@ -141,12 +144,40 @@ def shell_of(mapping):
     return None
 
 
-def is_bash(shell):
-    return shell is None or os.path.basename(shell.split()[0]) in ("bash", "sh")
+def platform_of(job):
+    """'windows', 'other' or 'unknown' for a job's `runs-on`."""
+    labels = job.get("runs-on") if isinstance(job, dict) else None
+    if isinstance(labels, dict):          # the runner-group form
+        labels = labels.get("labels")
+    if isinstance(labels, str):
+        labels = [labels]
+    if not isinstance(labels, list) or not all(isinstance(x, str) for x in labels):
+        return "unknown"
+    if any("${{" in x for x in labels):
+        return "unknown"
+    return "windows" if any("windows" in x.lower() for x in labels) else "other"
+
+
+# THE SHELL A STEP RUNS IN IS ONE OF THREE THINGS, NEVER A GUESS. Codex found
+# it guessed three ways on #408: `/bin/bash` read as not-bash, a
+# `${{ matrix.shell }}` read as not-bash, and a Windows job's default read as
+# bash (it is PowerShell). Each was a silent default. What cannot be known from
+# the file -- an expression, a `runs-on` expression with no explicit shell, a
+# composite step with no shell -- is UNKNOWN, and an unknown block is CANNOT
+# CHECK, not skipped.
+def classify(shell, platform):
+    """'bash', 'other' or 'unknown'."""
+    if shell is not None:
+        if "${{" in shell:
+            return "unknown"
+        return "bash" if os.path.basename(shell.split()[0]) in ("bash", "sh") else "other"
+    if platform == "windows":
+        return "other"                    # GitHub's Windows default is pwsh
+    return "bash" if platform == "other" else "unknown"
 
 
 def blocks(path):
-    """Yield (first content line, text, shell) for each step `run:` in a file."""
+    """Yield (first content line, text, 'bash'|'other'|'unknown') per step `run:`."""
     with open(path, encoding="utf-8") as f:
         source = f.read()
     node = yaml.compose(source)
@@ -171,11 +202,12 @@ def blocks(path):
         for k, job in jobs.value:
             job_data = data.get("jobs", {}).get(k.value)
             step_lists.append((steps_of(job) if isinstance(job, yaml.MappingNode) else [],
-                               shell_of(job_data) or top_shell))
+                               shell_of(job_data) or top_shell, platform_of(job_data)))
     runs = value_node(node, "runs")
     if isinstance(runs, yaml.MappingNode):
-        step_lists.append((steps_of(runs), None))
-    for steps, inherited in step_lists:
+        # A composite step must name its shell; one that does not is unknown.
+        step_lists.append((steps_of(runs), None, "unknown"))
+    for steps, inherited, platform in step_lists:
         for step in steps:
             if not isinstance(step, yaml.MappingNode):
                 continue
@@ -185,7 +217,7 @@ def blocks(path):
             sh = value_node(step, "shell")
             shell = sh.value if isinstance(sh, yaml.ScalarNode) else inherited
             first = run.start_mark.line + (2 if run.style in ("|", ">") else 1)
-            yield first, run.value, shell
+            yield first, run.value, classify(shell, platform)
 
 
 def main(argv):
@@ -204,7 +236,7 @@ def main(argv):
         print("  release qa.yml downloads, or set SHFMT=<path>. No parser is not a pass.")
         print("check-run-quoting: FAIL (code 2)")
         return 2
-    total, skipped, bad = 0, 0, []
+    total, skipped, bad, unknown = 0, 0, [], []
     for path in paths:
         rel = os.path.relpath(path, root) if path.startswith(root) else path
         try:
@@ -213,14 +245,23 @@ def main(argv):
             print(f"CANNOT CHECK: {rel} could not be read as YAML: {e}")
             print("check-run-quoting: FAIL (code 2)")
             return 2
-        for first, text, shell in found:
-            if not is_bash(shell):
+        for first, text, kind in found:
+            if kind == "other":
                 skipped += 1
+                continue
+            if kind == "unknown":
+                unknown.append(f"{rel}:{first}")
                 continue
             total += 1
             for line, msg in scan(text, shfmt):
                 bad.append(f"{rel}:{first + line}: {msg}")
-    if total == 0:
+    for u in unknown:
+        print(f"CANNOT CHECK: {u}: cannot tell which shell runs this block (an expression,")
+        print("  a `runs-on` expression with no `shell:`, or a composite step with none).")
+    if unknown:
+        print("  Name the shell on the step. A block whose shell is unknown is neither")
+        print("  skipped nor guessed.")
+    if total == 0 and not bad and not unknown:
         print(f"CANNOT CHECK: no bash `run:` block found in {len(paths)} file(s).")
         print("  A scan that looked at nothing is not a pass.")
         print("check-run-quoting: FAIL (code 2)")
@@ -233,6 +274,9 @@ def main(argv):
         print("  the quoted program.")
         print("check-run-quoting: FAIL (code 1)")
         return 1
+    if unknown:
+        print("check-run-quoting: FAIL (code 2)")
+        return 2
     print(f"check-run-quoting: OK — {total} bash run block(s) in {len(paths)} file(s)"
           f" ({skipped} non-bash skipped): every block parses, and no single-quote"
           " boundary sits between two letters. Not a check that every quote is where"

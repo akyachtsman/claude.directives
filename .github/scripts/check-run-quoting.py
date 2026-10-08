@@ -49,6 +49,13 @@ a space) is still a quote and is not reported. Such a stray quote usually
 leaves the block unbalanced, which IS reported. It also does NOT look at `.sh`
 files, at the toolkit's Markdown bash, or at `actions/github-script` bodies.
 
+KNOWN LIMITS, RECORDED NOT BUILT (owner ruling, 2026-10-08). Five Codex rounds
+on #408 each found a real corner of bash or GitHub Actions semantics, and every
+one was fixed. From here on, a review finding whose shape does not occur in this
+repo's workflows is answered on its thread and listed here, with no code. A
+finding that occurs here, or that would let this repo's workflows pass when they
+should not, is still fixed. Listed so far: (none yet).
+
 Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file, no
 shfmt, a block whose shell is unknown, an expression outside double quotes and
 heredoc bodies, or no `run:` block found at all (a did-not-look must not print the same

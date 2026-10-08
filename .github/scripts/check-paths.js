@@ -131,10 +131,7 @@ const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe
 // Left out on purpose: itemid / itemtype (identifiers, never fetched) and
 // <base href> (it sets the resolution base below; nothing is fetched from it).
 const URL_ATTRS = {
-  href: ['a', 'area', 'link',
-    // SVG's URL-bearing href (and xlink:href, below, on any element):
-    'image', 'use', 'feimage', 'textpath', 'mpath', 'pattern', 'lineargradient', 'radialgradient',
-    'filter', 'script', 'animate', 'animatemotion', 'animatetransform', 'set', 'cursor'],
+  href: ['a', 'area', 'link'],
   src: ['audio', 'embed', 'iframe', 'img', 'input', 'script', 'source', 'track', 'video', 'frame'],
   action: ['form'], formaction: ['button', 'input'], cite: ['blockquote', 'del', 'ins', 'q'],
   data: ['object'], poster: ['video'], manifest: ['html'], longdesc: ['img', 'iframe', 'frame'],
@@ -146,6 +143,11 @@ const URL_LIST_ATTRS = { ping: ['a', 'area'] }; // space-separated URLs
 // element state such as <x-chart data="monthly totals"> a "broken link"
 // (Codex on #415). xlink:href is namespaced, so it is a URL on any element.
 const on = (table, name, tag) => Object.hasOwn(table, name) && table[name].includes(tag);
+// Inside SVG/MathML only: these elements' href, and xlink:href on any element.
+// The parser adjusts xlink:* into the XLink namespace only in foreign content,
+// so on an HTML (custom) element both are plain component state (Codex, #415).
+const SVG_HREF = ['a', 'image', 'use', 'feimage', 'textpath', 'mpath', 'pattern', 'lineargradient',
+  'radialgradient', 'filter', 'script', 'animate', 'animatemotion', 'animatetransform', 'set', 'cursor'];
 // Character references, decoded as the HTML tokenizer decodes them inside an
 // attribute value. The named table is the WHATWG one in full (2231 names), read
 // from Python's standard library (html.entities.html5) rather than copied here
@@ -278,13 +280,14 @@ function srcsetUrls(v) {
 // The URL values one tag carries: URL attributes, each srcset / imagesrcset
 // candidate, each ping URL, and a
 // meta refresh's target, parsed as the spec's refresh algorithm reads it.
-function linksOf({ tag, attrs }) {
+function linksOf({ tag, attrs, foreign }) {
   const urls = [];
   if (tag === 'base') return urls; // resolved once, against the page, as the base -- never as a link (Codex on #415)
   for (const [name, v] of attrs) {
     if (on(SRCSET_ATTRS, name, tag)) urls.push(...srcsetUrls(v));
     else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
-    else if (on(URL_ATTRS, name, tag) || name === 'xlink:href') urls.push(v);
+    else if (on(URL_ATTRS, name, tag)) urls.push(v);
+    else if (foreign && (name === 'xlink:href' || (name === 'href' && SVG_HREF.includes(tag)))) urls.push(v);
   }
   if (tag === 'meta' && (attrs.get('http-equiv') || '').trim().toLowerCase() === 'refresh') {
     const m = (attrs.get('content') || '').match(/^\s*[\d.]*\s*[;,]?\s*(?:url\s*=\s*)?(["']?)(.*)$/is);

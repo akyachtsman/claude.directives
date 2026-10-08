@@ -1,10 +1,12 @@
 // Extracts all file paths from backtick references in CLAUDE.md and verifies each exists.
+// Two more passes below: doc citations in shipped files, and relative links in HTML pages.
 // Paths are matched as: `path/to/file.ext` — must contain a / and a . to qualify.
 // Dot-paths (.claude/, .github/) ARE validated here: this script runs only in
 // claude.directives CI, where those files are committed. (Downstream projects,
 // where dot-paths may not exist until bootstrap, do not run this script.)
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { execFileSync } from 'child_process';
 
 const raw = readFileSync('CLAUDE.md', 'utf8');
 // Strip fenced code blocks first so their contents aren't matched as inline-code paths.
@@ -93,6 +95,37 @@ for (const [ref, citedBy] of [...refs].sort()) {
     failed = true;
   }
 }
+
+// --- Third pass: relative links inside the published HTML pages ----------------
+// Every relative href / src / meta-refresh url= in a tracked .html page must name
+// a regular file -- or a directory holding index.html, which is what Pages serves
+// for it. isFile(), not existsSync(): a DIRECTORY named example.html exists
+// happily and still 404s. Nothing else here resolves an HTML link to the tree:
+// check-links.js reads only Markdown, and html-validate never touches the
+// filesystem. This is what survived of check-landing-cards.js when the two
+// landing pages merged (2026-10-08) -- the sync half went, the target half is
+// whole-class now: every page, every link, the redirect stubs included.
+const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
+const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
+  .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
+let htmlLinks = 0;
+for (const page of htmlPages) {
+  const src = readFileSync(page, 'utf8');
+  for (const m of src.matchAll(/\b(?:href|src)\s*=\s*"([^"]*)"|\burl=([^"';\s>]+)/gi)) {
+    const raw = (m[1] ?? m[2]).trim();
+    // Absolute (any scheme), protocol-relative, same-page anchor, or a template
+    // placeholder: not a path in this tree.
+    if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//') || raw.startsWith('#') || raw.includes('${')) continue;
+    const path = raw.replace(/[?#].*$/, '');
+    if (!path) continue;
+    const target = path.startsWith('/') ? path.slice(1) : join(dirname(page), path);
+    htmlLinks++;
+    if (isFile(target) || (!/\.[A-Za-z0-9]+$/.test(path) && isFile(join(target, 'index.html')))) continue;
+    console.error(`MISSING: ${page} links "${raw}" -> ${target}, which is not a regular file — the published link would 404`);
+    failed = true;
+  }
+}
+console.log(`OK:     ${htmlLinks} relative link(s) across ${htmlPages.length} HTML page(s) resolve to files`);
 
 if (failed) {
   console.error('\nOne or more referenced paths do not exist in the repo.');

@@ -101,7 +101,7 @@ downstream project's CI rather than ours.
 
 | Gate | Retired | Why |
 |---|---|---|
-| `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it |
+| `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it. Its other half — each card's target is a regular file — was NOT retired: it moved into `check-paths.js`'s third pass, widened to every relative link in every tracked `.html` page (Codex on #415) |
 
 ## Refresh-repo history
 

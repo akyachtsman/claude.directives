@@ -1055,9 +1055,13 @@ fetched into `.claude/`.
   installs.
 - **CLI / desktop:** run `scripts/install-toolkit.sh` (the same source the web
   setup script curls). The toolkit alone is NOT enough — `.claude/settings.json`
-  also enables the official review/security/design plugins it installs alongside
-  (owner ruling, 2026-10-07: Anthropic-maintained over self-maintained;
+  also enables the official plugins it installs alongside. The review and
+  security sources are an owner ruling (2026-10-07: Anthropic-maintained over
+  self-maintained;
   `test.md` → *QA/data agents — ship in the directives-toolkit plugin*).
+  Enabling `frontend-design` (design) and `plugin-dev` (plugin authoring) is
+  **current practice, not a stamped ruling** (owner, 2026-10-08): sessions follow
+  it, but may propose an alternative to the owner.
 - Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
   `enabledPlugins` (copy `templates/claude-settings.json`).
 

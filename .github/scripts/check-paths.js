@@ -299,8 +299,12 @@ function linksOf({ tag, attrs, foreign }) {
   }
   return urls;
 }
-// The site's deployed root. Underivable is a refusal, not a guess: guessing
-// would check every link against the wrong place and pass.
+// The site's deployed root. In CI it is always derivable (GITHUB_REPOSITORY).
+// Underivable -- a source archive or a checkout with no origin -- falls back to
+// a placeholder PROJECT-site root, never a guess at the real one: relative and
+// root-relative links are checked exactly as strictly, and only absolute links
+// to the deployed site go unchecked, which the run says (Codex on #415: the
+// documented local gate must not need a remote).
 function pagesRoot() {
   if (isFile('CNAME')) {
     const domain = readFileSync('CNAME', 'utf8').trim().split(/\s+/)[0];
@@ -315,8 +319,8 @@ function pagesRoot() {
   }
   const [owner, repo] = slug.split('/');
   if (!owner || !repo) {
-    console.error('CANNOT CHECK: no CNAME, no GITHUB_REPOSITORY and no readable origin remote -- the HTML links have no deployed base to resolve against');
-    process.exit(2);
+    console.warn('WARN:   no CNAME, GITHUB_REPOSITORY or origin remote -- absolute links to the deployed site are NOT checked in this run (CI derives the real root)');
+    return new URL('https://pages.invalid/__project_root__/');
   }
   const host = `${owner.toLowerCase()}.github.io`;
   return new URL(repo.toLowerCase() === host ? `https://${host}/` : `https://${host}/${repo}/`);

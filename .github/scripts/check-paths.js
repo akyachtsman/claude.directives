@@ -273,6 +273,13 @@ function tags(src) {
         if (/^[\t\n\f\r />]$/.test(src[e + 2 + tag.length] ?? '')) break;
         e += 2;
       }
+      // "<!--" then "<script" inside a script puts the tokenizer in its
+      // double-escaped state, where a literal </script> does not close the
+      // element. Refused rather than modelled (Codex on #415); no page here
+      // has a comment inside a script.
+      if (tag === 'script' && /<!--[\s\S]*<script[\t\n\f\r />]/.test(lower.slice(j, e))) {
+        throw new Error(`a <script> at offset ${i} opens "<!--" and then "<script" -- the double-escaped state this check does not model; remove the HTML comment from the script`);
+      }
       i = e;
     } else i = j;
   }
@@ -304,7 +311,10 @@ function srcsetUrls(v) {
 // The URL values one tag carries: URL attributes, each srcset / imagesrcset
 // candidate, each ping URL, and a
 // meta refresh's target, parsed as the spec's refresh algorithm reads it.
-function linksOf({ tag, attrs, foreign }) {
+function linksOf({ tag: name0, attrs, foreign }) {
+  // In HTML content the parser rewrites a legacy <image> start tag to <img>
+  // (Codex on #415); inside SVG, <image> is SVG's own element.
+  const tag = name0 === 'image' && !foreign ? 'img' : name0;
   const urls = [];
   if (tag === 'base') return urls; // resolved once, against the page, as the base -- never as a link (Codex on #415)
   for (const [name, v] of attrs) {

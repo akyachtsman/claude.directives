@@ -34,7 +34,9 @@ Do not edit the templates in place in `claude.directives` — copy to the target
 
 - Target repo exists on GitHub with source files committed to `main`
 - `claude.directives` is accessible (public repo) for fetching templates
-- Project's `CLAUDE.md` contains the app URL and auth credential
+- The app URL is known, and the test credential is ready to store as the
+  `TEST_AUTH_CREDENTIAL` repository secret — never in `CLAUDE.md` or any
+  committed file (`global.md` → *Security*)
 - Claude Code session is active with GitHub MCP access to the target repo
 
 ---
@@ -213,7 +215,7 @@ In the target repo on GitHub:
 
 | Name | Value |
 |---|---|
-| `TEST_AUTH_CREDENTIAL` | Auth credential from `CLAUDE.md` (PIN, password, or token) |
+| `TEST_AUTH_CREDENTIAL` | The test account's PIN, password or token — set it here only, never in a committed file |
 | `TEST_AUTH_EMAIL` | The matching identifier — REQUIRED when the gate is email+password (directives#304) OR identifier-first/split-step, i.e. an email step before any password field (directives#310) — without it a split-step gate is not detected at all; omit for PIN/password-only gates. Not truly secret: failure screenshots record it, so use a throwaway test-account address |
 
 **Exception — a login that already holds a working credential.** Some apps ship a

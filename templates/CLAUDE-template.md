@@ -56,7 +56,9 @@ This project's look is its own — established at kickoff via `/design-intake`
 6. Open PR to `main`
 
 ## UI Test Configuration
-Read by `ui-tester` and the Playwright kit at runtime — fill in before invoking agents:
+Read by `ui-tester` at runtime — fill in before invoking agents. The Playwright
+kit reads none of this: it takes the URL from the `APP_URL` variable and the
+credential from the `TEST_AUTH_CREDENTIAL` secret.
 | Key | Value |
 |---|---|
 | App URL | `https://akyachtsman.github.io/[repo-name]/` |

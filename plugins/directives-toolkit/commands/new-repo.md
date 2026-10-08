@@ -221,7 +221,8 @@ Execute in order:
    `playwright.config.js` resolves the live URL from the `APP_URL` variable, and
    update any project-specific selector constants in `app.spec.js` to match the
    actual UI (the kit is generic/exploratory by default and reads the credential
-   from `CLAUDE.md` at runtime, so it may need no selector edits).
+   from the `TEST_AUTH_CREDENTIAL` secret at runtime, so it may need no selector
+   edits; it never reads `CLAUDE.md`).
 
 8. **Pre-push verification.** Run the local gate before pushing:
    - `npx html-validate index.html` (and any other HTML entry points)

@@ -410,6 +410,23 @@ case("a reworded comment that drops package.json is refused",
          comment="      # needs .github/scripts/notify-email.js and the manifest\n")},
      expect_exit=1, needle="UNNAMED: .github/scripts/package.json")
 
+# Codex, #411: `--prefix` is a config option, legal before the subcommand too.
+PREFIX_FIRST = ("jobs:\n  run:\n    steps:\n"
+                "      - run: npm --prefix .github/scripts ci\n"
+                "{comment}"
+                '      - run: node .github/scripts/a.js\n')
+
+case("`npm --prefix .github/scripts ci` (option first) needs package.json named",
+     command_text=command_md(),
+     callers={"templates/workflows/p.yml": PREFIX_FIRST.format(comment="")},
+     expect_exit=1, needle="UNNAMED: .github/scripts/package.json")
+
+case("the same option-first caller naming package.json passes",
+     command_text=command_md(),
+     callers={"templates/workflows/p.yml": PREFIX_FIRST.format(
+         comment="      # npm reads .github/scripts/package.json\n")},
+     expect_exit=0, needle="  .github/scripts/package.json")
+
 case("npm run in ANOTHER directory needs no .github/scripts/package.json",
      command_text=command_md(),
      callers={"templates/workflows/kit.yml":

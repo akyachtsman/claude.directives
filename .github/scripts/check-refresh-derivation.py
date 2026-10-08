@@ -262,7 +262,12 @@ NPM = re.compile(r"\bnpm\s+(?:install|ci|i)\b")
 _ROOT = r"""(?:\./|\$GITHUB_WORKSPACE/|\$\{\{\s*github\.workspace\s*\}\}/)?"""
 SCRIPTS_DIR = re.compile(rf"^{_ROOT}\.github/scripts/?$")
 CD_NPM = re.compile(rf"""\bcd\s+["']?{_ROOT}\.github/scripts/?["']?\s*(?:&&|;|\n)\s*npm\s+(?:install|ci|i)\b""")
-PREFIX_NPM = re.compile(rf"""\bnpm\s+(?:install|ci|i)\b[^\n]*--prefix[= ]["']?{_ROOT}\.github/scripts/?["']?(?:\s|$)""")
+# `--prefix` is an npm CONFIG option, so it may sit on either side of the
+# subcommand (`npm ci --prefix X` and `npm --prefix X ci` both read X/package.json;
+# Codex, #411): both are lookaheads over the one command line, in either order.
+# Not read, by design: NPM_CONFIG_PREFIX in `env:`, `pushd`, a subshell `(cd X;
+# npm ci)` -- none occurs in a shipped caller; add a form here when one does.
+PREFIX_NPM = re.compile(rf"""\bnpm\s(?=[^\n]*?(?<![\w-])(?:install|ci|i)\b)(?=[^\n]*?--prefix[= ]["']?{_ROOT}\.github/scripts/?["']?(?:\s|$))""")
 
 
 def npm_in_scripts(doc):

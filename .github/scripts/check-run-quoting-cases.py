@@ -7,7 +7,7 @@ here currently carries the defect, so a guard that looked at nothing prints the
 same OK. That is the fail-open family (#323).
 
 It runs the REAL guard against fixture files rather than re-implementing its
-rule. Every refusal has an accepting complement, so none can be bought by
+rule, so it needs the same shfmt the guard does ($SHFMT or PATH). Every refusal has an accepting complement, so none can be bought by
 over-tightening, and the first case is the #264 block itself, as it shipped:
 two apostrophes in a jq comment that keep the quotes balanced, which is why
 `bash -n` never saw it.
@@ -64,7 +64,7 @@ runs:
 
 # (name, files {relname: text}, expected exit, text the output must contain
 #  [, "root" to run the guard's own discovery under the fixture dir instead of
-#  passing the files])
+#  passing the files, or "noparser" to point SHFMT at nothing])
 CASES = [
     ("the #264 jq comment — two apostrophes, balanced, FAIL on the right line",
      {"w.yml": workflow(BUG_264)}, 1, "w.yml:10: an apostrophe CLOSES"),
@@ -75,9 +75,9 @@ CASES = [
     ("the contraction inside double quotes is a literal — OK",
      {"w.yml": workflow("echo \"don't panic\"")}, 0, "OK"),
     ("a lone apostrophe leaves the block open — FAIL",
-     {"w.yml": workflow("echo runs' output")}, 1, "never closed"),
+     {"w.yml": workflow("echo runs' output")}, 1, "w.yml:8: does not parse as bash"),
     ("an unclosed double quote — FAIL",
-     {"w.yml": workflow('echo "half')}, 1, "double quote opened here"),
+     {"w.yml": workflow('echo "half')}, 1, "does not parse as bash"),
     ("a shell comment is not shell — OK",
      {"w.yml": workflow("# don't run this twice\necho ok")}, 0, "OK"),
     ("a # inside a word is not a comment — FAIL",
@@ -119,6 +119,8 @@ CASES = [
     ("no run block at all is a did-not-look — CANNOT CHECK",
      {"w.yml": "on: push\njobs:\n  j:\n    runs-on: x\n    steps:\n      - uses: actions/checkout@v4\n"},
      2, "no bash `run:` block"),
+    ("no shell parser — CANNOT CHECK, never a pass",
+     {"w.yml": workflow("echo ok")}, 2, "no usable shfmt", "noparser"),
     ("unparseable YAML — CANNOT CHECK",
      {"w.yml": "jobs: [\n"}, 2, "could not be read as YAML"),
     ("one clean file and one bad — the bad one still FAILS",
@@ -126,10 +128,10 @@ CASES = [
 
     # Codex, #408 — an UNQUOTED heredoc body still runs $( ) and backticks.
     ("$( ) in an unquoted heredoc body is shell — FAIL on the body line",
-     {"w.yml": workflow("cat <<EOF\nhead\n$(printf '%s' 'fork B's run')\nEOF")}, 1,
+     {"w.yml": workflow("cat <<EOF\nhead\n$(printf '%s' 'fork B's run, fork A's x')\nEOF")}, 1,
      "w.yml:10: an apostrophe CLOSES"),
     ("the same body under a QUOTED delimiter is literal — OK",
-     {"w.yml": workflow("cat <<'EOF'\nhead\n$(printf '%s' 'fork B's run')\nEOF")}, 0, "OK"),
+     {"w.yml": workflow("cat <<'EOF'\nhead\n$(printf '%s' 'fork B's run, fork A's x')\nEOF")}, 0, "OK"),
     ("a backslash-quoted delimiter is literal too — OK",
      {"w.yml": workflow("cat <<\\EOF\n$(echo it's')\nEOF")}, 0, "OK"),
     ("a backtick in an unquoted heredoc body is shell — FAIL",
@@ -147,8 +149,24 @@ CASES = [
      {"w.yml": workflow("cat <<'END.TXT'\ndon't\nEND.TXT\necho ok")}, 0, "OK"),
     ("<<- strips leading TABS from the terminator — the line after is shell, FAIL",
      {"w.yml": workflow("cat <<-EOF\n\tit's literal\n\tEOF\necho it's'")}, 1, "OPENS"),
-    ("plain << does NOT strip tabs: the body runs on, swallowing the rest — OK",
-     {"w.yml": workflow("cat <<EOF\nit's literal\n\tEOF\necho it's'")}, 0, "OK"),
+    ("plain << does NOT strip tabs: the heredoc never ends — FAIL, does not parse",
+     {"w.yml": workflow("cat <<EOF\nit's literal\n\tEOF\necho ok")}, 1, "unclosed here-document"),
+
+    # Codex, #408 round 2 — the three shapes that retired the hand lexer.
+    ("<<$'EOF' is a quoted delimiter named EOF — the line after it is shell, FAIL",
+     {"w.yml": workflow("cat <<$'EOF'\nit's literal\nEOF\necho it's'")}, 1,
+     "w.yml:11: an apostrophe OPENS"),
+    ("<<$'EOF' with a clean line after — its body was skipped, OK",
+     {"w.yml": workflow("cat <<$'EOF'\nit's literal\nEOF\necho ok")}, 0, "OK"),
+    ("$( ) nested in $(( )) is shell — FAIL",
+     {"w.yml": workflow("x=$(( $(echo 'fork B's run, fork A's x' | wc -c) + 1 ))")}, 1,
+     "an apostrophe CLOSES"),
+    ("shell: /bin/bash -e {0} is bash — FAIL",
+     {"w.yml": workflow("echo 'fork B's run, fork A's x'", shell="/bin/bash -e {0}")}, 1,
+     "an apostrophe CLOSES"),
+    ("shell: /usr/bin/python3 {0} is not — skipped",
+     {"w.yml": workflow("print('it''s')", shell="/usr/bin/python3 {0}")
+      + "      - run: echo ok\n"}, 0, "(1 non-bash skipped)"),
 
     # `<<` inside arithmetic is a shift, not a heredoc.
     ("$((1<<2)) is a shift — the next line is still scanned, FAIL",
@@ -182,8 +200,11 @@ def main():
                 paths.append(p)
             # "root": no file arguments, so the guard's own discovery runs.
             args = ["--root", d] if how == ["root"] else paths
+            env = dict(os.environ)
+            if how == ["noparser"]:
+                env["SHFMT"] = os.path.join(d, "no-such-shfmt")
             r = subprocess.run([sys.executable, GUARD, *args],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, env=env)
             out = r.stdout + r.stderr
             if r.returncode == want_code and want_text in out:
                 print(f"OK:   {name} (exit {r.returncode})")

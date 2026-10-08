@@ -351,8 +351,21 @@ jobs:
       # them keep the quotes balanced, so YAML parses and `bash -n` passes while
       # the program gets cut in half: ci-monitor's manual scan handed jq half a
       # program from #264 until #405 found it by reading. Every bash `run:`
-      # block in every workflow and composite is scanned for a quote boundary
-      # between two letters, and for a quote left open.
+      # block in every workflow and composite is parsed, and a single-quote
+      # boundary between two letters fails it.
+      #
+      # The parse is shfmt's (mvdan/sh), not a hand lexer: two review rounds on
+      # #408 found five bash grammar corners a hand lexer got wrong. Pinned to
+      # the newest release that publishes sha256sums.txt, and verified against
+      # it; a download that does not match fails here, before the guard runs.
+      - name: Install shfmt (the shell parser the quoting guard reads)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/shfmt" \
+            https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64
+          echo "1f57a384d59542f8fac5f503da1f3ea44242f46dff969569e80b524d64b71dbc  $RUNNER_TEMP/shfmt" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/shfmt"
+          echo "SHFMT=$RUNNER_TEMP/shfmt" >> "$GITHUB_ENV"
+
       - name: Check no apostrophe is read as a shell quote
         run: python3 .github/scripts/check-run-quoting.py
 

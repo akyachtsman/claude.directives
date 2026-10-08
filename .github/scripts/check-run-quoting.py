@@ -9,33 +9,43 @@ passed, and jq got half a program and failed with a syntax error. The scan
 never ran from #264 until #405 found it by reading. Nothing that checks syntax
 can see this, because the syntax is valid; it is the wrong program.
 
-THE RULE. In each `run:` block a bash step would execute, a `'` that OPENS or
-CLOSES a single-quoted span with an ASCII letter immediately on BOTH sides is
+THE RULE. In each `run:` block a bash step would execute, a single-quoted span
+whose opening or closing `'` has an ASCII letter immediately on BOTH sides is
 reported: `B's`, `don't`, `it's`. A real quote boundary almost never sits
 between two letters, and an apostrophe in English text almost always does. A
-quote still open at the end of the block is reported too.
+block the parser cannot read at all -- an unclosed quote is the usual cause --
+is reported too.
+
+THE PARSER IS shfmt's, NOT MINE. The first version of this guard lexed bash by
+hand, and two Codex rounds on #408 found six grammar corners it got wrong:
+`$( )` inside an unquoted heredoc body, a delimiter that is not an identifier
+(`<<END-JSON`), `.yaml` files, `<<$'EOF'`, `$( )` nested in `$(( ))`, and
+`/bin/bash`. The last of those is not grammar and stays fixed here; the other
+five were the same mechanism -- a partial lexer for a language with a large
+grammar -- and every fix would have waited for the next corner. So the block
+is parsed by `shfmt --to-json` (mvdan/sh), and this script reads the AST: each
+`SglQuoted` node carries its exact byte offsets, so heredocs, comments, double
+quotes, arithmetic and nesting are the parser's job and are right by
+construction. shfmt is found as $SHFMT or on PATH; qa.yml downloads a pinned,
+checksum-verified release. Without it this is CANNOT CHECK, never a pass.
 
 WHAT IS NOT SHELL, AND IS SKIPPED:
   - `${{ ... }}` expressions: GitHub substitutes them before the shell starts,
     so their quotes never reach it;
-  - heredoc bodies, which are literal text -- except that an UNQUOTED
-    delimiter's body still runs `$( )` and backticks, and those are scanned;
-  - a `#` comment that starts a word outside any quote;
-  - `'` inside double quotes, which is a literal character;
   - steps whose effective `shell:` (step, then job `defaults.run.shell`, then the
-    workflow's) is not bash or sh.
+    workflow's) is not bash or sh, judged by the executable's BASENAME, so
+    `/bin/bash -e {0}` is bash (Codex, #408).
 
-WHAT A CLEAN RUN PROVES. Only that no quote boundary in these blocks sits
-between two letters, and none is left open. It does NOT prove any quote is
-where the author meant it: `runs' output` (a closing apostrophe before a space)
-is still read as a quote and is not reported. Such a stray quote usually
-leaves the block unbalanced, which IS reported. It also does NOT look at
-`.sh` files, at the toolkit's Markdown bash, or at `actions/github-script`
-bodies.
+WHAT A CLEAN RUN PROVES. Only that every block parses as bash and no
+single-quote boundary in it sits between two letters. It does NOT prove any
+quote is where the author meant it: `runs' output` (a closing apostrophe before
+a space) is still a quote and is not reported. Such a stray quote usually
+leaves the block unbalanced, which IS reported. It also does NOT look at `.sh`
+files, at the toolkit's Markdown bash, or at `actions/github-script` bodies.
 
-Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file,
-or no `run:` block found at all (a did-not-look must not print the same OK as a
-pass).
+Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file, no
+shfmt, or no `run:` block found at all (a did-not-look must not print the same
+OK as a pass).
 
 Usage: check-run-quoting.py [--root DIR] [FILE ...]   (default: every workflow
 and composite under the repo root, or DIR, in .yml or .yaml)
@@ -44,8 +54,11 @@ Its own guard: check-run-quoting-cases.py.
 """
 
 import glob
+import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 
 import yaml
@@ -63,184 +76,55 @@ DEFAULT_GLOBS = (
     "templates/actions/*/action.yaml",
 )
 EXPR = re.compile(r"\$\{\{.*?\}\}")
-WORD_START = set(" \t\n;|&(")
-METACHARS = set(" \t\n;&|<>()")
+SHFMT_ERROR = re.compile(r"^(?:<standard input>:)?(\d+):(\d+): (.*)$")
 
 
-def heredoc_word(text, i):
-    """Read the delimiter word that starts at or after `i`.
-
-    Returns (delimiter, quoted, end) or None. The WHOLE word, as bash reads it:
-    `<<END-JSON` ends at `END-JSON`, not at `END`, and any quoting -- `'EOF'`,
-    `"EOF"`, `\\EOF`, `E"O"F` -- is removed from the delimiter and makes the
-    body literal. Matching only an identifier prefix recorded `END`, never saw
-    that line, and skipped the rest of the block (Codex, #408).
-    """
-    n = len(text)
-    while i < n and text[i] in " \t":
-        i += 1
-    word, quoted = [], False
-    while i < n and text[i] not in METACHARS:
-        c = text[i]
-        if c == "\\" and i + 1 < n:
-            word.append(text[i + 1])
-            quoted, i = True, i + 2
-        elif c in "'\"":
-            close = text.find(c, i + 1)
-            if close < 0:
-                return None
-            word.append(text[i + 1:close])
-            quoted, i = True, close + 1
-        else:
-            word.append(c)
-            i += 1
-    return ("".join(word), quoted, i) if word else None
+class NoParser(Exception):
+    pass
 
 
-def is_letter(c):
-    return c.isascii() and c.isalpha()
+def find_shfmt():
+    path = os.environ.get("SHFMT") or shutil.which("shfmt")
+    if not path or not os.access(path, os.X_OK):
+        raise NoParser(path or "shfmt (not on PATH and SHFMT unset)")
+    return path
 
 
-def scan(text, mode="top"):
-    """Return (line index within the block, message) for each finding.
+def is_letter(b):
+    return 0 <= b < 128 and chr(b).isalpha()
 
-    `mode="hd"` scans an UNQUOTED heredoc body: its text is literal (a quote of
-    either kind is just a character) but `$( )` and backticks in it are still
-    command substitutions, so the shell inside them is scanned (Codex, #408).
-    """
-    text = EXPR.sub("EXPR", text)
+
+def single_quoted(node, out):
+    """Collect every SglQuoted node in a shfmt JSON AST."""
+    if isinstance(node, dict):
+        if node.get("Type") == "SglQuoted":
+            out.append((node["Pos"]["Offset"], node["End"]["Offset"], bool(node.get("Dollar"))))
+        for v in node.values():
+            single_quoted(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            single_quoted(v, out)
+
+
+def scan(text, shfmt):
+    """Return (line index within the block, message) for each finding."""
+    src = EXPR.sub("EXPR", text).encode("utf-8")
+    r = subprocess.run([shfmt, "--to-json", "-ln", "bash"], input=src,
+                       capture_output=True)
+    if r.returncode != 0:
+        msg = r.stderr.decode("utf-8", "replace").strip().splitlines() or ["(no message)"]
+        m = SHFMT_ERROR.match(msg[0])
+        line = int(m.group(1)) - 1 if m else 0
+        return [(line, f"does not parse as bash: {m.group(3) if m else msg[0]}")]
+    spans = []
+    single_quoted(json.loads(r.stdout), spans)
     findings = []
-    # Each frame is a quoting context: 'top', 'cmd' ($( ... )), 'bt' (backtick),
-    # 'dq', 'hd' (an unquoted heredoc body) or 'arith' ($(( )) and (( )), where
-    # `<<` is a shift, not a heredoc). Single quotes are not a frame: nothing
-    # nests inside them.
-    frames = [[mode, 0]]
-    i, n = 0, len(text)
-    pending_heredocs = []
-    sq_open = None   # offset of the opening ' while inside a single-quoted span
-    ansi = False     # inside $'...', where \' is an escaped quote
-    dq_open = []
-
-    def boundary(at, what):
-        if 0 < at < n - 1 and is_letter(text[at - 1]) and is_letter(text[at + 1]):
-            findings.append((text.count("\n", 0, at), f"an apostrophe {what} a single-quoted span: "
-                                 f"...{text[max(0, at - 12):at + 12]!r}..."))
-
-    while i < n:
-        c = text[i]
-        if sq_open is not None:
-            if ansi and c == "\\":
-                i += 2
-                continue
-            if c == "'":
-                boundary(i, "CLOSES")
-                sq_open, ansi = None, False
-            i += 1
-            continue
-        kind = frames[-1][0]
-        if c == "\n" and pending_heredocs:
-            # Each pending heredoc body, in order, up to the line that is
-            # exactly its delimiter (leading tabs stripped for `<<-`). A quoted
-            # delimiter makes the body literal; an unquoted one still expands
-            # `$( )` and backticks, so that body is scanned for them.
-            j = i + 1
-            for delim, quoted, strip_tabs in pending_heredocs:
-                start = j
-                body_end = n
-                while j < n:
-                    end = text.find("\n", j)
-                    end = n if end < 0 else end
-                    line = text[j:end]
-                    if (line.lstrip("\t") if strip_tabs else line) == delim:
-                        body_end = j
-                        j = end + 1
-                        break
-                    j = end + 1
-                if not quoted:
-                    base = text.count("\n", 0, start)
-                    findings.extend((base + line_no, msg)
-                                    for line_no, msg in scan(text[start:body_end], "hd"))
-            pending_heredocs = []
-            i = j
-            continue
-        if c == "\\":
-            i += 2
-            continue
-        if kind == "arith":
-            if c == "(":
-                frames[-1][1] += 1
-            elif c == ")":
-                if frames[-1][1] > 0:
-                    frames[-1][1] -= 1
-                elif text.startswith("))", i):
-                    frames.pop()
-                    i += 2
-                    continue
-            i += 1
-            continue
-        if kind in ("dq", "hd"):
-            if c == '"' and kind == "dq":
-                frames.pop()
-                dq_open.pop()
-            elif text.startswith("$((", i):
-                frames.append(["arith", 0])
-                i += 3
-                continue
-            elif text.startswith("$(", i):
-                frames.append(["cmd", 0])
-                i += 2
-                continue
-            elif c == "`":
-                frames.append(["bt", 0])
-            i += 1
-            continue
-        # top, cmd, bt: ordinary shell.
-        if c == "'":
-            ansi = i > 0 and text[i - 1] == "$"
-            boundary(i, "OPENS")
-            sq_open = i
-        elif c == '"':
-            frames.append(["dq", 0])
-            dq_open.append(i)
-        elif c == "#" and (i == 0 or text[i - 1] in WORD_START):
-            end = text.find("\n", i)
-            i = n if end < 0 else end
-            continue
-        elif text.startswith("<<<", i):
-            i += 3
-            continue
-        elif text.startswith("<<", i):
-            strip_tabs = text.startswith("<<-", i)
-            w = heredoc_word(text, i + (3 if strip_tabs else 2))
-            if w:
-                pending_heredocs.append((w[0], w[1], strip_tabs))
-                i = w[2]
-                continue
-        elif text.startswith("$((", i) or text.startswith("((", i):
-            frames.append(["arith", 0])
-            i += 3 if c == "$" else 2
-            continue
-        elif text.startswith("$(", i):
-            frames.append(["cmd", 0])
-            i += 2
-            continue
-        elif c == "`":
-            if kind == "bt":
-                frames.pop()
-            else:
-                frames.append(["bt", 0])
-        elif c == "(":
-            frames[-1][1] += 1
-        elif c == ")":
-            if frames[-1][1] > 0:
-                frames[-1][1] -= 1
-            elif kind == "cmd":
-                frames.pop()
-        i += 1
-    if sq_open is not None:
-        findings.append((text.count("\n", 0, sq_open), "a single quote opened here is never closed"))
-    elif dq_open:
-        findings.append((text.count("\n", 0, dq_open[-1]), "a double quote opened here is never closed"))
+    for start, end, dollar in spans:
+        for at, what in ((start + (1 if dollar else 0), "OPENS"), (end - 1, "CLOSES")):
+            if 0 < at < len(src) - 1 and is_letter(src[at - 1]) and is_letter(src[at + 1]):
+                snippet = src[max(0, at - 12):at + 12].decode("utf-8", "replace")
+                findings.append((src.count(b"\n", 0, at),
+                                 f"an apostrophe {what} a single-quoted span: ...{snippet!r}..."))
     return findings
 
 
@@ -258,7 +142,7 @@ def shell_of(mapping):
 
 
 def is_bash(shell):
-    return shell is None or shell.split()[0] in ("bash", "sh")
+    return shell is None or os.path.basename(shell.split()[0]) in ("bash", "sh")
 
 
 def blocks(path):
@@ -312,6 +196,14 @@ def main(argv):
         paths = argv
     else:
         paths = sorted(p for g in DEFAULT_GLOBS for p in glob.glob(os.path.join(root, g)))
+    try:
+        shfmt = find_shfmt()
+    except NoParser as e:
+        print(f"CANNOT CHECK: no usable shfmt: {e}")
+        print("  This guard reads each block through shfmt's parser. Install the pinned")
+        print("  release qa.yml downloads, or set SHFMT=<path>. No parser is not a pass.")
+        print("check-run-quoting: FAIL (code 2)")
+        return 2
     total, skipped, bad = 0, 0, []
     for path in paths:
         rel = os.path.relpath(path, root) if path.startswith(root) else path
@@ -326,7 +218,7 @@ def main(argv):
                 skipped += 1
                 continue
             total += 1
-            for line, msg in scan(text):
+            for line, msg in scan(text, shfmt):
                 bad.append(f"{rel}:{first + line}: {msg}")
     if total == 0:
         print(f"CANNOT CHECK: no bash `run:` block found in {len(paths)} file(s).")
@@ -342,9 +234,9 @@ def main(argv):
         print("check-run-quoting: FAIL (code 1)")
         return 1
     print(f"check-run-quoting: OK — {total} bash run block(s) in {len(paths)} file(s)"
-          f" ({skipped} non-bash skipped): no quote boundary sits between two letters,"
-          " and none is left open. Not a check that every quote is where its author"
-          " meant it (read the header).")
+          f" ({skipped} non-bash skipped): every block parses, and no single-quote"
+          " boundary sits between two letters. Not a check that every quote is where"
+          " its author meant it (read the header).")
     return 0
 
 

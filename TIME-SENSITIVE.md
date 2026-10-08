@@ -115,6 +115,7 @@ is added by the pass that finds it.
 | Playwright behaviour the kit and the viewport gate rely on — each measurement is dated in its source | `test.md` → *Playwright* | 2026-10-06 | ⏳ The next Playwright version bump: re-run the measurements the source and `templates/scripts/check-ui-viewports.js` cite |
 | Where preinstalled browsers live | `plugins/directives-toolkit/agents/ui-tester.md` | 2026-10-06 | `ls "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"` in this session |
 | `dvh` support in the browsers the kit ships | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | 2026-10-06 | MDN browser-compat data for `dvh` against the runner image's browser versions |
+| shfmt v3.10.0 is the newest mvdan/sh release that publishes `sha256sums.txt` (v3.14.0 does not) | `.github/workflows/qa.yml`, the `Install shfmt` step | 2026-10-08 | For each newer release: `curl -sSfL https://github.com/mvdan/sh/releases/download/<tag>/sha256sums.txt`; if one now publishes it, move the pin and its checksum, then re-run `check-run-quoting-cases.py` |
 | Web-session git fetch cost | `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-09-23 | ⏳ The next `/refresh-repo` run |
 
 ## Outside services & standards

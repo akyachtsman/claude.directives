@@ -130,10 +130,22 @@ const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe
 // as a whole, not added one finding at a time (Codex on #415: imagesrcset).
 // Left out on purpose: itemid / itemtype (identifiers, never fetched) and
 // <base href> (it sets the resolution base below; nothing is fetched from it).
-const URL_ATTRS = new Set(['href', 'src', 'action', 'formaction', 'cite', 'data', 'poster',
-  'manifest', 'longdesc', 'background', 'lowsrc', 'dynsrc', 'profile', 'xlink:href']);
-const SRCSET_ATTRS = new Set(['srcset', 'imagesrcset']);
-const URL_LIST_ATTRS = new Set(['ping']); // space-separated URLs
+const URL_ATTRS = {
+  href: ['a', 'area', 'link',
+    // SVG's URL-bearing href (and xlink:href, below, on any element):
+    'image', 'use', 'feimage', 'textpath', 'mpath', 'pattern', 'lineargradient', 'radialgradient',
+    'filter', 'script', 'animate', 'animatemotion', 'animatetransform', 'set', 'cursor'],
+  src: ['audio', 'embed', 'iframe', 'img', 'input', 'script', 'source', 'track', 'video', 'frame'],
+  action: ['form'], formaction: ['button', 'input'], cite: ['blockquote', 'del', 'ins', 'q'],
+  data: ['object'], poster: ['video'], manifest: ['html'], longdesc: ['img', 'iframe', 'frame'],
+  background: ['body', 'table', 'td', 'th'], lowsrc: ['img'], dynsrc: ['img'], profile: ['head'],
+};
+const SRCSET_ATTRS = { srcset: ['img', 'source'], imagesrcset: ['link'] };
+const URL_LIST_ATTRS = { ping: ['a', 'area'] }; // space-separated URLs
+// The spec index ties each attribute to its elements: a name alone made custom
+// element state such as <x-chart data="monthly totals"> a "broken link"
+// (Codex on #415). xlink:href is namespaced, so it is a URL on any element.
+const on = (table, name, tag) => Object.hasOwn(table, name) && table[name].includes(tag);
 // Character references, decoded as the HTML tokenizer decodes them inside an
 // attribute value. The named table is the WHATWG one in full (2231 names), read
 // from Python's standard library (html.entities.html5) rather than copied here
@@ -270,9 +282,9 @@ function linksOf({ tag, attrs }) {
   const urls = [];
   if (tag === 'base') return urls; // resolved once, against the page, as the base -- never as a link (Codex on #415)
   for (const [name, v] of attrs) {
-    if (SRCSET_ATTRS.has(name)) urls.push(...srcsetUrls(v));
-    else if (URL_LIST_ATTRS.has(name)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
-    else if (URL_ATTRS.has(name)) urls.push(v);
+    if (on(SRCSET_ATTRS, name, tag)) urls.push(...srcsetUrls(v));
+    else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
+    else if (on(URL_ATTRS, name, tag) || name === 'xlink:href') urls.push(v);
   }
   if (tag === 'meta' && (attrs.get('http-equiv') || '').trim().toLowerCase() === 'refresh') {
     const m = (attrs.get('content') || '').match(/^\s*[\d.]*\s*[;,]?\s*(?:url\s*=\s*)?(["']?)(.*)$/is);
@@ -354,14 +366,18 @@ for (const page of htmlPages) {
   // which this tokenizer deliberately does not reimplement. So such a <base> is
   // REFUSED, never guessed at: a guess either way can hide a missing link or
   // invent one. The remedy is one move: put <base> in <head>.
+  // One pass marks each tag's context; the base lookup and the card checks read it.
   let inert = 0; let foreign = 0; let baseHref;
   for (const t of pageTags) {
-    if (t.tag === '/template' || t.tag === '/noscript') { inert = Math.max(0, inert - 1); continue; }
-    if (t.tag === '/svg' || t.tag === '/math') { foreign = Math.max(0, foreign - 1); continue; }
-    if (t.tag === 'template' || t.tag === 'noscript') { inert++; continue; }
-    if ((t.tag === 'svg' || t.tag === 'math') && !t.selfClosing) { foreign++; continue; }
+    t.inert = inert > 0; t.foreign = foreign > 0;
+    if (t.tag === '/template' || t.tag === '/noscript') inert = Math.max(0, inert - 1);
+    else if (t.tag === '/svg' || t.tag === '/math') foreign = Math.max(0, foreign - 1);
+    else if (t.tag === 'template' || t.tag === 'noscript') inert++;
+    else if ((t.tag === 'svg' || t.tag === 'math') && !t.selfClosing) foreign++;
+  }
+  for (const t of pageTags) {
     if (t.tag !== 'base') continue;
-    if (inert || foreign) {
+    if (t.inert || t.foreign) {
       console.error(`UNREADABLE: ${page}: a <base> inside <template>, <noscript>, SVG or MathML -- whether it sets the document base depends on tree construction this check does not do; move it into <head>`);
       failed = true; continue;
     }
@@ -378,7 +394,8 @@ for (const page of htmlPages) {
   const cardFail = (msg) => { console.error(`MISSING: ${page} ${msg}`); failed = true; };
   let cards = 0;
   pageTags.forEach((t, k) => {
-    if (!(t.attrs.get('class') || '').split(/[\t\n\f\r ]+/).includes('demo-card')) return;
+    // A card inside <template> or <noscript> is not on the page (Codex on #415).
+    if (t.inert || !(t.attrs.get('class') || '').split(/[\t\n\f\r ]+/).includes('demo-card')) return;
     cards++;
     if (t.tag !== 'a') return cardFail(`has a .demo-card <${t.tag}>, not a link -- cards must be anchors`);
     const href = (t.attrs.get('href') || '').trim();

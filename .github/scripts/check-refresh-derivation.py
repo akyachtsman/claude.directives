@@ -109,6 +109,22 @@ FILTER_LINE = re.compile(r"grep -E '([^']+)'")
 # never satisfy -- so the extension filter after each copy must be identical.
 ANY_TOKEN = re.compile(r"grep -oE '\\\.github/scripts/[^']*'")
 
+def pipeline(text, start):
+    """The rest of the shell pipeline that begins at `start`: its own line plus
+    every line a trailing backslash continues. A filter is read ONLY from here.
+    An unbounded search skipped past a pipeline that had lost its filter and
+    found the NEXT pipeline's -- so a dropped install filter read as "in step"
+    with the Phase 3 copy (Codex, #409)."""
+    end = start
+    while True:
+        nl = text.find("\n", end)
+        if nl < 0:
+            return text[start:]
+        if not text[text.rfind("\n", 0, nl) + 1:nl].rstrip().endswith("\\"):
+            return text[start:nl]
+        end = nl + 1
+
+
 DELIMITER_LINE = re.compile(r"(printf\s+'\\n'|echo)\s*>>\s*\"\$buf\"")
 
 # Form-independent: the path token anywhere in the file, whatever precedes it.
@@ -188,7 +204,7 @@ def main():
             "      This guard reads the SHIPPED pattern rather than copying it, so it cannot run\n"
             "      if the pipeline is reshaped. Update this extractor in the same change."
         )
-    filter_m = FILTER_LINE.search(text[token_m.end():])
+    filter_m = FILTER_LINE.search(pipeline(text, token_m.end()))
     if not filter_m:
         return fail(
             f"found the token grep in {COMMAND} but not the `grep -E '<ext>'` filter after it.\n"
@@ -199,8 +215,15 @@ def main():
 
     filters = []
     for m in ANY_TOKEN.finditer(text):
-        f = FILTER_LINE.search(text, m.end())
+        f = FILTER_LINE.search(pipeline(text, m.end()))
         filters.append(f.group(1) if f else None)
+    if None in filters:
+        return fail(
+            f"a copy of the derivation in {COMMAND} has NO extension filter of its own.\n"
+            "      Each copy -- the install pipeline and the Phase 3 applied-check -- must\n"
+            "      filter in its own pipeline; without one it accepts package-lock.json.\n"
+            + "".join(f"      copy {i + 1}: {f or '(none)'}\n" for i, f in enumerate(filters))
+        )
     if len(set(filters)) > 1:
         return fail(
             f"the derivation's copies in {COMMAND} filter DIFFERENTLY.\n"

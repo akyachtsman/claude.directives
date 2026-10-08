@@ -301,6 +301,15 @@ case("a Phase 3 copy that filters DIFFERENTLY from the install is refused",
      command_text=command_md(ext=EXT_SHIPPED) + PHASE3.replace("{ext}", EXT).replace("}}", "}"),
      callers=PKG, expect_exit=1, needle="filter DIFFERENTLY")
 
+case("an install pipeline that LOST its filter is refused, not read from Phase 3's",
+     command_text=command_md(ext_line=False) + PHASE3.replace("{ext}", EXT_SHIPPED).replace("}}", "}"),
+     callers=PKG, expect_exit=1, needle="not the `grep -E")
+
+case("a Phase 3 copy that LOST its filter is refused",
+     command_text=command_md(ext=EXT_SHIPPED)
+     + PHASE3.replace(" | sed -E 's/[.]+$//' | grep -E '{ext}'", "").replace("}}", "}"),
+     callers=PKG, expect_exit=1, needle="NO extension filter of its own")
+
 case("no callers at all is refused, never a vacuous pass",
      command_text=command_md(), callers={}, expect_exit=1,
      needle="pass vacuously")

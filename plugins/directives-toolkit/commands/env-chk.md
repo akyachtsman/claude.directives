@@ -27,7 +27,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
    `gh api repos/{owner}/{repo}/rules/branches/<default branch>`), warn once with
    the exact settings path — don't block, don't re-nag this session. A setting
    whose read is refused is reported as NOT READ, never as on or off. Also flag any open issues tagged @claude
-   with no linked PR yet. For a deploy-backed project (e.g. Pages), confirm the
+   with no linked PR yet. For every project (all deploy to Pages), confirm the
    live site is serving the latest commit: match the deploy run's `head_sha` to
    the head of the Pages source branch (`git rev-parse origin/main` — NOT the
    session's `HEAD`, which false-flags "stale" on a feature branch), and report

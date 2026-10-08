@@ -123,7 +123,8 @@ Repo-specific deltas:
    manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
    clone under `~/.claude/plugins/marketplaces/`) together with this session's own
    skill and tool list, then diff that surface against `EXPORTS.json` →
-   `externals` + `considered`. Only `borrowed` and `rejected` entries suppress a
+   `externals` + `considered` (a grouped entry covers its key AND every name in
+   its `names` array). Only `borrowed` and `rejected` entries suppress a
    finding: a `deferred` verdict means the work still fits and has not been done,
    so it stays a finding on every pass, carrying its recorded rationale rather
    than being re-derived. Match names after normalising: strip a `-builtin`
@@ -198,7 +199,7 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 `doc-comp`) fire on description match; agents are namespaced
 `directives-toolkit:*`. Notable:
 - `/do-repo` — run a command (`inspect` / `compare <target>` / `audit`) against
-  any public GitHub repo, read-only, without cloning.
+  any public GitHub repo, read-only, over raw URLs and git, with no checkout.
 - `update-pages` (auto-skill) — Pages deploy procedure: gates, push, watch to a
   terminal state, report live/stuck/failed proactively (encodes the
   stuck-pipeline toggle and cache gotchas).
@@ -261,7 +262,7 @@ python3 .github/scripts/check-job-bounds.py --include-templates  # every job bou
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
 python3 .github/scripts/check-toolkit-gates-cases.py  # the push and wait gates block the shapes they claim (+main, an apostrophe-hidden push, `sleep 5m`) and allow the complements. Re-prove with PUSH_GATE_BIN / WAIT_GATE_BIN=<mutant>
 python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation still matches every shipped caller — it reads the pattern OUT of refresh-repo.md, so a copy cannot drift from it (PROP6)
-python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — 2 of its 3 checks never fire against THIS repo (no ragged caller, no missed match), so nothing else would notice them break
+python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — most of its checks never fire against THIS repo (no ragged caller, no missed match, no widened copy), so nothing else would notice them break
 python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT; it does NOT check that carriers install them, nor that a composite names a file that exists
 python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — real `git init` fixtures, each refusal with its accepting complement. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
 python3 .github/scripts/check-run-quoting.py       # no apostrophe in a bash `run:` block is read as a shell quote (a single-quote boundary between two letters; a block that does not parse fails too) — the #264 ci-monitor defect, which `bash -n` cannot see. Needs shfmt v3.12.0 as $SHFMT or on PATH: the pinned, sha256-checked download is in qa.yml; without it the guard exits 2 CANNOT CHECK

@@ -124,7 +124,16 @@ for (const [ref, citedBy] of [...refs].sort()) {
 //   else's page, external like any other origin.
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
 const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
-const URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'action', 'formaction', 'data', 'cite', 'manifest', 'longdesc', 'background']);
+// Which attributes carry URLs, by the HTML spec's attribute index -- every
+// attribute it types as a URL, a URL list or a srcset -- plus the obsolete URL
+// attributes browsers still fetch, and SVG's xlink:href. Taken from the index
+// as a whole, not added one finding at a time (Codex on #415: imagesrcset).
+// Left out on purpose: itemid / itemtype (identifiers, never fetched) and
+// <base href> (it sets the resolution base below; nothing is fetched from it).
+const URL_ATTRS = new Set(['href', 'src', 'action', 'formaction', 'cite', 'data', 'poster',
+  'manifest', 'longdesc', 'background', 'lowsrc', 'dynsrc', 'profile', 'xlink:href']);
+const SRCSET_ATTRS = new Set(['srcset', 'imagesrcset']);
+const URL_LIST_ATTRS = new Set(['ping']); // space-separated URLs
 const NAMED_REFS = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
 const decodeRefs = (v) => v.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|quot|apos|lt|gt);?/gi, (m, r) => {
   const k = r.toLowerCase();
@@ -192,14 +201,16 @@ function srcsetUrls(v) {
   }
   return urls.filter(Boolean);
 }
-// The URL values one tag carries: URL attributes, each srcset candidate, and a
+// The URL values one tag carries: URL attributes, each srcset / imagesrcset
+// candidate, each ping URL, and a
 // meta refresh's target, parsed as the spec's refresh algorithm reads it.
 function linksOf({ tag, attrs }) {
   const urls = [];
+  if (tag === 'base') return urls; // resolved once, against the page, as the base -- never as a link (Codex on #415)
   for (const [name, v] of attrs) {
-    if (!URL_ATTRS.has(name)) continue;
-    if (name === 'srcset') urls.push(...srcsetUrls(v));
-    else urls.push(v);
+    if (SRCSET_ATTRS.has(name)) urls.push(...srcsetUrls(v));
+    else if (URL_LIST_ATTRS.has(name)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
+    else if (URL_ATTRS.has(name)) urls.push(v);
   }
   if (tag === 'meta' && (attrs.get('http-equiv') || '').trim().toLowerCase() === 'refresh') {
     const m = (attrs.get('content') || '').match(/^\s*[\d.]*\s*[;,]?\s*(?:url\s*=\s*)?(["']?)(.*)$/is);

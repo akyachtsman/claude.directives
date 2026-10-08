@@ -500,6 +500,14 @@
       "sockets": [
         "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
       ]
+    },
+    "update-config-builtin": {
+      "vendor": "Anthropic (built-in skill)",
+      "serves": "meta.session",
+      "sockets": [
+        "plugins/directives-toolkit/commands/refresh-repo.md",
+        "plugins/directives-toolkit/commands/new-repo.md"
+      ]
     }
   },
   "considered": {
@@ -533,12 +541,6 @@
       "verdict": "rejected",
       "rationale": "Its eval MODEL (query + should-fire, scored over repeated runs) shaped the first local runner, which `claude plugin eval` has now replaced entirely. Its own runner is unusable: scripts/run_eval.py returns on the FIRST tool use of the FIRST assistant message, so any preamble reads as no-trigger -- it scored the known-good pdf skill 0.00. Nothing of it remains in the repo; kept as a rejected-with-reason so no audit re-adopts it for trigger testing.",
       "stays": "CLAUDE.md"
-    },
-    "update-config": {
-      "vendor": "Anthropic",
-      "verdict": "deferred",
-      "rationale": "Built-in skill for settings.json editing: permissions, env vars, and hook registration. Overlaps /refresh-repo Phase 1.5, which hand-writes jq to merge the SessionStart row and the permissions.allow block. Deferred rather than borrowed because refresh-repo's job is a NEGOTIATED sync (diff the installed copy against upstream, disposition each drift), not a settings edit; update-config performs the write but decides nothing. Revisit if refresh-repo's jq needs another repair - the write half should delegate then.",
-      "stays": "plugins/directives-toolkit/commands/refresh-repo.md"
     },
     "fewer-permission-prompts": {
       "vendor": "Anthropic",

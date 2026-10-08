@@ -139,7 +139,8 @@ diff sees nothing wrong with either. `/env-chk` reports all three and names
 above never inspects `.claude/settings.json`, and Phase 2 only sees upstream
 changes, so a current-stamped project would otherwise refresh forever without
 being fixed. After the install block below, repair registration and the exec
-bit. The registration test is the same `jq` expression `/env-chk` runs; it
+bit; the registration is a settings write, so it goes through *Settings writes*
+below. The registration test is the same `jq` expression `/env-chk` runs; it
 parses the `SessionStart` array rather than grepping the file, for the reason
 the comment in the block gives:
 
@@ -158,8 +159,9 @@ if [ -f .claude/hooks/session-start.sh ] \
             | any((gsub("\"";"") | split(" ")[0] | endswith("hooks/session-start.sh")))' \
        .claude/settings.json >/dev/null 2>&1; then
   echo "MISSING-REGISTRATION: .claude/settings.json has no SessionStart row —"
-  echo "  merge it from templates/claude-settings.json (do not overwrite the file;"
-  echo "  the project may carry its own keys), then re-run /env-chk to confirm."
+  echo "  merge the row from templates/claude-settings.json via Settings writes"
+  echo "  (do not overwrite the file; the project may carry its own keys),"
+  echo "  then re-run /env-chk to confirm."
 fi
 ```
 
@@ -195,8 +197,8 @@ if [ -f .claude/settings.json ] && [ ! -f .claude/hooks/session-start.sh ]; then
   fi
 fi
 ```
-Install the settings row in the same pass, so the registration and its target
-always land together.
+Install the settings row in the same pass (through *Settings writes* below), so
+the registration and its target always land together.
 
 `session-start.sh` is also in the drift loop, not only in Phase 2: a locally
 truncated hook whose template never moved would otherwise stay broken through
@@ -231,6 +233,54 @@ looking preserves tampering.
    are asymmetric: a wrongly-kept bad edit is caught by the next review or CI
    run, while a wrongly-restored improvement is deleted with nothing left to
    notice. Never silently preserve.
+
+### Settings writes
+
+This command DECIDES what changes in `.claude/settings.json`; Anthropic's
+built-in `update-config` skill WRITES it. Every write lands here: the
+`SessionStart` row the hook repair above found missing, a settings-row merge in
+Phase 2, and, in Phase 3, each `UNAPPLIED` settings entry dispositioned as apply
+and each local `allow` extra dispositioned as remove. Make every decision first,
+then invoke `update-config` with the Skill tool once, naming:
+- **the file**: the project's `.claude/settings.json`, never
+  `settings.local.json` or the user settings, since Phase 3 compares only the
+  project file;
+- **the exact entries**, copied from `templates/claude-settings.json` at the head
+  being synced: the `SessionStart` object as the template writes it, each
+  `permissions` entry with its section, each `enabledPlugins` or
+  `extraKnownMarketplaces` key with its value, and each `allow` entry to remove;
+- **merge, not replace**: append to the existing arrays and objects, skip an
+  entry already present, and leave every other key, hook and permission alone.
+
+Exact entries are what keep the decision here. `update-config` decides nothing
+of its own, and an open-ended request makes it stop to ask which file to edit
+or whether to replace an array, which stalls an unattended refresh. What it
+contributes is the procedure, maintained by Anthropic against the settings
+schema as that changes: read before writing, merge arrays rather than replace
+them, validate with `jq -e`.
+
+Observed 2026-10-08 on a scratch copy, never a real project file: it is
+prompt-only. Invoking it loads that procedure, and the session's own Read and
+Edit tools make the write. Given a file carrying a project-owned `SessionStart`
+hook, a `PostToolUse` hook, `env`, `deny` and plugin keys, it appended the
+toolkit's `SessionStart` row beside the existing one, added only the `allow`
+entry that was missing, and changed nothing else. It does not create a missing
+file (its procedure asks first), so a project with no `.claude/settings.json`
+gets the template copied by the settings row: that is a create, not a merge.
+
+**Fallback: the hand merge.** `update-config` ships with Claude Code, so a
+session that has bundled skills turned off or hides it through
+`skillOverrides` does not have it. When it is not in this session's skill list,
+or the Skill tool refuses it, make the same merge by hand with the Edit tool,
+under the same three rules above, then confirm the file still parses with
+`jq empty .claude/settings.json`.
+
+**Verify either way, and report which path ran.** Re-run the registration test
+in the hook repair block (it prints nothing once the row is registered), and let
+Phase 3's settings comparison re-check every entry. The refresh report states
+`settings written via update-config`, or `settings written by hand
+(update-config unavailable: <why>)`, with the entries written, or `no settings
+writes`.
 
 ## Phase 2 — Upstream delta since last sync (installed templates)
 
@@ -338,7 +388,7 @@ project** — map each to its installed location before dispositioning:
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
-| `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge. Install it WITH the hook row below, never alone |
+| `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge, through *Settings writes* (Phase 1.5). Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
 | `directives/*`, `docs/*`, `plugins/*` | not installed — read live / delivered by the plugin | Informational; no local file to update |
@@ -649,7 +699,9 @@ What is compared, delta or not:
   since a stricter local choice is still a choice), every `permissions.ask`
   entry (local `ask` or `deny`), every `permissions.deny` entry (local `deny`),
   and every `enabledPlugins` and `extraKnownMarketplaces` key at the template's
-  value. The `SessionStart` row is Phase 1.5's. A project that deliberately
+  value. The `SessionStart` row is Phase 1.5's. Applying a missing entry, or
+  removing an unexplained `allow` extra (below), is a settings write: make it
+  through *Settings writes* (Phase 1.5). A project that deliberately
   leaves an entry out records why, keyed by the entry itself:
 
   ```bash
@@ -986,5 +1038,6 @@ later", keep the old stamp, and never fabricate a SHA or an unverified delta
 (`global.md` → *Behavior Rules*: evidence before assertions).
 
 Report: rules re-read (Phase 0), broken references and fixes, the upstream
-delta with per-file dispositions, the new stamp — and remind that any toolkit
+delta with per-file dispositions, which path wrote `.claude/settings.json`
+(*Settings writes*), the new stamp — and remind that any toolkit
 changes in the delta arrive via the plugin at next session start.

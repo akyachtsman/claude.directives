@@ -309,7 +309,20 @@ const ROOT = pagesRoot();
 // "docs%2F..%2F..%2Fetc%2Fpasswd" passed the root check and then reached
 // /etc/passwd once decoded (Codex on #415).
 const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean));
-const published = (p) => tracked.has(p) && isFile(p);
+// And tracked is not yet published: this site is built by Jekyll (no tracked
+// .nojekyll), which leaves out every path with a segment starting "." or "_"
+// and its default exclude list -- measured live 2026-10-08: .github/... and
+// .claude/... 404 while CLAUDE.md is served (Codex on #415). A tracked
+// .nojekyll lifts that; a _config.yml can re-include or exclude anything, so
+// its presence is refused until this check models it.
+const JEKYLL = !tracked.has('.nojekyll');
+if (JEKYLL && tracked.has('_config.yml')) {
+  console.error('CANNOT CHECK: a tracked _config.yml can change what Jekyll publishes (include/exclude) -- teach check-paths.js its rules first');
+  process.exit(2);
+}
+const JEKYLL_EXCLUDED = /^(?:node_modules|vendor\/(?:bundle|cache|gems|ruby)|gemfiles|Gemfile(?:\.lock)?)(?:\/|$)/;
+const jekyllPublishes = (p) => !JEKYLL || !(p.split('/').some((seg) => /^[._]/.test(seg)) || JEKYLL_EXCLUDED.test(p));
+const published = (p) => tracked.has(p) && isFile(p) && jekyllPublishes(p);
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;

@@ -96,36 +96,117 @@ for (const [ref, citedBy] of [...refs].sort()) {
   }
 }
 
-// --- Third pass: relative links inside the published HTML pages ----------------
-// Every relative href / src / meta-refresh url= in a tracked .html page must name
-// a regular file -- or a directory holding index.html, which is what Pages serves
+// --- Third pass: links inside the published HTML pages -------------------------
+// Every link in a tracked .html page that stays on this Pages site must name a
+// regular file -- or a directory holding index.html, which is what Pages serves
 // for it. isFile(), not existsSync(): a DIRECTORY named example.html exists
 // happily and still 404s. Nothing else here resolves an HTML link to the tree:
 // check-links.js reads only Markdown, and html-validate never touches the
 // filesystem. This is what survived of check-landing-cards.js when the two
-// landing pages merged (2026-10-08) -- the sync half went, the target half is
-// whole-class now: every page, every link, the redirect stubs included.
+// landing pages merged (2026-10-08): the sync half went, the target half is
+// whole-class now -- every page, every URL-bearing attribute, the redirect stubs.
+//
+// Two mechanisms rather than patterns, so a markup variant cannot slip past
+// (Codex on #415: a single-quoted href, then a root-relative one):
+// - tags() tokenizes attributes the way the HTML spec does -- double-quoted,
+//   single-quoted, unquoted or bare; comments and raw-text elements skipped;
+//   the first of a duplicate attribute wins -- and THROWS on markup it cannot
+//   read, which fails the run rather than skipping the page.
+// - each link is resolved by WHATWG URL against the page's own address under a
+//   sentinel project root, exactly as a browser resolves it on the deployed
+//   site. Another origin is external and skipped; same origin but outside the
+//   root (a root-relative "/x", or too many "..") FAILS, since on the project
+//   site it leaves the repo's pages altogether.
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
+const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
+const URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'action', 'formaction', 'data', 'cite', 'manifest', 'longdesc', 'background']);
+const NAMED_REFS = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
+const decodeRefs = (v) => v.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|quot|apos|lt|gt);?/gi, (m, r) => {
+  const k = r.toLowerCase();
+  if (k[0] !== '#') return NAMED_REFS[k];
+  return String.fromCodePoint(k[1] === 'x' ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10));
+});
+function tags(src) {
+  const out = []; const lower = src.toLowerCase(); const n = src.length; let i = 0;
+  const upTo = (s, from, what) => { const e = src.indexOf(s, from); if (e < 0) throw new Error(`unterminated ${what} at offset ${from}`); return e; };
+  while ((i = src.indexOf('<', i)) >= 0) {
+    if (src.startsWith('<!--', i)) { i = upTo('-->', i + 4, 'comment') + 3; continue; }
+    if ('!?/'.includes(src[i + 1] ?? 'x')) { i = upTo('>', i, 'declaration or end tag') + 1; continue; }
+    if (!/[A-Za-z]/.test(src[i + 1] ?? '')) { i++; continue; } // a bare "<" in text
+    let j = i + 1;
+    while (j < n && !/[\s/>]/.test(src[j])) j++;
+    const tag = lower.slice(i + 1, j); const attrs = new Map();
+    for (;;) {
+      while (j < n && /[\s/]/.test(src[j])) j++;
+      if (j >= n) throw new Error(`unterminated <${tag}> at offset ${i}`);
+      if (src[j] === '>') { j++; break; }
+      let k = j;
+      while (k < n && !/[\s/>=]/.test(src[k])) k++;
+      const name = lower.slice(j, k); j = k;
+      while (j < n && /\s/.test(src[j])) j++;
+      let value = '';
+      if (src[j] === '=') {
+        j++;
+        while (j < n && /\s/.test(src[j])) j++;
+        if (src[j] === '"' || src[j] === "'") {
+          const e = upTo(src[j], j + 1, `${src[j]}-quoted ${name} in <${tag}>`);
+          value = src.slice(j + 1, e); j = e + 1;
+        } else {
+          k = j;
+          while (k < n && !/[\s>]/.test(src[k])) k++;
+          value = src.slice(j, k); j = k;
+        }
+      }
+      if (!attrs.has(name)) attrs.set(name, decodeRefs(value));
+    }
+    out.push({ tag, attrs });
+    i = RAW_TEXT.has(tag) ? (() => { const e = lower.indexOf(`</${tag}`, j); if (e < 0) throw new Error(`unterminated <${tag}> at offset ${i}`); return e; })() : j;
+  }
+  return out;
+}
+// The URL values one tag carries: URL attributes, each srcset candidate, and a
+// meta refresh's target, parsed as the spec's refresh algorithm reads it.
+function linksOf({ tag, attrs }) {
+  const urls = [];
+  for (const [name, v] of attrs) {
+    if (!URL_ATTRS.has(name)) continue;
+    if (name === 'srcset') urls.push(...v.split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean));
+    else urls.push(v);
+  }
+  if (tag === 'meta' && (attrs.get('http-equiv') || '').trim().toLowerCase() === 'refresh') {
+    const m = (attrs.get('content') || '').match(/^\s*[\d.]*\s*[;,]?\s*(?:url\s*=\s*)?(["']?)(.*)$/is);
+    if (m && m[2]) urls.push(m[1] ? m[2].split(m[1])[0] : m[2]);
+  }
+  return urls;
+}
+const ROOT = new URL('https://pages.invalid/__project_root__/');
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
 for (const page of htmlPages) {
-  const src = readFileSync(page, 'utf8');
-  for (const m of src.matchAll(/\b(?:href|src)\s*=\s*"([^"]*)"|\burl=([^"';\s>]+)/gi)) {
-    const raw = (m[1] ?? m[2]).trim();
-    // Absolute (any scheme), protocol-relative, same-page anchor, or a template
-    // placeholder: not a path in this tree.
-    if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//') || raw.startsWith('#') || raw.includes('${')) continue;
-    const path = raw.replace(/[?#].*$/, '');
-    if (!path) continue;
-    const target = path.startsWith('/') ? path.slice(1) : join(dirname(page), path);
+  let pageTags;
+  try { pageTags = tags(readFileSync(page, 'utf8')); } catch (e) {
+    console.error(`UNREADABLE: ${page}: ${e.message} -- its links cannot be checked`);
+    failed = true; continue;
+  }
+  const base = new URL(page, ROOT);
+  for (const raw of pageTags.flatMap(linksOf)) {
+    let url;
+    try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }
+    if (url.origin !== ROOT.origin) continue; // another site, any scheme: not this tree's to check
     htmlLinks++;
-    if (isFile(target) || (!/\.[A-Za-z0-9]+$/.test(path) && isFile(join(target, 'index.html')))) continue;
+    if (!url.pathname.startsWith(ROOT.pathname)) {
+      console.error(`MISSING: ${page} links "${raw}", which resolves to ${url.pathname} -- outside the Pages project root, so it leaves this repo's site`);
+      failed = true; continue;
+    }
+    const rel = decodeURIComponent(url.pathname.slice(ROOT.pathname.length));
+    const target = rel === '' || rel.endsWith('/') ? `${rel}index.html` : rel;
+    if (isFile(target) || isFile(join(target, 'index.html'))) continue;
     console.error(`MISSING: ${page} links "${raw}" -> ${target}, which is not a regular file — the published link would 404`);
     failed = true;
   }
 }
-console.log(`OK:     ${htmlLinks} relative link(s) across ${htmlPages.length} HTML page(s) resolve to files`);
+console.log(`OK:     ${htmlLinks} same-site link(s) across ${htmlPages.length} HTML page(s) checked`);
 
 if (failed) {
   console.error('\nOne or more referenced paths do not exist in the repo.');

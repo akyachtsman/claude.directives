@@ -597,7 +597,8 @@ What is compared, delta or not:
     directive at the head, names: the pattern *Deriving the referenced-script
     set* installs by, the same filter in both places. A workflow must NAME
     what it needs by that path: `cron-notify.yml` runs
-    `node .github/scripts/notify-task.js` and names `notify-email.js` and
+    `node "$GITHUB_WORKSPACE/.github/scripts/notify-task.js"` (still from
+    `working-directory: .github/scripts`) and names `notify-email.js` and
     `package.json` the same way, which closed #398. A step that runs a bare
     relative command under `working-directory: .github/scripts` is invisible to
     both, so the fix for one is to name the path, never to widen this check

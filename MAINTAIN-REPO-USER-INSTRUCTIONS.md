@@ -308,7 +308,8 @@ repo**:
    unchanged does not rebuild the cache.
 3. Start a NEW session and run `/env-chk` to confirm what actually attached.
 
-**Step 3 is a verification step, not a formality — the rebuild is best-effort.**
+**Step 3 is a verification step, not a formality — the documented rebuild has
+not yet been measured here.**
 Measured 2026-08-19: the owner re-saved `fleet` UNCHANGED, as step 2 then said
 to — which, by the documented rule above, is no change and so no rebuild — and
 the next new session in a
@@ -320,10 +321,12 @@ clean — because it commits the hook and re-runs the installer itself. One repo
 broken and one repo clean in one environment is the signature: the difference is
 the hook, not the environment, and no further re-saving fixes it.
 
-So treat the edit-and-save as a nudge that may not land (a session whose VM is
-restored rather than rebuilt keeps the old cache), and treat the hook as the
-cure. If `/env-chk` still reports a stale or unwanted plugin after an edit-and-save,
-stop repeating it and **install the hook once** in that project — `/refresh-repo`
+So an edit-and-save followed by a NEW session is the documented rebuild, and
+step 3 confirms it landed. Check from a new session only: reopening an existing
+one after it idled does not count, because its VM is restored rather than
+rebuilt and keeps the old cache. The hook is still the lasting cure. If
+`/env-chk` in a new session after an edit-and-save still reports a stale or
+unwanted plugin, stop repeating it and **install the hook once** in that project — `/refresh-repo`
 does it (Phase 2 installs `.claude/hooks/session-start.sh` and merges the
 `SessionStart` row even when the local path does not exist). From then on the
 project heals itself every session and never needs this section again.

@@ -68,11 +68,12 @@ without `.claude/hooks/session-start.sh`; with the hook, the next session update
 itself. The setup-script install is
 cached per environment, so a toolkit change merged upstream normally reaches your
 sessions only when that cache rebuilds (~weekly). To get it **now**: open the
-environment's settings, make any edit to the Setup script (even re-saving a
-whitespace change), save — that is *meant* to invalidate the cache — then start a
+environment's settings, make a real edit to the Setup script (a `#` comment line
+is enough), save — that is *meant* to invalidate the cache — then start a
 **new** session and run `/env-chk` to check what actually attached. Verify rather
-than assume: a re-save has been observed not to rebuild (2026-08-19, see
-`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → Environment Maintenance). `/env-chk` tells
+than assume: a re-save with NOTHING changed has been observed not to rebuild
+(2026-08-19), and the docs count only a change to the script or the allowed hosts
+(see `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → Environment Maintenance). `/env-chk` tells
 you when this is needed ("plugins/ changed upstream") and whether it worked.
 
 Environments whose setup script predates 2026-08-05 need that cache-invalidation
@@ -80,7 +81,8 @@ step every time. Newer ones do not: the script now refreshes the marketplaces an
 runs `claude plugin update` after each install, so a plain re-run moves the
 plugins to current. `claude plugin install` alone never could — it reports
 "already installed" and leaves the old sha pinned. To adopt the fix on an older
-environment, re-save its Setup script once; from then on it self-updates.
+environment, edit and save its Setup script once (a `#` comment line is
+enough); from then on it self-updates.
 
 **Two later fixes make the manual step rarer still.** First, `--scope` defaulted to
 `user` on install *and* update (`update` now says `auto-detect`, 2026-09-24, and

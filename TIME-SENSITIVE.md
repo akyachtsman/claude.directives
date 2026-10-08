@@ -66,8 +66,8 @@ is added by the pass that finds it.
 |---|---|---|---|
 | How web sessions get the toolkit (setup script, `SessionStart` hook) | `global.md` → *Skill Bootstrap* | 2026-10-06 | ⏳ The next fresh web session's start-up output |
 | When a hook-fetched plugin update takes effect | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-10-06 | ⏳ The next session whose `SessionStart` hook fetches an update |
-| What rebuilds the cached setup script | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | undated | code.claude.com/docs/en/cloud-environments, section *Environment caching* |
-| Whether a re-save that rebuilds the cache lands in the next session | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | 2026-08-19 | ⏳ The next time the owner re-saves an environment |
+| What rebuilds the cached setup script | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | 2026-10-08 | code.claude.com/docs/en/cloud-environments, section *Environment caching* |
+| Whether a re-save that rebuilds the cache lands in the next session | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Environment Maintenance* | 2026-08-19 | ⏳ The next time the owner edits and saves an environment's setup script (the 2026-08-19 save was unchanged, so it never tested this) |
 | `claude plugin install` / `update` scope defaults | `scripts/install-toolkit.sh` (steps 4–5) | 2026-10-08 | `claude plugin install --help`, `claude plugin update --help` |
 | How a session detects it is on the web (`CLAUDE_CODE_REMOTE`) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-10-08 | `env` in this session |
 | PR subscription lifecycle (auto-subscribe on open, drop on merge) | `CLAUDE.md` → *Notifications* | 2026-09-24 | ⏳ The next PR a session opens and merges |

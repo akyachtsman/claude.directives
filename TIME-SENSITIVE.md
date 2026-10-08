@@ -76,7 +76,7 @@ is added by the pass that finds it.
 | `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-10-08 | `claude plugin eval --help` |
 | Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-10-08 | Claude Code on the web docs, network access |
 | When a network-allowlist change reaches running sessions | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-08 | code.claude.com/docs/en/cloud-environments, section *Network access* |
-| The project-scope MCP file is `.mcp.json` at the repo root, meant to be committed | `data.md` → *MCP Configuration* | 2026-10-08 | code.claude.com/docs/en/mcp (this repo keeps the gitignore rule; the owner has not ruled on committing it) |
+| Claude Code reads the project-scope MCP file from `.mcp.json` at the repo root (its docs suggest committing one that holds no secrets; this standard keeps it gitignored) | `data.md` → *MCP Configuration* | 2026-10-08 | code.claude.com/docs/en/mcp (owner ruling 2026-10-08: it stays gitignored, `data.md` → *MCP Configuration*) |
 | WebFetch obeys the egress policy | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-08 | WebFetch a policy-denied host and expect `EGRESS_BLOCKED` ("blocked by the network egress proxy") |
 | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` semantics | `global.md` → *Subagent Model Selection* | 2026-10-08 | code.claude.com/docs/en/sub-agents, "Run every subagent on one model" |
 
@@ -90,6 +90,7 @@ is added by the pass that finds it.
 | Built-in `anthropic-skills:docx` and `anthropic-skills:pdf` (text extraction, OCR for scanned PDFs) | `plugins/directives-toolkit/skills/doc-comp/SKILL.md` | 2026-10-08 | This session's skill list: both skills listed, and the `pdf` skill's own description still names OCR for scanned PDFs |
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
 | The Anthropic-authored LSP plugin set (twelve names) | `EXPORTS.json` → `considered.lsp-plugins` | 2026-10-08 | the `claude-plugins-official` `marketplace.json` |
+| `discord`, `telegram`, `imessage`, `fakechat` are third-party plugins listed under the official marketplace's `external_plugins/`, not Anthropic-built | `EXPORTS.json` → `considered.messaging-channels` | 2026-10-08 | In the `claude-plugins-official` `marketplace.json`, each plugin's `source` path still starts `./external_plugins/`; if one moves under `./plugins/` or gains Anthropic authorship, re-judge the entry |
 
 ## GitHub
 | Topic | Source | Last checked | Check |

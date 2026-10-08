@@ -19,12 +19,18 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
   explicit approval at the project level.
 
 ## MCP Configuration
-- Each repo configures its own Supabase MCP access in `.mcp.json` at the repo
-  root — the project-scope file Claude Code reads (`.claude/mcp.json` is never
-  read; verified 2026-10-08 against code.claude.com/docs/en/mcp).
-- `.mcp.json` is **per-repo and gitignored** — it holds connection setup
-  and must never be committed. Add it to the project `.gitignore` during
-  bootstrap.
+- **Web sessions** (Claude Code on the web) reach Supabase through the Supabase
+  connector: no project file is needed or created there.
+- **CLI / desktop sessions** configure Supabase MCP access per repo in `.mcp.json`
+  at the repo root — the project-scope file Claude Code reads (`.claude/mcp.json`
+  is never read; verified 2026-10-08 against code.claude.com/docs/en/mcp).
+- Wherever it exists, `.mcp.json` is **gitignored** (owner ruling, 2026-10-08) —
+  it holds connection setup, which for Supabase can include an access token, and
+  must never be committed. Add it to the project `.gitignore` during bootstrap,
+  so a CLI/desktop copy is ignored from the start. Claude Code's docs suggest
+  committing a project `.mcp.json` that holds no secrets; this standard does not,
+  because the only sessions that need the file are local ones holding
+  credentials.
 - Treat MCP config as local session setup, not shared project state.
 
 ## Row-Level Security (RLS)

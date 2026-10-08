@@ -662,6 +662,18 @@
       "verdict": "rejected",
       "rationale": "Built-in skill that writes a mod - a pane, band, status line, toast or hook - as function hooks that hot-reload in the CURRENT session. The toolkit's guard hooks (the push and wait gates among them) must reach every session in every downstream repo, so they ship through the claude-directives marketplace as plugin files under plugins/directives-toolkit/hooks/; a session-local mod reaches no other session. plugin-dev stays the authoring authority (CLAUDE.md -> Toolkit changes).",
       "stays": "plugins/directives-toolkit/hooks/hooks.json"
+    },
+    "messaging-channels": {
+      "vendor": "third-party, listed in claude-plugins-official (external_plugins/)",
+      "verdict": "rejected",
+      "names": [
+        "discord",
+        "telegram",
+        "imessage",
+        "fakechat"
+      ],
+      "rationale": "Chat-channel plugins in Anthropic's official marketplace, under its external_plugins/ directory, so not Anthropic-built and outside the parity pass's Anthropic-owned count either way. Out of scope: nothing in this repo or its toolkit talks to a chat channel. Owner ruling 2026-10-08: recorded as rejected so the ownership question does not recur on every audit.",
+      "stays": "CLAUDE.md"
     }
   }
 }

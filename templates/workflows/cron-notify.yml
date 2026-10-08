@@ -39,8 +39,13 @@ jobs:
       - name: Install deps
         working-directory: .github/scripts
         run: npm install
+      # Run from the repo root by FULL PATH, and name every file this job needs:
+      # .github/scripts/notify-task.js (run below), .github/scripts/notify-email.js
+      # (which it requires) and .github/scripts/package.json (what `npm install`
+      # above reads). /refresh-repo and /new-repo derive the scripts to install
+      # from the `.github/scripts/<file>` paths a workflow names, so a bare
+      # `node notify-task.js` under `working-directory:` left all three out (#398).
       - name: Run task
-        working-directory: .github/scripts
         env:
           # --- your task's own inputs (example; names match the data directive) ---
           # DB_URL: ${{ vars.DB_URL }}
@@ -54,4 +59,4 @@ jobs:
           SMTP_USER:  ${{ vars.SMTP_USER }}
           SMTP_PASS:  ${{ secrets.SMTP_PASS }}
           FORCE:      ${{ github.event.inputs.force }}
-        run: node notify-task.js
+        run: node .github/scripts/notify-task.js

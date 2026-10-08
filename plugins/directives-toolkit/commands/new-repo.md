@@ -146,12 +146,10 @@ Execute in order:
    installs them, because that is not decidable from prose (#354). Keeping this
    correct is a review responsibility.
 
-   **Scheduled-job scripts — the derivation's known blind spot, so copy them by
-   hand.** `cron-notify.yml` runs `node notify-task.js` from
-   `working-directory: .github/scripts`, never naming the path, so the derivation
-   cannot see it (#398, until the derivation is widened). Copy
-   `claude.directives/templates/scripts/` (`notify-email.js`, `notify-task.js`,
-   `package.json`) into `.github/scripts/`, then run `npm install` there and **commit** the generated
+   **Scheduled-job scripts.** `cron-notify.yml` names
+   `.github/scripts/notify-task.js`, `.github/scripts/notify-email.js` and
+   `.github/scripts/package.json` by path, so the derivation above copies all
+   three (#398). Then run `npm install` in `.github/scripts/` and **commit** the generated
    `package-lock.json` (`cron-notify.yml`'s `cache:` step needs
    `.github/scripts/package-lock.json`, same policy as the Playwright kit).
    `notify-task.js` ships as a starter that emails via `notify-email.js`; it

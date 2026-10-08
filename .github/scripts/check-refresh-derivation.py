@@ -43,7 +43,11 @@ form-independent scan, THREE ways:
      defect exists ONLY in the concatenation, so check 1 is structurally blind to
      it. Whether the loop delimits is read out of the command text, not assumed.
   3. OFF-CONTRACT. Anything the pattern accepts that is not .js/.py under
-     .github/scripts/ -- see the extras split below.
+     .github/scripts/, or exactly .github/scripts/package.json (#398) -- see the
+     extras split below.
+  4. IN STEP. Every copy of the token grep in the command -- the install
+     pipeline and the Phase 3 applied-check -- applies the SAME extension
+     filter, so the check can never be wider or narrower than the install (#398).
 
 WHY grep AND NOT `re`. An earlier version compiled the extracted patterns with
 Python's `re` and matched with Python. The shipped pipeline runs GNU `grep -E`,
@@ -99,6 +103,12 @@ FILTER_LINE = re.compile(r"grep -E '([^']+)'")
 
 # Does the fetch loop put a boundary between concatenated callers? Read, not
 # assumed -- this guard models whatever the command actually does.
+# EVERY copy of the token grep, wherever it sits: the install pipeline and the
+# Phase 3 applied-check each carry one. #398's constraint is that they name the
+# SAME set -- a check wider than the install refuses a stamp the install can
+# never satisfy -- so the extension filter after each copy must be identical.
+ANY_TOKEN = re.compile(r"grep -oE '\\\.github/scripts/[^']*'")
+
 DELIMITER_LINE = re.compile(r"(printf\s+'\\n'|echo)\s*>>\s*\"\$buf\"")
 
 # Form-independent: the path token anywhere in the file, whatever precedes it.
@@ -114,6 +124,16 @@ DELIMITER_LINE = re.compile(r"(printf\s+'\\n'|echo)\s*>>\s*\"\$buf\"")
 # A directory reference (`.github/scripts/ui-tests/`) is still excluded, because
 # truth keeps only .js/.py endings. Found by Codex on #345 round 2.
 TRUTH_RE = re.compile(r"\.github/scripts/[A-Za-z0-9_./-]+")
+
+# THE CONTRACT: .js/.py under .github/scripts/, plus EXACTLY
+# .github/scripts/package.json -- cron-notify.yml's `npm install` reads it, so it
+# installs with that caller like a script (#398). Not ui-tests/package.json (the
+# kit row installs that) and never package-lock.json (the project generates it).
+PACKAGE_JSON = ".github/scripts/package.json"
+
+
+def in_contract(path):
+    return path.endswith((".js", ".py")) or path == PACKAGE_JSON
 
 
 def fail(msg):
@@ -152,7 +172,7 @@ def derive(token_pat, filter_pat, text):
 
 
 def truth(text):
-    return {h for h in TRUTH_RE.findall(text) if h.endswith((".js", ".py"))}
+    return {h for h in TRUTH_RE.findall(text) if in_contract(h)}
 
 
 def main():
@@ -176,6 +196,20 @@ def main():
             "      because an unterminated `\\.(js|py)` matches the `.js` inside `.json`."
         )
     token_pat, filter_pat = token_m.group(1), filter_m.group(1)
+
+    filters = []
+    for m in ANY_TOKEN.finditer(text):
+        f = FILTER_LINE.search(text, m.end())
+        filters.append(f.group(1) if f else None)
+    if len(set(filters)) > 1:
+        return fail(
+            f"the derivation's copies in {COMMAND} filter DIFFERENTLY.\n"
+            "      The install pipeline and the Phase 3 applied-check must name the same\n"
+            "      set (#398): a check wider than the install refuses a stamp the install\n"
+            "      can never satisfy, and a narrower one passes a dependency it never saw.\n"
+            + "".join(f"      filter {i + 1}: {f}\n" for i, f in enumerate(filters))
+            + "      Widen or narrow them together."
+        )
 
     callers = sorted({p for g in CALLER_GLOBS for p in Path().glob(g)})
     if not callers:
@@ -274,19 +308,21 @@ def main():
     #     and the asymmetry favours it: installing a script nothing referenced
     #     costs a file, missing one ships a red build.
     #
-    #   * does NOT end .js/.py -> a FAILURE. The derivation's declared contract is
-    #     .js/.py under .github/scripts/, so this is the pattern accepting
+    #   * outside the contract -> a FAILURE. The derivation's declared contract is
+    #     .js/.py under .github/scripts/ plus exactly package.json there (#398), so
+    #     this is the pattern accepting
     #     something outside its own contract. The live instance:
     #     `grep -E '\.(js|py)'` unterminated matches the `.js` inside `.json`, so
     #     `.github/scripts/package-lock.json` enters the install list as a script.
     #     Printing that and exiting 0 is the fail-open shape (#323) -- a green run
     #     with a note nobody reads is indistinguishable from a guard that passed.
     extra = sorted(documented_all - per_caller)
-    off_contract = [s for s in extra if not s.endswith((".js", ".py"))]
+    off_contract = [s for s in extra if not in_contract(s)]
     if off_contract:
         return fail(
             "the documented derivation matches path(s) OUTSIDE its own contract.\n"
-            "      It is meant to yield .js/.py under .github/scripts/. These are neither,\n"
+            "      It is meant to yield .js/.py under .github/scripts/, plus exactly\n"
+            f"      {PACKAGE_JSON}. These are neither,\n"
             "      so a refresh would install them as scripts:\n\n"
             + "".join(f"      OFF-CONTRACT: {s}\n" for s in off_contract)
             + "\n      Usual causes: an unterminated extension filter (`\\.(js|py)` with no `$`\n"

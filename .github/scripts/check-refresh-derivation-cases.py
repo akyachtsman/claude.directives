@@ -91,6 +91,8 @@ PREFIXED = r"(node|python3) \.github/scripts/[A-Za-z0-9_.-]+"
 SLASHED = r"\.github/scripts/[A-Za-z0-9_./-]+"      # the shipped shape
 SLASHFREE = r"\.github/scripts/[A-Za-z0-9_.-]+"      # pre-#345-round-2
 EXT = r"\.(js|py)$"
+EXT_SHIPPED = r"\.(js|py)$|^\.github/scripts/package\.json$"   # #398
+EXT_PKG_UNANCHORED = r"\.(js|py)$|package\.json$"
 EXT_LOOSE = r"\.(js|py)"
 EXT_PY_ONLY = r"\.(?:js|py)$"
 
@@ -261,6 +263,43 @@ case("a reshaped pipeline the extractor cannot read is refused",
 case("a pipeline with no extension filter is refused",
      command_text=command_md(ext_line=False), callers=GOOD, expect_exit=1,
      needle="not the `grep -E")
+
+# #398: exactly .github/scripts/package.json joins the contract.
+PKG = {"templates/workflows/cron.yml":
+       "steps:\n  - run: npm install  # reads .github/scripts/package.json\n"
+       "  - run: node .github/scripts/notify-task.js\n"}
+KIT_PKG = {"templates/workflows/q.yml":
+           "steps:\n  - run: node .github/scripts/a.js\n"
+           "  # kit: .github/scripts/ui-tests/package.json\n"
+           "  # lock: .github/scripts/package-lock.json\n"}
+
+case("the shipped filter derives .github/scripts/package.json",
+     command_text=command_md(ext=EXT_SHIPPED), callers=PKG, expect_exit=0,
+     needle="  .github/scripts/package.json")
+
+case("a .js/.py-only filter MISSES package.json, which the contract now includes",
+     command_text=command_md(ext=EXT), callers=PKG, expect_exit=1,
+     needle="MISSED: .github/scripts/package.json")
+
+case("an UNANCHORED package.json takes the kit's ui-tests/package.json — refused",
+     command_text=command_md(ext=EXT_PKG_UNANCHORED), callers=KIT_PKG, expect_exit=1,
+     needle="OFF-CONTRACT: .github/scripts/ui-tests/package.json")
+
+case("the shipped filter leaves the kit's package.json and the lockfile out",
+     command_text=command_md(ext=EXT_SHIPPED), callers=KIT_PKG, expect_exit=0,
+     needle="1 referenced script(s)")
+
+PHASE3 = ("\n```bash\nscan() {\n  deps=\"$(printf '%s\\n' \"$1\" | "
+          "grep -oE '\\.github/scripts/[A-Za-z0-9_./-]+' | sed -E 's/[.]+$//' | "
+          "grep -E '{ext}'; true)\"\n}}\n```\n")
+
+case("the Phase 3 copy filtering like the install passes",
+     command_text=command_md(ext=EXT_SHIPPED) + PHASE3.replace("{ext}", EXT_SHIPPED).replace("}}", "}"),
+     callers=PKG, expect_exit=0, needle="referenced script(s)")
+
+case("a Phase 3 copy that filters DIFFERENTLY from the install is refused",
+     command_text=command_md(ext=EXT_SHIPPED) + PHASE3.replace("{ext}", EXT).replace("}}", "}"),
+     callers=PKG, expect_exit=1, needle="filter DIFFERENTLY")
 
 case("no callers at all is refused, never a vacuous pass",
      command_text=command_md(), callers={}, expect_exit=1,

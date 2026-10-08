@@ -62,7 +62,9 @@ runs:
         RUN
 """
 
-# (name, files {relname: text}, expected exit, text the output must contain)
+# (name, files {relname: text}, expected exit, text the output must contain
+#  [, "root" to run the guard's own discovery under the fixture dir instead of
+#  passing the files])
 CASES = [
     ("the #264 jq comment — two apostrophes, balanced, FAIL on the right line",
      {"w.yml": workflow(BUG_264)}, 1, "w.yml:10: an apostrophe CLOSES"),
@@ -121,20 +123,66 @@ CASES = [
      {"w.yml": "jobs: [\n"}, 2, "could not be read as YAML"),
     ("one clean file and one bad — the bad one still FAILS",
      {"a.yml": workflow("echo ok"), "b.yml": workflow("echo it's'")}, 1, "b.yml:"),
+
+    # Codex, #408 — an UNQUOTED heredoc body still runs $( ) and backticks.
+    ("$( ) in an unquoted heredoc body is shell — FAIL on the body line",
+     {"w.yml": workflow("cat <<EOF\nhead\n$(printf '%s' 'fork B's run')\nEOF")}, 1,
+     "w.yml:10: an apostrophe CLOSES"),
+    ("the same body under a QUOTED delimiter is literal — OK",
+     {"w.yml": workflow("cat <<'EOF'\nhead\n$(printf '%s' 'fork B's run')\nEOF")}, 0, "OK"),
+    ("a backslash-quoted delimiter is literal too — OK",
+     {"w.yml": workflow("cat <<\\EOF\n$(echo it's')\nEOF")}, 0, "OK"),
+    ("a backtick in an unquoted heredoc body is shell — FAIL",
+     {"w.yml": workflow("cat <<EOF\n`echo it's'`\nEOF")}, 1, "OPENS"),
+    ("plain text and quotes in an unquoted body stay literal — OK",
+     {"w.yml": workflow("cat <<EOF\nit's \"fine\" and $(date +%s) too\nEOF")}, 0, "OK"),
+
+    # Codex, #408 — the delimiter is the WHOLE word, compared exactly.
+    ("<<END-JSON ends at END-JSON — the line after it is shell, FAIL",
+     {"w.yml": workflow("cat <<END-JSON\nit's literal\nEND-JSON\necho it's'")}, 1,
+     "w.yml:11: an apostrophe OPENS"),
+    ("<<END-JSON with nothing after it — its body was skipped, OK",
+     {"w.yml": workflow("cat <<END-JSON\nit's literal\nEND-JSON\necho ok")}, 0, "OK"),
+    ("a quoted punctuation delimiter — the body is literal, OK",
+     {"w.yml": workflow("cat <<'END.TXT'\ndon't\nEND.TXT\necho ok")}, 0, "OK"),
+    ("<<- strips leading TABS from the terminator — the line after is shell, FAIL",
+     {"w.yml": workflow("cat <<-EOF\n\tit's literal\n\tEOF\necho it's'")}, 1, "OPENS"),
+    ("plain << does NOT strip tabs: the body runs on, swallowing the rest — OK",
+     {"w.yml": workflow("cat <<EOF\nit's literal\n\tEOF\necho it's'")}, 0, "OK"),
+
+    # `<<` inside arithmetic is a shift, not a heredoc.
+    ("$((1<<2)) is a shift — the next line is still scanned, FAIL",
+     {"w.yml": workflow("x=$((1<<2))\necho it's'")}, 1, "OPENS"),
+    ("(( y = 1 << 3 )) is a shift too — FAIL",
+     {"w.yml": workflow("(( y = 1 << 3 ))\necho it's'")}, 1, "OPENS"),
+
+    # Codex, #408 — the DEFAULT scan finds .yaml as well as .yml.
+    ("default scan: a .yaml workflow is found — FAIL",
+     {".github/workflows/w.yaml": workflow("echo it's'"),
+      ".github/workflows/ok.yml": workflow("echo ok")}, 1, "w.yaml:", "root"),
+    ("default scan: an action.yaml composite is found — FAIL",
+     {"templates/actions/x/action.yaml": COMPOSITE.replace("RUN", "echo it's'"),
+      ".github/workflows/ok.yml": workflow("echo ok")}, 1, "action.yaml:", "root"),
+    ("default scan: both extensions, both clean — OK, two files",
+     {".github/workflows/a.yaml": workflow("echo ok"),
+      "templates/workflows/b.yml": workflow("echo ok")}, 0, "in 2 file(s)", "root"),
 ]
 
 
 def main():
     failures = 0
-    for name, files, want_code, want_text in CASES:
+    for name, files, want_code, want_text, *how in CASES:
         with tempfile.TemporaryDirectory() as d:
             paths = []
             for rel, text in files.items():
                 p = os.path.join(d, rel)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(text)
                 paths.append(p)
-            r = subprocess.run([sys.executable, GUARD, *paths],
+            # "root": no file arguments, so the guard's own discovery runs.
+            args = ["--root", d] if how == ["root"] else paths
+            r = subprocess.run([sys.executable, GUARD, *args],
                                capture_output=True, text=True)
             out = r.stdout + r.stderr
             if r.returncode == want_code and want_text in out:

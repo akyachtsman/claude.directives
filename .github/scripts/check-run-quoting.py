@@ -18,7 +18,8 @@ quote still open at the end of the block is reported too.
 WHAT IS NOT SHELL, AND IS SKIPPED:
   - `${{ ... }}` expressions: GitHub substitutes them before the shell starts,
     so their quotes never reach it;
-  - heredoc bodies (`<<EOF`, `<<-'EOF'`, ...), which are literal text;
+  - heredoc bodies, which are literal text -- except that an UNQUOTED
+    delimiter's body still runs `$( )` and backticks, and those are scanned;
   - a `#` comment that starts a word outside any quote;
   - `'` inside double quotes, which is a literal character;
   - steps whose effective `shell:` (step, then job `defaults.run.shell`, then the
@@ -36,8 +37,8 @@ Exit 0: clean. Exit 1: findings. Exit 2: CANNOT CHECK -- an unreadable file,
 or no `run:` block found at all (a did-not-look must not print the same OK as a
 pass).
 
-Usage: check-run-quoting.py [FILE ...]   (default: every workflow and
-composite this repo ships or runs)
+Usage: check-run-quoting.py [--root DIR] [FILE ...]   (default: every workflow
+and composite under the repo root, or DIR, in .yml or .yaml)
 
 Its own guard: check-run-quoting-cases.py.
 """
@@ -50,27 +51,70 @@ import sys
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Both extensions: GitHub accepts .yml and .yaml for workflows and for action
+# metadata, and a file this list misses is a file the OK line never saw (Codex,
+# #408).
 DEFAULT_GLOBS = (
     ".github/workflows/*.yml",
+    ".github/workflows/*.yaml",
     "templates/workflows/*.yml",
+    "templates/workflows/*.yaml",
     "templates/actions/*/action.yml",
+    "templates/actions/*/action.yaml",
 )
 EXPR = re.compile(r"\$\{\{.*?\}\}")
-HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 WORD_START = set(" \t\n;|&(")
+METACHARS = set(" \t\n;&|<>()")
+
+
+def heredoc_word(text, i):
+    """Read the delimiter word that starts at or after `i`.
+
+    Returns (delimiter, quoted, end) or None. The WHOLE word, as bash reads it:
+    `<<END-JSON` ends at `END-JSON`, not at `END`, and any quoting -- `'EOF'`,
+    `"EOF"`, `\\EOF`, `E"O"F` -- is removed from the delimiter and makes the
+    body literal. Matching only an identifier prefix recorded `END`, never saw
+    that line, and skipped the rest of the block (Codex, #408).
+    """
+    n = len(text)
+    while i < n and text[i] in " \t":
+        i += 1
+    word, quoted = [], False
+    while i < n and text[i] not in METACHARS:
+        c = text[i]
+        if c == "\\" and i + 1 < n:
+            word.append(text[i + 1])
+            quoted, i = True, i + 2
+        elif c in "'\"":
+            close = text.find(c, i + 1)
+            if close < 0:
+                return None
+            word.append(text[i + 1:close])
+            quoted, i = True, close + 1
+        else:
+            word.append(c)
+            i += 1
+    return ("".join(word), quoted, i) if word else None
 
 
 def is_letter(c):
     return c.isascii() and c.isalpha()
 
 
-def scan(text):
-    """Return (line index within the block, message) for each finding."""
+def scan(text, mode="top"):
+    """Return (line index within the block, message) for each finding.
+
+    `mode="hd"` scans an UNQUOTED heredoc body: its text is literal (a quote of
+    either kind is just a character) but `$( )` and backticks in it are still
+    command substitutions, so the shell inside them is scanned (Codex, #408).
+    """
     text = EXPR.sub("EXPR", text)
     findings = []
-    # Each frame is a quoting context: 'top', 'cmd' ($( ... )), 'bt' (backtick)
-    # or 'dq'. Single quotes are not a frame: nothing nests inside them.
-    frames = [["top", 0]]
+    # Each frame is a quoting context: 'top', 'cmd' ($( ... )), 'bt' (backtick),
+    # 'dq', 'hd' (an unquoted heredoc body) or 'arith' ($(( )) and (( )), where
+    # `<<` is a shift, not a heredoc). Single quotes are not a frame: nothing
+    # nests inside them.
+    frames = [[mode, 0]]
     i, n = 0, len(text)
     pending_heredocs = []
     sq_open = None   # offset of the opening ' while inside a single-quoted span
@@ -95,26 +139,53 @@ def scan(text):
             continue
         kind = frames[-1][0]
         if c == "\n" and pending_heredocs:
-            # Skip each pending heredoc body, in order, up to its delimiter line.
+            # Each pending heredoc body, in order, up to the line that is
+            # exactly its delimiter (leading tabs stripped for `<<-`). A quoted
+            # delimiter makes the body literal; an unquoted one still expands
+            # `$( )` and backticks, so that body is scanned for them.
             j = i + 1
-            for delim in pending_heredocs:
+            for delim, quoted, strip_tabs in pending_heredocs:
+                start = j
+                body_end = n
                 while j < n:
                     end = text.find("\n", j)
                     end = n if end < 0 else end
                     line = text[j:end]
-                    j = end + 1
-                    if line.strip() == delim:
+                    if (line.lstrip("\t") if strip_tabs else line) == delim:
+                        body_end = j
+                        j = end + 1
                         break
+                    j = end + 1
+                if not quoted:
+                    base = text.count("\n", 0, start)
+                    findings.extend((base + line_no, msg)
+                                    for line_no, msg in scan(text[start:body_end], "hd"))
             pending_heredocs = []
             i = j
             continue
         if c == "\\":
             i += 2
             continue
-        if kind == "dq":
-            if c == '"':
+        if kind == "arith":
+            if c == "(":
+                frames[-1][1] += 1
+            elif c == ")":
+                if frames[-1][1] > 0:
+                    frames[-1][1] -= 1
+                elif text.startswith("))", i):
+                    frames.pop()
+                    i += 2
+                    continue
+            i += 1
+            continue
+        if kind in ("dq", "hd"):
+            if c == '"' and kind == "dq":
                 frames.pop()
                 dq_open.pop()
+            elif text.startswith("$((", i):
+                frames.append(["arith", 0])
+                i += 3
+                continue
             elif text.startswith("$(", i):
                 frames.append(["cmd", 0])
                 i += 2
@@ -139,11 +210,16 @@ def scan(text):
             i += 3
             continue
         elif text.startswith("<<", i):
-            m = HEREDOC.match(text, i)
-            if m:
-                pending_heredocs.append(m.group(2))
-                i = m.end()
+            strip_tabs = text.startswith("<<-", i)
+            w = heredoc_word(text, i + (3 if strip_tabs else 2))
+            if w:
+                pending_heredocs.append((w[0], w[1], strip_tabs))
+                i = w[2]
                 continue
+        elif text.startswith("$((", i) or text.startswith("((", i):
+            frames.append(["arith", 0])
+            i += 3 if c == "$" else 2
+            continue
         elif text.startswith("$(", i):
             frames.append(["cmd", 0])
             i += 2
@@ -229,13 +305,16 @@ def blocks(path):
 
 
 def main(argv):
+    root = ROOT
+    if argv[:1] == ["--root"] and len(argv) >= 2:
+        root, argv = os.path.abspath(argv[1]), argv[2:]
     if argv:
         paths = argv
     else:
-        paths = sorted(p for g in DEFAULT_GLOBS for p in glob.glob(os.path.join(ROOT, g)))
+        paths = sorted(p for g in DEFAULT_GLOBS for p in glob.glob(os.path.join(root, g)))
     total, skipped, bad = 0, 0, []
     for path in paths:
-        rel = os.path.relpath(path, ROOT) if path.startswith(ROOT) else path
+        rel = os.path.relpath(path, root) if path.startswith(root) else path
         try:
             found = list(blocks(path))
         except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:

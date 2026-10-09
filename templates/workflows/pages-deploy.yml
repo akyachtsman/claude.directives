@@ -84,6 +84,10 @@ jobs:
       # a denied DIRECTORY held (a directory URL can 404 while a file under it
       # is served, so probing the directory alone proves nothing).
       deny: ${{ steps.filter.outputs.deny }}
+      # The token written into the artifact. Verify compares against THIS, not
+      # its own run attempt: "Re-run failed jobs" reuses a successful build's
+      # artifact while GITHUB_RUN_ATTEMPT moves on.
+      marker: ${{ steps.filter.outputs.marker }}
     timeout-minutes: 20
     env:
       BUILD_CMD: ''
@@ -155,7 +159,9 @@ jobs:
           # The deployment marker: the verify job waits until the live site
           # serves THIS run's token before probing anything, so no probe can be
           # answered by the previous deployment. Written last, after the filter.
-          printf '%s\n' "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > "$RUNNER_TEMP/site/pages-deploy-marker.txt"
+          marker="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "$marker" > "$RUNNER_TEMP/site/pages-deploy-marker.txt"
+          echo "marker=$marker" >> "$GITHUB_OUTPUT"
           echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src, ${denied} deny-list path(s) removed"
           {
             echo "deny<<__PAGES_DENY_EOF__"
@@ -262,6 +268,7 @@ jobs:
         env:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
           DENY: ${{ needs.build.outputs.deny }}
+          MARKER: ${{ needs.build.outputs.marker }}
         run: |
           set -euo pipefail
           url="$PAGE_URL"
@@ -290,7 +297,11 @@ jobs:
           # Wait for THIS deployment, not merely for a 200: a cache-busting query
           # skips cached objects but does not prove the edge has switched, and a
           # forbidden file new in this artifact reads 404 from the old one.
-          token="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          token="$MARKER"
+          if [ -z "$token" ]; then
+            echo "::error::the build job reported no deployment marker; cannot tell the new deployment from the old."
+            exit 1
+          fi
           live=""
           for attempt in $(seq 1 60); do
             live=$(curl -s --max-time 10 -H "Cache-Control: no-cache" \

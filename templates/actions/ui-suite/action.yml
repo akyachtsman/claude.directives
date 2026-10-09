@@ -444,6 +444,10 @@ runs:
           echo "::error::port 8080 is already in use, so this run cannot start its own server there."
           exit 1
         fi
+        # A server-root that starts with `-` (a SITE_DIR such as `-site`) would
+        # be read as an http-server option, not the directory to serve: a `./`
+        # prefix keeps it a path.
+        case "$SERVER_ROOT" in -*) SERVER_ROOT="./$SERVER_ROOT" ;; esac
         "$bin" "$SERVER_ROOT" -p 8080 --silent &
         pid=$!
         # An ELAPSED deadline, not a count of polls: each probe may spend its own

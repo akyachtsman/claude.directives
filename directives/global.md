@@ -320,9 +320,11 @@ client-side Supabase + RLS.
   count **build inputs** as changes. Applied to today's workflows, in the same
   change:
   - **PR QA (`qa.yml`)** runs the same build, serves the build's output
-    directory instead of the repo root, and adds the build inputs (sources,
-    build config) to `UI_PATHS`. Otherwise a TypeScript- or Tailwind-only PR
-    skips the UI suite, or tests the unbuilt tree.
+    directory instead of the repo root, and counts the build inputs (sources,
+    build config) as UI changes alongside `UI_PATHS`. Otherwise a TypeScript- or Tailwind-only PR
+    skips the UI suite, or tests the unbuilt tree. The template does all three
+    once its `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` are set, the first two
+    to the same values as `pages-deploy.yml`.
   - **Live QA and the monitor:** add the deploy workflow's exact `name:` to
     `qa-live.yml`'s `workflow_run.workflows`, and a `workflow_run` arm to
     `pages-monitor.yml`.

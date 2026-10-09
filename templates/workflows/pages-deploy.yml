@@ -23,7 +23,8 @@ name: Pages Deploy
 #   5. Delete pages-retry.yml and its REQUIRED entry (W3): the retry lives here.
 # Installed before the first page exists (a new project), it publishes nothing
 # until index.html arrives: with no build and no Pages deployment ever, a run
-# skips its Publish job, and pages-monitor.yml reports "nothing published".
+# skips its Publish job: pages-monitor.yml reports "nothing published" and
+# qa-live.yml skips its suite (both read the skipped Publish job).
 # Rules and reasoning: docs/standards/automations.md -> Watcher Rules (W2, W3),
 # docs/standards/hosting-mechanics.md.
 #

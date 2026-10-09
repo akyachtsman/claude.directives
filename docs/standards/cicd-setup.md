@@ -517,7 +517,8 @@ switch: watchers named "Pages Deploy" in `qa-live.yml` and `pages-monitor.yml`
 and `pages-retry.yml` deleted with its `REQUIRED` entry. Installed before the
 project's first page exists, it publishes nothing until `index.html` arrives: a
 run with no build and no Pages deployment ever skips its Publish job, and
-`pages-monitor.yml` reports it as nothing published rather than a failure.
+`pages-monitor.yml` reports it as nothing published rather than a failure while
+`qa-live.yml` skips its suite.
 
 ### 9e — CI Notify
 

@@ -58,12 +58,42 @@ env:
   UI_TESTS_DIR: .github/scripts/ui-tests
 
 jobs:
+  # A successful deploy run can still have published nothing: pages-deploy.yml,
+  # installed before a project's first page exists, skips its Publish job. There
+  # is no site to test then, so the suite is skipped. Only a lookup that answers
+  # "every Publish job skipped" counts; any other answer runs the suite.
+  published:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      published: ${{ steps.check.outputs.published }}
+    steps:
+      - name: Did the watched deploy publish?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          pub=yes
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ] && [ -n "$RUN_ID" ]; then
+            pub=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "Publish")] | if length > 0 and all(.conclusion == "skipped") then "none" else "yes" end') || pub=yes
+          fi
+          if [ "$pub" = "none" ]; then
+            echo "::notice::the watched deploy published nothing (no site yet), so the live suite is skipped."
+          fi
+          echo "published=$pub" >> "$GITHUB_OUTPUT"
+
   ui-tests-live:
-    # For workflow_run: only run when Pages deploy succeeded.
+    needs: published
+    # For workflow_run: only run when Pages deploy succeeded AND published.
     # For workflow_dispatch: always run.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       needs.published.outputs.published != 'none')
     runs-on: ubuntu-latest
     # 120 is the fleet FLOOR for a ui-suite caller — UI_SUITE_FLOOR in check-job-bounds.py,
     # which enforces it. Set HIGHER if your suite needs it, never lower, and raise it BEFORE

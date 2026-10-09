@@ -98,8 +98,9 @@ Execute in order:
      `SITE_DIR` per its header. On a branch-source project it would deploy
      nothing and fail, so it is not installed there. Installed here, before
      the first page exists, it is a deliberate no-op until `index.html`
-     arrives (no build, no Pages deployment ever: the Publish job is skipped
-     and `pages-monitor.yml` reports nothing published)
+     arrives (no build, no Pages deployment ever: the Publish job is skipped,
+     `pages-monitor.yml` reports nothing published, and `qa-live.yml` skips
+     its suite)
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
 

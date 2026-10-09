@@ -99,6 +99,16 @@ jobs:
       BUILD_CMD: ''
       SITE_DIR: '.'
     steps:
+      # The live site is main, whatever ref a manual dispatch names: the Actions
+      # UI and `--ref` can start this on any branch, which would publish
+      # unmerged work. Recovery dispatches run on main (update-pages step 5).
+      - name: Only main deploys
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::this workflow publishes the live site and runs only on main; it was started on ${GITHUB_REF}."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 

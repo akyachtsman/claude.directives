@@ -446,7 +446,7 @@ jobs:
       # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
       # here on every run (locally it's only needed when a map changed).
       - name: Validate map HTML
-        run: npx --yes html-validate@11.16.2 docs/site/logical-map.html   # pinned: a new release's default rules could turn this red with no change here
+        run: npx --yes html-validate@10.17.0 docs/site/logical-map.html   # pinned: a new release could turn this red with no change here. 10.x: 11.x needs Node >=22.22 and this job runs Node 20
 
       - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js

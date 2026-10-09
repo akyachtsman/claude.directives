@@ -256,25 +256,17 @@ const published = (p) => tracked.has(p) && isFile(p);
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
-// One document's links, each paired with the base it resolves against.
-// Two parses: scripting on is what most visitors get, and decides the base and
-// the refresh; scripting off is what <noscript> visitors get, and its
-// <noscript> content is markup whose links are read too. An <iframe srcdoc> is
-// a document the browser renders, so it is read the same way, recursively,
-// with this document's base as its fallback base (spec; Codex on #415).
-function documentLinks(html, fallback) {
-  const doc = parseHtml(html, { scriptingEnabled: true, sourceCodeLocationInfo: true });
+// One document's links, each paired with the base it resolves against. The
+// document is analysed twice, as the two kinds of visitor get it: scripting on
+// (most visitors; also decides the landing cards) and scripting off, where
+// <noscript> content is live markup -- its links, and a <base> or refresh
+// inside it, take effect (Codex on #415). Each parse gets its own base and
+// refresh; the links checked are the union. An <iframe srcdoc> is a document
+// the browser renders, so it is read the same way, recursively, with this
+// document's base as its fallback base (spec; Codex on #415).
+function analyse(doc, fallback) {
   const all = [...elements(doc)];
   const live = all.filter((e) => !e.inTemplate);
-  const noscriptLinks = [];
-  (function walk(node, inNoscript) {
-    for (const c of node.childNodes || []) {
-      if (!c.tagName) continue;
-      const here = inNoscript || (c.namespaceURI === NS.html && c.tagName === 'noscript');
-      if (inNoscript) noscriptLinks.push(...linksOf(c));
-      walk(c, here);
-    }
-  })(parseHtml(html, { scriptingEnabled: false }), false);
   // A tag name holding a non-ASCII space, "=", a quote or "<" is an authoring
   // slip (e.g. "<a" + NBSP + "class=..."): the browser makes an unknown element
   // of it, so a card or link there is dead. Refused, never read past.
@@ -297,13 +289,21 @@ function documentLinks(html, fallback) {
   let base = fallback;
   if (baseEl) { try { base = new URL(attr(baseEl.el, 'href'), fallback); } catch { base = fallback; } }
   const refresh = refreshTarget(live, base);
-  const links = all.flatMap(({ el }) => linksOf(el)).concat(noscriptLinks, refresh ? [refresh] : [])
-    .map((raw) => ({ raw, base }));
+  const links = all.flatMap(({ el }) => linksOf(el)).concat(refresh ? [refresh] : []).map((raw) => ({ raw, base }));
   for (const { el } of all) {
     const srcdoc = el.namespaceURI === NS.html && el.tagName === 'iframe' ? attr(el, 'srcdoc') : undefined;
     if (srcdoc !== undefined) links.push(...documentLinks(srcdoc, base).links);
   }
   return { live, links };
+}
+function documentLinks(html, fallback) {
+  const scripted = analyse(parseHtml(html, { scriptingEnabled: true, sourceCodeLocationInfo: true }), fallback);
+  const unscripted = analyse(parseHtml(html, { scriptingEnabled: false }), fallback);
+  const seen = new Set();
+  const links = [...scripted.links, ...unscripted.links].filter(({ raw, base }) => {
+    const k = `${base.href}\n${raw}`; if (seen.has(k)) return false; seen.add(k); return true;
+  });
+  return { live: scripted.live, links };
 }
 for (const page of htmlPages) {
   const pageUrl = new URL(page, ROOT);

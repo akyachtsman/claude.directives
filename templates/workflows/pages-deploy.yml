@@ -178,6 +178,12 @@ jobs:
             printf '%s\n' "$links"
             exit 1
           fi
+          # Again after the filter: a deny entry can remove the entry point
+          # itself, and a tree without one must not reach the live site.
+          if [ ! -f "$RUNNER_TEMP/site/index.html" ]; then
+            echo "::error::index.html is gone after applying .github/pages-deny.txt; the published site would have no entry point."
+            exit 1
+          fi
           # The deployment marker: the verify job waits until the live site
           # serves THIS run's token before probing anything, so no probe can be
           # answered by the previous deployment. Written last, after the filter.

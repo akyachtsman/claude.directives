@@ -177,6 +177,9 @@ function linksOf(el) {
   for (const { name, value: v, namespace } of el.attrs) {
     if (el.namespaceURI === NS.html) {
       if (tag === 'base') continue; // it sets the resolution base; nothing is fetched from it
+      // srcdoc wins over src: the browser renders srcdoc and never requests src
+      // (Codex on #415). The srcdoc document itself is read by analyse().
+      if (tag === 'iframe' && name === 'src' && el.attrs.some((a) => a.name === 'srcdoc' && !a.namespace)) continue;
       if (on(SRCSET_ATTRS, name, tag)) urls.push(...srcsetUrls(v));
       else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
       else if (!namespace && on(URL_ATTRS, name, tag)) urls.push(v);

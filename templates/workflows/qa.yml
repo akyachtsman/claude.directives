@@ -27,6 +27,13 @@
 #     docs/standards/cicd-setup.md -> Step 5.
 #   - Set UI_TESTS_DIR below to the path of your Playwright test directory
 #   - Adjust the UI_PATHS regex in the ui-changes job to your project layout
+#   - A project with the CI-build opt-in (global.md -> Hosting & Deployment)
+#     sets BUILD_CMD and SITE_DIR below to the SAME values as its
+#     pages-deploy.yml, and BUILD_PATHS to its build inputs (required with a
+#     build: the change detection refuses to run without it). The browser job
+#     then runs the build and serves SITE_DIR, so it tests what is deployed,
+#     and a change to a build input alone still runs it. Without the opt-in
+#     leave all three as shipped: no build, the repo root is served.
 
 name: QA — Static + UI Tests
 
@@ -53,6 +60,14 @@ permissions:
 env:
   # Path to the directory containing playwright.config.js and package.json
   UI_TESTS_DIR: .github/scripts/ui-tests
+  # CI-build opt-in only (header). BUILD_CMD runs from the repo root and writes
+  # SITE_DIR; empty BUILD_CMD means no build and SITE_DIR stays '.'.
+  BUILD_CMD: ''
+  SITE_DIR: '.'
+  # Extended regex of the build INPUTS, matched against the PR file list beside
+  # UI_PATHS, e.g. '^src/|^package(-lock)?\.json$|^tsconfig\.json$|^tailwind\.config\.'.
+  # Empty: nothing beyond UI_PATHS.
+  BUILD_PATHS: ''
 
 jobs:
   static-checks:
@@ -148,11 +163,19 @@ jobs:
           # skip the very ENTRY gate the page exists for.
           UI_PATHS: '(\.(html|css|m?js)$|^js/|^styles/|^\.github/actions/|^\.github/scripts/ui-tests/|^\.github/workflows/qa\.yml$)'
         run: |
-          # This job gates the LOCAL suite, which serves the repo root as static
+          # A build whose inputs are not listed would let a source-only PR skip
+          # the browser job: refuse the configuration rather than guess.
+          if [ -n "$BUILD_CMD" ] && [ -z "$BUILD_PATHS" ]; then
+            echo "::error::BUILD_CMD is set but BUILD_PATHS is empty: list the build inputs (workflow env) so a change to them runs the UI suite."
+            exit 1
+          fi
+          # This job gates the LOCAL suite, which serves SITE_DIR as static
           # files, so it needs a static entry point. Enabling it for a repo with
           # no index.html would hand Playwright a directory listing to assert
-          # against — a green run that never loaded an application.
-          if [ ! -f index.html ]; then
+          # against — a green run that never loaded an application. With a
+          # build, SITE_DIR does not exist yet: the browser job checks its
+          # index.html after building, and refuses there instead.
+          if [ -z "$BUILD_CMD" ] && [ ! -f "$SITE_DIR/index.html" ]; then
             echo "ui=false" >> "$GITHUB_OUTPUT"
             echo "No index.html yet — skipping browser job."
             exit 0
@@ -173,7 +196,9 @@ jobs:
             echo "::error::could not diff $BASE_SHA...HEAD — refusing to guess whether UI tests are needed."
             exit 1
           fi
-          if printf '%s\n' "$files" | grep -qE "$UI_PATHS"; then
+          pattern="$UI_PATHS"
+          [ -n "$BUILD_PATHS" ] && pattern="${pattern}|${BUILD_PATHS}"
+          if printf '%s\n' "$files" | grep -qE "$pattern"; then
             echo "ui=true" >> "$GITHUB_OUTPUT"
             echo "UI-relevant changes detected."
           else
@@ -195,6 +220,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # CI-build opt-in only: build exactly as pages-deploy.yml does and serve
+      # its output, so the suite tests what is deployed rather than the
+      # unbuilt tree. With BUILD_CMD empty these three steps are skipped.
+      - name: Setup Node (build)
+        if: env.BUILD_CMD != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build
+        if: env.BUILD_CMD != ''
+        run: bash -eo pipefail -c "$BUILD_CMD"
+
+      - name: Check the built site has an entry point
+        if: env.BUILD_CMD != ''
+        run: |
+          if [ ! -f "$SITE_DIR/index.html" ]; then
+            echo "::error::$SITE_DIR/index.html is missing after the build: nothing for the suite to load."
+            exit 1
+          fi
 
       # advisory-run ships 'false': blocking is the default posture for the
       # static/no-backend tier, where the suite runs fully against the bundled
@@ -219,4 +265,5 @@ jobs:
           artifact-name: playwright-results-local
           app-pages: ${{ vars.APP_PAGES }}
           start-local-server: 'true'
+          server-root: ${{ env.SITE_DIR }}
           advisory-run: 'false'

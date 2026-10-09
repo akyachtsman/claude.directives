@@ -276,11 +276,16 @@ jobs:
             paths=()
             live=""; live_from=""; jekyll=0; deny_unexpanded=""
             if [ "${#entries[@]}" -gt 0 ]; then
-              art=""; art_from=""
+              art=""; art_from=""; no_expand=0
               if [ -n "${RUN_ID:-}" ]; then
                 art_from="the deploy run's Pages artifact"
                 art=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
                   --jq "[.artifacts[] | select(.name | startswith(\"${PAGES_ARTIFACT_PREFIX}\")) | select(.expired | not)] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
+              elif [ "${EVENT_NAME:-}" != "page_build" ] && [ -z "$build_type" ]; then
+                # Neither source is known (the Pages API did not answer): guessing
+                # either one could expand from the wrong listing.
+                problems="${problems}- Could not read the Pages build type from the Pages API, so files under denied directories are NOT checked\n"
+                no_expand=1
               elif [ "${EVENT_NAME:-}" != "page_build" ] && [ "$build_type" != "legacy" ]; then
                 # Only this repository's own default-branch runs: a fork's PR
                 # run can upload a github-pages artifact from a branch it also
@@ -317,6 +322,8 @@ jobs:
                 else
                   problems="${problems}- Could not read ${art_from} (an artifact named ${PAGES_ARTIFACT_PREFIX}*; PAGES_ARTIFACT_PREFIX sets the name), so files under denied directories are NOT checked (the repository tree does not give the published paths)\n"
                 fi
+              elif [ "$no_expand" = 1 ]; then
+                :
               elif [ "$src_known" != 1 ]; then
                 problems="${problems}- Could not read the Pages source folder from the Pages API, so files under denied directories are NOT checked (a /docs site publishes docs/x as x)\n"
               else

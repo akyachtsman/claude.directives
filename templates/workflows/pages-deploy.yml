@@ -144,6 +144,18 @@ jobs:
           # `--` ends the options: a SITE_DIR such as `-site` would otherwise be
           # read as one, copy nothing, and still exit 0.
           rsync -a --exclude=/.git --exclude=/.github --exclude=node_modules -- "$src/" "$RUNNER_TEMP/site/"
+          # No symlinks in the published copy. upload-pages-artifact archives with
+          # tar --dereference, so a link publishes its TARGET: `notes.md ->
+          # CLAUDE.md` would serve a deny-listed file under a name the deny-list
+          # never names, and an absolute link could publish runner files.
+          # Checked BEFORE the deny-list: `rm -rf link/x` follows a directory
+          # link, so a link to `..` would delete outside the copy.
+          links=$(find "$RUNNER_TEMP/site" -type l -printf '%P -> %l\n')
+          if [ -n "$links" ]; then
+            echo "::error::symlinks in the site would publish their targets past the deny-list; replace them with real files or remove them:"
+            printf '%s\n' "$links"
+            exit 1
+          fi
           # Deny-list entries are LITERAL site-relative paths, removed after the
           # copy. Never rsync patterns: as an --exclude, `secret[1].txt` is a glob
           # that leaves the file of that exact name in place. An entry that
@@ -173,16 +185,6 @@ jobs:
               rm -rf -- "$RUNNER_TEMP/site/$p"
               denied=$((denied + 1))
             done < .github/pages-deny.txt
-          fi
-          # No symlinks in the published copy. upload-pages-artifact archives with
-          # tar --dereference, so a link publishes its TARGET: `notes.md ->
-          # CLAUDE.md` would serve a deny-listed file under a name the deny-list
-          # never names, and an absolute link could publish runner files.
-          links=$(find "$RUNNER_TEMP/site" -type l -printf '%P -> %l\n')
-          if [ -n "$links" ]; then
-            echo "::error::symlinks in the site would publish their targets past the deny-list; replace them with real files or remove them:"
-            printf '%s\n' "$links"
-            exit 1
           fi
           # Again after the filter: a deny entry can remove the entry point
           # itself, and a tree without one must not reach the live site.

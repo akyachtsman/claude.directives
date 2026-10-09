@@ -148,6 +148,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Deploy parity that must not depend on the diff: the browser job is
+      # skipped on a PR touching no UI path, but a symlink added anywhere in
+      # an unbuilt site (notes.md, a .png) still fails pages-deploy.yml. So
+      # without a build the symlink check runs here, on every PR; with one,
+      # the browser job checks the built output (it always runs then).
+      - name: Symlinks in the unbuilt site
+        if: env.BUILD_CMD == ''
+        run: |
+          src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
+          [ -d "$src" ] || exit 0
+          links=$(find "$src" \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
+          if [ -n "$links" ] && [ -f .github/workflows/pages-deploy.yml ]; then
+            echo "::error::symlinks in the site, which pages-deploy.yml refuses; replace them with real files:"
+            printf '%s\n' "$links"
+            exit 1
+          elif [ -n "$links" ]; then
+            echo "::warning::symlinks in the site; pages-deploy.yml (Actions-source) refuses them: $(printf '%s; ' "$links")"
+          fi
+
       - name: Diff against PR base
         id: diff
         env:

@@ -330,10 +330,9 @@ client-side Supabase + RLS.
 
   **Not open yet (owner ruling, 2026-10-06).** No project may take the opt-in
   until [claude.directives#402](https://github.com/akyachtsman/claude.directives/issues/402) lands. Today's toolkit
-  still tests, serves, watches and recovers the site as committed (the
-  `ui-tester` agent serves the repo root; the `update-pages` stuck-run recovery
-  can switch to branch-source), so an opted-in project would be tested unbuilt
-  and could be recovered into publishing its unbuilt tree. Until then a concrete
+  still tests, serves and watches the site as committed (the `ui-tester` agent
+  serves the repo root; the PR QA and live watchers know no build), so an
+  opted-in project would be tested unbuilt. Until then a concrete
   need is raised with the owner and on that issue; the project does not switch.
   The gate binds every project: a `Build:` bullet recorded before #402 lands
   does not open it, and nothing plans on, adds or runs a build on its strength.

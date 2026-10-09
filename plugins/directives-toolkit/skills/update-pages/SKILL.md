@@ -42,7 +42,17 @@ Run in order:
    each RUN object instead reports the prose title "pages build and deployment"
    (both verified via the Actions API, 2026-10-08), so find runs by `head_sha`
    with `event=dynamic` or by `workflow_id`, never by run name. A custom Actions deploy
-   runs as its own named workflow. Know which the repo uses.
+   runs as its own named workflow. Know which the repo uses — **the source decides
+   the step-5 recovery**, so settle it here, from the tree: a workflow under
+   `.github/workflows/` that runs `actions/deploy-pages` means **Actions-source**
+   (a filtered copy, a CI build, or both — `global.md` → *Hosting & Deployment*);
+   none means branch-source. The settings endpoint that states it outright
+   (`GET repos/{owner}/{repo}/pages`, field `build_type`: `legacy` or `workflow`)
+   is refused by a web session's GitHub proxy (403, 2026-10-09). Where the tree
+   says Actions-source, or a `Build:` bullet in the project's `CLAUDE.md` records
+   a build, treat the site as Actions-source even if a run of
+   `pages-build-deployment` also appears: a visibility flip can fire that one
+   under either source.
 
 4. **Watch to a terminal state — never a blocking or backgrounded sleep.** Find
    the deploy run whose `head_sha` == the merge commit's SHA from step 2 and
@@ -66,15 +76,26 @@ Run in order:
 
 5. **Stuck detection.** If no run for the merge commit's SHA appears within
    ~2 minutes of the merge — check first that it IS the merge commit, not the
-   branch head (step 2), or a healthy deploy reads as stuck —
-   the branch-source build is not auto-firing (common right after enabling Pages,
-   or when the pipeline is wedged). This needs a **human action you cannot do** —
-   message the user the exact fix and then keep watching for the new run:
-   > **Settings → Pages → Build and deployment → Source "Deploy from a branch"**
-   > → set **Branch: None** → **Save** → set back to **Branch: `main`,
-   > Folder: `/ (root)`** → **Save**.
-   > (Re-saving the *same* value is a no-op and the Save button stays greyed out;
-   > the **None → main** toggle is what forces a fresh build.)
+   branch head (step 2), or a healthy deploy reads as stuck — the deploy is not
+   auto-firing (common right after enabling Pages, or when the pipeline is
+   wedged). The fix depends on the source from step 3:
+   - **Branch-source.** This needs a **human action you cannot do** — message
+     the user the exact fix and then keep watching for the new run:
+     > **Settings → Pages → Build and deployment → Source "Deploy from a branch"**
+     > → set **Branch: None** → **Save** → set back to **Branch: `main`,
+     > Folder: `/ (root)`** → **Save**.
+     > (Re-saving the *same* value is a no-op and the Save button stays greyed out;
+     > the **None → main** toggle is what forces a fresh build.)
+   - **Actions-source.** Start the deploy workflow again; never touch the
+     source setting. If it declares `workflow_dispatch`, dispatch it on `main`
+     (`gh api -X POST repos/{owner}/{repo}/actions/workflows/<file>/dispatches -f ref=main`);
+     otherwise re-run its latest run for that SHA
+     (`gh api -X POST repos/{owner}/{repo}/actions/runs/<id>/rerun`), or ask the
+     user to press **Run workflow** / **Re-run** on it in the Actions tab.
+     ⚠️ **Never recommend "Deploy from a branch" here, not even briefly as a
+     toggle.** Branch-source publishes the whole repository: every deny-listed
+     path goes public, and a build project serves its unbuilt sources. The
+     None → main toggle is a branch-source fix only.
 
 6. **Report proactively on the terminal state** (message / `SendUserFile` with
    `status: proactive` so it reaches the user's phone):
@@ -91,6 +112,8 @@ Run in order:
      `workflow_run` and re-runs on failure, bounded to `run_attempt < 4` so a truly
      broken deploy can't loop), otherwise re-run manually via the Actions API. A
      merged-but-failed deploy leaves the site **stale** — that is not "done."
+     On Actions-source, the run to re-run is the deploy workflow's own, never
+     `pages-build-deployment` (step 5).
 
 7. **Verification caveat.** A remote/sandbox session often **cannot fetch the
    `*.github.io` page** (network allowlist blocks it — `curl`/`WebFetch` return
@@ -105,7 +128,9 @@ Run in order:
 ## Gotchas this skill exists to catch
 - **Live site shows `README.md`** → no `index.html` in the *published* snapshot
   (or it's cache). Check the deployed SHA, not just that "a build ran."
-- **Pushes produce no builds** → stuck pipeline → the None→main toggle (step 5).
+- **Pushes produce no builds** → stuck pipeline → on branch-source the None→main
+  toggle; on Actions-source re-dispatch or re-run the deploy workflow, never the
+  toggle (step 5).
 - **Same old page after a successful deploy** → browser/CDN cache → cache-bust
   with `?v=` or incognito (step 6); `/` catches up when the CDN TTL expires.
 - **A green build for the wrong SHA** → confirm `head_sha` matches the merge

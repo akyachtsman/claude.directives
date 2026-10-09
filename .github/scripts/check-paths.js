@@ -287,7 +287,11 @@ function analyse(doc, fallback) {
     throw new Error('a <base> together with a Content-Security-Policy base-uri directive -- whether the policy blocks the base is CSP enforcement this check does not model; drop one of them');
   }
   let base = fallback;
-  if (baseEl) { try { base = new URL(attr(baseEl.el, 'href'), fallback); } catch { base = fallback; } }
+  // The spec's frozen base URL keeps the fallback when the href does not parse,
+  // or parses to a data: or javascript: URL (Codex on #415).
+  if (baseEl) {
+    try { const u = new URL(attr(baseEl.el, 'href'), fallback); if (u.protocol !== 'data:' && u.protocol !== 'javascript:') base = u; } catch { /* fallback */ }
+  }
   const refresh = refreshTarget(live, base);
   const links = all.flatMap(({ el }) => linksOf(el)).concat(refresh ? [refresh] : []).map((raw) => ({ raw, base }));
   for (const { el } of all) {

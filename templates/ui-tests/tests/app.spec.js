@@ -4,10 +4,10 @@
 // Discovers app structure, exercises all interactive elements, captures API calls.
 //
 // dvh units are supported by every browser this kit's Playwright ships (they need
-// Chromium 108 / WebKit 15.4 / Firefox 101; 1.63.0 ships Chromium 153, measured
-// 2026-10-06). An element present in the HTML but not visible to Playwright is
-// triaged normally (selector, timing, layout), not blamed on dvh. See the
-// ui-tester agent.
+// Chromium 108 / WebKit 15.4 / Firefox 101; 1.64.0 ships Chromium 156, measured
+// 2026-10-08, as 1.63.0's Chromium 153 was on 2026-10-06). An element present
+// in the HTML but not visible to Playwright is triaged normally (selector,
+// timing, layout), not blamed on dvh. See the ui-tester agent.
 
 import { test as base, expect } from '@playwright/test';
 
@@ -30,9 +30,10 @@ import { test as base, expect } from '@playwright/test';
 // the body is created after the beforeAll/beforeEach hooks. That holds, but
 // setup is still not body entry: a SIBLING test-scoped fixture set up after the
 // witness can throw, and Playwright then never invokes the callback while the
-// witness is already recorded — a false RENDERED, reproduced on 1.63.0.
+// witness is already recorded — a false RENDERED, reproduced on 1.63.0 and 1.64.0.
 //
-// Measured on 1.63.0 (2026-09-24), one laptop project at 1280x800, for the
+// Measured on 1.63.0 (2026-09-24), and again on 1.64.0 (2026-10-08), one laptop
+// project at 1280x800, for the
 // setup-time version — each still holds for the call, which runs later:
 //   * a beforeEach that throws; a beforeEach that requests `page`, NAVIGATES and
 //     throws; a beforeAll that throws on a test marked to fail — NO witness in

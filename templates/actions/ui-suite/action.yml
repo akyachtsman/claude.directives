@@ -600,7 +600,8 @@ runs:
         # takes precedence over the json reporter's configured `outputFile`, so a
         # caller whose job or workflow already exports it sends the report
         # somewhere else and the configured file is never written at all.
-        # Measured on the shipped 1.62.1: with the variable set the config's
+        # Measured on the shipped 1.62.1, and again on 1.64.0 (2026-10-08): with
+        # the variable set the config's
         # `outputFile` produced NO file, and the post-run gate — reading the
         # validated path — exited 15 on a run that had passed (Codex, #347
         # round 18). Setting it to the same validated path is the fix rather

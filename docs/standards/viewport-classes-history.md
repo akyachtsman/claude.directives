@@ -135,7 +135,7 @@ Two things replace the project's viewport, and the rule named only one of them
 until directives#347 round 31:
 - `setViewportSize()` inside the test body.
 - `test.use({ viewport })` at file or `describe` scope — the fixture form.
-  Measured on 1.62.1, and again on 1.63.0 (2026-10-06): a spec carrying it ran at 390px in the laptop, tablet
+  Measured on 1.62.1, again on 1.63.0 (2026-10-06) and on 1.64.0 (2026-10-08): a spec carrying it ran at 390px in the laptop, tablet
   AND phone projects, and the JSON report carried **no annotation at all** —
   neither per-test nor per-result. Playwright does not mark it, so nothing
   downstream can infer it.
@@ -169,7 +169,7 @@ only half the ways to override it leaves the other half silent.
 
 The `outputFile` itself need not match `report-path`: the composite exports
 `PLAYWRIGHT_JSON_OUTPUT_FILE` set to the validated path, and that variable
-takes precedence over the configured `outputFile` (measured on 1.62.1 and 1.63.0 — with
+takes precedence over the configured `outputFile` (measured on 1.62.1, 1.63.0 and 1.64.0 — with
 it set, the configured file is not written at all). The composite pins it for
 the opposite reason too: a job that already exported that variable used to
 redirect the report away from the path the gate reads, failing an otherwise

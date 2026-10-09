@@ -180,6 +180,12 @@ function linksOf(el) {
       // srcdoc wins over src: the browser renders srcdoc and never requests src
       // (Codex on #415). The srcdoc document itself is read by analyse().
       if (tag === 'iframe' && name === 'src' && el.attrs.some((a) => a.name === 'srcdoc' && !a.namespace)) continue;
+      // preconnect and dns-prefetch use only the URL's origin, never its path;
+      // a <link> whose rel is ONLY those requests nothing to check (Codex, #415).
+      if (tag === 'link' && name === 'href') {
+        const rels = (attr(el, 'rel') || '').toLowerCase().split(/[\t\n\f\r ]+/).filter(Boolean);
+        if (rels.length && rels.every((r) => r === 'preconnect' || r === 'dns-prefetch')) continue;
+      }
       if (on(SRCSET_ATTRS, name, tag)) urls.push(...srcsetUrls(v));
       else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
       else if (!namespace && on(URL_ATTRS, name, tag)) urls.push(v);

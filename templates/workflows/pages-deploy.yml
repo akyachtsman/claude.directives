@@ -337,6 +337,13 @@ jobs:
           # Deployment): a .well-known file, say. A filter that drops one
           # leaves the root and every deny probe green.
           mapfile -t public < <(read_list .github/pages-public.txt)
+          # Same rule as the deny-list: a `.` or `..` component would let curl
+          # squash the path out of the project site and probe something else.
+          for p in "${public[@]}"; do
+            case "/${p%/}/" in
+              *'/../'*|*'/./'*|'//') echo "::error::pages-public.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
+            esac
+          done
           n=${#deny[@]}; m=${#public[@]}
           if [ $((n + m)) -gt 0 ] && [ "$code" = "200" ]; then
             first=()

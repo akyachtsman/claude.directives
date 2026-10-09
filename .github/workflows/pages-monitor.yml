@@ -57,6 +57,7 @@ permissions:
   contents: read
   issues: write
   pages: read   # lets the Pages API return the real html_url
+  actions: read # lists the watched workflow's runs, to tell a superseded cancel from a failed deploy
 
 jobs:
   monitor:

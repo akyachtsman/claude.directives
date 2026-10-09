@@ -86,12 +86,17 @@ Run in order:
      > Folder: `/ (root)`** → **Save**.
      > (Re-saving the *same* value is a no-op and the Save button stays greyed out;
      > the **None → main** toggle is what forces a fresh build.)
-   - **Actions-source.** Start the deploy workflow again; never touch the
-     source setting. If it declares `workflow_dispatch`, dispatch it on `main`
-     (`gh api -X POST repos/{owner}/{repo}/actions/workflows/<file>/dispatches -f ref=main`);
-     otherwise re-run its latest run for that SHA
-     (`gh api -X POST repos/{owner}/{repo}/actions/runs/<id>/rerun`), or ask the
-     user to press **Run workflow** / **Re-run** on it in the Actions tab.
+   - **Actions-source.** Start a NEW run of the deploy workflow on `main`; never
+     touch the source setting, and never re-run an older run — a re-run keeps
+     its original commit, so it would republish stale code while the watch
+     waits for this one. If the workflow declares `workflow_dispatch`, dispatch
+     it (`gh api -X POST repos/{owner}/{repo}/actions/workflows/<file>/dispatches -f ref=main`,
+     or **Run workflow** in the Actions tab). The dispatched run builds `main`'s
+     head at that moment, so watch for a run whose `head_sha` is
+     `git rev-parse origin/main` after a fresh fetch, not necessarily step 2's
+     SHA. If it does not declare `workflow_dispatch`, add the trigger through
+     the PR flow: merging that change is itself a push to `main`, so it starts
+     the missing run, and the next stuck deploy can be dispatched.
      ⚠️ **Never recommend "Deploy from a branch" here, not even briefly as a
      toggle.** Branch-source publishes the whole repository: every deny-listed
      path goes public, and a build project serves its unbuilt sources. The
@@ -129,8 +134,8 @@ Run in order:
 - **Live site shows `README.md`** → no `index.html` in the *published* snapshot
   (or it's cache). Check the deployed SHA, not just that "a build ran."
 - **Pushes produce no builds** → stuck pipeline → on branch-source the None→main
-  toggle; on Actions-source re-dispatch or re-run the deploy workflow, never the
-  toggle (step 5).
+  toggle; on Actions-source a NEW run of the deploy workflow on `main`, never a
+  re-run of an older one and never the toggle (step 5).
 - **Same old page after a successful deploy** → browser/CDN cache → cache-bust
   with `?v=` or incognito (step 6); `/` catches up when the CDN TTL expires.
 - **A green build for the wrong SHA** → confirm `head_sha` matches the merge

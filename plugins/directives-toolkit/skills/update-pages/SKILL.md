@@ -136,8 +136,10 @@ Run in order:
      `workflow_run` and re-runs on failure, bounded to `run_attempt < 4` so a truly
      broken deploy can't loop), otherwise re-run manually via the Actions API. A
      merged-but-failed deploy leaves the site **stale** — that is not "done."
-     On Actions-source, the run to re-run is the deploy workflow's own, never
-     `pages-build-deployment` (step 5).
+     On Actions-source, never re-run: dispatch a NEW run of the deploy workflow
+     on `main` (step 5). `pages-deploy.yml` refuses a re-run of its publish,
+     since an older commit would roll the site back, and the run to recover is
+     never `pages-build-deployment`.
 
 7. **Verification caveat.** A remote/sandbox session often **cannot fetch the
    `*.github.io` page** (network allowlist blocks it — `curl`/`WebFetch` return

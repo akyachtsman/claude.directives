@@ -66,12 +66,14 @@ on:
 # still probing, then report nothing itself.
 # A CANCELLED watched run (one superseded by a newer push, say) published
 # nothing either; it waits its turn rather than cancelling a monitor still
-# probing a real deploy. So does a MANUAL run: it is not a deploy, never closes
-# the issue and never reports "build errored", so cancelling a deploy's monitor
-# for it could drop that deploy's alarm.
+# probing a real deploy. A MANUAL run gets a group of its own: it is not a
+# deploy, never closes the issue and never reports "build errored", and in the
+# shared group it would replace a deploy's monitor still PENDING there (a new
+# run evicts the pending one, whatever cancel-in-progress says), dropping that
+# deploy's alarm (Codex, #424).
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'cancelled') }}
+  group: ${{ github.event_name == 'workflow_dispatch' && format('pages-monitor-manual-{0}', github.run_id) || github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
+  cancel-in-progress: ${{ !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'cancelled') }}
 
 permissions:
   contents: read

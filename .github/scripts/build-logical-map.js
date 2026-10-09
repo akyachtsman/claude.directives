@@ -122,7 +122,7 @@ const PLACE = {
     'templates/scripts/browser-ladder.js', `${P}/agents/supabase.md`,
     'templates/project-test-plan-template.md', 'templates/implementation-summary-template.md',
     `${P}/skills/doc-comp/`],
-  pr: [`${P}/commands/commit-chk.md`, `${P}/scripts/`, `${P}/agents/pr-readiness-reviewer.md`,
+  pr: [`${P}/commands/commit-chk.md`, `${P}/agents/pr-readiness-reviewer.md`,
     'templates/pr-checklist.md', 'templates/workflows/qa.yml', 'templates/workflows/qa-response.yml',
     'templates/workflows/qa-live.yml', 'templates/ui-tests/', 'templates/actions/secret-scan/', 'templates/actions/ui-suite/',
     'templates/scripts/check-contrast.js', 'templates/scripts/check-ui-viewports.js',
@@ -137,7 +137,10 @@ const PLACE = {
     'templates/workflows/pages-deploy.yml',
     'templates/workflows/ci-monitor.yml', 'templates/workflows/ci-notify.yml',
     'docs/standards/automations.md'],
-  upkeep: [`${P}/commands/refresh-repo.md`, `${P}/commands/audit-repo.md`,
+  // scripts/ sits here, not under pr: besides the guard scripts the hooks run
+  // from session start, it carries /refresh-repo's Phase 3 (refresh-stamp.sh),
+  // and an arrow may not run backwards from upkeep (Codex, #423).
+  upkeep: [`${P}/commands/refresh-repo.md`, `${P}/scripts/`, `${P}/commands/audit-repo.md`,
     `${P}/commands/learn.md`, `${P}/commands/handoff-session.md`, `${P}/commands/do-repo.md`,
     `${P}/commands/my-list.md`, 'MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'docs/standards/kit-defects.md',
     'templates/workflows/keepalive.yml', 'templates/workflows/cron-notify.yml',
@@ -185,7 +188,7 @@ const ALIASES = {
   '.claude-plugin/marketplace.json': [/@claude-directives(?![\w-])/, /(?<![\w.-])claude-directives(?=["'\s]*:)/],
   [`${P}/.claude-plugin/plugin.json`]: [/(?<![\w.-])\.\/plugins\/directives-toolkit(?![\w/-])/, 'CLAUDE_PLUGIN_ROOT'],
   [`${P}/hooks/`]: ['hooks/hooks.json', `${P}/hooks`],
-  [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', `${P}/scripts`],
+  [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'build-input-gate.sh', 'refresh-stamp.sh', `${P}/scripts`],
   [`${P}/evals/`]: [`${P}/evals`],
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
@@ -349,7 +352,7 @@ for (const g of Object.values(GROUPS)) for (const f of g.files) if (!existsSync(
 const labelOf = id => {
   if (GROUPS[id]) return GROUPS[id].label;
   if (id.startsWith('vendor:')) return id.slice(7);
-  const custom = { [`${P}/hooks/`]: 'hooks.json', [`${P}/scripts/`]: 'push-gate · wait-gate',
+  const custom = { [`${P}/hooks/`]: 'hooks.json', [`${P}/scripts/`]: 'scripts/',
     [`${P}/evals/`]: 'evals/', 'templates/styles/': 'styles/', 'templates/ui-tests/': 'ui-tests/' };
   if (custom[id]) return custom[id];
   const base = id.replace(/\/$/, '').split('/').pop();
@@ -496,6 +499,7 @@ const FLOW = [
   ['qa-response.yml', 'ui-tests/', 'run', 'runs the kit on demand (tests-dir)', 'a', 'UI_TESTS_DIR'],
   // upkeep
   ['/refresh-repo', 'kit-defects.md', 'run', 'checks against', 'a', 'Fetch the list'],
+  ['/refresh-repo', 'scripts/', 'run', 'runs Phase 3 (applied-check + stamp)', 'a', 'scripts/refresh-stamp.sh'],
   ['/do-repo', '/audit-repo', 'run', "runs its checklist on another repo", 'a', 'checklist'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with', 'a', 'Run `/refresh-repo`'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects', 'a', 'Delete'],
@@ -610,7 +614,7 @@ const fileToNode = f => {
 }
 // (c) scripts the plugin's hooks run.
 const hooksJson = readFileSync(`${P}/hooks/hooks.json`, 'utf8');
-if (/scripts\/[\w-]+\.sh/.test(hooksJson)) derived.push([`${P}/hooks/`, `${P}/scripts/`, 'run', 'runs on every Bash call']);
+if (/scripts\/[\w-]+\.sh/.test(hooksJson)) derived.push([`${P}/hooks/`, `${P}/scripts/`, 'run', 'runs its guard scripts']);
 // (c2) what the plugin installs: everything under its root. Claude Code loads
 // commands/, agents/, skills/ and hooks/ by convention, and the hooks run
 // scripts/ from it; nothing lists them, so drawing a few by the files that

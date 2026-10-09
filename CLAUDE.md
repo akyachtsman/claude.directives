@@ -233,7 +233,7 @@ Before committing or pushing, verify locally — this list mirrors what `qa.yml`
 runs, so keep the two in sync:
 ```
 python3 -c "import yaml; print(yaml.safe_load(open('templates/actions/secret-scan/action.yml'))['runs']['steps'][0]['run'])" | bash -eo pipefail   # qa.yml's Secret scan step: runs the composite's own block, so the pattern has no third copy here
-npm install --no-save --no-package-lock --ignore-scripts parse5@8.0.1   # check-paths.js's HTML parser, the version qa.yml pins
+npm install --no-save --no-package-lock --ignore-scripts parse5@8.0.1 entities@8.1.0   # check-paths.js's HTML parser and its only dependency, both exact, as qa.yml pins them
 node .github/scripts/check-paths.js               # backtick paths in CLAUDE.md, doc citations in shipped files, and every same-site link in a tracked .html page (parsed by parse5, URL-resolved, never outside the Pages root) names a tracked file; refuses without a tracked .nojekyll
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js

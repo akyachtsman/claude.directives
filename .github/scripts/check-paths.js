@@ -193,6 +193,9 @@ function decodeRefs(v) {
   return out;
 }
 // SVG/MathML HTML integration points: their children parse as HTML again.
+const BREAKOUT = new Set(['b', 'big', 'blockquote', 'body', 'br', 'center', 'code', 'dd', 'div', 'dl', 'dt', 'em',
+  'embed', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'hr', 'i', 'img', 'li', 'listing', 'menu', 'meta', 'nobr',
+  'ol', 'p', 'pre', 'ruby', 's', 'small', 'span', 'strong', 'strike', 'sub', 'sup', 'table', 'tt', 'u', 'ul', 'var']);
 const POINTS = { svg: ['foreignobject', 'desc', 'title'], math: ['mi', 'mo', 'mn', 'ms', 'mtext', 'annotation-xml'] };
 function tags(src) {
   // The namespace stack lives in the tokenizer because raw text depends on it:
@@ -253,6 +256,13 @@ function tags(src) {
         }
       }
       if (!attrs.has(name)) attrs.set(name, decodeRefs(value));
+    }
+    // An HTML breakout tag inside SVG/MathML pops the foreign content and is
+    // processed as HTML (spec "in foreign content"; Codex on #415): <svg><p>
+    // closes the svg, so a <script> after it is HTML raw text again.
+    if (top() !== undefined && top().ns !== 'html'
+      && (BREAKOUT.has(tag) || (tag === 'font' && ['color', 'face', 'size'].some((a) => attrs.has(a))))) {
+      while (top() !== undefined && top().ns !== 'html') stack.pop();
     }
     const foreign = top() !== undefined && top().ns !== 'html';
     out.push({ tag, attrs, selfClosing, foreign, underForeign: stack.length > 0 });
@@ -324,7 +334,10 @@ function linksOf({ tag: name0, attrs, foreign }) {
     else if (foreign && (name === 'xlink:href' || (name === 'href' && SVG_HREF.includes(tag)))) urls.push(v);
   }
   if (tag === 'meta' && (attrs.get('http-equiv') || '').trim().toLowerCase() === 'refresh') {
-    const m = (attrs.get('content') || '').match(/^\s*[\d.]*\s*[;,]?\s*(?:url\s*=\s*)?(["']?)(.*)$/is);
+    // The spec's refresh steps: a delay (digits, or "." then digits/dots) must
+    // come first, then end of input, whitespace, ";" or ","; with no delay the
+    // directive is ignored and nothing navigates (Codex on #415).
+    const m = (attrs.get('content') || '').match(/^[\t\n\f\r ]*(?:\d|(?=\.))[\d.]*(?:$|[\t\n\f\r ;,][\t\n\f\r ]*[;,]?[\t\n\f\r ]*(?:url[\t\n\f\r ]*=[\t\n\f\r ]*)?(["']?)(.*))$/is);
     if (m && m[2]) urls.push(m[1] ? m[2].split(m[1])[0] : m[2]);
   }
   return urls;

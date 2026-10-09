@@ -1274,7 +1274,9 @@ before reporting "no access":
    BROWSER-originated connections even when allowlisted —
    ERR_CONNECTION_RESET while curl succeeds means use curl for
    content, and for UI verification serve the project locally
-   (`python3 -m http.server` + the project's demo mode) and screenshot that.
+   (`python3 -m http.server` + the project's demo mode; with the CI-build
+   opt-in, build first and serve the output directory, never the repo root)
+   and screenshot that.
 7. **The owner** — for pixel-level truth on browser-blocked third-party sites,
    ask for high-res screenshots and treat them as data: extract exact colors,
    typography, spacing, and interaction behavior from the image before

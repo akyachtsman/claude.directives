@@ -325,9 +325,11 @@ client-side Supabase + RLS.
     skips the UI suite, or tests the unbuilt tree. The template does all three
     once its `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` are set, the first two
     to the same values as `pages-deploy.yml`.
-  - **Live QA and the monitor:** add the deploy workflow's exact `name:` to
-    `qa-live.yml`'s `workflow_run.workflows`, and a `workflow_run` arm to
-    `pages-monitor.yml`.
+  - **Live QA and the monitor:** add the deploy workflow's exact `name:`
+    ("Pages Deploy" for `pages-deploy.yml`) to `qa-live.yml`'s
+    `workflow_run.workflows`, and a `workflow_run` arm to `pages-monitor.yml`,
+    and list each under its own file in `.github/workflow-ref-required.json`
+    so a later template refresh cannot drop them silently.
   - **The retry:** delete `pages-retry.yml` and its `REQUIRED` entry (W3's
     exception is closed to a build), and build the retry into the deploy
     workflow.
@@ -396,9 +398,12 @@ both fire only for **branch-source** builds, except that a visibility flip can
 still run `pages-build-deployment`, and with it the retry.
 `docs/standards/automations.md` → *Watcher Rules* (W2, W3) carries the table.
 - **The monitor: ADD, never replace.** `pages-monitor.yml` takes a `workflow_run`
-  trigger naming your own deploy workflow (its file header ships the snippet),
-  and keeps `page_build:`; `qa-live.yml` keeps `pages-build-deployment`. The new
-  name goes **alongside**: those arms are what see the **legacy managed build**
+  trigger naming your own deploy workflow (`Pages Deploy` for `pages-deploy.yml`;
+  its file header ships the snippet), and keeps `page_build:`; `qa-live.yml`
+  keeps `pages-build-deployment`, with the same name added. List each watcher
+  under its own file in `.github/workflow-ref-required.json`, so a refresh that
+  drops either trigger fails the build. The new name goes **alongside**: those
+  arms are what see the **legacy managed build**
   a visibility flip can fire even while Actions-source is configured
   (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
 - **The retry: do NOT repoint it, by default.** It re-runs the **whole** watched

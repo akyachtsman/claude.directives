@@ -71,8 +71,11 @@ permissions:
 # replaces it (conclusion `cancelled`), so the newest main is what deploys. A
 # watcher reading conclusions must treat a cancelled run with a newer run of
 # this workflow behind it as superseded, not as a failed deploy.
+# Only main shares the group. A run on any other ref (a manual dispatch with
+# --ref) gets a group of its own, so it can never take the pending slot from a
+# main run before the build job's "Only main deploys" step rejects it.
 concurrency:
-  group: pages-deploy
+  group: ${{ github.ref == 'refs/heads/main' && 'pages-deploy' || format('pages-deploy-offmain-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:

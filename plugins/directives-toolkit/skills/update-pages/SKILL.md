@@ -43,16 +43,22 @@ Run in order:
    (both verified via the Actions API, 2026-10-08), so find runs by `head_sha`
    with `event=dynamic` or by `workflow_id`, never by run name. A custom Actions deploy
    runs as its own named workflow. Know which the repo uses — **the source decides
-   the step-5 recovery**, so settle it here, from the tree: a workflow under
-   `.github/workflows/` that runs `actions/deploy-pages` means **Actions-source**
-   (a filtered copy, a CI build, or both — `global.md` → *Hosting & Deployment*);
-   none means branch-source. The settings endpoint that states it outright
-   (`GET repos/{owner}/{repo}/pages`, field `build_type`: `legacy` or `workflow`)
-   is refused by a web session's GitHub proxy (403, 2026-10-09). Where the tree
-   says Actions-source, or a `Build:` bullet in the project's `CLAUDE.md` records
-   a build, treat the site as Actions-source even if a run of
-   `pages-build-deployment` also appears: a visibility flip can fire that one
-   under either source.
+   the step-5 recovery**, so settle it here. Only **positive** evidence settles
+   it; anything else leaves it **unknown**:
+   - **Actions-source:** a workflow under `.github/workflows/` that runs
+     `actions/deploy-pages`, or a `Build:` bullet in the project's `CLAUDE.md`
+     recording a build (`global.md` → *Hosting & Deployment*). A
+     `pages-build-deployment` run does not overturn this: a visibility flip
+     fires that one under either source.
+   - **Branch-source:** the settings endpoint
+     (`GET repos/{owner}/{repo}/pages`) reports `build_type: legacy`, or the user
+     reads **Settings → Pages → Build and deployment → Source** and it says
+     "Deploy from a branch". The endpoint is refused by a web session's GitHub
+     proxy (403, 2026-10-09), so there it is the user's reading.
+   - **Unknown:** neither. The tree cannot prove branch-source — a deploy can
+     call the Pages deployment API directly or sit behind a reusable workflow,
+     with no `actions/deploy-pages` in sight. Treat unknown as Actions-source
+     for every step-5 decision until the user confirms the setting.
 
 4. **Watch to a terminal state — never a blocking or backgrounded sleep.** Find
    the deploy run whose `head_sha` == the merge commit's SHA from step 2 and
@@ -79,8 +85,9 @@ Run in order:
    branch head (step 2), or a healthy deploy reads as stuck — the deploy is not
    auto-firing (common right after enabling Pages, or when the pipeline is
    wedged). The fix depends on the source from step 3:
-   - **Branch-source.** This needs a **human action you cannot do** — message
-     the user the exact fix and then keep watching for the new run:
+   - **Branch-source, confirmed** (step 3 — never on an unknown source). This
+     needs a **human action you cannot do** — message the user the exact fix
+     and then keep watching for the new run:
      > **Settings → Pages → Build and deployment → Source "Deploy from a branch"**
      > → set **Branch: None** → **Save** → set back to **Branch: `main`,
      > Folder: `/ (root)`** → **Save**.
@@ -95,8 +102,13 @@ Run in order:
      head at that moment, so watch for a run whose `head_sha` is
      `git rev-parse origin/main` after a fresh fetch, not necessarily step 2's
      SHA. If it does not declare `workflow_dispatch`, add the trigger through
-     the PR flow: merging that change is itself a push to `main`, so it starts
-     the missing run, and the next stuck deploy can be dispatched.
+     the PR flow, then dispatch it on `main` as soon as that merges and watch
+     the dispatched run. Do not count on the merge push to deploy: a deploy
+     whose `push:` carries a `paths:` filter skips a workflow-only commit, and
+     that filter may be why the run was missing in the first place.
+   - **Unknown source:** ask the user what Settings → Pages → Source shows
+     before recommending anything; until they answer, the Actions-source
+     recovery is the only one on offer.
      ⚠️ **Never recommend "Deploy from a branch" here, not even briefly as a
      toggle.** Branch-source publishes the whole repository: every deny-listed
      path goes public, and a build project serves its unbuilt sources. The
@@ -133,9 +145,10 @@ Run in order:
 ## Gotchas this skill exists to catch
 - **Live site shows `README.md`** → no `index.html` in the *published* snapshot
   (or it's cache). Check the deployed SHA, not just that "a build ran."
-- **Pushes produce no builds** → stuck pipeline → on branch-source the None→main
-  toggle; on Actions-source a NEW run of the deploy workflow on `main`, never a
-  re-run of an older one and never the toggle (step 5).
+- **Pushes produce no builds** → stuck pipeline → on a CONFIRMED branch-source
+  site the None→main toggle; otherwise (Actions-source, or unknown) a NEW run
+  of the deploy workflow on `main`, never a re-run of an older one and never the
+  toggle (step 5).
 - **Same old page after a successful deploy** → browser/CDN cache → cache-bust
   with `?v=` or incognito (step 6); `/` catches up when the CDN TTL expires.
 - **A green build for the wrong SHA** → confirm `head_sha` matches the merge

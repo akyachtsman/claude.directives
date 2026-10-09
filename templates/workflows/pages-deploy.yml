@@ -88,6 +88,12 @@ jobs:
       # its own run attempt: "Re-run failed jobs" reuses a successful build's
       # artifact while GITHUB_RUN_ATTEMPT moves on.
       marker: ${{ steps.filter.outputs.marker }}
+      # The artifact name, one per build attempt. "Re-run all jobs" runs the
+      # build again in the same run; a second artifact of the default name
+      # makes deploy-pages refuse ("multiple artifacts"). Each attempt uploads
+      # its own name and the deploy job takes the name from here, so "Re-run
+      # failed jobs", which reuses the build, still gets the right one.
+      artifact: github-pages-${{ github.run_attempt }}
     timeout-minutes: 20
     env:
       BUILD_CMD: ''
@@ -175,6 +181,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/site
           include-hidden-files: false
+          name: github-pages-${{ github.run_attempt }}
 
   deploy:
     name: Publish
@@ -199,6 +206,8 @@ jobs:
         id: d1
         continue-on-error: true
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact }}
 
       # Retry only a FAST failure: GitHub's transient "Deployment failed, try
       # again later" comes back in seconds. A failure near deploy-pages' own
@@ -221,6 +230,8 @@ jobs:
         if: steps.d1.outcome == 'failure'
         continue-on-error: true
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact }}
 
       - name: Retry after attempt 2?
         if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
@@ -237,6 +248,8 @@ jobs:
         id: d3
         if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact }}
 
       - name: Page URL
         id: url
@@ -336,7 +349,7 @@ jobs:
           # Internal-LOOKING paths that must stay public (global.md -> Hosting &
           # Deployment): a .well-known file, say. A filter that drops one
           # leaves the root and every deny probe green.
-          mapfile -t public < <(read_list .github/pages-public.txt)
+          mapfile -t public < <(read_list .github/pages-public.txt | sort -u)
           # Same rule as the deny-list: a `.` or `..` component would let curl
           # squash the path out of the project site and probe something else.
           if [ "${#public[@]}" -gt 20 ]; then

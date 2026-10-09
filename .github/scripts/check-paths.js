@@ -114,6 +114,14 @@ for (const [ref, citedBy] of [...refs].sort()) {
 // spec it missed on almost every pass, so the owner chose the parser over the
 // 2026-08-22 "no parser dependency" ruling, for this check (2026-10-09).
 //
+// Scope: HTML-level URLs -- URL attributes on the elements the spec gives them,
+// srcset/ping lists, SVG/MathML href, the document base, the first successful
+// meta refresh, and iframe srcdoc documents. CSS references are OUT of scope:
+// url() in style attributes, <style>, linked stylesheets and SVG presentation
+// attributes (fill, stroke, mask, filter, marker, cursor, which are CSS
+// properties). Checking those is a CSS link checker, a different tool, and no
+// page here uses one (2026-10-09, after Codex on #415).
+//
 // Each link is resolved by WHATWG URL against the page's DEPLOYED address, as
 // a browser resolves it there. A URL inside the site root must name a published
 // file. A RELATIVE reference resolving outside it (a root-relative "/x", or too
@@ -264,7 +272,7 @@ let htmlLinks = 0;
 // refresh; the links checked are the union. An <iframe srcdoc> is a document
 // the browser renders, so it is read the same way, recursively, with this
 // document's base as its fallback base (spec; Codex on #415).
-function analyse(doc, fallback) {
+function analyse(doc, fallback, refreshAllowed = true) {
   const all = [...elements(doc)];
   const live = all.filter((e) => !e.inTemplate);
   // A tag name holding a non-ASCII space, "=", a quote or "<" is an authoring
@@ -292,17 +300,22 @@ function analyse(doc, fallback) {
   if (baseEl) {
     try { const u = new URL(attr(baseEl.el, 'href'), fallback); if (u.protocol !== 'data:' && u.protocol !== 'javascript:') base = u; } catch { /* fallback */ }
   }
-  const refresh = refreshTarget(live, base);
+  const refresh = refreshAllowed ? refreshTarget(live, base) : null;
   const links = all.flatMap(({ el }) => linksOf(el)).concat(refresh ? [refresh] : []).map((raw) => ({ raw, base }));
   for (const { el } of all) {
     const srcdoc = el.namespaceURI === NS.html && el.tagName === 'iframe' ? attr(el, 'srcdoc') : undefined;
-    if (srcdoc !== undefined) links.push(...documentLinks(srcdoc, base).links);
+    if (srcdoc === undefined) continue;
+    // A sandbox without allow-scripts sets the sandboxed automatic features
+    // flag: the srcdoc document's meta refresh never navigates (Codex, #415).
+    const sandbox = attr(el, 'sandbox');
+    const autoFeatures = sandbox === undefined || sandbox.split(/[\t\n\f\r ]+/).map((t) => t.toLowerCase()).includes('allow-scripts');
+    links.push(...documentLinks(srcdoc, base, autoFeatures && refreshAllowed).links);
   }
   return { live, links };
 }
-function documentLinks(html, fallback) {
-  const scripted = analyse(parseHtml(html, { scriptingEnabled: true, sourceCodeLocationInfo: true }), fallback);
-  const unscripted = analyse(parseHtml(html, { scriptingEnabled: false }), fallback);
+function documentLinks(html, fallback, refreshAllowed = true) {
+  const scripted = analyse(parseHtml(html, { scriptingEnabled: true, sourceCodeLocationInfo: true }), fallback, refreshAllowed);
+  const unscripted = analyse(parseHtml(html, { scriptingEnabled: false }), fallback, refreshAllowed);
   const seen = new Set();
   const links = [...scripted.links, ...unscripted.links].filter(({ raw, base }) => {
     const k = `${base.href}\n${raw}`; if (seen.has(k)) return false; seen.add(k); return true;

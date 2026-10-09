@@ -43,23 +43,25 @@ Run in order:
    (both verified via the Actions API, 2026-10-08), so find runs by `head_sha`
    with `event=dynamic` or by `workflow_id`, never by run name. A custom Actions deploy
    runs as its own named workflow. Know which the repo uses — **the source decides
-   the step-5 recovery**, so settle it here. Only **positive** evidence settles
-   it; anything else leaves it **unknown**:
-   - **Actions-source:** a workflow under `.github/workflows/` that runs
-     `actions/deploy-pages`. A `Build:` bullet in the project's `CLAUDE.md` is
-     not evidence: it records a decision, not an installed deploy, and while
-     the opt-in is closed it changes nothing (`global.md` → *Hosting &
-     Deployment*). A `pages-build-deployment` run does not overturn this
-     either: a visibility flip fires that one under either source.
-   - **Branch-source:** the settings endpoint
-     (`GET repos/{owner}/{repo}/pages`) reports `build_type: legacy`, or the user
-     reads **Settings → Pages → Build and deployment → Source** and it says
-     "Deploy from a branch". The endpoint is refused by a web session's GitHub
-     proxy (403, 2026-10-09), so there it is the user's reading.
-   - **Unknown:** neither. The tree cannot prove branch-source — a deploy can
-     call the Pages deployment API directly or sit behind a reusable workflow,
-     with no `actions/deploy-pages` in sight. Treat unknown as Actions-source
-     for every step-5 decision until the user confirms the setting.
+   the step-5 recovery**, so settle it here, taking the first source of these
+   that answers:
+   1. **The settings endpoint** (`GET repos/{owner}/{repo}/pages`), which is
+      authoritative: `build_type: workflow` is **Actions-source** and `legacy`
+      is **branch-source**, whatever workflows the tree holds. A web
+      session's GitHub proxy refuses it (403, 2026-10-09).
+   2. **The user's reading** of **Settings → Pages → Build and deployment →
+      Source**: "GitHub Actions" or "Deploy from a branch".
+   3. **The tree, one way only:** a workflow under `.github/workflows/` that
+      runs `actions/deploy-pages` means **Actions-source**. Its absence proves
+      nothing — a deploy can call the Pages deployment API directly or sit
+      behind a reusable workflow — so with none, the source is **unknown**.
+
+   A `Build:` bullet in the project's `CLAUDE.md` is not evidence: it records
+   a decision, not an installed deploy, and while the opt-in is closed it
+   changes nothing (`global.md` → *Hosting & Deployment*). Nor is a
+   `pages-build-deployment` run: a visibility flip fires that one under either
+   source. Treat **unknown** as Actions-source for every step-5 decision until
+   the user confirms the setting.
 
 4. **Watch to a terminal state — never a blocking or backgrounded sleep.** Find
    the deploy run whose `head_sha` == the merge commit's SHA from step 2 and

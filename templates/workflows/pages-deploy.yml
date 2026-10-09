@@ -303,8 +303,11 @@ jobs:
             echo "::error::the build job reported no deployment marker; cannot tell the new deployment from the old."
             exit 1
           fi
-          live=""
-          for attempt in $(seq 1 60); do
+          # An ELAPSED deadline, not a count of polls: each poll may spend its
+          # own --max-time, so 60 polls could take twice the 10 minutes.
+          live=""; attempt=0; deadline=$((SECONDS + 600))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            attempt=$((attempt + 1))
             live=$(curl -s --max-time 10 -H "Cache-Control: no-cache" \
               "${url}pages-deploy-marker.txt?cb=${GITHUB_RUN_ID}-m${attempt}" | head -c 200) || live=""
             [ "$live" = "$token" ] && break

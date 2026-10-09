@@ -56,18 +56,19 @@ on:
 # trigger — two `page_build` events could always collide; adding the second
 # source made it likelier, not possible.
 # (Confirmed downstream on apfp.claude, 2026-08-19.)
-# A watched run on another branch publishes nothing (the job skips it below),
-# so it gets a group of its own: in the shared one it would cancel the monitor
-# of a real deploy still probing, then report nothing itself.
+# A watched run on another branch, or from a fork (whose branch may also be
+# called main), publishes nothing (the job skips it below), so it gets a group
+# of its own: in the shared one it would cancel the monitor of a real deploy
+# still probing, then report nothing itself.
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch != github.event.repository.default_branch && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
+  group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
   cancel-in-progress: true
 
 permissions:
   contents: read
   issues: write
   pages: read   # lets the Pages API return the real html_url
-  actions: read # lists the watched workflow's runs, to tell a superseded cancel from a failed deploy
+  actions: read # the watched workflow's runs (a superseded cancel vs a failed deploy) and its Pages artifact
 
 jobs:
   monitor:
@@ -94,6 +95,7 @@ jobs:
           RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           RUN_UPDATED: ${{ github.event.workflow_run.updated_at }}
           RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           ISSUE_LABEL: 'pages-deploy-failure'
         run: |
@@ -127,14 +129,15 @@ jobs:
           fi
           status="${status:-manual}"
           # NOT A DEPLOY OF THE SITE. A watched deploy run on another branch (a
-          # manual dispatch with --ref, which pages-deploy.yml refuses) published
-          # nothing, so its conclusion says nothing about the live site.
+          # manual dispatch with --ref, which pages-deploy.yml refuses), or from
+          # a fork's branch of the same name, published nothing, so its
+          # conclusion says nothing about the live site.
           if [ -n "${RUN_CONCLUSION:-}" ] && [ -n "${RUN_BRANCH:-}" ] && [ -n "${DEFAULT_BRANCH:-}" ] \
-             && [ "$RUN_BRANCH" != "$DEFAULT_BRANCH" ]; then
+             && { [ "$RUN_BRANCH" != "$DEFAULT_BRANCH" ] || { [ -n "${RUN_HEAD_REPO:-}" ] && [ "$RUN_HEAD_REPO" != "$REPO" ]; }; }; then
             {
               echo "## ⏭️ Not a deploy of ${DEFAULT_BRANCH}"
               echo ""
-              echo "- The watched run was on ${RUN_BRANCH}; only ${DEFAULT_BRANCH} publishes the site."
+              echo "- The watched run was on ${RUN_HEAD_REPO:-an unknown repository}:${RUN_BRANCH}; only ${REPO}:${DEFAULT_BRANCH} publishes the site."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -151,7 +154,7 @@ jobs:
              && [ -n "${RUN_NUMBER:-}" ] && [ -n "${RUN_BRANCH:-}" ] && [ -n "${RUN_UPDATED:-}" ]; then
             newest=$(gh api -X GET "repos/$REPO/actions/workflows/$RUN_WORKFLOW_ID/runs" \
               -f branch="$RUN_BRANCH" -F per_page=10 \
-              --jq "[.workflow_runs[] | select(.run_number > $RUN_NUMBER) | select(.created_at <= \"$RUN_UPDATED\") | .run_number] | max // 0" \
+              --jq "[.workflow_runs[] | select(.head_repository.id == .repository.id) | select(.run_number > $RUN_NUMBER) | select(.created_at <= \"$RUN_UPDATED\") | .run_number] | max // 0" \
               2>/dev/null) || newest=0
             if [ "${newest:-0}" -gt "$RUN_NUMBER" ] 2>/dev/null; then
               {
@@ -234,9 +237,12 @@ jobs:
                 art=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
                   --jq '[.artifacts[] | select(.name | startswith("github-pages")) | select(.expired | not)] | sort_by(.id) | last | .archive_download_url // empty' 2>/dev/null || true)
               elif [ "${EVENT_NAME:-}" != "page_build" ] && [ "$build_type" != "legacy" ]; then
+                # Only this repository's own default-branch runs: a fork's PR
+                # run can upload a github-pages artifact from a branch it also
+                # calls main, and its list would decide what gets probed.
                 art_from="the newest Pages artifact on ${DEFAULT_BRANCH:-the default branch}"
                 art=$(gh api "repos/$REPO/actions/artifacts?per_page=100" \
-                  --jq "[.artifacts[] | select(.name | startswith(\"github-pages\")) | select(.expired | not) | select(.workflow_run.head_branch == \"${DEFAULT_BRANCH:-}\")] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
+                  --jq "[.artifacts[] | select(.name | startswith(\"github-pages\")) | select(.expired | not) | select(.workflow_run.head_branch == \"${DEFAULT_BRANCH:-}\") | select(.workflow_run.head_repository_id == .workflow_run.repository_id)] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
               fi
               if [ -n "$art_from" ]; then
                 ad=$(mktemp -d)

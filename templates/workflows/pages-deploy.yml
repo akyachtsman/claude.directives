@@ -258,9 +258,9 @@ jobs:
     needs: [build, deploy]
     runs-on: ubuntu-latest
     # Up to 10 min for the new deployment's marker, liveness up to ~165s, a 30s
-    # pause, and two 8s passes over at most 40 deny URLs (~11 min), plus the
-    # public paths.
-    timeout-minutes: 30
+    # pause, two 8s passes over at most 40 deny URLs (~11 min), and one 8s probe
+    # for each of at most 20 public paths (~3 min): ~27 min worst case.
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -339,6 +339,10 @@ jobs:
           mapfile -t public < <(read_list .github/pages-public.txt)
           # Same rule as the deny-list: a `.` or `..` component would let curl
           # squash the path out of the project site and probe something else.
+          if [ "${#public[@]}" -gt 20 ]; then
+            echo "::error::pages-public.txt lists ${#public[@]} paths; this job probes at most 20 within its bound. List fewer, or raise timeout-minutes and this cap together."
+            exit 1
+          fi
           for p in "${public[@]}"; do
             case "/${p%/}/" in
               *'/../'*|*'/./'*|'//') echo "::error::pages-public.txt entry does not name a path inside the site: [$p]"; exit 1 ;;

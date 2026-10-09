@@ -196,6 +196,12 @@ jobs:
                 paths=("${entries[@]}")
               fi
             fi
+            # One URL per path: overlapping entries (`private/` and
+            # `private/a.json`) must not count twice against the cap, as in
+            # pages-deploy.yml, which dedupes the same way.
+            if [ "${#paths[@]}" -gt 0 ]; then
+              mapfile -t paths < <(printf '%s\n' "${paths[@]}" | sort -u)
+            fi
             n=${#paths[@]}
             max_paths=40
             # Percent-encode each segment: a literal `#` or `?` in a name would

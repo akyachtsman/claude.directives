@@ -122,6 +122,12 @@ from pathlib import Path
 import yaml
 
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")
+# Phase 3's applied-check runs from this script, not from a fenced block in the
+# command: a command's arguments are substituted into its text on load, and the
+# check's functions take positional parameters. The guard reads the two files as
+# ONE text, so the Phase 3 copy is found wherever it sits, and a copy deleted
+# from both is still refused.
+STAMP = Path("plugins/directives-toolkit/scripts/refresh-stamp.sh")
 # directives/*.md joined the set in directives#355: `test.md` names
 # `.github/scripts/browser-ladder.js`, which no workflow or composite invokes,
 # so a YAML-only caller set derived nothing for it and a refresh shipped the
@@ -530,6 +536,8 @@ def main():
         return fail(f"{COMMAND} not found — the derivation this guard pins has moved or been deleted.")
 
     text = COMMAND.read_text(encoding="utf-8")
+    if STAMP.exists():
+        text += "\n" + STAMP.read_text(encoding="utf-8")
 
     token_m = TOKEN_LINE.search(text)
     if not token_m:

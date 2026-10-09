@@ -29,10 +29,11 @@ name: Pages Monitor
 # propagation), with redirects NOT followed — a 3xx to a page that 404s is the
 # declared URL answering something other than 404, so it is reported. Paths are
 # taken literally (percent-encoded, no curl globbing). A DIRECTORY entry is
-# expanded to every file under it in the repository at the deployed commit, and
-# each is probed: a directory URL can 404 while a file under it is served. (That
-# is the source tree; a build that writes denied files the source lacks is
-# covered by pages-deploy.yml's own check, not here.) At most 40 URLs after
+# expanded to every file under it as PUBLISHED, and each is probed: a directory
+# URL can 404 while a file under it is served. The published list is the deploy
+# run's Pages artifact for an Actions deploy, and the built commit's source
+# folder (Jekyll's .md -> .html included) for a branch build; where neither is
+# available it falls back to the repository tree and says so. At most 40 URLs after
 # expansion, the same cap as pages-deploy.yml — more is reported, not silently
 # truncated, since the job bound cannot fit them. Absent file, or one listing no paths =
 # nothing declared = no-op, and the job summary says exposure was NOT checked.
@@ -71,7 +72,7 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     # Liveness up to ~165s, a 30s pause, and two 8s probes for each of up to 40
-    # forbidden URLs (~11 min).
+    # forbidden URLs, plus up to 2 min fetching the deploy artifact (~13 min).
     timeout-minutes: 20
     steps:
       - name: Verify Pages deploy and report
@@ -86,6 +87,8 @@ jobs:
           # on workflow_dispatch, which the "manual" default below covers.
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          EVENT_NAME: ${{ github.event_name }}
           RUN_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
           RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           RUN_UPDATED: ${{ github.event.workflow_run.updated_at }}
@@ -96,7 +99,11 @@ jobs:
           set -euo pipefail
           # Real Pages URL from the API (covers <owner>.github.io user-site
           # repos and custom domains); generic derivation as the fallback.
-          url=$(gh api "repos/$REPO/pages" --jq '.html_url // empty' 2>/dev/null || true)
+          # The same response says which folder a branch build publishes.
+          pages=$(gh api "repos/$REPO/pages" 2>/dev/null || true)
+          url=$(jq -r '.html_url // empty' <<< "${pages:-null}" 2>/dev/null || true)
+          src_root=$(jq -r '.source.path // "/"' <<< "${pages:-null}" 2>/dev/null || true)
+          src_root="${src_root#/}"; src_root="${src_root%/}"
           if [ -z "$url" ]; then
             repo_name="${REPO#*/}"
             url="https://${OWNER}.github.io/${repo_name}/"
@@ -192,33 +199,80 @@ jobs:
             # root check cannot see that (the old deploy already served 200).
             # The list is capped so the worst case (every probe hitting its
             # --max-time) stays inside timeout-minutes:
-            # 165s liveness + 30s delay + 40 URLs x 2 passes x 8s = ~835s < 1200s.
+            # 165s liveness + 120s artifact + 30s delay + 40 URLs x 2 passes x 8s = ~955s < 1200s.
             entries=()
             while IFS= read -r p || [ -n "$p" ]; do
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
               entries+=("${p#/}")
             done <<< "$deny"
-            # Expand a directory entry to every file under it in the repository
-            # at the deployed commit (the default branch on a manual run).
+            # Expand a directory entry to every file under it ON THE LIVE SITE.
+            # Live paths are not repository paths: an Actions deploy publishes
+            # its build output (SITE_DIR=dist, say), a branch build publishes
+            # its source folder (/docs, say), and Jekyll renders private/a.md
+            # as private/a.html. So the file list comes from what was
+            # published, where that is knowable:
+            #  - an Actions deploy (workflow_run): the run's own Pages artifact;
+            #  - a branch build (page_build): the tree at the built commit, under
+            #    the source folder, plus Jekyll's .md -> .html names unless that
+            #    folder holds a .nojekyll.
+            # Otherwise (a manual run, an artifact that is gone) it is the
+            # repository tree, and the summary says the expansion is approximate.
+            # LIMIT: a Jekyll permalink moves a page where no listing shows it.
             paths=()
+            live=""; live_from=""; jekyll=0
             if [ "${#entries[@]}" -gt 0 ]; then
-              tree_err=$(mktemp)
-              if tree=$(gh api "repos/$REPO/git/trees/${commit:-HEAD}?recursive=1" \
-                    --jq 'if .truncated then "::TRUNCATED::" else (.tree[] | select(.type == "blob") | .path) end' 2>"$tree_err") \
-                 && [ "$tree" != "::TRUNCATED::" ]; then
-                for e in "${entries[@]}"; do
-                  paths+=("$e")
-                  d="${e%/}"
-                  while IFS= read -r f; do
-                    case "$f" in "$d"/*) paths+=("$f") ;; esac
-                  done <<< "$tree"
-                done
-              else
-                [ "${tree:-}" = "::TRUNCATED::" ] && echo "the tree listing was truncated" > "$tree_err"
-                problems="${problems}- Could not list the repository tree to expand denied directories, so files under them are NOT checked: $(head -c 200 "$tree_err" | tr '\n' ' ')\n"
-                paths=("${entries[@]}")
+              if [ -n "${RUN_ID:-}" ]; then
+                art=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
+                  --jq '[.artifacts[] | select(.name | startswith("github-pages")) | select(.expired | not)] | sort_by(.id) | last | .archive_download_url // empty' 2>/dev/null || true)
+                ad=$(mktemp -d)
+                # upload-pages-artifact stores one artifact.tar of `./`-relative
+                # entries; directories end in `/`.
+                if [ -n "$art" ] \
+                   && curl -sSfL --max-time 120 -H "Authorization: Bearer $GH_TOKEN" -o "$ad/a.zip" "$art" \
+                   && unzip -q "$ad/a.zip" -d "$ad/x" && [ -f "$ad/x/artifact.tar" ] \
+                   && tar -tf "$ad/x/artifact.tar" > "$ad/list"; then
+                  live=$(sed 's#^\./##' "$ad/list" | grep -v -e '/$' -e '^$' || true)
+                  live_from="the deploy run's Pages artifact"
+                fi
               fi
+              if [ -z "$live_from" ]; then
+                tree_err=$(mktemp)
+                if tree=$(gh api "repos/$REPO/git/trees/${commit:-HEAD}?recursive=1" \
+                      --jq 'if .truncated then "::TRUNCATED::" else (.tree[] | select(.type == "blob") | .path) end' 2>"$tree_err") \
+                   && [ "$tree" != "::TRUNCATED::" ]; then
+                  if [ "${EVENT_NAME:-}" = "page_build" ]; then
+                    if [ -n "$src_root" ]; then
+                      live=$(while IFS= read -r f; do
+                        case "$f" in "$src_root"/*) printf '%s\n' "${f#"$src_root"/}" ;; esac
+                      done <<< "$tree")
+                    else
+                      live="$tree"
+                    fi
+                    if ! grep -qx '\.nojekyll' <<< "$live"; then
+                      jekyll=1
+                      live=$(printf '%s\n' "$live"; sed -n -E 's/\.(md|markdown)$/.html/p' <<< "$live")
+                    fi
+                    live_from="the built commit, under its source folder"
+                  else
+                    live="$tree"
+                    live_from="the repository tree (approximate: no published file list was available)"
+                  fi
+                else
+                  [ "${tree:-}" = "::TRUNCATED::" ] && echo "the tree listing was truncated" > "$tree_err"
+                  problems="${problems}- Could not list the repository tree to expand denied directories, so files under them are NOT checked: $(head -c 200 "$tree_err" | tr '\n' ' ')\n"
+                fi
+              fi
+              for e in "${entries[@]}"; do
+                paths+=("$e")
+                if [ "$jekyll" = 1 ]; then
+                  case "$e" in *.md|*.markdown) paths+=("${e%.*}.html") ;; esac
+                fi
+                d="${e%/}"
+                while IFS= read -r f; do
+                  case "$f" in "$d"/*) paths+=("$f") ;; esac
+                done <<< "$live"
+              done
             fi
             # One URL per path: overlapping entries (`private/` and
             # `private/a.json`) must not count twice against the cap, as in
@@ -247,7 +301,7 @@ jobs:
                   problems="${problems}- Forbidden path served HTTP ${first[i]} then ${dcode}, expected 404 on both: ${url}${paths[i]}\n"
                 fi
               done
-              deny_note="${#entries[@]} declared in .github/pages-deny.txt (${n} URLs after expanding directories), all 404 on two probes 30s apart"
+              deny_note="${#entries[@]} declared in .github/pages-deny.txt (${n} URLs after expanding directories from ${live_from:-nothing}), all 404 on two probes 30s apart"
             fi
           elif grep -q 'HTTP 404' "$deny_err"; then
             :

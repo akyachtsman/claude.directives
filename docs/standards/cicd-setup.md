@@ -307,7 +307,10 @@ Drop-in for a **branch-source** Pages project (the live URL is derived from the
 repo). ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, `page_build`
 never fires and this monitor is inert until you add a `workflow_run` trigger
 naming your own deploy workflow — the template header carries the snippet, and
-the same name must be added to `qa-live.yml`'s watch list. Do NOT add it to
+the same name must be added to `qa-live.yml`'s watch list. If that deploy
+uploads its Pages artifact under its own name (`upload-pages-artifact`'s
+`name:`), set the monitor's `PAGES_ARTIFACT_PREFIX` to it: the monitor reads the
+published file list from that artifact. Do NOT add it to
 `pages-retry.yml` — unless that deploy is provably idempotent and you record, in
 the project's CLAUDE.md, **both** why *and* a **revisit trigger** naming the
 condition that ends the exception ("if the deploy ever gains a build or test

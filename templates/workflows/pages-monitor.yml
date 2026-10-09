@@ -98,6 +98,12 @@ jobs:
           RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           ISSUE_LABEL: 'pages-deploy-failure'
+          # The name your deploy uploads its Pages artifact under, as a prefix:
+          # upload-pages-artifact's default is `github-pages`, and pages-deploy.yml
+          # uploads `github-pages-<attempt>`. A deploy that sets its own `name:` /
+          # `artifact_name:` must put that name here, or every deploy is reported
+          # with its denied directories unchecked.
+          PAGES_ARTIFACT_PREFIX: 'github-pages'
         run: |
           set -euo pipefail
           # Real Pages URL from the API (covers <owner>.github.io user-site
@@ -235,14 +241,14 @@ jobs:
               if [ -n "${RUN_ID:-}" ]; then
                 art_from="the deploy run's Pages artifact"
                 art=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
-                  --jq '[.artifacts[] | select(.name | startswith("github-pages")) | select(.expired | not)] | sort_by(.id) | last | .archive_download_url // empty' 2>/dev/null || true)
+                  --jq "[.artifacts[] | select(.name | startswith(\"${PAGES_ARTIFACT_PREFIX}\")) | select(.expired | not)] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
               elif [ "${EVENT_NAME:-}" != "page_build" ] && [ "$build_type" != "legacy" ]; then
                 # Only this repository's own default-branch runs: a fork's PR
                 # run can upload a github-pages artifact from a branch it also
                 # calls main, and its list would decide what gets probed.
                 art_from="the newest Pages artifact on ${DEFAULT_BRANCH:-the default branch}"
                 art=$(gh api "repos/$REPO/actions/artifacts?per_page=100" \
-                  --jq "[.artifacts[] | select(.name | startswith(\"github-pages\")) | select(.expired | not) | select(.workflow_run.head_branch == \"${DEFAULT_BRANCH:-}\") | select(.workflow_run.head_repository_id == .workflow_run.repository_id)] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
+                  --jq "[.artifacts[] | select(.name | startswith(\"${PAGES_ARTIFACT_PREFIX}\")) | select(.expired | not) | select(.workflow_run.head_branch == \"${DEFAULT_BRANCH:-}\") | select(.workflow_run.head_repository_id == .workflow_run.repository_id)] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
               fi
               if [ -n "$art_from" ]; then
                 ad=$(mktemp -d)
@@ -255,7 +261,7 @@ jobs:
                   live=$(sed 's#^\./##' "$ad/list" | grep -v -e '/$' -e '^$' || true)
                   live_from="$art_from"
                 else
-                  problems="${problems}- Could not read ${art_from}, so files under denied directories are NOT checked (the repository tree does not give the published paths)\n"
+                  problems="${problems}- Could not read ${art_from} (an artifact named ${PAGES_ARTIFACT_PREFIX}*; PAGES_ARTIFACT_PREFIX sets the name), so files under denied directories are NOT checked (the repository tree does not give the published paths)\n"
                 fi
               else
                 tree_err=$(mktemp)

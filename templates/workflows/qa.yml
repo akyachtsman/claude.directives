@@ -33,7 +33,11 @@
 #     build: the change detection refuses to run without it). The browser job
 #     then runs the build and serves SITE_DIR, so it tests what is deployed,
 #     and a change to a build input alone still runs it. Without the opt-in
-#     leave all three as shipped: no build, the repo root is served.
+#     leave all three as shipped: no build, the repo root is served. It serves
+#     the tree UNFILTERED (dotfiles and deny-listed paths included), so it
+#     tests the site's behaviour, not what pages-deploy.yml leaves out; it does
+#     refuse what that deploy refuses (a SITE_DIR outside the repository, or a
+#     symlink in the site), so a green PR cannot merge into a red deploy.
 
 name: QA — Static + UI Tests
 
@@ -165,7 +169,9 @@ jobs:
         run: |
           # A build whose inputs are not listed would let a source-only PR skip
           # the browser job: refuse the configuration rather than guess.
-          if [ -n "$BUILD_CMD" ] && [ -z "$BUILD_PATHS" ]; then
+          # Normalised as pages-deploy.yml does: '' and '/' mean the repo root.
+          src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
+          if [ -n "$BUILD_CMD" ] && [ -z "${BUILD_PATHS//[[:space:]]/}" ]; then
             echo "::error::BUILD_CMD is set but BUILD_PATHS is empty: list the build inputs (workflow env) so a change to them runs the UI suite."
             exit 1
           fi
@@ -175,7 +181,7 @@ jobs:
           # against — a green run that never loaded an application. With a
           # build, SITE_DIR does not exist yet: the browser job checks its
           # index.html after building, and refuses there instead.
-          if [ -z "$BUILD_CMD" ] && [ ! -f "$SITE_DIR/index.html" ]; then
+          if [ -z "$BUILD_CMD" ] && [ ! -f "$src/index.html" ]; then
             echo "ui=false" >> "$GITHUB_OUTPUT"
             echo "No index.html yet — skipping browser job."
             exit 0
@@ -197,14 +203,19 @@ jobs:
             exit 1
           fi
           pattern="$UI_PATHS"
-          [ -n "$BUILD_PATHS" ] && pattern="${pattern}|${BUILD_PATHS}"
-          if printf '%s\n' "$files" | grep -qE "$pattern"; then
-            echo "ui=true" >> "$GITHUB_OUTPUT"
-            echo "UI-relevant changes detected."
-          else
-            echo "ui=false" >> "$GITHUB_OUTPUT"
-            echo "No UI-relevant changes — skipping browser job."
-          fi
+          [ -n "${BUILD_PATHS//[[:space:]]/}" ] && pattern="${pattern}|${BUILD_PATHS}"
+          # grep exits 2 on a malformed pattern; inside an `if` that read as
+          # "no match" and skipped the suite. Only 0 and 1 are answers.
+          rc=0
+          printf '%s\n' "$files" | grep -qE -- "$pattern" || rc=$?
+          case "$rc" in
+            0) echo "ui=true" >> "$GITHUB_OUTPUT"
+               echo "UI-relevant changes detected." ;;
+            1) echo "ui=false" >> "$GITHUB_OUTPUT"
+               echo "No UI-relevant changes — skipping browser job." ;;
+            *) echo "::error::UI_PATHS/BUILD_PATHS is not a valid extended regex (grep exit $rc): fix the pattern."
+               exit 1 ;;
+          esac
 
   ui-tests:
     name: UI Tests (local server)
@@ -223,7 +234,7 @@ jobs:
 
       # CI-build opt-in only: build exactly as pages-deploy.yml does and serve
       # its output, so the suite tests what is deployed rather than the
-      # unbuilt tree. With BUILD_CMD empty these three steps are skipped.
+      # unbuilt tree. With BUILD_CMD empty these two steps are skipped.
       - name: Setup Node (build)
         if: env.BUILD_CMD != ''
         uses: actions/setup-node@v4
@@ -234,13 +245,35 @@ jobs:
         if: env.BUILD_CMD != ''
         run: bash -eo pipefail -c "$BUILD_CMD"
 
-      - name: Check the built site has an entry point
-        if: env.BUILD_CMD != ''
+      # Refuse what pages-deploy.yml refuses, so a green PR cannot merge into a
+      # red deploy: a site directory resolving outside the repository, or a
+      # symlink in the site (the deploy publishes link TARGETS). A build implies
+      # that deploy (the opt-in is Actions-source); without one the repo may be
+      # branch-source, where the managed build publishes links differently, so
+      # a symlink only warns. Also exports the normalised directory ('' and '/'
+      # mean the repo root) to serve.
+      - name: Check the site directory
         run: |
-          if [ ! -f "$SITE_DIR/index.html" ]; then
-            echo "::error::$SITE_DIR/index.html is missing after the build: nothing for the suite to load."
+          src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
+          if [ ! -f "$src/index.html" ]; then
+            echo "::error::$src/index.html is missing: nothing for the suite to load."
             exit 1
           fi
+          ws=$(realpath -e .)
+          real=$(realpath -e -- "$src")
+          case "$real/" in
+            "$ws"/*) ;;
+            *) echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the repository; pages-deploy.yml refuses it."; exit 1 ;;
+          esac
+          links=$(find "$real" \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
+          if [ -n "$links" ] && [ -n "$BUILD_CMD" ]; then
+            echo "::error::symlinks in the built site, which pages-deploy.yml refuses; replace them with real files:"
+            printf '%s\n' "$links"
+            exit 1
+          elif [ -n "$links" ]; then
+            echo "::warning::symlinks in the site; pages-deploy.yml (Actions-source) refuses them: $(printf '%s; ' "$links")"
+          fi
+          echo "SITE_ROOT=$src" >> "$GITHUB_ENV"
 
       # advisory-run ships 'false': blocking is the default posture for the
       # static/no-backend tier, where the suite runs fully against the bundled
@@ -265,5 +298,5 @@ jobs:
           artifact-name: playwright-results-local
           app-pages: ${{ vars.APP_PAGES }}
           start-local-server: 'true'
-          server-root: ${{ env.SITE_DIR }}
+          server-root: ${{ env.SITE_ROOT }}
           advisory-run: 'false'

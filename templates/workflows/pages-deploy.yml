@@ -33,7 +33,7 @@ name: Pages Deploy
 # repo root (`npm ci && npm run build`, say); SITE_DIR is the directory it
 # writes. No build: BUILD_CMD empty and SITE_DIR `.` — the repo root, filtered.
 # Whatever tests or watches the site must act on SITE_DIR, never the repo root,
-# and must count the build inputs as changes (qa.yml UI_PATHS).
+# and must count the build inputs as changes (qa.yml BUILD_PATHS).
 #
 # FILTER. Each deny-list line is a literal path (no glob), removed from the
 # copy. Always dropped, whatever the deny-list says: .git and .github at any depth,

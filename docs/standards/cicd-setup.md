@@ -242,15 +242,27 @@ Add any additional backend API secrets the app requires (e.g. read-only API toke
 
 ## Step 6 — Enable GitHub Pages
 
-`Settings → Pages → Source → Deploy from a branch → Branch: main → / (root)`
+Pick the source first (`directives/global.md` → *Hosting & Deployment*), and set
+only that one:
 
-Save. GitHub will create the `pages-build-deployment` workflow automatically. This is what triggers `qa-live.yml`.
+- **Branch-source** (nothing in the repo must stay private, no CI build):
+  `Settings → Pages → Source → Deploy from a branch → Branch: main → / (root)`.
+  Save. GitHub creates the `pages-build-deployment` workflow automatically; it
+  is what triggers `qa-live.yml`.
+- **Actions-source** (a file that must not be public, or the CI-build opt-in):
+  `Settings → Pages → Source → GitHub Actions`. ⚠️ **Never select "Deploy from
+  a branch" here, not even briefly:** it publishes the whole repository,
+  unfiltered, before `pages-deploy.yml` (Step 9d-bis) ever runs. The deploy is
+  `Pages Deploy`, and it is what triggers `qa-live.yml`.
 
 ---
 
-## Step 7 — Verify pages-build-deployment appears
+## Step 7 — Verify the deploy workflow appears
 
-Go to the target repo's `Actions` tab. Confirm `pages-build-deployment` appears in the workflow list after enabling Pages. It may take one push to appear.
+Go to the target repo's `Actions` tab and confirm the deploy for the source you
+picked appears in the workflow list: `pages-build-deployment` on branch-source,
+`Pages Deploy` on Actions-source (once Step 9d-bis has merged). It may take one
+push to appear.
 
 ---
 
@@ -575,7 +587,7 @@ Open the PR from the branch that now holds Steps 1–9. That PR is the test:
 
 - [ ] `QA — Static + UI Tests` runs on the PR and goes green — a red static job
       at a missing file means a Step 1 script was skipped
-- [ ] after the squash-merge, `QA — UI Tests (live)` runs once `pages-build-deployment` completes
+- [ ] after the squash-merge, `QA — UI Tests (live)` runs once the deploy completes — `pages-build-deployment` on branch-source, `Pages Deploy` on Actions-source (before the first page exists, `Pages Deploy` publishes nothing and the live suite is skipped; Step 9d-bis)
 - [ ] `QA — Event-Driven Response` is visible in the Actions tab and ready for dispatch
 
 ---
@@ -636,7 +648,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app has no login, or because its login ships a working credential in a visible, editable password field and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)
-- [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions
+- [ ] GitHub Pages enabled on the chosen source, and its deploy visible in Actions — `pages-build-deployment` (branch-source) or `Pages Deploy` (Actions-source, never "Deploy from a branch")
 - [ ] At least one successful run of each workflow confirmed
 
 ---

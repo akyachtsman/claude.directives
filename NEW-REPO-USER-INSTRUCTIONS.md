@@ -115,7 +115,14 @@ once locally — it persists.
    bootstrap PR targets) and is required to enable GitHub Pages. An empty repo
    has no `main`, which stalls the bootstrap; tick **"Add a README file"** when
    creating the repo.
-3. Enable GitHub Pages: **Settings → Pages → Source: `main` / `root`**
+3. Enable GitHub Pages on ONE source (`directives/global.md` → *Hosting & Deployment*):
+   **branch-source** (nothing in the repo must stay private, no CI build) →
+   **Settings → Pages → Source: Deploy from a branch, `main` / `root`**;
+   **Actions-source** (a file that must not be public, or the CI-build opt-in) →
+   **Settings → Pages → Source: GitHub Actions**. Never select "Deploy from a
+   branch" for an Actions-source project, not even briefly: it publishes the
+   whole repository, unfiltered, before `pages-deploy.yml` runs
+   (`docs/standards/cicd-setup.md` → *Step 6*).
 4. Set repo Watch: **Watch → All Activity**
 5. Add repository secrets (**Settings → Secrets and variables → Actions → Secrets**):
    - `TEST_AUTH_CREDENTIAL` — valid login credential for Playwright tests. Set

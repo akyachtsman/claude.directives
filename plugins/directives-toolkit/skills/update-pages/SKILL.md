@@ -105,7 +105,7 @@ Run in order:
      head at that moment, so watch for a run whose `head_sha` is
      `git rev-parse origin/main` after a fresh fetch, not necessarily step 2's
      SHA. If it does not declare `workflow_dispatch`, add the trigger through
-     the PR flow, then dispatch it on `main` as soon as that merges and watch
+     the PR flow (`templates/workflows/pages-deploy.yml` ships it), then dispatch it on `main` as soon as that merges and watch
      the dispatched run. Do not count on the merge push to deploy: a deploy
      whose `push:` carries a `paths:` filter skips a workflow-only commit, and
      that filter may be why the run was missing in the first place. A deploy

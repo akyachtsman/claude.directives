@@ -61,13 +61,14 @@ Execute in order:
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
    copy these workflow files from `claude.directives/templates/workflows/`
-   — **nine for a branch-source project, eight for an Actions-source one**:
+   — **nine for either Pages source, differing in one file**:
    `pages-retry.yml` is BRANCH-SOURCE ONLY and must not be installed on an
    Actions-source project (see its bullet below; installing it there arms a
    retry of a rogue unfiltered deploy). Omit its `REQUIRED` entry in the same
-   edit. This is the one file in the set whose installation is conditional —
-   check the project's Pages source before copying
-   into `.github/workflows/`:
+   edit. `pages-deploy.yml` is ACTIONS-SOURCE ONLY, the converse: it is that
+   project's deploy, with the retry built in. These are the two files in the
+   set whose installation is conditional — check the project's Pages source
+   before copying into `.github/workflows/`:
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages
    - `ci-monitor.yml` — event-driven CI failure tracker
@@ -90,6 +91,12 @@ Execute in order:
      Skipping it also means dropping its `REQUIRED` entry in the workflow-ref
      guard, in the same edit. It only arms once it's on the
      default branch, so it covers the *next* deploy, not the one that adds it
+   - `pages-deploy.yml` — **ACTIONS-SOURCE ONLY.** Builds (only for a project
+     with the CI-build opt-in), drops the `.github/pages-deny.txt` paths,
+     publishes, retries GitHub's transient publish failure, then asserts the
+     root serves 200 and each denied path 404. Fill in `BUILD_CMD` and
+     `SITE_DIR` per its header. On a branch-source project it would deploy
+     nothing and fail, so it is not installed there
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
 

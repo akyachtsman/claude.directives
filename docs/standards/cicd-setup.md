@@ -488,6 +488,25 @@ that rogue unfiltered deploy; (2) it only arms once
 it's on the default branch, so it covers the *next* deploy, not the one that adds
 it.
 
+### 9d-bis — Pages Deploy (Actions-source only)
+
+⚠️ **ACTIONS-SOURCE ONLY — the mirror of 9d.** Install this where Settings →
+Pages → Source is "GitHub Actions": a repo holding files that must not be public,
+or a project with the CI-build opt-in (`directives/global.md` → *Hosting & Deployment*). A branch-source
+project does not install it; there the push is the deploy.
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-deploy.yml \
+  -o .github/workflows/pages-deploy.yml
+```
+
+**What it does:** builds (only with the opt-in: `BUILD_CMD` and `SITE_DIR` in its
+header), copies the site minus every `.github/pages-deny.txt` path, publishes it,
+retries GitHub's transient publish failure from the same artifact, then asserts
+the root serves 200 and each denied path 404. Its header lists the rest of the
+switch: watchers named "Pages Deploy" in `qa-live.yml` and `pages-monitor.yml`
+(add, never replace), and `pages-retry.yml` deleted with its `REQUIRED` entry.
+
 ### 9e — CI Notify
 
 Drop-in — edit only the watched names to match the QA workflows you installed

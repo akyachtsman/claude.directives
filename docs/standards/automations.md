@@ -89,7 +89,8 @@ Verifying a deploy is not re-running one. `pages-monitor` and `qa-live` may
 watch either source. `pages-retry` may not: it re-runs the whole watched run, so
 pointing it at a project-owned deploy replays that workflow's entire build,
 which this template neither intends nor bounds. Actions-source projects build
-retry into their own deploy workflow instead (Automation 4b).
+retry into their own deploy workflow instead (Automation 4b);
+`templates/workflows/pages-deploy.yml` is that deploy, retry included.
 
 A project MAY extend it anyway if its deploy is genuinely idempotent — no build,
 no compile, no tests, same commit in and same tree out — but must record that

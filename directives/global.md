@@ -360,7 +360,8 @@ this test, in order:
    public** — a real secret, unreleased material, anything whose exposure is a
    problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
    rather than the tree: rsync the repo minus a deny-list, upload that artifact,
-   deploy it.
+   deploy it (`templates/workflows/pages-deploy.yml` does exactly this, build
+   step included for an opted-in project).
 2. **Otherwise** → branch-source is fine and the push is the deploy, unless the
    project has opted into a CI build, which forces Actions-source (above).
 
@@ -398,7 +399,8 @@ still run `pages-build-deployment`, and with it the retry.
   (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
 - **The retry: do NOT repoint it, by default.** It re-runs the **whole** watched
   run and would replay your entire build; an Actions-source project builds retry
-  into its own deploy workflow instead (`docs/standards/automations.md` → *Automation 4b — Pages Deploy Retry*).
+  into its own deploy workflow instead (`templates/workflows/pages-deploy.yml`
+  ships it) (`docs/standards/automations.md` → *Automation 4b — Pages Deploy Retry*).
   W3's one narrow exception stands: a project MAY extend the retry anyway **if
   its deploy is genuinely idempotent** — no build, no compile, no tests, same
   commit in and same tree out — provided it records in its own `CLAUDE.md` both

@@ -238,7 +238,16 @@ jobs:
             while IFS= read -r p || [ -n "$p" ]; do
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
-              entries+=("${p#/}")
+              # The same normalisation as pages-deploy.yml: `private/` names the
+              # path `private`, file or directory, and is probed as both the
+              # path and (if a directory) everything under it.
+              p="${p#/}"; p="${p%/}"
+              case "/$p/" in
+                *'/../'*|*'/./'*|'//')
+                  problems="${problems}- .github/pages-deny.txt entry does not name a path inside the site, NOT checked: [${p}]\n"
+                  continue ;;
+              esac
+              entries+=("$p")
             done <<< "$deny"
             # Expand a directory entry to every file under it ON THE LIVE SITE.
             # Live paths are not repository paths: an Actions deploy publishes

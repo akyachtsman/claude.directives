@@ -58,8 +58,12 @@ on:
 permissions:
   contents: read
 
-# One deploy at a time, and a queued one is not cancelled: cancelling a publish
-# mid-flight can leave the previous deployment live with no failure reported.
+# One deploy at a time. A RUNNING deploy is never cancelled: cancelling a
+# publish mid-flight can leave the previous deployment live with no failure
+# reported. A PENDING one is: the group holds one waiting run, and a newer push
+# replaces it (conclusion `cancelled`), so the newest main is what deploys. A
+# watcher reading conclusions must treat a cancelled run with a newer run of
+# this workflow behind it as superseded, not as a failed deploy.
 concurrency:
   group: pages-deploy
   cancel-in-progress: false

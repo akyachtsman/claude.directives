@@ -37,7 +37,7 @@ This project's look is its own — established at kickoff via `/design-intake`
 ## Required Commands
 | Purpose | Command |
 |---|---|
-| Validate HTML | `npx html-validate index.html` |
+| Validate HTML | `npx html-validate index.html` (with a `Build:`: run the build, then validate the generated HTML under `SITE_DIR`, never the source root) |
 | Validate workflow YAML | `python3 -c "import yaml, sys; yaml.safe_load(open('.github/workflows/qa.yml'))"` |
 
 ## Project-Specific Security Constraints

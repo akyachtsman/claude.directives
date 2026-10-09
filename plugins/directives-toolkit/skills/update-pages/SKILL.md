@@ -11,8 +11,9 @@ serves the new content.**
 
 **Apply this automatically whenever a change updates the Pages site** — any edit to
 a file GitHub Pages serves (root `index.html`, `docs/site/commands.html`,
-`docs/site/logical-map.html`, other served HTML/CSS/assets) or to the Pages
-configuration. Don't wait to be asked: if the change you just made will change
+`docs/site/logical-map.html`, other served HTML/CSS/assets), to a build input
+under the CI-build opt-in (any path matching `BUILD_PATHS` in `qa.yml`: the
+deployed site is the build's output), or to the Pages configuration. Don't wait to be asked: if the change you just made will change
 what `*.github.io` serves, run these steps and report when it's live.
 
 Run in order:

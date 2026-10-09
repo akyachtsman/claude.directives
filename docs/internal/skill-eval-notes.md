@@ -13,6 +13,33 @@ A description that drifts stops firing **silently** — no error, just absence �
 All three negatives correctly never fire in either arm. (Previous: 2026-08-19,
 2 runs/case, 9 of 9, mean Δ +0.67.)
 
+The cases' frontmatter says `runs: 2`, so repeating the baseline at 3 runs/case
+needs `--runs 3` on the command line.
+
+## What the score and Δ mean (re-checked 2026-10-08)
+
+The harness now treats a `tool_used: Skill` grader specially in a two-arm run.
+Its `--ablation` help reads: "under with-without, graders marked with-only,
+incl. `tool_used: Skill`, are a plugin-fired indicator rather than part of the
+score". The docs page (code.claude.com/docs/en/plugin-evals, *Compare against a
+no-plugin baseline*) names the two ways out: a case whose graders are ALL in
+that set is scored normally, and "`arm: both` on a grader [scores] it in both
+arms regardless".
+
+Every grader in `plugins/directives-toolkit/evals/` sets `arm: both`, and each
+case has only that one grader, so both ways out apply and nothing changed for
+this suite: the score is whether the skill fired, in both arms. The 2026-09-29
+baseline still means what it says. Do not drop `arm: both`, and do not add an
+outcome grader beside it without understanding that the Skill grader would then
+leave the score unless `arm: both` stays.
+
+What Δ shows here is narrower than "the skill caused the behaviour". The without
+arm has no plugin, so the skill cannot fire there: a should-fire case scores 0
+in that arm by construction, and its Δ is just the with-arm firing rate. A
+should-not-fire case (`min: 0`, `max: 0`) passes in both arms at Δ 0. So the
++0.75 mean is 9 should-fire cases at +1 and 3 negatives at 0. The pass/fail
+score per case is the signal; Δ adds nothing a trigger test needs.
+
 ## The three gaps, and what fixed them
 
 **`doc-comp` — 0.00 → +1.00.** It fired on "diff the old X against the new X" and

@@ -186,7 +186,9 @@ Execute in order:
    and don't copy this or any other repo's `.gitignore` wholesale.
 
    Also copy `claude.directives/templates/claude-settings.json` to
-   `.claude/settings.json` (merge into any existing one): it registers the
+   `.claude/settings.json` (merge into any existing one, through the built-in
+   `update-config` skill with the hand-merge fallback, exactly as
+   `refresh-repo.md` → *Settings writes* lays out): it registers the
    claude-directives marketplace, enables the directives-toolkit plugin
    for every session on this repo, and pre-approves the two classes
    `global.md` → *Scheduling Tools Never Prompt* admits: the six Claude Code

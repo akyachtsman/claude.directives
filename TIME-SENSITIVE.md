@@ -74,6 +74,7 @@ is added by the pass that finds it.
 | Scheduling-tool names the settings pre-approve | `global.md` → *Scheduling Tools Never Prompt* | 2026-10-08 | This session's tool list against `templates/claude-settings.json` |
 | Wake envelopes cannot be switched off | `CLAUDE.md` → *Notifications* | 2026-10-08 | Claude Code settings docs |
 | `claude plugin eval` availability | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-10-08 | `claude plugin eval --help` |
+| How `plugin eval` scores a `tool_used: Skill` grader in a two-arm run (`arm: both`) | `docs/internal/skill-eval-notes.md` → *What the score and Δ mean* | 2026-10-08 | `claude plugin eval --help` (the `--ablation` option), and code.claude.com/docs/en/plugin-evals, section *Compare against a no-plugin baseline* |
 | Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-10-08 | Claude Code on the web docs, network access |
 | When a network-allowlist change reaches running sessions | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-08 | code.claude.com/docs/en/cloud-environments, section *Network access* |
 | Claude Code reads the project-scope MCP file from `.mcp.json` at the repo root (its docs suggest committing one that holds no secrets; this standard keeps it gitignored) | `data.md` → *MCP Configuration* | 2026-10-08 | code.claude.com/docs/en/mcp (owner ruling 2026-10-08: it stays gitignored, `data.md` → *MCP Configuration*) |
@@ -88,6 +89,7 @@ is added by the pass that finds it.
 | Built-in `/code-review` and `/security-review` | `test.md` → *QA/data agents* | 2026-10-08 | This session's skill list |
 | Built-in `dataviz` and `artifact-diagramming` | `design.md` → *Charts & data display*, `design.md` → *Diagrams & connectors* | 2026-10-08 | This session's skill list |
 | Built-in `anthropic-skills:docx` and `anthropic-skills:pdf` (text extraction, OCR for scanned PDFs) | `plugins/directives-toolkit/skills/doc-comp/SKILL.md` | 2026-10-08 | This session's skill list: both skills listed, and the `pdf` skill's own description still names OCR for scanned PDFs |
+| Built-in `update-config` skill in web sessions, and its merge procedure | `plugins/directives-toolkit/commands/refresh-repo.md` → *Settings writes* | 2026-10-08 | A web session's skill list shows `update-config`; invoking it (it only loads text) still says read first and merge arrays rather than replace them |
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
 | The Anthropic-authored LSP plugin set (twelve names) | `EXPORTS.json` → `considered.lsp-plugins` | 2026-10-08 | the `claude-plugins-official` `marketplace.json` |
 | `discord`, `telegram`, `imessage`, `fakechat` are third-party plugins listed under the official marketplace's `external_plugins/`, not Anthropic-built | `EXPORTS.json` → `considered.messaging-channels` | 2026-10-08 | In the `claude-plugins-official` `marketplace.json`, each plugin's `source` path still starts `./external_plugins/`; if one moves under `./plugins/` or gains Anthropic authorship, re-judge the entry |
@@ -131,6 +133,7 @@ is added by the pass that finds it.
 | Where preinstalled browsers live | `plugins/directives-toolkit/agents/ui-tester.md` | 2026-10-08 | `ls "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"` in this session |
 | `dvh` support in the browsers the kit ships | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | 2026-10-08 | MDN browser-compat data for `dvh` against the runner image's browser versions |
 | shfmt v3.12.0 is the newest mvdan/sh release that publishes `sha256sums.txt` (v3.11.0 and v3.12.0 do; v3.13.0 through v3.14.1 do not) | `.github/workflows/qa.yml`, the `Install shfmt` step | 2026-10-08 | For each newer release: `curl -sSfL https://github.com/mvdan/sh/releases/download/<tag>/sha256sums.txt`; if one now publishes it, move the pin and its checksum, then re-run `check-run-quoting-cases.py` |
+| parse5 8.0.1 (2026-04-19) is the newest stable release, and its whole dependency graph is parse5 plus entities, pinned at entities 8.1.0 (2026-09-07, no dependencies of its own) | `.github/workflows/qa.yml`, the `Install parse5` step; `CLAUDE.md` → *Local gate* | 2026-10-09 | `npm view parse5 dist-tags.latest` and `npm view parse5@<v> dependencies`; move every pin in both places together and re-run the link-check cases |
 | Web-session git fetch cost | `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-09-23 | ⏳ The next `/refresh-repo` run |
 | `/opt/pw-browsers/chromium` symlink target (build 1194, Chromium 141 on 2026-10-08) | `global.md` → *Network Access Playbook (cloud sessions)*, rung 6 | 2026-10-08 | `ls -la /opt/pw-browsers` |
 

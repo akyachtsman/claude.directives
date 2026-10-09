@@ -36,7 +36,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
 | `TIME-SENSITIVE.md` | The register of facts the directives rely on about something OUTSIDE this repo — models, Claude Code, GitHub, Codex, the test environment, outside services — with where it is stated, when it was last verified and how to re-check it. Kept apart from the owner's standing directives, which never expire. Walked by every `/audit-repo` run |
-| `index.html` | The repo's GitHub Pages landing page (links to the repo map and the commands reference); its demo-card list is kept in sync with `docs/site/index.html` by `check-landing-cards.js` |
+| `index.html` | The repo's GitHub Pages landing page (links to the repo map and the commands reference) — the site's only one: `docs/site/index.html` is a redirect stub back to it (merged 2026-10-08). The site is published **verbatim**: a tracked `.nojekyll` turns Jekyll off (2026-10-08), and `check-paths.js` refuses to run without it |
 | `docs/site/logical-map.html` | The repo map — a lifecycle flow, stage by stage, with every connection read out of the files. **Generated** by `.github/scripts/build-logical-map.js` from `EXPORTS.json` and the files themselves; never hand-edit it. Its behaviour (pan/zoom, search, trace a file's chain with the evidence for each link) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions do not attach plugins by themselves** — an environment's setup script performs the FIRST install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0); after that the `SessionStart` hook re-runs the same installer each session and moves it to current |
@@ -50,7 +50,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
-| `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths; see `docs/README.md` for the index |
+| `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and the advisory weekly `watcher-liveness.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
@@ -198,13 +198,18 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 drifts stops firing silently — no error, just absence. `claude plugin eval`
 (Anthropic) is the harness: cases live in `plugins/directives-toolkit/evals/`,
 each a `prompt.md` plus a skill-fired grader under its own `graders/` dir, using
-(`type: tool_used`, `tool: Skill`, `input_match` on the skill name). Run it from
+(`type: tool_used`, `tool: Skill`, `input_match` on the skill name, `arm: both`). Run it from
 the plugin directory:
 `claude plugin eval --no-publish .`
 It defaults to `--ablation with-without`, running every case twice — with the
-plugin and without it — so the Δ column shows the skill CAUSED the behaviour
-rather than the model doing it anyway. It costs real tokens and is NOT in CI;
-run it when a description changes.
+plugin and without it. **`arm: both` is load-bearing:** in a two-arm run the
+harness excludes a `tool_used: Skill` grader from the score and shows it only as
+a "plugin-fired indicator", unless the grader says `arm: both` (or it is the
+case's only grader). Every grader here says it, so the score IS whether the
+skill fired. The without arm has no plugin, so a should-fire case scores 0 there
+by construction and its Δ is simply the with-arm firing rate; a should-not-fire
+case passes in both arms at Δ 0. Read the score, not Δ, as the result. It costs
+real tokens and is NOT in CI; run it when a description changes.
 
 Availability: `plugin eval` is early access, enabled per organization. On a
 machine that cannot receive that rollout, `CLAUDE_CODE_WALNUT_SPIRE=1` enables
@@ -214,7 +219,7 @@ commit it to this repo's `.claude/settings.json` — a committed value leaves th
 command gated off anyway.
 
 Measured baseline (2026-09-29, 3 runs/case, with/without arms): **12 of 12 pass**,
-mean Δ +0.75 — neither under- nor over-triggering. The durable lesson, and the
+mean Δ +0.75 (9 should-fire cases at +1, 3 negatives at 0) — neither under- nor over-triggering. The durable lesson, and the
 reason to keep measuring: **a description triggers on the WORDS a request
 actually uses, not on what the skill is for.** All three gaps found were fixed by
 rewriting the description against the measurement; the worked cases are in
@@ -228,7 +233,8 @@ Before committing or pushing, verify locally — this list mirrors what `qa.yml`
 runs, so keep the two in sync:
 ```
 python3 -c "import yaml; print(yaml.safe_load(open('templates/actions/secret-scan/action.yml'))['runs']['steps'][0]['run'])" | bash -eo pipefail   # qa.yml's Secret scan step: runs the composite's own block, so the pattern has no third copy here
-node .github/scripts/check-paths.js
+npm install --no-save --no-package-lock --ignore-scripts parse5@8.0.1 entities@8.1.0   # check-paths.js's HTML parser and its only dependency, both exact, as qa.yml pins them
+node .github/scripts/check-paths.js               # backtick paths in CLAUDE.md, doc citations in shipped files, and every same-site link in a tracked .html page (parsed by parse5, URL-resolved, never outside the Pages root) names a tracked file; refuses without a tracked .nojekyll
 node .github/scripts/check-sections.js
 node .github/scripts/check-plugin.js
 node .github/scripts/check-secret-scan.js
@@ -268,8 +274,6 @@ python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for p in ('.github/workf
 python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable
 python3 .github/scripts/check-pairs-cases.py    # that check's own guard — every pair drifted in turn, each mode refusal with its complement. Re-prove with CHECK_PAIRS_BIN=<mutant>
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
-diff <(sed -n '/:root {/,/^    }/p' index.html) <(sed -n '/:root {/,/^    }/p' docs/site/index.html)   # landing-page palette sync
-node .github/scripts/check-landing-cards.js       # landing-page demo-card sync (same script qa.yml runs)
 npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed

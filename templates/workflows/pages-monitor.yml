@@ -77,6 +77,8 @@ jobs:
           # on workflow_dispatch, which the "manual" default below covers.
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          RUN_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           ISSUE_LABEL: 'pages-deploy-failure'
         run: |
           set -euo pipefail
@@ -103,6 +105,24 @@ jobs:
             commit="${RUN_COMMIT:-}"
           fi
           status="${status:-manual}"
+          # SUPERSEDED is not a failure. A deploy whose concurrency group holds
+          # one pending run (pages-deploy.yml) cancels that run when a newer
+          # push arrives, so a cancelled run with a NEWER run of the same
+          # workflow behind it was replaced, not broken: the newer run gets its
+          # own monitor run. Anything else cancelled, or a lookup that fails,
+          # stays errored.
+          if [ "${RUN_CONCLUSION:-}" = "cancelled" ] && [ -n "${RUN_WORKFLOW_ID:-}" ] && [ -n "${RUN_NUMBER:-}" ]; then
+            newest=$(gh api "repos/$REPO/actions/workflows/$RUN_WORKFLOW_ID/runs?per_page=5" \
+              --jq '[.workflow_runs[].run_number] | max // 0' 2>/dev/null) || newest=0
+            if [ "${newest:-0}" -gt "$RUN_NUMBER" ] 2>/dev/null; then
+              {
+                echo "## ⏭️ Pages deploy superseded"
+                echo ""
+                echo "- Run #${RUN_NUMBER} was cancelled for newer run #${newest}; that run is monitored on its own."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
           short="${commit:0:7}"
           echo "Pages deploy status: $status (commit ${short:-n/a}) — target $url"
 

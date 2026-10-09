@@ -41,16 +41,17 @@ name: Pages Deploy
 # artifact, so nothing is rebuilt — which is why pages-retry.yml, which re-runs
 # a WHOLE watched run, does not belong beside this file.
 #
-# ASSERT. After the publish: the site root serves 200, each deny-listed path
-# serves 404 on two probes 30s apart (one 404 can be the PREVIOUS deploy during
-# CDN propagation), and each path in .github/pages-public.txt (internal-looking
-# files that must stay public, same format) serves 200. Redirects are not
-# followed; paths are percent-encoded and cache-busted.
-# The checks are anonymous, so a PRIVATE Pages site (Enterprise Cloud only)
-# reads as down: there, replace this job's probes with authenticated ones. A failure fails this
-# run, where the bad filter was made. It is NOT a substitute for
-# pages-monitor.yml: a deploy that fails before reaching these steps reports
-# nothing here (hosting-mechanics.md -> Verification versus the monitor).
+# ASSERT. Only once the live site serves this run's pages-deploy-marker.txt (a
+# file of that name in the site is overwritten), so no probe can be answered by
+# the previous deployment: the root serves 200; each deny-listed path serves 404
+# on two probes 30s apart; each path in .github/pages-public.txt
+# (internal-looking files that must stay public, same format) serves 200.
+# Redirects are not followed; paths are percent-encoded and cache-busted. A
+# failure fails this run, where the bad filter was made. It is NOT a substitute
+# for pages-monitor.yml: a deploy that fails before reaching these steps reports
+# nothing here (hosting-mechanics.md -> Verification versus the monitor). The
+# probes are anonymous, so a PRIVATE Pages site (Enterprise Cloud only) reads
+# as down: such a project replaces them with authenticated ones.
 on:
   push:
     branches: [main]
@@ -137,6 +138,10 @@ jobs:
             printf '%s\n' "$links"
             exit 1
           fi
+          # The deployment marker: the verify job waits until the live site
+          # serves THIS run's token before probing anything, so no probe can be
+          # answered by the previous deployment. Written last, after the filter.
+          printf '%s\n' "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > "$RUNNER_TEMP/site/pages-deploy-marker.txt"
           echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src, ${denied} deny-list path(s) removed"
 
       - name: Upload Pages artifact
@@ -204,8 +209,9 @@ jobs:
     name: Assert the live site
     needs: deploy
     runs-on: ubuntu-latest
-    # Liveness up to ~165s, a 30s pause, and two passes over the deny-list.
-    timeout-minutes: 15
+    # Up to 10 min for the new deployment's marker, liveness up to ~165s, a 30s
+    # pause, and two passes over the declared paths.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -238,6 +244,22 @@ jobs:
               -H "Cache-Control: no-cache" "${url}$(enc "$1")?cb=${GITHUB_RUN_ID}-$2") || c="000"
             printf '%s' "$c"
           }
+          # Wait for THIS deployment, not merely for a 200: a cache-busting query
+          # skips cached objects but does not prove the edge has switched, and a
+          # forbidden file new in this artifact reads 404 from the old one.
+          token="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          live=""
+          for attempt in $(seq 1 60); do
+            live=$(curl -s --max-time 10 -H "Cache-Control: no-cache" \
+              "${url}pages-deploy-marker.txt?cb=${GITHUB_RUN_ID}-m${attempt}" | head -c 200) || live=""
+            [ "$live" = "$token" ] && break
+            sleep 10
+          done
+          if [ "$live" != "$token" ]; then
+            echo "::error::the live site never served this run's deployment marker (${token}) within 10 minutes; nothing was probed, because every probe would read the previous deployment."
+            echo "- new deployment (marker ${token}) not observed live within 10 minutes; probes NOT run" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           code="000"
           for attempt in 1 2 3 4 5; do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \

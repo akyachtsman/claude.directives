@@ -251,6 +251,20 @@ jobs:
               case "/${p%/}/" in
                 *'/../'*|*'/./'*|'//') echo "::error::pages-public.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
               esac
+              # It must be in what is uploaded: a path the deny-list removed (the
+              # path itself or a parent), that the build never wrote, or that is
+              # hidden while the upload drops hidden files would publish a tree
+              # the verify job is bound to reject.
+              if [ ! -e "$RUNNER_TEMP/site/${p%/}" ]; then
+                echo "::error::pages-public.txt lists [$p], which is not in the filtered site (removed by pages-deny.txt, or never built)."
+                exit 1
+              fi
+              case "/$p" in
+                */.*) if [ "${INCLUDE_HIDDEN_FILES:-false}" != "true" ]; then
+                        echo "::error::pages-public.txt lists [$p], a hidden path the upload drops; set INCLUDE_HIDDEN_FILES to 'true' to publish it."
+                        exit 1
+                      fi ;;
+              esac
               printf '%s\n' "$p" >> "$pubs"
             done < .github/pages-public.txt
             npub=$(sort -u "$pubs" | wc -l)

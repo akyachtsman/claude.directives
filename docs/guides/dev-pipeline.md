@@ -194,9 +194,10 @@ What `/new-repo` scaffolds in **every** project:
   `ci-notify.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`,
   `qa-response.yml`, `cron-notify.yml` (`keepalive.yml` is NOT installed — it
   pushes to `main`, which the required ruleset refuses)
-- **plus `pages-retry.yml`, which is source-conditional.** State it in both
-  branches, never as "branch-source only" — the exception lives in the half a
-  one-sided sentence drops:
+- **plus one of two source-conditional files**, so every project has nine:
+  `pages-retry.yml` and its converse `pages-deploy.yml`. State `pages-retry.yml`
+  in both branches, never as "branch-source only" — the exception lives in the
+  half a one-sided sentence drops:
   - **branch-source** → install it, with its `REQUIRED` entry.
   - **Actions-source** → **delete it** and drop the `REQUIRED` entry; **or**
     repoint it at your own deploy under W3's idempotent exception (no build, no
@@ -204,7 +205,12 @@ What `/new-repo` scaffolds in **every** project:
     `CLAUDE.md` and **updating** the `REQUIRED` entry to that deploy's name
     rather than dropping it (`automations.md` → *Watcher Rules* W3).
 
-  This is the single exception to "no opt-in modules" above, and it is not a
+  `pages-deploy.yml` is the mirror: **Actions-source** → install it (it IS the
+  deploy: filter, publish, retry, assert), add its `Pages Deploy` watchers to
+  `qa-live.yml` and `pages-monitor.yml` and list both in the `REQUIRED` file;
+  **branch-source** → do not install it (`cicd-setup.md` → *Step 9d-bis*).
+
+  This pair is the single exception to "no opt-in modules" above, and it is not a
   preference:
   the file watches `pages-build-deployment`, which a **repo visibility flip
   fires even under Actions-source**, publishing the unfiltered tree — so

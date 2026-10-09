@@ -46,8 +46,14 @@ on:
 # one. Without this, repeated Pages deploys queue up qa-live runs that can sit
 # for hours (the job timeout below does not start counting until a runner is
 # assigned, so a queued run is not bounded by it).
+# A watched Actions deploy run on another branch, or from a fork, deployed
+# nothing (the job's `if:` skips it), but `github.ref` on a workflow_run is the
+# default branch whichever run fired it, so it gets a group of its own: in the
+# shared one it would cancel the live suite of a real deploy. The managed
+# pages-build-deployment (event `dynamic`) is exempt: it publishes the
+# configured source branch, which need not be the default one.
 concurrency:
-  group: qa-live-${{ github.ref }}
+  group: qa-live-${{ github.event_name == 'workflow_run' && github.event.workflow_run.event != 'dynamic' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('offbranch-{0}', github.run_id) || github.ref }}
   cancel-in-progress: true
 
 # Least privilege: read the repo and run tests against the live URL.
@@ -88,11 +94,16 @@ jobs:
 
   ui-tests-live:
     needs: published
-    # For workflow_run: only run when Pages deploy succeeded AND published.
-    # For workflow_dispatch: always run.
+    # For workflow_run: only run when the deploy succeeded AND published, and
+    # (an Actions deploy) ran on this repository's default branch; the managed
+    # pages-build-deployment (event `dynamic`) publishes the configured source
+    # branch. For workflow_dispatch: always run.
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
+       (github.event.workflow_run.event == 'dynamic' ||
+        (github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+         github.event.workflow_run.head_repository.full_name == github.repository)) &&
        needs.published.outputs.published != 'none')
     runs-on: ubuntu-latest
     # 120 is the fleet FLOOR for a ui-suite caller — UI_SUITE_FLOOR in check-job-bounds.py,

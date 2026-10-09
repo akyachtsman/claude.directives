@@ -264,7 +264,8 @@ or live URL not serving — with no session required.
   never guessed; more than 40 URLs after that expansion is reported rather than
   truncated; the list covers only the paths someone remembered.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
-  issue. A healthy deploy closes it and reports green in the job summary only.
+  issue. A healthy deploy closes it and reports green in the job summary only; a
+  healthy MANUAL run does not close it, since it cannot tell which build is live.
 - The live URL comes from the Pages API (user-site repos and custom domains work),
   with a generic derivation as fallback — the file is portable to any project as-is.
 - Uses `GITHUB_TOKEN` only.

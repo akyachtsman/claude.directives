@@ -133,6 +133,7 @@ is added by the pass that finds it.
 | Where preinstalled browsers live | `plugins/directives-toolkit/agents/ui-tester.md` | 2026-10-08 | `ls "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"` in this session |
 | `dvh` support in the browsers the kit ships | `plugins/directives-toolkit/agents/ui-tester.md` → *Known CI Compatibility Issues* | 2026-10-08 | MDN browser-compat data for `dvh` against the runner image's browser versions |
 | shfmt v3.12.0 is the newest mvdan/sh release that publishes `sha256sums.txt` (v3.11.0 and v3.12.0 do; v3.13.0 through v3.14.1 do not) | `.github/workflows/qa.yml`, the `Install shfmt` step | 2026-10-08 | For each newer release: `curl -sSfL https://github.com/mvdan/sh/releases/download/<tag>/sha256sums.txt`; if one now publishes it, move the pin and its checksum, then re-run `check-run-quoting-cases.py` |
+| parse5 8.0.1 is the newest stable release (published 2026-04-19), and is the version `check-paths.js`'s HTML pass is pinned to | `.github/workflows/qa.yml`, the `Install parse5` step; `CLAUDE.md` → *Local gate* | 2026-10-09 | `npm view parse5 dist-tags.latest`; if newer, move both pins together and re-run the link-check cases |
 | Web-session git fetch cost | `plugins/directives-toolkit/commands/refresh-repo.md` | 2026-09-23 | ⏳ The next `/refresh-repo` run |
 | `/opt/pw-browsers/chromium` symlink target (build 1194, Chromium 141 on 2026-10-08) | `global.md` → *Network Access Playbook (cloud sessions)*, rung 6 | 2026-10-08 | `ls -la /opt/pw-browsers` |
 

@@ -7,6 +7,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, posix } from 'path';
 import { execFileSync } from 'child_process';
+import { parse as parseHtml } from 'parse5';
 
 const raw = readFileSync('CLAUDE.md', 'utf8');
 // Strip fenced code blocks first so their contents aren't matched as inline-code paths.
@@ -98,39 +99,32 @@ for (const [ref, citedBy] of [...refs].sort()) {
 
 // --- Third pass: links inside the published HTML pages -------------------------
 // Every link in a tracked .html page that stays on this Pages site must name a
-// regular file -- or a directory holding index.html, which is what Pages serves
-// for it. isFile(), not existsSync(): a DIRECTORY named example.html exists
-// happily and still 404s. Nothing else here resolves an HTML link to the tree:
+// tracked regular file -- or a directory holding index.html, which is what Pages
+// serves for it. Nothing else here resolves an HTML link to the tree:
 // check-links.js reads only Markdown, and html-validate never touches the
 // filesystem. This is what survived of check-landing-cards.js when the two
 // landing pages merged (2026-10-08): the sync half went, the target half is
 // whole-class now -- every page, every URL-bearing attribute, the redirect stubs.
 //
-// Two mechanisms rather than patterns, so a markup variant cannot slip past
-// (Codex on #415: a single-quoted href, then a root-relative one):
-// - tags() tokenizes attributes the way the HTML spec does -- double-quoted,
-//   single-quoted, unquoted or bare; comments and raw-text elements skipped;
-//   the first of a duplicate attribute wins -- and THROWS on markup it cannot
-//   read, which fails the run rather than skipping the page.
-// - each link is resolved by WHATWG URL against the page's own DEPLOYED address,
-//   exactly as a browser resolves it there. pagesRoot() derives that address
-//   the way GitHub Pages assigns it -- a tracked CNAME's domain, else
-//   <owner>.github.io/<repo>/ (or / for a <owner>.github.io repo) -- so an
-//   absolute link spelling this site's own URL is checked like a relative one
-//   (Codex on #415: a canonical or card URL to a missing page). A URL inside
-//   that root must name a file. A RELATIVE reference that resolves outside it
-//   (a root-relative "/x", or too many "..") FAILS, since on the project site it
-//   leaves the repo's pages altogether; an absolute URL outside it is someone
-//   else's page, external like any other origin.
+// Pages are read by parse5 (pinned in qa.yml), a spec-complete HTML parser:
+// tokenization, character references, foreign content and integration points,
+// breakouts, templates, scripting-dependent <noscript>, the parser's own
+// rewrites (<image> -> <img>) -- all as a browser does them. A hand-written
+// tokenizer stood here first; #415's review rounds found a new corner of the
+// spec it missed on almost every pass, so the owner chose the parser over the
+// 2026-08-22 "no parser dependency" ruling, for this check (2026-10-09).
+//
+// Each link is resolved by WHATWG URL against the page's DEPLOYED address, as
+// a browser resolves it there. A URL inside the site root must name a published
+// file. A RELATIVE reference resolving outside it (a root-relative "/x", or too
+// many "..") FAILS: on a project site it can only leave the site by mistake. An
+// absolute URL outside it is someone else's page, external like any origin.
 const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
-const HEAD_OK = new Set(['html', 'head', 'base', 'link', 'meta', 'title', 'style', 'script', 'noscript', 'template']);
-const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'plaintext']);
-// Which attributes carry URLs, by the HTML spec's attribute index -- every
-// attribute it types as a URL, a URL list or a srcset -- plus the obsolete URL
-// attributes browsers still fetch, and SVG's xlink:href. Taken from the index
-// as a whole, not added one finding at a time (Codex on #415: imagesrcset).
-// Left out on purpose: itemid / itemtype (identifiers, never fetched) and
-// <base href> (it sets the resolution base below; nothing is fetched from it).
+const NS = { html: 'http://www.w3.org/1999/xhtml', svg: 'http://www.w3.org/2000/svg', math: 'http://www.w3.org/1998/Math/MathML', xlink: 'http://www.w3.org/1999/xlink' };
+// Which HTML attributes carry URLs, by the HTML spec's attribute index -- every
+// attribute it types as a URL, a URL list or a srcset, on the elements it names
+// -- plus the obsolete URL attributes browsers still fetch. Keyed by element:
+// on a custom element, data="..." is component state, not a link.
 const URL_ATTRS = {
   href: ['a', 'area', 'link'],
   src: ['audio', 'embed', 'iframe', 'img', 'input', 'script', 'source', 'track', 'video', 'frame'],
@@ -140,191 +134,11 @@ const URL_ATTRS = {
 };
 const SRCSET_ATTRS = { srcset: ['img', 'source'], imagesrcset: ['link'] };
 const URL_LIST_ATTRS = { ping: ['a', 'area'] }; // space-separated URLs
-// The spec index ties each attribute to its elements: a name alone made custom
-// element state such as <x-chart data="monthly totals"> a "broken link"
-// (Codex on #415). xlink:href is namespaced, so it is a URL on any element.
 const on = (table, name, tag) => Object.hasOwn(table, name) && table[name].includes(tag);
-// Inside SVG/MathML only: these elements' href, and xlink:href on any element.
-// The parser adjusts xlink:* into the XLink namespace only in foreign content,
-// so on an HTML (custom) element both are plain component state (Codex, #415).
+// SVG elements whose href is a URL; xlink:href is a URL on any SVG/MathML
+// element, and MathML Core makes href global on MathML elements.
 const SVG_HREF = ['a', 'image', 'use', 'feimage', 'textpath', 'mpath', 'pattern', 'lineargradient',
   'radialgradient', 'filter', 'script', 'animate', 'animatemotion', 'animatetransform', 'set', 'cursor'];
-// Character references, decoded as the HTML tokenizer decodes them inside an
-// attribute value. The named table is the WHATWG one in full (2231 names), read
-// from Python's standard library (html.entities.html5) rather than copied here
-// -- a five-name subset resolved "docs&sol;site&sol;x.html" to a different path
-// than the browser did (Codex on #415). Unavailable is a refusal, not a guess.
-let NAMED_REFS;
-try {
-  NAMED_REFS = JSON.parse(execFileSync('python3', ['-c',
-    'import json, html.entities; print(json.dumps(html.entities.html5))'], { encoding: 'utf8' }));
-} catch (e) {
-  console.error(`CANNOT CHECK: python3's html.entities table is unavailable (${e.message.split('\n')[0]}) -- attribute values cannot be decoded as a browser decodes them`);
-  process.exit(2);
-}
-// Numeric references the spec remaps: C1 controls by windows-1252.
-const C1 = { 0x80: 0x20AC, 0x82: 0x201A, 0x83: 0x0192, 0x84: 0x201E, 0x85: 0x2026, 0x86: 0x2020,
-  0x87: 0x2021, 0x88: 0x02C6, 0x89: 0x2030, 0x8A: 0x0160, 0x8B: 0x2039, 0x8C: 0x0152, 0x8E: 0x017D,
-  0x91: 0x2018, 0x92: 0x2019, 0x93: 0x201C, 0x94: 0x201D, 0x95: 0x2022, 0x96: 0x2013, 0x97: 0x2014,
-  0x98: 0x02DC, 0x99: 0x2122, 0x9A: 0x0161, 0x9B: 0x203A, 0x9C: 0x0153, 0x9E: 0x017E, 0x9F: 0x0178 };
-function decodeRefs(v) {
-  let out = ''; let i = 0;
-  while (i < v.length) {
-    if (v[i] !== '&') { out += v[i++]; continue; }
-    const num = /^&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));?/.exec(v.slice(i));
-    if (num) {
-      let cp = num[1] !== undefined ? parseInt(num[1], 16) : parseInt(num[2], 10);
-      if (cp === 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) cp = 0xFFFD;
-      else if (C1[cp]) cp = C1[cp];
-      out += String.fromCodePoint(cp); i += num[0].length; continue;
-    }
-    // The longest table name matching here (names run to 32 characters).
-    let match = '';
-    for (let len = Math.min(32, v.length - i - 1); len > 0; len--) {
-      const cand = v.substr(i + 1, len);
-      if (Object.hasOwn(NAMED_REFS, cand)) { match = cand; break; }
-    }
-    const next = v[i + 1 + match.length];
-    // In an attribute, a match without ";" followed by "=" or an alphanumeric is
-    // left as written (the spec's "historical reasons" rule): "?a=1&copy=2" stays.
-    if (!match || (!match.endsWith(';') && next !== undefined && /[=A-Za-z0-9]/.test(next))) { out += v[i++]; continue; }
-    out += NAMED_REFS[match]; i += 1 + match.length;
-  }
-  return out;
-}
-// SVG/MathML HTML integration points: their children parse as HTML again.
-const BREAKOUT = new Set(['b', 'big', 'blockquote', 'body', 'br', 'center', 'code', 'dd', 'div', 'dl', 'dt', 'em',
-  'embed', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'hr', 'i', 'img', 'li', 'listing', 'menu', 'meta', 'nobr',
-  'ol', 'p', 'pre', 'ruby', 's', 'small', 'span', 'strong', 'strike', 'sub', 'sup', 'table', 'tt', 'u', 'ul', 'var']);
-const POINTS = { svg: ['foreignobject', 'desc', 'title'], math: ['mi', 'mo', 'mn', 'ms', 'mtext', 'annotation-xml'] };
-// Whitespace in the tokenizer is the spec's five ASCII characters only: JS \s
-// also matches U+00A0, so "<a\u00a0class=...>" read as an anchor although a
-// browser keeps the NBSP in the tag name (Codex on #415).
-function tags(src) {
-  // The namespace stack lives in the tokenizer because raw text depends on it:
-  // <title>, <style>, <script> are raw text only as HTML elements, and inside
-  // SVG/MathML a self-closing tag is honoured (Codex on #415: <svg><title/>).
-  // Each tag records t.foreign (it is in SVG/MathML) and t.underForeign (some
-  // <svg>/<math> is open); <svg>/<math> push foreign content, an integration
-  // point pushes HTML, a nested <svg> re-enters foreign, end tags pop.
-  const stack = [];
-  const top = () => stack[stack.length - 1];
-  // ASCII-only folding, as the spec folds tag and attribute names. toLowerCase()
-  // can change the string's LENGTH (U+0130 becomes two code units), shifting
-  // every later offset so links after it were silently never read (Codex, #415).
-  const out = []; const lower = src.replace(/[A-Z]+/g, (m) => m.toLowerCase()); const n = src.length; let i = 0;
-  const upTo = (s, from, what) => { const e = src.indexOf(s, from); if (e < 0) throw new Error(`unterminated ${what} at offset ${from}`); return e; };
-  while ((i = src.indexOf('<', i)) >= 0) {
-    if (src.startsWith('<!--', i)) { i = upTo('-->', i + 4, 'comment') + 3; continue; }
-    if (src[i + 1] === '/' && /[A-Za-z]/.test(src[i + 2] ?? '')) { // end tag: kept, so a card's </a> can be checked
-      const e = upTo('>', i, 'end tag');
-      const name = lower.slice(i + 2, e).split(/[\t\n\f\r />]/)[0];
-      out.push({ tag: `/${name}`, attrs: new Map(), foreign: top() !== undefined && top().ns !== 'html', underForeign: stack.length > 0 });
-      // </p> and </br> are breakout END tags in foreign content: they pop
-      // the SVG/MathML context like a breakout start tag (Codex on #415).
-      if ((name === 'p' || name === 'br') && top() !== undefined && top().ns !== 'html') {
-        while (top() !== undefined && top().ns !== 'html') stack.pop();
-      } else {
-        const k = stack.map((x) => x.tag).lastIndexOf(name);
-        if (k >= 0) stack.length = k;
-      }
-      i = e + 1; continue;
-    }
-    // CDATA is character data through "]]>" in SVG/MathML but a bogus comment
-    // ending at the first ">" in HTML -- which one applies is tree construction,
-    // so it is refused rather than guessed (Codex on #415). Nothing here uses it.
-    if (src.startsWith('<![CDATA[', i)) throw new Error(`a <![CDATA[ section at offset ${i} -- its extent depends on foreign-content parsing this check does not do; use text or a character reference instead`);
-    if ('!?/'.includes(src[i + 1] ?? 'x')) { i = upTo('>', i, 'declaration') + 1; continue; }
-    if (!/[A-Za-z]/.test(src[i + 1] ?? '')) { i++; continue; } // a bare "<" in text
-    let j = i + 1;
-    while (j < n && !/[\t\n\f\r />]/.test(src[j])) j++;
-    const tag = lower.slice(i + 1, j); const attrs = new Map(); let selfClosing = false;
-    // A tag name holding a non-ASCII space, "=", a quote or "<" is an authoring
-    // slip (e.g. "<a" + NBSP + "class=..."), never a deliberate element: the
-    // browser renders no such element, so a card or link there is dead.
-    // Refused rather than silently read as something else (Codex on #415).
-    if (/[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff="'<]/.test(tag)) {
-      throw new Error(`malformed tag name at offset ${i} ("${src.slice(i, j).slice(0, 40)}") -- a non-ASCII space or attribute text inside a tag name`);
-    }
-    for (;;) {
-      // Self-closing only when the TOKENIZER consumes "/" between attributes and
-      // ">" follows it at once; in <svg data-x=foo/> the "/" is part of the
-      // unquoted value, so the element stays open (Codex on #415).
-      let slash = false;
-      while (j < n && /[\t\n\f\r /]/.test(src[j])) { slash = src[j] === '/'; j++; }
-      if (j >= n) throw new Error(`unterminated <${tag}> at offset ${i}`);
-      if (src[j] === '>') { selfClosing = slash; j++; break; }
-      let k = j;
-      while (k < n && !/[\t\n\f\r />=]/.test(src[k])) k++;
-      const name = lower.slice(j, k); j = k;
-      while (j < n && /[\t\n\f\r ]/.test(src[j])) j++;
-      let value = '';
-      if (src[j] === '=') {
-        j++;
-        while (j < n && /[\t\n\f\r ]/.test(src[j])) j++;
-        if (src[j] === '"' || src[j] === "'") {
-          const e = upTo(src[j], j + 1, `${src[j]}-quoted ${name} in <${tag}>`);
-          value = src.slice(j + 1, e); j = e + 1;
-        } else {
-          k = j;
-          while (k < n && !/[\t\n\f\r >]/.test(src[k])) k++;
-          value = src.slice(j, k); j = k;
-        }
-      }
-      if (!attrs.has(name)) attrs.set(name, decodeRefs(value));
-    }
-    // An HTML breakout tag inside SVG/MathML pops the foreign content and is
-    // processed as HTML (spec "in foreign content"; Codex on #415): <svg><p>
-    // closes the svg, so a <script> after it is HTML raw text again.
-    if (top() !== undefined && top().ns !== 'html'
-      && (BREAKOUT.has(tag) || (tag === 'font' && ['color', 'face', 'size'].some((a) => attrs.has(a))))) {
-      while (top() !== undefined && top().ns !== 'html') stack.pop();
-    }
-    const foreign = top() !== undefined && top().ns !== 'html';
-    out.push({ tag, attrs, selfClosing, foreign, ns: foreign ? top().ns : 'html', underForeign: stack.length > 0 });
-    // A <noscript> body is tokenized on its own, with fresh state, so nothing
-    // inside it -- an unclosed <svg>, say -- can leak into the live markup
-    // after </noscript> (Codex on #415). Its links are still read.
-    if (!foreign && tag === 'noscript' && !selfClosing) {
-      let e = j;
-      for (;;) {
-        e = lower.indexOf('</noscript', e);
-        if (e < 0) throw new Error(`unterminated <noscript> at offset ${i}`);
-        if (/^[\t\n\f\r />]$/.test(src[e + 10] ?? '')) break;
-        e += 2;
-      }
-      out.push(...tags(src.slice(j, e)));
-      i = e; continue;
-    }
-    if (!selfClosing) {
-      if (tag === 'svg' || tag === 'math') stack.push({ tag, ns: tag });
-      else if (foreign && POINTS[top().ns].includes(tag)) stack.push({ tag, ns: 'html' });
-    }
-    if (foreign) { i = j; continue; } // no raw text and no plaintext in SVG/MathML
-    if (tag === 'plaintext') break; // no end tag exists: the rest of the document is text (spec)
-    if (RAW_TEXT.has(tag)) {
-      // Raw text ends only at an APPROPRIATE end tag: "</name" followed by
-      // whitespace, "/" or ">". A bare prefix match ended <script> at
-      // "</scripture>" and read the rest of the script as markup (Codex, #415).
-      let e = j;
-      for (;;) {
-        e = lower.indexOf(`</${tag}`, e);
-        if (e < 0) throw new Error(`unterminated <${tag}> at offset ${i}`);
-        if (/^[\t\n\f\r />]$/.test(src[e + 2 + tag.length] ?? '')) break;
-        e += 2;
-      }
-      // "<!--" then "<script" inside a script puts the tokenizer in its
-      // double-escaped state, where a literal </script> does not close the
-      // element. Refused rather than modelled (Codex on #415); no page here
-      // has a comment inside a script.
-      if (tag === 'script' && /<!--[\s\S]*<script[\t\n\f\r />]/.test(lower.slice(j, e))) {
-        throw new Error(`a <script> at offset ${i} opens "<!--" and then "<script" -- the double-escaped state this check does not model; remove the HTML comment from the script`);
-      }
-      i = e;
-    } else i = j;
-  }
-  return out;
-}
 // The candidate URLs of a srcset, by the HTML spec's "parse a srcset attribute":
 // a URL runs to the next whitespace (so a data: URL keeps its commas); trailing
 // commas on it end the candidate; otherwise its descriptors run to a comma that
@@ -348,36 +162,53 @@ function srcsetUrls(v) {
   }
   return urls.filter(Boolean);
 }
-// The spec's shared declarative refresh steps for one <meta http-equiv=refresh>:
-// a delay (digits, or "." then digits) must come first, then end of input,
-// whitespace, ";" or ","; with no delay the directive fails and is ignored
-// (Codex on #415). Returns null when it fails, else { url } (url '' = reload).
-const REFRESH = /^[\t\n\f\r ]*(?:\d|(?=\.))[\d.]*(?:$|[\t\n\f\r ;,][\t\n\f\r ]*[;,]?[\t\n\f\r ]*(?:url[\t\n\f\r ]*=[\t\n\f\r ]*)?(["']?)(.*))$/is;
-function refreshOf({ tag, attrs }) {
-  if (tag !== 'meta' || (attrs.get('http-equiv') || '').trim().toLowerCase() !== 'refresh') return null;
-  const m = (attrs.get('content') || '').match(REFRESH);
-  if (!m) return null;
-  return { url: m[2] ? (m[1] ? m[2].split(m[1])[0] : m[2]) : '' };
-}
-// The URL values one tag carries: URL attributes, each srcset / imagesrcset
-// candidate and each ping URL. A meta refresh is per DOCUMENT, not per tag:
-// see refreshOf() and the page loop.
-function linksOf({ tag: name0, attrs, foreign, ns }) {
-  // In HTML content the parser rewrites a legacy <image> start tag to <img>
-  // (Codex on #415); inside SVG, <image> is SVG's own element.
-  const tag = name0 === 'image' && !foreign ? 'img' : name0;
-  const urls = [];
-  if (tag === 'base') return urls; // resolved once, against the page, as the base -- never as a link (Codex on #415)
-  for (const [name, v] of attrs) {
-    if (on(SRCSET_ATTRS, name, tag)) urls.push(...srcsetUrls(v));
-    else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
-    else if (on(URL_ATTRS, name, tag)) urls.push(v);
-    else if (foreign && (name === 'xlink:href' || (name === 'href' && SVG_HREF.includes(tag)))) urls.push(v);
-    // MathML Core: href is a global attribute -- any MathML element can be a
-    // hyperlink (Codex on #415).
-    else if (ns === 'math' && name === 'href') urls.push(v);
+// The URL values one element carries. A meta refresh is per DOCUMENT, not per
+// element: see refreshTarget().
+function linksOf(el) {
+  const tag = el.tagName.toLowerCase(); const urls = [];
+  for (const { name, value: v, namespace } of el.attrs) {
+    if (el.namespaceURI === NS.html) {
+      if (tag === 'base') continue; // it sets the resolution base; nothing is fetched from it
+      if (on(SRCSET_ATTRS, name, tag)) urls.push(...srcsetUrls(v));
+      else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
+      else if (!namespace && on(URL_ATTRS, name, tag)) urls.push(v);
+    } else if (namespace === NS.xlink && name === 'href') urls.push(v);
+    else if (!namespace && name === 'href'
+      && (el.namespaceURI === NS.math || (el.namespaceURI === NS.svg && SVG_HREF.includes(tag)))) urls.push(v);
   }
   return urls;
+}
+// Elements in tree order. Template contents are a separate, inert fragment:
+// yielded with inTemplate so the base, refresh and card checks can skip them
+// while their links are still read -- once instantiated they are real links.
+function* elements(node, inTemplate = false) {
+  for (const c of node.childNodes || []) {
+    if (!c.tagName) continue;
+    yield { el: c, inTemplate };
+    yield* elements(c, inTemplate);
+    if (c.content) yield* elements(c.content, true);
+  }
+}
+const attr = (el, n) => el.attrs.find((a) => a.name === n && !a.namespace)?.value;
+// The spec's shared declarative refresh steps over the document's metas, in
+// tree order: the first that SUCCEEDS sets the "will declaratively refresh"
+// flag and every later one is ignored. A value with no leading delay fails;
+// so does a URL that does not parse, or a javascript: one -- and a failed one
+// does not set the flag, so a later one can still run.
+const REFRESH = /^[\t\n\f\r ]*(?:\d|(?=\.))[\d.]*(?:$|[\t\n\f\r ;,][\t\n\f\r ]*[;,]?[\t\n\f\r ]*(?:url[\t\n\f\r ]*=[\t\n\f\r ]*)?(["']?)(.*))$/is;
+function refreshTarget(live, base) {
+  for (const { el } of live) {
+    if (el.namespaceURI !== NS.html || el.tagName !== 'meta') continue;
+    if ((attr(el, 'http-equiv') || '').trim().toLowerCase() !== 'refresh') continue;
+    const m = (attr(el, 'content') || '').match(REFRESH);
+    if (!m) continue;
+    const raw = m[2] ? (m[1] ? m[2].split(m[1])[0] : m[2]) : '';
+    if (!raw) return null; // a reload: succeeds, and navigates nowhere new
+    let u; try { u = new URL(raw, base); } catch { continue; }
+    if (u.protocol === 'javascript:') continue;
+    return raw;
+  }
+  return null;
 }
 // The site's deployed root. In CI it is always derivable (GITHUB_REPOSITORY).
 // Underivable -- a source archive or a checkout with no origin -- falls back to
@@ -415,9 +246,8 @@ const tracked = new Set(execFileSync('git', ['ls-files', '-z'], { encoding: 'utf
 // Tracked IS published, because the site publishes the tree verbatim: a
 // tracked .nojekyll turns Jekyll off (owner call, 2026-10-08). Without it,
 // Jekyll drops "."/"_"/"#"/"~" paths, processes front matter, honours
-// permalinks and _config.yml -- a model this check would have to reimplement
-// to stay sound, which #415's review rounds showed has no end. So the file is
-// REQUIRED: its absence is a refusal, not a guess.
+// permalinks and _config.yml -- so the file is REQUIRED, and its absence is a
+// refusal, not a guess.
 if (!tracked.has('.nojekyll')) {
   console.error('CANNOT CHECK: no tracked .nojekyll -- Pages would run Jekyll, and what it publishes is not the tracked tree this check resolves links against');
   process.exit(2);
@@ -427,78 +257,60 @@ const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
 for (const page of htmlPages) {
-  let pageTags;
-  try { pageTags = tags(readFileSync(page, 'utf8')); } catch (e) {
-    console.error(`UNREADABLE: ${page}: ${e.message} -- its links cannot be checked`);
+  const html = readFileSync(page, 'utf8');
+  // Two parses: scripting on is what most visitors get, and decides the base,
+  // the refresh and the cards; scripting off is what <noscript> visitors get,
+  // and its <noscript> content is markup whose links are read too.
+  const doc = parseHtml(html, { scriptingEnabled: true, sourceCodeLocationInfo: true });
+  const all = [...elements(doc)];
+  const live = all.filter((e) => !e.inTemplate);
+  const noscriptLinks = [];
+  (function walk(node, inNoscript) {
+    for (const c of node.childNodes || []) {
+      if (!c.tagName) continue;
+      const here = inNoscript || (c.namespaceURI === NS.html && c.tagName === 'noscript');
+      if (inNoscript) noscriptLinks.push(...linksOf(c));
+      walk(c, here);
+    }
+  })(parseHtml(html, { scriptingEnabled: false }), false);
+  // A tag name holding a non-ASCII space, "=", a quote or "<" is an authoring
+  // slip (e.g. "<a" + NBSP + "class=..."): the browser makes an unknown element
+  // of it, so a card or link there is dead. Refused, never read past.
+  const bad = all.find(({ el }) => /[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff="'<]/.test(el.tagName));
+  if (bad) {
+    console.error(`UNREADABLE: ${page}: malformed tag name "${bad.el.tagName.slice(0, 40)}" -- a non-ASCII space or attribute text inside a tag name`);
     failed = true; continue;
   }
-  // The document base URL, as a browser sets it: the first <base> element that
-  // HAS an href, resolved against the page's own address; the page's address
-  // when there is none or it does not parse. A raw page address ignored a
-  // <base href="docs/"> that re-roots every relative link (Codex, #415).
+  // The document base URL, as a browser sets it: the first HTML <base> in the
+  // tree that HAS an href, resolved against the page's own address; the page's
+  // address when there is none or it does not parse. The parser has already
+  // decided placement -- a <base> inside <select> is dropped, one in SVG is not
+  // an HTML base, one in <template> is not in the tree.
   const pageUrl = new URL(page, ROOT);
-  // The document base is the first <base href> that is an HTML element of the
-  // document tree. Whether a <base> inside <template>, <noscript>, SVG or MathML
-  // is one depends on tree construction -- integration points like
-  // <foreignObject> parse their children as HTML again (Codex on #415, twice) --
-  // which this tokenizer deliberately does not reimplement. So such a <base> is
-  // REFUSED, never guessed at: a guess either way can hide a missing link or
-  // invent one. The remedy is one move: put <base> in <head>.
-  // Namespace context (t.foreign / t.underForeign) comes from the tokenizer.
-  // This pass adds t.inert: inside <template> or <noscript>.
-  let inert = 0; let baseHref;
-  for (const t of pageTags) {
-    t.inert = inert > 0;
-    if (t.tag === '/template' || t.tag === '/noscript') inert = Math.max(0, inert - 1);
-    else if (t.tag === 'template' || t.tag === 'noscript') inert++;
-  }
-  let inHead = true;
-  for (const t of pageTags) {
-    // Head content ends at the first start tag that cannot live in <head> (or
-    // at </head>). Only a <base> before that point is honoured as written; past
-    // it -- inside <select>, a table, after body content -- whether the parser
-    // inserts it depends on insertion mode, which this check does not model, so
-    // it is refused (Codex on #415, a <base> in <select>).
-    if (!t.inert && (t.tag === '/head' || (!t.tag.startsWith('/') && !HEAD_OK.has(t.tag)))) inHead = false;
-    if (t.tag !== 'base') continue;
-    if (t.inert || t.underForeign || !inHead) {
-      console.error(`UNREADABLE: ${page}: a <base> outside <head>, or inside <template>, <noscript>, SVG or MathML -- whether it sets the document base depends on tree construction this check does not do; move it into <head>`);
-      failed = true; continue;
-    }
-    if (baseHref === undefined && t.attrs.has('href')) baseHref = t.attrs.get('href');
-  }
+  const baseEl = live.find(({ el }) => el.namespaceURI === NS.html && el.tagName === 'base' && attr(el, 'href') !== undefined);
   let base = pageUrl;
-  if (baseHref !== undefined) { try { base = new URL(baseHref, pageUrl); } catch { base = pageUrl; } }
+  if (baseEl) { try { base = new URL(attr(baseEl.el, 'href'), pageUrl); } catch { base = pageUrl; } }
   // The landing-card assertions check-landing-cards.js made that still mean
-  // something with one page (its sync half went with the second page). A card
-  // is a link by definition, so each .demo-card must be an <a> with a non-blank
-  // href, closed by </a> before the next <a> opens; and the root page must HAVE
-  // a card, or every one of these passes vacuously. Validating only the targets
-  // present saw a dead card as one link fewer (Codex on #415, twice).
+  // something with one page: each live .demo-card is an HTML <a> with a
+  // non-blank href, closed by its own </a> (not implied by the parser); a root
+  // card targets docs/site/<filename>.html; and the root page has at least one,
+  // or all of this passes vacuously.
   const cardFail = (msg) => { console.error(`MISSING: ${page} ${msg}`); failed = true; };
   let cards = 0;
-  pageTags.forEach((t, k) => {
-    // A card inside <template> or <noscript> is not on the page (Codex on #415).
-    if (t.inert || !(t.attrs.get('class') || '').split(/[\t\n\f\r ]+/).includes('demo-card')) return;
+  for (const { el } of live) {
+    if (!(attr(el, 'class') || '').split(/[\t\n\f\r ]+/).includes('demo-card')) continue;
     cards++;
-    if (t.tag !== 'a') return cardFail(`has a .demo-card <${t.tag}>, not a link -- cards must be anchors`);
-    const href = (t.attrs.get('href') || '').trim();
+    if (el.namespaceURI !== NS.html || el.tagName !== 'a') { cardFail(`has a .demo-card <${el.tagName}>, not a link -- cards must be anchors`); continue; }
+    const href = (attr(el, 'href') || '').trim();
     if (!href) cardFail('has a .demo-card <a> with no href -- the card links nowhere');
-    // A root card is a demo, and demos live in docs/site/ -- the shape the root
-    // markup documents and check-landing-cards.js enforced. A README or an
-    // external URL is navigable but is not a demo (Codex on #415).
     else if (page === 'index.html' && !/^docs\/site\/[A-Za-z0-9][A-Za-z0-9._-]*\.html$/.test(href)) {
       cardFail(`has a .demo-card href="${href}" -- a root card must be docs/site/<filename>.html`);
     }
-    const close = pageTags.slice(k + 1).find((u) => u.tag === 'a' || u.tag === '/a');
-    if (!close || close.tag !== '/a') cardFail('has a .demo-card <a> not closed by </a> before the next <a>');
-  });
+    if (!el.sourceCodeLocation?.endTag) cardFail('has a .demo-card <a> not closed by its own </a>');
+  }
   if (page === 'index.html' && cards === 0) cardFail('has no .demo-card -- the landing-card checks would pass vacuously');
-  // Only the FIRST refresh that succeeds counts: it sets the document's "will
-  // declaratively refresh" flag and every later one is ignored (Codex, #415).
-  // A <meta> in <template> is inert and never runs.
-  const refresh = pageTags.filter((t) => !t.inert).map(refreshOf).find((r) => r !== null);
-  const pageLinks = pageTags.flatMap(linksOf).concat(refresh && refresh.url ? [refresh.url] : []);
+  const refresh = refreshTarget(live, base);
+  const pageLinks = all.flatMap(({ el }) => linksOf(el)).concat(noscriptLinks, refresh ? [refresh] : []);
   for (const raw of pageLinks) {
     let url;
     try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }

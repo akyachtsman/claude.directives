@@ -53,6 +53,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # check-paths.js reads every tracked HTML page with parse5, a spec-complete
+      # parser (owner, 2026-10-09, over the 2026-08-22 no-parser ruling, for
+      # this check only). PINNED: the gate must not change when parse5 does.
+      - name: Install parse5 (check-paths.js HTML parser)
+        run: npm install --no-save --no-package-lock --ignore-scripts parse5@8.0.1
+
       - name: Check file paths in CLAUDE.md exist
         run: node .github/scripts/check-paths.js
 

@@ -19,7 +19,9 @@ dir=$(dirname -- "$path")
 root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || exit 0
 qa="$root/.github/workflows/qa.yml"
 [ -f "$qa" ] || exit 0
-bp=$(python3 -c 'import sys, yaml
+# -I (isolated): neither the cwd nor user site-packages is on sys.path, so a
+# yaml.py inside the edited repository cannot run when PyYAML is imported.
+bp=$(python3 -I -c 'import sys, yaml
 env = (yaml.safe_load(open(sys.argv[1])) or {}).get("env") or {}
 print(env.get("BUILD_PATHS") or "")' "$qa" 2>/dev/null) || exit 0
 [ -n "${bp//[[:space:]]/}" ] || exit 0

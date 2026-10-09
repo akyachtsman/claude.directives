@@ -29,7 +29,9 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 2. Check for pre-installed Playwright browsers before running `npx playwright install` — look under `$PLAYWRIGHT_BROWSERS_PATH` if set, else `ls /opt/pw-browsers/` (the bundled version changes with the runner image; never assume a specific `chromium-<build>` directory)
 3. Install npm dependencies: `cd <Playwright test directory from CLAUDE.md> && npm install`
 4. Set `APP_URL` env var before running: use live URL for post-deploy runs, `http://localhost:8080` for local runs
-5. For local runs: start a server first with `npx http-server . -p 8080 --silent &` then `sleep 2`
+5. For local runs, serve the site **as deployed**, then start testing after `sleep 2`:
+   - **No build** (`CLAUDE.md` → `Build:` is none): serve the repo root, `npx http-server . -p 8080 --silent &`
+   - **CI-build opt-in** (`Build:` records one): run the build first, exactly as CI does: `BUILD_CMD` from the top-level `env:` of `.github/workflows/qa.yml`, from the repo root. Then serve its output, `npx http-server ./<SITE_DIR from the same env> -p 8080 --silent &` (the `./` keeps a `SITE_DIR` that starts with `-` a path, not an option). Never serve the repo root there; that is the unbuilt source, and a green run against it proves nothing about the deployed site. A failed build, a missing `SITE_DIR/index.html`, or a `Build:` with an empty `BUILD_CMD` is the finding: report it and stop, rather than falling back to the root
 6. Run the full spec — capture all results even if some phases fail
 7. Write findings to `.agent-reports/ui-test-report.md` after every run
 8. Escalate to the orchestrator after 3 unsuccessful fix cycles for the same issue

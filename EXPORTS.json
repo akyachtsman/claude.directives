@@ -351,7 +351,9 @@
         "directives/git.md",
         "plugins/directives-toolkit/commands/sdd-loop.md",
         "templates/CLAUDE-template.md",
-        "templates/pr-checklist.md"
+        "templates/pr-checklist.md",
+        "plugins/directives-toolkit/agents/test-verifier.md",
+        "plugins/directives-toolkit/commands/kickoff.md"
       ]
     },
     "code-review-builtin": {
@@ -371,7 +373,8 @@
       "sockets": [
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
-        "directives/test.md"
+        "directives/test.md",
+        "plugins/directives-toolkit/agents/qa-pipeline.md"
       ]
     },
     "security-review-builtin": {
@@ -381,7 +384,9 @@
         "directives/test.md",
         "plugins/directives-toolkit/agents/qa-pipeline.md",
         "templates/CLAUDE-template.md",
-        "templates/pr-checklist.md"
+        "templates/pr-checklist.md",
+        "plugins/directives-toolkit/agents/test-verifier.md",
+        "plugins/directives-toolkit/commands/sdd-loop.md"
       ]
     },
     "codex-reviews": {
@@ -435,7 +440,9 @@
         "templates/claude-settings.json",
         "docs/guides/design-tooling.md",
         "directives/design.md",
-        "plugins/directives-toolkit/commands/design-intake.md"
+        "plugins/directives-toolkit/commands/design-intake.md",
+        "directives/global.md",
+        "plugins/directives-toolkit/commands/refresh-repo.md"
       ]
     },
     "stitch": {
@@ -471,7 +478,8 @@
       "sockets": [
         "CLAUDE.md",
         "scripts/install-toolkit.sh",
-        "templates/claude-settings.json"
+        "templates/claude-settings.json",
+        "directives/global.md"
       ]
     },
     "dataviz-builtin": {
@@ -501,7 +509,8 @@
       "serves": "meta.session",
       "sockets": [
         "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
-      ]
+      ],
+      "note": "Adoption covers doc-comp's dependencies only (the built-in skills its SKILL.md names); skill-creator, also in anthropic-skills, stays rejected (considered -> skill-creator)."
     },
     "update-config-builtin": {
       "vendor": "Anthropic (built-in skill)",
@@ -509,6 +518,27 @@
       "sockets": [
         "plugins/directives-toolkit/commands/refresh-repo.md",
         "plugins/directives-toolkit/commands/new-repo.md"
+      ]
+    },
+    "ccr-harness-tools": {
+      "vendor": "Anthropic (Claude Code harness tools)",
+      "serves": "git.lifecycle",
+      "names": [
+        "send_later",
+        "create_trigger",
+        "Monitor",
+        "subscribe_pr_activity"
+      ],
+      "sockets": [
+        "directives/global.md",
+        "directives/git.md",
+        "docs/standards/automations.md",
+        "templates/claude-settings.json",
+        "plugins/directives-toolkit/scripts/wait-gate.sh",
+        "plugins/directives-toolkit/commands/env-chk.md",
+        "plugins/directives-toolkit/commands/new-repo.md",
+        "plugins/directives-toolkit/skills/update-pages/SKILL.md",
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
       ]
     }
   },
@@ -523,13 +553,13 @@
     "feature-dev": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "Generic explore/architect/review flow; /sdd-loop is bound to the imported directives as its constitution.",
+      "rationale": "Generic explore/architect/review flow. Its clarifying-questions phase is /diagnose's job (plugins/directives-toolkit/commands/diagnose.md: one question at a time, 2-3 approaches, then specs/<slug>/brief.md), and its build phase is /sdd-loop's, which is bound to the imported directives as its constitution.",
       "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
     },
     "claude-md-management": {
       "vendor": "Anthropic",
       "verdict": "borrowed",
-      "rationale": "Its claude-md-improver skill grades CLAUDE.md A-F; that rubric is copied into /audit-repo, so nothing loads the skill at runtime. Recorded under the PLUGIN name, which is what a marketplace manifest advertises and therefore what the parity diff sees.",
+      "rationale": "Its claude-md-improver skill grades CLAUDE.md A-F; that rubric is copied into /audit-repo, so nothing loads the skill at runtime. Recorded under the PLUGIN name, which is what a marketplace manifest advertises and therefore what the parity diff sees. Its /revise-claude-md command (update CLAUDE.md with the session's learnings) is not adopted: /learn (plugins/directives-toolkit/commands/learn.md) appends typed, confidence-scored lines to learnings.jsonl, latest-key-wins and validated by check-learnings.js, rather than adding prose to CLAUDE.md, whose rules are owner rulings and not a session's notes.",
       "stays": "plugins/directives-toolkit/commands/audit-repo.md"
     },
     "hookify": {
@@ -677,6 +707,98 @@
         "fakechat"
       ],
       "rationale": "Chat-channel plugins in Anthropic's official marketplace, under its external_plugins/ directory, so not Anthropic-built and outside the parity pass's Anthropic-owned count either way. Out of scope: nothing in this repo or its toolkit talks to a chat channel. Owner ruling 2026-10-08: recorded as rejected so the ownership question does not recur on every audit.",
+      "stays": "CLAUDE.md"
+    },
+    "code-review": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "The code-review plugin (plugins/code-review in both claude-plugins-official and claude-code-plugins): five Sonnet reviewers plus Haiku confidence scoring, posted with `gh pr comment`. Superseded by the built-in /code-review skill, which the directives already name (externals -> code-review-builtin). Its command is also called /code-review, so installing it would collide with the built-in the directives point at, and it drives `gh pr` subcommands that a web session's gh does not have (only `gh api` works there).",
+      "stays": "directives/test.md"
+    },
+    "design": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "knowledge-work-plugins design (Cowork-first): /critique, /design-system, /handoff, /ux-copy, /accessibility, /research-synthesis, plus nine MCP connectors (Figma, Slack, Linear, ...). It audits and documents a design team's existing system and hands specs to developers. This fleet's design method is per-project and generative instead: /design-intake distils tokens.css + components.css and an approved reference page, design.md is the method, frontend-design builds, and check-contrast.js enforces WCAG contrast mechanically. No Figma or design team to hand off from.",
+      "stays": "plugins/directives-toolkit/commands/design-intake.md"
+    },
+    "engineering": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "knowledge-work-plugins engineering (Cowork-first): /standup, /review (a code-review skill also named code-review), /debug, /architecture, /incident, /deploy-checklist, plus ten MCP connectors (Slack, PagerDuty, Datadog, ...). Its review lane is already delegated to pr-review-toolkit and the built-in /code-review and /security-review through qa-pipeline; /debug and /architecture overlap /diagnose; /deploy-checklist overlaps /commit-chk and update-pages. Its code-review skill name would shadow the built-in /code-review the directives name.",
+      "stays": "plugins/directives-toolkit/agents/qa-pipeline.md"
+    },
+    "plugin-management": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "knowledge-work-plugins cowork-plugin-management (listed as Plugin Management): create-cowork-plugin and cowork-plugin-customizer, both declaring that they need the Cowork desktop app, delivering a packaged .plugin file or editing mounted plugin directories. plugin-dev is this repo's authoring authority (CLAUDE.md -> Toolkit changes) and the toolkit ships as source in a marketplace, not as a .plugin file.",
+      "stays": "CLAUDE.md"
+    },
+    "document-skills": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "The anthropics/skills marketplace's document-skills plugin bundles the xlsx, docx, pptx and pdf skills, which sessions already have built in as anthropic-skills (externals -> anthropic-skills). Installing it would load a second copy of the same four skills under another name.",
+      "stays": "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
+    },
+    "productivity": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "knowledge-work-plugins productivity: a memory-management skill that writes working memory into CLAUDE.md and a memory/ directory, and a TASKS.md task tracker. This repo's compounding memory is learnings.jsonl, written by /learn as typed, confidence-scored lines and validated in CI; CLAUDE.md holds owner rulings, not session memory.",
+      "stays": "plugins/directives-toolkit/commands/learn.md"
+    },
+    "product-management": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "rationale": "knowledge-work-plugins product-management: /write-spec (a PRD from a problem statement) plus roadmap, stakeholder, research, competitive and metrics workflows. The spec step is /diagnose -> /sdd-loop specify here, bound to the imported directives; the rest is product-management work this repo does not do.",
+      "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
+    },
+    "vertical-plugins": {
+      "vendor": "Anthropic",
+      "verdict": "rejected",
+      "names": [
+        "marketing",
+        "sales",
+        "small-business",
+        "data",
+        "operations",
+        "legal",
+        "finance",
+        "enterprise-search",
+        "human-resources",
+        "customer-support",
+        "bio-research",
+        "pdf-viewer",
+        "claude-for-financial-advisors",
+        "financial-analysis",
+        "equity-research",
+        "market-researcher",
+        "investment-banking",
+        "earnings-reviewer",
+        "private-equity",
+        "claude-for-msft-365-install",
+        "model-builder",
+        "pitch-agent",
+        "gl-reconciler",
+        "month-end-closer",
+        "statement-auditor",
+        "valuation-reviewer",
+        "fund-admin",
+        "meeting-prep-agent",
+        "kyc-screener",
+        "commercial-legal",
+        "ip-legal",
+        "litigation-legal",
+        "corporate-legal",
+        "privacy-legal",
+        "product-legal",
+        "employment-legal",
+        "ai-governance-legal",
+        "regulatory-legal",
+        "legal-builder-hub",
+        "law-student",
+        "legal-clinic",
+        "pubmed"
+      ],
+      "rationale": "Anthropic-owned business and industry plugins from the built-in anthropic-plugin-directory (~/.claude/plugins/plugin-directory-cache-v2.json): the knowledge-work-plugins entries that do not overlap the toolkit (design, engineering, plugin-management, productivity and product-management have their own entries), and every Anthropic-owned entry of the financial-services, claude-for-financial-advisors, claude-for-legal and life-sciences repositories. operations covers both the knowledge-work and the financial-services plugin of that name. Out of domain: none of these jobs (marketing, sales, finance, legal practice, HR, support, biomedical research, PDF annotation) exists in this repo or its toolkit. Partner-built entries in the same repositories (life-sciences' partner connectors, claude-for-legal's external_plugins/cocounsel-legal, knowledge-work's partner-built/) are outside the Anthropic-owned count. Recorded as one entry so a future parity pass does not re-derive each verdict.",
       "stays": "CLAUDE.md"
     }
   }

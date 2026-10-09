@@ -184,7 +184,7 @@ a failure there must be fixed before work is done.
   "untestable"** — and a UI change shipped without a `ui-tester` run is a
   readiness blocker (see the `pr-readiness-reviewer` gate).
 
-## Rendered-verification gate (visual changes)
+## Rendered-verification gate (visual changes) (owner ruling, 2026-07-22)
 
 A change that alters rendered UI is not "done" until Playwright has actually
 rendered the changed surface and asserted the *visible outcome* — never a proxy

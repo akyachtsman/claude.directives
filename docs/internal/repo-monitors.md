@@ -2,8 +2,8 @@
 
 This repo's own infrastructure monitors **and its self-test triage**. For the
 **exported** automation standard that downstream projects inherit (email,
-CI/Codex monitors, PR lifecycle, escalation, tool-use discipline, test-scenario
-bootstrap), see `docs/standards/automations.md`; for the exported **project** CI triage,
+watcher rules, CI/Codex/Pages monitors, in-session subscription, cross-session
+messaging, PR lifecycle, escalation, test-scenario bootstrap), see `docs/standards/automations.md`; for the exported **project** CI triage,
 see `docs/standards/ci-triage.md`.
 
 ### Infrastructure Monitors (always on, no session required)
@@ -78,7 +78,7 @@ resets the count and is recorded on #318. QUIET and NOT CHECKED neither count
 toward the four nor reset them.
 
 ### Activation Checklist for New Sessions
-- Confirm all five exist: `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check
+- Confirm all seven workflows exist: `qa.yml` (the validation the monitors watch), the five monitors `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and the advisory weekly `watcher-liveness.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check
 - Do not subscribe to open PRs as a session-start step — subscription is harness-side on open. Then leave it alone; the harness drops it at merge (`CLAUDE.md` → *Notifications*, `git.md` → *PR Lifecycle*). Unsubscribing yourself disables `ci-notify.yml`'s wake and leaves a Codex review with no push signal at all
 - See *Self-test triage* below for `ci-failure` / `codex-flagged` handling
 - Check for open `ci-failure` issues before starting new work

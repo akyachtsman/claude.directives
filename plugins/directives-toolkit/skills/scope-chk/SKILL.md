@@ -30,8 +30,10 @@ Execute in order:
    (`git ls-remote`, a blob-less shallow clone into a scratch directory) for
    refs and listings work from any session (`/do-repo` packages this). The
    GitHub API and codeload tarballs do NOT: the proxy refuses them for a repo
-   the session was not opened on (`global.md` → *Repository Scope*). The MCP limit constrains ACTING
-   (branch/push/PR/merge), not reading. Never report a public repo as
+   the session was not opened on (`global.md` → *Repository Scope*). Nor does the GitHub MCP: in a web session
+   it reaches only the session's own repos, for reading as for ACTING
+   (branch/push/PR/merge), so another repo is read over raw URLs and git, never
+   the MCP. Never report a public repo as
    inaccessible — fetch it and answer from data.
 
 4. **Report** a compact verdict:

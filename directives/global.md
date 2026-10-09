@@ -259,8 +259,10 @@ findings unseen.
 
 ## GitHub Workflow
 - Work happens in Claude Code sessions (web, desktop, or CLI) scoped to a repo
-- Terminal and git are always available; `gh` CLI only sometimes — remote/web
-  sessions often lack it (use the GitHub MCP tools instead)
+- Terminal and git are always available. In a web session `gh api` (REST)
+  works through the session's GitHub proxy; other `gh` subcommands are
+  unavailable there, so use `gh api` or the GitHub MCP tools instead
+  (`git.md` → *Repo-settings preflight*)
 - All code changes go through a `claude/<name>` branch and a PR to `main`
 - Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
   after each squash-merge — recycling branches tangles lineage and can attach
@@ -728,7 +730,7 @@ own calls.
 for it — so haiku-tier work goes to a named agent type, never a fork.
 
 **The environment variable is the owner's, never a session's.**
-`CLAUDE_CODE_SUBAGENT_MODEL` (verified 2026-09-24 against
+`CLAUDE_CODE_SUBAGENT_MODEL` (verified 2026-10-09 against
 code.claude.com/docs/en/sub-agents) is what an omitted `model` falls to when the
 agent's definition names none; the call's `model` and the frontmatter both
 outrank it. ⚠️ **While it is set, leaving `model` out no longer inherits the
@@ -738,7 +740,7 @@ build tier above holds only with it unset (or set to `inherit`).
 agent definition's `model:` are both ignored, and subagents run the variable's
 model — or, with FORCE set alone, the session's (the built-in Explore agent keeps
 its own) — so none of the tiers apply. A fork, and a skill run in a subagent with
-`model: inherit`, still run the session's model (verified 2026-10-08 against
+`model: inherit`, still run the session's model (verified 2026-10-09 against
 code.claude.com/docs/en/sub-agents).
 Both are environment settings the owner changes; a session never sets either.
 
@@ -1241,14 +1243,16 @@ before reporting "no access":
    CI logs, commits), Supabase MCP for the database. Authenticated; always
    preferred for in-scope resources.
 2. **GitHub as a side-door** — `raw.githubusercontent.com` is allowlisted
-   (directives load through it); public repos are readable via the GitHub MCP.
-   Never pre-check a private repo with curl: unauthenticated requests return 404
+   (directives load through it). Any other public repo is read over raw URLs and
+   git transport, not the GitHub MCP, whose access in a web session is scoped to
+   the session's own repositories (→ *Repository Scope*). Never pre-check a
+   private repo with curl: unauthenticated requests return 404
    even when access exists.
 3. **WebSearch** — runs server-side and bypasses the container's network policy
    entirely. Use for documentation, examples, and corroborating facts.
 4. **WebFetch** — subject to the environment's egress policy too: a host the
    policy denies fails with `EGRESS_BLOCKED` ("blocked by the network egress
-   proxy"; measured 2026-10-08 on a host curl also gets a CONNECT 403 for), so
+   proxy"; measured 2026-10-09 on a host curl also gets a CONNECT 403 for), so
    it is not a way around rung 5. A 403 from a host it does reach may be the
    target site's bot protection, not the environment policy.
 5. **curl/CLI in the sandbox** — goes through the agent proxy; the environment

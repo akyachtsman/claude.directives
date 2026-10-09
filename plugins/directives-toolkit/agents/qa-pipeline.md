@@ -38,7 +38,7 @@ Runs the full agent QA pipeline in sequence. It does not modify code: the only f
   subagent spawn its own up to a depth limit — by default three layers below
   the main conversation (v2.1.219 and later; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`
   changes it, and `1` turns nesting off), per code.claude.com/docs/en/sub-agents,
-  *Let subagents spawn their own subagents* (read 2026-10-08). Invoked from the
+  *Let subagents spawn their own subagents* (read 2026-10-09). Invoked from the
   main session, this agent is layer one and its steps layer two. If `Agent` is
   missing from this agent's tools when it runs, nesting is off or exhausted: do
   not run the steps yourself in their place — stop and report to the caller that

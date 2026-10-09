@@ -123,7 +123,8 @@ independent work. **Batch verification**: group completed independent tasks
 and run the `directives-toolkit:qa-pipeline` agent (test-verifier → ui-tester
 → code review → security review via the built-in `/security-review`, whenever
 the batch meets that agent's trigger conditions → pr-readiness) once over the
-batch rather than once per task.
+batch rather than once per task. When it returns a ui-tester fix, apply it,
+push, and invoke it again with the `resume:` point it named.
 A failure routes back as the priority — its downstream tasks pause, the rest
 keep going. Loop until every task is done AND every verification round is
 green; the completion bar is unchanged. Honor the Pre-Push gate

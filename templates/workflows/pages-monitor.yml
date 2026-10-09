@@ -66,10 +66,12 @@ on:
 # still probing, then report nothing itself.
 # A CANCELLED watched run (one superseded by a newer push, say) published
 # nothing either; it waits its turn rather than cancelling a monitor still
-# probing a real deploy.
+# probing a real deploy. So does a MANUAL run: it is not a deploy, never closes
+# the issue and never reports "build errored", so cancelling a deploy's monitor
+# for it could drop that deploy's alarm.
 concurrency:
   group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
-  cancel-in-progress: ${{ !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'cancelled') }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'cancelled') }}
 
 permissions:
   contents: read
@@ -448,7 +450,7 @@ jobs:
               gh issue create --repo "$REPO" \
                 --title "Pages deploy failing" \
                 --label "$ISSUE_LABEL" \
-                --body "$(printf '%s\n\n---\nAuto-managed by \`.github/workflows/pages-monitor.yml\`. It closes automatically on the next healthy deploy.' "$body")"
+                --body "$(printf '%s\n\n---\nAuto-managed by `.github/workflows/pages-monitor.yml`. It closes automatically on the next healthy deploy.' "$body")"
             fi
             {
               echo "## ❌ Pages deploy problem"

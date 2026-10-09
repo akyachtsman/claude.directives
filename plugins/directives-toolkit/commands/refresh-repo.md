@@ -58,10 +58,11 @@ if [ "$rc" -ne 0 ] || ! grep -qE '^[0-9a-f]{40}$' <<<"$sha" || [ -z "$tree" ]; t
   echo "CANNOT CHECK: upstream tree not readable from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
 else
   # `|| true`: a project with no upstream references is a grep that matched
-  # nothing, not a failure to stop on.
+  # nothing, not a failure to stop on. A github.com `blob/main/` or `tree/main/`
+  # link names the same path as a raw one, so both prefixes are stripped.
   refs=$(grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
     --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
-    | sed -E 's#.*claude\.directives/(main/)?##' | sort -u \
+    | sed -E 's#.*claude\.directives/((blob|tree)/)?(main/)?##' | sort -u \
     | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' || true)
   while read -r p; do
     [ -n "$p" ] || continue
@@ -155,8 +156,9 @@ the comment in the block gives:
 # unrelated SessionStart hook AND reference this script under some other event, so
 # file-wide greps can both succeed while nothing invokes the updater at session start.
 if [ -f .claude/hooks/session-start.sh ] \
-   && ! jq -e '[.hooks.SessionStart[]?.hooks[]?.command] 
-            | any((gsub("\"";"") | split(" ")[0] | endswith("hooks/session-start.sh")))' \
+   && ! jq -e '[.hooks.SessionStart[]?.hooks[]? | ((.command // empty) | strings
+                | gsub("\"";"") | split(" ")[0]), (.args[]? | strings)]
+            | any(endswith("hooks/session-start.sh"))' \
        .claude/settings.json >/dev/null 2>&1; then
   echo "MISSING-REGISTRATION: .claude/settings.json has no SessionStart row —"
   echo "  merge the row from templates/claude-settings.json via Settings writes"
@@ -435,11 +437,12 @@ workflows rather than assuming the default:
 # The YAML scalar, not the rest of the line: a quoted value ends at its closing
 # quote (a `#` inside it is part of the path) with its escapes decoded (`\"` in
 # double quotes, `''` in single); an unquoted one ends at ` #` (a comment).
+# A trailing `/` is dropped, so `e2e/` and `e2e` name one kit, not `e2e//x`.
 kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null \
   | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
            -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
            -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \
-           -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sort -u)
+           -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sed -E 's#/+$##' | sort -u)
 if [ -z "$kit_dirs" ]; then   # no UI_TESTS_DIR set: the default, if the project has a kit at all
   [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests || echo "no UI-test kit in this project — kit defects step skipped"
 fi
@@ -755,8 +758,8 @@ claude.directives) is Phase 3's mechanism, run from the project root: it
 re-derives the head, reads Phase 2's verdict, fetches the upstream tree once,
 checks every path above, and stamps only on a clean result, printing one line
 per finding. It lives in a file because a command's arguments are substituted
-into its text on load, and its functions take positional parameters.
-(Create `.claude/directive-sync.json` with `{}` first if the project has none.)
+into its text on load, and its functions take positional parameters. A project
+with no `.claude/directive-sync.json` yet gets one, starting as `{}`.
 
 **Stamp only a VERIFIED head SHA.** Phases 2 and 3 need nothing from
 `api.github.com` — both run over git transport, which is what lets the stamp

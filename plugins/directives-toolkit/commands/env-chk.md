@@ -81,8 +81,9 @@ verdict. Read-only — do NOT modify files. Execute in order:
      ```bash
      [ "${CLAUDE_CODE_REMOTE:-}" = true ] \
        && [ -x .claude/hooks/session-start.sh ] \
-       && jq -e '[.hooks.SessionStart[]?.hooks[]?.command] 
-            | any((gsub("\"";"") | split(" ")[0] | endswith("hooks/session-start.sh")))' \
+       && jq -e '[.hooks.SessionStart[]?.hooks[]? | ((.command // empty) | strings
+                | gsub("\"";"") | split(" ")[0]), (.args[]? | strings)]
+            | any(endswith("hooks/session-start.sh"))' \
        .claude/settings.json >/dev/null 2>&1 \
        && echo "self-updating" || echo "needs remediation"
      ```

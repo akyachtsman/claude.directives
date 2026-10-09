@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-workflow-ref-guard.py — pinned cases for workflow-ref-guard.py.
+"""workflow-ref-guard-cases.py — pinned cases for workflow-ref-guard.py.
 
 WHY THIS EXISTS. The guard's whole value is being trusted when it is QUIET. A parser
 regression does not announce itself: it finds zero references, prints a cheerful
@@ -15,7 +15,7 @@ The second kind is why the guard is built on a YAML parser rather than regexes: 
 only fix a project has for a false red is to reformat legal YAML, which is a guard
 dictating style rather than catching faults.
 
-Run: python3 .github/scripts/check-workflow-ref-guard.py
+Run: python3 .github/scripts/workflow-ref-guard-cases.py
 """
 
 import json
@@ -419,7 +419,7 @@ def run_case(files, required):
         shutil.rmtree(tmp)
 
 
-c = Cases("check-workflow-ref-guard")
+c = Cases("workflow-ref-guard-cases")
 for case in CASES:
     label, expected, files, required = case[:4]
     diagnostic = case[4] if len(case) > 4 else None

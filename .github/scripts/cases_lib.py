@@ -5,7 +5,7 @@ named by the suite's own `*_BIN` variable -- against fixtures, and requires
 BOTH the exit code AND a stated reason: a dozen distinct problems can share an
 exit code, so "exit 1" alone lets a case keep passing after the branch it was
 written for is reverted and something else catches the input (the lesson
-check-workflow-ref-guard.py records from #237).
+workflow-ref-guard-cases.py records from #237).
 
 What lives here is only the scaffolding every suite repeated: running a
 command, writing a fixture tree, and the OK / FAILED reporting. The cases,

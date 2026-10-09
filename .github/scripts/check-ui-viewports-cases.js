@@ -1,6 +1,6 @@
 // check-ui-viewports-cases.js — pinned cases for templates/scripts/check-ui-viewports.js.
 //
-// WHY THIS EXISTS. Same doctrine as check-workflow-ref-guard.py next door: the
+// WHY THIS EXISTS. Same doctrine as workflow-ref-guard-cases.py next door: the
 // gate's whole value is being trusted when it is QUIET, so a regression in it is
 // silent by construction — it reads zero projects, prints a cheerful OK, and the
 // phone-only config it was installed to catch sails through. #282 is twelve
@@ -11,7 +11,7 @@
 // asserting only "exit 1" pins almost nothing here — six distinct faults exit
 // non-zero, so a case can keep passing while the branch it was written for is
 // reverted and some unrelated check catches the input instead (the lesson
-// check-workflow-ref-guard.py records from Codex, #237).
+// workflow-ref-guard-cases.py records from Codex, #237).
 //
 // NOT exported: .github/ is outside every EXPORTS.json category path, so no
 // manifest entry is required for this file.

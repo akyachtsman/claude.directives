@@ -74,7 +74,10 @@ jobs:
             # attempt.) Suppression therefore requires BOTH:
             #   1. the workflow actually declares cancel-in-progress — without it
             #      nothing could have superseded anything, so a cancel is a timeout
-            #      or a human;
+            #      or a human. An expression value counts as declared: it MAY cancel,
+            #      and condition 2 still decides (qa-live.yml computes it; matching
+            #      only the literal `true` turned its healthy supersedes into
+            #      ci-failure issues, audit 2026-10-09);
             #   2. the newer run was created BEFORE this run ended — one created
             #      afterwards cannot have caused the cancellation.
             # And NO probe may fail toward silence: an unreadable answer alarms.
@@ -101,7 +104,7 @@ jobs:
                   echo "cancelled on a run from fork ${WR_HEAD_REPO} — not classifiable from the base repo; reporting."
                 elif gh api "repos/$REPO/contents/${wf_path}?ref=${WR_SHA}" \
                      -H "Accept: application/vnd.github.raw" 2>/dev/null \
-                     | grep -qE '^[[:space:]]*cancel-in-progress:[[:space:]]*true[[:space:]]*(#.*)?$'; then
+                     | grep -qE '^[[:space:]]*cancel-in-progress:[[:space:]]*(true[[:space:]]*(#.*)?|\$\{\{.*)$'; then
                   # Same-repo: read at the run's head SHA rather than its branch name,
                   # so the definition is the one AS OF that run, not whatever the
                   # branch holds now.
@@ -230,7 +233,7 @@ jobs:
                 if [ "$rrepo" = "$REPO" ] && [ -n "$rpath" ] \
                    && gh api "repos/$REPO/contents/${rpath}?ref=${rsha}" \
                         -H "Accept: application/vnd.github.raw" 2>/dev/null \
-                      | grep -qE '^[[:space:]]*cancel-in-progress:[[:space:]]*true[[:space:]]*(#.*)?$'; then
+                      | grep -qE '^[[:space:]]*cancel-in-progress:[[:space:]]*(true[[:space:]]*(#.*)?|\$\{\{.*)$'; then
                   echo "suppressed: run $(echo "$r" | jq -r .id) was superseded under cancel-in-progress"
                   continue
                 fi
@@ -267,5 +270,5 @@ jobs:
               --repo "$REPO" \
               --title "CI failures detected" \
               --label "$ISSUE_LABEL" \
-              --body "$(printf 'CI Monitor detected failing workflow run(s) at %s:\n%s\n\n---\nThis issue is auto-managed by \`.github/workflows/ci-monitor.yml\`.\nClose it once the failures are resolved; new failures will reopen tracking.' "$stamp" "$body")"
+              --body "$(printf 'CI Monitor detected failing workflow run(s) at %s:\n%s\n\n---\nThis issue is auto-managed by `.github/workflows/ci-monitor.yml`.\nClose it once the failures are resolved; new failures will reopen tracking.' "$stamp" "$body")"
           fi

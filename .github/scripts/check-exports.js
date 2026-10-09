@@ -164,8 +164,8 @@ const UNCLASSIFIED_OK = [
   // Deliberate exclusions. Add a path here only with the reason it ships
   // without belonging to a domain; an empty list is the healthy state.
 ];
-const trackedFiles = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
-  .split('\n').filter(Boolean).filter(f => !f.includes('node_modules/'));
+const trackedFiles = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+  .split('\0').filter(Boolean).filter(f => !f.includes('node_modules/'));
 const domainPathList = [];
 for (const [dom, comps] of Object.entries(manifest.domains ?? {})) {
   if (dom.startsWith('_')) continue;

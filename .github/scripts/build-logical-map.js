@@ -32,7 +32,7 @@
 //   node .github/scripts/build-logical-map.js --check  # fail if it would change
 //
 // ESM (matches the other check-*.js).
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, statSync } from 'fs';
 import { execSync } from 'child_process';
 
 const OUT = 'docs/site/logical-map.html';
@@ -45,16 +45,14 @@ let failed = false;
 const fail = m => { console.error(`FAIL: ${m}`); failed = true; };
 
 /* ------------------------------------------------------------------ files */
-function walk(dir) {
-  const out = [];
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name === 'node_modules' || e.name.startsWith('.') && e.isDirectory() && e.name !== '.claude-plugin') continue;
-    const full = `${dir}/${e.name}`;
-    if (e.isDirectory()) out.push(...walk(full));
-    else if (e.isFile()) out.push(full);
-  }
-  return out.sort();
-}
+// Every file list comes from the TRACKED set, never the disk: a gitignored
+// eval result under evals/ or a scratch file in .github/scripts made --check
+// fail locally, and regenerating then committed a map CI's clean checkout
+// cannot reproduce (audit 2026-10-09). -z: git C-quotes unusual paths otherwise.
+const TRACKED = execSync('git ls-files -z', { encoding: 'utf8' }).split('\0').filter(Boolean).sort();
+// Files under dir, skipping dot-directories below it (as before) except .claude-plugin.
+const walk = dir => TRACKED.filter(f => f.startsWith(`${dir}/`)
+  && !f.slice(dir.length + 1).split('/').slice(0, -1).some(d => d.startsWith('.') && d !== '.claude-plugin'));
 // A path ending in '/' is a directory node: its text is every file under it.
 const filesOf = p => p.endsWith('/') ? walk(p.replace(/\/$/, '')) : [p];
 
@@ -73,9 +71,8 @@ const STAGES = [
 // This repo's own body is never exported, so it enters the map as two group
 // nodes rather than a file each. Both lists are DERIVED from the tree: a hand
 // list catches a deletion but never an addition.
-const listDir = d => readdirSync(d, { withFileTypes: true })
-  .filter(e => e.isFile() && !/^\./.test(e.name) && !/\.(pyc|pyo|log|tmp|bak|swp)$/.test(e.name))
-  .map(e => `${d}/${e.name}`).sort();
+const listDir = d => TRACKED.filter(f => f.startsWith(`${d}/`) && !f.slice(d.length + 1).includes('/')
+  && !/^\./.test(f.slice(d.length + 1)));
 const GROUPS = {
   'self:ci': {
     label: "This repo's CI & checks",
@@ -95,7 +92,7 @@ const GROUPS = {
   const exportedPaths = Object.entries(manifest.classes).filter(([k]) => !k.startsWith('_')).flatMap(([, c]) => c.paths);
   const isExported = f => exportedPaths.some(p => p.endsWith('/') ? f.startsWith(p) : f === p);
   const ci = new Set(GROUPS['self:ci'].files);
-  const tracked = execSync('git ls-files', { encoding: 'utf8' }).split('\n').filter(Boolean);
+  const tracked = TRACKED;
   // Order matters only for which line is quoted as evidence: the indexes first.
   const first = ['CLAUDE.md', 'README.md', 'docs/README.md'];
   GROUPS['self:ops'].files = [...first,
@@ -518,7 +515,7 @@ const FLOW = [
 const derived = [];
 // (a) composite actions a workflow uses, and (b) workflow_run watchers.
 const wfIds = PLACE.pr.concat(PLACE.ship, PLACE.upkeep).filter(id => id.startsWith('templates/workflows/'));
-const allWf = readdirSync('templates/workflows').map(f => `templates/workflows/${f}`);
+const allWf = listDir('templates/workflows');
 for (const f of allWf) if (!stageOf.has(f)) fail(`workflow template not on the map: ${f}`);
 const idByWfName = new Map(allWf.map(f => [wfName(f), f]));
 for (const f of allWf) {
@@ -550,7 +547,7 @@ void wfIds;
 // the run steps: an interpreter followed by a path ending in a shipped script.
 {
   const scripts = [...stageOf.keys()].filter(id => id.startsWith('templates/scripts/') && /\.(js|py|sh)$/.test(id));
-  const runners = [...allWf, ...readdirSync('templates/actions').map(a => `templates/actions/${a}/action.yml`)];
+  const runners = [...allWf, ...TRACKED.filter(f => /^templates\/actions\/[^/]+\/action\.yml$/.test(f))];
   for (const f of runners) {
     const owner = f.startsWith('templates/actions/') ? f.replace(/action\.yml$/, '') : f;
     const lines = readFileSync(f, 'utf8').split('\n').filter(l => !/^\s*#/.test(l));
@@ -592,7 +589,7 @@ const fileToNode = f => {
     }
     return [...dirs];
   };
-  const runners = [...allWf, ...readdirSync('templates/actions').map(a => `templates/actions/${a}/action.yml`)];
+  const runners = [...allWf, ...TRACKED.filter(f => /^templates\/actions\/[^/]+\/action\.yml$/.test(f))];
   for (const f of runners) {
     const owner = f.startsWith('templates/actions/') ? f.replace(/action\.yml$/, '') : f;
     const steps = readFileSync(f, 'utf8').split(/\n(?=\s*- (?:name|uses|run|shell):)/);

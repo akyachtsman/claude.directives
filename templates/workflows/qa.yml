@@ -251,8 +251,9 @@ jobs:
       # that deploy (the opt-in is Actions-source); without one the repo may be
       # branch-source, where the managed build publishes links differently, so
       # a symlink only warns. Also exports the normalised directory ('' and '/'
-      # mean the repo root) to serve.
+      # mean the repo root) to serve, as a step output.
       - name: Check the site directory
+        id: site
         run: |
           src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
           if [ ! -f "$src/index.html" ]; then
@@ -273,7 +274,7 @@ jobs:
           elif [ -n "$links" ]; then
             echo "::warning::symlinks in the site; pages-deploy.yml (Actions-source) refuses them: $(printf '%s; ' "$links")"
           fi
-          echo "SITE_ROOT=$src" >> "$GITHUB_ENV"
+          echo "root=$src" >> "$GITHUB_OUTPUT"
 
       # advisory-run ships 'false': blocking is the default posture for the
       # static/no-backend tier, where the suite runs fully against the bundled
@@ -298,5 +299,5 @@ jobs:
           artifact-name: playwright-results-local
           app-pages: ${{ vars.APP_PAGES }}
           start-local-server: 'true'
-          server-root: ${{ env.SITE_ROOT }}
+          server-root: ${{ steps.site.outputs.root }}
           advisory-run: 'false'

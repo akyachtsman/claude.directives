@@ -208,7 +208,7 @@ What `/new-repo` scaffolds in **every** project:
   `pages-deploy.yml` is the mirror: **Actions-source** → install it (it IS the
   deploy: filter, publish, retry, assert), add its `Pages Deploy` watchers to
   `qa-live.yml` and `pages-monitor.yml` and list both in the `REQUIRED` file;
-  **branch-source** → do not install it (`cicd-setup.md` → *Step 9d-bis*).
+  **branch-source** → do not install it (`cicd-setup.md` → *9d-bis — Pages Deploy (Actions-source only)*).
 
   This pair is the single exception to "no opt-in modules" above, and it is not a
   preference:

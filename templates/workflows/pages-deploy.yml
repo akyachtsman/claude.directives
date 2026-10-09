@@ -140,7 +140,8 @@ jobs:
               esac
               printf '%s\n' "$p" >> "$probes"
               if [ -d "$RUNNER_TEMP/site/$p" ]; then
-                (cd "$RUNNER_TEMP/site" && find "$p" -type f) >> "$probes"
+                # ./ keeps a dash-leading name from parsing as a find expression.
+                (cd "$RUNNER_TEMP/site" && find "./$p" -type f | sed 's#^\./##') >> "$probes"
               fi
               rm -rf -- "$RUNNER_TEMP/site/$p"
               denied=$((denied + 1))

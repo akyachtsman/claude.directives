@@ -33,8 +33,11 @@ Run in order:
    `sha` the merge call returns, or the PR's `merge_commit_sha` once `merged` is
    true), or after the merge from `git fetch origin main` then
    `git rev-parse origin/main`. Also confirm the homepage file is present: `index.html`
-   beats `README.md` as the directory index, so a missing root `index.html`
-   means the site will fall back to rendering `README.md`.
+   beats `README.md` as the directory index, so on branch-source a missing root
+   `index.html` means the site will fall back to rendering `README.md`. On
+   Actions-source the homepage is the published directory's own `index.html`
+   (`SITE_DIR` after any build); `pages-deploy.yml` refuses to publish one
+   without it.
 
 3. **Identify the deploy workflow.** GitHub Pages "Deploy from a branch" runs as
    the managed **`pages-build-deployment`** workflow. That slug is the WORKFLOW's
@@ -57,8 +60,8 @@ Run in order:
       behind a reusable workflow — so with none, the source is **unknown**.
 
    A `Build:` bullet in the project's `CLAUDE.md` is not evidence: it records
-   a decision, not an installed deploy, and while the opt-in is closed it
-   changes nothing (`global.md` → *Hosting & Deployment*). Nor is a
+   a decision, not an installed deploy
+   (`global.md` → *Hosting & Deployment*). Nor is a
    `pages-build-deployment` run: a visibility flip fires that one under either
    source. Treat **unknown** as Actions-source for every step-5 decision until
    the user confirms the setting.

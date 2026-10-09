@@ -96,7 +96,10 @@ Execute in order:
      publishes, retries GitHub's transient publish failure, then asserts the
      root serves 200 and each denied path 404. Fill in `BUILD_CMD` and
      `SITE_DIR` per its header. On a branch-source project it would deploy
-     nothing and fail, so it is not installed there
+     nothing and fail, so it is not installed there. Installed here, before
+     the first page exists, it is a deliberate no-op until `index.html`
+     arrives (no build, no Pages deployment ever: the Publish job is skipped
+     and `pages-monitor.yml` reports nothing published)
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
 
@@ -139,7 +142,10 @@ Execute in order:
    watcher the project must not lose, in both branches of W3: **branch-source**
    → write it at bootstrap as `{ "pages-retry.yml": ["pages-build-deployment"] }`;
    **Actions-source** → no retry entry, **or**, under W3's exception, the entry
-   naming the repointed deploy (rules: `docs/standards/automations.md` → *Watcher Rules*); and
+   naming the repointed deploy (rules: `docs/standards/automations.md` → *Watcher Rules*),
+   plus the two deploy watchers, so a refresh that drops either trigger fails
+   the build: with `pages-deploy.yml`, `"qa-live.yml": ["Pages Deploy"]` and
+   `"pages-monitor.yml": ["Pages Deploy"]`; and
    `check-contrast.js`, the WCAG guardrail `qa.yml` runs against the design
    tokens, reads `styles/tokens.css` or `css/tokens.css` by default — elsewhere,
    append `--tokens <file>` (repeat it per theme file).

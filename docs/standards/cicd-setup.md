@@ -344,7 +344,10 @@ repo, so its second rule is configured here rather than edited into the file:
 For the retry, state both branches (Step 9d; `automations.md` → *Watcher Rules* W3):
 **branch-source** → `"pages-retry.yml": ["pages-build-deployment"]`;
 **Actions-source** → no entry, **or**, under W3's exception, the entry naming the
-project's own deploy.
+project's own deploy. An Actions-source project also lists its two deploy
+watchers, so neither trigger can be dropped quietly: with `pages-deploy.yml`
+(Step 9d-bis), `"qa-live.yml": ["Pages Deploy"]` and
+`"pages-monitor.yml": ["Pages Deploy"]`.
 
 It reads the workflows with PyYAML, which ships on GitHub's runner images and is
 already what `qa.yml` parses workflow YAML with — no install step. The guard was
@@ -509,7 +512,12 @@ retries GitHub's transient publish failure from the same artifact, then asserts
 the root serves 200, each denied path 404, and each path in
 `.github/pages-public.txt` (internal-looking files that must stay public) 200. Its header lists the rest of the
 switch: watchers named "Pages Deploy" in `qa-live.yml` and `pages-monitor.yml`
-(add, never replace), and `pages-retry.yml` deleted with its `REQUIRED` entry.
+(add, never replace), each listed in `.github/workflow-ref-required.json` (Step
+9c-bis) as `"qa-live.yml": ["Pages Deploy"]` and `"pages-monitor.yml": ["Pages Deploy"]`,
+and `pages-retry.yml` deleted with its `REQUIRED` entry. Installed before the
+project's first page exists, it publishes nothing until `index.html` arrives: a
+run with no build and no Pages deployment ever skips its Publish job, and
+`pages-monitor.yml` reports it as nothing published rather than a failure.
 
 ### 9e — CI Notify
 

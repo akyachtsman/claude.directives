@@ -16,8 +16,14 @@ name: Pages Deploy
 #   4. The watchers: add this workflow's exact `name:` ("Pages Deploy") to
 #      qa-live.yml's watch list, and the same name as a new trigger in
 #      pages-monitor.yml (its header has the snippet) — ADD, never replace
-#      (W2). Rename it and both follow.
+#      (W2). Rename it and both follow. Then list both in
+#      .github/workflow-ref-required.json, so a refresh that drops either
+#      trigger fails the build instead of going quiet:
+#      "qa-live.yml": ["Pages Deploy"], "pages-monitor.yml": ["Pages Deploy"].
 #   5. Delete pages-retry.yml and its REQUIRED entry (W3): the retry lives here.
+# Installed before the first page exists (a new project), it publishes nothing
+# until index.html arrives: with no build and no Pages deployment ever, a run
+# skips its Publish job, and pages-monitor.yml reports "nothing published".
 # Rules and reasoning: docs/standards/automations.md -> Watcher Rules (W2, W3),
 # docs/standards/hosting-mechanics.md.
 #
@@ -97,7 +103,13 @@ jobs:
       # its own name and the deploy job takes the name from here, so "Re-run
       # failed jobs", which reuses the build, still gets the right one.
       artifact: github-pages-${{ github.run_attempt }}
+      # false only in the bootstrap state (no page yet, nothing ever deployed):
+      # the deploy and verify jobs are skipped and the run publishes nothing.
+      publish: ${{ steps.filter.outputs.publish }}
     timeout-minutes: 20
+    permissions:
+      contents: read
+      deployments: read # tells the bootstrap state from a site that lost its entry point
     env:
       BUILD_CMD: ''
       SITE_DIR: '.'
@@ -127,6 +139,8 @@ jobs:
 
       - name: Filter by deny-list
         id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           src="${SITE_DIR%/}"
@@ -136,6 +150,20 @@ jobs:
             exit 1
           fi
           if [ ! -f "$src/index.html" ]; then
+            # BOOTSTRAP. /new-repo installs this workflow before the first page
+            # exists (the build writes index.html later), so a project with no
+            # build and no Pages deployment ever has nothing to publish yet: that
+            # run is a no-op, not a failure. Anything else without an entry
+            # point (a build that wrote none, a site that once deployed) fails,
+            # and so does a deployments lookup that fails.
+            if [ -z "${BUILD_CMD:-}" ] \
+               && n=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1" --jq 'length') \
+               && [ "$n" = "0" ]; then
+              echo "::notice::no index.html yet and nothing ever deployed: nothing to publish."
+              echo "## ⏭️ No site yet: nothing published" >> "$GITHUB_STEP_SUMMARY"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "::error::$src/index.html is missing: the published site would have no entry point."
             exit 1
           fi
@@ -198,6 +226,7 @@ jobs:
           marker="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           printf '%s\n' "$marker" > "$RUNNER_TEMP/site/pages-deploy-marker.txt"
           echo "marker=$marker" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
           echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src, ${denied} deny-list path(s) removed"
           # A random delimiter: a fixed one could be the name of a denied file,
           # which would close the multiline output early.
@@ -209,6 +238,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload Pages artifact
+        if: steps.filter.outputs.publish == 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ runner.temp }}/site
@@ -216,8 +246,11 @@ jobs:
           name: github-pages-${{ github.run_attempt }}
 
   deploy:
+    # pages-monitor.yml reads a run whose "Publish" job was skipped as one that
+    # published nothing; keep the name in step with it.
     name: Publish
     needs: build
+    if: needs.build.outputs.publish == 'true'
     runs-on: ubuntu-latest
     # deploy-pages waits up to 10 minutes per attempt; three attempts plus the
     # two pauses between them fit inside 40.

@@ -177,6 +177,23 @@ jobs:
               exit 0
             fi
           fi
+          # NOTHING PUBLISHED. A successful run whose "Publish" job was skipped
+          # (pages-deploy.yml before the project's first page exists) changed
+          # nothing, and the site may not exist yet. Only a lookup that answers
+          # "every Publish job skipped" counts; any other answer is monitored.
+          if [ "${RUN_CONCLUSION:-}" = "success" ] && [ -n "${RUN_ID:-}" ]; then
+            pub=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.name == "Publish")] | if length > 0 and all(.conclusion == "skipped") then "skipped" else "" end' \
+              2>/dev/null) || pub=""
+            if [ "$pub" = "skipped" ]; then
+              {
+                echo "## ⏭️ Nothing published"
+                echo ""
+                echo "- The watched run skipped its Publish job (no site yet), so the live site was not changed."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
           short="${commit:0:7}"
           echo "Pages deploy status: $status (commit ${short:-n/a}) — target $url"
 

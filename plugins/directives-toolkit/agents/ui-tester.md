@@ -27,7 +27,7 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
    empty and the form ships no credential, there is no authenticated run: skip the auth phase and say so in the report,
    rather than guessing a value or asking for one to be written into the repo
 2. Check for pre-installed Playwright browsers before running `npx playwright install` — look under `$PLAYWRIGHT_BROWSERS_PATH` if set, else `ls /opt/pw-browsers/` (the bundled version changes with the runner image; never assume a specific `chromium-<build>` directory)
-3. Install npm dependencies: `cd <Playwright test directory from CLAUDE.md> && npm install`
+3. Install npm dependencies on Node 20, the version CI runs the kit on: `cd <Playwright test directory from CLAUDE.md> && npm install`. With the CI-build opt-in, run rule 5's build first (on Node 22) and switch back to Node 20 before this install
 4. Set `APP_URL` env var before running: use live URL for post-deploy runs, `http://localhost:8080` for local runs
 5. For local runs, serve the site **as deployed**, then start testing after `sleep 2`. Serve with the kit's own pinned `http-server` from step 3's install, `<test dir>/node_modules/.bin/http-server` (as the CI composite does), never bare `npx http-server` from the repo root, which can fetch an unpinned copy from the registry:
    - **No build** (`CLAUDE.md` → `Build:` is none): serve the repo root, `<test dir>/node_modules/.bin/http-server . -p 8080 --silent &`

@@ -158,9 +158,24 @@ jobs:
         run: |
           src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
           [ -d "$src" ] || exit 0
+          deploy=0; [ -f .github/workflows/pages-deploy.yml ] && deploy=1
+          # Resolve the root BEFORE entering it: a SITE_DIR that links outside
+          # the repository is what pages-deploy.yml refuses, and following it
+          # would scan runner files instead. An in-repository link is fine.
+          ws=$(realpath -e .)
+          real=$(realpath -e -- "$src")
+          case "$real/" in
+            "$ws"/*) ;;
+            *) if [ "$deploy" = 1 ]; then
+                 echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the repository; pages-deploy.yml refuses it."
+                 exit 1
+               fi
+               echo "::warning::SITE_DIR=$SITE_DIR resolves to $real, outside the repository; not scanned."
+               exit 0 ;;
+          esac
           # Scanned from inside, so the excluded names apply only BELOW the root.
-          links=$(cd "$src" && find . \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
-          if [ -n "$links" ] && [ -f .github/workflows/pages-deploy.yml ]; then
+          links=$(cd "$real" && find . \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
+          if [ -n "$links" ] && [ "$deploy" = 1 ]; then
             echo "::error::symlinks in the site, which pages-deploy.yml refuses; replace them with real files:"
             printf '%s\n' "$links"
             exit 1

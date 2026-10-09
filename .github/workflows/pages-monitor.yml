@@ -363,7 +363,12 @@ jobs:
                     if grep -qxF -- "_config.yml" <<< "$live"; then
                       cfg_txt=$(gh api -H "Accept: application/vnd.github.raw+json" \
                         "repos/$REPO/contents/$cfg?ref=${tree_ref:-HEAD}" 2>/dev/null) || cfg_txt="include: unreadable"
-                      grep -qE '^include[[:space:]]*:' <<< "$cfg_txt" && jinc=1
+                      # Parsed as YAML (flow style and quoted keys too); a file
+                      # that does not parse counts as having include:.
+                      jinc=$(python3 -c 'import sys, yaml
+          d = yaml.safe_load(sys.stdin.read()) or {}
+          print(1 if not isinstance(d, dict) or "include" in d else 0)' <<< "$cfg_txt" 2>/dev/null) || jinc=1
+                      [ "$jinc" = 0 ] || jinc=1
                     fi
                     if [ "$jinc" = 0 ]; then
                       live=$(awk -F/ '{ for (i = 1; i <= NF; i++) if (($i ~ /^[._#]/ && $i != ".htaccess") || $i ~ /~$/) next; print }' <<< "$live")

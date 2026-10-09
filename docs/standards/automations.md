@@ -258,9 +258,11 @@ or live URL not serving — with no session required.
   serve 404 on two probes 30s apart (one 404 can be the previous deploy
   mid-propagation) — the only thing here that catches a rogue unfiltered
   republish, which serves 200 and passes the two checks above. No file, or no
-  paths in it = not checked, and the job summary says so; more than 15 paths is
-  reported rather than truncated; the list covers only the paths someone
-  remembered.
+  paths in it = not checked, and the job summary says so. A directory entry is
+  expanded to every file under it as published (the deploy's Pages artifact, or
+  a branch build's source folder), and a list that cannot be read is reported,
+  never guessed; more than 40 URLs after that expansion is reported rather than
+  truncated; the list covers only the paths someone remembered.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
   issue. A healthy deploy closes it and reports green in the job summary only.
 - The live URL comes from the Pages API (user-site repos and custom domains work),

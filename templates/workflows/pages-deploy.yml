@@ -168,6 +168,16 @@ jobs:
             echo "::error::$src/index.html is missing: the published site would have no entry point."
             exit 1
           fi
+          # The site directory itself must resolve inside the workspace. rsync
+          # copies the CONTENTS of `$src/`, so a SITE_DIR that is (or passes
+          # through) a link, `dist -> /tmp/x` say, would publish whatever it
+          # points at as ordinary files, which the symlink check below never sees.
+          ws=$(realpath -e .)
+          real=$(realpath -e -- "$src")
+          case "$real/" in
+            "$ws"/*) ;;
+            *) echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the workspace $ws; publish a real directory inside the repository."; exit 1 ;;
+          esac
           rm -rf "$RUNNER_TEMP/site"
           mkdir -p "$RUNNER_TEMP/site"
           # `--` ends the options: a SITE_DIR such as `-site` would otherwise be

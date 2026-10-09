@@ -122,6 +122,14 @@ for (const [ref, citedBy] of [...refs].sort()) {
 // properties). Checking those is a CSS link checker, a different tool, and no
 // page here uses one (2026-10-09, after Codex on #415).
 //
+// Stricter by design (owner ruling 2026-10-09): a URL written in an HTML URL
+// position must name a published file, whatever a browsing context would do
+// with it -- a sandbox that blocks forms, scripts or navigation, and the like.
+// "The check flags a URL some context never requests" can only fail a page,
+// never pass a broken link, so such findings are declined rather than
+// exempted one context at a time. The few exemptions already made stay:
+// srcdoc shadowing src, origin-only link rels, a sandboxed srcdoc's refresh.
+//
 // Each link is resolved by WHATWG URL against the page's DEPLOYED address, as
 // a browser resolves it there. A URL inside the site root must name a published
 // file. A RELATIVE reference resolving outside it (a root-relative "/x", or too

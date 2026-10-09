@@ -28,7 +28,8 @@ name: Pages Deploy
 # Whatever tests or watches the site must act on SITE_DIR, never the repo root,
 # and must count the build inputs as changes (qa.yml UI_PATHS).
 #
-# FILTER. Always dropped, whatever the deny-list says: .git, .github,
+# FILTER. Each deny-list line is a literal path (no glob), removed from the
+# copy. Always dropped, whatever the deny-list says: .git, .github,
 # node_modules, and every dotfile or dot-directory (upload-pages-artifact
 # excludes them; a project serving one, .well-known say, sets
 # include-hidden-files below and denies its secrets by name).
@@ -98,17 +99,26 @@ jobs:
             echo "::error::$src/index.html is missing: the published site would have no entry point."
             exit 1
           fi
-          excludes=(--exclude=/.git --exclude=/.github --exclude=node_modules)
+          rm -rf "$RUNNER_TEMP/site"
+          mkdir -p "$RUNNER_TEMP/site"
+          rsync -a --exclude=/.git --exclude=/.github --exclude=node_modules "$src/" "$RUNNER_TEMP/site/"
+          # Deny-list entries are LITERAL site-relative paths, removed after the
+          # copy. Never rsync patterns: as an --exclude, `secret[1].txt` is a glob
+          # that leaves the file of that exact name in place. An entry that
+          # could leave the copy (a `..` component) is refused, not resolved.
+          denied=0
           if [ -f .github/pages-deny.txt ]; then
             while IFS= read -r p || [ -n "$p" ]; do
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
-              excludes+=("--exclude=/${p#/}")
+              p="${p#/}"; p="${p%/}"
+              case "/$p/" in
+                *'/../'*|*'/./'*|'//') echo "::error::pages-deny.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
+              esac
+              rm -rf -- "$RUNNER_TEMP/site/$p"
+              denied=$((denied + 1))
             done < .github/pages-deny.txt
           fi
-          rm -rf "$RUNNER_TEMP/site"
-          mkdir -p "$RUNNER_TEMP/site"
-          rsync -a "${excludes[@]}" "$src/" "$RUNNER_TEMP/site/"
           # No symlinks in the published copy. upload-pages-artifact archives with
           # tar --dereference, so a link publishes its TARGET: `notes.md ->
           # CLAUDE.md` would serve a deny-listed file under a name the deny-list
@@ -119,7 +129,7 @@ jobs:
             printf '%s\n' "$links"
             exit 1
           fi
-          echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src (${#excludes[@]} excludes)"
+          echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src, ${denied} deny-list path(s) removed"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
@@ -220,12 +230,12 @@ jobs:
           if [ "$n" -gt 0 ] && [ "$code" = "200" ]; then
             first=()
             for i in "${!paths[@]}"; do
-              first[i]=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 \
+              first[i]=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 \
                 -H "Cache-Control: no-cache" "${url}${paths[i]}?cb=${GITHUB_RUN_ID}-d1") || first[i]="000"
             done
             sleep 30
             for i in "${!paths[@]}"; do
-              second=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 \
+              second=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 \
                 -H "Cache-Control: no-cache" "${url}${paths[i]}?cb=${GITHUB_RUN_ID}-d2") || second="000"
               if [ "${first[i]}" != "404" ] || [ "$second" != "404" ]; then
                 problems="${problems}- ${url}${paths[i]} served HTTP ${first[i]} then ${second}, expected 404 on both\n"

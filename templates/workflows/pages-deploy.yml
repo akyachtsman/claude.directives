@@ -197,10 +197,13 @@ jobs:
           printf '%s\n' "$marker" > "$RUNNER_TEMP/site/pages-deploy-marker.txt"
           echo "marker=$marker" >> "$GITHUB_OUTPUT"
           echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src, ${denied} deny-list path(s) removed"
+          # A random delimiter: a fixed one could be the name of a denied file,
+          # which would close the multiline output early.
+          eof="PAGES_DENY_$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
           {
-            echo "deny<<__PAGES_DENY_EOF__"
+            echo "deny<<$eof"
             sort -u "$probes"
-            echo "__PAGES_DENY_EOF__"
+            echo "$eof"
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload Pages artifact

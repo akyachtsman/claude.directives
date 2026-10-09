@@ -229,6 +229,8 @@ styles/          ← the committed design contract (tokens.css + components.css)
                    managed build a visibility flip can fire, so installed there
                    it arms a retry of a rogue unfiltered deploy
                    (→ *Hosting & Deployment*)
+                 ← + pages-deploy.yml ONLY on an ACTIONS-SOURCE project: the
+                   converse, it is that project's deploy (retry built in)
                  ← keepalive.yml is NOT standard: it pushes to main weekly, which
                    the required default-branch ruleset refuses, and a repo where
                    PRs land never hits the public-repo 60-day inactivity limit it exists for

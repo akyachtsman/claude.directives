@@ -159,6 +159,12 @@ jobs:
               case "/$p/" in
                 *'/../'*|*'/./'*|'//') echo "::error::pages-deny.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
               esac
+              # Reserved: the marker below is written after the filter, so a
+              # deny entry for it would be published and then fail verify.
+              if [ "$p" = "pages-deploy-marker.txt" ]; then
+                echo "::error::pages-deny.txt lists pages-deploy-marker.txt, the deployment marker this workflow publishes; remove the entry."
+                exit 1
+              fi
               printf '%s\n' "$p" >> "$probes"
               if [ -d "$RUNNER_TEMP/site/$p" ]; then
                 # ./ keeps a dash-leading name from parsing as a find expression.

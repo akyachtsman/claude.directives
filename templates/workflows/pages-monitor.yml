@@ -54,8 +54,11 @@ on:
 # trigger — two `page_build` events could always collide; adding the second
 # source made it likelier, not possible.
 # (Confirmed downstream on apfp.claude, 2026-08-19.)
+# A watched run on another branch publishes nothing (the job skips it below),
+# so it gets a group of its own: in the shared one it would cancel the monitor
+# of a real deploy still probing, then report nothing itself.
 concurrency:
-  group: pages-monitor
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch != github.event.repository.default_branch && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
   cancel-in-progress: true
 
 permissions:

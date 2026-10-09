@@ -256,11 +256,13 @@ const published = (p) => tracked.has(p) && isFile(p);
 const htmlPages = execFileSync('git', ['ls-files', '-z', '*.html'], { encoding: 'utf8' })
   .split('\0').filter(Boolean).filter(isFile);  // a deleted or replaced page is not read -- the pages linking to it report it
 let htmlLinks = 0;
-for (const page of htmlPages) {
-  const html = readFileSync(page, 'utf8');
-  // Two parses: scripting on is what most visitors get, and decides the base,
-  // the refresh and the cards; scripting off is what <noscript> visitors get,
-  // and its <noscript> content is markup whose links are read too.
+// One document's links, each paired with the base it resolves against.
+// Two parses: scripting on is what most visitors get, and decides the base and
+// the refresh; scripting off is what <noscript> visitors get, and its
+// <noscript> content is markup whose links are read too. An <iframe srcdoc> is
+// a document the browser renders, so it is read the same way, recursively,
+// with this document's base as its fallback base (spec; Codex on #415).
+function documentLinks(html, fallback) {
   const doc = parseHtml(html, { scriptingEnabled: true, sourceCodeLocationInfo: true });
   const all = [...elements(doc)];
   const live = all.filter((e) => !e.inTemplate);
@@ -277,19 +279,40 @@ for (const page of htmlPages) {
   // slip (e.g. "<a" + NBSP + "class=..."): the browser makes an unknown element
   // of it, so a card or link there is dead. Refused, never read past.
   const bad = all.find(({ el }) => /[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff="'<]/.test(el.tagName));
-  if (bad) {
-    console.error(`UNREADABLE: ${page}: malformed tag name "${bad.el.tagName.slice(0, 40)}" -- a non-ASCII space or attribute text inside a tag name`);
+  if (bad) throw new Error(`malformed tag name "${bad.el.tagName.slice(0, 40)}" -- a non-ASCII space or attribute text inside a tag name`);
+  // The document base URL, as a browser sets it: the first HTML <base> in the
+  // tree that HAS an href, resolved against the fallback; the fallback when
+  // there is none or it does not parse. The parser has already decided
+  // placement -- a <base> inside <select> is dropped, one in SVG is not an HTML
+  // base, one in <template> is not in the tree.
+  const baseEl = live.find(({ el }) => el.namespaceURI === NS.html && el.tagName === 'base' && attr(el, 'href') !== undefined);
+  // A Content-Security-Policy base-uri directive can block that <base>; CSP
+  // enforcement is not modelled here, so the combination is refused rather
+  // than guessed (Codex on #415). No page here sets a CSP.
+  if (baseEl && live.some(({ el }) => el.namespaceURI === NS.html && el.tagName === 'meta'
+    && (attr(el, 'http-equiv') || '').trim().toLowerCase() === 'content-security-policy'
+    && /(?:^|;)[\t\n\f\r ]*base-uri\b/i.test(attr(el, 'content') || ''))) {
+    throw new Error('a <base> together with a Content-Security-Policy base-uri directive -- whether the policy blocks the base is CSP enforcement this check does not model; drop one of them');
+  }
+  let base = fallback;
+  if (baseEl) { try { base = new URL(attr(baseEl.el, 'href'), fallback); } catch { base = fallback; } }
+  const refresh = refreshTarget(live, base);
+  const links = all.flatMap(({ el }) => linksOf(el)).concat(noscriptLinks, refresh ? [refresh] : [])
+    .map((raw) => ({ raw, base }));
+  for (const { el } of all) {
+    const srcdoc = el.namespaceURI === NS.html && el.tagName === 'iframe' ? attr(el, 'srcdoc') : undefined;
+    if (srcdoc !== undefined) links.push(...documentLinks(srcdoc, base).links);
+  }
+  return { live, links };
+}
+for (const page of htmlPages) {
+  const pageUrl = new URL(page, ROOT);
+  let d;
+  try { d = documentLinks(readFileSync(page, 'utf8'), pageUrl); } catch (e) {
+    console.error(`UNREADABLE: ${page}: ${e.message}`);
     failed = true; continue;
   }
-  // The document base URL, as a browser sets it: the first HTML <base> in the
-  // tree that HAS an href, resolved against the page's own address; the page's
-  // address when there is none or it does not parse. The parser has already
-  // decided placement -- a <base> inside <select> is dropped, one in SVG is not
-  // an HTML base, one in <template> is not in the tree.
-  const pageUrl = new URL(page, ROOT);
-  const baseEl = live.find(({ el }) => el.namespaceURI === NS.html && el.tagName === 'base' && attr(el, 'href') !== undefined);
-  let base = pageUrl;
-  if (baseEl) { try { base = new URL(attr(baseEl.el, 'href'), pageUrl); } catch { base = pageUrl; } }
+  const { live } = d;
   // The landing-card assertions check-landing-cards.js made that still mean
   // something with one page: each live .demo-card is an HTML <a> with a
   // non-blank href, closed by its own </a> (not implied by the parser); a root
@@ -309,9 +332,7 @@ for (const page of htmlPages) {
     if (!el.sourceCodeLocation?.endTag) cardFail('has a .demo-card <a> not closed by its own </a>');
   }
   if (page === 'index.html' && cards === 0) cardFail('has no .demo-card -- the landing-card checks would pass vacuously');
-  const refresh = refreshTarget(live, base);
-  const pageLinks = all.flatMap(({ el }) => linksOf(el)).concat(noscriptLinks, refresh ? [refresh] : []);
-  for (const raw of pageLinks) {
+  for (const { raw, base } of d.links) {
     let url;
     try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }
     // http and https are one site: Pages redirects the first to the second.

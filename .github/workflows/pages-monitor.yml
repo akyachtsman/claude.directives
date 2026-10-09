@@ -31,7 +31,7 @@ name: Pages Monitor
 # taken literally (percent-encoded, no curl globbing). A DIRECTORY entry is
 # expanded to every file under it as PUBLISHED, and each is probed: a directory
 # URL can 404 while a file under it is served. The published list is the deploy
-# run's Pages artifact for an Actions deploy (the newest one on a manual run),
+# run's Pages artifact for an Actions deploy (on a manual run, that of the newest successful run),
 # and the commit's source folder (Jekyll's .md -> .html included) for a branch
 # build; an artifact that cannot be read is reported, never guessed from the
 # repository tree. At most 40 URLs after
@@ -247,8 +247,8 @@ jobs:
             # as private/a.html. So the file list comes from what was
             # published:
             #  - an Actions deploy (workflow_run): the run's own Pages artifact;
-            #  - a manual run on an Actions site: the newest Pages artifact on
-            #    the default branch;
+            #  - a manual run on an Actions site: the Pages artifact of the
+            #    newest SUCCESSFUL default-branch run;
             #  - a branch build (page_build, or a manual run on a branch-source
             #    site): the tree at the commit, under the source folder, plus
             #    Jekyll's .md -> .html names unless that folder holds a .nojekyll.
@@ -268,10 +268,20 @@ jobs:
               elif [ "${EVENT_NAME:-}" != "page_build" ] && [ "$build_type" != "legacy" ]; then
                 # Only this repository's own default-branch runs: a fork's PR
                 # run can upload a github-pages artifact from a branch it also
-                # calls main, and its list would decide what gets probed.
-                art_from="the newest Pages artifact on ${DEFAULT_BRANCH:-the default branch}"
-                art=$(gh api "repos/$REPO/actions/artifacts?per_page=100" \
-                  --jq "[.artifacts[] | select(.name | startswith(\"${PAGES_ARTIFACT_PREFIX}\")) | select(.expired | not) | select(.workflow_run.head_branch == \"${DEFAULT_BRANCH:-}\") | select(.workflow_run.head_repository_id == .workflow_run.repository_id)] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
+                # calls main, and its list would decide what gets probed. And
+                # only a run that SUCCEEDED: a newer run that uploaded and then
+                # failed to publish left the previous artifact live.
+                art_from="the newest successfully deployed Pages artifact on ${DEFAULT_BRANCH:-the default branch}"
+                cands=$(gh api "repos/$REPO/actions/artifacts?per_page=100" \
+                  --jq "[.artifacts[] | select(.name | startswith(\"${PAGES_ARTIFACT_PREFIX}\")) | select(.expired | not) | select(.workflow_run.head_branch == \"${DEFAULT_BRANCH:-}\") | select(.workflow_run.head_repository_id == .workflow_run.repository_id)] | sort_by(.id) | reverse | .[:10][] | \"\\(.workflow_run.id) \\(.archive_download_url)\"" 2>/dev/null || true)
+                while read -r cand_run cand_url; do
+                  [ -n "${cand_run:-}" ] || continue
+                  concl=$(gh api "repos/$REPO/actions/runs/$cand_run" --jq '.conclusion // empty' 2>/dev/null || true)
+                  if [ "$concl" = "success" ]; then
+                    art="$cand_url"
+                    break
+                  fi
+                done <<< "$cands"
               fi
               if [ -n "$art_from" ]; then
                 ad=$(mktemp -d)

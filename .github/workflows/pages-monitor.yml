@@ -31,9 +31,10 @@ name: Pages Monitor
 # taken literally (percent-encoded, no curl globbing). A DIRECTORY entry is
 # expanded to every file under it as PUBLISHED, and each is probed: a directory
 # URL can 404 while a file under it is served. The published list is the deploy
-# run's Pages artifact for an Actions deploy, and the built commit's source
-# folder (Jekyll's .md -> .html included) for a branch build; where neither is
-# available it falls back to the repository tree and says so. At most 40 URLs after
+# run's Pages artifact for an Actions deploy (the newest one on a manual run),
+# and the commit's source folder (Jekyll's .md -> .html included) for a branch
+# build; an artifact that cannot be read is reported, never guessed from the
+# repository tree. At most 40 URLs after
 # expansion, the same cap as pages-deploy.yml — more is reported, not silently
 # truncated, since the job bound cannot fit them. Absent file, or one listing no paths =
 # nothing declared = no-op, and the job summary says exposure was NOT checked.
@@ -103,6 +104,7 @@ jobs:
           pages=$(gh api "repos/$REPO/pages" 2>/dev/null || true)
           url=$(jq -r '.html_url // empty' <<< "${pages:-null}" 2>/dev/null || true)
           src_root=$(jq -r '.source.path // "/"' <<< "${pages:-null}" 2>/dev/null || true)
+          build_type=$(jq -r '.build_type // empty' <<< "${pages:-null}" 2>/dev/null || true)
           src_root="${src_root#/}"; src_root="${src_root%/}"
           if [ -z "$url" ]; then
             repo_name="${REPO#*/}"
@@ -211,20 +213,32 @@ jobs:
             # its build output (SITE_DIR=dist, say), a branch build publishes
             # its source folder (/docs, say), and Jekyll renders private/a.md
             # as private/a.html. So the file list comes from what was
-            # published, where that is knowable:
+            # published:
             #  - an Actions deploy (workflow_run): the run's own Pages artifact;
-            #  - a branch build (page_build): the tree at the built commit, under
-            #    the source folder, plus Jekyll's .md -> .html names unless that
-            #    folder holds a .nojekyll.
-            # Otherwise (a manual run, an artifact that is gone) it is the
-            # repository tree, and the summary says the expansion is approximate.
+            #  - a manual run on an Actions site: the newest Pages artifact on
+            #    the default branch;
+            #  - a branch build (page_build, or a manual run on a branch-source
+            #    site): the tree at the commit, under the source folder, plus
+            #    Jekyll's .md -> .html names unless that folder holds a .nojekyll.
+            # An artifact that cannot be read FAILS the check rather than falling
+            # back to the repository tree: a build's output paths (dist/x is
+            # served as x) do not match the tree, so the fallback would miss the
+            # very files it exists to find.
             # LIMIT: a Jekyll permalink moves a page where no listing shows it.
             paths=()
             live=""; live_from=""; jekyll=0
             if [ "${#entries[@]}" -gt 0 ]; then
+              art=""; art_from=""
               if [ -n "${RUN_ID:-}" ]; then
+                art_from="the deploy run's Pages artifact"
                 art=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
                   --jq '[.artifacts[] | select(.name | startswith("github-pages")) | select(.expired | not)] | sort_by(.id) | last | .archive_download_url // empty' 2>/dev/null || true)
+              elif [ "${EVENT_NAME:-}" != "page_build" ] && [ "$build_type" != "legacy" ]; then
+                art_from="the newest Pages artifact on ${DEFAULT_BRANCH:-the default branch}"
+                art=$(gh api "repos/$REPO/actions/artifacts?per_page=100" \
+                  --jq "[.artifacts[] | select(.name | startswith(\"github-pages\")) | select(.expired | not) | select(.workflow_run.head_branch == \"${DEFAULT_BRANCH:-}\")] | sort_by(.id) | last | .archive_download_url // empty" 2>/dev/null || true)
+              fi
+              if [ -n "$art_from" ]; then
                 ad=$(mktemp -d)
                 # upload-pages-artifact stores one artifact.tar of `./`-relative
                 # entries; directories end in `/`.
@@ -233,31 +247,27 @@ jobs:
                    && unzip -q "$ad/a.zip" -d "$ad/x" && [ -f "$ad/x/artifact.tar" ] \
                    && tar -tf "$ad/x/artifact.tar" > "$ad/list"; then
                   live=$(sed 's#^\./##' "$ad/list" | grep -v -e '/$' -e '^$' || true)
-                  live_from="the deploy run's Pages artifact"
+                  live_from="$art_from"
+                else
+                  problems="${problems}- Could not read ${art_from}, so files under denied directories are NOT checked (the repository tree does not give the published paths)\n"
                 fi
-              fi
-              if [ -z "$live_from" ]; then
+              else
                 tree_err=$(mktemp)
                 if tree=$(gh api "repos/$REPO/git/trees/${commit:-HEAD}?recursive=1" \
                       --jq 'if .truncated then "::TRUNCATED::" else (.tree[] | select(.type == "blob") | .path) end' 2>"$tree_err") \
                    && [ "$tree" != "::TRUNCATED::" ]; then
-                  if [ "${EVENT_NAME:-}" = "page_build" ]; then
-                    if [ -n "$src_root" ]; then
-                      live=$(while IFS= read -r f; do
-                        case "$f" in "$src_root"/*) printf '%s\n' "${f#"$src_root"/}" ;; esac
-                      done <<< "$tree")
-                    else
-                      live="$tree"
-                    fi
-                    if ! grep -qx '\.nojekyll' <<< "$live"; then
-                      jekyll=1
-                      live=$(printf '%s\n' "$live"; sed -n -E 's/\.(md|markdown)$/.html/p' <<< "$live")
-                    fi
-                    live_from="the built commit, under its source folder"
+                  if [ -n "$src_root" ]; then
+                    live=$(while IFS= read -r f; do
+                      case "$f" in "$src_root"/*) printf '%s\n' "${f#"$src_root"/}" ;; esac
+                    done <<< "$tree")
                   else
                     live="$tree"
-                    live_from="the repository tree (approximate: no published file list was available)"
                   fi
+                  if ! grep -qx '\.nojekyll' <<< "$live"; then
+                    jekyll=1
+                    live=$(printf '%s\n' "$live"; sed -n -E 's/\.(md|markdown)$/.html/p' <<< "$live")
+                  fi
+                  live_from="the commit, under the Pages source folder"
                 else
                   [ "${tree:-}" = "::TRUNCATED::" ] && echo "the tree listing was truncated" > "$tree_err"
                   problems="${problems}- Could not list the repository tree to expand denied directories, so files under them are NOT checked: $(head -c 200 "$tree_err" | tr '\n' ' ')\n"

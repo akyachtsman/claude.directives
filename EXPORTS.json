@@ -58,7 +58,8 @@
         "docs/standards/hosting-mechanics.md",
         "plugins/directives-toolkit/skills/update-pages/",
         "templates/workflows/pages-monitor.yml",
-        "templates/workflows/pages-retry.yml"
+        "templates/workflows/pages-retry.yml",
+        "templates/workflows/pages-deploy.yml"
       ],
       "starter": [
         "templates/CLAUDE-template.md"
@@ -278,6 +279,7 @@
         "templates/actions/secret-scan/",
         "templates/workflows/pages-monitor.yml",
         "templates/workflows/pages-retry.yml",
+        "templates/workflows/pages-deploy.yml",
         "templates/workflows/ci-monitor.yml",
         "templates/workflows/ci-notify.yml",
         "templates/workflows/codex-monitor.yml",

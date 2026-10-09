@@ -1,0 +1,548 @@
+name: Pages Deploy
+# Actions-source GitHub Pages deploy: build (optional) -> filter -> publish ->
+# assert. The deploy for a project whose Pages source is "GitHub Actions":
+# global.md -> Hosting & Deployment (a repo holding any file that must not be
+# public, or a project that has taken the CI-build opt-in, which forces
+# Actions-source). A BRANCH-SOURCE project does NOT install this file: there the
+# push is the deploy and GitHub runs the managed pages-build-deployment.
+#
+# Install, in the same change:
+#   1. Settings -> Pages -> Build and deployment -> Source = "GitHub Actions".
+#   2. Fill in BUILD_CMD and SITE_DIR in the build job below.
+#   3. Declare every path that must not be public in .github/pages-deny.txt
+#      (one site-relative path per line; `#` comments and blank lines ignored —
+#      the same file pages-monitor.yml reads). Each one is left out of the
+#      published copy AND asserted 404 on the live site after the deploy.
+#   4. The watchers: add this workflow's exact `name:` ("Pages Deploy") to
+#      qa-live.yml's watch list, and the same name as a new trigger in
+#      pages-monitor.yml (its header has the snippet) — ADD, never replace
+#      (W2). Rename it and both follow. Then list both in
+#      .github/workflow-ref-required.json, so a refresh that drops either
+#      trigger fails the build instead of going quiet:
+#      "qa-live.yml": ["Pages Deploy"], "pages-monitor.yml": ["Pages Deploy"].
+#   5. Delete pages-retry.yml and its REQUIRED entry (W3): the retry lives here.
+# Installed before the first page exists (a new project), it publishes nothing
+# until index.html arrives: with no build and no Pages deployment ever, a run
+# skips its Publish job: pages-monitor.yml reports "nothing published" and
+# qa-live.yml skips its suite (both read the skipped Publish job).
+# Rules and reasoning: docs/standards/automations.md -> Watcher Rules (W2, W3),
+# docs/standards/hosting-mechanics.md.
+#
+# BUILD (opt-in only — global.md -> Hosting & Deployment). BUILD_CMD is the
+# build recorded on the `Build:` bullet in the project CLAUDE.md, run from the
+# repo root (`npm ci && npm run build`, say); SITE_DIR is the directory it
+# writes. No build: BUILD_CMD empty and SITE_DIR `.` — the repo root, filtered.
+# Whatever tests or watches the site must act on SITE_DIR, never the repo root,
+# and must count the build inputs as changes (qa.yml UI_PATHS).
+#
+# FILTER. Each deny-list line is a literal path (no glob), removed from the
+# copy. Always dropped, whatever the deny-list says: .git and .github at any depth,
+# node_modules, and every dotfile or dot-directory (upload-pages-artifact
+# excludes them; a project serving one, .well-known say, sets
+# INCLUDE_HIDDEN_FILES to 'true' in the build job and denies its secrets by name).
+# A symlink anywhere in the copy fails the run: the upload follows links, so
+# one would publish its target past the deny-list.
+#
+# RETRY. GitHub's own publish step sometimes fails with a transient "Deployment
+# failed, try again later". The deploy job retries a FAST failure twice from the
+# same artifact, so nothing is rebuilt. A failure after ~8 minutes or more is
+# most likely deploy-pages' own timeout and is not retried: GitHub may still be
+# settling that deployment. A whole-run retry is why pages-retry.yml, which
+# re-runs a WHOLE watched run, does not belong beside this file.
+#
+# ASSERT. Only once the live site serves this run's pages-deploy-marker.txt (a
+# file of that name in the site is overwritten), so no probe can be answered by
+# the previous deployment: the root serves 200; each deny-listed path serves 404
+# on two probes 30s apart; each path in .github/pages-public.txt
+# (internal-looking files that must stay public, same format) serves 200.
+# Redirects are not followed; paths are percent-encoded and cache-busted. A
+# failure fails this run, where the bad filter was made. It is NOT a substitute
+# for pages-monitor.yml: a deploy that fails before reaching these steps reports
+# nothing here (hosting-mechanics.md -> Verification versus the monitor). The
+# probes are anonymous, so a PRIVATE Pages site (Enterprise Cloud only) reads
+# as down: such a project replaces them with authenticated ones.
+on:
+  push:
+    branches: [main]
+  # Stuck-run recovery re-dispatches this workflow (update-pages step 5). Never
+  # recover an Actions-source site by switching to "Deploy from a branch": that
+  # publishes the whole repository, unfiltered and unbuilt.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time. A RUNNING deploy is never cancelled: cancelling a
+# publish mid-flight can leave the previous deployment live with no failure
+# reported. A PENDING one is: the group holds one waiting run, and a newer push
+# replaces it (conclusion `cancelled`), so the newest main is what deploys. A
+# watcher reading conclusions must treat a cancelled run with a newer run of
+# this workflow behind it as superseded, not as a failed deploy.
+# Only main shares the group. A run on any other ref (a manual dispatch with
+# --ref) gets a group of its own, so it can never take the pending slot from a
+# main run before the build job's "Only main deploys" step rejects it.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'pages-deploy' || format('pages-deploy-offmain-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and filter
+    runs-on: ubuntu-latest
+    outputs:
+      # Every URL the verify job must see 404: each deny entry, and every file
+      # a denied DIRECTORY held (a directory URL can 404 while a file under it
+      # is served, so probing the directory alone proves nothing).
+      deny: ${{ steps.filter.outputs.deny }}
+      # The token written into the artifact. Verify compares against THIS, not
+      # its own run attempt: "Re-run failed jobs" reuses a successful build's
+      # artifact while GITHUB_RUN_ATTEMPT moves on.
+      marker: ${{ steps.filter.outputs.marker }}
+      # The artifact name, one per build attempt. "Re-run all jobs" runs the
+      # build again in the same run; a second artifact of the default name
+      # makes deploy-pages refuse ("multiple artifacts"). Each attempt uploads
+      # its own name and the deploy job takes the name from here, so "Re-run
+      # failed jobs", which reuses the build, still gets the right one.
+      artifact: github-pages-${{ github.run_attempt }}
+      # false only in the bootstrap state (no page yet, nothing ever deployed):
+      # the deploy and verify jobs are skipped and the run publishes nothing.
+      publish: ${{ steps.filter.outputs.publish }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      deployments: read # tells the bootstrap state from a site that lost its entry point
+    env:
+      BUILD_CMD: ''
+      SITE_DIR: '.'
+      # upload-pages-artifact's include-hidden-files, read by the filter too:
+      # a hidden file the upload drops is not probed, so it is not counted.
+      INCLUDE_HIDDEN_FILES: 'false'
+    steps:
+      # The live site is main, whatever ref a manual dispatch names: the Actions
+      # UI and `--ref` can start this on any branch, which would publish
+      # unmerged work. Recovery dispatches run on main (update-pages step 5).
+      - name: Only main deploys
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::this workflow publishes the live site and runs only on main; it was started on ${GITHUB_REF}."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: env.BUILD_CMD != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build
+        if: env.BUILD_CMD != ''
+        run: bash -eo pipefail -c "$BUILD_CMD"
+
+      - name: Filter by deny-list
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          src="${SITE_DIR%/}"
+          [ -n "$src" ] || src="."
+          if [ ! -d "$src" ]; then
+            echo "::error::SITE_DIR=$SITE_DIR is not a directory after the build."
+            exit 1
+          fi
+          if [ ! -f "$src/index.html" ]; then
+            # BOOTSTRAP. /new-repo installs this workflow before the first page
+            # exists (the build writes index.html later), so a project with no
+            # build and no Pages deployment ever has nothing to publish yet: that
+            # run is a no-op, not a failure. Anything else without an entry
+            # point (a build that wrote none, a site that once deployed) fails,
+            # and so does a deployments lookup that fails.
+            if [ -z "${BUILD_CMD:-}" ] \
+               && n=$(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=1" --jq 'length') \
+               && [ "$n" = "0" ]; then
+              echo "::notice::no index.html yet and nothing ever deployed: nothing to publish."
+              echo "## ⏭️ No site yet: nothing published" >> "$GITHUB_STEP_SUMMARY"
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::$src/index.html is missing: the published site would have no entry point."
+            exit 1
+          fi
+          # The site directory itself must resolve inside the workspace. rsync
+          # copies the CONTENTS of `$src/`, so a SITE_DIR that is (or passes
+          # through) a link, `dist -> /tmp/x` say, would publish whatever it
+          # points at as ordinary files, which the symlink check below never sees.
+          ws=$(realpath -e .)
+          real=$(realpath -e -- "$src")
+          case "$real/" in
+            "$ws"/*) ;;
+            *) echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the workspace $ws; publish a real directory inside the repository."; exit 1 ;;
+          esac
+          rm -rf "$RUNNER_TEMP/site"
+          mkdir -p "$RUNNER_TEMP/site"
+          # `--` ends the options: a SITE_DIR such as `-site` would otherwise be
+          # read as one, copy nothing, and still exit 0. The excludes are not
+          # anchored, so a NESTED .git or .github is dropped too, whatever
+          # INCLUDE_HIDDEN_FILES says.
+          rsync -a --exclude=.git --exclude=.github --exclude=node_modules -- "$src/" "$RUNNER_TEMP/site/"
+          # No symlinks in the published copy. upload-pages-artifact archives with
+          # tar --dereference, so a link publishes its TARGET: `notes.md ->
+          # CLAUDE.md` would serve a deny-listed file under a name the deny-list
+          # never names, and an absolute link could publish runner files.
+          # Checked BEFORE the deny-list: `rm -rf link/x` follows a directory
+          # link, so a link to `..` would delete outside the copy.
+          links=$(find "$RUNNER_TEMP/site" -type l -printf '%P -> %l\n')
+          if [ -n "$links" ]; then
+            echo "::error::symlinks in the site would publish their targets past the deny-list; replace them with real files or remove them:"
+            printf '%s\n' "$links"
+            exit 1
+          fi
+          # Deny-list entries are LITERAL site-relative paths, removed after the
+          # copy. Never rsync patterns: as an --exclude, `secret[1].txt` is a glob
+          # that leaves the file of that exact name in place. An entry that
+          # could leave the copy (a `..` component) is refused, not resolved.
+          denied=0
+          probes="$RUNNER_TEMP/deny-probes.txt"
+          : > "$probes"
+          if [ -f .github/pages-deny.txt ]; then
+            while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
+              p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+              case "$p" in ''|'#'*) continue ;; esac
+              p="${p#/}"; p="${p%/}"
+              case "/$p/" in
+                *'/../'*|*'/./'*|'//') echo "::error::pages-deny.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
+              esac
+              # Reserved: the marker below is written after the filter, so a
+              # deny entry for it would be published and then fail verify.
+              if [ "$p" = "pages-deploy-marker.txt" ]; then
+                echo "::error::pages-deny.txt lists pages-deploy-marker.txt, the deployment marker this workflow publishes; remove the entry."
+                exit 1
+              fi
+              printf '%s\n' "$p" >> "$probes"
+              if [ -d "$RUNNER_TEMP/site/$p" ]; then
+                # ./ keeps a dash-leading name from parsing as a find expression.
+                # Hidden files are left out unless the upload includes them.
+                if [ "${INCLUDE_HIDDEN_FILES:-false}" = "true" ]; then
+                  (cd "$RUNNER_TEMP/site" && find "./$p" -type f | sed 's#^\./##') >> "$probes"
+                else
+                  (cd "$RUNNER_TEMP/site" && find "./$p" -type f -not -path '*/.*' | sed 's#^\./##') >> "$probes"
+                fi
+              fi
+              # An entry that names nothing is still probed, but it removes
+              # nothing either: written relative to the repository instead of
+              # SITE_DIR, or naming a source (foo.md) the build renamed, it would
+              # leave the real file published. Say so on the run.
+              if [ ! -e "$RUNNER_TEMP/site/$p" ]; then
+                echo "::warning::pages-deny.txt entry [$p] matches nothing in the site; paths are relative to SITE_DIR and name what is published."
+                echo "- pages-deny.txt entry \`$p\` matched nothing in the site" >> "$GITHUB_STEP_SUMMARY"
+              fi
+              rm -rf -- "$RUNNER_TEMP/site/$p"
+              denied=$((denied + 1))
+            done < .github/pages-deny.txt
+          fi
+          # The verify job's caps, enforced HERE, before anything is uploaded:
+          # verify applies them too, but only after Publish has replaced the
+          # live site, so an over-long list would ship with nothing asserted.
+          ndeny=$(sort -u "$probes" | sed '/^$/d' | wc -l)
+          if [ "$ndeny" -gt 40 ]; then
+            echo "::error::the deny-list expands to ${ndeny} URLs; the verify job probes at most 40 within its bound. Deny fewer, more specific paths, or raise its timeout-minutes and both caps together."
+            exit 1
+          fi
+          if [ -f .github/pages-public.txt ]; then
+            pubs="$RUNNER_TEMP/public-paths.txt"
+            : > "$pubs"
+            while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
+              p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+              case "$p" in ''|'#'*) continue ;; esac
+              p="${p#/}"
+              case "/${p%/}/" in
+                *'/../'*|*'/./'*|'//') echo "::error::pages-public.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
+              esac
+              # It must be in what is uploaded: a path the deny-list removed (the
+              # path itself or a parent), that the build never wrote, or that is
+              # hidden while the upload drops hidden files would publish a tree
+              # the verify job is bound to reject.
+              if [ ! -e "$RUNNER_TEMP/site/${p%/}" ]; then
+                echo "::error::pages-public.txt lists [$p], which is not in the filtered site (removed by pages-deny.txt, or never built)."
+                exit 1
+              fi
+              case "/$p" in
+                */.*) if [ "${INCLUDE_HIDDEN_FILES:-false}" != "true" ]; then
+                        echo "::error::pages-public.txt lists [$p], a hidden path the upload drops; set INCLUDE_HIDDEN_FILES to 'true' to publish it."
+                        exit 1
+                      fi ;;
+              esac
+              printf '%s\n' "$p" >> "$pubs"
+            done < .github/pages-public.txt
+            npub=$(sort -u "$pubs" | wc -l)
+            if [ "$npub" -gt 20 ]; then
+              echo "::error::pages-public.txt lists ${npub} paths; the verify job probes at most 20 within its bound. List fewer, or raise its timeout-minutes and both caps together."
+              exit 1
+            fi
+          fi
+          # Again after the filter: a deny entry can remove the entry point
+          # itself, and a tree without one must not reach the live site.
+          if [ ! -f "$RUNNER_TEMP/site/index.html" ]; then
+            echo "::error::index.html is gone after applying .github/pages-deny.txt; the published site would have no entry point."
+            exit 1
+          fi
+          # The deployment marker: the verify job waits until the live site
+          # serves THIS run's token before probing anything, so no probe can be
+          # answered by the previous deployment. Written last, after the filter.
+          marker="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s\n' "$marker" > "$RUNNER_TEMP/site/pages-deploy-marker.txt"
+          echo "marker=$marker" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src, ${denied} deny-list path(s) removed"
+          # A random delimiter: a fixed one could be the name of a denied file,
+          # which would close the multiline output early.
+          eof="PAGES_DENY_$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
+          {
+            echo "deny<<$eof"
+            sort -u "$probes"
+            echo "$eof"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload Pages artifact
+        if: steps.filter.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/site
+          include-hidden-files: ${{ env.INCLUDE_HIDDEN_FILES }}
+          name: github-pages-${{ github.run_attempt }}
+
+  deploy:
+    # pages-monitor.yml reads a run whose "Publish" job was skipped as one that
+    # published nothing; keep the name in step with it.
+    name: Publish
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    # deploy-pages waits up to 10 minutes per attempt; three attempts plus the
+    # two pauses between them fit inside 40.
+    timeout-minutes: 40
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.url.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.url.outputs.page_url }}
+    steps:
+      # A RE-RUN deploys this run's commit again. Once main has moved on, that
+      # rolls the live site back to older content, and nothing objects: verify
+      # passes on this run's own marker and the monitor sees a success. A tip
+      # check cannot close that, since main can move between the check and the
+      # publish, so a re-run of this job is refused outright: dispatch a new run
+      # on main, which always publishes main's current tip. (Re-running only a
+      # failed verify job does not reach this step.)
+      - name: Refuse a re-run of the publish
+        if: github.run_attempt > 1
+        run: |
+          echo "::error::a re-run would publish ${GITHUB_SHA:0:7} again, which may no longer be main's tip. Dispatch a new run on main instead (Actions -> Pages Deploy -> Run workflow)."
+          exit 1
+
+      - name: Start the attempt clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Deploy (attempt 1)
+        id: d1
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact }}
+
+      # Retry only a FAST failure: GitHub's transient "Deployment failed, try
+      # again later" comes back in seconds. A failure near deploy-pages' own
+      # 10-minute timeout is most likely a timeout, and GitHub can still be
+      # settling that deployment server-side, so an immediate retry is rejected
+      # or cancelled and keeps the environment occupied. That case stops here.
+      - name: Retry after attempt 1?
+        if: steps.d1.outcome == 'failure'
+        run: |
+          elapsed=$(( $(date +%s) - T0 ))
+          if [ "$elapsed" -ge 480 ]; then
+            echo "::error::deploy attempt 1 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, dispatch a new run on main (a re-run of this one is refused)."
+            exit 1
+          fi
+          sleep 30
+          echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Deploy (attempt 2)
+        id: d2
+        if: steps.d1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact }}
+
+      - name: Retry after attempt 2?
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
+        run: |
+          elapsed=$(( $(date +%s) - T0 ))
+          if [ "$elapsed" -ge 480 ]; then
+            echo "::error::deploy attempt 2 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, dispatch a new run on main (a re-run of this one is refused)."
+            exit 1
+          fi
+          sleep 60
+          echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Deploy (attempt 3)
+        id: d3
+        if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact }}
+
+      - name: Page URL
+        id: url
+        env:
+          U1: ${{ steps.d1.outputs.page_url }}
+          U2: ${{ steps.d2.outputs.page_url }}
+          U3: ${{ steps.d3.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          url="${U3:-${U2:-$U1}}"
+          if [ -z "$url" ]; then
+            echo "::error::deploy-pages reported no page_url."
+            exit 1
+          fi
+          echo "page_url=$url" >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: Assert the live site
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    # Up to 10 min for the new deployment's marker, liveness up to ~165s, a 30s
+    # pause, two 8s passes over at most 40 deny URLs (~11 min), and one 8s probe
+    # for each of at most 20 public paths (~3 min): ~27 min worst case.
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Root serves 200, deny-listed paths 404, declared public paths 200
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          DENY: ${{ needs.build.outputs.deny }}
+          MARKER: ${{ needs.build.outputs.marker }}
+        run: |
+          set -euo pipefail
+          url="$PAGE_URL"
+          case "$url" in */) ;; *) url="${url}/" ;; esac
+          problems=""
+          # One site-relative path per line, `#` comments and blank lines ignored.
+          read_list() {
+            [ -f "$1" ] || return 0
+            while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
+              p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+              case "$p" in ''|'#'*) continue ;; esac
+              printf '%s\n' "${p#/}"
+            done < "$1"
+          }
+          # Percent-encode each segment: a literal `#` or `?` in a file name
+          # would otherwise start a fragment or query and probe another URL.
+          enc() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$1"; }
+          # A failed curl still prints 000 through -w, so the fallback REPLACES
+          # the captured code rather than appending to it.
+          probe() {
+            local c
+            c=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 \
+              -H "Cache-Control: no-cache" "${url}$(enc "$1")?cb=${GITHUB_RUN_ID}-$2") || c="000"
+            printf '%s' "$c"
+          }
+          # Wait for THIS deployment, not merely for a 200: a cache-busting query
+          # skips cached objects but does not prove the edge has switched, and a
+          # forbidden file new in this artifact reads 404 from the old one.
+          token="$MARKER"
+          if [ -z "$token" ]; then
+            echo "::error::the build job reported no deployment marker; cannot tell the new deployment from the old."
+            exit 1
+          fi
+          # An ELAPSED deadline, not a count of polls: each poll may spend its
+          # own --max-time, so 60 polls could take twice the 10 minutes.
+          live=""; attempt=0; deadline=$((SECONDS + 600))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            attempt=$((attempt + 1))
+            live=$(curl -s --max-time 10 -H "Cache-Control: no-cache" \
+              "${url}pages-deploy-marker.txt?cb=${GITHUB_RUN_ID}-m${attempt}" | head -c 200) || live=""
+            [ "$live" = "$token" ] && break
+            sleep 10
+          done
+          if [ "$live" != "$token" ]; then
+            echo "::error::the live site never served this run's deployment marker (${token}) within 10 minutes; nothing was probed, because every probe would read the previous deployment."
+            echo "- new deployment (marker ${token}) not observed live within 10 minutes; probes NOT run" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          code="000"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+              -H "Cache-Control: no-cache" "${url}?cb=${GITHUB_RUN_ID}-${attempt}") || code="000"
+            [ "$code" = "200" ] && break
+            sleep $((attempt * 6))
+          done
+          [ "$code" = "200" ] || problems="${problems}- ${url} returned HTTP ${code}, expected 200\n"
+          # The build job's list: each deny entry plus every file a denied
+          # directory held, so a served file under a 404ing directory is caught.
+          mapfile -t deny < <(printf '%s\n' "$DENY" | sed '/^$/d')
+          if [ "${#deny[@]}" -gt 40 ]; then
+            echo "::error::the deny-list expands to ${#deny[@]} URLs; this job probes at most 40 within its bound. Deny fewer, more specific paths, or raise timeout-minutes and both caps together (the build job checks the same)."
+            exit 1
+          fi
+          # Internal-LOOKING paths that must stay public (global.md -> Hosting &
+          # Deployment): a .well-known file, say. A filter that drops one
+          # leaves the root and every deny probe green.
+          mapfile -t public < <(read_list .github/pages-public.txt | sort -u)
+          # Same rule as the deny-list: a `.` or `..` component would let curl
+          # squash the path out of the project site and probe something else.
+          if [ "${#public[@]}" -gt 20 ]; then
+            echo "::error::pages-public.txt lists ${#public[@]} paths; this job probes at most 20 within its bound. List fewer, or raise timeout-minutes and both caps together (the build job checks the same)."
+            exit 1
+          fi
+          for p in "${public[@]}"; do
+            case "/${p%/}/" in
+              *'/../'*|*'/./'*|'//') echo "::error::pages-public.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
+            esac
+          done
+          n=${#deny[@]}; m=${#public[@]}
+          if [ $((n + m)) -gt 0 ] && [ "$code" = "200" ]; then
+            first=()
+            for i in "${!deny[@]}"; do first[i]=$(probe "${deny[i]}" d1); done
+            # Two probes 30s apart: one 404 can be the PREVIOUS deploy while the
+            # CDN propagates, and a new public file may not be live on the first.
+            sleep 30
+            for i in "${!deny[@]}"; do
+              second=$(probe "${deny[i]}" d2)
+              if [ "${first[i]}" != "404" ] || [ "$second" != "404" ]; then
+                problems="${problems}- ${url}${deny[i]} served HTTP ${first[i]} then ${second}, expected 404 on both\n"
+              fi
+            done
+            for i in "${!public[@]}"; do
+              pc=$(probe "${public[i]}" p)
+              [ "$pc" = "200" ] || problems="${problems}- ${url}${public[i]} (declared public) served HTTP ${pc}, expected 200\n"
+            done
+          elif [ $((n + m)) -gt 0 ]; then
+            problems="${problems}- declared paths NOT checked: the site itself is not serving\n"
+          fi
+          {
+            echo "## Pages deploy: ${url}"
+            echo ""
+            echo "- Root: HTTP ${code}"
+            if [ "$n" -eq 0 ]; then
+              echo "- Deny-list: none declared in .github/pages-deny.txt — exposure NOT checked"
+            else
+              echo "- Deny-list: ${n} path(s) probed twice, 30s apart"
+            fi
+            echo "- Declared public paths (.github/pages-public.txt): ${m}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$problems" ]; then
+            printf '%b' "$problems" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

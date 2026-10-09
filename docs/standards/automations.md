@@ -89,7 +89,8 @@ Verifying a deploy is not re-running one. `pages-monitor` and `qa-live` may
 watch either source. `pages-retry` may not: it re-runs the whole watched run, so
 pointing it at a project-owned deploy replays that workflow's entire build,
 which this template neither intends nor bounds. Actions-source projects build
-retry into their own deploy workflow instead (Automation 4b).
+retry into their own deploy workflow instead (Automation 4b);
+`templates/workflows/pages-deploy.yml` is that deploy, retry included.
 
 A project MAY extend it anyway if its deploy is genuinely idempotent — no build,
 no compile, no tests, same commit in and same tree out — but must record that
@@ -257,11 +258,14 @@ or live URL not serving — with no session required.
   serve 404 on two probes 30s apart (one 404 can be the previous deploy
   mid-propagation) — the only thing here that catches a rogue unfiltered
   republish, which serves 200 and passes the two checks above. No file, or no
-  paths in it = not checked, and the job summary says so; more than 15 paths is
-  reported rather than truncated; the list covers only the paths someone
-  remembered.
+  paths in it = not checked, and the job summary says so. A directory entry is
+  expanded to every file under it as published (the deploy's Pages artifact, or
+  a branch build's source folder), and a list that cannot be read is reported,
+  never guessed; more than 40 URLs after that expansion is reported rather than
+  truncated; the list covers only the paths someone remembered.
 - On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
-  issue. A healthy deploy closes it and reports green in the job summary only.
+  issue. A healthy deploy closes it and reports green in the job summary only; a
+  healthy MANUAL run does not close it, since it cannot tell which build is live.
 - The live URL comes from the Pages API (user-site repos and custom domains work),
   with a generic derivation as fallback — the file is portable to any project as-is.
 - Uses `GITHUB_TOKEN` only.

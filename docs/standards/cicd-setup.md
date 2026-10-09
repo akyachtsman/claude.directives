@@ -23,7 +23,7 @@ Three GitHub Actions workflows replace manual agent invocation for the mechanica
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
 | `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — plus the scheduled `cron-notify.yml` (Step 9f), so all eight are standard (`global.md` → *Repo Structure Standard*). `pages-retry.yml` is the one conditional file (Step 9d; `automations.md` → *Watcher Rules* W3): **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name. `keepalive.yml` is NOT installed (Step 9f).
+Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — plus the scheduled `cron-notify.yml` (Step 9f), so all eight are standard (`global.md` → *Repo Structure Standard*). Two files are conditional on the Pages source, so every project has nine: `pages-retry.yml` (Step 9d; `automations.md` → *Watcher Rules* W3) — **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name — and its converse `pages-deploy.yml` (Step 9d-bis), the deploy itself, installed **only** on Actions-source. `keepalive.yml` is NOT installed (Step 9f).
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -242,15 +242,27 @@ Add any additional backend API secrets the app requires (e.g. read-only API toke
 
 ## Step 6 — Enable GitHub Pages
 
-`Settings → Pages → Source → Deploy from a branch → Branch: main → / (root)`
+Pick the source first (`directives/global.md` → *Hosting & Deployment*), and set
+only that one:
 
-Save. GitHub will create the `pages-build-deployment` workflow automatically. This is what triggers `qa-live.yml`.
+- **Branch-source** (nothing in the repo must stay private, no CI build):
+  `Settings → Pages → Source → Deploy from a branch → Branch: main → / (root)`.
+  Save. GitHub creates the `pages-build-deployment` workflow automatically; it
+  is what triggers `qa-live.yml`.
+- **Actions-source** (a file that must not be public, or the CI-build opt-in):
+  `Settings → Pages → Source → GitHub Actions`. ⚠️ **Never select "Deploy from
+  a branch" here, not even briefly:** it publishes the whole repository,
+  unfiltered, before `pages-deploy.yml` (Step 9d-bis) ever runs. The deploy is
+  `Pages Deploy`, and it is what triggers `qa-live.yml`.
 
 ---
 
-## Step 7 — Verify pages-build-deployment appears
+## Step 7 — Verify the deploy workflow appears
 
-Go to the target repo's `Actions` tab. Confirm `pages-build-deployment` appears in the workflow list after enabling Pages. It may take one push to appear.
+Go to the target repo's `Actions` tab and confirm the deploy for the source you
+picked appears in the workflow list: `pages-build-deployment` on branch-source,
+`Pages Deploy` on Actions-source (once Step 9d-bis has merged). It may take one
+push to appear.
 
 ---
 
@@ -307,7 +319,10 @@ Drop-in for a **branch-source** Pages project (the live URL is derived from the
 repo). ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, `page_build`
 never fires and this monitor is inert until you add a `workflow_run` trigger
 naming your own deploy workflow — the template header carries the snippet, and
-the same name must be added to `qa-live.yml`'s watch list. Do NOT add it to
+the same name must be added to `qa-live.yml`'s watch list. If that deploy
+uploads its Pages artifact under its own name (`upload-pages-artifact`'s
+`name:`), set the monitor's `PAGES_ARTIFACT_PREFIX` to it: the monitor reads the
+published file list from that artifact. Do NOT add it to
 `pages-retry.yml` — unless that deploy is provably idempotent and you record, in
 the project's CLAUDE.md, **both** why *and* a **revisit trigger** naming the
 condition that ends the exception ("if the deploy ever gains a build or test
@@ -341,7 +356,10 @@ repo, so its second rule is configured here rather than edited into the file:
 For the retry, state both branches (Step 9d; `automations.md` → *Watcher Rules* W3):
 **branch-source** → `"pages-retry.yml": ["pages-build-deployment"]`;
 **Actions-source** → no entry, **or**, under W3's exception, the entry naming the
-project's own deploy.
+project's own deploy. An Actions-source project also lists its two deploy
+watchers, so neither trigger can be dropped quietly: with `pages-deploy.yml`
+(Step 9d-bis), `"qa-live.yml": ["Pages Deploy"]` and
+`"pages-monitor.yml": ["Pages Deploy"]`.
 
 It reads the workflows with PyYAML, which ships on GitHub's runner images and is
 already what `qa.yml` parses workflow YAML with — no install step. The guard was
@@ -488,6 +506,32 @@ that rogue unfiltered deploy; (2) it only arms once
 it's on the default branch, so it covers the *next* deploy, not the one that adds
 it.
 
+### 9d-bis — Pages Deploy (Actions-source only)
+
+⚠️ **ACTIONS-SOURCE ONLY — the mirror of 9d.** Install this where Settings →
+Pages → Source is "GitHub Actions": a repo holding files that must not be public,
+or a project with the CI-build opt-in (`directives/global.md` → *Hosting & Deployment*). A branch-source
+project does not install it; there the push is the deploy.
+
+```bash
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-deploy.yml \
+  -o .github/workflows/pages-deploy.yml
+```
+
+**What it does:** builds (only with the opt-in: `BUILD_CMD` and `SITE_DIR` in its
+header), copies the site minus every `.github/pages-deny.txt` path, publishes it,
+retries GitHub's transient publish failure from the same artifact, then asserts
+the root serves 200, each denied path 404, and each path in
+`.github/pages-public.txt` (internal-looking files that must stay public) 200. Its header lists the rest of the
+switch: watchers named "Pages Deploy" in `qa-live.yml` and `pages-monitor.yml`
+(add, never replace), each listed in `.github/workflow-ref-required.json` (Step
+9c-bis) as `"qa-live.yml": ["Pages Deploy"]` and `"pages-monitor.yml": ["Pages Deploy"]`,
+and `pages-retry.yml` deleted with its `REQUIRED` entry. Installed before the
+project's first page exists, it publishes nothing until `index.html` arrives: a
+run with no build and no Pages deployment ever skips its Publish job, and
+`pages-monitor.yml` reports it as nothing published rather than a failure while
+`qa-live.yml` skips its suite.
+
 ### 9e — CI Notify
 
 Drop-in — edit only the watched names to match the QA workflows you installed
@@ -543,7 +587,7 @@ Open the PR from the branch that now holds Steps 1–9. That PR is the test:
 
 - [ ] `QA — Static + UI Tests` runs on the PR and goes green — a red static job
       at a missing file means a Step 1 script was skipped
-- [ ] after the squash-merge, `QA — UI Tests (live)` runs once `pages-build-deployment` completes
+- [ ] after the squash-merge, `QA — UI Tests (live)` runs once the deploy completes — `pages-build-deployment` on branch-source, `Pages Deploy` on Actions-source (before the first page exists, `Pages Deploy` publishes nothing and the live suite is skipped; Step 9d-bis)
 - [ ] `QA — Event-Driven Response` is visible in the Actions tab and ready for dispatch
 
 ---
@@ -592,6 +636,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/workflows/codex-monitor.yml` present
 - [ ] `.github/workflows/pages-monitor.yml` present, and — if Pages is Actions-sourced — carrying a `workflow_run` trigger naming the deploy workflow
 - [ ] `.github/workflows/pages-retry.yml`: **branch-source** → present, with its `REQUIRED` entry; **Actions-source** → absent with no entry, **or** repointed under W3's exception with the entry updated to the deploy's name (Step 9d)
+- [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present, `BUILD_CMD`/`SITE_DIR` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
 - [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
 - [ ] `.github/workflows/cron-notify.yml` present; `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
@@ -603,7 +648,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app has no login, or because its login ships a working credential in a visible, editable password field and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)
-- [ ] GitHub Pages enabled and `pages-build-deployment` visible in Actions
+- [ ] GitHub Pages enabled on the chosen source, and its deploy visible in Actions — `pages-build-deployment` (branch-source) or `Pages Deploy` (Actions-source, never "Deploy from a branch")
 - [ ] At least one successful run of each workflow confirmed
 
 ---

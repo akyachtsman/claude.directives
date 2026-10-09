@@ -225,6 +225,32 @@ jobs:
               denied=$((denied + 1))
             done < .github/pages-deny.txt
           fi
+          # The verify job's caps, enforced HERE, before anything is uploaded:
+          # verify applies them too, but only after Publish has replaced the
+          # live site, so an over-long list would ship with nothing asserted.
+          ndeny=$(sort -u "$probes" | sed '/^$/d' | wc -l)
+          if [ "$ndeny" -gt 40 ]; then
+            echo "::error::the deny-list expands to ${ndeny} URLs; the verify job probes at most 40 within its bound. Deny fewer, more specific paths, or raise its timeout-minutes and both caps together."
+            exit 1
+          fi
+          if [ -f .github/pages-public.txt ]; then
+            pubs="$RUNNER_TEMP/public-paths.txt"
+            : > "$pubs"
+            while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+              case "$p" in ''|'#'*) continue ;; esac
+              p="${p#/}"
+              case "/${p%/}/" in
+                *'/../'*|*'/./'*|'//') echo "::error::pages-public.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
+              esac
+              printf '%s\n' "$p" >> "$pubs"
+            done < .github/pages-public.txt
+            npub=$(sort -u "$pubs" | wc -l)
+            if [ "$npub" -gt 20 ]; then
+              echo "::error::pages-public.txt lists ${npub} paths; the verify job probes at most 20 within its bound. List fewer, or raise its timeout-minutes and both caps together."
+              exit 1
+            fi
+          fi
           # Again after the filter: a deny entry can remove the entry point
           # itself, and a tree without one must not reach the live site.
           if [ ! -f "$RUNNER_TEMP/site/index.html" ]; then
@@ -419,7 +445,7 @@ jobs:
           # directory held, so a served file under a 404ing directory is caught.
           mapfile -t deny < <(printf '%s\n' "$DENY" | sed '/^$/d')
           if [ "${#deny[@]}" -gt 40 ]; then
-            echo "::error::the deny-list expands to ${#deny[@]} URLs; this job probes at most 40 within its bound. Deny fewer, more specific paths, or raise timeout-minutes and this cap together."
+            echo "::error::the deny-list expands to ${#deny[@]} URLs; this job probes at most 40 within its bound. Deny fewer, more specific paths, or raise timeout-minutes and both caps together (the build job checks the same)."
             exit 1
           fi
           # Internal-LOOKING paths that must stay public (global.md -> Hosting &
@@ -429,7 +455,7 @@ jobs:
           # Same rule as the deny-list: a `.` or `..` component would let curl
           # squash the path out of the project site and probe something else.
           if [ "${#public[@]}" -gt 20 ]; then
-            echo "::error::pages-public.txt lists ${#public[@]} paths; this job probes at most 20 within its bound. List fewer, or raise timeout-minutes and this cap together."
+            echo "::error::pages-public.txt lists ${#public[@]} paths; this job probes at most 20 within its bound. List fewer, or raise timeout-minutes and both caps together (the build job checks the same)."
             exit 1
           fi
           for p in "${public[@]}"; do

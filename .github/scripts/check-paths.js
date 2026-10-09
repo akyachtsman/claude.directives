@@ -320,7 +320,7 @@ function analyse(doc, fallback, refreshAllowed = true) {
     const autoFeatures = sandbox === undefined || sandbox.split(/[\t\n\f\r ]+/).map((t) => t.toLowerCase()).includes('allow-scripts');
     links.push(...documentLinks(srcdoc, base, autoFeatures && refreshAllowed).links);
   }
-  return { live, links };
+  return { live, links, base };
 }
 function documentLinks(html, fallback, refreshAllowed = true) {
   const scripted = analyse(parseHtml(html, { scriptingEnabled: true, sourceCodeLocationInfo: true }), fallback, refreshAllowed);
@@ -329,7 +329,7 @@ function documentLinks(html, fallback, refreshAllowed = true) {
   const links = [...scripted.links, ...unscripted.links].filter(({ raw, base }) => {
     const k = `${base.href}\n${raw}`; if (seen.has(k)) return false; seen.add(k); return true;
   });
-  return { live: scripted.live, links };
+  return { live: scripted.live, links, base: scripted.base };
 }
 for (const page of htmlPages) {
   const pageUrl = new URL(page, ROOT);
@@ -352,8 +352,17 @@ for (const page of htmlPages) {
     if (el.namespaceURI !== NS.html || el.tagName !== 'a') { cardFail(`has a .demo-card <${el.tagName}>, not a link -- cards must be anchors`); continue; }
     const href = (attr(el, 'href') || '').trim();
     if (!href) cardFail('has a .demo-card <a> with no href -- the card links nowhere');
-    else if (page === 'index.html' && !/^docs\/site\/[A-Za-z0-9][A-Za-z0-9._-]*\.html$/.test(href)) {
-      cardFail(`has a .demo-card href="${href}" -- a root card must be docs/site/<filename>.html`);
+    else if (page === 'index.html') {
+      // The shape is checked as written AND as the browser resolves it: a
+      // cross-origin <base> would send a well-shaped href off the site (Codex
+      // on #415).
+      let u; try { u = new URL(href, d.base); } catch { u = null; }
+      const rel = u && /^https?:$/.test(u.protocol) && u.host === ROOT.host && u.pathname.startsWith(ROOT.pathname)
+        ? u.pathname.slice(ROOT.pathname.length) : null;
+      const shape = /^docs\/site\/[A-Za-z0-9][A-Za-z0-9._-]*\.html$/;
+      if (!shape.test(href) || rel === null || !shape.test(rel)) {
+        cardFail(`has a .demo-card href="${href}"${u ? ` (resolves to ${u.href})` : ''} -- a root card must be docs/site/<filename>.html on this site`);
+      }
     }
     if (!el.sourceCodeLocation?.endTag) cardFail('has a .demo-card <a> not closed by its own </a>');
   }

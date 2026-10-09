@@ -111,9 +111,15 @@ jobs:
           # The same response says which folder a branch build publishes.
           pages=$(gh api "repos/$REPO/pages" 2>/dev/null || true)
           url=$(jq -r '.html_url // empty' <<< "${pages:-null}" 2>/dev/null || true)
-          src_root=$(jq -r '.source.path // "/"' <<< "${pages:-null}" 2>/dev/null || true)
+          # No default: an unreadable source folder is reported where it is
+          # needed, never assumed to be the repository root.
+          src_root=$(jq -r '.source.path // empty' <<< "${pages:-null}" 2>/dev/null || true)
           build_type=$(jq -r '.build_type // empty' <<< "${pages:-null}" 2>/dev/null || true)
-          src_root="${src_root#/}"; src_root="${src_root%/}"
+          src_known=0
+          if [ -n "$src_root" ]; then
+            src_known=1
+            src_root="${src_root#/}"; src_root="${src_root%/}"
+          fi
           if [ -z "$url" ]; then
             repo_name="${REPO#*/}"
             url="https://${OWNER}.github.io/${repo_name}/"
@@ -263,6 +269,8 @@ jobs:
                 else
                   problems="${problems}- Could not read ${art_from} (an artifact named ${PAGES_ARTIFACT_PREFIX}*; PAGES_ARTIFACT_PREFIX sets the name), so files under denied directories are NOT checked (the repository tree does not give the published paths)\n"
                 fi
+              elif [ "$src_known" != 1 ]; then
+                problems="${problems}- Could not read the Pages source folder from the Pages API, so files under denied directories are NOT checked (a /docs site publishes docs/x as x)\n"
               else
                 tree_err=$(mktemp)
                 if tree=$(gh api "repos/$REPO/git/trees/${commit:-HEAD}?recursive=1" \

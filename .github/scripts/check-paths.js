@@ -197,6 +197,9 @@ const BREAKOUT = new Set(['b', 'big', 'blockquote', 'body', 'br', 'center', 'cod
   'embed', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'hr', 'i', 'img', 'li', 'listing', 'menu', 'meta', 'nobr',
   'ol', 'p', 'pre', 'ruby', 's', 'small', 'span', 'strong', 'strike', 'sub', 'sup', 'table', 'tt', 'u', 'ul', 'var']);
 const POINTS = { svg: ['foreignobject', 'desc', 'title'], math: ['mi', 'mo', 'mn', 'ms', 'mtext', 'annotation-xml'] };
+// Whitespace in the tokenizer is the spec's five ASCII characters only: JS \s
+// also matches U+00A0, so "<a\u00a0class=...>" read as an anchor although a
+// browser keeps the NBSP in the tag name (Codex on #415).
 function tags(src) {
   // The namespace stack lives in the tokenizer because raw text depends on it:
   // <title>, <style>, <script> are raw text only as HTML elements, and inside
@@ -228,30 +231,37 @@ function tags(src) {
     if ('!?/'.includes(src[i + 1] ?? 'x')) { i = upTo('>', i, 'declaration') + 1; continue; }
     if (!/[A-Za-z]/.test(src[i + 1] ?? '')) { i++; continue; } // a bare "<" in text
     let j = i + 1;
-    while (j < n && !/[\s/>]/.test(src[j])) j++;
+    while (j < n && !/[\t\n\f\r />]/.test(src[j])) j++;
     const tag = lower.slice(i + 1, j); const attrs = new Map(); let selfClosing = false;
+    // A tag name holding a non-ASCII space, "=", a quote or "<" is an authoring
+    // slip (e.g. "<a" + NBSP + "class=..."), never a deliberate element: the
+    // browser renders no such element, so a card or link there is dead.
+    // Refused rather than silently read as something else (Codex on #415).
+    if (/[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff="'<]/.test(tag)) {
+      throw new Error(`malformed tag name at offset ${i} ("${src.slice(i, j).slice(0, 40)}") -- a non-ASCII space or attribute text inside a tag name`);
+    }
     for (;;) {
       // Self-closing only when the TOKENIZER consumes "/" between attributes and
       // ">" follows it at once; in <svg data-x=foo/> the "/" is part of the
       // unquoted value, so the element stays open (Codex on #415).
       let slash = false;
-      while (j < n && /[\s/]/.test(src[j])) { slash = src[j] === '/'; j++; }
+      while (j < n && /[\t\n\f\r /]/.test(src[j])) { slash = src[j] === '/'; j++; }
       if (j >= n) throw new Error(`unterminated <${tag}> at offset ${i}`);
       if (src[j] === '>') { selfClosing = slash; j++; break; }
       let k = j;
-      while (k < n && !/[\s/>=]/.test(src[k])) k++;
+      while (k < n && !/[\t\n\f\r />=]/.test(src[k])) k++;
       const name = lower.slice(j, k); j = k;
-      while (j < n && /\s/.test(src[j])) j++;
+      while (j < n && /[\t\n\f\r ]/.test(src[j])) j++;
       let value = '';
       if (src[j] === '=') {
         j++;
-        while (j < n && /\s/.test(src[j])) j++;
+        while (j < n && /[\t\n\f\r ]/.test(src[j])) j++;
         if (src[j] === '"' || src[j] === "'") {
           const e = upTo(src[j], j + 1, `${src[j]}-quoted ${name} in <${tag}>`);
           value = src.slice(j + 1, e); j = e + 1;
         } else {
           k = j;
-          while (k < n && !/[\s>]/.test(src[k])) k++;
+          while (k < n && !/[\t\n\f\r >]/.test(src[k])) k++;
           value = src.slice(j, k); j = k;
         }
       }

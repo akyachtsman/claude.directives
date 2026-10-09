@@ -80,6 +80,7 @@ is added by the pass that finds it.
 | Claude Code reads the project-scope MCP file from `.mcp.json` at the repo root (its docs suggest committing one that holds no secrets; this standard keeps it gitignored) | `data.md` → *MCP Configuration* | 2026-10-08 | code.claude.com/docs/en/mcp (owner ruling 2026-10-08: it stays gitignored, `data.md` → *MCP Configuration*) |
 | WebFetch obeys the egress policy | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-08 | WebFetch a policy-denied host and expect `EGRESS_BLOCKED` ("blocked by the network egress proxy") |
 | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` semantics | `global.md` → *Subagent Model Selection* | 2026-10-08 | code.claude.com/docs/en/sub-agents, "Run every subagent on one model" |
+| What a command's text has substituted on load | `plugins/directives-toolkit/scripts/refresh-stamp.sh`, its header | 2026-10-09 | Load a plugin skill whose body shows `$1` (`plugin-dev:command-development`) with and without an argument, and read what comes back |
 
 ## Anthropic plugins & built-in skills
 | Topic | Source | Last checked | Check |

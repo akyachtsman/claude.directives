@@ -154,12 +154,16 @@ def command_md(token=SLASHED, ext=EXT_SHIPPED, delimited=True, token_line=True, 
     )
 
 
-def build(tmp, command_text, callers):
+def build(tmp, command_text, callers, stamp_text=None):
     root = Path(tmp)
     cmd = root / "plugins/directives-toolkit/commands/refresh-repo.md"
     cmd.parent.mkdir(parents=True, exist_ok=True)
     if command_text is not None:
         cmd.write_text(command_text, encoding="utf-8")
+    if stamp_text is not None:
+        stamp = root / "plugins/directives-toolkit/scripts/refresh-stamp.sh"
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(stamp_text, encoding="utf-8")
     for rel, body in callers.items():
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -175,9 +179,9 @@ def run(root):
 PASS, FAIL = [], []
 
 
-def case(name, *, command_text, callers, expect_exit, needle):
+def case(name, *, command_text, callers, expect_exit, needle, stamp_text=None):
     with TemporaryDirectory() as tmp:
-        root = build(tmp, command_text, callers)
+        root = build(tmp, command_text, callers, stamp_text)
         rc, out = run(root)
     problems = []
     if "Traceback (most recent call last)" in out:
@@ -364,6 +368,21 @@ case("a script named at the end of a sentence is derived",
 case("a command with NO Phase 3 copy at all is refused, not compared against itself",
      command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,
      needle="applied-check's copy of the derivation is missing")
+
+# The shipped layout: Phase 3's copy lives in scripts/refresh-stamp.sh, because a
+# command's arguments are substituted into its text on load and scan() takes $1.
+# The guard reads the command and the script as one text.
+def stamp_sh(ext):
+    return "#!/usr/bin/env bash\n" + phase3_md(SLASHED, ext).replace("```bash\n", "").replace("```\n", "")
+
+
+case("the Phase 3 copy in refresh-stamp.sh, filtering like the install, passes",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=0,
+     needle="referenced script(s)", stamp_text=stamp_sh(EXT_SHIPPED))
+
+case("a Phase 3 copy in refresh-stamp.sh that filters DIFFERENTLY is refused",
+     command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,
+     needle="derive DIFFERENTLY", stamp_text=stamp_sh(EXT))
 
 # Check 5 -- both copies move TOGETHER, so check 4 (copy vs copy) is blind.
 case("both copies WIDENED identically are refused against the contract",

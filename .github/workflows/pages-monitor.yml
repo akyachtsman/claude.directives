@@ -60,9 +60,12 @@ on:
 # called main), publishes nothing (the job skips it below), so it gets a group
 # of its own: in the shared one it would cancel the monitor of a real deploy
 # still probing, then report nothing itself.
+# A CANCELLED watched run (one superseded by a newer push, say) published
+# nothing either; it waits its turn rather than cancelling a monitor still
+# probing a real deploy.
 concurrency:
   group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'cancelled') }}
 
 permissions:
   contents: read
@@ -239,6 +242,7 @@ jobs:
             # 165s liveness + 120s artifact + 30s delay + 40 URLs x 2 passes x 8s = ~955s < 1200s.
             entries=()
             while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
               # The same normalisation as pages-deploy.yml: `private/` names the
@@ -338,11 +342,22 @@ jobs:
                   if ! grep -qx '\.nojekyll' <<< "$live"; then
                     jekyll=1
                     # Jekyll publishes no path with a component starting with
-                    # `.`, `_` or `#`, or ending in `~` (its default excludes), so
-                    # those are not counted against the cap. A `_config.yml`
-                    # exclude list is not read: a path it drops is still probed,
-                    # and passes as the 404 it is.
-                    live=$(grep -v -E '(^|/)[._#][^/]*(/|$)|~(/|$)' <<< "$live" || true)
+                    # `.`, `_` or `#`, or ending in `~` (its default excludes,
+                    # `.htaccess` kept), so those are not counted against the cap.
+                    # A `_config.yml` with an `include:` key can publish any of
+                    # them again, so then nothing is dropped. Its `exclude:` list
+                    # is not read: a path it drops is still probed, and passes as
+                    # the 404 it is.
+                    cfg="${src_root:+$src_root/}_config.yml"
+                    jinc=0
+                    if grep -qxF -- "_config.yml" <<< "$live"; then
+                      cfg_txt=$(gh api -H "Accept: application/vnd.github.raw+json" \
+                        "repos/$REPO/contents/$cfg?ref=${tree_ref:-HEAD}" 2>/dev/null) || cfg_txt="include: unreadable"
+                      grep -qE '^include[[:space:]]*:' <<< "$cfg_txt" && jinc=1
+                    fi
+                    if [ "$jinc" = 0 ]; then
+                      live=$(awk -F/ '{ for (i = 1; i <= NF; i++) if (($i ~ /^[._#]/ && $i != ".htaccess") || $i ~ /~$/) next; print }' <<< "$live")
+                    fi
                     live=$(printf '%s\n' "$live"; sed -n -E 's/\.(md|markdown)$/.html/p' <<< "$live")
                   fi
                   live_from="the commit, under the Pages source folder"

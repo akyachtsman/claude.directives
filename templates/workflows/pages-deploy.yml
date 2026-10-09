@@ -207,6 +207,7 @@ jobs:
           : > "$probes"
           if [ -f .github/pages-deny.txt ]; then
             while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
               p="${p#/}"; p="${p%/}"
@@ -229,6 +230,14 @@ jobs:
                   (cd "$RUNNER_TEMP/site" && find "./$p" -type f -not -path '*/.*' | sed 's#^\./##') >> "$probes"
                 fi
               fi
+              # An entry that names nothing is still probed, but it removes
+              # nothing either: written relative to the repository instead of
+              # SITE_DIR, or naming a source (foo.md) the build renamed, it would
+              # leave the real file published. Say so on the run.
+              if [ ! -e "$RUNNER_TEMP/site/$p" ]; then
+                echo "::warning::pages-deny.txt entry [$p] matches nothing in the site; paths are relative to SITE_DIR and name what is published."
+                echo "- pages-deny.txt entry \`$p\` matched nothing in the site" >> "$GITHUB_STEP_SUMMARY"
+              fi
               rm -rf -- "$RUNNER_TEMP/site/$p"
               denied=$((denied + 1))
             done < .github/pages-deny.txt
@@ -245,6 +254,7 @@ jobs:
             pubs="$RUNNER_TEMP/public-paths.txt"
             : > "$pubs"
             while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
               p="${p#/}"
@@ -315,6 +325,7 @@ jobs:
     # two pauses between them fit inside 40.
     timeout-minutes: 40
     permissions:
+      contents: read # the re-run guard reads main's tip
       pages: write
       id-token: write
     environment:
@@ -323,6 +334,22 @@ jobs:
     outputs:
       page_url: ${{ steps.url.outputs.page_url }}
     steps:
+      # A RE-RUN deploys this run's commit again. Once main has moved on, that
+      # rolls the live site back to older content, and nothing objects: verify
+      # passes on this run's own marker and the monitor sees a success. So a
+      # re-run is allowed only while this commit is still main's tip; otherwise
+      # dispatch a new run on main. A lookup that fails refuses too.
+      - name: Refuse a re-run that would roll the site back
+        if: github.run_attempt > 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "::error::this re-run would publish ${GITHUB_SHA:0:7}, but main is now at ${tip:0:7}: it would roll the live site back. Dispatch a new run on main instead (Actions -> Pages Deploy -> Run workflow)."
+            exit 1
+          fi
+
       - name: Start the attempt clock
         run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
 
@@ -343,7 +370,7 @@ jobs:
         run: |
           elapsed=$(( $(date +%s) - T0 ))
           if [ "$elapsed" -ge 480 ]; then
-            echo "::error::deploy attempt 1 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: re-run this workflow once Settings -> Pages shows no deployment in progress."
+            echo "::error::deploy attempt 1 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, re-run this run if its commit is still main's tip, or dispatch a new run on main."
             exit 1
           fi
           sleep 30
@@ -362,7 +389,7 @@ jobs:
         run: |
           elapsed=$(( $(date +%s) - T0 ))
           if [ "$elapsed" -ge 480 ]; then
-            echo "::error::deploy attempt 2 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: re-run this workflow once Settings -> Pages shows no deployment in progress."
+            echo "::error::deploy attempt 2 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: once Settings -> Pages shows no deployment in progress, re-run this run if its commit is still main's tip, or dispatch a new run on main."
             exit 1
           fi
           sleep 60
@@ -416,6 +443,7 @@ jobs:
           read_list() {
             [ -f "$1" ] || return 0
             while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#$'\xef\xbb\xbf'}"   # a UTF-8 byte-order mark is not whitespace
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
               printf '%s\n' "${p#/}"

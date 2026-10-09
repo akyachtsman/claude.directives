@@ -95,8 +95,9 @@ Execute in order:
      with the CI-build opt-in), drops the `.github/pages-deny.txt` paths,
      publishes, retries GitHub's transient publish failure, then asserts the
      root serves 200 and each denied path 404. Fill in `BUILD_CMD` and
-     `SITE_DIR` per its header. On a branch-source project it would deploy
-     nothing and fail, so it is not installed there. Installed here, before
+     `SITE_DIR` per its header. On a branch-source project the push already
+     deploys, so it would be a second, competing deploy: it is not installed
+     there. Installed here, before
      the first page exists, it is a deliberate no-op until `index.html`
      arrives (no build, no Pages deployment ever: the Publish job is skipped,
      `pages-monitor.yml` reports nothing published, and `qa-live.yml` skips

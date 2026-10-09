@@ -220,8 +220,14 @@ function tags(src) {
       const e = upTo('>', i, 'end tag');
       const name = lower.slice(i + 2, e).split(/[\t\n\f\r />]/)[0];
       out.push({ tag: `/${name}`, attrs: new Map(), foreign: top() !== undefined && top().ns !== 'html', underForeign: stack.length > 0 });
-      const k = stack.map((x) => x.tag).lastIndexOf(name);
-      if (k >= 0) stack.length = k;
+      // </p> and </br> are breakout END tags in foreign content: they pop
+      // the SVG/MathML context like a breakout start tag (Codex on #415).
+      if ((name === 'p' || name === 'br') && top() !== undefined && top().ns !== 'html') {
+        while (top() !== undefined && top().ns !== 'html') stack.pop();
+      } else {
+        const k = stack.map((x) => x.tag).lastIndexOf(name);
+        if (k >= 0) stack.length = k;
+      }
       i = e + 1; continue;
     }
     // CDATA is character data through "]]>" in SVG/MathML but a bogus comment
@@ -328,9 +334,20 @@ function srcsetUrls(v) {
   }
   return urls.filter(Boolean);
 }
+// The spec's shared declarative refresh steps for one <meta http-equiv=refresh>:
+// a delay (digits, or "." then digits) must come first, then end of input,
+// whitespace, ";" or ","; with no delay the directive fails and is ignored
+// (Codex on #415). Returns null when it fails, else { url } (url '' = reload).
+const REFRESH = /^[\t\n\f\r ]*(?:\d|(?=\.))[\d.]*(?:$|[\t\n\f\r ;,][\t\n\f\r ]*[;,]?[\t\n\f\r ]*(?:url[\t\n\f\r ]*=[\t\n\f\r ]*)?(["']?)(.*))$/is;
+function refreshOf({ tag, attrs }) {
+  if (tag !== 'meta' || (attrs.get('http-equiv') || '').trim().toLowerCase() !== 'refresh') return null;
+  const m = (attrs.get('content') || '').match(REFRESH);
+  if (!m) return null;
+  return { url: m[2] ? (m[1] ? m[2].split(m[1])[0] : m[2]) : '' };
+}
 // The URL values one tag carries: URL attributes, each srcset / imagesrcset
-// candidate, each ping URL, and a
-// meta refresh's target, parsed as the spec's refresh algorithm reads it.
+// candidate and each ping URL. A meta refresh is per DOCUMENT, not per tag:
+// see refreshOf() and the page loop.
 function linksOf({ tag: name0, attrs, foreign }) {
   // In HTML content the parser rewrites a legacy <image> start tag to <img>
   // (Codex on #415); inside SVG, <image> is SVG's own element.
@@ -342,13 +359,6 @@ function linksOf({ tag: name0, attrs, foreign }) {
     else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
     else if (on(URL_ATTRS, name, tag)) urls.push(v);
     else if (foreign && (name === 'xlink:href' || (name === 'href' && SVG_HREF.includes(tag)))) urls.push(v);
-  }
-  if (tag === 'meta' && (attrs.get('http-equiv') || '').trim().toLowerCase() === 'refresh') {
-    // The spec's refresh steps: a delay (digits, or "." then digits/dots) must
-    // come first, then end of input, whitespace, ";" or ","; with no delay the
-    // directive is ignored and nothing navigates (Codex on #415).
-    const m = (attrs.get('content') || '').match(/^[\t\n\f\r ]*(?:\d|(?=\.))[\d.]*(?:$|[\t\n\f\r ;,][\t\n\f\r ]*[;,]?[\t\n\f\r ]*(?:url[\t\n\f\r ]*=[\t\n\f\r ]*)?(["']?)(.*))$/is);
-    if (m && m[2]) urls.push(m[1] ? m[2].split(m[1])[0] : m[2]);
   }
   return urls;
 }
@@ -467,7 +477,12 @@ for (const page of htmlPages) {
     if (!close || close.tag !== '/a') cardFail('has a .demo-card <a> not closed by </a> before the next <a>');
   });
   if (page === 'index.html' && cards === 0) cardFail('has no .demo-card -- the landing-card checks would pass vacuously');
-  for (const raw of pageTags.flatMap(linksOf)) {
+  // Only the FIRST refresh that succeeds counts: it sets the document's "will
+  // declaratively refresh" flag and every later one is ignored (Codex, #415).
+  // A <meta> in <template> is inert and never runs.
+  const refresh = pageTags.filter((t) => !t.inert).map(refreshOf).find((r) => r !== null);
+  const pageLinks = pageTags.flatMap(linksOf).concat(refresh && refresh.url ? [refresh.url] : []);
+  for (const raw of pageLinks) {
     let url;
     try { url = new URL(raw, base); } catch { console.error(`MISSING: ${page} links "${raw}", which is not a valid URL`); failed = true; continue; }
     // http and https are one site: Pages redirects the first to the second.

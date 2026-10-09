@@ -117,7 +117,7 @@ Execute in order:
 
    ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, two files need the
    exact `name:` of the project's own deploy workflow added before they do
-   anything: **`qa-live.yml`** (add it to `workflow_run.workflows`) and
+   anything ("Pages Deploy" for `pages-deploy.yml`): **`qa-live.yml`** (add it to `workflow_run.workflows`) and
    **`pages-monitor.yml`** (add a `workflow_run` trigger — its header has the
    snippet). `pages-retry.yml` must NOT get it — and on an **Actions-source**
    project is not installed **by default** (above), the one exception being W3's:

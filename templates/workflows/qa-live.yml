@@ -4,8 +4,13 @@
 # Triggers automatically after GitHub Pages deploys, or manually via workflow_dispatch.
 #
 # ⚠️ RULE W2 — Pages has two sources and only one name is ours to pre-fill.
-# ACTION: if Settings -> Pages -> Source is "GitHub Actions", add your own deploy
-# workflow's exact `name:` to the list below. Do not invent one.
+# ACTION: if Settings -> Pages -> Source is "GitHub Actions", add your deploy
+# workflow's exact `name:` to the list below: "Pages Deploy" for
+# templates/workflows/pages-deploy.yml, else your own. Add, never replace. It is
+# not pre-filled because on a branch-source project that name matches nothing
+# and workflow-ref-guard fails the build. Then list it for this file in
+# .github/workflow-ref-required.json, so adopting this template verbatim later
+# fails the guard instead of dropping the arm (cicd-setup.md -> 9c-bis).
 # ACTION: the job's `if:` gate needs NO workflow-name condition — it reads
 # `github.event.workflow_run.conclusion`, which is agnostic to which workflow
 # fired it. Do not "helpfully" add one; that re-breaks exactly what this fixes.
@@ -33,7 +38,7 @@ name: QA — UI Tests (live)
 
 on:
   workflow_run:
-    # + your Actions deploy workflow's `name:` if that is your Pages source
+    # + 'Pages Deploy' (pages-deploy.yml), or your own deploy's `name:`, on Actions-source
     workflows: ['pages-build-deployment']
     types: [completed]
   workflow_dispatch:

@@ -64,7 +64,8 @@ and which can finish later and republish the whole tree. Drop them and that
 rogue build runs with **nothing watching it at all** — no gate, no monitor, only
 the after-the-fact forensics of looking for a `pages build and deployment` run.
 The templates are written additively for exactly this reason (`qa-live.yml`:
-*"+ your Actions deploy workflow's `name:`"*); a reader who "repoints" instead of
+*"+ 'Pages Deploy' (pages-deploy.yml), or your own deploy's `name:`, on
+Actions-source"*); a reader who "repoints" instead of
 adding silently removes the only thing that runs when the legacy build does.
 
 ## Arms are not detection

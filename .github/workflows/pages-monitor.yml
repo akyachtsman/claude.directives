@@ -12,11 +12,15 @@ name: Pages Monitor
 # ACTION: add a workflow_run trigger naming your own deploy workflow:
 #
 #   workflow_run:
-#     workflows: ['<your deploy workflow name>']
+#     workflows: ['Pages Deploy']
 #     types: [completed]
 #
-# The job below already handles that event — it normalises the two status
-# vocabularies. Do not pre-fill a guessed name.
+# "Pages Deploy" is the name templates/workflows/pages-deploy.yml ships; use
+# your own deploy's exact `name:` otherwise. Keep `page_build:` beside it. The
+# job below already handles that event — it normalises the two status
+# vocabularies. Not pre-filled: on a branch-source project the name matches
+# nothing and workflow-ref-guard fails the build. List it for this file in
+# .github/workflow-ref-required.json too (cicd-setup.md -> 9c-bis).
 # Why: docs/standards/automations.md -> Watcher Rules (W2, W3 — a monitor may watch either source; a retry may not).
 #
 # ⚠️ EXPOSURE (optional) — a rogue unfiltered republish (the visibility-flip

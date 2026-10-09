@@ -281,7 +281,21 @@ function tags(src) {
       while (top() !== undefined && top().ns !== 'html') stack.pop();
     }
     const foreign = top() !== undefined && top().ns !== 'html';
-    out.push({ tag, attrs, selfClosing, foreign, underForeign: stack.length > 0 });
+    out.push({ tag, attrs, selfClosing, foreign, ns: foreign ? top().ns : 'html', underForeign: stack.length > 0 });
+    // A <noscript> body is tokenized on its own, with fresh state, so nothing
+    // inside it -- an unclosed <svg>, say -- can leak into the live markup
+    // after </noscript> (Codex on #415). Its links are still read.
+    if (!foreign && tag === 'noscript' && !selfClosing) {
+      let e = j;
+      for (;;) {
+        e = lower.indexOf('</noscript', e);
+        if (e < 0) throw new Error(`unterminated <noscript> at offset ${i}`);
+        if (/^[\t\n\f\r />]$/.test(src[e + 10] ?? '')) break;
+        e += 2;
+      }
+      out.push(...tags(src.slice(j, e)));
+      i = e; continue;
+    }
     if (!selfClosing) {
       if (tag === 'svg' || tag === 'math') stack.push({ tag, ns: tag });
       else if (foreign && POINTS[top().ns].includes(tag)) stack.push({ tag, ns: 'html' });
@@ -348,7 +362,7 @@ function refreshOf({ tag, attrs }) {
 // The URL values one tag carries: URL attributes, each srcset / imagesrcset
 // candidate and each ping URL. A meta refresh is per DOCUMENT, not per tag:
 // see refreshOf() and the page loop.
-function linksOf({ tag: name0, attrs, foreign }) {
+function linksOf({ tag: name0, attrs, foreign, ns }) {
   // In HTML content the parser rewrites a legacy <image> start tag to <img>
   // (Codex on #415); inside SVG, <image> is SVG's own element.
   const tag = name0 === 'image' && !foreign ? 'img' : name0;
@@ -359,6 +373,9 @@ function linksOf({ tag: name0, attrs, foreign }) {
     else if (on(URL_LIST_ATTRS, name, tag)) urls.push(...v.split(/[\t\n\f\r ]+/).filter(Boolean));
     else if (on(URL_ATTRS, name, tag)) urls.push(v);
     else if (foreign && (name === 'xlink:href' || (name === 'href' && SVG_HREF.includes(tag)))) urls.push(v);
+    // MathML Core: href is a global attribute -- any MathML element can be a
+    // hyperlink (Codex on #415).
+    else if (ns === 'math' && name === 'href') urls.push(v);
   }
   return urls;
 }

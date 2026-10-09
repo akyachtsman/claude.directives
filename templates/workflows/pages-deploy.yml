@@ -128,7 +128,9 @@ jobs:
           fi
           rm -rf "$RUNNER_TEMP/site"
           mkdir -p "$RUNNER_TEMP/site"
-          rsync -a --exclude=/.git --exclude=/.github --exclude=node_modules "$src/" "$RUNNER_TEMP/site/"
+          # `--` ends the options: a SITE_DIR such as `-site` would otherwise be
+          # read as one, copy nothing, and still exit 0.
+          rsync -a --exclude=/.git --exclude=/.github --exclude=node_modules -- "$src/" "$RUNNER_TEMP/site/"
           # Deny-list entries are LITERAL site-relative paths, removed after the
           # copy. Never rsync patterns: as an --exclude, `secret[1].txt` is a glob
           # that leaves the file of that exact name in place. An entry that

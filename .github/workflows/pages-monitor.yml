@@ -317,7 +317,15 @@ jobs:
                 problems="${problems}- Could not read the Pages source folder from the Pages API, so files under denied directories are NOT checked (a /docs site publishes docs/x as x)\n"
               else
                 tree_err=$(mktemp)
-                if tree=$(gh api "repos/$REPO/git/trees/${commit:-${src_branch:-HEAD}}?recursive=1" \
+                # A manual run has no built commit: resolve the source branch to
+                # a SHA through git/ref, which takes a branch name with `/` as
+                # path segments (git/trees would read them as extra segments).
+                tree_ref="${commit:-}"
+                if [ -z "$tree_ref" ] && [ -n "${src_branch:-}" ]; then
+                  tree_ref=$(gh api "repos/$REPO/git/ref/heads/$src_branch" --jq '.object.sha // empty' 2>"$tree_err") || tree_ref=""
+                  [ -n "$tree_ref" ] || tree_ref="unresolved-source-branch"
+                fi
+                if tree=$(gh api "repos/$REPO/git/trees/${tree_ref:-HEAD}?recursive=1" \
                       --jq 'if .truncated then "::TRUNCATED::" else (.tree[] | select(.type == "blob") | .path) end' 2>"$tree_err") \
                    && [ "$tree" != "::TRUNCATED::" ]; then
                   if [ -n "$src_root" ]; then
@@ -329,6 +337,12 @@ jobs:
                   fi
                   if ! grep -qx '\.nojekyll' <<< "$live"; then
                     jekyll=1
+                    # Jekyll publishes no path with a component starting with
+                    # `.`, `_` or `#`, or ending in `~` (its default excludes), so
+                    # those are not counted against the cap. A `_config.yml`
+                    # exclude list is not read: a path it drops is still probed,
+                    # and passes as the 404 it is.
+                    live=$(grep -v -E '(^|/)[._#][^/]*(/|$)|~(/|$)' <<< "$live" || true)
                     live=$(printf '%s\n' "$live"; sed -n -E 's/\.(md|markdown)$/.html/p' <<< "$live")
                   fi
                   live_from="the commit, under the Pages source folder"

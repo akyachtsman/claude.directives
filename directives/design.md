@@ -47,7 +47,7 @@ Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
 
 ## Stack
 Plain HTML + CSS + vanilla JS on GitHub Pages, no build by default (a CI build
-is a per-project opt-in with the owner's sign-off, not open yet) — set by
+is a per-project opt-in with the owner's sign-off) — set by
 `global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21; build rule
 2026-10-06), which owns it.
 
@@ -60,7 +60,7 @@ frameworked generators are rejected
 (`docs/guides/dev-pipeline.md` → *Deliberate rejects (simplicity discipline)*;
 the Figma bullet in step 1 of `/design-intake`), but it does not decide the token mechanism. Take an alternative to
 the owner rather than adopting one — and do not cite this line as authority for
-refusing one. The CI-build opt-in alone, once it opens, lets a utility library such as
+refusing one. The CI-build opt-in alone lets a utility library such as
 Tailwind compile on top of `tokens.css` and `components.css`; replacing those
 files with it is a further owner decision.
 

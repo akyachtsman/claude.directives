@@ -18,10 +18,10 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 - **Live URL:** https://akyachtsman.github.io/[repo-name]/
 - **Stack:** [fill in]
 - **Build:** none
-  <!-- The default, and the only value while the CI-build opt-in is closed
-  (until claude.directives#402 lands). Once it opens, an opted-in build replaces
-  "none" with the need it serves and the owner's sign-off with its date
-  (global.md, Hosting & Deployment). -->
+  <!-- The default. An opted-in build replaces "none" with the need it serves,
+  the owner's sign-off with its date, the build command and output directory
+  that pages-deploy.yml and qa.yml carry as BUILD_CMD and SITE_DIR, and the
+  build inputs qa.yml carries as BUILD_PATHS (global.md, Hosting & Deployment). -->
 - **Branch policy:** Develop on a `claude/<name>` feature branch; PRs target `main`
 
 ## Design
@@ -37,7 +37,7 @@ This project's look is its own — established at kickoff via `/design-intake`
 ## Required Commands
 | Purpose | Command |
 |---|---|
-| Validate HTML | `npx html-validate index.html` |
+| Validate HTML | `npx html-validate index.html` (with a `Build:`: run the build, then validate the generated HTML under `SITE_DIR`, never the source root) |
 | Validate workflow YAML | `python3 -c "import yaml, sys; yaml.safe_load(open('.github/workflows/qa.yml'))"` |
 
 ## Project-Specific Security Constraints

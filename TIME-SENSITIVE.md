@@ -111,6 +111,8 @@ is added by the pass that finds it.
 | What each GitHub MCP write tool commits | `global.md` → *A Blocked Command Is Not a Blocked Capability* | 2026-10-08 | The descriptions and parameters of `create_or_update_file`, `push_files`, `delete_file` and `create_branch` in this session's tool list |
 | When ci-notify's PR lookup misses | `git.md` → *PR Lifecycle* | undated | ⏳ The next PR whose green-CI wake does not arrive |
 | Branch-rules and reactions APIs are readable through a web session's `gh api`; the proxy's `ccr/` stand-in routes | `git.md` → *Repo-settings preflight*, `git.md` → *GitHub API Quota*; `pr-mechanics.md` → *Reading reactions* | 2026-10-08 | `gh api repos/<o>/<r>/rules/branches/main`; `gh api repos/<o>/<r>/issues/<n>/reactions`; `gh api repos/<o>/<r>/pulls/<n>/ccr/x` prints the route list |
+| What the Pages actions (v5) do with dotfiles, symlinks and `page_url` | `templates/workflows/pages-deploy.yml` | 2026-10-09 | `git ls-remote --tags https://github.com/actions/upload-pages-artifact.git` (and `deploy-pages`), then read `action.yml` at the newest tag |
+| Pages settings endpoint through a web session's proxy | `plugins/directives-toolkit/skills/update-pages/SKILL.md`, step 3 | 2026-10-09 | `gh api repos/{owner}/{repo}/pages` from a web session |
 
 ## Codex
 | Topic | Source | Last checked | Check |

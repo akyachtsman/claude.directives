@@ -27,9 +27,14 @@ name: Pages Monitor
 # whoever published it; a late legacy build fires its own run. A path must be
 # 404 on two probes 30s apart (one 404 can be the PREVIOUS deploy mid-CDN
 # propagation), with redirects NOT followed — a 3xx to a page that 404s is the
-# declared URL answering something other than 404, so it is reported. At most
-# 15 paths — more is reported, not silently truncated, since the job bound
-# cannot fit them. Absent file, or one listing no paths =
+# declared URL answering something other than 404, so it is reported. Paths are
+# taken literally (percent-encoded, no curl globbing). A DIRECTORY entry is
+# expanded to every file under it in the repository at the deployed commit, and
+# each is probed: a directory URL can 404 while a file under it is served. (That
+# is the source tree; a build that writes denied files the source lacks is
+# covered by pages-deploy.yml's own check, not here.) At most 40 URLs after
+# expansion, the same cap as pages-deploy.yml — more is reported, not silently
+# truncated, since the job bound cannot fit them. Absent file, or one listing no paths =
 # nothing declared = no-op, and the job summary says exposure was NOT checked.
 # LIMIT: this checks the paths you REMEMBERED to list. A new internal directory
 # nobody adds is invisible — the deploy's deny-list problem, one layer out.
@@ -62,9 +67,9 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    # 10, not 5: liveness can take ~165s, and each forbidden path that fails
-    # takes up to ~30s more before it is reported.
-    timeout-minutes: 10
+    # Liveness up to ~165s, a 30s pause, and two 8s probes for each of up to 40
+    # forbidden URLs (~11 min).
+    timeout-minutes: 20
     steps:
       - name: Verify Pages deploy and report
         env:
@@ -163,34 +168,56 @@ jobs:
             # root check cannot see that (the old deploy already served 200).
             # The list is capped so the worst case (every probe hitting its
             # --max-time) stays inside timeout-minutes:
-            # 165s liveness + 30s delay + 15 paths x 2 passes x 8s = ~435s < 600s.
-            paths=()
+            # 165s liveness + 30s delay + 40 URLs x 2 passes x 8s = ~835s < 1200s.
+            entries=()
             while IFS= read -r p || [ -n "$p" ]; do
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
               case "$p" in ''|'#'*) continue ;; esac
-              paths+=("${p#/}")
+              entries+=("${p#/}")
             done <<< "$deny"
+            # Expand a directory entry to every file under it in the repository
+            # at the deployed commit (the default branch on a manual run).
+            paths=()
+            if [ "${#entries[@]}" -gt 0 ]; then
+              tree_err=$(mktemp)
+              if tree=$(gh api "repos/$REPO/git/trees/${commit:-HEAD}?recursive=1" \
+                    --jq 'if .truncated then "::TRUNCATED::" else (.tree[] | select(.type == "blob") | .path) end' 2>"$tree_err") \
+                 && [ "$tree" != "::TRUNCATED::" ]; then
+                for e in "${entries[@]}"; do
+                  paths+=("$e")
+                  d="${e%/}"
+                  while IFS= read -r f; do
+                    case "$f" in "$d"/*) paths+=("$f") ;; esac
+                  done <<< "$tree"
+                done
+              else
+                [ "${tree:-}" = "::TRUNCATED::" ] && echo "the tree listing was truncated" > "$tree_err"
+                problems="${problems}- Could not list the repository tree to expand denied directories, so files under them are NOT checked: $(head -c 200 "$tree_err" | tr '\n' ' ')\n"
+                paths=("${entries[@]}")
+              fi
+            fi
             n=${#paths[@]}
-            max_paths=15
+            max_paths=40
+            # Percent-encode each segment: a literal `#` or `?` in a name would
+            # otherwise start a fragment or query and probe another URL.
+            enc() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$1"; }
             if [ "$n" -eq 0 ]; then
               deny_note=".github/pages-deny.txt lists no paths — exposure NOT checked"
             elif [ "$n" -gt "$max_paths" ]; then
-              problems="${problems}- .github/pages-deny.txt lists ${n} paths; the monitor checks at most ${max_paths} within its time bound — exposure NOT checked\n"
+              problems="${problems}- .github/pages-deny.txt expands to ${n} URLs; the monitor checks at most ${max_paths} within its time bound — exposure NOT checked\n"
             else
               first=()
               for i in "${!paths[@]}"; do
-                p="${paths[$i]}"
-                first[$i]=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d1") || first[$i]="000"
+                first[i]=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 "${url}$(enc "${paths[i]}")?cb=${GITHUB_RUN_ID}-d1") || first[i]="000"
               done
               sleep 30
               for i in "${!paths[@]}"; do
-                p="${paths[$i]}"
-                dcode=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "${url}${p}?cb=${GITHUB_RUN_ID}-d2") || dcode="000"
-                if [ "${first[$i]}" != "404" ] || [ "$dcode" != "404" ]; then
-                  problems="${problems}- Forbidden path served HTTP ${first[$i]} then ${dcode}, expected 404 on both: ${url}${p}\n"
+                dcode=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 "${url}$(enc "${paths[i]}")?cb=${GITHUB_RUN_ID}-d2") || dcode="000"
+                if [ "${first[i]}" != "404" ] || [ "$dcode" != "404" ]; then
+                  problems="${problems}- Forbidden path served HTTP ${first[i]} then ${dcode}, expected 404 on both: ${url}${paths[i]}\n"
                 fi
               done
-              deny_note="${n} declared in .github/pages-deny.txt, all 404 on two probes 30s apart"
+              deny_note="${#entries[@]} declared in .github/pages-deny.txt (${n} URLs after expanding directories), all 404 on two probes 30s apart"
             fi
           elif grep -q 'HTTP 404' "$deny_err"; then
             :

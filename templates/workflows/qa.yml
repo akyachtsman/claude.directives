@@ -158,7 +158,8 @@ jobs:
         run: |
           src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
           [ -d "$src" ] || exit 0
-          links=$(find "$src" \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
+          # Scanned from inside, so the excluded names apply only BELOW the root.
+          links=$(cd "$src" && find . \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
           if [ -n "$links" ] && [ -f .github/workflows/pages-deploy.yml ]; then
             echo "::error::symlinks in the site, which pages-deploy.yml refuses; replace them with real files:"
             printf '%s\n' "$links"
@@ -286,7 +287,9 @@ jobs:
             "$ws"/*) ;;
             *) echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the repository; pages-deploy.yml refuses it."; exit 1 ;;
           esac
-          links=$(find "$real" \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
+          # Scanned from inside, so the excluded names apply only BELOW the root
+          # (a site directory that is itself called node_modules is still scanned).
+          links=$(cd "$real" && find . \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
           if [ -n "$links" ] && { [ -n "$BUILD_CMD" ] || [ -f .github/workflows/pages-deploy.yml ]; }; then
             echo "::error::symlinks in the site, which pages-deploy.yml refuses; replace them with real files:"
             printf '%s\n' "$links"

@@ -58,11 +58,12 @@ if [ "$rc" -ne 0 ] || ! grep -qE '^[0-9a-f]{40}$' <<<"$sha" || [ -z "$tree" ]; t
   echo "CANNOT CHECK: upstream tree not readable from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
 else
   # `|| true`: a project with no upstream references is a grep that matched
-  # nothing, not a failure to stop on. A github.com `blob/main/` or `tree/main/`
-  # link names the same path as a raw one, so both prefixes are stripped.
+  # nothing, not a failure to stop on. A github.com `blob/main/` link names the
+  # same file as a raw one, so that prefix is stripped. A `tree/` link names a
+  # DIRECTORY, which this file listing cannot confirm: it stays unchecked.
   refs=$(grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
     --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
-    | sed -E 's#.*claude\.directives/((blob|tree)/)?(main/)?##' | sort -u \
+    | sed -E 's#.*claude\.directives/(blob/)?(main/)?##' | sort -u \
     | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' || true)
   while read -r p; do
     [ -n "$p" ] || continue

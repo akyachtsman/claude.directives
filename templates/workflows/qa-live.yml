@@ -56,17 +56,17 @@ on:
 # default branch whichever run fired it, so it gets a group of its own: in the
 # shared one it would cancel the live suite of a real deploy. The managed
 # pages-build-deployment (event `dynamic`) is exempt: it publishes the
-# configured source branch, which need not be the default one. A manual run
-# gets its own group too: it may test an override URL, and in the shared one it
-# would cancel the live suite of a real deploy.
+# configured source branch, which need not be the default one. So does a
+# manual run (it may test an override URL) and a watched run that did not
+# succeed (the job skips it): in the shared group either would cancel the live
+# suite of a real deploy. Only a run that will test the deploy shares it.
 concurrency:
-  group: qa-live-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event_name == 'workflow_run' && github.event.workflow_run.event != 'dynamic' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('offbranch-{0}', github.run_id) || github.ref }}
-  # Only a run that will test something cancels an older one: a watched run
-  # that did not succeed is skipped below, and must not kill a live suite
-  # still running against a real deploy. ci-monitor reads this line to decide
-  # whether a cancelled run could have been superseded: keep it on one line,
-  # either the literal `true` or a `${{ … }}` expression.
-  cancel-in-progress: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+  group: qa-live-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && format('skipped-{0}', github.run_id) || github.event_name == 'workflow_run' && github.event.workflow_run.event != 'dynamic' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('offbranch-{0}', github.run_id) || github.ref }}
+  # Keep the literal `true` exactly as written: ci-monitor greps for that form
+  # to decide whether a cancelled run could have been superseded, and an
+  # expression could have evaluated false for the newer run (Codex, #424). The
+  # runs that must not cancel are kept out of the shared group above instead.
+  cancel-in-progress: true
 
 # Least privilege: read the repo and run tests against the live URL.
 permissions:

@@ -37,9 +37,11 @@ name: Pages Deploy
 # one would publish its target past the deny-list.
 #
 # RETRY. GitHub's own publish step sometimes fails with a transient "Deployment
-# failed, try again later". The deploy job retries it twice from the same
-# artifact, so nothing is rebuilt — which is why pages-retry.yml, which re-runs
-# a WHOLE watched run, does not belong beside this file.
+# failed, try again later". The deploy job retries a FAST failure twice from the
+# same artifact, so nothing is rebuilt. A failure after ~8 minutes or more is
+# most likely deploy-pages' own timeout and is not retried: GitHub may still be
+# settling that deployment. A whole-run retry is why pages-retry.yml, which
+# re-runs a WHOLE watched run, does not belong beside this file.
 #
 # ASSERT. Only once the live site serves this run's pages-deploy-marker.txt (a
 # file of that name in the site is overwritten), so no probe can be answered by
@@ -166,14 +168,29 @@ jobs:
     outputs:
       page_url: ${{ steps.url.outputs.page_url }}
     steps:
+      - name: Start the attempt clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Deploy (attempt 1)
         id: d1
         continue-on-error: true
         uses: actions/deploy-pages@v5
 
-      - name: Pause before retry
+      # Retry only a FAST failure: GitHub's transient "Deployment failed, try
+      # again later" comes back in seconds. A failure near deploy-pages' own
+      # 10-minute timeout is most likely a timeout, and GitHub can still be
+      # settling that deployment server-side, so an immediate retry is rejected
+      # or cancelled and keeps the environment occupied. That case stops here.
+      - name: Retry after attempt 1?
         if: steps.d1.outcome == 'failure'
-        run: sleep 30
+        run: |
+          elapsed=$(( $(date +%s) - T0 ))
+          if [ "$elapsed" -ge 480 ]; then
+            echo "::error::deploy attempt 1 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: re-run this workflow once Settings -> Pages shows no deployment in progress."
+            exit 1
+          fi
+          sleep 30
+          echo "T0=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Deploy (attempt 2)
         id: d2
@@ -181,9 +198,16 @@ jobs:
         continue-on-error: true
         uses: actions/deploy-pages@v5
 
-      - name: Pause before last retry
+      - name: Retry after attempt 2?
         if: steps.d1.outcome == 'failure' && steps.d2.outcome == 'failure'
-        run: sleep 60
+        run: |
+          elapsed=$(( $(date +%s) - T0 ))
+          if [ "$elapsed" -ge 480 ]; then
+            echo "::error::deploy attempt 2 failed after ${elapsed}s, most likely its timeout. GitHub may still be settling that deployment, so it is not retried now: re-run this workflow once Settings -> Pages shows no deployment in progress."
+            exit 1
+          fi
+          sleep 60
+          echo "T0=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Deploy (attempt 3)
         id: d3

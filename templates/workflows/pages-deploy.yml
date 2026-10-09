@@ -79,6 +79,11 @@ jobs:
   build:
     name: Build and filter
     runs-on: ubuntu-latest
+    outputs:
+      # Every URL the verify job must see 404: each deny entry, and every file
+      # a denied DIRECTORY held (a directory URL can 404 while a file under it
+      # is served, so probing the directory alone proves nothing).
+      deny: ${{ steps.filter.outputs.deny }}
     timeout-minutes: 20
     env:
       BUILD_CMD: ''
@@ -98,6 +103,7 @@ jobs:
         run: bash -eo pipefail -c "$BUILD_CMD"
 
       - name: Filter by deny-list
+        id: filter
         run: |
           set -euo pipefail
           src="${SITE_DIR%/}"
@@ -118,6 +124,8 @@ jobs:
           # that leaves the file of that exact name in place. An entry that
           # could leave the copy (a `..` component) is refused, not resolved.
           denied=0
+          probes="$RUNNER_TEMP/deny-probes.txt"
+          : > "$probes"
           if [ -f .github/pages-deny.txt ]; then
             while IFS= read -r p || [ -n "$p" ]; do
               p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
@@ -126,6 +134,10 @@ jobs:
               case "/$p/" in
                 *'/../'*|*'/./'*|'//') echo "::error::pages-deny.txt entry does not name a path inside the site: [$p]"; exit 1 ;;
               esac
+              printf '%s\n' "$p" >> "$probes"
+              if [ -d "$RUNNER_TEMP/site/$p" ]; then
+                (cd "$RUNNER_TEMP/site" && find "$p" -type f) >> "$probes"
+              fi
               rm -rf -- "$RUNNER_TEMP/site/$p"
               denied=$((denied + 1))
             done < .github/pages-deny.txt
@@ -145,6 +157,11 @@ jobs:
           # answered by the previous deployment. Written last, after the filter.
           printf '%s\n' "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > "$RUNNER_TEMP/site/pages-deploy-marker.txt"
           echo "Published tree: $(find "$RUNNER_TEMP/site" -type f | wc -l) files from $src, ${denied} deny-list path(s) removed"
+          {
+            echo "deny<<__PAGES_DENY_EOF__"
+            sort -u "$probes"
+            echo "__PAGES_DENY_EOF__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
@@ -231,11 +248,12 @@ jobs:
 
   verify:
     name: Assert the live site
-    needs: deploy
+    needs: [build, deploy]
     runs-on: ubuntu-latest
     # Up to 10 min for the new deployment's marker, liveness up to ~165s, a 30s
-    # pause, and two passes over the declared paths.
-    timeout-minutes: 25
+    # pause, and two 8s passes over at most 40 deny URLs (~11 min), plus the
+    # public paths.
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -243,6 +261,7 @@ jobs:
       - name: Root serves 200, deny-listed paths 404, declared public paths 200
         env:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          DENY: ${{ needs.build.outputs.deny }}
         run: |
           set -euo pipefail
           url="$PAGE_URL"
@@ -292,7 +311,13 @@ jobs:
             sleep $((attempt * 6))
           done
           [ "$code" = "200" ] || problems="${problems}- ${url} returned HTTP ${code}, expected 200\n"
-          mapfile -t deny < <(read_list .github/pages-deny.txt)
+          # The build job's list: each deny entry plus every file a denied
+          # directory held, so a served file under a 404ing directory is caught.
+          mapfile -t deny < <(printf '%s\n' "$DENY" | sed '/^$/d')
+          if [ "${#deny[@]}" -gt 40 ]; then
+            echo "::error::the deny-list expands to ${#deny[@]} URLs; this job probes at most 40 within its bound. Deny fewer, more specific paths, or raise timeout-minutes and this cap together."
+            exit 1
+          fi
           # Internal-LOOKING paths that must stay public (global.md -> Hosting &
           # Deployment): a .well-known file, say. A filter that drops one
           # leaves the root and every deny probe green.

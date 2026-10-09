@@ -46,10 +46,11 @@ Run in order:
    the step-5 recovery**, so settle it here. Only **positive** evidence settles
    it; anything else leaves it **unknown**:
    - **Actions-source:** a workflow under `.github/workflows/` that runs
-     `actions/deploy-pages`, or a `Build:` bullet in the project's `CLAUDE.md`
-     recording a build (`global.md` → *Hosting & Deployment*). A
-     `pages-build-deployment` run does not overturn this: a visibility flip
-     fires that one under either source.
+     `actions/deploy-pages`. A `Build:` bullet in the project's `CLAUDE.md` is
+     not evidence: it records a decision, not an installed deploy, and while
+     the opt-in is closed it changes nothing (`global.md` → *Hosting &
+     Deployment*). A `pages-build-deployment` run does not overturn this
+     either: a visibility flip fires that one under either source.
    - **Branch-source:** the settings endpoint
      (`GET repos/{owner}/{repo}/pages`) reports `build_type: legacy`, or the user
      reads **Settings → Pages → Build and deployment → Source** and it says
@@ -105,7 +106,11 @@ Run in order:
      the PR flow, then dispatch it on `main` as soon as that merges and watch
      the dispatched run. Do not count on the merge push to deploy: a deploy
      whose `push:` carries a `paths:` filter skips a workflow-only commit, and
-     that filter may be why the run was missing in the first place.
+     that filter may be why the run was missing in the first place. A deploy
+     that reads its input from its trigger (a `workflow_run` deploy taking
+     `github.event.workflow_run.*`, say) gets none of it from a dispatch:
+     dispatch the workflow that produces that input instead, or make the
+     deploy safe for a dispatch event first.
    - **Unknown source:** ask the user what Settings → Pages → Source shows
      before recommending anything; until they answer, the Actions-source
      recovery is the only one on offer.

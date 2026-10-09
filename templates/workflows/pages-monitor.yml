@@ -326,7 +326,10 @@ jobs:
                 # path segments (git/trees would read them as extra segments).
                 tree_ref="${commit:-}"
                 if [ -z "$tree_ref" ] && [ -n "${src_branch:-}" ]; then
-                  tree_ref=$(gh api "repos/$REPO/git/ref/heads/$src_branch" --jq '.object.sha // empty' 2>"$tree_err") || tree_ref=""
+                  # Each segment percent-encoded: a `#` or `?` in a branch name
+                  # would otherwise end the endpoint path.
+                  ref_path=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$src_branch")
+                  tree_ref=$(gh api "repos/$REPO/git/ref/heads/$ref_path" --jq '.object.sha // empty' 2>"$tree_err") || tree_ref=""
                   [ -n "$tree_ref" ] || tree_ref="unresolved-source-branch"
                 fi
                 if tree=$(gh api "repos/$REPO/git/trees/${tree_ref:-HEAD}?recursive=1" \

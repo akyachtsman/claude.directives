@@ -36,7 +36,7 @@ name: Pages Deploy
 # and must count the build inputs as changes (qa.yml UI_PATHS).
 #
 # FILTER. Each deny-list line is a literal path (no glob), removed from the
-# copy. Always dropped, whatever the deny-list says: .git, .github,
+# copy. Always dropped, whatever the deny-list says: .git and .github at any depth,
 # node_modules, and every dotfile or dot-directory (upload-pages-artifact
 # excludes them; a project serving one, .well-known say, sets
 # INCLUDE_HIDDEN_FILES to 'true' in the build job and denies its secrets by name).
@@ -184,8 +184,10 @@ jobs:
           rm -rf "$RUNNER_TEMP/site"
           mkdir -p "$RUNNER_TEMP/site"
           # `--` ends the options: a SITE_DIR such as `-site` would otherwise be
-          # read as one, copy nothing, and still exit 0.
-          rsync -a --exclude=/.git --exclude=/.github --exclude=node_modules -- "$src/" "$RUNNER_TEMP/site/"
+          # read as one, copy nothing, and still exit 0. The excludes are not
+          # anchored, so a NESTED .git or .github is dropped too, whatever
+          # INCLUDE_HIDDEN_FILES says.
+          rsync -a --exclude=.git --exclude=.github --exclude=node_modules -- "$src/" "$RUNNER_TEMP/site/"
           # No symlinks in the published copy. upload-pages-artifact archives with
           # tar --dereference, so a link publishes its TARGET: `notes.md ->
           # CLAUDE.md` would serve a deny-listed file under a name the deny-list

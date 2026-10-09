@@ -503,7 +503,8 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 **What it does:** builds (only with the opt-in: `BUILD_CMD` and `SITE_DIR` in its
 header), copies the site minus every `.github/pages-deny.txt` path, publishes it,
 retries GitHub's transient publish failure from the same artifact, then asserts
-the root serves 200 and each denied path 404. Its header lists the rest of the
+the root serves 200, each denied path 404, and each path in
+`.github/pages-public.txt` (internal-looking files that must stay public) 200. Its header lists the rest of the
 switch: watchers named "Pages Deploy" in `qa-live.yml` and `pages-monitor.yml`
 (add, never replace), and `pages-retry.yml` deleted with its `REQUIRED` entry.
 

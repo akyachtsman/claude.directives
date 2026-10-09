@@ -41,9 +41,13 @@ name: Pages Deploy
 # artifact, so nothing is rebuilt — which is why pages-retry.yml, which re-runs
 # a WHOLE watched run, does not belong beside this file.
 #
-# ASSERT. After the publish: the site root serves 200, and each deny-listed path
+# ASSERT. After the publish: the site root serves 200, each deny-listed path
 # serves 404 on two probes 30s apart (one 404 can be the PREVIOUS deploy during
-# CDN propagation), redirects not followed, cache-busted. A failure fails this
+# CDN propagation), and each path in .github/pages-public.txt (internal-looking
+# files that must stay public, same format) serves 200. Redirects are not
+# followed; paths are percent-encoded and cache-busted.
+# The checks are anonymous, so a PRIVATE Pages site (Enterprise Cloud only)
+# reads as down: there, replace this job's probes with authenticated ones. A failure fails this
 # run, where the bad filter was made. It is NOT a substitute for
 # pages-monitor.yml: a deploy that fails before reaching these steps reports
 # nothing here (hosting-mechanics.md -> Verification versus the monitor).
@@ -206,7 +210,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Root serves 200, deny-listed paths serve 404
+      - name: Root serves 200, deny-listed paths 404, declared public paths 200
         env:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
         run: |
@@ -214,6 +218,26 @@ jobs:
           url="$PAGE_URL"
           case "$url" in */) ;; *) url="${url}/" ;; esac
           problems=""
+          # One site-relative path per line, `#` comments and blank lines ignored.
+          read_list() {
+            [ -f "$1" ] || return 0
+            while IFS= read -r p || [ -n "$p" ]; do
+              p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+              case "$p" in ''|'#'*) continue ;; esac
+              printf '%s\n' "${p#/}"
+            done < "$1"
+          }
+          # Percent-encode each segment: a literal `#` or `?` in a file name
+          # would otherwise start a fragment or query and probe another URL.
+          enc() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe="/"))' "$1"; }
+          # A failed curl still prints 000 through -w, so the fallback REPLACES
+          # the captured code rather than appending to it.
+          probe() {
+            local c
+            c=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 \
+              -H "Cache-Control: no-cache" "${url}$(enc "$1")?cb=${GITHUB_RUN_ID}-$2") || c="000"
+            printf '%s' "$c"
+          }
           code="000"
           for attempt in 1 2 3 4 5; do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
@@ -222,31 +246,30 @@ jobs:
             sleep $((attempt * 6))
           done
           [ "$code" = "200" ] || problems="${problems}- ${url} returned HTTP ${code}, expected 200\n"
-          paths=()
-          if [ -f .github/pages-deny.txt ]; then
-            while IFS= read -r p || [ -n "$p" ]; do
-              p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
-              case "$p" in ''|'#'*) continue ;; esac
-              paths+=("${p#/}")
-            done < .github/pages-deny.txt
-          fi
-          n=${#paths[@]}
-          if [ "$n" -gt 0 ] && [ "$code" = "200" ]; then
+          mapfile -t deny < <(read_list .github/pages-deny.txt)
+          # Internal-LOOKING paths that must stay public (global.md -> Hosting &
+          # Deployment): a .well-known file, say. A filter that drops one
+          # leaves the root and every deny probe green.
+          mapfile -t public < <(read_list .github/pages-public.txt)
+          n=${#deny[@]}; m=${#public[@]}
+          if [ $((n + m)) -gt 0 ] && [ "$code" = "200" ]; then
             first=()
-            for i in "${!paths[@]}"; do
-              first[i]=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 \
-                -H "Cache-Control: no-cache" "${url}${paths[i]}?cb=${GITHUB_RUN_ID}-d1") || first[i]="000"
-            done
+            for i in "${!deny[@]}"; do first[i]=$(probe "${deny[i]}" d1); done
+            # Two probes 30s apart: one 404 can be the PREVIOUS deploy while the
+            # CDN propagates, and a new public file may not be live on the first.
             sleep 30
-            for i in "${!paths[@]}"; do
-              second=$(curl -sg -o /dev/null -w "%{http_code}" --max-time 8 \
-                -H "Cache-Control: no-cache" "${url}${paths[i]}?cb=${GITHUB_RUN_ID}-d2") || second="000"
+            for i in "${!deny[@]}"; do
+              second=$(probe "${deny[i]}" d2)
               if [ "${first[i]}" != "404" ] || [ "$second" != "404" ]; then
-                problems="${problems}- ${url}${paths[i]} served HTTP ${first[i]} then ${second}, expected 404 on both\n"
+                problems="${problems}- ${url}${deny[i]} served HTTP ${first[i]} then ${second}, expected 404 on both\n"
               fi
             done
-          elif [ "$n" -gt 0 ]; then
-            problems="${problems}- deny-listed paths NOT checked: the site itself is not serving\n"
+            for i in "${!public[@]}"; do
+              pc=$(probe "${public[i]}" p)
+              [ "$pc" = "200" ] || problems="${problems}- ${url}${public[i]} (declared public) served HTTP ${pc}, expected 200\n"
+            done
+          elif [ $((n + m)) -gt 0 ]; then
+            problems="${problems}- declared paths NOT checked: the site itself is not serving\n"
           fi
           {
             echo "## Pages deploy: ${url}"
@@ -257,6 +280,7 @@ jobs:
             else
               echo "- Deny-list: ${n} path(s) probed twice, 30s apart"
             fi
+            echo "- Declared public paths (.github/pages-public.txt): ${m}"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$problems" ]; then
             printf '%b' "$problems" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -115,6 +115,9 @@ jobs:
           # needed, never assumed to be the repository root.
           src_root=$(jq -r '.source.path // empty' <<< "${pages:-null}" 2>/dev/null || true)
           build_type=$(jq -r '.build_type // empty' <<< "${pages:-null}" 2>/dev/null || true)
+          # The branch a branch build publishes: a manual run lists ITS tree,
+          # not the default branch's (they can differ).
+          src_branch=$(jq -r '.source.branch // empty' <<< "${pages:-null}" 2>/dev/null || true)
           src_known=0
           if [ -n "$src_root" ]; then
             src_known=1
@@ -267,7 +270,7 @@ jobs:
             # very files it exists to find.
             # LIMIT: a Jekyll permalink moves a page where no listing shows it.
             paths=()
-            live=""; live_from=""; jekyll=0
+            live=""; live_from=""; jekyll=0; deny_unexpanded=""
             if [ "${#entries[@]}" -gt 0 ]; then
               art=""; art_from=""
               if [ -n "${RUN_ID:-}" ]; then
@@ -302,6 +305,11 @@ jobs:
                    && tar -tf "$ad/x/artifact.tar" > "$ad/list"; then
                   live=$(sed 's#^\./##' "$ad/list" | grep -v -e '/$' -e '^$' || true)
                   live_from="$art_from"
+                elif [ "$status" = "manual" ]; then
+                  # A manual run cannot close an incident, so an artifact that
+                  # simply expired (retention ends) is not a deploy failure: it
+                  # is stated, and the explicit entries are still probed.
+                  deny_unexpanded="${art_from} is not available (expired, or named other than ${PAGES_ARTIFACT_PREFIX}*), so files under denied directories were NOT checked"
                 else
                   problems="${problems}- Could not read ${art_from} (an artifact named ${PAGES_ARTIFACT_PREFIX}*; PAGES_ARTIFACT_PREFIX sets the name), so files under denied directories are NOT checked (the repository tree does not give the published paths)\n"
                 fi
@@ -309,7 +317,7 @@ jobs:
                 problems="${problems}- Could not read the Pages source folder from the Pages API, so files under denied directories are NOT checked (a /docs site publishes docs/x as x)\n"
               else
                 tree_err=$(mktemp)
-                if tree=$(gh api "repos/$REPO/git/trees/${commit:-HEAD}?recursive=1" \
+                if tree=$(gh api "repos/$REPO/git/trees/${commit:-${src_branch:-HEAD}}?recursive=1" \
                       --jq 'if .truncated then "::TRUNCATED::" else (.tree[] | select(.type == "blob") | .path) end' 2>"$tree_err") \
                    && [ "$tree" != "::TRUNCATED::" ]; then
                   if [ -n "$src_root" ]; then
@@ -367,7 +375,7 @@ jobs:
                   problems="${problems}- Forbidden path served HTTP ${first[i]} then ${dcode}, expected 404 on both: ${url}${paths[i]}\n"
                 fi
               done
-              deny_note="${#entries[@]} declared in .github/pages-deny.txt (${n} URLs after expanding directories from ${live_from:-nothing}), all 404 on two probes 30s apart"
+              deny_note="${#entries[@]} declared in .github/pages-deny.txt (${n} URLs after expanding directories from ${live_from:-nothing}), all 404 on two probes 30s apart${deny_unexpanded:+; ${deny_unexpanded}}"
             fi
           elif grep -q 'HTTP 404' "$deny_err"; then
             :

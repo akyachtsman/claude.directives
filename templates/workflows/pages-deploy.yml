@@ -39,7 +39,7 @@ name: Pages Deploy
 # copy. Always dropped, whatever the deny-list says: .git, .github,
 # node_modules, and every dotfile or dot-directory (upload-pages-artifact
 # excludes them; a project serving one, .well-known say, sets
-# include-hidden-files below and denies its secrets by name).
+# INCLUDE_HIDDEN_FILES to 'true' in the build job and denies its secrets by name).
 # A symlink anywhere in the copy fails the run: the upload follows links, so
 # one would publish its target past the deny-list.
 #
@@ -114,6 +114,9 @@ jobs:
     env:
       BUILD_CMD: ''
       SITE_DIR: '.'
+      # upload-pages-artifact's include-hidden-files, read by the filter too:
+      # a hidden file the upload drops is not probed, so it is not counted.
+      INCLUDE_HIDDEN_FILES: 'false'
     steps:
       # The live site is main, whatever ref a manual dispatch names: the Actions
       # UI and `--ref` can start this on any branch, which would publish
@@ -219,7 +222,12 @@ jobs:
               printf '%s\n' "$p" >> "$probes"
               if [ -d "$RUNNER_TEMP/site/$p" ]; then
                 # ./ keeps a dash-leading name from parsing as a find expression.
-                (cd "$RUNNER_TEMP/site" && find "./$p" -type f | sed 's#^\./##') >> "$probes"
+                # Hidden files are left out unless the upload includes them.
+                if [ "${INCLUDE_HIDDEN_FILES:-false}" = "true" ]; then
+                  (cd "$RUNNER_TEMP/site" && find "./$p" -type f | sed 's#^\./##') >> "$probes"
+                else
+                  (cd "$RUNNER_TEMP/site" && find "./$p" -type f -not -path '*/.*' | sed 's#^\./##') >> "$probes"
+                fi
               fi
               rm -rf -- "$RUNNER_TEMP/site/$p"
               denied=$((denied + 1))
@@ -279,7 +287,7 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ runner.temp }}/site
-          include-hidden-files: false
+          include-hidden-files: ${{ env.INCLUDE_HIDDEN_FILES }}
           name: github-pages-${{ github.run_attempt }}
 
   deploy:

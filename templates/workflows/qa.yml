@@ -247,10 +247,11 @@ jobs:
 
       # Refuse what pages-deploy.yml refuses, so a green PR cannot merge into a
       # red deploy: a site directory resolving outside the repository, or a
-      # symlink in the site (the deploy publishes link TARGETS). A build implies
-      # that deploy (the opt-in is Actions-source); without one the repo may be
+      # symlink in the site (the deploy publishes link TARGETS). A symlink fails
+      # where that deploy is installed (.github/workflows/pages-deploy.yml) or a
+      # build implies it (the opt-in is Actions-source); otherwise the repo is
       # branch-source, where the managed build publishes links differently, so
-      # a symlink only warns. Also exports the normalised directory ('' and '/'
+      # it only warns. Also exports the normalised directory ('' and '/'
       # mean the repo root) to serve, as a step output.
       - name: Check the site directory
         id: site
@@ -267,8 +268,8 @@ jobs:
             *) echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the repository; pages-deploy.yml refuses it."; exit 1 ;;
           esac
           links=$(find "$real" \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -printf '%P -> %l\n')
-          if [ -n "$links" ] && [ -n "$BUILD_CMD" ]; then
-            echo "::error::symlinks in the built site, which pages-deploy.yml refuses; replace them with real files:"
+          if [ -n "$links" ] && { [ -n "$BUILD_CMD" ] || [ -f .github/workflows/pages-deploy.yml ]; }; then
+            echo "::error::symlinks in the site, which pages-deploy.yml refuses; replace them with real files:"
             printf '%s\n' "$links"
             exit 1
           elif [ -n "$links" ]; then

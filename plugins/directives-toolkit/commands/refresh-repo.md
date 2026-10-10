@@ -475,7 +475,7 @@ if [ -n "$d" ]; then rm -rf "$d"; fi
     ci`), a `Makefile` or a root script can call it, and a script can `require`
     a sibling. So search every tracked file, not just `.github/`, and read
     every hit:
-    `git grep -nE "notify-email|\.github/scripts|\bnpm\b" -- . ':!.github/workflows/cron-notify.yml' ':!.github/scripts/notify-task.js' ':!.github/scripts/notify-email.js' ':!*package-lock.json'`.
+    `git grep -nE "notify-email|\.github/scripts|\bnpm\b|\.\.?/package(-lock)?\.json" -- . ':!.github/workflows/cron-notify.yml' ':!.github/scripts/notify-task.js' ':!.github/scripts/notify-email.js' ':!*package-lock.json'`.
     A hit is a consumer until shown otherwise. Only one that plainly points
     elsewhere (an `npm` step in `.github/scripts/ui-tests`, a path to another
     script) is cleared.

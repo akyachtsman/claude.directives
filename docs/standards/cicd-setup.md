@@ -574,6 +574,10 @@ elif [ -f package.json ] && ! node -e 'process.exit(JSON.parse(require("fs").rea
   # npm workspaces at the root can claim .github/scripts, and npm install then
   # writes the ROOT lockfile (in this block and in cron-notify.yml alike).
   stop="$stop the root package.json declares npm workspaces (or cannot be parsed); install the kit by hand;"
+elif [ -f .github/scripts/npm-shrinkwrap.json ]; then
+  # npm prefers a shrinkwrap over package-lock.json and may rewrite it, which
+  # this block neither backs up nor stages.
+  stop="$stop .github/scripts/npm-shrinkwrap.json exists (install the kit by hand);"
 elif [ -f .github/scripts/package.json ]; then
   # Parse it: any JSON layout, not one spelling. A read or parse failure is a
   # STOP of its own, never read as "not a module".
@@ -629,15 +633,18 @@ else
            # dependency to it instead of overwriting it, and keep a
            # nodemailer it already declares at its own version.
            if [ "$has_nm" = yes ]; then (cd .github/scripts && npm install)
-           else (cd .github/scripts && npm install nodemailer@^6.9.0); fi
+           else (cd .github/scripts && npm install --save-prod nodemailer@^6.9.0); fi
          else
            (cd .github/scripts && npm install)   # cron-notify.yml's cache: step needs the lockfile
          fi \
       && [ -f .github/scripts/package-lock.json ] \
+      && node -e 'process.exit("nodemailer" in (JSON.parse(require("fs").readFileSync(".github/scripts/package.json", "utf8")).dependencies || {}) ? 0 : 1)' \
       && ok=1
   fi
-  # Success means the lockfile exists (an .npmrc can switch it off) AND the
-  # staging worked; anything less takes the rollback.
+  # Success means the lockfile exists (an .npmrc can switch it off),
+  # nodemailer is a regular dependency (an .npmrc save-dev/save-optional
+  # cannot move it, and --save-prod overrides them) AND the staging worked;
+  # anything less takes the rollback.
   if [ -n "$ok" ] && git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
        .github/scripts/notify-email.js .github/scripts/package.json \
        .github/scripts/package-lock.json; then

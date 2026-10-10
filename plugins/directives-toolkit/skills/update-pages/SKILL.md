@@ -126,15 +126,18 @@ Run in order:
      None → main toggle is a branch-source fix only.
 
 6. **Report proactively on the terminal state** (message / `SendUserFile` with
-   `status: proactive` so it reaches the user's phone):
-   - **SUCCESS:** `✅ Deployed <short-sha> — live at <pages-url>`. Warn that the
+   `status: proactive` so it reaches the user's phone). On a successful build,
+   do step 7's cache-busted fetch FIRST: its result chooses between the first
+   two lines below, so the report never precedes the check it reports.
+   - **SUCCESS** (the fetch served the new content): `✅ Deployed <short-sha> —
+     live at <pages-url>`. Warn that the
      served root (`/`) can stay CDN-cached for up to ~10 min after a deploy; tell
      the user to verify *now* via a cache-busted URL
      (`<pages-url>/index.html?v=<timestamp>`) or an incognito window.
    - **BUILD SUCCEEDED, PAGE NOT FETCHED:** `⚠️ Merged <short-sha>, live
      unverified — build succeeded (<run-url>); <pages-url> could not be fetched
      from this session`. Use this, never the SUCCESS line, whenever step 7's
-     cache-busted fetch did not happen.
+     cache-busted fetch could not be made or did not show the new content.
    - **FAILURE:** `❌ Pages build failed for <short-sha> — <run-url>`, with the
      failing step summarized. GitHub's *managed* deploy sometimes fails its publish
      step with a transient **"Deployment failed, try again later."** — a GitHub-side

@@ -564,7 +564,7 @@ mkdir -p .github/workflows .github/scripts
 # Preflight, before anything is written: never overwrite a file the project
 # already has, and never put the CommonJS scripts under an ES-module manifest.
 # The install below runs only when this passes (no `exit`: safe to paste).
-stop= tmp=
+stop= tmp= t= has_nm=
 for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
   if [ -e "$f" ]; then stop="$stop $f exists (diff it against the template by hand);"; fi
 done
@@ -573,9 +573,11 @@ if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
 elif [ -f .github/scripts/package.json ]; then
   # Parse it: any JSON layout, not one spelling. A read or parse failure is a
   # STOP of its own, never read as "not a module".
-  if ! t=$(node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log(j.type || "")' .github/scripts/package.json 2>/dev/null); then
+  # Prints "<type> <yes|no>": the second word says whether it already declares
+  # nodemailer, whose existing spec is kept rather than replaced.
+  if ! t=$(node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const d = Object.assign({}, j.dependencies, j.devDependencies, j.optionalDependencies); console.log((j.type || "-") + " " + ("nodemailer" in d ? "yes" : "no"))' .github/scripts/package.json 2>/dev/null); then
     stop="$stop .github/scripts/package.json cannot be parsed;"
-  elif [ "$t" = module ]; then
+  elif has_nm=${t##* }; [ "${t%% *}" = module ]; then
     stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
   fi
 fi
@@ -617,8 +619,10 @@ else
       && { [ ! -f "$tmp/package.json" ] || cp "$tmp/package.json" .github/scripts/package.json; } \
       && if [ -f "$tmp/orig-package.json" ]; then
            # An existing manifest may serve other automation: add the
-           # dependency to it instead of overwriting it.
-           (cd .github/scripts && npm install nodemailer@^6.9.0)
+           # dependency to it instead of overwriting it, and keep a
+           # nodemailer it already declares at its own version.
+           if [ "$has_nm" = yes ]; then (cd .github/scripts && npm install)
+           else (cd .github/scripts && npm install nodemailer@^6.9.0); fi
          else
            (cd .github/scripts && npm install)   # cron-notify.yml's cache: step needs the lockfile
          fi \

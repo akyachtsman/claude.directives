@@ -469,12 +469,13 @@ if [ -n "$d" ]; then rm -rf "$d"; fi
   - **unchanged:** `notify-email.js` and `package.json` match a shipped version
     (run the test above with the path swapped in); `package-lock.json` goes
     only with `package.json`.
-  - **no other consumer:** nothing else under `.github/` reads it. A workflow
+  - **no other consumer:** nothing else in the repository reads it. A workflow
     can use `package.json` without naming it (an `npm` step whose
     `working-directory` is `.github/scripts`, or `npm --prefix .github/scripts
-    ci`), and a script can `require` a sibling. So search broadly and read
+    ci`), a `Makefile` or a root script can call it, and a script can `require`
+    a sibling. So search every tracked file, not just `.github/`, and read
     every hit:
-    `grep -rnE "notify-email|\.github/scripts|\bnpm\b" .github --exclude=cron-notify.yml --exclude=notify-task.js --exclude=notify-email.js`.
+    `git grep -nE "notify-email|\.github/scripts|\bnpm\b" -- . ':!.github/workflows/cron-notify.yml' ':!.github/scripts/notify-task.js' ':!.github/scripts/notify-email.js' ':!*package-lock.json'`.
     A hit is a consumer until shown otherwise. Only one that plainly points
     elsewhere (an `npm` step in `.github/scripts/ui-tests`, a path to another
     script) is cleared.

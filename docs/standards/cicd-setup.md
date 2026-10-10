@@ -616,18 +616,21 @@ else
          else
            (cd .github/scripts && npm install)   # cron-notify.yml's cache: step needs the lockfile
          fi \
+      && [ -f .github/scripts/package-lock.json ] \
       && ok=1
   fi
-  if [ -n "$ok" ]; then
-    git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
-      .github/scripts/notify-email.js .github/scripts/package.json \
-      .github/scripts/package-lock.json
+  # Success means the lockfile exists (an .npmrc can switch it off) AND the
+  # staging worked; anything less takes the rollback.
+  if [ -n "$ok" ] && git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
+       .github/scripts/notify-email.js .github/scripts/package.json \
+       .github/scripts/package-lock.json; then
+    echo "Installed and staged the scheduled-job kit"
   else
     rm -f .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js
     for f in package.json package-lock.json; do
       if [ -f "$tmp/orig-$f" ]; then cp "$tmp/orig-$f" ".github/scripts/$f"; else rm -f ".github/scripts/$f"; fi
     done
-    echo "FAILED: a download or npm install did not complete; the tree is restored and nothing is staged"
+    echo "FAILED: a download, npm install, the lockfile or git add did not complete; the tree is restored and nothing is staged"
   fi
   rm -r -- "$tmp"
 fi

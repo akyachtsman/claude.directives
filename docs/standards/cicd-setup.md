@@ -557,7 +557,7 @@ call it a dud.
 
 ### 9f — Scheduled-job notifications
 
-Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note), then replace the starter task body:
+Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. The starter exits before its task body when the SMTP settings are unset, so a task that sends no email also deletes that guard (the `REQUIRED` check) when it replaces the body. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note), then replace the starter task body:
 
 ```bash
 mkdir -p .github/workflows .github/scripts
@@ -568,8 +568,11 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js \
   -o .github/scripts/notify-email.js
 # An existing manifest may serve other automation: add the dependency to it
-# instead of overwriting it.
-if [ -f .github/scripts/package.json ]; then
+# instead of overwriting it. The scripts are CommonJS, so an ES-module
+# manifest cannot host them: stop and decide that by hand.
+if grep -qE '"type" *: *"module"' .github/scripts/package.json 2>/dev/null; then
+  echo 'STOP: .github/scripts/package.json is "type": "module"; the CommonJS notify scripts cannot run under it'
+elif [ -f .github/scripts/package.json ]; then
   (cd .github/scripts && npm install nodemailer@^6.9.0)
 else
   curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \

@@ -573,12 +573,15 @@ if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
 elif [ -f .github/scripts/package.json ]; then
   # Parse it: any JSON layout, not one spelling. A read or parse failure is a
   # STOP of its own, never read as "not a module".
-  # Prints "<type> <yes|no>": the second word says whether it already declares
-  # nodemailer, whose existing spec is kept rather than replaced.
-  if ! t=$(node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const d = Object.assign({}, j.dependencies, j.devDependencies, j.optionalDependencies); console.log((j.type || "-") + " " + ("nodemailer" in d ? "yes" : "no"))' .github/scripts/package.json 2>/dev/null); then
+  # Prints "<type> <yes|other|no>": whether nodemailer is already a regular
+  # dependency (its spec is kept), declared only as a dev/optional one (an
+  # install may omit those, so a person moves it), or absent (it is added).
+  if ! t=$(node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const o = Object.assign({}, j.devDependencies, j.optionalDependencies); console.log((j.type || "-") + " " + ("nodemailer" in (j.dependencies || {}) ? "yes" : "nodemailer" in o ? "other" : "no"))' .github/scripts/package.json 2>/dev/null); then
     stop="$stop .github/scripts/package.json cannot be parsed;"
   elif has_nm=${t##* }; [ "${t%% *}" = module ]; then
     stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
+  elif [ "$has_nm" = other ]; then
+    stop="$stop .github/scripts/package.json declares nodemailer only as a dev/optional dependency (move it to dependencies);"
   fi
 fi
 # git add fails on an ignored path only AFTER staging the paths before it, so

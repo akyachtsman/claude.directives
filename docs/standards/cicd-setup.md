@@ -561,28 +561,39 @@ Installed only when the project has a scheduled task (`global.md` → *Repo Stru
 
 ```bash
 mkdir -p .github/workflows .github/scripts
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
-  -o .github/workflows/cron-notify.yml
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js \
-  -o .github/scripts/notify-task.js
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js \
-  -o .github/scripts/notify-email.js
-# An existing manifest may serve other automation: add the dependency to it
-# instead of overwriting it. The scripts are CommonJS, so an ES-module
-# manifest cannot host them: stop and decide that by hand.
+# Preflight, before anything is written: never overwrite a file the project
+# already has, and never put the CommonJS scripts under an ES-module manifest.
+# The install below runs only when this passes (no `exit`: safe to paste).
+stop=
+for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
+  if [ -e "$f" ]; then stop="$stop $f exists (diff it against the template by hand);"; fi
+done
 if grep -qE '"type" *: *"module"' .github/scripts/package.json 2>/dev/null; then
-  echo 'STOP: .github/scripts/package.json is "type": "module"; the CommonJS notify scripts cannot run under it'
-elif [ -f .github/scripts/package.json ]; then
-  (cd .github/scripts && npm install nodemailer@^6.9.0)
-else
-  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
-    -o .github/scripts/package.json
-  # cron-notify.yml's setup-node `cache:` step needs a committed lockfile
-  (cd .github/scripts && npm install)
+  stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
 fi
-git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
-  .github/scripts/notify-email.js .github/scripts/package.json \
-  .github/scripts/package-lock.json
+if [ -n "$stop" ]; then
+  echo "STOP, nothing written:$stop"
+else
+  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
+    -o .github/workflows/cron-notify.yml
+  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js \
+    -o .github/scripts/notify-task.js
+  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js \
+    -o .github/scripts/notify-email.js
+  # An existing manifest may serve other automation: add the dependency to it
+  # instead of overwriting it. Either way cron-notify.yml's setup-node `cache:`
+  # step needs the lockfile committed.
+  if [ -f .github/scripts/package.json ]; then
+    (cd .github/scripts && npm install nodemailer@^6.9.0)
+  else
+    curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
+      -o .github/scripts/package.json
+    (cd .github/scripts && npm install)
+  fi
+  git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
+    .github/scripts/notify-email.js .github/scripts/package.json \
+    .github/scripts/package-lock.json
+fi
 ```
 
 **What it does:** `cron-notify.yml` surfaces scheduled-job failures the same way

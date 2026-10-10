@@ -183,8 +183,11 @@ re-theme. Details: `directives/design.md` and `docs/guides/design-tooling.md`.
 
 ---
 
-### Scheduled email notifications (standard)
-`/new-repo` already scaffolds the email kit into every project; until the SMTP
-secrets are set, the job emits a notice and skips (no failure). To turn it on, set
-the secrets and variables, then replace the body of `.github/scripts/notify-task.js`.
+### Scheduled email notifications (only with a scheduled task)
+`/new-repo` does not install the email kit: a `schedule:` workflow starts
+recurring work the moment it lands, so it is added when the project has a
+scheduled task (owner ruling, 2026-10-10), per `docs/standards/cicd-setup.md`
+Step 9f. Once installed, until the SMTP secrets are set the job emits a notice
+and skips (no failure). To turn it on, set the secrets and variables, then
+replace the body of `.github/scripts/notify-task.js`.
 The settings tables, provider setup and scheduling: `docs/guides/cron-email-notifications.md`.

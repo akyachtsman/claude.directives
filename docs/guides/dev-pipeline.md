@@ -220,9 +220,10 @@ What `/new-repo` scaffolds in **every** project:
   `automations.md` → *Watcher Rules* W3). Consistency loses to a security
   hazard, and the condition is a fact about the project's Pages source rather
   than a toggle anyone chooses. Omit its `REQUIRED` entry in the same edit
-- the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job /
-  guardrail scripts (`.github/scripts/`: `notify-email.js`, `notify-task.js`,
-  `check-contrast.js`, `package.json`)
+- the Playwright kit (`.github/scripts/ui-tests/`) and the guardrail scripts
+  (`.github/scripts/`: `check-contrast.js` and the rest `qa.yml` names); the
+  scheduled-job scripts (`notify-email.js`, `notify-task.js`, `package.json`)
+  come with `cron-notify.yml`, only when the project has a scheduled task
 
 **Setup, each only where it applies** (NEW-REPO-USER-INSTRUCTIONS Step 1): the
 data keys (`DB_URL` variable, `DB_SERVICE_KEY` secret) before the project's
@@ -238,7 +239,7 @@ consumer for that Contents-write PAT and should not hold one. The Supabase conne
 per-repo + gitignored by the data directive's security rule — the one thing never
 committed.
 
-**Graceful when unconfigured:** `notify-task.js` checks its required SMTP config
+**Graceful when unconfigured:** once installed, `notify-task.js` checks its required SMTP config
 and, if any is missing, emits a GitHub Actions **notice** and exits 0 — a
 not-yet-configured repo surfaces a clear message instead of a cryptic
 scheduled-job crash. (Design is **per-project and generated** — see `design.md`
@@ -263,7 +264,7 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   scaffolds the full set (all standard workflows + Playwright kit;
   `keepalive.yml` is excluded). Since 2026-10-10 (owner ruling) the scheduled
   job and its scripts are added only when a project has a scheduled task.
-  The email kit is standard + active, with a config-guard notice in
+  Once installed, the email kit is active, with a config-guard notice in
   `notify-task.js`; its secrets are needed only if the project sends email. See "Complete standard scaffold" above.
 - **Design — per-project generative (done):** the fixed company design system
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;

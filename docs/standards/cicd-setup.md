@@ -557,7 +557,7 @@ call it a dud.
 
 ### 9f — Scheduled-job notifications
 
-Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. Install it with its scripts (`notify-task.js`, `notify-email.js`, `package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note), then replace the starter task body:
+Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note), then replace the starter task body:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \

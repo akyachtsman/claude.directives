@@ -176,8 +176,9 @@ Execute in order:
    installs them, because that is not decidable from prose (#354). Keeping this
    correct is a review responsibility.
 
-   **Scheduled-job scripts** (only when `cron-notify.yml` is installed, i.e.
-   the owner named a scheduled task at bootstrap). `cron-notify.yml` names
+   **Scheduled-job scripts** — not at bootstrap: they ride with
+   `cron-notify.yml`, which is added only when the project has a scheduled task
+   (`docs/standards/cicd-setup.md` Step 9f). `cron-notify.yml` names
    `.github/scripts/notify-task.js`, `.github/scripts/notify-email.js` and
    `.github/scripts/package.json` by path, so the derivation above copies all
    three (#398). Then run `npm install` in `.github/scripts/` and **commit** the generated

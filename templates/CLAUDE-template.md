@@ -92,7 +92,7 @@ Agents write evidence to `.agent-reports/`:
 ## Safety Rules for Agents
 - Reviewer agents must not edit code unless explicitly instructed.
 - Test commands must not require production credentials.
-- Anything that destroys data — a data reset, a DROP or DELETE, a destructive migration — needs explicit owner approval before it is applied to a live backend (`data.md` → *Reversible-by-Design Backend Changes*); other backend changes go through versioned migrations per that section.
+- Anything that destroys data — a data reset, a DROP or DELETE, a destructive migration — needs explicit owner approval before it is applied to a live backend (`data.md` → *Reversible-by-Design Backend Changes*); other backend changes follow that section too: schema, RPCs, RLS policies and grants through versioned migrations, and an edge function as its versioned source in the same PR, redeployed from it.
 - Merges, and a Pages deploy (on a Pages project the merge IS the deploy), need no approval: they follow `git.md` → *Conditional Auto-Merge on Green*.
 - If a check can't run locally, explain why and name the closest substitute.
 

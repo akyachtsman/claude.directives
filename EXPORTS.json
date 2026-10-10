@@ -720,6 +720,13 @@
       "rationale": "Chat-channel plugins in Anthropic's official marketplace, under its external_plugins/ directory, so not Anthropic-built and outside the parity pass's Anthropic-owned count either way. Out of scope: nothing in this repo or its toolkit talks to a chat channel. Owner ruling 2026-10-08: recorded as rejected so the ownership question does not recur on every audit.",
       "stays": "CLAUDE.md"
     },
+    "ccr-session-mutators": {
+      "vendor": "Anthropic (Claude Code harness tools)",
+      "verdict": "rejected",
+      "rationale": "Evaluated and kept behind a permission prompt, never pre-approved: each mutates or widens a session's reach (attaches a repository, spawns, archives, unarchives or interrupts a session). global.md -> Scheduling Tools Never Prompt lists them under what must keep prompting; a session uses one only when the user asks for exactly that.",
+      "names": ["add_repo", "create_session", "archive_session", "unarchive_session", "interrupt_session"],
+      "stays": "directives/global.md"
+    },
     "code-review": {
       "vendor": "Anthropic",
       "verdict": "rejected",

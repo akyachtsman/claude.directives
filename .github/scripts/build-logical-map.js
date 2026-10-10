@@ -152,6 +152,7 @@ const PLACE = {
 const KINDS = {
   pub: { label: 'publishes',    hint: 'this repo validates or ships it',                         color: '#8B5E3C' },
   cop: { label: 'copies',       hint: 'a snapshot lands in the project at bootstrap',             color: '#B7791F' },
+  add: { label: 'adds when needed', hint: 'a snapshot lands later, only when a condition holds (a scheduled task)', color: '#B7791F', dash: true },
   ins: { label: 'installs',     hint: 'delivered as the plugin, refreshed every session',         color: '#7A4BAF' },
   imp: { label: 'imports',      hint: 'read live by raw URL at every session start',              color: '#1F6FEB' },
   gov: { label: 'governs',      hint: 'the rule the target must satisfy',                         color: '#C0392B' },
@@ -175,7 +176,7 @@ const KINDS = {
 // chosen from the line that performs the connection; deleting that instruction
 // then fails the build. Passive kinds (governs, details in, imports, explains)
 // are relationships of mention, so a mention is their evidence.
-const ACTIVE = new Set(['pub', 'cop', 'ins', 'seq', 'run', 'pro', 'val', 'rem', 'ret']);
+const ACTIVE = new Set(['pub', 'cop', 'add', 'ins', 'seq', 'run', 'pro', 'val', 'rem', 'ret']);
 
 /* ----------------------------------------------------------------- tokens */
 // How a file is NAMED by another file. Evidence for a connection is one of
@@ -325,7 +326,7 @@ const delivery = p =>
 const DELIVERY = {
   inh: 'inherited — raw URL, live at the next session start',
   ins: 'installed — the plugin, refreshed every session by the SessionStart hook',
-  cop: 'copied — a snapshot taken at bootstrap; resync with /refresh-repo',
+  cop: 'copied — a snapshot taken at bootstrap (or later, when a condition adds it); resync with /refresh-repo',
   ref: 'referenced — read on demand, nothing stored downstream',
   int: 'internal — never leaves this repo',
   ven: 'vendor — owned by someone else; we hold only the wiring',
@@ -411,15 +412,15 @@ const FLOW = [
   ['/new-repo', 'secret-scan', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
   ['/new-repo', 'ui-suite', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
   ['/new-repo', 'ui-tests/', 'cop', 'copies the kit', 'a', 'Install the Playwright kit'],
-  ['cicd-setup.md', 'notify-email.js', 'cop', 'copies with cron-notify.yml', 'a', 'Install it with its scripts'],
-  ['cicd-setup.md', 'notify-task.js', 'cop', 'copies with cron-notify.yml', 'a', 'Install it with its scripts'],
-  ['cicd-setup.md', 'package.json', 'cop', 'copies with cron-notify.yml', 'a', 'Install it with its scripts'],
+  ['cicd-setup.md', 'notify-email.js', 'add', 'adds with cron-notify.yml', 'a', 'Install it with its scripts'],
+  ['cicd-setup.md', 'notify-task.js', 'add', 'adds with cron-notify.yml', 'a', 'Install it with its scripts'],
+  ['cicd-setup.md', 'package.json', 'add', 'adds with cron-notify.yml', 'a', 'Install it with its scripts'],
   ['/new-repo', 'pages-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'pages-retry.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'pages-deploy.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'ci-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'ci-notify.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
-  ['cicd-setup.md', 'cron-notify.yml', 'cop', 'copies when a scheduled task needs it', 'a', '-o .github/workflows/cron-notify.yml'],
+  ['cicd-setup.md', 'cron-notify.yml', 'add', 'adds when a scheduled task needs it', 'a', '-o .github/workflows/cron-notify.yml'],
   ['CLAUDE-template.md', 'global.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'git.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'design.md', 'imp', 'imports'],
@@ -717,14 +718,14 @@ for (const [a, b, k, w, s, q] of FLOW) add(N(a), N(b), k, w, s ?? 'a', true, nul
   for (const s of STAGES.slice(1)) {
     if (!PLACE[s.id].length) fail(`stage ${s.id} is empty`);
   }
-  // Every COPIED template must arrive by a copy (or be retired). Reachable is
+  // Every COPIED template must arrive by a copy, a conditional add, or be retired. Reachable is
   // not enough: a later "runs" arrow reached secret-scan and the notify
   // scripts while the map never showed how they enter a project (Codex, #393).
   // The fill-in artifacts are exempt: a project reads them from upstream when
   // it needs one; nothing copies them at bootstrap.
   for (const { p, cls } of exported) {
     if (delivery(p) !== 'cop' || cls === 'artifact') continue;
-    if (!edges.some(e => e.b === p && (e.kind === 'cop' || e.kind === 'rem'))) {
+    if (!edges.some(e => e.b === p && ['cop', 'add', 'rem'].includes(e.kind))) {
       fail(`copied template with no copy into a project: ${labelOf(p)} — declare the copy that installs it, or retire it`);
     }
   }

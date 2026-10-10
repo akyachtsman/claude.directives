@@ -462,10 +462,21 @@ if [ -n "$d" ]; then rm -rf "$d"; fi
   treat it as `STARTER` and ask.
 - **`STARTER`** (either form) → never refresh it silently and never delete it unasked. Report
   it and ask the owner whether the project has a scheduled task. **No** →
-  remove `cron-notify.yml` and the files only it installs (`notify-task.js`,
-  `notify-email.js`, `package.json`, `package-lock.json` under
-  `.github/scripts/`), keeping any file another installed workflow still names
-  by path, in the same refresh PR. **Yes** → keep it and replace the starter body
+  remove `cron-notify.yml` and the starter `notify-task.js` in the same refresh
+  PR. Its three companions under `.github/scripts/` may be project-owned by now,
+  so each is removed only when BOTH hold, and otherwise kept and named to the
+  owner:
+  - **unchanged:** `notify-email.js` and `package.json` match a shipped version
+    (run the test above with the path swapped in); `package-lock.json` goes
+    only with `package.json`.
+  - **no other consumer:** nothing else under `.github/` reads it. A workflow
+    can use `package.json` without naming it (an `npm` step whose
+    `working-directory` is `.github/scripts`), and a script can `require` a
+    sibling, so search for both:
+    `grep -rnE "notify-email|working-directory: *\.github/scripts|npm (ci|install)" .github --exclude=cron-notify.yml --exclude=notify-task.js --exclude=notify-email.js`.
+    Any hit is a consumer until shown otherwise.
+
+  **Yes** → keep it and replace the starter body
   (`docs/standards/cicd-setup.md` Step 9f).
 - **`CANNOT CHECK`** → ask the owner the same question instead of guessing.
 

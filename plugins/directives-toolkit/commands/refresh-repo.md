@@ -424,6 +424,43 @@ Actions-source and a branch-source project respectively): **"absent locally" is
 not a fact about the project's intent.** Ask
 what installing it *starts*, not only what it restores.
 
+⚠️ **And its converse: a PRESENT scheduled starter with no task** (owner ruling,
+2026-10-10). Projects scaffolded before that ruling got `cron-notify.yml`
+unconditionally, so a taskless project may run it daily with nothing to do. When
+`.github/workflows/cron-notify.yml` is installed, test whether
+`.github/scripts/notify-task.js` is still a shipped starter: byte-identical to
+`templates/scripts/notify-task.js` as it stood at ANY upstream commit, since an
+older starter differs from today's.
+
+```bash
+# STARTER = the file matches some shipped version (no task body written yet).
+# A blob-less clone carries every commit's trees, which is all the test reads.
+d=$(mktemp -d) || d=
+if [ -f .github/scripts/notify-task.js ] && [ -n "$d" ] \
+   && git clone -q --bare --filter=blob:none https://github.com/akyachtsman/claude.directives.git "$d"; then
+  h=$(git hash-object .github/scripts/notify-task.js)
+  # Collect first, then match with a here-string: `grep -q` in a pipe exits on
+  # the first hit, and under pipefail the writer's SIGPIPE turns a match into
+  # a miss (it did, for the current starter).
+  shipped=$(git -C "$d" log --format=%H -- templates/scripts/notify-task.js \
+    | while read -r c; do git -C "$d" rev-parse -q --verify "$c:templates/scripts/notify-task.js" 2>/dev/null || true; done)
+  if grep -qxF "$h" <<<"$shipped"; then echo STARTER; else echo "TASK (modified)"; fi
+else
+  echo "CANNOT CHECK: notify-task.js absent or upstream history not readable"
+fi
+if [ -n "$d" ]; then rm -rf "$d"; fi
+```
+
+- **`TASK (modified)`** → the project has a task: refresh the workflow as usual.
+- **`STARTER`** → never refresh it silently and never delete it unasked. Report
+  it and ask the owner whether the project has a scheduled task. **No** →
+  remove `cron-notify.yml` and the files only it installs (`notify-task.js`,
+  `notify-email.js`, `package.json`, `package-lock.json` under
+  `.github/scripts/`), keeping any file another installed workflow still names
+  by path, in the same refresh PR. **Yes** → keep it and replace the starter body
+  (`docs/standards/cicd-setup.md` Step 9f).
+- **`CANNOT CHECK`** → ask the owner the same question instead of guessing.
+
 ### Kit defects
 
 The per-file rule above protects local kit edits, and it also stops a kit BUG

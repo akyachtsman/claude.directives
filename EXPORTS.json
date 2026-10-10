@@ -526,8 +526,19 @@
       "names": [
         "send_later",
         "create_trigger",
+        "update_trigger",
+        "delete_trigger",
+        "fire_trigger",
+        "list_triggers",
+        "get_trigger",
+        "get_session",
+        "list_sessions",
+        "list_environments",
+        "list_repos",
+        "read_documentation",
         "Monitor",
-        "subscribe_pr_activity"
+        "subscribe_pr_activity",
+        "unsubscribe_pr_activity"
       ],
       "sockets": [
         "directives/global.md",

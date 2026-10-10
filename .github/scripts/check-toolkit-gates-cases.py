@@ -14,6 +14,11 @@ the owner ruling of 2026-08-22, #257): the server-side ruleset is the control.
 These cases pin only the shapes the gate says it catches — a push naming main
 as a literal ref — not the open-ended bypass surface #257 records.
 
+EVERY CASE RUNS TWICE: once as shipped, once with `jq` hidden from PATH, so
+gate-lib.sh's sed+awk fallback must read each payload exactly as jq does. That
+fallback once stopped at the first escaped quote and let a push to main through
+behind a quoted commit message (audit, 2026-10-09).
+
 Both gates source gate-lib.sh from their own directory, so every run copies
 the gate under test and the library into one temp directory -- the installed
 layout -- which lets each be swapped for a MUTANT independently:
@@ -53,6 +58,8 @@ PUSH_CASES = [
     ("a backslash-newline continuation", "git push origin \\\nmain", BLOCK),
     ("command substitution in backticks", "result=`git push origin main`", BLOCK),
     ("command substitution inside double quotes", 'out="$(git push origin main)"', BLOCK),
+    ("a double-quoted commit message before the push",
+     'git commit -m "msg" && git push origin main', BLOCK),
     ("an escaped quote outside quotes before the push",
      'echo \\" && git push origin main && echo "done"', BLOCK),
     # ...and the complement.
@@ -143,12 +150,27 @@ def install(tmp):
     return Path(tmp) / "push-gate.sh", Path(tmp) / "wait-gate.sh"
 
 
-def run(gate, command, background=None):
+def run(gate, command, background=None, env=None):
     tool_input = {"command": command}
     if background is not None:
         tool_input["run_in_background"] = background
     payload = json.dumps({"tool_name": "Bash", "tool_input": tool_input})
-    return run_argv(["bash", gate], input=payload.encode(), cwd=ROOT)
+    return run_argv(["bash", gate], input=payload.encode(), cwd=ROOT, env=env)
+
+
+def no_jq_env(tmp):
+    """PATH holding a link to every executable on the real PATH except jq."""
+    bindir = Path(tmp) / "nojq-bin"
+    bindir.mkdir()
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        if not os.path.isdir(d):
+            continue
+        for name in os.listdir(d):
+            src = os.path.join(d, name)
+            if name == "jq" or (bindir / name).exists() or not os.access(src, os.X_OK) or os.path.isdir(src):
+                continue
+            (bindir / name).symlink_to(src)
+    return {**os.environ, "PATH": str(bindir)}
 
 
 def main():
@@ -158,7 +180,13 @@ def main():
             return 1
     c = Cases("check-toolkit-gates-cases")
     with tempfile.TemporaryDirectory() as tmp:
-        check(c, *install(tmp))
+        gates = install(tmp)
+        check(c, *gates)
+        env = no_jq_env(tmp)
+        if run_argv(["bash", "-c", "command -v jq"], env=env)[0] == 0:
+            c.fail("no-jq pass", "jq is still on the PATH built without it")
+        else:
+            check(c, *gates, env=env, tag=" (no jq)")
         # A gate that cannot load its library must ALLOW, quietly: fail-open is
         # the design (each gate's header), and an error exit here would surface
         # on every Bash call. Both payloads below are ones the gates block.
@@ -171,14 +199,14 @@ def main():
                 c.fail(label, f"expected a silent allow (exit 0); got {code}\n      {out}")
             else:
                 c.ok(label)
-    return c.finish(f"{len(PUSH_CASES) + len(WAIT_CASES) + 2} gate payloads read correctly.")
+    return c.finish(f"{2 * (len(PUSH_CASES) + len(WAIT_CASES)) + 2} gate payloads read correctly, with and without jq.")
 
 
-def check(c, push, wait):
-    for name, gate, cases in (("push-gate", push, [(l, cmd, None, e) for l, cmd, e in PUSH_CASES]),
-                              ("wait-gate", wait, WAIT_CASES)):
+def check(c, push, wait, env=None, tag=""):
+    for name, gate, cases in (("push-gate" + tag, push, [(l, cmd, None, e) for l, cmd, e in PUSH_CASES]),
+                              ("wait-gate" + tag, wait, WAIT_CASES)):
         for label, command, background, expected in cases:
-            code, out = run(gate, command, background)
+            code, out = run(gate, command, background, env)
             verdict = "block" if expected == BLOCK else "allow"
             if code != expected:
                 c.fail(f"{name}: {label}", f"expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")

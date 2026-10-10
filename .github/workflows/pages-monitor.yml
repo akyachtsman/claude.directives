@@ -66,9 +66,13 @@ on:
 # still probing, then report nothing itself.
 # A CANCELLED watched run (one superseded by a newer push, say) published
 # nothing either; it waits its turn rather than cancelling a monitor still
-# probing a real deploy.
+# probing a real deploy. A MANUAL run gets a group of its own: it is not a
+# deploy, never closes the issue and never reports "build errored", and in the
+# shared group it would replace a deploy's monitor still PENDING there (a new
+# run evicts the pending one, whatever cancel-in-progress says), dropping that
+# deploy's alarm (Codex, #424).
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
+  group: ${{ github.event_name == 'workflow_dispatch' && format('pages-monitor-manual-{0}', github.run_id) || github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != github.event.repository.default_branch || github.event.workflow_run.head_repository.full_name != github.repository) && format('pages-monitor-offbranch-{0}', github.run_id) || 'pages-monitor' }}
   cancel-in-progress: ${{ !(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'cancelled') }}
 
 permissions:
@@ -448,7 +452,7 @@ jobs:
               gh issue create --repo "$REPO" \
                 --title "Pages deploy failing" \
                 --label "$ISSUE_LABEL" \
-                --body "$(printf '%s\n\n---\nAuto-managed by \`.github/workflows/pages-monitor.yml\`. It closes automatically on the next healthy deploy.' "$body")"
+                --body "$(printf '%s\n\n---\nAuto-managed by `.github/workflows/pages-monitor.yml`. It closes automatically on the next healthy deploy.' "$body")"
             fi
             {
               echo "## ❌ Pages deploy problem"

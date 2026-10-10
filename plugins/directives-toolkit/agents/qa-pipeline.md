@@ -68,7 +68,13 @@ Runs the full agent QA pipeline in sequence. It does not modify code: the only f
 
 ### UI Tester Feedback Loop (Step 2)
 
-The ui-tester runs interactively with the orchestrator until one of these terminal conditions is reached:
+The ui-tester loops with the orchestrator until one of these terminal conditions is reached.
+**Each fix ENDS this run.** A subagent cannot be told mid-run that a fix landed:
+it has no message channel, and its run is over once it returns. So a failing
+round returns the fix plus where to resume, and the calling session, once the
+fix is pushed, invokes this agent again with `resume: step 2, round <N+1>`.
+On that input, skip step 1 (nothing it checks changed beyond the fix, which the
+Pre-Push gate covers), run the deploy check below, then continue at ui-tester.
 
 **Terminal: Pass** — all scenarios pass → proceed to step 3
 **Terminal: Escalate** — escalation criteria met → stop pipeline, notify human with full findings
@@ -82,30 +88,32 @@ Round 1:  Invoke ui-tester → receive structured result
             If S2 (login) fails:
               Read the auth-diagnostics attachment and structured error message first
               Use the diagnostic decision tree in ui-tester.md to identify exact root cause
-              Return the targeted fix to the calling session (file + line + exact change) —
-              this orchestrator never edits code itself. Once the caller reports the fix
-              pushed, confirm the deploy caught up (deploy run head_sha == the commit that
-              deploy publishes — for a deploy from `main`, the squash-merge commit, never the
-              branch head (`update-pages` step 2) — via the Actions API, never a timed
-              wait), then re-run ui-tester
+              End the run, returning the targeted fix (file + line + exact change) and
+              `resume: step 2, round <N+1>` — this orchestrator never edits code itself.
+              On the resumed run, first confirm the deploy caught up (deploy run head_sha
+              == the commit that deploy publishes — for a deploy from `main`, the
+              squash-merge commit, never the branch head (`update-pages` step 2) — via the
+              Actions API, never a timed wait), then re-run ui-tester
             If other scenarios fail:
-              Read the structured error message, return the targeted fix to the caller,
-              re-run ui-tester after the same head_sha deploy check
+              Read the structured error message, end the run returning the targeted
+              fix and the resume point; the resumed run does the same head_sha deploy
+              check before re-running ui-tester
             Do not guess at fixes — always read diagnostic data first
             If not fixable by agent → escalate to human immediately
-Round 2+: Same as Round 1
+Round 2+: Same as Round 1, each in its own resumed run
           If same failure persists after Round 3 with no improvement → escalate to human;
           proceed to the code review step anyway to capture full pipeline output
 Max rounds: 3 (then escalate regardless)
 ```
 
-**What the orchestrator does between rounds:**
-- Re-read the ui-test-report from `.agent-reports/ui-test-report.md`
+**What the orchestrator does on a resumed round:**
+- Re-read the previous round's ui-test-report from `.agent-reports/ui-test-report.md`
+  (the resumed run has no memory of the last one; the report is the record)
 - Compare with previous round to confirm improvement or regression
 - Identify the minimum targeted fix
 - Direct the fix with file + line + exact change in the pipeline summary message
   (the calling session applies it — see Operating Rules)
-- Confirm the fix is pushed AND deployed (head_sha check) before invoking next round
+- Confirm the fix is pushed AND deployed (head_sha check) before re-running ui-tester
 
 ### Security Review Trigger Conditions
 

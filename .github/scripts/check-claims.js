@@ -303,8 +303,8 @@ const DERIVE = process.argv.includes('--derive');
 // extensionless files, and a scan that cannot read them reports full coverage
 // over a subset. Binary detection is a NUL byte in the first 8KB — the same
 // heuristic git itself uses — so a new text format needs no allowlist edit.
-const trackedTextFiles = () => execFileSync('git', ['ls-files'], { encoding: 'utf8' })
-  .split('\n').filter(Boolean)
+const trackedTextFiles = () => execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+  .split('\0').filter(Boolean)
   .filter((f) => !f.includes('node_modules/'))
   // ALL THREE guard artifacts, for the reasons set out at GUARD_ARTIFACTS. An
   // artifact that matches is a permanent false candidate in advisory output, and

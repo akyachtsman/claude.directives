@@ -243,7 +243,7 @@ node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, 
 node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header); a reworded carrier turns it red: add the wording to `phrasings` (#341)
 node .github/scripts/check-claims-cases.js       # that guard's own guard. Re-prove with CHECK_CLAIMS_BIN=<mutant>
 python3 .github/scripts/check-py-warnings.py      # every tracked .py compiles clean — a `\` in a plain docstring is FATAL on 3.15, and the guard then stops running
-(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts)   # RUN THIS FIRST: BOTH viewport checks below resolve @playwright/test from here; without it the cases exit 1 "CANNOT RUN"
+(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts)   # run this BEFORE the two viewport checks below (not first in the list): both resolve @playwright/test from here; without it the cases exit 1 "CANNOT RUN"
 node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — needs the ui-tests install ABOVE, and runs a Playwright suite (minutes). Re-prove with CHECK_UI_VIEWPORTS_BIN=<mutant>
 python3 .github/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml --kit-dir templates/ui-tests  # the ui-suite composite gives both viewport checks the SAME env and cwd as the Playwright run; report-path variables and each step's cwd pinned to literals
 python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths. Re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
@@ -251,7 +251,7 @@ python3 .github/scripts/check-report-path-cases.py # the ui-suite report-path va
 node .github/scripts/check-contrast-cases.js      # the exported WCAG guardrail's own guard — this repo has no styles/tokens.css, so NOTHING else here would notice it break (#334)
 node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone
 python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
-python3 .github/scripts/check-workflow-ref-guard.py  # the guard itself still reads every pinned YAML form
+python3 .github/scripts/workflow-ref-guard-cases.py  # the guard itself still reads every pinned YAML form
 python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
 python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
 python3 .github/scripts/check-toolkit-gates-cases.py  # the push and wait gates block the shapes they claim (+main, an apostrophe-hidden push, `sleep 5m`) and allow the complements; both share gate-lib.sh's quote parser. Re-prove with PUSH_GATE_BIN / WAIT_GATE_BIN / GATE_LIB_BIN=<mutant>
@@ -274,7 +274,7 @@ python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for p in ('.github/workf
 python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable
 python3 .github/scripts/check-pairs-cases.py    # that check's own guard — every pair drifted in turn, each mode refusal with its complement. Re-prove with CHECK_PAIRS_BIN=<mutant>
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
-npx html-validate docs/site/logical-map.html                 # when the map changed (CI runs it every time)
+npx html-validate@10.17.0 docs/site/logical-map.html         # when the map changed (CI runs it every time, same pin)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js

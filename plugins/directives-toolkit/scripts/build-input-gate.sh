@@ -9,12 +9,25 @@
 # of .github/workflows/qa.yml, and gives the same update-pages reminder when
 # the edited path, relative to the repository root, matches it. No build
 # (BUILD_PATHS empty or absent): silent. Unlike the served-file hook it skips
-# no `templates/` paths: a project's own templates/ can be a build input.
+# no `templates/` paths: a project's own templates/ can be a build input. An
+# edit the served-file hook already reminded about (its pattern, repeated below)
+# gets no second, identical reminder.
 #
 # Fail-open by design: any parse problem exits 0. Exit 2 = feed stderr to Claude.
 in=$(cat)
-path=$(printf '%s' "$in" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
+if command -v jq >/dev/null 2>&1; then
+  path=$(printf '%s' "$in" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
+else
+  # No jq must not read as "no build input": the gates' JSON-string reader.
+  # shellcheck source=gate-lib.sh
+  . "$(dirname -- "${BASH_SOURCE[0]}")/gate-lib.sh" 2>/dev/null || exit 0
+  path=$(gate_json_string "$in" file_path)
+fi
 [ -n "$path" ] || exit 0
+if printf '%s\n' "$path" | grep -qE '(index\.html|/docs/[^"]*\.(html|js)|\.css)$' \
+   && ! printf '%s\n' "$path" | grep -q '/templates/'; then
+  exit 0   # the served-file hook in hooks.json gives the same reminder
+fi
 dir=$(dirname -- "$path")
 [ -d "$dir" ] || exit 0
 root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || exit 0
@@ -36,7 +49,10 @@ bp=$(awk '
     print v; exit
   }' "$qa") || exit 0
 [ -n "${bp//[[:space:]]/}" ] || exit 0
-rel=${path#"$root"/}
+# Relative to the root as git sees it: --show-toplevel is the RESOLVED path, so
+# stripping it from a path reached through a symlink (macOS /tmp, a linked home)
+# stripped nothing and the edit went unmatched (audit, 2026-10-09).
+rel="$(git -C "$dir" rev-parse --show-prefix)$(basename -- "$path")"
 if printf '%s\n' "$rel" | grep -qE -- "$bp" 2>/dev/null; then
   echo 'Edited a build input of the GitHub Pages site (BUILD_PATHS in qa.yml) - the deployed site changes with it: apply the update-pages skill: ship it, watch the deploy for the merge commit SHA (not the branch head), and report live/stuck/failed proactively.' >&2
   exit 2

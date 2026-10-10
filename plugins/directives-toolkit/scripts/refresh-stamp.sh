@@ -6,12 +6,13 @@
 # commands/refresh-repo.md -> Phase 3; this file is only the mechanism.
 #
 # WHY A FILE, NOT A FENCED BLOCK IN THE COMMAND. Claude Code substitutes a
-# command's arguments into its text on load: `$ARGUMENTS` always, and `$1`, `$2`,
-# `$3` whenever any argument is given, and `${CLAUDE_PLUGIN_ROOT}` with the
-# plugin's install path (measured 2026-10-09 by loading a plugin skill with and
-# without one). check() and scan() below take positional
-# parameters, so `/refresh-repo now` rewrote them into literals and the guard
-# compared the wrong paths. A file on disk is never substituted.
+# command's arguments into its text on load: `$ARGUMENTS` always; `$N` counted
+# from 0 (`$0` is the first argument), each only when that argument exists; and
+# `${CLAUDE_PLUGIN_ROOT}` with the plugin's install path (measured 2026-10-09 by
+# loading a plugin skill with two arguments: `$1` became the SECOND). check() and
+# scan() below take positional parameters, so `/refresh-repo a b` rewrote `$1`
+# into a literal and the guard compared the wrong paths. A file on disk is never
+# substituted.
 #
 # Self-contained: every Bash call is a fresh shell, so it re-derives what it
 # needs and reads Phase 2's verdict from the marker files Phase 2 leaves.
@@ -19,6 +20,10 @@
 # $classified set in Phase 2's block are all empty here — the guard would take
 # the "upstream head unavailable" branch every time and the stamp could NEVER
 # advance. Phase 2 leaves its verdict in a file for exactly this reason.
+# A project's first refresh may have no sync file yet (/new-repo writes one only
+# for some projects): start it empty, or the stamp below could never be written
+# and Phase 2's verdict, consumed just below, would be lost with it.
+[ -f .claude/directive-sync.json ] || { mkdir -p .claude && printf '{}\n' > .claude/directive-sync.json; }
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
 head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
 marker=$(git rev-parse --git-path refresh-repo-classified)
@@ -75,7 +80,7 @@ if [ "$tree" = yes ]; then
     | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
              -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
              -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \
-             -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sort -u; true)
+             -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sed -E 's#/+$##' | sort -u; true)
   [ -n "$kit_dirs" ] || { [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests; }
 
   # 1. Every path the delta lists.

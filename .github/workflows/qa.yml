@@ -35,9 +35,11 @@ jobs:
   validate:
     name: Validate Directives
     runs-on: ubuntu-latest
-    # Bounded because it fetches: checkout, and npx for the validators. Fast in
-    # practice (~7s), which is exactly why the missing bound went unnoticed —
-    # a job that always finishes quickly is still unbounded when it does not.
+    # Bounded because it fetches: checkout, and npx for the validators. It once
+    # ran in ~7s, which is exactly why the missing bound went unnoticed — a job
+    # that always finishes quickly is still unbounded when it does not. Now
+    # 293-344s over 30 runs (measured 2026-10-09), mostly the *-cases suites
+    # that drive Playwright: re-check the headroom if that grows past ~7 minutes.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +102,7 @@ jobs:
       # dangling watcher through. These cases pin both directions — every valid form
       # it must read, and every dangling name it must still catch.
       - name: Check the cross-reference guard reads YAML correctly
-        run: python3 .github/scripts/check-workflow-ref-guard.py
+        run: python3 .github/scripts/workflow-ref-guard-cases.py
 
       # Presence, sanity ceiling, and a floor for browser jobs — all three,
       # because #238's defect DECLARED a bound on every broken job; the value
@@ -444,7 +446,7 @@ jobs:
       # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
       # here on every run (locally it's only needed when a map changed).
       - name: Validate map HTML
-        run: npx --yes html-validate docs/site/logical-map.html
+        run: npx --yes html-validate@10.17.0 docs/site/logical-map.html   # pinned: a new release could turn this red with no change here. 10.x: 11.x needs Node >=22.22 and this job runs Node 20
 
       - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js

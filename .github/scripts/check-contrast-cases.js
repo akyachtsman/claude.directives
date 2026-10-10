@@ -16,7 +16,7 @@
 // pins BOTH the exit code and a required diagnostic substring — the script has
 // six distinct ways to exit 1, and a case asserting only "exit 1" can keep
 // passing while the branch it was written for is reverted and a different check
-// catches the input instead (the lesson check-workflow-ref-guard.py records).
+// catches the input instead (the lesson workflow-ref-guard-cases.py records).
 //
 // NOT exported: .github/ is outside every EXPORTS.json category path, so no
 // manifest entry is required for this file.

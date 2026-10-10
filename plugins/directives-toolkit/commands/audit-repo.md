@@ -60,7 +60,9 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   the native, unless the project's `CLAUDE.md` records why it was declined.
 - Errors — syntax errors, broken references, dead imports, invalid config,
   malformed data, things that won't run. For per-file correctness depth, run
-  `/code-review --effort high` (read-only, reports findings) and fold its
+  `/code-review high <path>` on each top-level directory in turn (read-only,
+  reports findings; the level is a bare word, and without a target it reviews
+  only the current diff, not the tree) and fold its
   results in — never `/simplify` or `code-simplifier` here, which APPLY fixes
   and would rewrite the tree before you approve anything, contradicting this
   command's findings-only contract; recommend those as follow-ups instead

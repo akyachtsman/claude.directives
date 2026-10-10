@@ -1,6 +1,7 @@
 name: Scheduled Notification
 
-# Standard scheduled job (ships in every project): runs notify-task.js, which
+# Scheduled job, installed only when the project has a scheduled task (not by
+# /new-repo; docs/standards/cicd-setup.md Step 9f): runs notify-task.js, which
 # emails a notification via notify-email.js. notify-task.js guards on the SMTP
 # config and emits a GitHub Actions notice if it's missing (needed only if the
 # project sends email). Customize notify-task.js with your task; add its own env below.
@@ -42,8 +43,9 @@ jobs:
       # Name every file this job needs by its FULL PATH:
       # .github/scripts/notify-task.js (run below), .github/scripts/notify-email.js
       # (which it requires) and .github/scripts/package.json (what `npm install`
-      # above reads). /refresh-repo and /new-repo derive the scripts to install
-      # from the `.github/scripts/<file>` paths a workflow names, so a bare
+      # above reads). Once this workflow is installed, /refresh-repo derives the
+      # scripts to install from the `.github/scripts/<file>` paths a workflow
+      # names, so a bare
       # `node notify-task.js` left all three out (#398). These names ARE the
       # dependency record: claude.directives' derivation guard fails its CI if
       # a file this job needs stops being named in this workflow. The working directory

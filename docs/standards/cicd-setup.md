@@ -23,7 +23,7 @@ Three GitHub Actions workflows replace manual agent invocation for the mechanica
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
 | `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — plus the scheduled `cron-notify.yml` (Step 9f), so all eight are standard (`global.md` → *Repo Structure Standard*). Two files are conditional on the Pages source, so every project has nine: `pages-retry.yml` (Step 9d; `automations.md` → *Watcher Rules* W3) — **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name — and its converse `pages-deploy.yml` (Step 9d-bis), the deploy itself, installed **only** on Actions-source. `keepalive.yml` is NOT installed (Step 9f).
+Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — so seven are standard (`global.md` → *Repo Structure Standard*). The scheduled `cron-notify.yml` (Step 9f) is added only when the project has a scheduled task. Two files are conditional on the Pages source, so every project has a baseline of eight, nine with the scheduled job: `pages-retry.yml` (Step 9d; `automations.md` → *Watcher Rules* W3) — **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name — and its converse `pages-deploy.yml` (Step 9d-bis), the deploy itself, installed **only** on Actions-source. `keepalive.yml` is NOT installed (Step 9f).
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -557,11 +557,115 @@ call it a dud.
 
 ### 9f — Scheduled-job notifications
 
-A drop-in, standard in every project (`global.md` → *Repo Structure Standard*): its starter `notify-task.js` exits 0 — with a warning while the email config is unset — until the project replaces its task body, so installing it before there is a task costs nothing:
+Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. The starter exits before its task body when the SMTP settings are unset, so a task that sends no email also deletes that guard (the `REQUIRED` check) when it replaces the body. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note). The block below stages the files but does not commit them. Before committing, set `on.schedule` in `cron-notify.yml` to the task's own cadence (the template's `cron: '0 7 * * *'` is a placeholder; add the DST guard if it needs a fixed local time, per `docs/guides/cron-email-notifications.md`) and replace the starter task body, then stage those edits again (`git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js`): the block's own `git add` captured the unedited templates:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
-  -o .github/workflows/cron-notify.yml
+mkdir -p .github/workflows .github/scripts
+# Preflight, before anything is written: never overwrite a file the project
+# already has, and never put the CommonJS scripts under an ES-module manifest.
+# The install below runs only when this passes (no `exit`: safe to paste).
+stop= tmp= t= has_nm=
+for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
+  if [ -e "$f" ]; then stop="$stop $f exists (diff it against the template by hand);"; fi
+done
+if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
+  stop="$stop node and npm are required;"
+elif [ -f package.json ] && ! node -e 'process.exit(JSON.parse(require("fs").readFileSync("package.json", "utf8")).workspaces ? 1 : 0)' 2>/dev/null; then
+  # npm workspaces at the root can claim .github/scripts, and npm install then
+  # writes the ROOT lockfile (in this block and in cron-notify.yml alike).
+  stop="$stop the root package.json declares npm workspaces (or cannot be parsed); install the kit by hand;"
+elif [ -f .github/scripts/.npmrc ]; then
+  # A project .npmrc can change what npm installs and saves (lock-only,
+  # omit, save-dev...) here and in cron-notify.yml alike; rather than chase
+  # each setting, leave that configuration to a person.
+  stop="$stop .github/scripts/.npmrc exists (install the kit by hand);"
+elif [ -f .github/scripts/npm-shrinkwrap.json ]; then
+  # npm prefers a shrinkwrap over package-lock.json and may rewrite it, which
+  # this block neither backs up nor stages.
+  stop="$stop .github/scripts/npm-shrinkwrap.json exists (install the kit by hand);"
+elif [ -f .github/scripts/package.json ]; then
+  # Parse it: any JSON layout, not one spelling. A read or parse failure is a
+  # STOP of its own, never read as "not a module".
+  # Prints "<type> <yes|other|no>": whether nodemailer is already a regular
+  # dependency (its spec is kept), declared only as a dev/optional one (an
+  # install may omit those, so a person moves it), or absent (it is added).
+  if ! t=$(node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const o = Object.assign({}, j.devDependencies, j.optionalDependencies); console.log((j.type || "-") + " " + ("nodemailer" in (j.dependencies || {}) ? "yes" : "nodemailer" in o ? "other" : "no"))' .github/scripts/package.json 2>/dev/null); then
+    stop="$stop .github/scripts/package.json cannot be parsed;"
+  elif has_nm=${t##* }; [ "${t%% *}" = module ]; then
+    stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
+  elif [ "$has_nm" = other ]; then
+    stop="$stop .github/scripts/package.json declares nodemailer only as a dev/optional dependency (move it to dependencies);"
+  fi
+fi
+# git add fails on an ignored path only AFTER staging the paths before it, so
+# an ignored kit path is a STOP here rather than a half-staged index later.
+for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js \
+         .github/scripts/package.json .github/scripts/package-lock.json; do
+  if git check-ignore -q -- "$f"; then stop="$stop $f is git-ignored (unignore it first);"; fi
+done
+# Back up what npm may rewrite. A failed backup is a STOP: the rollback below
+# restores from these copies and must never delete an original it has none of.
+if [ -z "$stop" ]; then
+  tmp=$(mktemp -d) || tmp=
+  if [ -z "$tmp" ]; then stop="$stop no scratch directory (mktemp -d failed);"; fi
+fi
+if [ -z "$stop" ]; then
+  for f in package.json package-lock.json; do
+    if [ -f ".github/scripts/$f" ] && ! cp ".github/scripts/$f" "$tmp/orig-$f"; then
+      stop="$stop could not back up .github/scripts/$f;"
+    fi
+  done
+fi
+if [ -n "$stop" ]; then
+  echo "STOP, nothing written:$stop"
+  if [ -n "$tmp" ]; then rm -r -- "$tmp"; fi
+else
+  # All or nothing. Download into the scratch dir, copy into place only when
+  # every download succeeded, and on ANY failure put the tree back as it was
+  # (the preflight proved the three new files absent and backed up the rest),
+  # so a failed run stages nothing and can simply be re-run.
+  ok=
+  if curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml -o "$tmp/cron-notify.yml" \
+     && curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js -o "$tmp/notify-task.js" \
+     && curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js -o "$tmp/notify-email.js" \
+     && { [ -f "$tmp/orig-package.json" ] \
+          || curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json -o "$tmp/package.json"; }; then
+    cp "$tmp/cron-notify.yml" .github/workflows/cron-notify.yml \
+      && cp "$tmp/notify-task.js" "$tmp/notify-email.js" .github/scripts/ \
+      && { [ ! -f "$tmp/package.json" ] || cp "$tmp/package.json" .github/scripts/package.json; } \
+      && if [ -f "$tmp/orig-package.json" ]; then
+           # An existing manifest may serve other automation: add the
+           # dependency to it instead of overwriting it, and keep a
+           # nodemailer it already declares at its own version.
+           if [ "$has_nm" = yes ]; then (cd .github/scripts && npm install)
+           else (cd .github/scripts && npm install --save-prod nodemailer@^6.9.0); fi
+         else
+           (cd .github/scripts && npm install)   # cron-notify.yml's cache: step needs the lockfile
+         fi \
+      && [ -f .github/scripts/package-lock.json ] \
+      && node -e 'process.exit("nodemailer" in (JSON.parse(require("fs").readFileSync(".github/scripts/package.json", "utf8")).dependencies || {}) ? 0 : 1)' \
+      && (cd .github/scripts && node -e 'const path = require("path"); process.exit(require.resolve("nodemailer").startsWith(path.resolve("node_modules") + path.sep) ? 0 : 1)') \
+      && ok=1
+  fi
+  # Success means the lockfile exists (an .npmrc can switch it off),
+  # nodemailer is a regular dependency (--save-prod overrides an .npmrc
+  # save-dev/save-optional), node resolves it from .github/scripts/node_modules
+  # itself, not a parent folder (an .npmrc package-lock-only installs nothing,
+  # and a clean CI checkout has no root node_modules) AND the
+  # staging worked; anything less takes the rollback.
+  if [ -n "$ok" ] && git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
+       .github/scripts/notify-email.js .github/scripts/package.json \
+       .github/scripts/package-lock.json; then
+    echo "Installed and staged the scheduled-job kit"
+  else
+    rm -f .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js
+    for f in package.json package-lock.json; do
+      if [ -f "$tmp/orig-$f" ]; then cp "$tmp/orig-$f" ".github/scripts/$f"; else rm -f ".github/scripts/$f"; fi
+    done
+    echo "FAILED: a download, npm install, the lockfile or git add did not complete; the tree is restored and nothing is staged"
+  fi
+  rm -r -- "$tmp"
+fi
 ```
 
 **What it does:** `cron-notify.yml` surfaces scheduled-job failures the same way
@@ -638,7 +742,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/workflows/pages-retry.yml`: **branch-source** → present, with its `REQUIRED` entry; **Actions-source** → absent with no entry, **or** repointed under W3's exception with the entry updated to the deploy's name (Step 9d)
 - [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present, `BUILD_CMD`/`SITE_DIR` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
 - [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
-- [ ] `.github/workflows/cron-notify.yml` present; `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
+- [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
 - [ ] `.github/scripts/` holds the five scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py` (Step 1)

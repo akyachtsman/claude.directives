@@ -1,6 +1,7 @@
 'use strict';
 // Default scheduled-task entry point — runs from .github/scripts/ via cron-notify.yml.
-// Ships in every project; replace the marked section with your real notification.
+// Installed with cron-notify.yml when the project has a scheduled task; replace
+// the marked section with your real notification.
 //
 // Needed only if the project sends email (NEW-REPO-USER-INSTRUCTIONS Step 1): SMTP_HOST, SMTP_USER,
 // ALERT_TO (Variables) + SMTP_PASS (Secret). If any is missing, this emits a

@@ -44,7 +44,7 @@ connection a **quote**: the evidence line must then carry that phrase too.
 
 **Every ACTIVE connection must carry a quote** (owner ruling, 2026-10-05, after
 three Codex rounds on #393 each found more first-mention evidence). Active kinds
-claim something happens: publishes, copies, installs, hands off, runs, fills in,
+claim something happens: publishes, copies, adds when needed, installs, hands off, runs, fills in,
 checks, retires, re-syncs. The quote is a phrase from the instruction that makes
 it happen. The build looks for it on the same line as the file's name first, and
 only then anywhere in the same paragraph (the run of non-blank lines), so a

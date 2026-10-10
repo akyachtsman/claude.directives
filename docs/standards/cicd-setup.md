@@ -579,6 +579,12 @@ elif [ -f .github/scripts/package.json ]; then
     stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
   fi
 fi
+# git add fails on an ignored path only AFTER staging the paths before it, so
+# an ignored kit path is a STOP here rather than a half-staged index later.
+for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js \
+         .github/scripts/package.json .github/scripts/package-lock.json; do
+  if git check-ignore -q -- "$f"; then stop="$stop $f is git-ignored (unignore it first);"; fi
+done
 # Back up what npm may rewrite. A failed backup is a STOP: the rollback below
 # restores from these copies and must never delete an original it has none of.
 if [ -z "$stop" ]; then

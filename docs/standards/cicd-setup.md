@@ -639,13 +639,14 @@ else
          fi \
       && [ -f .github/scripts/package-lock.json ] \
       && node -e 'process.exit("nodemailer" in (JSON.parse(require("fs").readFileSync(".github/scripts/package.json", "utf8")).dependencies || {}) ? 0 : 1)' \
-      && (cd .github/scripts && node -e 'require.resolve("nodemailer")') \
+      && (cd .github/scripts && node -e 'const path = require("path"); process.exit(require.resolve("nodemailer").startsWith(path.resolve("node_modules") + path.sep) ? 0 : 1)') \
       && ok=1
   fi
   # Success means the lockfile exists (an .npmrc can switch it off),
   # nodemailer is a regular dependency (--save-prod overrides an .npmrc
-  # save-dev/save-optional), node can actually resolve it from
-  # .github/scripts (an .npmrc package-lock-only installs nothing) AND the
+  # save-dev/save-optional), node resolves it from .github/scripts/node_modules
+  # itself, not a parent folder (an .npmrc package-lock-only installs nothing,
+  # and a clean CI checkout has no root node_modules) AND the
   # staging worked; anything less takes the rollback.
   if [ -n "$ok" ] && git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
        .github/scripts/notify-email.js .github/scripts/package.json \

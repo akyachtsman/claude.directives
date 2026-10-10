@@ -817,7 +817,13 @@
         "legal-builder-hub",
         "law-student",
         "legal-clinic",
-        "pubmed"
+        "pubmed",
+        "single-cell-rna-qc",
+        "instrument-data-to-allotrope",
+        "nextflow-development",
+        "scvi-tools",
+        "clinical-trial-protocol",
+        "scientific-problem-selection"
       ],
       "rationale": "Anthropic-owned business and industry plugins from the built-in anthropic-plugin-directory (~/.claude/plugins/plugin-directory-cache-v2.json): the knowledge-work-plugins entries that do not overlap the toolkit (design, engineering, plugin-management, productivity and product-management have their own entries), and every Anthropic-owned entry of the financial-services, claude-for-financial-advisors, claude-for-legal and life-sciences repositories. operations covers both the knowledge-work and the financial-services plugin of that name. Out of domain: none of these jobs (marketing, sales, finance, legal practice, HR, support, biomedical research, PDF annotation) exists in this repo or its toolkit. Partner-built entries in the same repositories (life-sciences' partner connectors, claude-for-legal's external_plugins/cocounsel-legal, knowledge-work's partner-built/) are outside the Anthropic-owned count. Recorded as one entry so a future parity pass does not re-derive each verdict.",
       "stays": "CLAUDE.md"

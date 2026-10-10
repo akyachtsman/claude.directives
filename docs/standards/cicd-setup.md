@@ -567,10 +567,16 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
   -o .github/scripts/notify-task.js
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js \
   -o .github/scripts/notify-email.js
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
-  -o .github/scripts/package.json
-# cron-notify.yml's setup-node `cache:` step needs a committed lockfile
-(cd .github/scripts && npm install)
+# An existing manifest may serve other automation: add the dependency to it
+# instead of overwriting it.
+if [ -f .github/scripts/package.json ]; then
+  (cd .github/scripts && npm install nodemailer@^6.9.0)
+else
+  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
+    -o .github/scripts/package.json
+  # cron-notify.yml's setup-node `cache:` step needs a committed lockfile
+  (cd .github/scripts && npm install)
+fi
 git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
   .github/scripts/notify-email.js .github/scripts/package.json \
   .github/scripts/package-lock.json

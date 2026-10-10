@@ -471,10 +471,13 @@ if [ -n "$d" ]; then rm -rf "$d"; fi
     only with `package.json`.
   - **no other consumer:** nothing else under `.github/` reads it. A workflow
     can use `package.json` without naming it (an `npm` step whose
-    `working-directory` is `.github/scripts`), and a script can `require` a
-    sibling, so search for both:
-    `grep -rnE "notify-email|working-directory: *\.github/scripts|npm (ci|install)" .github --exclude=cron-notify.yml --exclude=notify-task.js --exclude=notify-email.js`.
-    Any hit is a consumer until shown otherwise.
+    `working-directory` is `.github/scripts`, or `npm --prefix .github/scripts
+    ci`), and a script can `require` a sibling. So search broadly and read
+    every hit:
+    `grep -rnE "notify-email|\.github/scripts|\bnpm\b" .github --exclude=cron-notify.yml --exclude=notify-task.js --exclude=notify-email.js`.
+    A hit is a consumer until shown otherwise. Only one that plainly points
+    elsewhere (an `npm` step in `.github/scripts/ui-tests`, a path to another
+    script) is cleared.
 
   **Yes** → keep it and replace the starter body
   (`docs/standards/cicd-setup.md` Step 9f).

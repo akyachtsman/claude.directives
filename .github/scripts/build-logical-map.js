@@ -420,7 +420,7 @@ const FLOW = [
   ['/new-repo', 'pages-deploy.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'ci-monitor.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
   ['/new-repo', 'ci-notify.yml', 'cop', 'copies', 'a', 'copy these workflow files'],
-  ['cicd-setup.md', 'cron-notify.yml', 'add', 'adds when a scheduled task needs it', 'a', '-o .github/workflows/cron-notify.yml'],
+  ['cicd-setup.md', 'cron-notify.yml', 'add', 'adds when a scheduled task needs it', 'a', 'cp "$tmp/cron-notify.yml" .github/workflows/cron-notify.yml'],
   ['CLAUDE-template.md', 'global.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'git.md', 'imp', 'imports'],
   ['CLAUDE-template.md', 'design.md', 'imp', 'imports'],

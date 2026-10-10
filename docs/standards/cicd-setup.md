@@ -564,7 +564,7 @@ mkdir -p .github/workflows .github/scripts
 # Preflight, before anything is written: never overwrite a file the project
 # already has, and never put the CommonJS scripts under an ES-module manifest.
 # The install below runs only when this passes (no `exit`: safe to paste).
-stop=
+stop= tmp=
 for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
   if [ -e "$f" ]; then stop="$stop $f exists (diff it against the template by hand);"; fi
 done
@@ -579,28 +579,57 @@ elif [ -f .github/scripts/package.json ]; then
     stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
   fi
 fi
+# Back up what npm may rewrite. A failed backup is a STOP: the rollback below
+# restores from these copies and must never delete an original it has none of.
+if [ -z "$stop" ]; then
+  tmp=$(mktemp -d) || tmp=
+  if [ -z "$tmp" ]; then stop="$stop no scratch directory (mktemp -d failed);"; fi
+fi
+if [ -z "$stop" ]; then
+  for f in package.json package-lock.json; do
+    if [ -f ".github/scripts/$f" ] && ! cp ".github/scripts/$f" "$tmp/orig-$f"; then
+      stop="$stop could not back up .github/scripts/$f;"
+    fi
+  done
+fi
 if [ -n "$stop" ]; then
   echo "STOP, nothing written:$stop"
+  if [ -n "$tmp" ]; then rm -r -- "$tmp"; fi
 else
-  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
-    -o .github/workflows/cron-notify.yml
-  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js \
-    -o .github/scripts/notify-task.js
-  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js \
-    -o .github/scripts/notify-email.js
-  # An existing manifest may serve other automation: add the dependency to it
-  # instead of overwriting it. Either way cron-notify.yml's setup-node `cache:`
-  # step needs the lockfile committed.
-  if [ -f .github/scripts/package.json ]; then
-    (cd .github/scripts && npm install nodemailer@^6.9.0)
-  else
-    curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
-      -o .github/scripts/package.json
-    (cd .github/scripts && npm install)
+  # All or nothing. Download into the scratch dir, copy into place only when
+  # every download succeeded, and on ANY failure put the tree back as it was
+  # (the preflight proved the three new files absent and backed up the rest),
+  # so a failed run stages nothing and can simply be re-run.
+  ok=
+  if curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml -o "$tmp/cron-notify.yml" \
+     && curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js -o "$tmp/notify-task.js" \
+     && curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js -o "$tmp/notify-email.js" \
+     && { [ -f "$tmp/orig-package.json" ] \
+          || curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json -o "$tmp/package.json"; }; then
+    cp "$tmp/cron-notify.yml" .github/workflows/cron-notify.yml \
+      && cp "$tmp/notify-task.js" "$tmp/notify-email.js" .github/scripts/ \
+      && { [ ! -f "$tmp/package.json" ] || cp "$tmp/package.json" .github/scripts/package.json; } \
+      && if [ -f "$tmp/orig-package.json" ]; then
+           # An existing manifest may serve other automation: add the
+           # dependency to it instead of overwriting it.
+           (cd .github/scripts && npm install nodemailer@^6.9.0)
+         else
+           (cd .github/scripts && npm install)   # cron-notify.yml's cache: step needs the lockfile
+         fi \
+      && ok=1
   fi
-  git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
-    .github/scripts/notify-email.js .github/scripts/package.json \
-    .github/scripts/package-lock.json
+  if [ -n "$ok" ]; then
+    git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
+      .github/scripts/notify-email.js .github/scripts/package.json \
+      .github/scripts/package-lock.json
+  else
+    rm -f .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js
+    for f in package.json package-lock.json; do
+      if [ -f "$tmp/orig-$f" ]; then cp "$tmp/orig-$f" ".github/scripts/$f"; else rm -f ".github/scripts/$f"; fi
+    done
+    echo "FAILED: a download or npm install did not complete; the tree is restored and nothing is staged"
+  fi
+  rm -r -- "$tmp"
 fi
 ```
 

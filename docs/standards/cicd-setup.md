@@ -574,6 +574,11 @@ elif [ -f package.json ] && ! node -e 'process.exit(JSON.parse(require("fs").rea
   # npm workspaces at the root can claim .github/scripts, and npm install then
   # writes the ROOT lockfile (in this block and in cron-notify.yml alike).
   stop="$stop the root package.json declares npm workspaces (or cannot be parsed); install the kit by hand;"
+elif [ -f .github/scripts/.npmrc ]; then
+  # A project .npmrc can change what npm installs and saves (lock-only,
+  # omit, save-dev...) here and in cron-notify.yml alike; rather than chase
+  # each setting, leave that configuration to a person.
+  stop="$stop .github/scripts/.npmrc exists (install the kit by hand);"
 elif [ -f .github/scripts/npm-shrinkwrap.json ]; then
   # npm prefers a shrinkwrap over package-lock.json and may rewrite it, which
   # this block neither backs up nor stages.

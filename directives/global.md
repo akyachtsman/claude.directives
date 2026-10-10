@@ -219,10 +219,14 @@ index.html       ← the app's entry page (additional pages are fine — every
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
   workflows/     ← the standard template set from templates/workflows/ —
-                   8 unconditional:
+                   7 unconditional:
     qa.yml, qa-live.yml, qa-response.yml,
-    ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml,
-    cron-notify.yml
+    ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml
+                 ← + cron-notify.yml ONLY when the project has a scheduled
+                   task (owner ruling, 2026-10-10). A `schedule:` workflow
+                   starts recurring work the moment it lands, so it is added
+                   with the task, not before (/new-repo does not install it;
+                   docs/standards/cicd-setup.md Step 9f adds it)
                  ← + pages-retry.yml ONLY on a BRANCH-SOURCE project. On an
                    Actions-source one it must not be installed (or must be
                    repointed under W3's idempotent exception) — it watches the

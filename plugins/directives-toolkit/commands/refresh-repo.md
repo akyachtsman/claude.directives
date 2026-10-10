@@ -424,6 +424,65 @@ Actions-source and a branch-source project respectively): **"absent locally" is
 not a fact about the project's intent.** Ask
 what installing it *starts*, not only what it restores.
 
+⚠️ **And its converse: a PRESENT scheduled starter with no task** (owner ruling,
+2026-10-10). Projects scaffolded before that ruling got `cron-notify.yml`
+unconditionally, so a taskless project may run it daily with nothing to do. When
+`.github/workflows/cron-notify.yml` is installed, test whether
+`.github/scripts/notify-task.js` is still a shipped starter: byte-identical to
+`templates/scripts/notify-task.js` as it stood at ANY upstream commit, since an
+older starter differs from today's.
+
+```bash
+# STARTER = the file matches some shipped version (no task body written yet).
+# A blob-less clone carries every commit's trees, which is all the test reads.
+d=$(mktemp -d) || d=
+if [ -f .github/scripts/notify-task.js ] && [ -n "$d" ] \
+   && git clone -q --bare --filter=blob:none https://github.com/akyachtsman/claude.directives.git "$d"; then
+  h=$(git hash-object .github/scripts/notify-task.js)
+  # Collect first, then match with a here-string: `grep -q` in a pipe exits on
+  # the first hit, and under pipefail the writer's SIGPIPE turns a match into
+  # a miss (it did, for the current starter).
+  shipped=$(git -C "$d" log --format=%H -- templates/scripts/notify-task.js \
+    | while read -r c; do git -C "$d" rev-parse -q --verify "$c:templates/scripts/notify-task.js" 2>/dev/null || true; done)
+  if grep -qxF "$h" <<<"$shipped"; then echo STARTER
+  # An edit that left the starter's placeholder body in place wrote no task.
+  elif grep -qF 'Add your scheduled notification in notify-task.js' .github/scripts/notify-task.js; then
+    echo "STARTER (edited, placeholder body still in place)"
+  else echo MODIFIED; fi
+else
+  echo "CANNOT CHECK: notify-task.js absent or upstream history not readable"
+fi
+if [ -n "$d" ]; then rm -rf "$d"; fi
+```
+
+- **`MODIFIED`** → show the diff against the template at the fetched head. A
+  diff that replaces the marked task body (`Replace with your project's
+  notification logic`) is a task: refresh the workflow as usual. A diff of only
+  formatting, line endings or comments is not: treat it as `STARTER`. Unsure →
+  treat it as `STARTER` and ask.
+- **`STARTER`** (either form) → never refresh it silently and never delete it unasked. Report
+  it and ask the owner whether the project has a scheduled task. **No** →
+  remove `cron-notify.yml` and the starter `notify-task.js` in the same refresh
+  PR. Its three companions under `.github/scripts/` may be project-owned by now,
+  so each is removed only when BOTH hold, and otherwise kept and named to the
+  owner:
+  - **unchanged:** `notify-email.js` and `package.json` match a shipped version
+    (run the test above with the path swapped in); `package-lock.json` goes
+    only with `package.json`.
+  - **no other consumer:** nothing else under `.github/` reads it. A workflow
+    can use `package.json` without naming it (an `npm` step whose
+    `working-directory` is `.github/scripts`, or `npm --prefix .github/scripts
+    ci`), and a script can `require` a sibling. So search broadly and read
+    every hit:
+    `grep -rnE "notify-email|\.github/scripts|\bnpm\b" .github --exclude=cron-notify.yml --exclude=notify-task.js --exclude=notify-email.js`.
+    A hit is a consumer until shown otherwise. Only one that plainly points
+    elsewhere (an `npm` step in `.github/scripts/ui-tests`, a path to another
+    script) is cleared.
+
+  **Yes** → keep it and replace the starter body
+  (`docs/standards/cicd-setup.md` Step 9f).
+- **`CANNOT CHECK`** → ask the owner the same question instead of guessing.
+
 ### Kit defects
 
 The per-file rule above protects local kit edits, and it also stops a kit BUG

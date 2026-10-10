@@ -61,7 +61,7 @@ Execute in order:
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
    copy these workflow files from `claude.directives/templates/workflows/`
-   — **nine for either Pages source, differing in one file**:
+   — **eight for either Pages source, differing in one file**:
    `pages-retry.yml` is BRANCH-SOURCE ONLY and must not be installed on an
    Actions-source project (see its bullet below; installing it there arms a
    retry of a rogue unfiltered deploy). Omit its `REQUIRED` entry in the same
@@ -103,7 +103,11 @@ Execute in order:
      `pages-monitor.yml` reports nothing published, and `qa-live.yml` skips
      its suite)
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
-   - `cron-notify.yml` — scheduled email-notification job (runs `notify-task.js`)
+   - **Not `cron-notify.yml`** (the scheduled job). It is installed only when
+     the project has a scheduled task (`global.md` → *Repo Structure
+     Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts
+     recurring work the moment it lands. Add it with the task, per
+     `docs/standards/cicd-setup.md` Step 9f.
 
    **Do NOT copy `keepalive.yml`.** It pushes to `main` weekly, which the
    required default-branch ruleset refuses — so it would be red on every run.
@@ -172,10 +176,13 @@ Execute in order:
    installs them, because that is not decidable from prose (#354). Keeping this
    correct is a review responsibility.
 
-   **Scheduled-job scripts.** `cron-notify.yml` names
+   **Scheduled-job scripts** — not at bootstrap: they ride with
+   `cron-notify.yml`, which is added only when the project has a scheduled task
+   (`docs/standards/cicd-setup.md` Step 9f). `cron-notify.yml` names
    `.github/scripts/notify-task.js`, `.github/scripts/notify-email.js` and
-   `.github/scripts/package.json` by path, so the derivation above copies all
-   three (#398). Then run `npm install` in `.github/scripts/` and **commit** the generated
+   `.github/scripts/package.json` by path, so once it is installed the
+   derivation above (and a later `/refresh-repo`) copies all three (#398); Step
+   9f carries the commands. Then run `npm install` in `.github/scripts/` and **commit** the generated
    `package-lock.json` (`cron-notify.yml`'s `cache:` step needs
    `.github/scripts/package-lock.json`, same policy as the Playwright kit).
    `notify-task.js` ships as a starter that emails via `notify-email.js`; it

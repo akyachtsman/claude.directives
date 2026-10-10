@@ -190,11 +190,13 @@ What `/new-repo` scaffolds in **every** project:
 - `CLAUDE.md` (from `CLAUDE-template.md`) + the five directive URLs + `index.html`
   + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
-- the standard workflows — **eight unconditionally**: `qa.yml`, `qa-live.yml`,
+- the standard workflows — **seven unconditionally**: `qa.yml`, `qa-live.yml`,
   `ci-notify.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`,
-  `qa-response.yml`, `cron-notify.yml` (`keepalive.yml` is NOT installed — it
-  pushes to `main`, which the required ruleset refuses)
-- **plus one of two source-conditional files**, so every project has nine:
+  `qa-response.yml` (`keepalive.yml` is NOT installed — it pushes to `main`,
+  which the required ruleset refuses; `cron-notify.yml` is added only when the
+  project has a scheduled task, owner ruling 2026-10-10)
+- **plus one of two source-conditional files**, so every project has a baseline of eight
+  (nine once `cron-notify.yml` is added with a scheduled task):
   `pages-retry.yml` and its converse `pages-deploy.yml`. State `pages-retry.yml`
   in both branches, never as "branch-source only" — the exception lives in the
   half a one-sided sentence drops:
@@ -219,9 +221,10 @@ What `/new-repo` scaffolds in **every** project:
   `automations.md` → *Watcher Rules* W3). Consistency loses to a security
   hazard, and the condition is a fact about the project's Pages source rather
   than a toggle anyone chooses. Omit its `REQUIRED` entry in the same edit
-- the Playwright kit (`.github/scripts/ui-tests/`) and the scheduled-job /
-  guardrail scripts (`.github/scripts/`: `notify-email.js`, `notify-task.js`,
-  `check-contrast.js`, `package.json`)
+- the Playwright kit (`.github/scripts/ui-tests/`) and the guardrail scripts
+  (`.github/scripts/`: `check-contrast.js` and the rest `qa.yml` names); the
+  scheduled-job scripts (`notify-email.js`, `notify-task.js`, `package.json`)
+  come with `cron-notify.yml`, only when the project has a scheduled task
 
 **Setup, each only where it applies** (NEW-REPO-USER-INSTRUCTIONS Step 1): the
 data keys (`DB_URL` variable, `DB_SERVICE_KEY` secret) before the project's
@@ -237,7 +240,7 @@ consumer for that Contents-write PAT and should not hold one. The Supabase conne
 per-repo + gitignored by the data directive's security rule — the one thing never
 committed.
 
-**Graceful when unconfigured:** `notify-task.js` checks its required SMTP config
+**Graceful when unconfigured:** once installed, `notify-task.js` checks its required SMTP config
 and, if any is missing, emits a GitHub Actions **notice** and exits 0 — a
 not-yet-configured repo surfaces a clear message instead of a cryptic
 scheduled-job crash. (Design is **per-project and generated** — see `design.md`
@@ -259,9 +262,10 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   self-review; `sdd-loop` plan gains the one adaptive plan-review pass (fresh
   subagent scores `plan.md`, revises under ~8, forces data-flow/failure-mode).
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
-  scaffolds the full set (all nine standard workflows + Playwright kit +
-  scheduled-job scripts; `keepalive.yml` is excluded).
-  The email kit is standard + active, with a config-guard notice in
+  scaffolds the full set (all standard workflows + Playwright kit;
+  `keepalive.yml` is excluded). Since 2026-10-10 (owner ruling) the scheduled
+  job and its scripts are added only when a project has a scheduled task.
+  Once installed, the email kit is active, with a config-guard notice in
   `notify-task.js`; its secrets are needed only if the project sends email. See "Complete standard scaffold" above.
 - **Design — per-project generative (done):** the fixed company design system
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;

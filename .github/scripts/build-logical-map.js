@@ -191,8 +191,8 @@ const ALIASES = {
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
   'templates/ui-tests/': ['templates/ui-tests', '.github/scripts/ui-tests'],
   // A bare `package.json` is ambiguous (the kit ships one too), so only the
-  // installed path names this file: cron-notify.yml and /new-repo both write
-  // `.github/scripts/package.json` since #398.
+  // installed path names this file: cron-notify.yml, /new-repo and cicd-setup.md
+  // Step 9f all write `.github/scripts/package.json` since #398.
   'templates/scripts/package.json': ['nodemailer', '.github/scripts/package.json'],
   // /new-repo copies every composite action by one generic instruction,
   // "`templates/actions/<a>/**` → `.github/actions/<a>/**`", which names each.

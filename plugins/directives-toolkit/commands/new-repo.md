@@ -180,8 +180,9 @@ Execute in order:
    `cron-notify.yml`, which is added only when the project has a scheduled task
    (`docs/standards/cicd-setup.md` Step 9f). `cron-notify.yml` names
    `.github/scripts/notify-task.js`, `.github/scripts/notify-email.js` and
-   `.github/scripts/package.json` by path, so the derivation above copies all
-   three (#398). Then run `npm install` in `.github/scripts/` and **commit** the generated
+   `.github/scripts/package.json` by path, so once it is installed the
+   derivation above (and a later `/refresh-repo`) copies all three (#398); Step
+   9f carries the commands. Then run `npm install` in `.github/scripts/` and **commit** the generated
    `package-lock.json` (`cron-notify.yml`'s `cache:` step needs
    `.github/scripts/package-lock.json`, same policy as the Playwright kit).
    `notify-task.js` ships as a starter that emails via `notify-email.js`; it

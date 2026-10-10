@@ -560,8 +560,20 @@ call it a dud.
 Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note), then replace the starter task body:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
+mkdir -p .github/workflows .github/scripts
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
   -o .github/workflows/cron-notify.yml
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-task.js \
+  -o .github/scripts/notify-task.js
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/notify-email.js \
+  -o .github/scripts/notify-email.js
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
+  -o .github/scripts/package.json
+# cron-notify.yml's setup-node `cache:` step needs a committed lockfile
+(cd .github/scripts && npm install)
+git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js \
+  .github/scripts/notify-email.js .github/scripts/package.json \
+  .github/scripts/package-lock.json
 ```
 
 **What it does:** `cron-notify.yml` surfaces scheduled-job failures the same way

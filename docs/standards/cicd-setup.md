@@ -568,9 +568,16 @@ stop=
 for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
   if [ -e "$f" ]; then stop="$stop $f exists (diff it against the template by hand);"; fi
 done
-# Parse it (node is needed for npm anyway): any JSON layout, not one spelling.
-if [ -f .github/scripts/package.json ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).type === "module" ? 0 : 1)' .github/scripts/package.json 2>/dev/null; then
-  stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
+if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
+  stop="$stop node and npm are required;"
+elif [ -f .github/scripts/package.json ]; then
+  # Parse it: any JSON layout, not one spelling. A read or parse failure is a
+  # STOP of its own, never read as "not a module".
+  if ! t=$(node -e 'const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log(j.type || "")' .github/scripts/package.json 2>/dev/null); then
+    stop="$stop .github/scripts/package.json cannot be parsed;"
+  elif [ "$t" = module ]; then
+    stop="$stop .github/scripts/package.json is \"type\": \"module\" (the notify scripts are CommonJS);"
+  fi
 fi
 if [ -n "$stop" ]; then
   echo "STOP, nothing written:$stop"

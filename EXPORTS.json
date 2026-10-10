@@ -538,7 +538,9 @@
         "read_documentation",
         "Monitor",
         "subscribe_pr_activity",
-        "unsubscribe_pr_activity"
+        "unsubscribe_pr_activity",
+        "ScheduleWakeup",
+        "SendUserFile"
       ],
       "sockets": [
         "directives/global.md",
@@ -549,6 +551,7 @@
         "plugins/directives-toolkit/commands/env-chk.md",
         "plugins/directives-toolkit/commands/new-repo.md",
         "plugins/directives-toolkit/skills/update-pages/SKILL.md",
+        "plugins/directives-toolkit/skills/scope-chk/SKILL.md",
         "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
       ]
     }

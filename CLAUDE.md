@@ -126,7 +126,12 @@ Repo-specific deltas:
    authoritative inventory, not recall: read the registered marketplaces' own
    manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
    clone under `~/.claude/plugins/marketplaces/`) together with this session's own
-   skill and tool list. The built-in `anthropic-plugin-directory` marketplace has
+   skill list and its harness tools — the remote-session, scheduling and
+   notification tools (`EXPORTS.json` → `externals.ccr-harness-tools` and
+   `considered.ccr-session-mutators` list the ones evaluated). Core tools (Read,
+   Edit, Bash, Agent, AskUserQuestion and the like) are the platform the
+   toolkit runs on, not natives to weigh against it, so they are out of scope.
+   The built-in `anthropic-plugin-directory` marketplace has
    no clone: its inventory is `plugin-directory-cache-v2.json` in
    `~/.claude/plugins/`, whose `listings` each carry a `name`, a
    `source.repository` (`url` and `path`) and a `checks.review.by.type`. Read it

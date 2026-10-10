@@ -53,7 +53,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
    session scoped to any repo. Do **not** depend on `api.github.com`: the proxy
    refuses it — and so `gh api`, curl and WebFetch alike — for any repository the
    session was not opened on, which from a downstream project includes
-   claude.directives (verified 2026-10-08: 403, "GitHub access to this
+   claude.directives (verified 2026-10-09: 403, "GitHub access to this
    repository is not enabled for this session"), and the GitHub MCP is scoped to
    the session's own repo and compares no two refs.
    If the stamp differs, or none exists, report a ⚠️ finding.

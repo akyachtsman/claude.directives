@@ -47,13 +47,13 @@ This project's look is its own — established at kickoff via `/design-intake`
 - [Add project-specific rules here]
 
 ## Agent Workflow
-1. Use a `claude/<name>` feature branch
+1. Use a `claude/<name>` feature branch, and open a draft PR to `main` on its first push (`git.md` → *PR Lifecycle*)
 2. For a non-trivial feature, run `/sdd-loop` (`specify` → `plan` → `implement`) before coding — separate WHAT from HOW; trivial changes skip to step 3
 3. Implement changes in [main source file] — or `/sdd-loop plan` then `/sdd-loop implement` to settle the approach and work its task list
 4. Run Required Commands above — all must pass
 5. Prefer `qa-pipeline`; run steps individually only if it fails:
    `test-verifier` → `pr-review-toolkit:code-reviewer` → `/security-review` (if security-relevant) → `pr-readiness-reviewer`
-6. Open PR to `main`
+6. Mark the draft PR ready once CI is green, then merge per `git.md` → *Conditional Auto-Merge on Green*
 
 ## UI Test Configuration
 Read by `ui-tester` at runtime — fill in before invoking agents. The Playwright
@@ -92,7 +92,8 @@ Agents write evidence to `.agent-reports/`:
 ## Safety Rules for Agents
 - Reviewer agents must not edit code unless explicitly instructed.
 - Test commands must not require production credentials.
-- Destructive commands, data resets, migrations, or deploys require explicit approval.
+- Anything that destroys data — a data reset, a DROP or DELETE, a destructive migration — needs explicit owner approval before it is applied to a live backend (`data.md` → *Reversible-by-Design Backend Changes*); other backend changes follow that section too: schema, RPCs, RLS policies and grants through versioned migrations, and an edge function as its versioned source in the same PR, redeployed from it.
+- Merges, and a Pages deploy (on a Pages project the merge IS the deploy), need no approval: they follow `git.md` → *Conditional Auto-Merge on Green*.
 - If a check can't run locally, explain why and name the closest substitute.
 
 ## Scheduling Permissions

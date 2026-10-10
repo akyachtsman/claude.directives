@@ -450,7 +450,7 @@ personal token, 15,000 for calls made through a GitHub App owned by an Enterpris
 Cloud organization (GraphQL: 5,000 and 10,000 points). The higher-limit route
 still draws down the budget the lower-limit ones share (GitHub docs, *Rate limits
 for the REST API*; a web session's proxy credential measured 15,000 / 10,000 on
-2026-10-06 via `GET /rate_limit`). Git
+2026-10-09 via `GET /rate_limit`). Git
 transport (push/fetch/clone) is not metered; API/MCP reads and writes are. Quota
 hygiene is fleet-wide — one repo session's polling can starve another repo's
 merge in the same hour.

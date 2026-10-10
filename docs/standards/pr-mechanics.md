@@ -148,7 +148,7 @@ COMMENT form names the head and the monitor clears the label itself — observed
   ⚠️ Read reactions with `issue_read` → **`get`**, passing the PR number.
   `pull_request_read` → `get` returns no `reactions` field, and `issue_read` →
   `get_labels` fails outright on a PR number (*"Could not resolve to an
-  Issue"*) while `get` accepts the same number — verified 2026-08-23. Read that way, a 👍 left by an earlier clean round
+  Issue"*) while `get` accepts the same number — verified 2026-10-09. Read that way, a 👍 left by an earlier clean round
   survives every later push and is indistinguishable from a fresh one, and a
   human's is indistinguishable from Codex's. "Accept it when the review request
   postdates the push" does not work there: there is nothing to correlate with

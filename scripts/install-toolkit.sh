@@ -79,9 +79,9 @@ soft "" claude plugin install plugin-dev@claude-code-plugins        # optional
 # cache carries a previous install (verified 2026-08-05). `update` is what moves the
 # pointer. Failures are reported by soft() rather than suppressed.
 # `--scope user` is explicit because `update` now defaults to `auto-detect`
-# (`--help`, 2026-09-24): without it a repo holding a project-scope copy could have
-# step 5 update that copy twice and leave the user copy stale. Observed the same
-# day: an explicit `--scope user` update moved pr-review-toolkit 6bfd4e0 -> e8e9ee7
+# (`--help`, 2026-10-09): without it a repo holding a project-scope copy could have
+# step 5 update that copy twice and leave the user copy stale. Observed on
+# 2026-09-24: an explicit `--scope user` update moved pr-review-toolkit 6bfd4e0 -> e8e9ee7
 # after this installer's unscoped run had already reported success.
 soft "" claude plugin update directives-toolkit@claude-directives --scope user
 soft "" claude plugin update pr-review-toolkit@claude-plugins-official --scope user

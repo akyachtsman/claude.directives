@@ -295,7 +295,7 @@ This section applies to **legacy projects only** — one carrying
 nothing here. The installed-tooling cache is **per environment** and rebuilds
 when that environment's setup script or allowed network hosts CHANGE, or when it
 expires after ~7 days (code.claude.com/docs/en/cloud-environments → *Environment
-caching*, read 2026-10-08). A save with nothing changed is not a change and
+caching*, read 2026-10-09). A save with nothing changed is not a change and
 rebuilds nothing. Since the whole fleet
 shares the single `fleet` environment, this is **one action that reaches every
 repo**:

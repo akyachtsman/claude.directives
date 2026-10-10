@@ -17,7 +17,7 @@ Referenced by the exported directives and the qa agents.
 
 | File | What it covers |
 |------|----------------|
-| `standards/automations.md` | The agent-session automation standard — email + CI/Codex/Pages monitors, the Pages auto-retry, in-session subscription, PR lifecycle, escalation rules, tool-use discipline, test-scenario bootstrap |
+| `standards/automations.md` | The agent-session automation standard — email, the watcher rules, CI/Codex/Pages monitors, the Pages auto-retry, the CI-success wake, in-session subscription, cross-session messaging, PR lifecycle, escalation rules, test-scenario bootstrap |
 | `standards/cicd-setup.md` | Canonical CI/CD install procedure — workflow templates to copy, monitors, secrets/variables, verification checklist |
 | `standards/ci-triage.md` | **Project** CI triage — expected vs real Playwright failures, two-tier CI, when to trigger `qa-live.yml` (this repo's own self-test triage lives in `internal/repo-monitors.md`) |
 | `standards/code-review-standard.md` | Blocking vs non-blocking review criteria and output format |

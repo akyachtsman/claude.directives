@@ -35,7 +35,8 @@ actually cost the next session a wrong turn.
 ## 1. Settle the working state first
 A handoff over a messy tree is worthless:
 - Commit and push everything; `git status` clean, nothing unpushed.
-- Drive every open PR to a terminal state — merged or closed, nothing dangling.
+- Drive every open PR to a terminal state — merged, closed, or reported blocked
+  with its reason (`git.md` → *PR Lifecycle*), nothing dangling.
 - Branch hygiene — **verify against the remote, never assert from local state**:
   `git ls-remote --heads origin` (local `git branch` says nothing about merged
   refs still on the remote). Unmerged work on a branch is yours to finish: push

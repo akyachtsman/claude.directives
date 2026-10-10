@@ -126,11 +126,24 @@ Run in order:
      None → main toggle is a branch-source fix only.
 
 6. **Report proactively on the terminal state** (message / `SendUserFile` with
-   `status: proactive` so it reaches the user's phone):
-   - **SUCCESS:** `✅ Deployed <short-sha> — live at <pages-url>`. Warn that the
+   `status: proactive` so it reaches the user's phone). On a successful build,
+   do step 7's cache-busted fetch FIRST: its result chooses among the first
+   three lines below, so the report never precedes the check it reports.
+   - **SUCCESS** (the fetch served the new content): `✅ Deployed <short-sha> —
+     live at <pages-url>`. Warn that the
      served root (`/`) can stay CDN-cached for up to ~10 min after a deploy; tell
      the user to verify *now* via a cache-busted URL
      (`<pages-url>/index.html?v=<timestamp>`) or an incognito window.
+   - **BUILD SUCCEEDED, PAGE NOT FETCHED:** `⚠️ Merged <short-sha>, live
+     unverified — build succeeded (<run-url>); <pages-url> could not be fetched
+     from this session`. Use this, never the SUCCESS line, whenever step 7's
+     cache-busted fetch could not be made (the request failed or was blocked).
+   - **BUILD SUCCEEDED, SITE STILL STALE** (the fetch worked but served the
+     previous content): `⚠️ Built <short-sha> (<run-url>), but <pages-url>
+     still serves the previous version`. This is a confirmed serving problem,
+     not an unverified one. Re-fetch cache-busted on a check-in (never a
+     blocking sleep) for up to ~10 min of propagation; still stale after that,
+     treat it as stuck and recover per step 5.
    - **FAILURE:** `❌ Pages build failed for <short-sha> — <run-url>`, with the
      failing step summarized. GitHub's *managed* deploy sometimes fails its publish
      step with a transient **"Deployment failed, try again later."** — a GitHub-side
@@ -145,11 +158,17 @@ Run in order:
      since an older commit would roll the site back, and the run to recover is
      never `pages-build-deployment`.
 
-7. **Verification caveat.** A remote/sandbox session often **cannot fetch the
-   `*.github.io` page** (network allowlist blocks it — `curl`/`WebFetch` return
-   403 "Host not in allowlist"). So verify by the build's `head_sha` +
-   `conclusion` via the Actions API, **not** by loading the page. Confirm the
-   intended files are in the published commit's tree with `git show <sha>:<path>`.
+7. **Verification caveat.** `global.md` → *Async Operations* counts a deploy
+   done only once the deployed asset is fetched **cache-busted** and serves the
+   new content ("merged" is not "live"); do that whenever the page can be
+   fetched. A remote/sandbox session
+   often **cannot fetch the `*.github.io` page** (network allowlist blocks it —
+   `curl`/`WebFetch` return 403 "Host not in allowlist"). Then fall back to the
+   build's `head_sha` + `conclusion` via the Actions API, and confirm the
+   intended files are in the published commit's tree with `git show <sha>:<path>`
+   — but that proves the build, not what is served, so report the status as
+   **"Merged, live unverified"**, never "Deployed", and say why the page could
+   not be fetched.
    A clean/empty-cache render (headless Playwright, incognito, or a `?v=` bust)
    confirms the *new* deploy is served but does **not** reproduce a **returning
    visitor's** cached state — so it can't catch a stale-cache regression on its own

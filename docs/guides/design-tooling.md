@@ -31,7 +31,8 @@ contract. Re-run `/design-intake` any time to re-theme.
 foreground/background token pairs in `styles/tokens.css` (or `css/tokens.css`, or
 whatever `--tokens <file>` names) and fails CI if one is
 below WCAG AA. It exits with a notice (no failure) before a project has a
-`tokens.css`, and it refuses outright to score a token carrying an alpha channel
+`tokens.css` and no CSS at all; a repo that has CSS elsewhere but no tokens file
+is still a hard failure. It also refuses outright to score a token carrying an alpha channel
 — a translucent colour has no ratio of its own.
 
 It is a **floor, not a coverage report**: the list encodes the roles tokens are

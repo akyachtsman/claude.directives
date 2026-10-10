@@ -31,17 +31,20 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
 | `CLAUDE.md` | This file — internal repo-ops, not imported |
+| `README.md` | The repo's front page on GitHub — what the repo is, the five exported directives, and pointers to `CLAUDE.md` and the bootstrap guide |
 | `EXPORTS.json` | Machine-readable export boundary — every downstream-consumed path by delivery mode (inherited rules / installed tooling / copied scaffolding / referenced docs), by `domains`/compartment, by `swap` class, and by **durability `classes`** (standard · orchestrator · behavioral · mechanical · artifact · reference — the classes must partition the exported set exactly); enforced by `check-exports.js` in `qa.yml` |
 | `learnings.jsonl` | Compounding project memory — `/learn` appends typed, confidence-scored entries (one JSON object per line, latest-key-wins); consulted at session start and by `/diagnose` |
 | `NEW-REPO-USER-INSTRUCTIONS.md` | Bootstrap guide for spinning up a new project repo |
 | `MAINTAIN-REPO-USER-INSTRUCTIONS.md` | Owner's post-bootstrap runbook — propagation matrix (what to do when each delivery mode changes), downstream-finding loop, environment re-save procedure, domain boundaries |
 | `TIME-SENSITIVE.md` | The register of facts the directives rely on about something OUTSIDE this repo — models, Claude Code, GitHub, Codex, the test environment, outside services — with where it is stated, when it was last verified and how to re-check it. Kept apart from the owner's standing directives, which never expire. Walked by every `/audit-repo` run |
 | `index.html` | The repo's GitHub Pages landing page (links to the repo map and the commands reference) — the site's only one: `docs/site/index.html` is a redirect stub back to it (merged 2026-10-08). The site is published **verbatim**: a tracked `.nojekyll` turns Jekyll off (2026-10-08), and `check-paths.js` refuses to run without it |
+| `docs/site/commands.html` | The commands reference — every toolkit slash command by pipeline phase, linked from `index.html` |
 | `docs/site/logical-map.html` | The repo map — a lifecycle flow, stage by stage, with every connection read out of the files. **Generated** by `.github/scripts/build-logical-map.js` from `EXPORTS.json` and the files themselves; never hand-edit it. Its behaviour (pan/zoom, search, trace a file's chain with the evidence for each link) is hand-written in `docs/site/logical-map.js` |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions do not attach plugins by themselves** — an environment's setup script performs the FIRST install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0); after that the `SessionStart` hook re-runs the same installer each session and moves it to current |
 | `.claude/settings.json` | Plugin enablement (`extraKnownMarketplaces` + `enabledPlugins`) plus the `SessionStart` hook registration; the guard hooks themselves ship inside the plugin |
 | `.claude/hooks/session-start.sh` | SessionStart hook — runs `scripts/install-toolkit.sh` on every **web** session so a merged toolkit change reaches sessions without a per-environment Setup-script re-save. Best-effort: always exits 0. Byte-identical to `templates/claude-hooks/session-start.sh` |
+| `templates/claude-hooks/` | The downstream copy of the `SessionStart` hook (`session-start.sh`) that `/new-repo` installs into projects; byte-identical to `.claude/hooks/session-start.sh` (`check-pairs.py`) |
 | `.claude/directive-sync.json` | Upstream-sync baseline (`.upstream.sha` + snapshots) that `/env-chk` and `/refresh-repo` read to detect directive drift |
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
@@ -53,6 +56,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and the advisory weekly `watcher-liveness.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
+| `.github/workflow-ref-required.json` | `workflow-ref-guard.py`'s required-watcher list: for each workflow file, the `workflow_run` names it MUST keep watching (here `ci-monitor.yml` and `ci-notify.yml` watch QA, `pages-retry.yml` watches `pages-build-deployment`), so a watcher deleted outright fails CI instead of passing silently |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 
 ## How it's imported downstream
@@ -122,7 +126,18 @@ Repo-specific deltas:
    authoritative inventory, not recall: read the registered marketplaces' own
    manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
    clone under `~/.claude/plugins/marketplaces/`) together with this session's own
-   skill and tool list, then diff that surface against `EXPORTS.json` →
+   skill list and its harness tools — the remote-session, scheduling and
+   notification tools (`EXPORTS.json` → `externals.ccr-harness-tools` and
+   `considered.ccr-session-mutators` list the ones evaluated). Core tools (Read,
+   Edit, Bash, Agent, AskUserQuestion and the like) are the platform the
+   toolkit runs on, not natives to weigh against it, so they are out of scope.
+   The built-in `anthropic-plugin-directory` marketplace has
+   no clone: its inventory is `plugin-directory-cache-v2.json` in
+   `~/.claude/plugins/`, whose `listings` each carry a `name`, a
+   `source.repository` (`url` and `path`) and a `checks.review.by.type`. Read it
+   too, comparing each `name` lowercased with spaces as hyphens
+   (`Plugin Management` is `plugin-management`). Then diff that surface against
+   `EXPORTS.json` →
    `externals` + `considered` (a grouped entry covers its key AND every name in
    its `names` array). Only `borrowed` and `rejected` entries suppress a
    finding: a `deferred` verdict means the work still fits and has not been done,
@@ -134,7 +149,11 @@ Repo-specific deltas:
    manifest advertises. Count only **Anthropic-owned** capabilities —
    the `anthropics/*` marketplaces and the built-in skills — and exclude this
    repo's own `claude-directives` marketplace, which advertises
-   `directives-toolkit`; without that filter the pass flags the toolkit it is
+   `directives-toolkit`. In the directory cache, an entry is Anthropic-owned only
+   when its repository is under `github.com/anthropics/`, its review is by
+   `anthropic`, and its path is not under `external_plugins/` or
+   `partner-built/` — partner-built entries are not Anthropic's, even in an
+   Anthropic repository. Without that filter the pass flags the toolkit it is
    auditing, plus every third-party vendor plugin, as a missing native. What
    survives the filter and is in neither list is the finding. The same pass
    walks `TIME-SENSITIVE.md` row by row and re-checks each fact it lists. Not every
@@ -211,12 +230,9 @@ by construction and its Δ is simply the with-arm firing rate; a should-not-fire
 case passes in both arms at Δ 0. Read the score, not Δ, as the result. It costs
 real tokens and is NOT in CI; run it when a description changes.
 
-Availability: `plugin eval` is early access, enabled per organization. On a
-machine that cannot receive that rollout, `CLAUDE_CODE_WALNUT_SPIRE=1` enables
-it — set in the shell, in the user-level Claude settings under `env`, or in
-managed settings. Do NOT
-commit it to this repo's `.claude/settings.json` — a committed value leaves the
-command gated off anyway.
+Availability: `plugin eval` requires Claude Code v2.1.269 or later. If
+`claude plugin eval --help` reports no such command, run `claude update` and
+check again.
 
 Measured baseline (2026-09-29, 3 runs/case, with/without arms): **12 of 12 pass**,
 mean Δ +0.75 (9 should-fire cases at +1, 3 negatives at 0) — neither under- nor over-triggering. The durable lesson, and the

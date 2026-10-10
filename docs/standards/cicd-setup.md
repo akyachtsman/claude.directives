@@ -95,7 +95,7 @@ gets read-only access to the default branch's caches, while `push`,
 declares a write-capable `cache-mode` (`write`, `write-only`) overrides that
 default, so a low-trust trigger carrying one is cache-poisonable — review it as
 writing, never as read-only (GitHub docs, *Dependency caching*, re-checked
-2026-10-06). So by default a `workflow_run`-triggered job can READ a key it was denied WRITING — measured in
+2026-10-09). So by default a `workflow_run`-triggered job can READ a key it was denied WRITING — measured in
 `claude.insurance` on 2026-08-25 (run 32897692210), where a `qa-live` run
 restored the exact key a manual `workflow_dispatch` had written two days and
 three runs earlier. So narrow any statement of the limit to **saves**;

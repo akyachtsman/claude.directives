@@ -330,6 +330,11 @@
     ev.preventDefault();
     paint();
   });
+  // The map moves by transform only, so #wrap's own scroll must stay at 0. A
+  // focused or clicked box makes the browser scroll even an overflow:hidden
+  // container to show it, and every position reveal() computes is then off by
+  // that scroll: a search result landed above the view (#425). Undo it at once.
+  wrap.addEventListener('scroll', () => { if (wrap.scrollTop || wrap.scrollLeft) wrap.scrollTo(0, 0); });
   // Tabbing to a box that is off screen brings it into view.
   for (const b of boxes.values()) {
     b.addEventListener('focus', () => {

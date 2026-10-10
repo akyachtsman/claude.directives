@@ -570,6 +570,10 @@ for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .githu
 done
 if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
   stop="$stop node and npm are required;"
+elif [ -f package.json ] && ! node -e 'process.exit(JSON.parse(require("fs").readFileSync("package.json", "utf8")).workspaces ? 1 : 0)' 2>/dev/null; then
+  # npm workspaces at the root can claim .github/scripts, and npm install then
+  # writes the ROOT lockfile (in this block and in cron-notify.yml alike).
+  stop="$stop the root package.json declares npm workspaces (or cannot be parsed); install the kit by hand;"
 elif [ -f .github/scripts/package.json ]; then
   # Parse it: any JSON layout, not one spelling. A read or parse failure is a
   # STOP of its own, never read as "not a module".

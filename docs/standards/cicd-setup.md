@@ -23,7 +23,7 @@ Three GitHub Actions workflows replace manual agent invocation for the mechanica
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
 | `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — plus the scheduled `cron-notify.yml` (Step 9f), so all eight are standard (`global.md` → *Repo Structure Standard*). Two files are conditional on the Pages source, so every project has nine: `pages-retry.yml` (Step 9d; `automations.md` → *Watcher Rules* W3) — **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name — and its converse `pages-deploy.yml` (Step 9d-bis), the deploy itself, installed **only** on Actions-source. `keepalive.yml` is NOT installed (Step 9f).
+Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — so seven are standard (`global.md` → *Repo Structure Standard*). The scheduled `cron-notify.yml` (Step 9f) is added only when the project has a scheduled task. Two files are conditional on the Pages source, so every project has eight: `pages-retry.yml` (Step 9d; `automations.md` → *Watcher Rules* W3) — **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name — and its converse `pages-deploy.yml` (Step 9d-bis), the deploy itself, installed **only** on Actions-source. `keepalive.yml` is NOT installed (Step 9f).
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -557,7 +557,7 @@ call it a dud.
 
 ### 9f — Scheduled-job notifications
 
-A drop-in, standard in every project (`global.md` → *Repo Structure Standard*): its starter `notify-task.js` exits 0 — with a warning while the email config is unset — until the project replaces its task body, so installing it before there is a task costs nothing:
+Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. Install it with its scripts (`notify-task.js`, `notify-email.js`, `package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note), then replace the starter task body:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/cron-notify.yml \
@@ -638,7 +638,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/workflows/pages-retry.yml`: **branch-source** → present, with its `REQUIRED` entry; **Actions-source** → absent with no entry, **or** repointed under W3's exception with the entry updated to the deploy's name (Step 9d)
 - [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present, `BUILD_CMD`/`SITE_DIR` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
 - [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
-- [ ] `.github/workflows/cron-notify.yml` present; `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
+- [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
 - [ ] `.github/scripts/` holds the five scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py` (Step 1)

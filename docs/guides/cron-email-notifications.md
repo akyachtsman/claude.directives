@@ -4,9 +4,11 @@ A scheduled **GitHub Actions** job that runs a Node script and emails a
 notification. Transport-agnostic (any SMTP provider), DST-safe, and protected
 against GitHub's 60-day scheduler auto-disable (public repositories only).
 
-`/new-repo` scaffolds this kit into **every** project as standard; the SMTP
-secrets and variables are needed only if the project sends email
-(NEW-REPO-USER-INSTRUCTIONS Step 1). The
+A project gets this kit **when it has a scheduled task** (owner ruling,
+2026-10-10): a `schedule:` workflow starts recurring work the moment it lands,
+so `/new-repo` does not install it by default; add it with the task
+(`docs/standards/cicd-setup.md` Step 9f). The SMTP secrets and variables are
+needed only if the project sends email (NEW-REPO-USER-INSTRUCTIONS Step 1). The
 shipped entry point `notify-task.js` **guards on the config and emits a GitHub
 Actions notice (not a crash) if a required secret/variable is missing**, then
 skips — so an unconfigured repo is obvious in the Actions log. Replace the body

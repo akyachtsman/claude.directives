@@ -190,11 +190,12 @@ What `/new-repo` scaffolds in **every** project:
 - `CLAUDE.md` (from `CLAUDE-template.md`) + the five directive URLs + `index.html`
   + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
-- the standard workflows — **eight unconditionally**: `qa.yml`, `qa-live.yml`,
+- the standard workflows — **seven unconditionally**: `qa.yml`, `qa-live.yml`,
   `ci-notify.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`,
-  `qa-response.yml`, `cron-notify.yml` (`keepalive.yml` is NOT installed — it
-  pushes to `main`, which the required ruleset refuses)
-- **plus one of two source-conditional files**, so every project has nine:
+  `qa-response.yml` (`keepalive.yml` is NOT installed — it pushes to `main`,
+  which the required ruleset refuses; `cron-notify.yml` is added only when the
+  project has a scheduled task, owner ruling 2026-10-10)
+- **plus one of two source-conditional files**, so every project has eight:
   `pages-retry.yml` and its converse `pages-deploy.yml`. State `pages-retry.yml`
   in both branches, never as "branch-source only" — the exception lives in the
   half a one-sided sentence drops:
@@ -259,8 +260,9 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   self-review; `sdd-loop` plan gains the one adaptive plan-review pass (fresh
   subagent scores `plan.md`, revises under ~8, forces data-flow/failure-mode).
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
-  scaffolds the full set (all nine standard workflows + Playwright kit +
-  scheduled-job scripts; `keepalive.yml` is excluded).
+  scaffolds the full set (all standard workflows + Playwright kit;
+  `keepalive.yml` is excluded). Since 2026-10-10 (owner ruling) the scheduled
+  job and its scripts are added only when a project has a scheduled task.
   The email kit is standard + active, with a config-guard notice in
   `notify-task.js`; its secrets are needed only if the project sends email. See "Complete standard scaffold" above.
 - **Design — per-project generative (done):** the fixed company design system

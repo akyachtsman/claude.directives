@@ -552,7 +552,8 @@
         "plugins/directives-toolkit/commands/new-repo.md",
         "plugins/directives-toolkit/skills/update-pages/SKILL.md",
         "plugins/directives-toolkit/skills/scope-chk/SKILL.md",
-        "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
+        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
+        "docs/internal/accepted-residuals.md"
       ]
     }
   },

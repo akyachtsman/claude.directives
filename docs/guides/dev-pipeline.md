@@ -195,7 +195,8 @@ What `/new-repo` scaffolds in **every** project:
   `qa-response.yml` (`keepalive.yml` is NOT installed — it pushes to `main`,
   which the required ruleset refuses; `cron-notify.yml` is added only when the
   project has a scheduled task, owner ruling 2026-10-10)
-- **plus one of two source-conditional files**, so every project has eight:
+- **plus one of two source-conditional files**, so every project has a baseline of eight
+  (nine once `cron-notify.yml` is added with a scheduled task):
   `pages-retry.yml` and its converse `pages-deploy.yml`. State `pages-retry.yml`
   in both branches, never as "branch-source only" — the exception lives in the
   half a one-sided sentence drops:

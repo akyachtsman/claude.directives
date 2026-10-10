@@ -444,15 +444,23 @@ if [ -f .github/scripts/notify-task.js ] && [ -n "$d" ] \
   # a miss (it did, for the current starter).
   shipped=$(git -C "$d" log --format=%H -- templates/scripts/notify-task.js \
     | while read -r c; do git -C "$d" rev-parse -q --verify "$c:templates/scripts/notify-task.js" 2>/dev/null || true; done)
-  if grep -qxF "$h" <<<"$shipped"; then echo STARTER; else echo "TASK (modified)"; fi
+  if grep -qxF "$h" <<<"$shipped"; then echo STARTER
+  # An edit that left the starter's placeholder body in place wrote no task.
+  elif grep -qF 'Add your scheduled notification in notify-task.js' .github/scripts/notify-task.js; then
+    echo "STARTER (edited, placeholder body still in place)"
+  else echo MODIFIED; fi
 else
   echo "CANNOT CHECK: notify-task.js absent or upstream history not readable"
 fi
 if [ -n "$d" ]; then rm -rf "$d"; fi
 ```
 
-- **`TASK (modified)`** → the project has a task: refresh the workflow as usual.
-- **`STARTER`** → never refresh it silently and never delete it unasked. Report
+- **`MODIFIED`** → show the diff against the template at the fetched head. A
+  diff that replaces the marked task body (`Replace with your project's
+  notification logic`) is a task: refresh the workflow as usual. A diff of only
+  formatting, line endings or comments is not: treat it as `STARTER`. Unsure →
+  treat it as `STARTER` and ask.
+- **`STARTER`** (either form) → never refresh it silently and never delete it unasked. Report
   it and ask the owner whether the project has a scheduled task. **No** →
   remove `cron-notify.yml` and the files only it installs (`notify-task.js`,
   `notify-email.js`, `package.json`, `package-lock.json` under

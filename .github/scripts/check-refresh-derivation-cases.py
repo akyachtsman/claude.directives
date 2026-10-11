@@ -85,19 +85,17 @@ two-copy comparison in batch C (R1), when the derivation moved into one file.
 #   makes grep match NOTHING and the pipeline's trailing `sort` swallows the
 #   failure)
 
-import os
-import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from cases_lib import Cases, bin_path, run as run_cmd
+
 # Points the suite at a MUTATED copy of the guard, so "these cases discriminate"
 # is re-provable rather than a claim made once in a commit message. Same
 # mechanism as CHECK_CLAIMS_BIN (#344).
-GUARD = Path(
-    os.environ.get("CHECK_REFRESH_DERIVATION_BIN")
-    or Path(__file__).resolve().parent / "check-refresh-derivation.py"
-).resolve()
+GUARD = bin_path("CHECK_REFRESH_DERIVATION_BIN",
+                 Path(__file__).resolve().parent / "check-refresh-derivation.py")
 
 BARE = r"\.github/scripts/[A-Za-z0-9_.-]+"
 PREFIXED = r"(node|python3) \.github/scripts/[A-Za-z0-9_.-]+"
@@ -183,11 +181,10 @@ def build(tmp, command_text, callers, stamp_text=KEEP, derive_text=KEEP):
 
 
 def run(root):
-    p = subprocess.run([sys.executable, str(GUARD)], cwd=root, capture_output=True, text=True)
-    return p.returncode, p.stdout + p.stderr
+    return run_cmd([sys.executable, GUARD], cwd=root)
 
 
-PASS, FAIL = [], []
+CASES = Cases("check-refresh-derivation-cases")
 
 
 def case(name, *, callers, expect_exit, needle, command_text=KEEP, stamp_text=KEEP,
@@ -197,23 +194,12 @@ def case(name, *, callers, expect_exit, needle, command_text=KEEP, stamp_text=KE
     with TemporaryDirectory() as tmp:
         root = build(tmp, command_text, callers, stamp_text, derive_text)
         rc, out = run(root)
-    problems = []
+    # A traceback is never a catch, whatever the exit code and output say: a
+    # crash can exit 1 with the needle already printed.
     if "Traceback (most recent call last)" in out:
-        problems.append("the guard CRASHED — a traceback is not a catch, so this proves nothing")
-    if rc != expect_exit:
-        problems.append(f"expected exit {expect_exit}, got {rc}")
-    if needle and needle not in out:
-        problems.append(f"expected {needle!r} in the output")
-    if problems:
-        FAIL.append((name, problems, out))
-        print(f"FAIL: {name} (exit {rc})")
-        for pr in problems:
-            print(f"        {pr}")
-        for line in out.strip().splitlines()[:6]:
-            print(f"      | {line}")
+        CASES.fail(name, f"the guard CRASHED — a traceback is not a catch, so this proves nothing.\n      {out}")
     else:
-        PASS.append(name)
-        print(f"OK:   {name} (exit {rc})")
+        CASES.expect(name, rc, out, expect_exit, needle)
 
 
 # A pair of well-formed callers, both ending in a newline.
@@ -577,8 +563,4 @@ case("no callers at all is refused, never a vacuous pass",
      callers={}, expect_exit=1,
      needle="pass vacuously")
 
-print()
-if FAIL:
-    print(f"check-refresh-derivation-cases: FAIL — {len(FAIL)} of {len(PASS) + len(FAIL)} case(s) failed")
-    sys.exit(1)
-print(f"check-refresh-derivation-cases: OK — {len(PASS)} pinned derivation shapes read correctly.")
+sys.exit(CASES.finish(f"{CASES.passed} pinned derivation shapes read correctly."))

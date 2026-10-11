@@ -43,13 +43,16 @@
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { binPath } from './cases_lib.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
 // BROWSER_LADDER_BIN drives a mutated copy, so discrimination is re-proved
-// rather than asserted.
-const LADDER = process.env.BROWSER_LADDER_BIN
-  || join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js');
+// rather than asserted. Resolved to an absolute path (binPath): `require` reads a
+// bare relative path such as `mut/ladder.js` as a PACKAGE name, and the CLI cases
+// run it from temp dirs, so an unresolved mutant fails to load and every case
+// "discriminates" by crashing (the #365 lesson, batch C).
+const LADDER = binPath('BROWSER_LADDER_BIN', join(HERE, '..', '..', 'templates', 'scripts', 'browser-ladder.js'));
 const { ladder, report, RUNGS, realInstall, realLaunch, classifyInstall,
   INSTALL_MAX_BUFFER, INSTALL_TIMEOUT_MS, parseArgs, DEFAULT_TESTS_DIR,
   resolvePlaywright, PROBE_TIMEOUT_MS, treeRootOf, flushThenExit,

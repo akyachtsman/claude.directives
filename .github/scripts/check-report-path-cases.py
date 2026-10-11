@@ -40,17 +40,15 @@ Run: python3 .github/scripts/check-report-path-cases.py
 import atexit
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
+
+from cases_lib import Cases, bin_path, run as run_cmd
 
 # Overridable so a MUTANT can be pointed at, the way CHECK_UI_VIEWPORTS_BIN and
 # CHECK_CLAIMS_BIN are used elsewhere in this directory: a case that cannot be
 # shown to redden is a case nobody has measured.
-VALIDATOR = os.environ.get(
-    "CHECK_REPORT_PATH_BIN",
-    "templates/actions/ui-suite/validate-report-path.py",
-)
+VALIDATOR = bin_path("CHECK_REPORT_PATH_BIN", "templates/actions/ui-suite/validate-report-path.py")
 TESTS_DIR = ".github/scripts/ui-tests"
 # The repo root — every case resolves against it.
 WORKSPACE = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(
@@ -434,67 +432,55 @@ def run(value, tests_dir=None, workspace=None):
         # since #347 round 11, so a suite that let the runner's own value through
         # would pass or fail by where it happened to be checked out.
         env["GITHUB_WORKSPACE"] = workspace or WORKSPACE
-        proc = subprocess.run([sys.executable, VALIDATOR], env=env,
-                              capture_output=True, text=True, timeout=30)
+        code, text = run_cmd([sys.executable, VALIDATOR], env=env, timeout=30)
         with open(out_file, encoding="utf-8") as handle:
             outputs = handle.read()
-        return proc.returncode, proc.stdout + proc.stderr, outputs
+        return code, text, outputs
     finally:
         os.unlink(out_file)
 
 
+def output_problem(case, value, want_path, outputs):
+    """What is wrong with the step outputs a case's run emitted, or None."""
+    if want_path is None:
+        if outputs.strip():
+            return ("a REFUSED value still emitted step outputs:\n"
+                    f"      {outputs!r}\n"
+                    "      A consumer reading them would receive the rejected path.")
+        return None
+    emitted = dict(line.split("=", 1) for line in outputs.splitlines() if "=" in line)
+    if emitted.get("path") != want_path:
+        return f"path output was {emitted.get('path')!r}, expected {want_path!r}"
+    # BOTH BASES, every time. The steps that run from tests-dir need the
+    # value in THEIR base; round 9 shipped only the other one and left
+    # them on the raw input (#347 round 10).
+    # The DERIVED default is not the input, so a case may say what it
+    # expects instead (#347 round 21). Everything else still pins that
+    # `relative` is the caller's own value, verbatim.
+    want_relative = case[7] if len(case) > 7 else value
+    if emitted.get("relative") != want_relative:
+        return (f"relative output was {emitted.get('relative')!r}, expected {want_relative!r}\n"
+                "      The three sequence steps read this one; without it they\n"
+                "      fall back to the unvalidated action input.")
+    return None
+
+
 def main():
-    failures = []
+    cases = Cases("check-report-path-cases")
     for case in CASES:
         label, value, want_code, needle, want_path = case[:5]
         tests_dir = case[5] if len(case) > 5 else None
         workspace = case[6] if len(case) > 6 else None
         code, text, outputs = run(value, tests_dir, workspace)
-        if code != want_code:
-            failures.append(f"{label}\n      expected exit {want_code}; got {code}.\n"
-                            + "\n".join("      " + ln for ln in text.splitlines()))
+        if code != want_code or needle not in text:
+            cases.expect(label, code, text, want_code, needle)   # records the failure
             continue
-        if needle not in text:
-            failures.append(f"{label}\n      exit {code} was right but the diagnostic was not:\n"
-                            + f"      expected to contain {needle!r}\n"
-                            + "\n".join("      " + ln for ln in text.splitlines()))
-            continue
-        if want_path is None:
-            if outputs.strip():
-                failures.append(f"{label}\n      a REFUSED value still emitted step outputs:\n"
-                                + f"      {outputs!r}\n"
-                                + "      A consumer reading them would receive the rejected path.")
-                continue
+        problem = output_problem(case, value, want_path, outputs)
+        if problem:
+            cases.fail(label, problem)
         else:
-            emitted = dict(
-                line.split("=", 1) for line in outputs.splitlines() if "=" in line
-            )
-            if emitted.get("path") != want_path:
-                failures.append(f"{label}\n      path output was {emitted.get('path')!r}, "
-                                f"expected {want_path!r}")
-                continue
-            # BOTH BASES, every time. The steps that run from tests-dir need the
-            # value in THEIR base; round 9 shipped only the other one and left
-            # them on the raw input (#347 round 10).
-            # The DERIVED default is not the input, so a case may say what it
-            # expects instead (#347 round 21). Everything else still pins that
-            # `relative` is the caller's own value, verbatim.
-            want_relative = case[7] if len(case) > 7 else value
-            if emitted.get("relative") != want_relative:
-                failures.append(f"{label}\n      relative output was "
-                                f"{emitted.get('relative')!r}, expected {want_relative!r}\n"
-                                + "      The three sequence steps read this one; without it they"
-                                + "\n      fall back to the unvalidated action input.")
-                continue
-        print(f"OK:   {label} (exit {code})")
-
-    if failures:
-        print("\ncheck-report-path-cases: FAILED")
-        for item in failures:
-            print(f"  - {item}")
-        return 1
-    print(f"\ncheck-report-path-cases: OK — {len(CASES)} pinned report-path shapes read correctly.")
-    return 0
+            cases.ok(f"{label} (exit {code})")
+    return cases.finish(f"{len(CASES)} pinned report-path shapes read correctly.")
 
 
 if __name__ == "__main__":

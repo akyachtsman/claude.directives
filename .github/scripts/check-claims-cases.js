@@ -118,23 +118,17 @@
 import { execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
-import { join, dirname, resolve } from 'path';
+import { join } from 'path';
+import { binPath, writeTree, runNode } from './cases_lib.mjs';
 
 // Points the suite at a MUTATED copy of the guard, so "these cases discriminate"
 // is re-provable rather than a claim made once in a commit message.
-const SCRIPT = resolve(process.env.CHECK_CLAIMS_BIN || '.github/scripts/check-claims.js');
+const SCRIPT = binPath('CHECK_CLAIMS_BIN', '.github/scripts/check-claims.js');
 
 const PASS = [];
 const FAIL = [];
 
-function run(root, args = []) {
-  try {
-    const out = execFileSync('node', [SCRIPT, ...args], { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-    return { code: 0, out };
-  } catch (err) {
-    return { code: err.status === undefined ? -1 : err.status, out: `${err.stdout || ''}${err.stderr || ''}` };
-  }
-}
+const run = (root, args = []) => runNode(SCRIPT, args, { cwd: root });
 
 /**
  * files: { path: contents }. manifest: the claims.json object.
@@ -143,10 +137,7 @@ function build(manifest, files) {
   const root = mkdtempSync(join(tmpdir(), 'claims-cases-'));
   mkdirSync(join(root, '.github/scripts'), { recursive: true });
   writeFileSync(join(root, '.github/scripts/claims.json'), JSON.stringify(manifest, null, 2));
-  for (const [p, body] of Object.entries(files)) {
-    mkdirSync(dirname(join(root, p)), { recursive: true });
-    writeFileSync(join(root, p), body);
-  }
+  writeTree(root, files);
   return root;
 }
 

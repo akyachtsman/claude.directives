@@ -505,31 +505,3 @@ Rules. Additional automation triggers — ping the human when:
 
 Keywords that always escalate: production data loss or deletion; authentication
 or secret rotation; billing or quota alerts; any message from a human.
-
----
-
-## Bootstrap Step — Identify Project-Specific Test Scenarios
-
-Before writing any application code, identify which UI features or data behaviors
-are not covered by the 4 generic Playwright scenarios (S1–S4) and document them
-in CLAUDE.md under a new section. (S1–S4/S5+ is the upstream kit's numbering for
-NEW projects; an existing project's CLAUDE.md scenario table is authoritative for
-its own numbering — match scenarios by role, not number.)
-
-```markdown
-## Project-Specific Test Scenarios
-| # | Feature | What to verify | Failure indicator |
-|---|---|---|---|
-| S5 | [feature name] | [what correct behavior looks like] | [what broken looks like] |
-```
-
-Rules for identifying gaps:
-- Any feature that groups, filters, or transforms backend data before display
-- Any feature where a silent fallback exists (e.g. "Other", empty state, default value)
-  that would hide a broken data fetch
-- Any feature where layout or structure depends on data shape (grids, sections, cards)
-- Any multi-step interaction beyond a single task toggle
-
-This table becomes the input to the ui-tester agent when adding S5+ scenarios
-to app.spec.js. If the table is empty, the agent must explicitly confirm that
-S1–S4 fully cover the app's critical paths before proceeding.

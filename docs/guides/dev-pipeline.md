@@ -271,4 +271,5 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;
   `design.md` is now a thin method, `/design-intake` establishes each project's
   own `styles/tokens.css` + `styles/components.css` via `frontend-design` + Stitch,
-  and the WCAG guardrail ships per-project. See `docs/internal/archive/design-migration.md`.
+  and the WCAG guardrail ships per-project. The method is `directives/design.md`;
+  the migration plan, now implemented, is in git history (removed in batch C, R12).

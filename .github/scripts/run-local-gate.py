@@ -19,7 +19,8 @@ WHAT IT RUNS, per step, in order:
     step that exports a variable (the shfmt install sets SHFMT) hands it on.
     `$RUNNER_TEMP` is a temporary directory removed at the end.
   - The runner defaults a local run can know are set: CI and GITHUB_ACTIONS
-    (`true`), RUNNER_OS, RUNNER_ARCH, GITHUB_WORKFLOW and GITHUB_JOB. A script
+    (`true`), GITHUB_WORKFLOW, GITHUB_JOB, and RUNNER_OS / RUNNER_ARCH from
+    the job's `runs-on` (an ubuntu-* label, and only on a host matching it). A script
     naming any other GITHUB_* or RUNNER_* variable is refused (SEEDED).
   - `timeout-minutes` is enforced: a step's own, cut to what remains of the
     job's. A step past it is killed with its whole process group and FAILS.
@@ -125,6 +126,7 @@ def plan(workflow, job, root):
         raise CannotRun(f"{workflow} has no steps for job {job!r}")
     refuse_unknown(body, JOB_KEYS, f"job {job!r}")
     context = {"workflow": str(doc.get("name") or os.path.basename(workflow)), "job": job,
+               "target": target(body.get("runs-on")),
                "deadline": minutes(body["timeout-minutes"], f"job {job!r}") if "timeout-minutes" in body else None}
     out = []
     for i, step in enumerate(steps, 1):
@@ -169,8 +171,22 @@ def plan(workflow, job, root):
 SEEDED = {"GITHUB_ACTIONS", "GITHUB_WORKSPACE", "GITHUB_ENV", "GITHUB_PATH", "GITHUB_WORKFLOW",
           "GITHUB_JOB", "RUNNER_TEMP", "RUNNER_OS", "RUNNER_ARCH"}
 RUNNER_VARIABLE = re.compile(r"\$\{?((?:GITHUB|RUNNER)_[A-Z0-9_]+)")
-RUNNER_OS = {"Linux": "Linux", "Darwin": "macOS", "Windows": "Windows"}
-RUNNER_ARCH = {"x86_64": "X64", "amd64": "X64", "aarch64": "ARM64", "arm64": "ARM64"}
+HOST_ARCH = {"x86_64": "X64", "amd64": "X64", "aarch64": "ARM64", "arm64": "ARM64"}
+
+
+def target(runs_on):
+    """(RUNNER_OS, RUNNER_ARCH) for a job's `runs-on`, which must be a GitHub-
+    hosted Ubuntu label this host can stand in for. The values describe the
+    TARGET, not the host: a step branching on them, or downloading an amd64
+    binary, must take the path it takes on Actions (Codex, #431). A label this
+    runner cannot reproduce is CANNOT RUN, never run on whatever host it is."""
+    if not (isinstance(runs_on, str) and runs_on.startswith("ubuntu-")):
+        raise CannotRun(f"runs-on {runs_on!r} is not a GitHub-hosted ubuntu-* label this runner reproduces")
+    want = ("Linux", "ARM64" if runs_on.endswith("-arm") else "X64")
+    host = (platform.system(), HOST_ARCH.get(platform.machine().lower(), platform.machine()))
+    if host != want:
+        raise CannotRun(f"the job targets {runs_on} ({want[0]} {want[1]}), and this host is {host[0]} {host[1]}")
+    return want
 
 
 def run_bounded(argv, cwd, env, timeout):
@@ -209,8 +225,14 @@ def make(label, step, root):
     return label, script, shell, cwd, env, left, timeout
 
 
+class BadEnvFile(Exception):
+    pass
+
+
 def read_env_file(path):
-    """Parse a $GITHUB_ENV file: `KEY=VALUE` lines and `KEY<<DELIM` blocks."""
+    """Parse a $GITHUB_ENV file: `KEY=VALUE` lines and `KEY<<DELIM` blocks.
+    A block with no closing delimiter, or a line of neither form, raises
+    BadEnvFile: GitHub's runner fails the step on either (Codex, #431)."""
     out = {}
     with open(path, encoding="utf-8") as handle:
         lines = handle.read().splitlines()
@@ -224,10 +246,14 @@ def read_env_file(path):
             while i < len(lines) and lines[i] != delim:
                 body.append(lines[i])
                 i += 1
+            if i >= len(lines):
+                raise BadEnvFile(f"{key}<<{delim} is never closed by {delim}")
             out[key] = "\n".join(body)
         elif "=" in line:
             key, value = line.split("=", 1)
             out[key] = value
+        elif line.strip():
+            raise BadEnvFile(f"line {line!r} is neither KEY=VALUE nor KEY<<DELIMITER")
         i += 1
     return out
 
@@ -235,8 +261,7 @@ def read_env_file(path):
 def run(steps, root, context):
     temp = tempfile.mkdtemp(prefix="local-gate-")
     env = dict(os.environ, CI="true", GITHUB_ACTIONS="true", GITHUB_WORKFLOW=context["workflow"],
-               GITHUB_JOB=context["job"], RUNNER_OS=RUNNER_OS.get(platform.system(), platform.system()),
-               RUNNER_ARCH=RUNNER_ARCH.get(platform.machine().lower(), platform.machine()))
+               GITHUB_JOB=context["job"], RUNNER_OS=context["target"][0], RUNNER_ARCH=context["target"][1])
     job_end = time.monotonic() + context["deadline"] if context["deadline"] else None
     env_file, path_file = os.path.join(temp, "env"), os.path.join(temp, "path")
     runner_temp = os.path.join(temp, "runner")
@@ -272,7 +297,12 @@ def run(steps, root, context):
             else:
                 print(f"FAIL [{n}] {label} (exit {code}, {took:.1f}s)", flush=True)
                 failed.append(f"[{n}] {label}")
-            env.update(read_env_file(env_file))
+            try:
+                env.update(read_env_file(env_file))
+            except BadEnvFile as e:
+                print(f"FAIL [{n}] {label} ($GITHUB_ENV: {e})", flush=True)
+                if not failed or failed[-1] != f"[{n}] {label}":
+                    failed.append(f"[{n}] {label}")
             with open(path_file, encoding="utf-8") as handle:
                 added = [p for p in handle.read().splitlines() if p]
             if added:

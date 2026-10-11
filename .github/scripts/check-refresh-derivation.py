@@ -144,6 +144,27 @@ COMMAND_CALL = re.compile(r'derive-scripts\.sh"?\s*<\s*"\$buf"')
 # path alone (a variable set and never used) is not running it.
 STAMP_DEF = re.compile(r'^\s*derive=.*derive-scripts\.sh', re.M)
 STAMP_CALL = re.compile(r'\bbash\s+"\$\{?derive\}?"')
+# The calls are matched in EXECUTABLE text only: a call left behind as a comment,
+# or quoted in prose, is not one (Codex, #427). The command's code is its fenced
+# bash blocks; in both files a comment line is dropped and a trailing comment cut.
+FENCE = re.compile(r"^```(?:bash|sh)[ \t]*\n(.*?)^```", re.M | re.S)
+
+
+def shell_code(text):
+    """`text` with shell comments removed: whole comment lines dropped, and a
+    ` # ...` tail cut. The calls matched here hold no `#`, so a crude cut is safe
+    for them; it is never used to read anything else."""
+    out = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        out.append(re.sub(r"\s#.*$", "", line))
+    return "\n".join(out)
+
+
+def command_code(markdown):
+    """The executable shell in a command: its fenced bash/sh blocks, comments removed."""
+    return shell_code("\n".join(FENCE.findall(markdown)))
 
 # Inputs the derivation must read exactly to the contract (check 5): the
 # shapes each stage exists for.
@@ -522,17 +543,20 @@ def main():
                 "      never satisfy, or passes a dependency it never saw (#398).\n"
                 f"      Run {DERIVE.name} there instead."
             )
-    if not COMMAND_CALL.search(command):
+    if not COMMAND_CALL.search(command_code(command)):
         return fail(
             f"{COMMAND} does not run {DERIVE.name} over the fetched buffer.\n"
-            f"      The install derivation must be `bash .../{DERIVE.name} <\"$buf\"`, so it\n"
+            f"      The install derivation must RUN `bash .../{DERIVE.name} <\"$buf\"` in a\n"
+            "      fenced bash block (a comment or prose mention is not a call), so it\n"
             "      derives exactly what the Phase 3 applied-check verifies."
         )
-    if not (STAMP_DEF.search(stamp) and STAMP_CALL.search(stamp)):
+    stamp_code = shell_code(stamp)
+    if not (STAMP_DEF.search(stamp_code) and STAMP_CALL.search(stamp_code)):
         return fail(
             f"{STAMP} does not run {DERIVE.name}.\n"
-            "      Phase 3 verifies every script dependency, delta or not; without the\n"
-            "      shared derivation it either stops checking scripts or grows its own copy."
+            "      It must set `derive=` to the file and run `bash \"$derive\"`, outside a\n"
+            "      comment. Phase 3 verifies every script dependency, delta or not; without\n"
+            "      the shared derivation it either stops checking scripts or grows its own copy."
         )
 
     callers = sorted({p for g in CALLER_GLOBS for p in Path().glob(g)})

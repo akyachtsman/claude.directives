@@ -126,13 +126,19 @@ def derive_sh(token=SLASHED, ext=EXT_SHIPPED, sed=True):
     return f"#!/usr/bin/env bash\n{pipe}\nrc=$?\n[ $rc -le 1 ] || exit 2\nexit 0\n"
 
 
-def command_md(delimited=True, calls=True, inline=False):
+CALL = 'derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf")'
+
+
+def command_md(delimited=True, calls=True, inline=False, commented=False, prose=False):
     """A refresh-repo.md whose install block runs derive-scripts.sh over $buf --
-    unless `calls` is False -- and, when `inline`, also carries its own copy."""
-    run = ('derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf")'
-           if calls else 'derived=$(cat "$buf")')
+    unless `calls` is False. When it does not, `commented` leaves the call behind
+    as a comment in the block and `prose` quotes it outside any fence. When
+    `inline`, the block also carries its own copy of the token grep."""
+    run = CALL if calls else ("# " + CALL + "\nderived=$(cat \"$buf\")" if commented
+                              else 'derived=$(cat "$buf")')
     return (
-        "```bash\n"
+        ("The install runs `" + CALL + "`.\n\n" if prose else "")
+        + "```bash\n"
         "for c in $callers; do\n"
         '  curl -fsSL "$raw/$c" >>"$buf"\n'
         + (DELIM + "\n" if delimited else "")
@@ -143,11 +149,12 @@ def command_md(delimited=True, calls=True, inline=False):
     )
 
 
-def stamp_sh(calls=True, inline=False):
+def stamp_sh(calls=True, inline=False, commented=False):
     """A refresh-stamp.sh whose scan() runs derive-scripts.sh -- unless `calls`
-    is False -- and, when `inline`, carries its own copy of the token grep."""
-    body = ('    d=$(printf \'%s\\n\' "$1" | bash "$derive")\n' if calls
-            else "    d=\n")
+    is False, when `commented` leaves the call behind as a comment -- and, when
+    `inline`, carries its own copy of the token grep."""
+    call = '    d=$(printf \'%s\\n\' "$1" | bash "$derive")\n'
+    body = call if calls else ("  #" + call[2:] + "    d=\n" if commented else "    d=\n")
     if inline:
         body += f"    d=\"$d $(printf '%s\\n' \"$1\" | grep -oE '{SLASHED}')\"\n"
     return ("#!/usr/bin/env bash\n"
@@ -360,6 +367,19 @@ case("a command that does not run derive-scripts.sh over $buf is refused",
 
 case("a refresh-stamp.sh that does not run derive-scripts.sh is refused",
      stamp_text=stamp_sh(calls=False), callers=PKG, expect_exit=1,
+     needle="refresh-stamp.sh does not run derive-scripts.sh")
+
+# Codex, #427: a call left behind as a comment, or quoted in prose, is not a call.
+case("a COMMENTED-OUT call in the command's block is refused",
+     command_text=command_md(calls=False, commented=True), callers=PKG, expect_exit=1,
+     needle="does not run derive-scripts.sh over the fetched buffer")
+
+case("a call quoted only in the command's PROSE is refused",
+     command_text=command_md(calls=False, prose=True), callers=PKG, expect_exit=1,
+     needle="does not run derive-scripts.sh over the fetched buffer")
+
+case("a COMMENTED-OUT `bash \"$derive\"` in refresh-stamp.sh is refused",
+     stamp_text=stamp_sh(calls=False, commented=True), callers=PKG, expect_exit=1,
      needle="refresh-stamp.sh does not run derive-scripts.sh")
 
 # Check 5 -- a derivation the shipped callers cannot show is wrong. The callers

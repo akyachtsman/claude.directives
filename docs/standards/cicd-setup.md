@@ -192,7 +192,7 @@ cd .github/scripts/ui-tests && npm install && cd -
 git add .github/scripts/ui-tests/package-lock.json
 ```
 
-After copying, review which UI features are not covered by the generic S1–S4 test scenarios (e.g. data grouping, section rendering, feature-specific layouts, multi-step flows). Add project-specific scenarios for these gaps directly in `app.spec.js` (starting at S5) before the first CI run.
+After copying, and before the first CI run, fill in the *Project-Specific Test Scenarios* table in the project's `CLAUDE.md` (it comes from `templates/CLAUDE-template.md`) and add one `app.spec.js` scenario per row, starting at S5. What counts as a gap, and the scenario shape, are in `agents/ui-tester.md` → *Project-Specific Scenarios*; the agent's own pass after the first successful run catches what this one missed.
 
 ---
 
@@ -295,8 +295,7 @@ Rules: `docs/standards/automations.md` → *Watcher Rules* (W1).
 
 After pushing, verify with a manual `workflow_dispatch` run before relying on it.
 
-**What it does:** files a deduplicated `ci-failure` issue when a watched
-workflow fails. Behavior detail: `docs/standards/automations.md` → Automation 2.
+**What it does:** `docs/standards/automations.md` → Automation 2.
 
 ### 9b — Codex Monitor
 
@@ -307,11 +306,7 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/workflows/codex-monitor.yml
 ```
 
-**What it does:** adds a `codex-flagged` label when Codex raises concerns and
-clears it on a Codex all-clear **comment** naming the current head SHA. ⚠️ It
-sees neither a 👍 reaction nor an inline review-thread reply, so a clean rerun in
-either form leaves the label; what to do then: `directives/git.md` → *PR Lifecycle*.
-Behavior detail: `docs/standards/automations.md` → Automation 3.
+**What it does**, including the verdict forms it cannot see: `docs/standards/automations.md` → Automation 3.
 
 ### 9c — Pages Monitor
 
@@ -336,9 +331,7 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/workflows/pages-monitor.yml
 ```
 
-**What it does:** verifies every Pages build is live and tracks problems via a
-deduplicated `pages-deploy-failure` issue. Behavior detail: `docs/standards/automations.md`
-→ Automation 4.
+**What it does:** `docs/standards/automations.md` → Automation 4.
 
 ### 9c-bis — Workflow cross-reference guard
 
@@ -489,22 +482,9 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 { "pages-retry.yml": ["pages-build-deployment"] }
 ```
 
-**What it does:** watches the managed `pages-build-deployment` run (that file
-slug is the workflow's actual `name` — the UI's prose title "pages build and
-deployment" never matches in `workflow_run` filters) and, on a
-failure, re-runs it automatically (transient *"Deployment failed, try again
-later."* publish blips clear on retry), bounded to `run_attempt < 4` so a truly
-broken deploy can't loop — at the ceiling `pages-monitor.yml` opens the tracking
-issue. **Two prerequisites:** (1) it targets the **branch-source** Pages workflow
-(`pages-build-deployment`) — projects on the **GitHub Actions** Pages source
-should instead build retry into their own deploy workflow, unless that deploy is
-provably idempotent and the project's CLAUDE.md records both the reasoning **and
-a revisit trigger** ending the exception (`docs/standards/automations.md` → *Watcher Rules*, W3). ⚠️ An Actions-source project that keeps this watcher
-un-repointed must **delete** it, not narrow it — a visibility flip fires
-`pages-build-deployment` even under Actions-source, and the retry would re-run
-that rogue unfiltered deploy; (2) it only arms once
-it's on the default branch, so it covers the *next* deploy, not the one that adds
-it.
+**What it does:** `docs/standards/automations.md` → Automation 4b. It only arms
+once it is on the default branch, so it covers the *next* deploy, not the one
+that adds it.
 
 ### 9d-bis — Pages Deploy (Actions-source only)
 
@@ -542,14 +522,8 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/workflows/ci-notify.yml
 ```
 
-**What it does:** comments on the open PR for a head SHA when a watched QA
-workflow completes **green**, so a watching session wakes on success — GitHub
-delivers failures natively but never green. Without it, a PR-attached wait has
-no success signal at all. With it the coverage is still partial: one of its two
-lookups (head SHA, else branch + head-repo owner) must resolve exactly one open
-PR, and it exits silently otherwise. When to arm a check-in instead, and why
-even a unique match is not proof: `directives/git.md` → *PR Lifecycle*. Behavior detail: `docs/standards/automations.md` →
-Automation 4c.
+**What it does**, and why its coverage is partial: `docs/standards/automations.md` →
+Automation 4c. When to arm a check-in instead: `directives/git.md` → *PR Lifecycle*.
 
 ⚠️ `workflow_run` triggers are read from the DEFAULT branch, so this workflow can
 never wake the PR that installs it. Verify on the first post-install PR; don't

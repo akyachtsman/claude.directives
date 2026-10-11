@@ -40,7 +40,6 @@ Referenced by the exported directives and the qa agents.
 | File | What it covers |
 |------|----------------|
 | `internal/repo-monitors.md` | This repo's own infrastructure monitors (`ci-monitor`, `codex-monitor`, `pages-monitor`) **and self-test triage** (the `ci-failure` / `codex-flagged` flow) |
-| `internal/archive/design-migration.md` | The per-project generative design migration (tokens + `/design-intake` + Stitch/frontend-design) — the record of the plan, now implemented |
 | `internal/repo-map-ui.md` | How the repo map is built and what the `Repo Map UI` suite covers — the evidence rule, the start-to-finish check, the layout and its invariants. Read before changing the map, the generator or the suite |
 | `internal/gate-history.md` | Why the local gate looks like it does — the history `CLAUDE.md`'s *Local gate* no longer carries, and where each script's history now lives (its own header) |
 | `internal/skill-eval-notes.md` | Auto-skill eval baseline and the worked description-tuning cases behind it |

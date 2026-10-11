@@ -35,7 +35,7 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
 6. Run the full spec — capture all results even if some phases fail
 7. Write findings to `.agent-reports/ui-test-report.md` after every run
 8. Escalate to the orchestrator after 3 unsuccessful fix cycles for the same issue
-9. After the first successful run, review which UI features are not covered by the generic S1–S4 scenarios (e.g. data grouping, section rendering, feature-specific layouts, multi-step flows). Add project-specific test scenarios for these gaps directly in `app.spec.js`, starting at S5.
+9. After the first successful run, add the project-specific scenarios: see *Project-Specific Scenarios* below.
 
 ### Phase 1 — Page Load & Auth Discovery
 
@@ -186,7 +186,19 @@ before the change is Ready (companions the origin-aware-back coding standard).
 
 S1–S4 cover generic app behavior. Before adding S5+ scenarios, read the
 `## Project-Specific Test Scenarios` table in `CLAUDE.md` — this is the
-authoritative list of what needs coverage beyond the generic suite.
+authoritative list of what needs coverage beyond the generic suite. (S1–S4/S5+
+is the upstream kit's numbering for NEW projects; an existing project's table
+is authoritative for its own numbering, so match scenarios by role, not number.)
+
+A feature belongs in that table when it is a gap the generic suite cannot see:
+- it groups, filters or transforms backend data before display;
+- a silent fallback exists (an "Other" bucket, an empty state, a default value)
+  that would hide a broken data fetch;
+- its layout or structure depends on the data's shape (grids, sections, cards);
+- it is a multi-step interaction beyond a single toggle.
+
+An EMPTY table is a claim that S1–S4 cover the app's critical paths: confirm
+that explicitly in the report rather than leaving it implied.
 
 For each row in that table, add a numbered scenario to `app.spec.js`:
 

@@ -10,7 +10,8 @@ there is no second list to drift (audit 2026-10-09, batch C, S1).
 WHAT IT RUNS, per step, in order:
   - `uses: actions/checkout@...` is skipped: the working tree IS the checkout.
   - `uses: ./<dir>` (a composite in this repo) runs each `run:` step of
-    <dir>/action.yml, as `qa.yml`'s Secret scan step does.
+    <dir>/action.yml, as `qa.yml`'s Secret scan step does, with the calling
+    step's `env:` under each inner step's own.
   - `run:` is written to a file and run the way the runner does: `bash -e` when
     the step names no shell, `bash --noprofile --norc -eo pipefail` for
     `shell: bash`. `working-directory` and literal `env:` values apply.
@@ -19,6 +20,8 @@ WHAT IT RUNS, per step, in order:
     `$RUNNER_TEMP` is a temporary directory removed at the end.
 
 WHAT IT REFUSES (exit 2, CANNOT RUN), rather than run something else:
+  - any key at workflow, job or step level it does not emulate (an allow-list:
+    a workflow `env:`, a job's `defaults:`, a step's `continue-on-error`, ...);
   - a `uses:` that is neither checkout nor a local composite;
   - an `if:` on a step: its condition cannot be evaluated here;
   - a `${{ ... }}` expression inside a `run:` script;
@@ -72,17 +75,44 @@ def load(path):
         raise CannotRun(f"cannot read {path}: {e}")
 
 
+# The keys the runner understands, at each level. Anything else is refused,
+# never ignored: a key the runner drops (a workflow-level `env:`, a job's
+# `defaults.run`, a step's `continue-on-error`) runs the same script under
+# different settings, and the gate could pass what Actions fails (Codex,
+# #431). An allow-list, so a key nobody thought of is refused too. Keys here
+# either change nothing a local run can see (name, permissions, concurrency,
+# runs-on, timeout-minutes, id) or are emulated (env on a step, shell,
+# working-directory, run, uses).
+WORKFLOW_KEYS = {"name", "run-name", "on", True, "permissions", "concurrency", "jobs"}
+JOB_KEYS = {"name", "runs-on", "timeout-minutes", "permissions", "steps"}
+STEP_KEYS = {"name", "id", "run", "uses", "env", "shell", "working-directory", "timeout-minutes"}
+COMPOSITE_STEP_KEYS = {"name", "id", "run", "env", "shell", "working-directory"}
+
+
+def refuse_unknown(keys, allowed, where):
+    extra = [k for k in keys if k not in allowed]
+    if extra:
+        raise CannotRun(f"{where} sets {', '.join(sorted(map(str, extra)))}, which this runner does not "
+                        "emulate (see WORKFLOW_KEYS / JOB_KEYS / STEP_KEYS)")
+
+
 def plan(workflow, job, root):
-    """The job's steps as (label, script, shell, cwd, env) tuples, or CannotRun."""
+    """The job's steps as (label, script, shell, cwd, env, left) tuples, or CannotRun."""
     doc = load(workflow)
-    steps = (((doc or {}).get("jobs") or {}).get(job) or {}).get("steps")
+    if not isinstance(doc, dict):
+        raise CannotRun(f"{workflow} is not a workflow mapping")
+    refuse_unknown(doc, WORKFLOW_KEYS, "the workflow")
+    body = (doc.get("jobs") or {}).get(job)
+    steps = body.get("steps") if isinstance(body, dict) else None
     if not isinstance(steps, list) or not steps:
         raise CannotRun(f"{workflow} has no steps for job {job!r}")
+    refuse_unknown(body, JOB_KEYS, f"job {job!r}")
     out = []
     for i, step in enumerate(steps, 1):
         label = step.get("name") or step.get("uses") or f"step {i}"
         if "if" in step:
             raise CannotRun(f"step {i} ({label}) has an `if:`, which cannot be evaluated here")
+        refuse_unknown(step, STEP_KEYS, f"step {i} ({label})")
         uses = step.get("uses")
         if uses is not None:
             if uses.startswith("actions/checkout@"):
@@ -90,13 +120,19 @@ def plan(workflow, job, root):
             if not uses.startswith("./"):
                 raise CannotRun(f"step {i} ({label}) uses {uses}, which cannot run locally")
             action = load(os.path.join(root, uses, "action.yml"))
+            if (action or {}).get("inputs"):
+                raise CannotRun(f"{uses}/action.yml declares inputs, which this runner does not pass")
             inner = ((action or {}).get("runs") or {}).get("steps")
             if not isinstance(inner, list):
                 raise CannotRun(f"{uses}/action.yml has no composite steps")
             for j, sub in enumerate(inner, 1):
                 if "run" not in sub or "uses" in sub or "if" in sub:
                     raise CannotRun(f"{uses} step {j} is not a plain `run:` step")
-                out.append(make(f"{label} / {sub.get('name') or j}", sub, root))
+                refuse_unknown(sub, COMPOSITE_STEP_KEYS, f"{uses} step {j}")
+                # The calling step's env reaches the composite's steps, as on
+                # GitHub; a key the inner step sets itself wins (Codex, #431).
+                merged = dict(sub, env={**(step.get("env") or {}), **(sub.get("env") or {})})
+                out.append(make(f"{label} / {sub.get('name') or j}", merged, root))
             continue
         if "run" not in step:
             raise CannotRun(f"step {i} ({label}) has neither `run:` nor `uses:`")

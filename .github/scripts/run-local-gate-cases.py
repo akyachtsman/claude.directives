@@ -134,6 +134,29 @@ CASES = [
      {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
       "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - uses: actions/cache@v4\n"},
      2, "is not a plain `run:` step"),
+    # ── keys the runner does not emulate are refused, never ignored ─────────
+    ("a workflow-level env: — CANNOT RUN",
+     {"wf.yml": "name: t\non: push\nenv:\n  X: '1'\njobs:\n  validate:\n    runs-on: x\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     2, "the workflow sets env"),
+    ("a job's defaults.run — CANNOT RUN",
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: x\n    defaults:\n      run:\n        shell: bash\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     2, "job 'validate' sets defaults"),
+    ("a step's continue-on-error — CANNOT RUN",
+     {"wf.yml": workflow("      - name: c\n        continue-on-error: true\n        run: exit 1\n")},
+     2, "sets continue-on-error"),
+    ("a with: on a local composite — CANNOT RUN",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n        with:\n          x: 1\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo hi\n"},
+     2, "sets with"),
+    # ── a composite sees the calling step's env, under its own ─────────────
+    ("the calling step's env reaches a composite's run step",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n        env:\n          OUTER: 'yes'\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - name: inner\n      shell: bash\n      run: test \"$OUTER\" = yes\n"},
+     0, "PASS [1] comp / inner"),
+    ("a composite step's own env wins over the caller's",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n        env:\n          X: outer\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - name: inner\n      shell: bash\n      env:\n        X: inner\n      run: test \"$X\" = inner\n"},
+     0, "PASS [1] comp / inner"),
     ("no such job — CANNOT RUN",
      {"wf.yml": "name: t\non: push\njobs:\n  other:\n    runs-on: x\n    steps:\n      - run: 'true'\n"},
      2, "no steps for job 'validate'"),
@@ -164,7 +187,7 @@ def main():
         elif step.get("uses", "").startswith("./"):
             with open(os.path.join(ROOT, step["uses"], "action.yml"), encoding="utf-8") as handle:
                 want += sum(1 for s in yaml.safe_load(handle)["runs"]["steps"] if "run" in s)
-    code, out = run([sys.executable, RUNNER, "--list"])
+    code, out = run([sys.executable, RUNNER, "--list", "--root", ROOT])
     c.expect("this repo's validate job can be planned", code, out, 0, f"[{want}] ")
     if f"[{want + 1}] " in out:
         c.fail("this repo's validate job plans no extra step", out)

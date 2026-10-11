@@ -9,9 +9,10 @@ guard says so on its own success line -- "concatenation: NOT EXERCISED" -- but a
 check that only ever runs against inputs it passes is an assertion, not a test.
 It could be deleted, or silently broken, and CI would not notice.
 
-So each case here builds a synthetic repo in a temp directory: a refresh-repo.md
-carrying a chosen derivation pipeline, plus caller YAML of a chosen shape, and
-runs the REAL guard against it as a subprocess. The guard resolves COMMAND and
+So each case here builds a synthetic repo in a temp directory: a
+derive-scripts.sh carrying chosen stages, a refresh-repo.md and refresh-stamp.sh
+that run it (or, for the one-copy cases, do not), plus caller YAML of a chosen
+shape, and runs the REAL guard against it as a subprocess. The guard resolves COMMAND and
 CALLER_GLOBS relative to cwd and has no importable surface, so the CLI contract
 in a temp cwd is the only honest way to drive it -- and it is also the contract
 qa.yml uses.
@@ -30,7 +31,7 @@ CHECK_REFRESH_DERIVATION_BIN, and the cases that reddened for each:
     A  per-caller loop neutered (the pre-review aggregate logic)
        -> "the old command-prefixed form is refused"
        -> "a miss in one caller is NOT masked by a match in another"
-    B  run_grep stops treating grep's stderr as fatal
+    B  the guard stops treating the derivation's stderr as fatal
        -> "a Python-only construct grep cannot honour is refused"
     C  concatenation check neutered (`ragged = []`)
        -> "an UNDELIMITED loop that loses a script is refused"
@@ -61,15 +62,17 @@ found the same way: by running the case against a mutant instead of trusting a
 green line. A case built from a fixture that cannot express the condition it
 names will pass forever.
 
-The contract check (5) and the needs-named check (6) are pinned the same way,
-each refusal beside its accepting complement: two copies widened or narrowed
-IDENTICALLY agree with each other, so only the probe-vs-contract check can
-refuse them; and a caller whose comment stops naming a file its script
-`require`s, or the package.json its `npm install` reads, is refused while the
-same caller naming them passes. MEASURED 2026-10-08 via
-CHECK_REFRESH_DERIVATION_BIN: with check 5's comparison disabled, exactly the
-two "identically" refusals fail; with check 6's, exactly the two "reworded
-comment" refusals.
+The one-copy check (4), the contract check (5) and the needs-named check (6)
+are pinned the same way, each refusal beside its accepting complement: an
+inline copy of the derivation in either caller, or a caller that stops running
+derive-scripts.sh, is refused (4); a derivation widened or narrowed in a way
+the shipped callers cannot show is refused against the probe contract (5); and
+a caller whose comment stops naming a file its script `require`s, or the
+package.json its `npm install` reads, is refused while the same caller naming
+them passes (6). MEASURED 2026-10-08 via CHECK_REFRESH_DERIVATION_BIN: with
+check 5's comparison disabled, exactly the two contract refusals fail; with
+check 6's, exactly the two "reworded comment" refusals. Check 4 replaced a
+two-copy comparison in batch C (R1), when the derivation moved into one file.
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -107,64 +110,72 @@ EXT_LOOSE = r"\.(js|py)"
 EXT_PY_ONLY = r"\.(?:js|py)$"
 
 DELIM = """  printf '\\n' >>"$buf" """.rstrip()
-
-
-# The Phase 3 applied-check's own copy of the derivation, in its real shape.
-# Every fixture carries one by default: the guard refuses a command without it.
-PHASE3 = ("\n```bash\nscan() {{\n  deps=\"$(printf '%s\\n' \"$1\" | "
-          "grep -oE '{token}'{rest}; true)\"\n}}\n```\n")
 STRIP = r"s/[.]+$//"
-
-
-def phase3_md(token, ext, sed=True):
-    """The Phase 3 copy: `token`, the trailing-period sed when `sed`, then `ext`
-    -- or no filter when ext is None."""
-    rest = f" | sed -E '{STRIP}'" if sed else ""
-    rest += "" if ext is None else f" | grep -E '{ext}'"
-    return PHASE3.format(token=token, rest=rest)
-
-
 KEEP = object()
 
 
-def command_md(token=SLASHED, ext=EXT_SHIPPED, delimited=True, token_line=True, ext_line=True,
-               phase3=KEEP, sed=True, phase3_token=None, phase3_sed=None):
-    """Build a refresh-repo.md carrying the chosen pipeline, plus a Phase 3 copy
-    that mirrors it -- same token, sed and filter -- unless told otherwise:
-    phase3 is a different filter, None for no filter, or False for no Phase 3
-    copy at all; phase3_token and phase3_sed override those stages alone."""
-    pipe = "refs=$("
-    pipe += f"grep -oE '{token}' \"$buf\"" if token_line else "rg -o 'whatever' \"$buf\""
+def derive_sh(token=SLASHED, ext=EXT_SHIPPED, sed=True):
+    """A derive-scripts.sh with the chosen stages: the token grep, the
+    trailing-period sed when `sed`, then the `ext` filter -- or none when ext
+    is None. Same exit contract as the shipped file."""
+    pipe = f"grep -oE '{token}'"
     if sed:
-        pipe += f" \\\n       | sed -E '{STRIP}'"
-    if ext_line:
-        pipe += f" \\\n       | grep -E '{ext}'"
-    pipe += " | sort -u)"
+        pipe += f" | sed -E '{STRIP}'"
+    if ext is not None:
+        pipe += f" | grep -E '{ext}'"
+    return f"#!/usr/bin/env bash\n{pipe}\nrc=$?\n[ $rc -le 1 ] || exit 2\nexit 0\n"
+
+
+CALL = 'derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf")'
+
+
+def command_md(delimited=True, calls=True, inline=False, commented=False, prose=False):
+    """A refresh-repo.md whose install block runs derive-scripts.sh over $buf --
+    unless `calls` is False. When it does not, `commented` leaves the call behind
+    as a comment in the block and `prose` quotes it outside any fence. When
+    `inline`, the block also carries its own copy of the token grep."""
+    run = CALL if calls else ("# " + CALL + "\nderived=$(cat \"$buf\")" if commented
+                              else 'derived=$(cat "$buf")')
     return (
-        "```bash\n"
+        ("The install runs `" + CALL + "`.\n\n" if prose else "")
+        + "```bash\n"
         "for c in $callers; do\n"
         '  curl -fsSL "$raw/$c" >>"$buf"\n'
         + (DELIM + "\n" if delimited else "")
         + "done\n"
-        + pipe + "\n"
-        "```\n"
-        + ("" if phase3 is False else phase3_md(
-            phase3_token or token, ext if phase3 is KEEP else phase3,
-            sed if phase3_sed is None else phase3_sed))
+        + run + "\n"
+        + (f"refs=$(grep -oE '{SLASHED}' \"$buf\" | sort -u)\n" if inline else "")
+        + "```\n"
     )
 
 
-def build(tmp, command_text, callers, stamp_text=None):
+def stamp_sh(calls=True, inline=False, commented=False):
+    """A refresh-stamp.sh whose scan() runs derive-scripts.sh -- unless `calls`
+    is False, when `commented` leaves the call behind as a comment -- and, when
+    `inline`, carries its own copy of the token grep."""
+    call = '    d=$(printf \'%s\\n\' "$1" | bash "$derive")\n'
+    body = call if calls else ("  #" + call[2:] + "    d=\n" if commented else "    d=\n")
+    if inline:
+        body += f"    d=\"$d $(printf '%s\\n' \"$1\" | grep -oE '{SLASHED}')\"\n"
+    return ("#!/usr/bin/env bash\n"
+            'derive="$(dirname "${BASH_SOURCE[0]}")/derive-scripts.sh"\n'
+            "scan() {\n" + body + "}\n")
+
+
+def build(tmp, command_text, callers, stamp_text=KEEP, derive_text=KEEP):
+    """A synthetic repo. command_text/stamp_text/derive_text None means the file
+    is absent; KEEP means the well-formed default."""
     root = Path(tmp)
-    cmd = root / "plugins/directives-toolkit/commands/refresh-repo.md"
-    cmd.parent.mkdir(parents=True, exist_ok=True)
-    if command_text is not None:
-        cmd.write_text(command_text, encoding="utf-8")
-    if stamp_text is not None:
-        stamp = root / "plugins/directives-toolkit/scripts/refresh-stamp.sh"
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(stamp_text, encoding="utf-8")
-    for rel, body in callers.items():
+    files = {
+        "plugins/directives-toolkit/commands/refresh-repo.md": command_text,
+        "plugins/directives-toolkit/scripts/refresh-stamp.sh":
+            stamp_sh() if stamp_text is KEEP else stamp_text,
+        "plugins/directives-toolkit/scripts/derive-scripts.sh":
+            derive_sh() if derive_text is KEEP else derive_text,
+    }
+    for rel, body in {**files, **callers}.items():
+        if body is None:
+            continue
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(body, encoding="utf-8")
@@ -179,9 +190,12 @@ def run(root):
 PASS, FAIL = [], []
 
 
-def case(name, *, command_text, callers, expect_exit, needle, stamp_text=None):
+def case(name, *, callers, expect_exit, needle, command_text=KEEP, stamp_text=KEEP,
+         derive_text=KEEP):
+    if command_text is KEEP:
+        command_text = command_md()
     with TemporaryDirectory() as tmp:
-        root = build(tmp, command_text, callers, stamp_text)
+        root = build(tmp, command_text, callers, stamp_text, derive_text)
         rc, out = run(root)
     problems = []
     if "Traceback (most recent call last)" in out:
@@ -244,25 +258,24 @@ RAGGED_SAFE = {
 }
 
 case("the shipped shape passes",
-     command_text=command_md(), callers=GOOD, expect_exit=0,
-     needle="referenced script(s)")
+     callers=GOOD, expect_exit=0, needle="referenced script(s)")
 
 case("the old command-prefixed form is refused",
-     command_text=command_md(token=PREFIXED), callers=GOOD, expect_exit=1,
+     derive_text=derive_sh(token=PREFIXED), callers=GOOD, expect_exit=1,
      needle="MISSED: .github/scripts/b.py")
 
 case("a miss in one caller is NOT masked by a match in another",
-     command_text=command_md(token=PREFIXED), callers=MASKING, expect_exit=1,
+     derive_text=derive_sh(token=PREFIXED), callers=MASKING, expect_exit=1,
      needle="referenced by templates/actions/x/action.yml")
 
 case("an unterminated extension filter is refused (.json)",
-     command_text=command_md(ext=EXT_LOOSE),
+     derive_text=derive_sh(ext=EXT_LOOSE),
      callers={**GOOD, "templates/workflows/two.yml":
               "steps:\n  - run: cat .github/scripts/package-lock.json\n"},
      expect_exit=1, needle="OFF-CONTRACT: .github/scripts/package-lock.json")
 
 case("a Python-only construct grep cannot honour is refused",
-     command_text=command_md(ext=EXT_PY_ONLY), callers=GOOD, expect_exit=1,
+     derive_text=derive_sh(ext=EXT_PY_ONLY), callers=GOOD, expect_exit=1,
      needle="not usable by the engine that RUNS it")
 
 case("an UNDELIMITED loop that loses a script is refused",
@@ -274,36 +287,34 @@ case("…and the delimiter fixes exactly that case",
      needle="lack a trailing newline")
 
 case("a nested script is found, not truncated to its directory",
-     command_text=command_md(), callers=NESTED, expect_exit=0,
-     needle=".github/scripts/nested/a.py")
+     callers=NESTED, expect_exit=0, needle=".github/scripts/nested/a.py")
 
 case("a SLASH-FREE pattern cannot reach a nested script and is refused",
-     command_text=command_md(token=SLASHFREE), callers=NESTED, expect_exit=1,
+     derive_text=derive_sh(token=SLASHFREE), callers=NESTED, expect_exit=1,
      needle="MISSED: .github/scripts/nested/a.py")
 
 case("a bare directory reference is neither missing nor off-contract",
-     command_text=command_md(), callers=DIRREF, expect_exit=0,
-     needle="referenced script(s)")
+     callers=DIRREF, expect_exit=0, needle="referenced script(s)")
 
 case("a ragged caller whose tail is not a path must NOT false-alarm",
      command_text=command_md(delimited=False), callers=RAGGED_SAFE, expect_exit=0,
      needle="lack a trailing newline")
 
 case("callers that all end in a newline are reported as NOT EXERCISED",
-     command_text=command_md(), callers=GOOD, expect_exit=0,
-     needle="NOT EXERCISED")
+     callers=GOOD, expect_exit=0, needle="NOT EXERCISED")
 
 case("a missing command file is refused, not skipped",
-     command_text=None, callers=GOOD, expect_exit=1,
-     needle="not found")
+     command_text=None, callers=GOOD, expect_exit=1, needle="refresh-repo.md not found")
 
-case("a reshaped pipeline the extractor cannot read is refused",
-     command_text=command_md(token_line=False), callers=GOOD, expect_exit=1,
-     needle="could not find the derivation's")
+case("a missing derive-scripts.sh is refused, not skipped",
+     derive_text=None, callers=GOOD, expect_exit=1, needle="derive-scripts.sh not found")
 
-case("a pipeline with no extension filter is refused",
-     command_text=command_md(ext_line=False), callers=GOOD, expect_exit=1,
-     needle="not the `grep -E")
+case("a missing refresh-stamp.sh is refused, not skipped",
+     stamp_text=None, callers=GOOD, expect_exit=1, needle="refresh-stamp.sh not found")
+
+case("a derivation with NO extension filter is refused against the contract",
+     derive_text=derive_sh(ext=None), callers=GOOD, expect_exit=1,
+     needle="only the derivation gives: .github/scripts/package-lock.json")
 
 # #398: exactly .github/scripts/package.json joins the contract.
 PKG = {"templates/workflows/cron.yml":
@@ -315,87 +326,75 @@ KIT_PKG = {"templates/workflows/q.yml":
            "  # lock: .github/scripts/package-lock.json\n"}
 
 case("the shipped filter derives .github/scripts/package.json",
-     command_text=command_md(ext=EXT_SHIPPED), callers=PKG, expect_exit=0,
-     needle="  .github/scripts/package.json")
+     callers=PKG, expect_exit=0, needle="  .github/scripts/package.json")
 
 case("a .js/.py-only filter MISSES package.json, which the contract now includes",
-     command_text=command_md(ext=EXT), callers=PKG, expect_exit=1,
+     derive_text=derive_sh(ext=EXT), callers=PKG, expect_exit=1,
      needle="MISSED: .github/scripts/package.json")
 
 case("an UNANCHORED package.json takes the kit's ui-tests/package.json — refused",
-     command_text=command_md(ext=EXT_PKG_UNANCHORED), callers=KIT_PKG, expect_exit=1,
+     derive_text=derive_sh(ext=EXT_PKG_UNANCHORED), callers=KIT_PKG, expect_exit=1,
      needle="OFF-CONTRACT: .github/scripts/ui-tests/package.json")
 
 case("the shipped filter leaves the kit's package.json and the lockfile out",
-     command_text=command_md(ext=EXT_SHIPPED), callers=KIT_PKG, expect_exit=0,
-     needle="1 referenced script(s)")
-
-case("the Phase 3 copy filtering like the install passes",
-     command_text=command_md(ext=EXT_SHIPPED), callers=PKG, expect_exit=0,
-     needle="referenced script(s)")
-
-case("a Phase 3 copy that filters DIFFERENTLY from the install is refused",
-     command_text=command_md(ext=EXT_SHIPPED, phase3=EXT), callers=PKG, expect_exit=1,
-     needle="derive DIFFERENTLY")
-
-case("an install pipeline that LOST its filter is refused, not read from Phase 3's",
-     command_text=command_md(ext_line=False, phase3=EXT_SHIPPED), callers=PKG, expect_exit=1,
-     needle="not the `grep -E")
-
-case("a Phase 3 copy that LOST its filter is refused",
-     command_text=command_md(ext=EXT_SHIPPED, phase3=None), callers=PKG, expect_exit=1,
-     needle="NO extension filter of its own")
-
-case("a filterless Phase 3 copy does not borrow an identical filter from LATER in the file",
-     command_text=command_md(ext=EXT_SHIPPED, phase3=None)
-     + f"\n```bash\nls | grep -E '{EXT_SHIPPED}'\n```\n",
-     callers=PKG, expect_exit=1, needle="NO extension filter of its own")
-
-# Codex, #409 round 4: the copies are compared by RUNNING them, every stage.
-case("a Phase 3 token that cannot reach a nested path is refused, same filter or not",
-     command_text=command_md(ext=EXT_SHIPPED, phase3_token=SLASHFREE), callers=PKG,
-     expect_exit=1, needle="only the install derives: .github/scripts/nested/d.py")
-
-case("an install without the trailing-period stage derives LESS than Phase 3 — refused",
-     command_text=command_md(ext=EXT_SHIPPED, sed=False, phase3_sed=True), callers=PKG,
-     expect_exit=1, needle="derives: .github/scripts/e.js")
+     callers=KIT_PKG, expect_exit=0, needle="1 referenced script(s)")
 
 case("a script named at the end of a sentence is derived",
-     command_text=command_md(ext=EXT_SHIPPED),
      callers={"directives/test.md": "Run it with .github/scripts/browser-ladder.js.\n"},
      expect_exit=0, needle="  .github/scripts/browser-ladder.js")
 
-case("a command with NO Phase 3 copy at all is refused, not compared against itself",
-     command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,
-     needle="applied-check's copy of the derivation is missing")
+case("a derivation without the trailing-period stage is refused against the contract",
+     derive_text=derive_sh(sed=False), callers=PKG, expect_exit=1,
+     needle="only the contract admits: .github/scripts/e.js")
 
-# The shipped layout: Phase 3's copy lives in scripts/refresh-stamp.sh, because a
-# command's arguments are substituted into its text on load and scan() takes $1.
-# The guard reads the command and the script as one text.
-def stamp_sh(ext):
-    return "#!/usr/bin/env bash\n" + phase3_md(SLASHED, ext).replace("```bash\n", "").replace("```\n", "")
+# Check 4 -- ONE copy. Batch C (R1) moved the derivation into derive-scripts.sh;
+# before it, the command and the Phase 3 script each carried a copy and this
+# suite compared them stage by stage. Now a copy anywhere else is refused.
+case("both callers running derive-scripts.sh pass the one-copy check",
+     callers=PKG, expect_exit=0, needle="both run derive-scripts.sh")
 
+case("an INLINE copy of the derivation in refresh-repo.md is refused",
+     command_text=command_md(inline=True), callers=PKG, expect_exit=1,
+     needle="refresh-repo.md carries an INLINE copy")
 
-case("the Phase 3 copy in refresh-stamp.sh, filtering like the install, passes",
-     command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=0,
-     needle="referenced script(s)", stamp_text=stamp_sh(EXT_SHIPPED))
+case("an INLINE copy of the derivation in refresh-stamp.sh is refused",
+     stamp_text=stamp_sh(inline=True), callers=PKG, expect_exit=1,
+     needle="refresh-stamp.sh carries an INLINE copy")
 
-case("a Phase 3 copy in refresh-stamp.sh that filters DIFFERENTLY is refused",
-     command_text=command_md(ext=EXT_SHIPPED, phase3=False), callers=PKG, expect_exit=1,
-     needle="derive DIFFERENTLY", stamp_text=stamp_sh(EXT))
+case("a command that does not run derive-scripts.sh over $buf is refused",
+     command_text=command_md(calls=False), callers=PKG, expect_exit=1,
+     needle="does not run derive-scripts.sh over the fetched buffer")
 
-# Check 5 -- both copies move TOGETHER, so check 4 (copy vs copy) is blind.
-case("both copies WIDENED identically are refused against the contract",
-     command_text=command_md(ext=EXT_PKG_UNANCHORED), callers=PKG, expect_exit=1,
-     needle="only the install pipeline derives: .github/scripts/ui-tests/package.json")
+case("a refresh-stamp.sh that does not run derive-scripts.sh is refused",
+     stamp_text=stamp_sh(calls=False), callers=PKG, expect_exit=1,
+     needle="refresh-stamp.sh does not run derive-scripts.sh")
 
-case("both copies NARROWED identically are refused against the contract",
-     command_text=command_md(ext=EXT), callers=GOOD, expect_exit=1,
+# Codex, #427: a call left behind as a comment, or quoted in prose, is not a call.
+case("a COMMENTED-OUT call in the command's block is refused",
+     command_text=command_md(calls=False, commented=True), callers=PKG, expect_exit=1,
+     needle="does not run derive-scripts.sh over the fetched buffer")
+
+case("a call quoted only in the command's PROSE is refused",
+     command_text=command_md(calls=False, prose=True), callers=PKG, expect_exit=1,
+     needle="does not run derive-scripts.sh over the fetched buffer")
+
+case("a COMMENTED-OUT `bash \"$derive\"` in refresh-stamp.sh is refused",
+     stamp_text=stamp_sh(calls=False, commented=True), callers=PKG, expect_exit=1,
+     needle="refresh-stamp.sh does not run derive-scripts.sh")
+
+# Check 5 -- a derivation the shipped callers cannot show is wrong. The callers
+# here give no ui-tests/package.json and no package.json, so only the probes can
+# refuse these.
+case("a derivation WIDENED where no caller shows it is refused against the contract",
+     derive_text=derive_sh(ext=EXT_PKG_UNANCHORED), callers=PKG, expect_exit=1,
+     needle="only the derivation gives: .github/scripts/ui-tests/package.json")
+
+case("a derivation NARROWED where no caller shows it is refused against the contract",
+     derive_text=derive_sh(ext=EXT), callers=GOOD, expect_exit=1,
      needle="only the contract admits: .github/scripts/package.json")
 
-case("both copies on the contract pass the probe check",
-     command_text=command_md(ext=EXT_SHIPPED), callers=GOOD, expect_exit=0,
-     needle="derives exactly the 6-path contract set")
+case("the shipped derivation passes the probe check",
+     callers=GOOD, expect_exit=0, needle="exactly the 6-path contract set")
 
 # Check 6 -- the cron-notify shape: a script that require()s a sibling, and
 # `npm install` run in .github/scripts. The names live only in a comment.
@@ -414,7 +413,7 @@ NAMED = ("      # needs .github/scripts/notify-email.js (required by the task)\n
 CRON_NAMED = {**NOTIFY_TASK, "templates/workflows/cron.yml": CRON_STEPS.format(comment=NAMED)}
 
 case("a caller that names what its script requires and npm reads passes",
-     command_text=command_md(), callers=CRON_NAMED, expect_exit=0,
+     callers=CRON_NAMED, expect_exit=0,
      needle="  .github/scripts/notify-email.js")
 
 case("a reworded comment that drops the required sibling is refused",
@@ -449,7 +448,7 @@ case("the same option-first caller naming package.json passes",
 # Codex, #411 round 3: npm is read as TOKENS, so any config option may precede
 # the subcommand, and a `cd` earlier in the block sets the directory.
 def npm_case(name, steps, expect_exit, needle):
-    case(name, command_text=command_md(),
+    case(name,
          callers={"templates/workflows/n.yml": "jobs:\n  t:\n    steps:\n" + steps
                   + "      - run: node .github/scripts/a.js\n"},
          expect_exit=expect_exit, needle=needle)
@@ -540,7 +539,7 @@ PY_CALLER = ("jobs:\n  t:\n    steps:\n"
              "{comment}")
 
 def py_case(name, main_src, extra, comment, expect_exit, needle):
-    case(name, command_text=command_md(),
+    case(name,
          callers={"templates/scripts/main.py": main_src, **extra,
                   "templates/workflows/py.yml": PY_CALLER.format(comment=comment)},
          expect_exit=expect_exit, needle=needle)
@@ -575,7 +574,7 @@ case("an unreadable YAML caller is refused, not passed",
      expect_exit=1, needle="not readable YAML")
 
 case("no callers at all is refused, never a vacuous pass",
-     command_text=command_md(), callers={}, expect_exit=1,
+     callers={}, expect_exit=1,
      needle="pass vacuously")
 
 print()

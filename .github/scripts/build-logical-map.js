@@ -135,7 +135,8 @@ const PLACE = {
     'templates/workflows/ci-monitor.yml', 'templates/workflows/ci-notify.yml',
     'docs/standards/automations.md'],
   // scripts/ sits here, not under pr: besides the guard scripts the hooks run
-  // from session start, it carries /refresh-repo's Phase 3 (refresh-stamp.sh),
+  // from session start, it carries /refresh-repo's Phase 3 (refresh-stamp.sh)
+  // and the script derivation both phases run (derive-scripts.sh),
   // and an arrow may not run backwards from upkeep (Codex, #423).
   upkeep: [`${P}/commands/refresh-repo.md`, `${P}/scripts/`, `${P}/commands/audit-repo.md`,
     `${P}/commands/learn.md`, `${P}/commands/handoff-session.md`, `${P}/commands/do-repo.md`,
@@ -186,7 +187,7 @@ const ALIASES = {
   '.claude-plugin/marketplace.json': [/@claude-directives(?![\w-])/, /(?<![\w.-])claude-directives(?=["'\s]*:)/],
   [`${P}/.claude-plugin/plugin.json`]: [/(?<![\w.-])\.\/plugins\/directives-toolkit(?![\w/-])/, 'CLAUDE_PLUGIN_ROOT'],
   [`${P}/hooks/`]: ['hooks/hooks.json', `${P}/hooks`],
-  [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'build-input-gate.sh', 'refresh-stamp.sh', `${P}/scripts`],
+  [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'build-input-gate.sh', 'refresh-stamp.sh', 'derive-scripts.sh', `${P}/scripts`],
   [`${P}/evals/`]: [`${P}/evals`],
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],

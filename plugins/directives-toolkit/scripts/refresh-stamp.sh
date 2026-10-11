@@ -129,9 +129,19 @@ DELTA
 
   # 2. Every dependency, delta or not.
   deps=; queue=; seen=" "
+  # The script set comes from derive-scripts.sh, the SAME file Phase 2's install
+  # derivation runs, so this check can never be wider or narrower than the
+  # install (#398). A derivation that fails refuses the stamp: read as "no
+  # scripts", it would pass every dependency it never saw.
+  derive="$(dirname "${BASH_SOURCE[0]}")/derive-scripts.sh"
   scan() {   # names in $1: scripts into deps, composites onto the queue
+    local d
+    if ! d=$(printf '%s\n' "$1" | bash "$derive"); then
+      echo "CANNOT VERIFY: the script derivation ($derive) failed"
+      unapplied=1
+    fi
     deps="$deps
-$(printf '%s\n' "$1" | grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' | sed -E 's/[.]+$//' | grep -E '\.(js|py)$|^\.github/scripts/package\.json$'; true)"
+$d"
     queue="$queue $(printf '%s\n' "$1" | grep -oE '\./\.github/actions/[A-Za-z0-9_.-]+' | sed 's|^\./||' | tr '\n' ' '; true)"
   }
   for w in .github/workflows/* .github/actions/*/action.yml; do

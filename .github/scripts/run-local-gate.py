@@ -72,6 +72,35 @@ class CannotRun(Exception):
     pass
 
 
+def core_schema_loader(yaml):
+    """A SafeLoader that resolves plain scalars by YAML 1.2's core schema, as
+    GitHub does, not PyYAML's 1.1: `yes`, `on`, `y` stay strings, `true`
+    and `false` (any case form the spec allows) are booleans, `~`/`null`
+    are null, and integers and floats are 1.2 forms (Codex, #431)."""
+    class Core(yaml.SafeLoader):
+        pass
+    Core.yaml_implicit_resolvers = {}
+    rules = [
+        ("tag:yaml.org,2002:bool", r"^(?:true|True|TRUE|false|False|FALSE)$", "tTfF"),
+        ("tag:yaml.org,2002:null", r"^(?:~|null|Null|NULL|)$", ["~", "n", "N", ""]),
+        ("tag:yaml.org,2002:int", r"^(?:[-+]?[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+)$", list("-+0123456789")),
+        ("tag:yaml.org,2002:float",
+         r"^(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$",
+         list("-+.0123456789")),
+    ]
+    for tag, pattern, first in rules:
+        Core.add_implicit_resolver(tag, re.compile(pattern), list(first))
+    return Core
+
+
+def env_value(value):
+    """An `env:` value as GitHub hands it to the shell: booleans as `true` /
+    `false`, null as empty, everything else as its string."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return "" if value is None else str(value)
+
+
 def load(path):
     try:
         import yaml
@@ -79,7 +108,7 @@ def load(path):
         raise CannotRun("PyYAML is not installed, so the workflow cannot be read")
     try:
         with open(path, encoding="utf-8") as handle:
-            return yaml.safe_load(handle)
+            return yaml.load(handle, Loader=core_schema_loader(yaml))
     except (OSError, yaml.YAMLError) as e:
         raise CannotRun(f"cannot read {path}: {e}")
 
@@ -96,6 +125,9 @@ WORKFLOW_KEYS = {"name", "run-name", "on", True, "permissions", "concurrency", "
 JOB_KEYS = {"name", "runs-on", "timeout-minutes", "permissions", "steps"}
 STEP_KEYS = {"name", "id", "run", "uses", "env", "shell", "working-directory", "timeout-minutes"}
 COMPOSITE_STEP_KEYS = {"name", "id", "run", "env", "shell", "working-directory"}
+# The checkout refs skipped as "the working tree IS the checkout". A ref
+# outside this set is CANNOT RUN: add one here once it is known to exist.
+CHECKOUT_REFS = {"v4", "v5"}
 
 
 def refuse_unknown(keys, allowed, where):
@@ -137,6 +169,11 @@ def plan(workflow, job, root):
         uses = step.get("uses")
         if uses is not None:
             if uses.startswith("actions/checkout@"):
+                # Only refs known to resolve: Actions fails a job whose
+                # checkout ref does not exist, and this runner cannot tell.
+                if uses.split("@", 1)[1] not in CHECKOUT_REFS:
+                    raise CannotRun(f"step {i} ({label}) uses {uses}; only actions/checkout@"
+                                    f"{{{', '.join(sorted(CHECKOUT_REFS))}}} are known to resolve")
                 # The working tree IS the checkout only when checkout comes
                 # first, once: a later one cleans the workspace (`git clean
                 # -ffdx`), which this runner does not reproduce (Codex, #431).
@@ -151,6 +188,8 @@ def plan(workflow, job, root):
             action = load(os.path.join(root, uses, "action.yml"))
             if (action or {}).get("inputs"):
                 raise CannotRun(f"{uses}/action.yml declares inputs, which this runner does not pass")
+            if ((action or {}).get("runs") or {}).get("using") != "composite":
+                raise CannotRun(f"{uses}/action.yml is not `runs.using: composite`")
             inner = ((action or {}).get("runs") or {}).get("steps")
             if not isinstance(inner, list):
                 raise CannotRun(f"{uses}/action.yml has no composite steps")
@@ -158,6 +197,8 @@ def plan(workflow, job, root):
                 if "run" not in sub or "uses" in sub or "if" in sub:
                     raise CannotRun(f"{uses} step {j} is not a plain `run:` step")
                 refuse_unknown(sub, COMPOSITE_STEP_KEYS, f"{uses} step {j}")
+                if "shell" not in sub:
+                    raise CannotRun(f"{uses} step {j} has `run:` without `shell:`, which GitHub requires in a composite")
                 # The calling step's env reaches the composite's steps, as on
                 # GitHub; a key the inner step sets itself wins (Codex, #431).
                 merged = dict(sub, env={**(step.get("env") or {}), **(sub.get("env") or {})})
@@ -255,9 +296,9 @@ def make(label, step, root):
     env, left = {}, []
     for key, value in (step.get("env") or {}).items():
         if isinstance(value, str) and "${{" in value:
-            left.append(key)
+            left.append(str(key))
         else:
-            env[key] = str(value)
+            env[str(key)] = env_value(value)
     timeout = minutes(step["timeout-minutes"], label) if "timeout-minutes" in step else None
     return label, script, shell, cwd, env, left, timeout
 

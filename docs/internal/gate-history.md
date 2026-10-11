@@ -1,7 +1,9 @@
 # Gate History — why the local gate looks like this
 
-Internal. `CLAUDE.md` → *Local gate — CI scripts (this repo)* keeps one line of
-purpose per command and the hard rules a session must follow; the round-by-round
+Internal. `CLAUDE.md` → *Local gate — CI scripts (this repo)* once kept one line
+of purpose per command; since 2026-10-11 it runs `qa.yml`'s `validate` job through
+`run-local-gate.py` and keeps only the steps outside that job and the hard rules
+a session must follow (batch C, S1). The round-by-round
 history and evidence behind those lines lives with the script it is about, in that
 script's header comment under **HISTORY MOVED FROM CLAUDE.md (2026-09-23)**. This
 file holds the part with no single script home: history about a byte-identical

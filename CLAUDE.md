@@ -180,8 +180,8 @@ everything hot-reloads:
 
 ## Self-test monitoring (this repo's CI)
 A directive repo must pass its own CI before it can be trusted downstream.
-- `qa.yml` — `QA — Directive Validation`: every check the *Local gate* below
-  lists (that list mirrors it), plus a warn-only external-link job. Each
+- `qa.yml` — `QA — Directive Validation`: the checks in its `validate` job,
+  which the *Local gate* below runs from the file, plus a warn-only external-link job. Each
   guard's design history is in its own
   header comment; what has no single script home is in
   `docs/internal/gate-history.md`.
@@ -247,50 +247,20 @@ Re-run the negatives whenever a description is widened: over-triggering is the
 failure mode a broader description buys, and it is invisible without them.
 
 ## Local gate — CI scripts (this repo)
-Before committing or pushing, verify locally — this list mirrors what `qa.yml`
-runs, so keep the two in sync:
+Before committing or pushing, run `qa.yml`'s `validate` job locally. The runner
+reads the steps out of the workflow, so there is no list here to keep in sync
+(batch C, S1):
 ```
-python3 -c "import yaml; print(yaml.safe_load(open('templates/actions/secret-scan/action.yml'))['runs']['steps'][0]['run'])" | bash -eo pipefail   # qa.yml's Secret scan step: runs the composite's own block, so the pattern has no third copy here
-npm install --no-save --no-package-lock --ignore-scripts parse5@8.0.1 entities@8.1.0   # check-paths.js's HTML parser and its only dependency, both exact, as qa.yml pins them
-node .github/scripts/check-paths.js               # backtick paths in CLAUDE.md, doc citations in shipped files, and every same-site link in a tracked .html page (parsed by parse5, URL-resolved, never outside the Pages root) names a tracked file; refuses without a tracked .nojekyll
-node .github/scripts/check-sections.js
-node .github/scripts/check-plugin.js
-node .github/scripts/check-secret-scan.js
-node .github/scripts/check-exports.js            # export boundary: both directions — manifest paths exist AND every shipped file is classified
-node .github/scripts/check-learnings.js          # learnings.jsonl: valid JSON, declared types, sane confidence, every file listed by a key's LATEST entry exists (a workflow_run entry's workflows still contain the text); completeness by inverted ownership — every workflow naming workflow_run is listed or exempted with a reason (#370)
-node .github/scripts/check-claims.js             # pinned claims still stated by every listed consumer — travelled, NOT true (read its header); a reworded carrier turns it red: add the wording to `phrasings` (#341)
-node .github/scripts/check-claims-cases.js       # that guard's own guard. Re-prove with CHECK_CLAIMS_BIN=<mutant>
-python3 .github/scripts/check-py-warnings.py      # every tracked .py compiles clean — a `\` in a plain docstring is FATAL on 3.15, and the guard then stops running
-(cd templates/ui-tests && npm install --no-package-lock --ignore-scripts)   # run this BEFORE the two viewport checks below (not first in the list): both resolve @playwright/test from here; without it the cases exit 1 "CANNOT RUN"
-node .github/scripts/check-ui-viewports-cases.js  # the viewport gate's own guard — needs the ui-tests install ABOVE, and runs a Playwright suite (minutes). Re-prove with CHECK_UI_VIEWPORTS_BIN=<mutant>
-python3 .github/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml --kit-dir templates/ui-tests  # the ui-suite composite gives both viewport checks the SAME env and cwd as the Playwright run; report-path variables and each step's cwd pinned to literals
-python3 .github/scripts/check-ui-suite-env-cases.py  # that env guard's own guard — every branch that can print, incl. the failure paths. Re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
-python3 .github/scripts/check-report-path-cases.py # the ui-suite report-path validator's own guard — this repo does not use the composite, so nothing else here would notice it break. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
-node .github/scripts/check-contrast-cases.js      # the exported WCAG guardrail's own guard — this repo has no styles/tokens.css, so NOTHING else here would notice it break (#334). Re-prove with CHECK_CONTRAST_BIN=<mutant>
-node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests   # the shipped Playwright config still declares laptop+tablet+phone
-python3 .github/scripts/workflow-ref-guard.py     # every workflow_run name resolves; required watchers intact
-python3 .github/scripts/workflow-ref-guard-cases.py  # the guard itself still reads every pinned YAML form
-python3 .github/scripts/check-job-bounds.py --include-templates  # every job bounded, none >=360, ui-suite callers >=120 ENFORCED; direct-playwright >=30 is ADVISORY (prints, never fails). The flag adds templates/; downstream omits it
-python3 .github/scripts/check-job-bounds-cases.py  # that guard's own guard — an UNREADABLE bound on a floored job must REFUSE, and the no-floor exemption must survive (#334)
-python3 .github/scripts/check-toolkit-gates-cases.py  # the push and wait gates block the shapes they claim (+main, an apostrophe-hidden push, `sleep 5m`) and allow the complements; both share gate-lib.sh's quote parser. Re-prove with PUSH_GATE_BIN / WAIT_GATE_BIN / GATE_LIB_BIN=<mutant>
-python3 .github/scripts/check-refresh-derivation.py  # /refresh-repo's script derivation (the plugin's scripts/derive-scripts.sh, run by both phases) still matches every shipped caller, and no inline copy has crept back (PROP6; one copy since batch C, R1)
-python3 .github/scripts/check-refresh-derivation-cases.py  # that guard's own guard — most of its checks never fire against THIS repo (no ragged caller, no missed match, no widened copy), so nothing else would notice them break
-python3 .github/scripts/check-action-siblings.py   # every file under `templates/actions/*/` is in the tree `git write-tree` would COMMIT; it does NOT check that carriers install them, nor that a composite names a file that exists
-python3 .github/scripts/check-action-siblings-cases.py  # that guard's own guard — real `git init` fixtures, each refusal with its accepting complement. Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
-python3 .github/scripts/check-run-quoting.py       # no apostrophe in a bash `run:` block is read as a shell quote (a single-quote boundary between two letters; a block that does not parse fails too) — the #264 ci-monitor defect, which `bash -n` cannot see. Needs shfmt v3.12.0 as $SHFMT or on PATH: the pinned, sha256-checked download is in qa.yml; without it the guard exits 2 CANNOT CHECK
-python3 .github/scripts/check-run-quoting-cases.py # that guard's own guard — the #264 block verbatim, each refusal with its complement. Re-prove with CHECK_RUN_QUOTING_BIN=<mutant>
-node .github/scripts/check-browser-ladder-cases.js  # the exported browser ladder's own guard (#332) — failing branches injected, every case drives the SHIPPED ladder. Re-prove with BROWSER_LADDER_BIN=<mutant>
-node .github/scripts/build-logical-map.js --check # the committed map still matches the tree; every connection has evidence, every file is wired from the start, no arrow crosses a box
-for f in templates/ui-tests/tests/*.js templates/ui-tests/*.js; do node --check "$f" || exit 1; done  # the exported spec and config still PARSE — nothing else in this repo reads them
-node .github/scripts/check-links.js --internal   # offline, against the working tree. Strictly SINGLE-LINE: only a reference wholly on one line is counted, and the run says so (#366)
-node .github/scripts/check-links-cases.js        # that checker's own guard. Re-prove with CHECK_LINKS_BIN=<mutant> — an ABSOLUTE path
-#   ⚠️ check-links rules (history in the check-links-cases.js header):
-#   - DO NOT teach it to read across a line break (#365 and #367 both tried, both reverted); keep every `file.md` → *Name* reference on ONE line
-#   - Do NOT suppress the self form after a code span naming a `.md` file (#367 rounds 12-16, withdrawn by owner ruling 2026-09-18)
-#   - Keep the `\x60` in `(?<![\x60\w])`; do NOT reintroduce the flanking rule; line endings are normalised ONCE by `readSource()`
-python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for p in ('.github/workflows/*', 'templates/workflows/*', 'templates/actions/*/action') for e in ('.yml', '.yaml') for f in glob.glob(p + e)]"
-python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable; the adapted watcher pairs equal apart from watch list and comments. Needs shfmt as $SHFMT (it minifies the run: scripts); without it the adapted pairs fail as NOT checked
-python3 .github/scripts/check-pairs-cases.py    # that check's own guard — every pair drifted in turn, each adapted pair in a job key and a run line, each mode refusal with its complement. Re-prove with CHECK_PAIRS_BIN=<mutant>
+python3 .github/scripts/run-local-gate.py          # every step of the validate job, in order; exit 0 all pass, 1 any fail, 2 CANNOT RUN
+python3 .github/scripts/run-local-gate.py --list   # the steps it would run
+```
+What it emulates and what it refuses rather than approximate (a remote action,
+an `if:`, an expression in a script) is in its header; its own guard is
+`run-local-gate-cases.py`, which the job runs. A `*-cases` suite that can be
+re-proved against a mutant names its `*_BIN` variable in its header.
+
+Not in that job, so run them by hand when they apply:
+```
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 npx html-validate@10.17.0 docs/site/logical-map.html         # when the map changed (CI runs it every time, same pin)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
@@ -298,6 +268,11 @@ node .github/scripts/check-repo-map-ui.js                    # when the map chan
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json, the map, or any file a drawn connection quotes, regenerate first: node .github/scripts/build-logical-map.js
 ```
+⚠️ **check-links rules** (history in the `check-links-cases.js` header):
+- DO NOT teach it to read across a line break (#365 and #367 both tried, both reverted); keep every cross-reference (a backticked file name, an arrow, a starred section name) on ONE line.
+- Do NOT suppress the self form after a code span naming a `.md` file (#367 rounds 12-16, withdrawn by owner ruling 2026-09-18).
+- Keep the `\x60` in `(?<![\x60\w])`; do NOT reintroduce the flanking rule; line endings are normalised ONCE by `readSource()`.
+
 ⚠️ **RUN THE GATE AFTER `git add`, NOT BEFORE — a NEW file is invisible to it
 until staged.** `check-exports`, `check-py-warnings` and `check-claims --derive`
 all enumerate via `git ls-files`, which does not list untracked paths. So a gate

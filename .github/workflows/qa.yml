@@ -371,6 +371,13 @@ jobs:
       - name: Check the browser ladder enforces what it claims
         run: node .github/scripts/check-browser-ladder-cases.js
 
+      # CLAUDE.md's Local gate is this job, run by run-local-gate.py from this
+      # file, so a step added here is run locally with no second list to edit.
+      # The runner is trusted when it says OK, so it has cases like any guard:
+      # each step-running rule GitHub's runner follows, and each refusal.
+      - name: Check the local gate runner runs this job as GitHub does
+        run: python3 .github/scripts/run-local-gate-cases.py
+
   check-external-links:
     name: Check External Links (warn only)
     runs-on: ubuntu-latest

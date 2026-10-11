@@ -514,12 +514,17 @@ if (mode !== '--external') {
 // not as HTML. Those pages failed this job intermittently on files that exist
 // (#430, #431: three FAILs in a run, each after the full retry budget), while
 // the API answers a program authoritatively, and an authed call there is
-// within the token's documented rate limit. A ref containing a slash cannot
-// be told from the path here; such a URL is fetched as a page, as before.
-const GITHUB_PAGE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|tree)\/([^/#?]+)\/([^#?]+)(?:[#?].*)?$/;
+// within the token's documented rate limit. Only refs that cannot contain a
+// slash are translated -- `main` or a commit SHA, the forms links here pin --
+// because a URL does not say where a ref like `feature/topic` ends and its
+// path begins (Codex, #434). Any other ref is fetched as a page, as before.
+// The ref and each path segment are re-encoded for the API URL.
+const GITHUB_PAGE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|tree)\/(main|[0-9a-f]{7,40})\/([^#?]+)(?:[#?].*)?$/;
 const fetchedAs = url => {
   const m = url.match(GITHUB_PAGE);
-  return m ? `https://api.github.com/repos/${m[1]}/${m[2]}/contents/${m[4]}?ref=${m[3]}` : url;
+  if (!m) return url;
+  const path = m[4].split('/').map(seg => encodeURIComponent(decodeURIComponent(seg))).join('/');
+  return `https://api.github.com/repos/${m[1]}/${m[2]}/contents/${path}?ref=${encodeURIComponent(m[3])}`;
 };
 
 if (mode === '--external-plan') {

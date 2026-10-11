@@ -684,7 +684,9 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
   try {
     writeTree(dir, { 'a.md': [
       'https://github.com/o/r/blob/main/docs/x.md',
-      'https://github.com/o/r/tree/v1/src#readme',
+      'https://github.com/o/r/tree/0123abc/src#readme',
+      'https://github.com/o/r/blob/feature/topic/docs/x.md',
+      'https://github.com/o/r/blob/main/docs/✓.md',
       'https://github.com/o/r',
       'https://example.com/page',
     ].join('\n') + '\n' });
@@ -692,8 +694,15 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     check('a github.com blob page is fetched through the contents API',
       r.out.includes('https://github.com/o/r/blob/main/docs/x.md -> https://api.github.com/repos/o/r/contents/docs/x.md?ref=main'),
       r.out.trim());
-    check('…a tree page too, its fragment dropped',
-      r.out.includes('https://github.com/o/r/tree/v1/src#readme -> https://api.github.com/repos/o/r/contents/src?ref=v1'),
+    check('…a tree page at a commit SHA too, its fragment dropped',
+      r.out.includes('https://github.com/o/r/tree/0123abc/src#readme -> https://api.github.com/repos/o/r/contents/src?ref=0123abc'),
+      r.out.trim());
+    // A URL cannot say where a ref like feature/topic ends (Codex, #434).
+    check('…but a ref that may hold a slash is fetched as the page',
+      r.out.includes('https://github.com/o/r/blob/feature/topic/docs/x.md -> https://github.com/o/r/blob/feature/topic/docs/x.md'),
+      r.out.trim());
+    check('…and a path segment is re-encoded, not passed through',
+      r.out.includes('https://github.com/o/r/blob/main/docs/✓.md -> https://api.github.com/repos/o/r/contents/docs/%E2%9C%93.md?ref=main'),
       r.out.trim());
     check('…while a repo page and a non-GitHub URL are fetched as written',
       r.out.includes('https://github.com/o/r -> https://github.com/o/r\n')

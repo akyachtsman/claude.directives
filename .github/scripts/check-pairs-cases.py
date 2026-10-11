@@ -103,6 +103,9 @@ def cases():
             (f"{template}: a renamed watched workflow — accepted",
              lambda r, t=template: replace(r, t, "      - 'QA — Static + UI Tests'\n", "      - 'QA — Renamed'\n"),
              0, "equal apart from their watch list"),
+            (f"{template}: an emptied watch list — refused",
+             lambda r, t=template: replace(r, t, "    workflows:\n      - 'QA — Static + UI Tests'\n      - 'QA — UI Tests (live)'\n      - 'QA — Event-Driven Response'\n", "    workflows: []\n"),
+             1, f"{live} <-> {template}: on.workflow_run.workflows is not a non-empty list"),
             (f"{template}: no on.workflow_run.workflows — refused",
              lambda r, t=template: replace(r, t, "    workflows:\n", "    branches:\n"),
              1, f"{live} <-> {template}: has no on.workflow_run.workflows"),
@@ -119,6 +122,13 @@ def cases():
         ("a reworded shell comment inside run: — accepted",
          lambda r: replace(r, MONITOR[1], "# THE RECORD OF WHY.", "# THE RECORD, REWORDED."),
          0, "equal apart from their watch list"),
+        # Python calls False == 0; GitHub does not, and requires a boolean here.
+        ("required: false turned to 0 — refused (no type coercion)",
+         lambda r: replace(r, MONITOR[1], "required: false", "required: 0"),
+         1, "differ beyond their watch list"),
+        ("required: false turned to 'false' — refused (a string is not a boolean)",
+         lambda r: replace(r, MONITOR[1], "required: false", "required: 'false'"),
+         1, "differ beyond their watch list"),
         # The same line, de-commented, is code: refused.
         ("a shell comment turned into code — refused",
          lambda r: replace(r, MONITOR[1], "# THE RECORD OF WHY.", "echo THE RECORD OF WHY."),

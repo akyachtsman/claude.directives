@@ -13,8 +13,8 @@ workflow name, so they diverge from their templates on purpose (`CLAUDE.md` →
 `on.workflow_run.workflows` list; the rest (about 250 lines of shared logic) was
 compared by nothing, so a fix landed in one copy could silently skip the other.
 ADAPTED below holds them to that: each side is PARSED (PyYAML, as
-workflow-ref-guard.py does), its watch list set aside, and the rest must be
-EQUAL. YAML comments and blank lines drop out in the parse, so they may
+workflow-ref-guard.py does), its watch list set aside (it must name at least
+one workflow), and the rest must be EQUAL, type for type: `false` is not `0`. YAML comments and blank lines drop out in the parse, so they may
 differ. A `run:` script is a string the parse keeps whole, and the copies DO
 word their shell comments differently ("this repo's qa.yml" against
 "qa-live.yml"), so each script's whole-line comments and blank lines are set
@@ -87,9 +87,29 @@ def adapted_logic(path):
     run = on.get("workflow_run") if isinstance(on, dict) else None
     if not isinstance(run, dict) or "workflows" not in run:
         raise ValueError("has no on.workflow_run.workflows to set aside")
+    # Only a list that names something is set aside. An emptied one is a
+    # watcher that fires for nothing, and workflow-ref-guard.py, which holds
+    # templates to no required list, would pass it (Codex, #430).
+    names = run["workflows"]
+    if not (isinstance(names, list) and names
+            and all(isinstance(n, str) and n.strip() for n in names)):
+        raise ValueError("on.workflow_run.workflows is not a non-empty list of workflow names")
     run["workflows"] = WATCH_LIST
     strip_run_comments(doc)
-    return doc
+    return typed(doc)
+
+
+def typed(node):
+    """`node` with every scalar tagged by its YAML-loaded type. Python equality
+    alone calls `false` and `0` equal (False == 0), and `5` and `5.0`; GitHub
+    does not, so a template whose `required: false` became `required: 0` must
+    not compare equal to its live copy (Codex, #430)."""
+    if isinstance(node, dict):
+        return {k if isinstance(k, str) else f"<{type(k).__name__}> {k}": typed(v)
+                for k, v in node.items()}
+    if isinstance(node, list):
+        return [typed(v) for v in node]
+    return [type(node).__name__, node]
 
 
 def strip_run_comments(node):

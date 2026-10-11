@@ -9,7 +9,11 @@ reason named. Each refusal has an accepting complement, so a fix cannot be
 bought by refusing everything.
 
 Every pair on the check's own list is drifted in turn: a pair dropped from the
-list (or a comparison that skips one) fails the case named after it.
+list (or a comparison that skips one) fails the case named after it. The
+ADAPTED pairs (equal apart from their watch list and comments) are drifted in
+turn as well, each in a job key and in a `run:` script line, against the
+complements that must stay accepted: a changed watch list, a reworded YAML
+comment, a reworded shell comment.
 
 Re-prove discrimination with a mutant:
 
@@ -37,24 +41,39 @@ _spec = importlib.util.spec_from_file_location("check_pairs", REAL)
 _real = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_real)
 PAIRS = _real.PAIRS
+ADAPTED = _real.ADAPTED
+MONITOR = next(p for p in ADAPTED if p[0].endswith("ci-monitor.yml"))
 HOOK = next(p for p in PAIRS if p[2])
 PLAIN = next(p for p in PAIRS if not p[2])
 
 
 def fixture(tmp):
-    """A tree holding every pair file exactly as this repo has it, modes included."""
+    """A tree holding every pair and adapted-pair file exactly as this repo has it, modes included."""
     root = tempfile.mkdtemp(dir=tmp)
-    for live, template, _ in PAIRS:
-        for rel in (live, template):
-            dest = os.path.join(root, rel)
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            shutil.copy2(os.path.join(ROOT, rel), dest)
+    files = [rel for live, template, _ in PAIRS for rel in (live, template)]
+    files += [rel for pair in ADAPTED for rel in pair]
+    for rel in files:
+        dest = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(os.path.join(ROOT, rel), dest)
     return root
 
 
 def append(root, rel, text="# drift\n"):
     with open(os.path.join(root, rel), "a", encoding="utf-8") as handle:
         handle.write(text)
+
+
+def replace(root, rel, old, new):
+    """Swap ONE occurrence of `old`; a fixture that no longer holds it fails
+    loudly rather than leaving the file untouched and the case vacuous."""
+    path = os.path.join(root, rel)
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    if text.count(old) != 1:
+        raise SystemExit(f"check-pairs-cases: {rel} holds {text.count(old)} copies of {old!r}, not 1 -- update the case")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text.replace(old, new))
 
 
 def chmod(root, rel, mode):
@@ -68,7 +87,42 @@ def cases():
     for live, template, _ in PAIRS:
         out.append((f"{template} drifted from {live} — refused",
                     lambda r, t=template: append(r, t), 1, f"{live} <-> {template}: contents differ"))
+    # Every adapted pair, drifted in turn where the parse keeps it: a job key,
+    # and a line of the `run:` script. Each needle names the pair.
+    for live, template in ADAPTED:
+        out += [
+            (f"{template}: a job key drifted from {live} — refused",
+             lambda r, t=template: replace(r, t, "runs-on: ubuntu-latest", "runs-on: ubuntu-22.04"),
+             1, f"{live} <-> {template}: differ beyond their watch list"),
+            (f"{template}: a run-script line drifted from {live} — refused",
+             lambda r, t=template: replace(r, t, "set -euo pipefail\n", "set -euo pipefail\n          echo drift\n"),
+             1, f"{live} <-> {template}: differ beyond their watch list"),
+            (f"{template}: a reworded YAML comment — accepted",
+             lambda r, t=template: append(r, t, "# a comment only this copy has\n"),
+             0, "equal apart from their watch list"),
+            (f"{template}: a renamed watched workflow — accepted",
+             lambda r, t=template: replace(r, t, "      - 'QA — Static + UI Tests'\n", "      - 'QA — Renamed'\n"),
+             0, "equal apart from their watch list"),
+            (f"{template}: no on.workflow_run.workflows — refused",
+             lambda r, t=template: replace(r, t, "    workflows:\n", "    branches:\n"),
+             1, f"{live} <-> {template}: has no on.workflow_run.workflows"),
+            (f"{template} missing — refused",
+             lambda r, t=template: os.remove(os.path.join(r, t)), 1, f"missing {template}"),
+        ]
     out += [
+        # The diff names the moved line, so the log shows what drifted.
+        ("an adapted refusal prints the drifted line",
+         lambda r: replace(r, MONITOR[1], "set -euo pipefail\n", "set -euo pipefail\n          echo drift\n"),
+         1, "echo drift"),
+        # A shell comment inside `run:` survives the YAML parse as text; the
+        # copies word theirs differently, so it must be set aside too.
+        ("a reworded shell comment inside run: — accepted",
+         lambda r: replace(r, MONITOR[1], "# THE RECORD OF WHY.", "# THE RECORD, REWORDED."),
+         0, "equal apart from their watch list"),
+        # The same line, de-commented, is code: refused.
+        ("a shell comment turned into code — refused",
+         lambda r: replace(r, MONITOR[1], "# THE RECORD OF WHY.", "echo THE RECORD OF WHY."),
+         1, "differ beyond their watch list"),
         # The diff is printed, so the line that moved is visible in the log.
         ("a refusal prints the drifted line",
          lambda r: append(r, PLAIN[1], "# the drifted line\n"), 1, "+# the drifted line"),

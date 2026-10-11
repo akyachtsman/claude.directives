@@ -7,9 +7,20 @@ This file is the single source of truth for which pairs those are -- `qa.yml`
 runs it, `CLAUDE.md` → *Local gate — CI scripts (this repo)* runs it, and `CLAUDE.md` → *Self-application*
 points here rather than enumerating. Add a pair HERE, nowhere else.
 
-Not every live/template pair belongs on it. `ci-monitor.yml` and `ci-notify.yml`
-watch this repo's own workflow name, so they diverge from their templates on
-purpose (`CLAUDE.md` → *Self-application*, the "adapted" pattern).
+THE ADAPTED PAIRS. `ci-monitor.yml` and `ci-notify.yml` watch this repo's own
+workflow name, so they diverge from their templates on purpose (`CLAUDE.md` →
+*Self-application*, the "adapted" pattern). That divergence is ONE field, the
+`on.workflow_run.workflows` list; the rest (about 250 lines of shared logic) was
+compared by nothing, so a fix landed in one copy could silently skip the other.
+ADAPTED below holds them to that: each side is PARSED (PyYAML, as
+workflow-ref-guard.py does), its watch list set aside, and the rest must be
+EQUAL. YAML comments and blank lines drop out in the parse, so they may
+differ. A `run:` script is a string the parse keeps whole, and the copies DO
+word their shell comments differently ("this repo's qa.yml" against
+"qa-live.yml"), so each script's whole-line comments and blank lines are set
+aside too; every other line of it must match. The cost: a heredoc line that
+starts with `#` is read as a comment, and none of these scripts has one
+(batch C, R7).
 
 WHY THE SCRIPT PAIRS. A guard that ships to projects from `templates/scripts/`
 while this repo runs the `.github/scripts/` copy can be repaired in the copy we
@@ -33,6 +44,7 @@ ROOT defaults to the repository this file lives in (the cases pass a fixture).
 """
 
 import difflib
+import json
 import os
 import stat
 import sys
@@ -49,6 +61,74 @@ PAIRS = [
     (".github/scripts/check-ui-suite-env.py", "templates/scripts/check-ui-suite-env.py", False),
     (".claude/hooks/session-start.sh", "templates/claude-hooks/session-start.sh", True),
 ]
+
+# (live copy, template copy): equal apart from on.workflow_run.workflows.
+ADAPTED = [
+    (".github/workflows/ci-monitor.yml", "templates/workflows/ci-monitor.yml"),
+    (".github/workflows/ci-notify.yml", "templates/workflows/ci-notify.yml"),
+]
+WATCH_LIST = "<the watched workflows — adapted per repo>"
+
+
+def adapted_logic(path):
+    """The workflow at `path`, parsed, with its watch list replaced by a marker.
+    Raises ValueError when it has no workflow_run.workflows to set aside: a pair
+    that no longer watches anything is not the adapted shape at all."""
+    import yaml   # imported here so the byte pairs run without PyYAML
+    with open(path, encoding="utf-8") as handle:
+        doc = yaml.safe_load(handle)
+    if not isinstance(doc, dict):
+        raise ValueError("is not a YAML mapping")
+    # YAML 1.1 reads a bare `on:` key as the boolean True; name it back, so
+    # the parsed document has string keys only and can be dumped for a diff.
+    if True in doc:
+        doc["on"] = doc.pop(True)
+    on = doc.get("on")
+    run = on.get("workflow_run") if isinstance(on, dict) else None
+    if not isinstance(run, dict) or "workflows" not in run:
+        raise ValueError("has no on.workflow_run.workflows to set aside")
+    run["workflows"] = WATCH_LIST
+    strip_run_comments(doc)
+    return doc
+
+
+def strip_run_comments(node):
+    """Drop whole-line comments and blank lines from every `run:` script under
+    `node`, in place: the copies word those differently on purpose."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "run" and isinstance(value, str):
+                node[key] = "\n".join(line for line in value.splitlines()
+                                      if line.strip() and not line.lstrip().startswith("#"))
+            else:
+                strip_run_comments(value)
+    elif isinstance(node, list):
+        for item in node:
+            strip_run_comments(item)
+
+
+def check_adapted(root):
+    failures = []
+    for live, template in ADAPTED:
+        a, b = os.path.join(root, live), os.path.join(root, template)
+        missing = [p for p, full in ((live, a), (template, b)) if not os.path.isfile(full)]
+        if missing:
+            failures.append(f"{live} <-> {template}: missing {', '.join(missing)}")
+            continue
+        try:
+            da, db = adapted_logic(a), adapted_logic(b)
+        except ImportError:
+            failures.append("PyYAML is not installed: the adapted pairs cannot be read, so they are NOT checked")
+            break
+        except ValueError as e:
+            failures.append(f"{live} <-> {template}: {e}")
+            continue
+        if da != db:
+            dump = lambda d: json.dumps(d, indent=1, sort_keys=True, default=str).splitlines(keepends=True)
+            diff = difflib.unified_diff(dump(da), dump(db), fromfile=live, tofile=template)
+            failures.append(f"{live} <-> {template}: differ beyond their watch list\n"
+                            + "".join(diff).rstrip("\n"))
+    return failures
 
 
 def is_exec(path):
@@ -89,6 +169,7 @@ def main(argv):
     root = argv[1] if len(argv) > 1 else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     # An empty list checks nothing, and "OK -- 0 pairs" is a vacuous pass.
     failures = check(root) if PAIRS else ["the pair list is empty — this check verified nothing"]
+    failures += check_adapted(root) if ADAPTED else ["the adapted list is empty — those pairs are unchecked"]
     if failures:
         for f in failures:
             print(f"FAIL: {f}")
@@ -96,7 +177,10 @@ def main(argv):
         return 1
     for live, template, executable in PAIRS:
         print(f"OK:   {live} == {template}" + (" (both executable)" if executable else ""))
-    print(f"check-pairs: OK — {len(PAIRS)} pairs byte-identical, modes in step")
+    for live, template in ADAPTED:
+        print(f"OK:   {live} ~= {template} (equal apart from the watch list and comments)")
+    print(f"check-pairs: OK — {len(PAIRS)} pairs byte-identical, modes in step; "
+          f"{len(ADAPTED)} adapted pairs equal apart from their watch list and comments")
     return 0
 
 

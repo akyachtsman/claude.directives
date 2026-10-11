@@ -66,7 +66,7 @@ works and reports the resulting failure against the app (directives#312). After 
 After auth (or immediately for public apps), enumerate all interactive elements.
 
 > Runnable source of truth: **`discoverElements()` in
-> `templates/ui-tests/tests/app.spec.js`** — do not duplicate its body here.
+> `templates/ui-tests/tests/lib/fixtures.js`** — do not duplicate its body here.
 > Key semantics: enumerates visible interactive elements (`button`, `a[href]`,
 > non-hidden `input`, `select`, `textarea`, `[role=button]`, `[onclick]`) and
 > records each element's DOM-order index **before** visibility filtering, so
@@ -120,7 +120,7 @@ auth-diagnostics attachment:
 ### captureApiCalls Helper
 
 > Runnable source of truth: **`captureApiCalls()` in
-> `templates/ui-tests/tests/app.spec.js`** — do not duplicate its body here.
+> `templates/ui-tests/tests/lib/fixtures.js`** — do not duplicate its body here.
 > Key semantics: must be called **before** `page.goto()` (it uses
 > `addInitScript` to wrap `window.fetch` before page load); records per call
 > `url`, `status`, `recordCount`, `firstFieldKey`, and `error`, backend-agnostic
@@ -213,8 +213,9 @@ test('S5: <feature> renders correctly', async ({ page, renderWitness }) => {
 });
 ```
 
-Use the kit's own helpers — `gotoAndAuth()` and the `renderWitness` fixture in
-`templates/ui-tests/tests/app.spec.js`; there is no `login()`. A scenario that
+Use the kit's own helpers, which `app.spec.js` already imports: `gotoAndAuth()`
+from `templates/ui-tests/tests/lib/auth.js` and the `renderWitness` fixture from
+`templates/ui-tests/tests/lib/fixtures.js`; there is no `login()`. A scenario that
 requests `renderWitness` without CALLING it as its first statement records no
 witness and can only ever count as SCHEDULED (`test.md` → *UI coverage gates (blocking)*).
 

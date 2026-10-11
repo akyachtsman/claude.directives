@@ -196,7 +196,7 @@ const withProjects = rows => cfg(`  projects: [\n${rows}  ],\n`);
 // fixture only the body requests, and how the gate reads what it records — does
 // not depend on a real page. The real-page measurement is in the gate's header.
 const WITNESS_SRC = (() => {
-  const kit = join(REPO_ROOT, 'templates', 'ui-tests', 'tests', 'app.spec.js');
+  const kit = join(REPO_ROOT, 'templates', 'ui-tests', 'tests', 'lib', 'fixtures.js');
   const m = readFileSync(kit, 'utf8').match(/\/\/ >>> render-witness\n([\s\S]*?)\/\/ <<< render-witness/);
   if (!m) {
     console.error('check-ui-viewports-cases: CANNOT RUN — the render-witness block is missing from');

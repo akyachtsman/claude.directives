@@ -99,6 +99,7 @@ is added by the pass that finds it.
 ## GitHub
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
+| The Ubuntu release `ubuntu-latest` resolves to | `.github/scripts/run-local-gate.py` → `UBUNTU_LATEST` | 2026-10-11 | The label table in the README of `actions/runner-images` (raw.githubusercontent.com/actions/runner-images/main/README.md) |
 | API quotas and which calls are REST vs GraphQL | `git.md` → *GitHub API Quota Economy* | 2026-10-09 | `GET /rate_limit`; GitHub REST and GraphQL docs |
 | What the session proxy lets through (`api.github.com`, git) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-10-09 | A read-only curl and `git ls-remote` from this session |
 | Pages caching | `global.md` → *Hosting & Deployment* | 2026-10-09 | `curl -I` a Pages URL |

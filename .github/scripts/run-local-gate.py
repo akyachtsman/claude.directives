@@ -137,6 +137,12 @@ def plan(workflow, job, root):
         uses = step.get("uses")
         if uses is not None:
             if uses.startswith("actions/checkout@"):
+                # The working tree IS the checkout only when checkout comes
+                # first, once: a later one cleans the workspace (`git clean
+                # -ffdx`), which this runner does not reproduce (Codex, #431).
+                if i != 1:
+                    raise CannotRun(f"step {i} ({label}) is a checkout after other steps, whose "
+                                    "workspace cleanup this runner does not reproduce")
                 continue
             if not uses.startswith("./"):
                 raise CannotRun(f"step {i} ({label}) uses {uses}, which cannot run locally")
@@ -174,19 +180,50 @@ RUNNER_VARIABLE = re.compile(r"\$\{?((?:GITHUB|RUNNER)_[A-Z0-9_]+)")
 HOST_ARCH = {"x86_64": "X64", "amd64": "X64", "aarch64": "ARM64", "arm64": "ARM64"}
 
 
+# What `ubuntu-latest` resolves to. A fact about GitHub that moves when GitHub
+# migrates the label, so it is a TIME-SENSITIVE.md row: the source of truth is
+# actions/runner-images' README label table (24.04 there, checked 2026-10-11).
+# When GitHub moves it, every ubuntu-latest job here is CANNOT RUN until this
+# line follows, and qa.yml's own run of the cases turns red: a loud signal.
+UBUNTU_LATEST = "24.04"
+UBUNTU_LABEL = re.compile(r"ubuntu-(latest|\d\d\.\d\d)(-arm)?$")
+
+
+def host_ubuntu_release(path="/etc/os-release"):
+    """The host's Ubuntu VERSION_ID, or None when it is not Ubuntu."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            fields = dict(line.rstrip("\n").split("=", 1) for line in handle if "=" in line)
+    except OSError:
+        return None
+    if fields.get("ID", "").strip('"') != "ubuntu":
+        return None
+    return fields.get("VERSION_ID", "").strip('"') or None
+
+
 def target(runs_on):
     """(RUNNER_OS, RUNNER_ARCH) for a job's `runs-on`, which must be a GitHub-
-    hosted Ubuntu label this host can stand in for. The values describe the
-    TARGET, not the host: a step branching on them, or downloading an amd64
-    binary, must take the path it takes on Actions (Codex, #431). A label this
-    runner cannot reproduce is CANNOT RUN, never run on whatever host it is."""
-    if not (isinstance(runs_on, str) and runs_on.startswith("ubuntu-")):
-        raise CannotRun(f"runs-on {runs_on!r} is not a GitHub-hosted ubuntu-* label this runner reproduces")
-    want = ("Linux", "ARM64" if runs_on.endswith("-arm") else "X64")
-    host = (platform.system(), HOST_ARCH.get(platform.machine().lower(), platform.machine()))
+    hosted Ubuntu label this host can stand in for: same OS, architecture and
+    Ubuntu release (Codex, #431). The values describe the TARGET, not the
+    host, so a step branching on them takes the path it takes on Actions. A
+    label this runner cannot reproduce is CANNOT RUN, never run anyway.
+
+    What it can NOT reproduce is the image itself: GitHub's runner image ships
+    its own preinstalled tools and versions, which a host of the same release
+    does not have. That is why CI stays authoritative and this is a pre-push
+    proxy for it."""
+    m = UBUNTU_LABEL.match(runs_on) if isinstance(runs_on, str) else None
+    if not m:
+        raise CannotRun(f"runs-on {runs_on!r} is not a GitHub-hosted ubuntu-<release> or ubuntu-latest "
+                        "label this runner reproduces")
+    release = UBUNTU_LATEST if m.group(1) == "latest" else m.group(1)
+    want = ("Linux", "ARM64" if m.group(2) else "X64", release)
+    host = (platform.system(), HOST_ARCH.get(platform.machine().lower(), platform.machine()),
+            host_ubuntu_release())
     if host != want:
-        raise CannotRun(f"the job targets {runs_on} ({want[0]} {want[1]}), and this host is {host[0]} {host[1]}")
-    return want
+        raise CannotRun(f"the job targets {runs_on} (Ubuntu {want[2]}, {want[1]}), and this host is "
+                        f"{host[0]} {host[1]}, Ubuntu {host[2] or 'none'}")
+    return want[:2]
 
 
 def run_bounded(argv, cwd, env, timeout):
@@ -298,7 +335,15 @@ def run(steps, root, context):
                 print(f"FAIL [{n}] {label} (exit {code}, {took:.1f}s)", flush=True)
                 failed.append(f"[{n}] {label}")
             try:
-                env.update(read_env_file(env_file))
+                written = read_env_file(env_file)
+                if "NODE_OPTIONS" in written:
+                    raise BadEnvFile("NODE_OPTIONS cannot be set through it")
+                # GitHub keeps its own GITHUB_* and RUNNER_* values whatever a
+                # step writes here (Codex, #431); so does this runner.
+                for key in [k for k in written if k.startswith(("GITHUB_", "RUNNER_"))]:
+                    print(f"    ($GITHUB_ENV: {key} is a runner variable and keeps its value)", flush=True)
+                    del written[key]
+                env.update(written)
             except BadEnvFile as e:
                 print(f"FAIL [{n}] {label} ($GITHUB_ENV: {e})", flush=True)
                 if not failed or failed[-1] != f"[{n}] {label}":

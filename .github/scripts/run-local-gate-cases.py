@@ -179,7 +179,7 @@ CASES = [
      2, "not a positive number"),
     ("a runs-on this runner cannot reproduce — CANNOT RUN",
      {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: macos-latest\n    steps:\n" + STEP.format(name="one", run="echo ok")},
-     2, "is not a GitHub-hosted ubuntu-* label"),
+     2, "is not a GitHub-hosted ubuntu-<release>"),
     # This host is Linux X64; an ARM target is a real mismatch, not a label.
     ("a runs-on this host cannot stand in for — CANNOT RUN",
      {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-24.04-arm\n    steps:\n" + STEP.format(name="one", run="echo ok")},
@@ -193,6 +193,21 @@ CASES = [
     ("a malformed GITHUB_ENV line FAILS the step",
      {"wf.yml": workflow(STEP.format(name="set", run='echo not-an-assignment >> "$GITHUB_ENV"'))},
      1, "neither KEY=VALUE nor KEY<<DELIMITER"),
+    # This host is Ubuntu 24.04, which ubuntu-latest resolves to; 22.04 is a
+    # different image even on the same OS and architecture.
+    ("a runs-on naming another Ubuntu release — CANNOT RUN",
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-22.04\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     2, "Ubuntu 22.04"),
+    ("a checkout after another step — CANNOT RUN",
+     {"wf.yml": workflow(STEP.format(name="one", run="echo ok") + "      - uses: actions/checkout@v4\n")},
+     2, "is a checkout after other steps"),
+    ("GITHUB_ENV cannot overwrite a GITHUB_* variable",
+     {"wf.yml": workflow(STEP.format(name="set", run='echo GITHUB_ACTIONS=false >> "$GITHUB_ENV"')
+                         + STEP.format(name="get", run='test "$GITHUB_ACTIONS" = true'))},
+     0, "PASS [2] get"),
+    ("GITHUB_ENV setting NODE_OPTIONS FAILS the step",
+     {"wf.yml": workflow(STEP.format(name="set", run='echo NODE_OPTIONS=--x >> "$GITHUB_ENV"'))},
+     1, "NODE_OPTIONS cannot be set"),
     ("no such job — CANNOT RUN",
      {"wf.yml": "name: t\non: push\njobs:\n  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: 'true'\n"},
      2, "no steps for job 'validate'"),

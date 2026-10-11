@@ -22,6 +22,9 @@
 // manifest entry is required for this file.
 // ESM (.github/scripts/package.json declares "type": "module").
 //
+// Re-prove discrimination with a mutant (an absolute or relative path):
+//   CHECK_CONTRAST_BIN=/tmp/mutant.js node .github/scripts/check-contrast-cases.js
+//
 // Run: node .github/scripts/check-contrast-cases.js
 
 // ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────

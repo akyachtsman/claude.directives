@@ -98,22 +98,16 @@
 //   the source file's. Re-prove with CHECK_LINKS_BIN=<mutant> (a RELATIVE one
 //   resolves against the caller, not the temp tree; left relative it crashed
 //   every case and read as perfect discrimination)
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { binPath, writeTree, runNode } from './cases_lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-// Resolved against the CALLER's cwd, not left relative: each case spawns the
-// checker with cwd set to a throwaway temp dir, so a relative
-// CHECK_LINKS_BIN=./old-check-links.js would resolve there, fail to load, and
-// every case would "discriminate" by crashing — a proof that proves nothing.
-// Measured: #365's original proof passed only because the path handed to it
-// happened to be absolute.
-const BIN = process.env.CHECK_LINKS_BIN
-  ? resolve(process.env.CHECK_LINKS_BIN)
-  : join(HERE, 'check-links.js');
+// binPath resolves a mutant against the CALLER's cwd: #365's original proof
+// passed only because the path handed to it happened to be absolute.
+const BIN = binPath('CHECK_LINKS_BIN', join(HERE, 'check-links.js'));
 
 let failed = 0;
 
@@ -121,15 +115,8 @@ let failed = 0;
 function run(files) {
   const dir = mkdtempSync(join(tmpdir(), 'xref-'));
   try {
-    for (const [rel, body] of Object.entries(files)) {
-      const abs = join(dir, rel);
-      mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(abs, body);
-    }
-    const r = spawnSync(process.execPath, [BIN, '--internal'], {
-      cwd: dir, encoding: 'utf8',
-    });
-    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    writeTree(dir, files);
+    return runNode(BIN, ['--internal'], { cwd: dir });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

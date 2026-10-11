@@ -33,13 +33,16 @@
 //   this repo ships no project token file for it to read, so nothing else here
 //   would notice `check-contrast.js` break, #334)
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'fs';
-import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
 import { join, resolve, dirname } from 'path';
+import { binPath, writeTree, runNode } from './cases_lib.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const CHECK = join(REPO_ROOT, 'templates', 'scripts', 'check-contrast.js');
+// CHECK_CONTRAST_BIN names a MUTATED copy of the guard, so "these cases
+// discriminate" is re-provable like every other suite's (batch C, R4: this was
+// the one suite without the override).
+const CHECK = binPath('CHECK_CONTRAST_BIN', join(REPO_ROOT, 'templates', 'scripts', 'check-contrast.js'));
 const SHIPPED_TOKENS = join(REPO_ROOT, 'templates', 'styles', 'tokens.css');
 
 // A self-contained palette, deliberately NOT the shipped one. The mutation cases
@@ -863,8 +866,8 @@ function runCase(files) {
       check = join(tmp, 'check-contrast.js');
       writeFileSync(check, src.replace(line, `const CANDIDATES = ${JSON.stringify(files.__candidates)};`), 'utf8');
     }
+    writeTree(tmp, Object.fromEntries(Object.entries(files).filter(([rel]) => !rel.startsWith('__'))));
     for (const [rel, body] of Object.entries(files)) {
-      if (rel === '__candidates' || rel === '__env') continue;
       if (rel === '__symlink') {
         const [linkRel, target] = body;
         const dest = join(tmp, linkRel);
@@ -875,17 +878,13 @@ function runCase(files) {
       if (rel === '__shipped') {
         mkdirSync(join(tmp, 'styles'), { recursive: true });
         writeFileSync(join(tmp, 'styles', 'tokens.css'), readFileSync(SHIPPED_TOKENS, 'utf8'));
-        continue;
       }
-      const dest = join(tmp, rel);
-      mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, body, 'utf8');
     }
     // The caller's own CHECK_CONTRAST_TOKENS must not leak into every case.
     const env = { ...process.env, ...(files.__env || {}) };
     if (!files.__env || !('CHECK_CONTRAST_TOKENS' in files.__env)) delete env.CHECK_CONTRAST_TOKENS;
-    const r = spawnSync(process.execPath, [check], { encoding: 'utf8', cwd: tmp, env });
-    return { code: r.status, out: `${r.stdout || ''}${r.stderr || ''}`.trim() };
+    const { code, out } = runNode(check, [], { cwd: tmp, env });
+    return { code, out: out.trim() };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

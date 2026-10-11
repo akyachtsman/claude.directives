@@ -76,15 +76,14 @@ import { createRequire } from 'module';
 import { pathToFileURL, fileURLToPath } from 'url';
 import { tmpdir } from 'os';
 import { join, resolve, dirname, sep, relative } from 'path';
+import { binPath } from './cases_lib.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // Points the suite at a MUTATED copy of the gate, so "these cases discriminate"
 // is re-provable rather than a claim made once. Same mechanism as
 // CHECK_CLAIMS_BIN on #346, for the same reason: a case that cannot be shown to
 // redden is a case nobody has measured.
-const CHECK = process.env.CHECK_UI_VIEWPORTS_BIN
-  ? resolve(process.env.CHECK_UI_VIEWPORTS_BIN)
-  : join(REPO_ROOT, 'templates', 'scripts', 'check-ui-viewports.js');
+const CHECK = binPath('CHECK_UI_VIEWPORTS_BIN', join(REPO_ROOT, 'templates', 'scripts', 'check-ui-viewports.js'));
 const ANCHOR = join(REPO_ROOT, 'templates', 'ui-tests', 'playwright.config.js');
 
 // The fixtures import @playwright/test the way a real config does, so they need a

@@ -121,7 +121,9 @@ def load(path):
 # either change nothing a local run can see (name, permissions, concurrency,
 # runs-on, timeout-minutes, id) or are emulated (env on a step, shell,
 # working-directory, run, uses).
-WORKFLOW_KEYS = {"name", "run-name", "on", True, "permissions", "concurrency", "jobs"}
+# Keys are strings: the core-schema loader reads `on:` as "on". No `True`
+# here, for Python counts 1 == True, so a stray `1:` key would pass (Codex, #431).
+WORKFLOW_KEYS = {"name", "run-name", "on", "permissions", "concurrency", "jobs"}
 JOB_KEYS = {"name", "runs-on", "timeout-minutes", "permissions", "steps"}
 STEP_KEYS = {"name", "id", "run", "uses", "env", "shell", "working-directory", "timeout-minutes"}
 COMPOSITE_STEP_KEYS = {"name", "id", "run", "env", "shell", "working-directory"}

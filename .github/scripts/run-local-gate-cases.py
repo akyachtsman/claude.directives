@@ -282,6 +282,10 @@ CASES = [
     ("a GITHUB_ENV heredoc with an empty name FAILS the step (#432)",
      {"wf.yml": workflow("      - name: set\n        run: printf '<<EOF\\nv\\nEOF\\n' >> \"$GITHUB_ENV\"\n")},
      1, "has an empty name or delimiter"),
+    ("a GITHUB_ENV heredoc with a whitespace delimiter is legal, as on GitHub (#435)",
+     {"wf.yml": workflow(STEP.format(name="set", run="printf 'K<< \\nv\\n \\n' >> \"$GITHUB_ENV\"")
+                         + STEP.format(name="get", run="test \"$K\" = v"))},
+     0, "PASS [2] get"),
     ("a fractional timeout-minutes on the checkout step — CANNOT RUN (#432)",
      {"wf.yml": workflow("      - uses: actions/checkout@v4\n        timeout-minutes: 0.5\n" + STEP.format(name="one", run="echo ok"), checkout=False)},
      2, "not a whole number from 1 to 360"),

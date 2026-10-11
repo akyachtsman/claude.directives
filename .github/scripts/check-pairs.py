@@ -12,11 +12,11 @@ workflow name, so they diverge from their templates on purpose (`CLAUDE.md` →
 *Self-application*, the "adapted" pattern). That divergence is ONE field, the
 `on.workflow_run.workflows` list; the rest (about 250 lines of shared logic) was
 compared by nothing, so a fix landed in one copy could silently skip the other.
-ADAPTED below holds them to that: each side is COMPOSED (PyYAML's node tree,
-as workflow-ref-guard.py reads it), its watch list set aside (it must name at
+ADAPTED below holds them to that: each side is read as PyYAML's PARSER
+events (no resolver runs), its watch list set aside (it must name at
 least one workflow), and the rest must be EQUAL as source text: every scalar
-compared by its text, by plain-or-quoted and by its tag, never by a
-resolved value. YAML comments and blank lines drop out in the parse, so they may
+compared by its text, by plain-or-quoted and by any tag WRITTEN on it,
+never by a resolved value; mapping keys likewise. YAML comments and blank lines drop out in the parse, so they may
 differ. A `run:` script is a string the parse keeps whole, and the copies DO
 word their shell comments differently ("this repo's qa.yml" against
 "qa-live.yml"), so each script is compared as shfmt minifies it: comments and
@@ -92,11 +92,11 @@ def adapted_logic(path, shfmt):
     import yaml   # imported here so the byte pairs run without PyYAML
     try:
         with open(path, encoding="utf-8") as handle:
-            doc = source_form(yaml.compose(handle, Loader=yaml.SafeLoader))
+            doc = source_form(list(yaml.parse(handle, Loader=yaml.SafeLoader)))
     except yaml.YAMLError as e:
         raise ValueError(f"{os.path.basename(path)} does not parse as YAML: {str(e).splitlines()[0]}")
     if not isinstance(doc, dict):
-        raise ValueError("is not a YAML mapping")
+        raise ValueError(f"{os.path.basename(path)} is not a YAML mapping")
     on = doc.get("on")
     run = on.get("workflow_run") if isinstance(on, dict) else None
     if not isinstance(run, dict) or "workflows" not in run:
@@ -113,26 +113,47 @@ def adapted_logic(path, shfmt):
     return doc
 
 
-def source_form(node):
-    """A composed YAML node as plain data: a mapping keyed by its keys' text, a
-    list, or a scalar as ["plain" | "quoted", tag, text]. Every quoted style
-    (single, double, block) is a string to GitHub, so they are one class; a
-    plain scalar is the only kind a schema resolves. The tag is kept because an
-    explicit one (`!!str false`) changes what GitHub reads where the text does
-    not (Codex, #430); for a plain scalar without one it follows from the text,
-    so it adds no difference the text did not already show. A collection with
-    a non-default tag carries it too."""
+def source_form(events):
+    """The first YAML document as plain data, built from the PARSER's events:
+    a mapping, a list, or a scalar as ["plain" | "quoted", explicit tag or
+    None, text]. Events, not the composed node tree, because only an event
+    knows whether a tag was WRITTEN: the composer gives plain `on` and
+    `!!bool on` the same resolved bool tag (Codex, #430, after `!!str false`
+    and `no` for values). Nothing here runs a resolver, so nothing is
+    compared by YAML 1.1 rules GitHub does not apply. Every quoted style
+    (single, double, block) is a string to GitHub, so they are one class.
+
+    A mapping key that is a plain, untagged scalar is keyed by its text, so
+    `doc["on"]` finds a written `on:`; any other key is keyed by its whole
+    form, so `!!bool on` or `"on"` is a different key and not found."""
     import yaml
-    if isinstance(node, yaml.MappingNode):
-        out = {(k.value if isinstance(k, yaml.ScalarNode) else repr(source_form(k))): source_form(v)
-               for k, v in node.value}
-        if node.tag != "tag:yaml.org,2002:map":
-            out["<tag>"] = node.tag
-        return out
-    if isinstance(node, yaml.SequenceNode):
-        items = [source_form(v) for v in node.value]
-        return items if node.tag == "tag:yaml.org,2002:seq" else [["<tag>", node.tag]] + items
-    return ["plain" if node.style is None else "quoted", node.tag, node.value]
+    events = iter(events)
+
+    def node(ev):
+        if isinstance(ev, yaml.ScalarEvent):
+            return ["plain" if ev.style is None else "quoted", ev.tag, ev.value]
+        if isinstance(ev, yaml.AliasEvent):
+            return ["alias", None, ev.anchor]
+        if isinstance(ev, yaml.SequenceStartEvent):
+            items = [] if ev.tag is None else [["<tag>", ev.tag]]
+            for child in events:
+                if isinstance(child, yaml.SequenceEndEvent):
+                    return items
+                items.append(node(child))
+        if isinstance(ev, yaml.MappingStartEvent):
+            out = {} if ev.tag is None else {"<tag>": ev.tag}
+            for child in events:
+                if isinstance(child, yaml.MappingEndEvent):
+                    return out
+                key = node(child)
+                plain_key = is_scalar(key) and key[0] == "plain" and key[1] is None
+                out[key[2] if plain_key else json.dumps(key)] = node(next(events))
+        raise ValueError(f"unexpected YAML event {type(ev).__name__}")
+
+    for ev in events:
+        if isinstance(ev, (yaml.ScalarEvent, yaml.AliasEvent, yaml.SequenceStartEvent, yaml.MappingStartEvent)):
+            return node(ev)
+    return None
 
 
 def is_scalar(value):

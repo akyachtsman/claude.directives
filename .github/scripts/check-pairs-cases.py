@@ -134,6 +134,11 @@ def cases():
         ("required: false turned to !!str false — refused (explicit tag)",
          lambda r: replace(r, MONITOR[1], "required: false", "required: !!str false"),
          1, "differ beyond their watch list"),
+        # The composer resolves plain `on` to bool too; only an event knows the
+        # tag was WRITTEN. GitHub (YAML 1.2) needs the string key `on`.
+        ("on: turned to !!bool on: — refused (an explicit tag on a key)",
+         lambda r: replace(r, MONITOR[1], "\non:\n", "\n!!bool on:\n"),
+         1, "has no on.workflow_run.workflows"),
         ("required: false turned to 'false' — refused (a string is not a boolean)",
          lambda r: replace(r, MONITOR[1], "required: false", "required: 'false'"),
          1, "differ beyond their watch list"),

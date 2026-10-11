@@ -19,10 +19,10 @@ compared by its text, by plain-or-quoted and by its tag, never by a
 resolved value. YAML comments and blank lines drop out in the parse, so they may
 differ. A `run:` script is a string the parse keeps whole, and the copies DO
 word their shell comments differently ("this repo's qa.yml" against
-"qa-live.yml"), so each script's whole-line comments and blank lines are set
-aside too; every other line of it must match. The cost: a heredoc line that
-starts with `#` is read as a comment, and none of these scripts has one
-(batch C, R7).
+"qa-live.yml"), so each script is compared as shfmt minifies it: comments and
+layout gone, every quoted string and heredoc body whole. That needs shfmt
+($SHFMT or PATH, as check-run-quoting.py finds it); without it the adapted
+pairs fail as NOT checked, never pass (batch C, R7).
 
 WHY THE SCRIPT PAIRS. A guard that ships to projects from `templates/scripts/`
 while this repo runs the `.github/scripts/` copy can be repaired in the copy we
@@ -48,7 +48,9 @@ ROOT defaults to the repository this file lives in (the cases pass a fixture).
 import difflib
 import json
 import os
+import shutil
 import stat
+import subprocess
 import sys
 
 # (live copy, template copy, both must be executable)
@@ -72,7 +74,7 @@ ADAPTED = [
 WATCH_LIST = "<the watched workflows — adapted per repo>"
 
 
-def adapted_logic(path):
+def adapted_logic(path, shfmt):
     """The workflow at `path` as its YAML node tree, every scalar kept as its
     SOURCE TEXT plus whether it is plain or quoted, with the watch list
     replaced by a marker. Raises ValueError when there is no non-empty
@@ -88,8 +90,11 @@ def adapted_logic(path):
     is strictness: `true` against `True` is reported though GitHub reads both
     alike, which is the safe direction for copies meant to match."""
     import yaml   # imported here so the byte pairs run without PyYAML
-    with open(path, encoding="utf-8") as handle:
-        doc = source_form(yaml.compose(handle, Loader=yaml.SafeLoader))
+    try:
+        with open(path, encoding="utf-8") as handle:
+            doc = source_form(yaml.compose(handle, Loader=yaml.SafeLoader))
+    except yaml.YAMLError as e:
+        raise ValueError(f"{os.path.basename(path)} does not parse as YAML: {str(e).splitlines()[0]}")
     if not isinstance(doc, dict):
         raise ValueError("is not a YAML mapping")
     on = doc.get("on")
@@ -104,7 +109,7 @@ def adapted_logic(path):
             and all(is_scalar(n) and n[2].strip() for n in names)):
         raise ValueError("on.workflow_run.workflows is not a non-empty list of workflow names")
     run["workflows"] = WATCH_LIST
-    strip_run_comments(doc)
+    strip_run_comments(doc, shfmt)
     return doc
 
 
@@ -135,19 +140,39 @@ def is_scalar(value):
         and isinstance(value[2], str)
 
 
-def strip_run_comments(node):
-    """Drop whole-line comments and blank lines from every `run:` script under
-    `node`, in place: the copies word those differently on purpose."""
+class NoShfmt(Exception):
+    pass
+
+
+def find_shfmt():
+    """The shell parser, as check-run-quoting.py finds it: $SHFMT or PATH."""
+    path = os.environ.get("SHFMT") or shutil.which("shfmt")
+    if not path or not os.access(path, os.X_OK):
+        raise NoShfmt(path or "shfmt (not on PATH and SHFMT unset)")
+    return path
+
+
+def strip_run_comments(node, shfmt):
+    """Replace every `run:` script under `node` with its shfmt minification, in
+    place. The copies word their shell comments differently on purpose, and a
+    minified script has no comments and no layout, while every quoted string
+    and heredoc body survives whole. A line-based "starts with #" filter was
+    the first version here, and it also dropped `#` lines INSIDE a multi-line
+    quoted string -- data, which ci-monitor's `msgs="..."` really holds (Codex,
+    #430). Telling the two apart is a shell parse, and this repo's rule for a
+    shell parse is shfmt, never a hand lexer (check-run-quoting.py, #408)."""
     if isinstance(node, dict):
         for key, value in node.items():
             if key == "run" and is_scalar(value):
-                value[2] = "\n".join(line for line in value[2].splitlines()
-                                     if line.strip() and not line.lstrip().startswith("#"))
+                out = subprocess.run([shfmt, "-mn"], input=value[2], capture_output=True, text=True)
+                if out.returncode:
+                    raise ValueError(f"a run: script does not parse as shell: {out.stderr.strip()}")
+                value[2] = out.stdout
             else:
-                strip_run_comments(value)
+                strip_run_comments(value, shfmt)
     elif isinstance(node, list) and not is_scalar(node):
         for item in node:
-            strip_run_comments(item)
+            strip_run_comments(item, shfmt)
 
 
 def check_adapted(root):
@@ -159,7 +184,12 @@ def check_adapted(root):
             failures.append(f"{live} <-> {template}: missing {', '.join(missing)}")
             continue
         try:
-            da, db = adapted_logic(a), adapted_logic(b)
+            shfmt = find_shfmt()
+            da, db = adapted_logic(a, shfmt), adapted_logic(b, shfmt)
+        except NoShfmt as e:
+            failures.append(f"no usable shfmt ({e}): the adapted pairs cannot be compared, so they are NOT "
+                            "checked. Set SHFMT to the v3.12.0 release qa.yml downloads")
+            break
         except ImportError:
             failures.append("PyYAML is not installed: the adapted pairs cannot be read, so they are NOT checked")
             break

@@ -289,7 +289,7 @@ node .github/scripts/check-links-cases.js        # that checker's own guard. Re-
 #   - Do NOT suppress the self form after a code span naming a `.md` file (#367 rounds 12-16, withdrawn by owner ruling 2026-09-18)
 #   - Keep the `\x60` in `(?<![\x60\w])`; do NOT reintroduce the flanking rule; line endings are normalised ONCE by `readSource()`
 python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for p in ('.github/workflows/*', 'templates/workflows/*', 'templates/actions/*/action') for e in ('.yml', '.yaml') for f in glob.glob(p + e)]"
-python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable; the adapted watcher pairs equal apart from watch list and comments
+python3 .github/scripts/check-pairs.py          # every intentionally identical pair (the list lives in the script) is byte-identical, modes in step, both SessionStart hook copies executable; the adapted watcher pairs equal apart from watch list and comments. Needs shfmt as $SHFMT (it minifies the run: scripts); without it the adapted pairs fail as NOT checked
 python3 .github/scripts/check-pairs-cases.py    # that check's own guard — every pair drifted in turn, each adapted pair in a job key and a run line, each mode refusal with its complement. Re-prove with CHECK_PAIRS_BIN=<mutant>
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
 npx html-validate@10.17.0 docs/site/logical-map.html         # when the map changed (CI runs it every time, same pin)

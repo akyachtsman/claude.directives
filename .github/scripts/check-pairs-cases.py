@@ -137,6 +137,14 @@ def cases():
         ("required: false turned to 'false' — refused (a string is not a boolean)",
          lambda r: replace(r, MONITOR[1], "required: false", "required: 'false'"),
          1, "differ beyond their watch list"),
+        # A `#` line INSIDE a multi-line quoted string is data, not a comment:
+        # ci-monitor's msgs="..." holds one such string (Codex, #430).
+        ("a # line inside a quoted string — refused (data, not a comment)",
+         lambda r: replace(r, MONITOR[1], 'msgs="$msgs\n', 'msgs="$msgs\n              # Canceling since a higher priority waiting request\n'),
+         1, "differ beyond their watch list"),
+        ("a template that is not valid YAML — refused, not a traceback",
+         lambda r: append(r, MONITOR[1], "  : [unbalanced\n"),
+         1, "does not parse as YAML"),
         # The same line, de-commented, is code: refused.
         ("a shell comment turned into code — refused",
          lambda r: replace(r, MONITOR[1], "# THE RECORD OF WHY.", "echo THE RECORD OF WHY."),
@@ -182,10 +190,15 @@ def main():
             root = fixture(tmp)
             mutate(root)
             c.expect(label, *run([sys.executable, GUARD, root]), expected, needle)
+    # No shell parser: the adapted pairs are NOT checked, and that must fail.
+    env = dict(os.environ, SHFMT="/nonexistent/shfmt", PATH="/usr/bin:/bin")
+    with tempfile.TemporaryDirectory() as tmp:
+        c.expect("no shfmt — the adapted pairs fail as NOT checked",
+                 *run([sys.executable, GUARD, fixture(tmp)], env=env), 1, "the adapted pairs cannot be compared")
     # And the live repo. A suite that only ever sees fixtures can be green while
     # the real pairs have drifted.
     c.expect("the live repo passes", *run([sys.executable, GUARD, ROOT]), 0)
-    return c.finish(f"{len(all_cases) + 1} pinned trees read correctly.")
+    return c.finish(f"{len(all_cases) + 2} pinned trees read correctly.")
 
 
 if __name__ == "__main__":

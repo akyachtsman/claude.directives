@@ -21,7 +21,7 @@ WHAT IT RUNS, per step, in order:
   - The runner defaults a local run can know are set: CI and GITHUB_ACTIONS
     (`true`), GITHUB_WORKFLOW, GITHUB_JOB, and RUNNER_OS / RUNNER_ARCH from
     the job's `runs-on` (an ubuntu-* label, and only on a host matching it). A script
-    naming any other GITHUB_* or RUNNER_* variable is refused (SEEDED).
+    naming any other of GitHub's default variables is refused (SEEDED).
   - `timeout-minutes` is enforced: a step's own, cut to what remains of the
     job's. A step past it is killed with its whole process group and FAILS.
 
@@ -174,6 +174,8 @@ def plan(workflow, job, root):
             raise CannotRun(f"step {i} ({label}) has an `if:`, which cannot be evaluated here")
         refuse_unknown(step, STEP_KEYS, f"step {i} ({label})")
         uses = step.get("uses")
+        if uses is not None and "run" in step:
+            raise CannotRun(f"step {i} ({label}) has both `uses:` and `run:`; GitHub takes one or the other")
         if uses is not None:
             if uses.startswith("actions/checkout@"):
                 # Only refs known to resolve: Actions fails a job whose
@@ -217,6 +219,22 @@ def plan(workflow, job, root):
     return out, context
 
 
+# GitHub's default variables, which neither a step's `env:` nor a $GITHUB_ENV
+# write can override: the run keeps the runner's value (Codex, #431). A
+# GITHUB_ name that is NOT a default (GITHUB_TOKEN, set from a secret) can be
+# set, as on GitHub. From the variables reference's default-variable table.
+DEFAULT_VARIABLES = {
+    "GITHUB_ACTION", "GITHUB_ACTION_PATH", "GITHUB_ACTION_REPOSITORY", "GITHUB_ACTIONS", "GITHUB_ACTOR",
+    "GITHUB_ACTOR_ID", "GITHUB_API_URL", "GITHUB_BASE_REF", "GITHUB_ENV", "GITHUB_EVENT_NAME",
+    "GITHUB_EVENT_PATH", "GITHUB_GRAPHQL_URL", "GITHUB_HEAD_REF", "GITHUB_JOB", "GITHUB_OUTPUT",
+    "GITHUB_PATH", "GITHUB_REF", "GITHUB_REF_NAME", "GITHUB_REF_PROTECTED", "GITHUB_REF_TYPE",
+    "GITHUB_REPOSITORY", "GITHUB_REPOSITORY_ID", "GITHUB_REPOSITORY_OWNER", "GITHUB_REPOSITORY_OWNER_ID",
+    "GITHUB_RETENTION_DAYS", "GITHUB_RUN_ATTEMPT", "GITHUB_RUN_ID", "GITHUB_RUN_NUMBER",
+    "GITHUB_SERVER_URL", "GITHUB_SHA", "GITHUB_STEP_SUMMARY", "GITHUB_TRIGGERING_ACTOR",
+    "GITHUB_WORKFLOW", "GITHUB_WORKFLOW_REF", "GITHUB_WORKFLOW_SHA", "GITHUB_WORKSPACE",
+    "RUNNER_ARCH", "RUNNER_DEBUG", "RUNNER_ENVIRONMENT", "RUNNER_NAME", "RUNNER_OS", "RUNNER_TEMP",
+    "RUNNER_TOOL_CACHE",
+}
 # The runner variables a local run can set truthfully. Actions also sets
 # GITHUB_SHA, GITHUB_REF, GITHUB_EVENT_NAME and the like, whose values only a
 # real run knows; a script that names one is CANNOT RUN rather than run with
@@ -293,7 +311,7 @@ def make(label, step, root):
         raise CannotRun(f"{label}: its `run:` is not a string (quote it)")
     if "${{" in script:
         raise CannotRun(f"{label}: its script holds a ${{{{ }}}} expression")
-    unseeded = sorted(set(RUNNER_VARIABLE.findall(script)) - SEEDED)
+    unseeded = sorted((set(RUNNER_VARIABLE.findall(script)) & DEFAULT_VARIABLES) - SEEDED)
     if unseeded:
         raise CannotRun(f"{label}: its script reads {', '.join(unseeded)}, which only an Actions runner sets")
     shell = step.get("shell")
@@ -305,6 +323,8 @@ def make(label, step, root):
     cwd = os.path.join(root, workdir)
     env, left = {}, []
     for key, value in (step.get("env") or {}).items():
+        if str(key) in DEFAULT_VARIABLES:
+            continue
         if isinstance(value, str) and "${{" in value:
             left.append(str(key))
         else:
@@ -351,12 +371,14 @@ def run(steps, root, context):
     env = dict(os.environ, CI="true", GITHUB_ACTIONS="true", GITHUB_WORKFLOW=context["workflow"],
                GITHUB_JOB=context["job"], RUNNER_OS=context["target"][0], RUNNER_ARCH=context["target"][1])
     job_end = time.monotonic() + context["deadline"] if context["deadline"] else None
-    env_file, path_file = os.path.join(temp, "env"), os.path.join(temp, "path")
     runner_temp = os.path.join(temp, "runner")
     os.mkdir(runner_temp)
     failed = []
     try:
         for n, (label, script, shell, cwd, step_env, left, step_timeout) in enumerate(steps, 1):
+            # Fresh files per step, as on GitHub: a path saved by an earlier
+            # step is not read again for a later one (Codex, #431).
+            env_file, path_file = os.path.join(temp, f"env{n}"), os.path.join(temp, f"path{n}")
             open(env_file, "w").close()
             open(path_file, "w").close()
             script_file = os.path.join(temp, f"step{n}.sh")
@@ -400,7 +422,7 @@ def run(steps, root, context):
                     raise BadEnvFile("NODE_OPTIONS cannot be set through it")
                 # GitHub keeps its own GITHUB_* and RUNNER_* values whatever a
                 # step writes here (Codex, #431); so does this runner.
-                for key in [k for k in written if k.startswith(("GITHUB_", "RUNNER_"))]:
+                for key in [k for k in written if k in DEFAULT_VARIABLES]:
                     print(f"    ($GITHUB_ENV: {key} is a runner variable and keeps its value)", flush=True)
                     del written[key]
                 env.update(written)

@@ -28,9 +28,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 RUNNER = bin_path("RUN_LOCAL_GATE_BIN", os.path.join(ROOT, ".github", "scripts", "run-local-gate.py"))
 
 
-def workflow(steps):
-    """A one-job workflow whose job `validate` has `steps` (YAML text, indented 6)."""
-    return "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + steps
+CHECKOUT = "      - uses: actions/checkout@v4\n"
+
+
+def workflow(steps, checkout=True):
+    """A one-job workflow whose job `validate` has `steps` (YAML text, indented
+    6), after the checkout every job here must open with."""
+    return ("name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n"
+            + (CHECKOUT if checkout else "") + steps)
 
 
 STEP = "      - name: {name}\n        run: {run}\n"
@@ -59,7 +64,7 @@ CASES = [
      {"wf.yml": workflow(STEP.format(name="breaks", run="exit 1") + STEP.format(name="after", run="echo RAN-AFTER"))},
      1, "RAN-AFTER"),
     ("checkout is skipped, not refused",
-     {"wf.yml": workflow("      - uses: actions/checkout@v4\n" + STEP.format(name="one", run="echo ok"))},
+     {"wf.yml": workflow(CHECKOUT + STEP.format(name="one", run="echo ok"), checkout=False)},
      0, "all 1 steps"),
     ("working-directory is honoured",
      {"wf.yml": workflow("      - name: wd\n        run: test -f marker\n        working-directory: sub\n"),
@@ -139,10 +144,10 @@ CASES = [
      2, "is not a plain `run:` step"),
     # ── keys the runner does not emulate are refused, never ignored ─────────
     ("a workflow-level env: — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\nenv:\n  X: '1'\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\nenv:\n  X: '1'\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "the workflow sets env"),
     ("a job's defaults.run — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        shell: bash\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        shell: bash\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "job 'validate' sets defaults"),
     ("a step's continue-on-error — CANNOT RUN",
      {"wf.yml": workflow("      - name: c\n        continue-on-error: true\n        run: exit 1\n")},
@@ -174,7 +179,7 @@ CASES = [
      {"wf.yml": workflow("      - name: quick\n        timeout-minutes: 1\n        run: echo ok\n")},
      0, "PASS [1] quick"),
     ("the job's timeout-minutes bounds the steps after it runs out",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    timeout-minutes: 1\n    steps:\n"
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    timeout-minutes: 1\n    steps:\n" + CHECKOUT
                 + STEP.format(name="first", run="sleep 30") + STEP.format(name="second", run="echo ok")},
      1, "FAIL [2] second (not run: the job's timeout-minutes had passed)"),
     ("a fractional timeout-minutes — CANNOT RUN (GitHub takes whole minutes)",
@@ -196,11 +201,11 @@ CASES = [
      {"wf.yml": workflow("      - name: z\n        timeout-minutes: 0\n        run: echo ok\n")},
      2, "not a whole number from 1 to 360"),
     ("a runs-on this runner cannot reproduce — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: macos-latest\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: macos-latest\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "is not a GitHub-hosted ubuntu-<release>"),
     # This host is Linux X64; an ARM target is a real mismatch, not a label.
     ("a runs-on this host cannot stand in for — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-24.04-arm\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-24.04-arm\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "this host is"),
     ("RUNNER_OS and RUNNER_ARCH describe the target",
      {"wf.yml": workflow(STEP.format(name="t", run='test "$RUNNER_OS" = Linux && test "$RUNNER_ARCH" = X64'))},
@@ -214,7 +219,7 @@ CASES = [
     # This host is Ubuntu 24.04, which ubuntu-latest resolves to; 22.04 is a
     # different image even on the same OS and architecture.
     ("a runs-on naming another Ubuntu release — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-22.04\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-22.04\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "Ubuntu 22.04"),
     ("a checkout after another step — CANNOT RUN",
      {"wf.yml": workflow(STEP.format(name="one", run="echo ok") + "      - uses: actions/checkout@v4\n")},
@@ -246,7 +251,7 @@ CASES = [
       "act/action.yml": "name: a\nruns:\n  steps:\n    - shell: bash\n      run: echo hi\n"},
      2, "is not `runs.using: composite`"),
     ("a checkout ref not known to resolve — CANNOT RUN",
-     {"wf.yml": workflow("      - uses: actions/checkout@does-not-exist\n" + STEP.format(name="one", run="echo ok"))},
+     {"wf.yml": workflow("      - uses: actions/checkout@does-not-exist\n" + STEP.format(name="one", run="echo ok"), checkout=False)},
      2, "are known to resolve"),
     ("a step env cannot override a default variable",
      {"wf.yml": workflow("      - name: e\n        run: test \"$GITHUB_ACTIONS\" = true\n        env:\n          GITHUB_ACTIONS: 'false'\n")},
@@ -263,8 +268,14 @@ CASES = [
      {"wf.yml": workflow("      - uses: actions/checkout@v4\n        run: exit 1\n")},
      2, "has both `uses:` and `run:`"),
     ("a numeric top-level key — CANNOT RUN (1 is not True here)",
-     {"wf.yml": "name: t\non: push\n1: bogus\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\n1: bogus\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "the workflow sets 1"),
+    ("a job whose first step is not checkout — CANNOT RUN",
+     {"wf.yml": workflow(STEP.format(name="one", run="echo ok"), checkout=False)},
+     2, "first step is not actions/checkout"),
+    ("a bare-name read of a runner variable — CANNOT RUN",
+     {"wf.yml": workflow(STEP.format(name="e", run="'[[ -v GITHUB_SHA ]]'"))},
+     2, "reads GITHUB_SHA"),
     ("no such job — CANNOT RUN",
      {"wf.yml": "name: t\non: push\njobs:\n  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: 'true'\n"},
      2, "no steps for job 'validate'"),
@@ -283,6 +294,16 @@ def main():
             c.expect(label, code, out, expected, needle)
             if label == "a refusal anywhere runs nothing" and "SHOULD-NOT-RUN" in out:
                 c.fail(label + " (output)", "step 1 ran before the refusal")
+    # A caller's own value for a default the runner does not seed must not
+    # reach a step: the step looks for it without naming it, so the scan
+    # above cannot be what stops it.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = tempfile.mkdtemp(dir=tmp)
+        write_tree(root, {"wf.yml": workflow(STEP.format(name="e", run="test \"$(env | grep -c '^GITHUB_REF_' || true)\" = 0"))})
+        code, out = run([sys.executable, RUNNER, "--root", root, "--workflow", os.path.join(root, "wf.yml")],
+                        env=dict(os.environ, GITHUB_REF_NAME="leak", RUN_LOCAL_GATE_MINUTE="1"))
+        c.expect("a caller's unseeded default variable is removed from the step's environment",
+                 code, out, 0, "PASS [1] e")
     # This repo's own job: every step with a script is planned. Counted from
     # the YAML here, independently of the runner's own reading.
     import yaml

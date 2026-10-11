@@ -170,6 +170,10 @@ def plan(workflow, job, root):
                "target": target(body.get("runs-on")),
                "deadline": minutes(body["timeout-minutes"], f"job {job!r}") if "timeout-minutes" in body else None}
     out = []
+    first = steps[0] if isinstance(steps[0], dict) else {}
+    if not str(first.get("uses", "")).startswith("actions/checkout@"):
+        raise CannotRun("the job's first step is not actions/checkout: on a hosted runner its steps "
+                        "would start in an empty workspace, while this runner starts in the tree")
     for i, step in enumerate(steps, 1):
         label = step.get("name") or step.get("uses") or f"step {i}"
         if "if" in step:
@@ -244,7 +248,13 @@ DEFAULT_VARIABLES = {
 # that is the called program's own business, as it is on a laptop.
 SEEDED = {"GITHUB_ACTIONS", "GITHUB_WORKSPACE", "GITHUB_ENV", "GITHUB_PATH", "GITHUB_WORKFLOW",
           "GITHUB_JOB", "RUNNER_TEMP", "RUNNER_OS", "RUNNER_ARCH"}
-RUNNER_VARIABLE = re.compile(r"\$\{?((?:GITHUB|RUNNER)_[A-Z0-9_]+)")
+# Any whole-word mention, not only a `$` expansion: `[[ -v GITHUB_SHA ]]`,
+# `printenv GITHUB_SHA` and `declare -p` read a variable by its bare name
+# (Codex, #431). Strict on purpose -- a comment naming one is refused too.
+# What no scan can see is an indirect reference (`${!name}`); for that, the
+# unseeded defaults are also REMOVED from every step's environment, so a
+# caller's own GITHUB_SHA never stands in for the runner's.
+RUNNER_VARIABLE = re.compile(r"(?<![A-Za-z0-9_])((?:GITHUB|RUNNER)_[A-Z0-9_]+)(?![A-Za-z0-9_])")
 HOST_ARCH = {"x86_64": "X64", "amd64": "X64", "aarch64": "ARM64", "arm64": "ARM64"}
 
 
@@ -370,7 +380,8 @@ def read_env_file(path):
 
 def run(steps, root, context):
     temp = tempfile.mkdtemp(prefix="local-gate-")
-    env = dict(os.environ, CI="true", GITHUB_ACTIONS="true", GITHUB_WORKFLOW=context["workflow"],
+    env = {k: v for k, v in os.environ.items() if k not in DEFAULT_VARIABLES or k in SEEDED}
+    env = dict(env, CI="true", GITHUB_ACTIONS="true", GITHUB_WORKFLOW=context["workflow"],
                GITHUB_JOB=context["job"], RUNNER_OS=context["target"][0], RUNNER_ARCH=context["target"][1])
     job_end = time.monotonic() + context["deadline"] if context["deadline"] else None
     runner_temp = os.path.join(temp, "runner")

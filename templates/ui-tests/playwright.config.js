@@ -62,7 +62,7 @@ export default defineConfig({
     //
     // navigationTimeout — a page that cannot load in 30s is a failure worth
     // reporting as one, not worth waiting out. Governs goto(); the matching cap
-    // for waitForLoadState('networkidle') is IDLE_MS in tests/app.spec.js, which
+    // for waitForLoadState('networkidle') is IDLE_MS in tests/lib/fixtures.js, which
     // passes an explicit and much shorter timeout at every call site.
     navigationTimeout: 30_000,
     // actionTimeout — the floor for click()/fill()/press()/selectOption() calls

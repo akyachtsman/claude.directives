@@ -486,6 +486,17 @@ if [ -n "$d" ]; then rm -rf "$d"; fi
   (`docs/standards/cicd-setup.md` Step 9f).
 - **`CANNOT CHECK`** → ask the owner the same question instead of guessing.
 
+### Kit helpers moved out of the spec (2026-10-11)
+
+Since batch C, S2, the kit's helpers live in `tests/lib/fixtures.js` and
+`tests/lib/auth.js`, and `tests/app.spec.js` imports them. A project kit that
+still defines them inline gets two new files plus an `app.spec.js` diff that
+adds the imports and removes the inline copies. Take those hunks TOGETHER: the
+imports without the removals declare each helper twice, a SyntaxError that
+fails every scenario. A helper the project changed locally moves into the lib
+file with its change, never back to the upstream body. Confirm with
+`npx playwright test --list` from the kit directory, which loads every import.
+
 ### Kit defects
 
 The per-file rule above protects local kit edits, and it also stops a kit BUG

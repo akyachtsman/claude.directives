@@ -136,7 +136,7 @@ In each copied workflow file (`qa.yml`, `qa-live.yml`, `qa-response.yml`), confi
 Copy the Playwright test scaffold into the target repo if not already present:
 
 ```bash
-mkdir -p .github/scripts/ui-tests/tests
+mkdir -p .github/scripts/ui-tests/tests/lib
 
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/playwright.config.js \
   -o .github/scripts/ui-tests/playwright.config.js
@@ -146,6 +146,12 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
 
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/app.spec.js \
   -o .github/scripts/ui-tests/tests/app.spec.js
+
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/lib/fixtures.js \
+  -o .github/scripts/ui-tests/tests/lib/fixtures.js
+
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/lib/auth.js \
+  -o .github/scripts/ui-tests/tests/lib/auth.js
 ```
 
 The kit's viewport gate ships alongside it. Install it **with** the `ui-suite`

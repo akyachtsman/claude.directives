@@ -429,7 +429,8 @@
         "templates/ui-tests/package.json",
         "templates/actions/ui-suite/action.yml",
         "templates/ui-tests/playwright.config.js",
-        "templates/ui-tests/tests/app.spec.js"
+        "templates/ui-tests/tests/app.spec.js",
+        "templates/ui-tests/tests/lib/fixtures.js"
       ]
     },
     "frontend-design": {

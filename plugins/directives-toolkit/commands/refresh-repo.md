@@ -597,14 +597,20 @@ for c in $callers; do
          rm -f "$buf"; exit 1; }
   printf '\n' >>"$buf"   # token boundary — see the third bullet below
 done
-refs=$(grep -oE '\.github/scripts/[A-Za-z0-9_./-]+' "$buf" \
-       | sed -E 's/[.]+$//' \
-       | grep -E '\.(js|py)$|^\.github/scripts/package\.json$' | sort -u)
+# The derivation itself lives in ONE file, which Phase 3's applied-check runs
+# too, so the install and the check can never name different sets (#398).
+derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf") \
+  || { echo "DERIVATION FAILED — derivation INVALID, do not use it" >&2
+       rm -f "$buf"; exit 1; }
 rm -f "$buf"
+refs=$(printf '%s\n' "$derived" | sort -u)
 printf '%s\n' "$refs"
 ```
 
-Seven things about that shape, each of which a shorter version got wrong (the
+`derive-scripts.sh` (in this plugin's `scripts/`) is the derivation: the whole
+path token, a trailing period stripped, then only `.js`/`.py` endings plus exactly
+`.github/scripts/package.json`. Seven things about that shape, each of which a
+shorter version got wrong (the
 failures themselves: the *Refresh-repo history* section of
 https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-history.md, which a downstream checkout does not carry):
 
@@ -625,14 +631,13 @@ https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-hi
   job fails before its own install step (Codex, #409). Phase 3 refuses the stamp
   while it is missing. A trailing period is
   stripped first (`sed -E 's/[.]+$//'`): a directive that names a script at
-  the end of a sentence still names it. The Phase 3 check below already did
-  this, so the install derived LESS than the check verified (Codex, #409).
-  `check-refresh-derivation.py` now runs both copies, stage by stage, over the
-  same inputs and refuses any difference in what they derive — and holds each
-  copy to the contract over a fixed probe set, so two copies that widen or
-  narrow together still fail.
-  `check-refresh-derivation.py` runs this exact pattern, read out of this file,
-  against every shipped caller, so an invocation-form change fails CI.
+  the end of a sentence still names it. When the install and Phase 3 each
+  carried a copy, only Phase 3's stripped it, so the install derived LESS than
+  the check verified (Codex, #409); one file now serves both.
+  `check-refresh-derivation.py` runs `derive-scripts.sh` against every shipped
+  caller and holds it to the contract over a fixed probe set, so an
+  invocation-form change or a widened or narrowed stage fails CI, and it
+  refuses an inline copy of the derivation in either caller.
 - **It matches a MENTION, not only an invocation, and that is the accepted
   cost.** A comment reading `# replaced .github/scripts/legacy.py` puts
   `legacy.py` in the set. The asymmetry runs the right way: a spare installed
@@ -729,8 +734,8 @@ What is compared, delta or not:
     command is parsed for sibling names: `check-action-siblings.py` records the
     four rounds that parsing cost.
   - every script whose `.github/scripts/*` path something installed, or a
-    directive at the head, names: the pattern *Deriving the referenced-script
-    set* installs by, the same filter in both places. A workflow must NAME
+    directive at the head, names, derived by the same `derive-scripts.sh`
+    that *Deriving the referenced-script set* installs by. A workflow must NAME
     what it needs by that path: `cron-notify.yml` runs
     `node "$GITHUB_WORKSPACE/.github/scripts/notify-task.js"` (still from
     `working-directory: .github/scripts`) and names `notify-email.js` and

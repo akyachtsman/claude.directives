@@ -2,12 +2,13 @@
 r"""Guard /refresh-repo's referenced-script derivation against the real callers.
 
 WHY IT EXISTS. refresh-repo Phase 2 (*Deriving the referenced-script set*)
-derives WHICH .github/scripts/* files a refresh must install, by grepping the
-caller workflows/actions it is installing; Phase 3's applied-check carries a
-second copy of the same derivation.
-That derivation is a PATTERN in a markdown file; the callers are YAML edited
-independently. Nothing tied the two together, so a caller could change the FORM
-of an invocation and silently fall out of the derivation.
+derives WHICH .github/scripts/* files a refresh must install, by running
+plugins/directives-toolkit/scripts/derive-scripts.sh over the caller
+workflows/actions/directives it is installing; Phase 3's applied-check
+(refresh-stamp.sh) runs the same file. The derivation is a few stages of grep
+and sed; the callers are YAML edited independently. Nothing tied the two
+together, so a caller could change the FORM of an invocation and silently fall
+out of the derivation.
 
 That is not hypothetical. Reported by PROP6 on 2026-09-01 and reproduced here:
 the pattern required `node ` or `python3 ` immediately before `.github/`, while
@@ -26,8 +27,7 @@ comment telling you to copy check-ui-viewports.js by hand. Prose compensating
 for what the derivation should have caught -- enumerate-vs-derive reappearing one
 level up, inside the fix for it.
 
-WHAT THIS CHECKS. The pattern is read OUT OF refresh-repo.md rather than copied
-here; a copy is the same drift one file over. It is then run -- through real
+WHAT THIS CHECKS. derive-scripts.sh is RUN -- by bash, so through real
 `grep -E`, see below -- against every shipped caller, a fixed probe set and a
 form-independent scan, these ways:
 
@@ -44,21 +44,18 @@ form-independent scan, these ways:
      dropped by the extension filter. The script vanishes with no error. This
      defect exists ONLY in the concatenation, so check 1 is structurally blind to
      it. Whether the loop delimits is read out of the command text, not assumed.
-  3. OFF-CONTRACT. Anything the pattern accepts that is not .js/.py under
+  3. OFF-CONTRACT. Anything the derivation accepts that is not .js/.py under
      .github/scripts/, or exactly .github/scripts/package.json (#398) -- see the
      extras split below.
-  4. IN STEP. The command carries two copies of the derivation -- the install
-     pipeline and the Phase 3 applied-check -- and both must exist and DERIVE
-     the same set. Each copy's stages (grep -oE, sed -E, grep -E) are run with
-     real grep and sed over a fixed probe set plus every shipped caller, and
-     the outputs compared, so the check can never be wider or narrower than the
-     install (#398). Comparing one field at a time left the next one open
-     through three Codex rounds on #409.
-  5. ON CONTRACT. Check 4 compares the copies with EACH OTHER, so two copies
-     widened -- or narrowed -- the same way agree, and pass it. Each copy's
-     output over PROBES must therefore equal PROBES_CONTRACT, the set the
-     contract in check 3 admits from those inputs, exactly. Check 3 only sees
-     what the shipped callers happen to contain; the probes carry the shapes
+  4. ONE COPY. The install derivation and the Phase 3 applied-check must both
+     RUN derive-scripts.sh, and neither may carry an inline copy of the token
+     grep. They once carried a copy each, and keeping two copies in step took
+     three Codex rounds on #409 and a stage-by-stage comparison here; one file
+     makes "the check is never wider or narrower than the install" (#398)
+     structural rather than policed (batch C, R1).
+  5. ON CONTRACT. Check 3 only sees what the shipped callers happen to contain,
+     so the derivation's output over PROBES must equal PROBES_CONTRACT, the set
+     the contract admits from those inputs, exactly. The probes carry the shapes
      at each edge of the contract whether a caller has them today or not.
   6. NEEDS NAMED. The derivation finds only what a caller NAMES, so a caller
      must name every file it needs by its `.github/scripts/` path -- and the
@@ -84,8 +81,9 @@ ends in `| sort -u`, so the pipeline's exit status is sort's -- 0 -- and the
 derivation silently returns EMPTY while this guard reports OK. Certifying one
 engine's behaviour to vouch for another's is the fail-open family (#323) inside
 the guard written to prevent it. Caught by Codex on #345. So: every pattern is
-executed by `grep -E` itself, and grep writing ANYTHING to stderr is a failure,
-because that is how it reports a construct it will then silently not match.
+executed by `grep -E` itself -- the guard runs derive-scripts.sh, never a
+re-implementation -- and the script writing ANYTHING to stderr is a failure,
+because that is how grep reports a construct it will then silently not match.
 
 ⚠️ WHAT IT CANNOT CATCH. Ground truth is "the token `.github/scripts/<name>.js|py`
 appears in a caller". A caller that referenced a script by some other root, or
@@ -124,10 +122,11 @@ import yaml
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")
 # Phase 3's applied-check runs from this script, not from a fenced block in the
 # command: a command's arguments are substituted into its text on load, and the
-# check's functions take positional parameters. The guard reads the two files as
-# ONE text, so the Phase 3 copy is found wherever it sits, and a copy deleted
-# from both is still refused.
+# check's functions take positional parameters.
 STAMP = Path("plugins/directives-toolkit/scripts/refresh-stamp.sh")
+# THE derivation. Both of the above run it; this guard runs it too, so what is
+# checked is what ships.
+DERIVE = Path("plugins/directives-toolkit/scripts/derive-scripts.sh")
 # directives/*.md joined the set in directives#355: `test.md` names
 # `.github/scripts/browser-ladder.js`, which no workflow or composite invokes,
 # so a YAML-only caller set derived nothing for it and a refresh shipped the
@@ -135,29 +134,18 @@ STAMP = Path("plugins/directives-toolkit/scripts/refresh-stamp.sh")
 CALLER_GLOBS = ("templates/workflows/*.yml", "templates/actions/*/action.yml",
                 "directives/*.md")
 
-# The two-stage shape the command documents: grab the whole path token, then
-# keep only .js/.py endings. Captured as two regexes so the extension filter is
-# applied exactly as the shipped pipeline applies it -- an unterminated
-# `\.(js|py)` matches the `.js` inside `.json`, which is why the stages are
-# separate rather than one pattern.
-TOKEN_LINE = re.compile(r"grep -oE '([^']+)' \"\$buf\"")
-FILTER_LINE = re.compile(r"grep -E '([^']+)'")
+# An INLINE copy of the token grep, in either caller. Check 4 refuses one: the
+# derivation must live in DERIVE alone.
+INLINE_COPY = re.compile(r"grep -oE '[^']*\\\.github/scripts/[^']*'")
+# How each caller must run DERIVE: the install over the fetched buffer, the
+# applied-check from its own directory.
+COMMAND_CALL = re.compile(r'derive-scripts\.sh"?\s*<\s*"\$buf"')
+# The applied-check must both point `derive` at the file and RUN it: naming the
+# path alone (a variable set and never used) is not running it.
+STAMP_DEF = re.compile(r'^\s*derive=.*derive-scripts\.sh', re.M)
+STAMP_CALL = re.compile(r'\bbash\s+"\$\{?derive\}?"')
 
-# EVERY copy of the token grep, wherever it sits: the install pipeline and the
-# Phase 3 applied-check each carry one. #398's constraint is that they name the
-# SAME set -- a check wider than the install refuses a stamp the install can
-# never satisfy -- so the extension filter after each copy must be identical.
-ANY_TOKEN = re.compile(r"grep -oE '[^']*\\\.github/scripts/[^']*'")
-
-# Every stage of a copy's pipeline, in order. Comparing one field at a time --
-# first the filter, then whether Phase 3 exists, then the token pattern -- left
-# the next field open each round (Codex, #409, three rounds). So each copy's
-# stages are RUN over the same inputs and their outputs compared: a difference
-# in the token class, a sed stage, or the filter all show up as a difference in
-# what is derived.
-STAGE_RE = re.compile(r"(grep -oE|sed -E|grep -E) '([^']+)'")
-
-# Inputs every copy must derive identically, beside the shipped callers: the
+# Inputs the derivation must read exactly to the contract (check 5): the
 # shapes each stage exists for.
 PROBES = "\n".join([
     "run: node .github/scripts/a.js",
@@ -171,7 +159,7 @@ PROBES = "\n".join([
     "a bare directory .github/scripts/ui-tests/",
 ]) + "\n"
 
-# What every copy must derive from PROBES -- the contract (check 3) applied to
+# What the derivation must derive from PROBES -- the contract (check 3) applied to
 # them, written out rather than computed so it cannot drift with in_contract().
 # Each probe above is in it or deliberately out of it: the lockfile and the
 # kit's package.json are other rows' files, and a bare directory is no file.
@@ -185,46 +173,21 @@ PROBES_CONTRACT = {
 }
 
 
-def stages_of(text, start):
-    return STAGE_RE.findall(pipeline(text, start))
+def derive(data):
+    """Run DERIVE over `data` and return (set of paths, None) or (None, why).
 
-
-def run_stages(stages, data):
-    """Run a copy's stages over `data` with real grep and sed.
-
-    grep exits 1 for "no matches", which is not an error. It exits 2 -- and,
-    for some malformed-but-accepted constructs, exits 1 while WARNING on
-    stderr -- for a pattern it cannot honour. That warning is the only signal
-    distinguishing "matched nothing" from "could not match", and the shipped
-    pipeline throws it away, so any stderr is fatal here.
+    grep exits 1 for "no matches", which the script maps to exit 0. A pattern
+    grep cannot honour exits 2 -- or, for some malformed-but-accepted
+    constructs, matches nothing while WARNING on stderr. That warning is the
+    only signal distinguishing "matched nothing" from "could not match", so any
+    stderr is fatal here, as is any non-zero exit.
     """
-    for kind, pat in stages:
-        args = kind.split() + [pat]
-        p = subprocess.run(args, input=data, capture_output=True, text=True)
-        if p.stderr.strip():
-            return None, f"{args[0]} wrote to stderr: {p.stderr.strip()}"
-        if p.returncode not in (0, 1):
-            return None, f"{args[0]} exited {p.returncode}"
-        data = p.stdout
-        if not data:
-            return set(), None
-    return {ln for ln in data.split("\n") if ln}, None
-
-
-def pipeline(text, start):
-    """The rest of the shell pipeline that begins at `start`: its own line plus
-    every line a trailing backslash continues. A filter is read ONLY from here.
-    An unbounded search skipped past a pipeline that had lost its filter and
-    found the NEXT pipeline's -- so a dropped install filter read as "in step"
-    with the Phase 3 copy (Codex, #409)."""
-    end = start
-    while True:
-        nl = text.find("\n", end)
-        if nl < 0:
-            return text[start:]
-        if not text[text.rfind("\n", 0, nl) + 1:nl].rstrip().endswith("\\"):
-            return text[start:nl]
-        end = nl + 1
+    p = subprocess.run(["bash", str(DERIVE)], input=data, capture_output=True, text=True)
+    if p.stderr.strip():
+        return None, f"it wrote to stderr: {p.stderr.strip()}"
+    if p.returncode != 0:
+        return None, f"it exited {p.returncode}"
+    return {ln for ln in p.stdout.split("\n") if ln}, None
 
 
 # Does the fetch loop put a boundary between concatenated callers? Read, not
@@ -521,117 +484,81 @@ def truth(text):
 
 def engine_error(err, what):
     return fail(
-        f"the documented pattern is not usable by the engine that RUNS it.\n"
+        f"{DERIVE} is not usable by the engine that RUNS it.\n"
         f"      {err}\n"
         "      GNU grep -E is not Python's `re`: a construct `re` accepts (e.g. `(?:`)\n"
-        "      makes grep warn and match NOTHING, and the pipeline's trailing `sort`\n"
-        "      swallows the failure — an empty derivation reported as success.\n"
+        "      makes grep warn and match NOTHING, and a caller that ignored the warning\n"
+        "      would read an empty derivation as success.\n"
         f"      {what}\n"
-        f"      Fix the pattern in {COMMAND}, not this guard."
+        f"      Fix {DERIVE}, not this guard."
     )
 
 
+def derived_paths(data, what):
+    """DERIVE's output over `data`, cut to the path token (ground truth's shape)."""
+    got, err = derive(data)
+    if err:
+        return None, engine_error(err, what)
+    return {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}, None
+
+
 def main():
-    if not COMMAND.exists():
-        return fail(f"{COMMAND} not found — the derivation this guard pins has moved or been deleted.")
+    for f, role in ((COMMAND, "the command that installs by the derivation"),
+                    (DERIVE, "the derivation itself"),
+                    (STAMP, "the Phase 3 applied-check")):
+        if not f.exists():
+            return fail(f"{f} not found ({role}) — what this guard pins has moved or been deleted.")
 
-    text = COMMAND.read_text(encoding="utf-8")
-    if STAMP.exists():
-        text += "\n" + STAMP.read_text(encoding="utf-8")
+    command, stamp = COMMAND.read_text(encoding="utf-8"), STAMP.read_text(encoding="utf-8")
 
-    token_m = TOKEN_LINE.search(text)
-    if not token_m:
+    # ---- check 4: ONE copy, run by both callers --------------------------------
+    for f, text in ((COMMAND, command), (STAMP, stamp)):
+        if INLINE_COPY.search(text):
+            return fail(
+                f"{f} carries an INLINE copy of the script derivation.\n"
+                f"      The derivation lives in {DERIVE} alone, which the install and the\n"
+                "      Phase 3 applied-check both run: a second copy can drift, and a check\n"
+                "      wider or narrower than the install refuses a stamp the install can\n"
+                "      never satisfy, or passes a dependency it never saw (#398).\n"
+                f"      Run {DERIVE.name} there instead."
+            )
+    if not COMMAND_CALL.search(command):
         return fail(
-            f"could not find the derivation's `grep -oE '<pattern>' \"$buf\"` line in {COMMAND}.\n"
-            "      This guard reads the SHIPPED pattern rather than copying it, so it cannot run\n"
-            "      if the pipeline is reshaped. Update this extractor in the same change."
+            f"{COMMAND} does not run {DERIVE.name} over the fetched buffer.\n"
+            f"      The install derivation must be `bash .../{DERIVE.name} <\"$buf\"`, so it\n"
+            "      derives exactly what the Phase 3 applied-check verifies."
         )
-    filter_m = FILTER_LINE.search(pipeline(text, token_m.end()))
-    if not filter_m:
+    if not (STAMP_DEF.search(stamp) and STAMP_CALL.search(stamp)):
         return fail(
-            f"found the token grep in {COMMAND} but not the `grep -E '<ext>'` filter after it.\n"
-            "      Without the extension stage the derivation matches `.github/scripts/package-lock.json`,\n"
-            "      because an unterminated `\\.(js|py)` matches the `.js` inside `.json`."
-        )
-    token_pat, filter_pat = token_m.group(1), filter_m.group(1)
-    install = stages_of(text, token_m.start())
-
-    # THE PHASE 3 COPY MUST EXIST. Comparing filters proves nothing if one side
-    # is gone: deleting or reshaping the Phase 3 scan left one copy, one filter,
-    # and a pass -- while the applied-check stopped verifying unchanged
-    # dependencies such as package.json (Codex, #409). The install pipeline is
-    # the copy that reads "$buf"; any other copy is the applied-check's.
-    copies = list(ANY_TOKEN.finditer(text))
-    if not [m for m in copies if m.start() != token_m.start()]:
-        return fail(
-            f"the Phase 3 applied-check's copy of the derivation is missing from {COMMAND}.\n"
-            "      Only the install pipeline's token grep was found. Phase 3 verifies every\n"
-            "      script dependency, delta or not, with its own copy of this pattern; without\n"
-            "      it a stale or missing dependency no longer blocks the refresh stamp.\n"
-            "      Restore it, or update this guard in the same change if it moved."
-        )
-
-    filters = []
-    for m in copies:
-        f = FILTER_LINE.search(pipeline(text, m.end()))
-        filters.append(f.group(1) if f else None)
-    if None in filters:
-        return fail(
-            f"a copy of the derivation in {COMMAND} has NO extension filter of its own.\n"
-            "      Each copy -- the install pipeline and the Phase 3 applied-check -- must\n"
-            "      filter in its own pipeline; without one it accepts package-lock.json.\n"
-            + "".join(f"      copy {i + 1}: {f or '(none)'}\n" for i, f in enumerate(filters))
+            f"{STAMP} does not run {DERIVE.name}.\n"
+            "      Phase 3 verifies every script dependency, delta or not; without the\n"
+            "      shared derivation it either stops checking scripts or grows its own copy."
         )
 
     callers = sorted({p for g in CALLER_GLOBS for p in Path().glob(g)})
-    corpus = PROBES + "".join(c.read_text(encoding="utf-8") + "\n" for c in callers)
-    want, err = run_stages(install, corpus)
-    if err:
-        return engine_error(err, f"install stages: {install}")
-    for i, m in enumerate(copies):
-        if m.start() == token_m.start():
-            continue
-        got, err = run_stages(stages_of(text, m.start()), corpus)
-        if err:
-            return engine_error(err, f"copy {i + 1} stages: {stages_of(text, m.start())}")
-        if got != want:
-            return fail(
-                f"the derivation's copies in {COMMAND} derive DIFFERENTLY.\n"
-                "      The install pipeline and the Phase 3 applied-check must name the same\n"
-                "      set (#398): a check wider than the install refuses a stamp the install\n"
-                "      can never satisfy, and a narrower one passes a dependency it never saw.\n"
-                "      Run over the same probes and shipped callers:\n"
-                + "".join(f"      only the install derives: {s}\n" for s in sorted(want - got))
-                + "".join(f"      only copy {i + 1} derives: {s}\n" for s in sorted(got - want))
-                + f"      install stages: {install}\n"
-                + f"      copy {i + 1} stages: {stages_of(text, m.start())}\n"
-                + "      Change every stage of both copies together."
-            )
-
     if not callers:
         return fail(
             "no caller files matched "
             f"{', '.join(CALLER_GLOBS)} — this guard would pass vacuously, which is the\n"
             "      fail-open shape it exists to prevent."
         )
-
     bodies = {c: c.read_text(encoding="utf-8") for c in callers}
 
-    # ---- check 1: per caller (check 4, in step, ran above) ---------------------
-    missed = []
+    # ---- check 1: per caller -------------------------------------------------
+    missed, named_by = [], {}
     documented_all = set()
     for caller in callers:
-        got, err = run_stages(install, bodies[caller])
+        got, err = derived_paths(bodies[caller], f"caller: {caller}")
         if err:
-            return engine_error(err, f"token: {token_pat}   filter: {filter_pat}")
-        got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
+            return err
+        named_by[caller] = got
         documented_all |= got
         for script in sorted(truth(bodies[caller]) - got):
             missed.append((script, str(caller)))
 
     if missed:
         lines = [
-            "the documented derivation MISSES script(s) a shipped caller references.",
+            "the derivation MISSES script(s) a shipped caller references.",
             "      A refresh installing that caller would not install the script, and the",
             "      job dies at step resolution on any project that lacks it.",
             "      Checked PER CALLER: /refresh-repo installs a SUBSET, so another caller",
@@ -639,8 +566,7 @@ def main():
             "",
         ]
         lines += [f"      MISSED: {s}\n              referenced by {w}" for s, w in missed]
-        lines += ["", f"      documented pattern: {token_pat}  then  {filter_pat}",
-                  f"      Fix the pattern in {COMMAND}, not this guard."]
+        lines += ["", f"      Fix {DERIVE}, not this guard."]
         return fail("\n".join(lines))
 
     # ---- check 2: the concatenated buffer ------------------------------------
@@ -652,7 +578,7 @@ def main():
     # to fail. Only callers missing a trailing newline can cause this, so pair
     # each of those against every other caller instead of guessing an order.
     per_caller = set().union(*(truth(b) for b in bodies.values()))
-    delimited = bool(DELIMITER_LINE.search(text))
+    delimited = bool(DELIMITER_LINE.search(command))
     ragged = [c for c in callers if not bodies[c].endswith("\n")]
     joiner = "\n" if delimited else ""
 
@@ -662,10 +588,9 @@ def main():
             if second is first:
                 continue
             buf = bodies[first] + joiner + bodies[second] + joiner
-            got, err = run_stages(install, buf)
+            got, err = derived_paths(buf, f"concatenation: {first} + {second}")
             if err:
-                return fail(f"the documented pattern failed on the concatenated buffer: {err}")
-            got = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
+                return err
             dropped = sorted((truth(bodies[first]) | truth(bodies[second])) - got)
             if dropped:
                 lost, lost_pair = dropped, (first, second)
@@ -690,67 +615,53 @@ def main():
     # Extras split in two, and the split is the whole point -- "matches more than
     # ground truth" is NOT one condition.
     #
-    #   * ends .js/.py -> a NOTE. The only way to get here is a pattern whose char
-    #     class admits `/`, so it matches a nested `.../ui-tests/app.spec.js` that
-    #     the (slash-free) truth scan truncates. That is a widening, not a break,
-    #     and the asymmetry favours it: installing a script nothing referenced
-    #     costs a file, missing one ships a red build.
+    #   * ends .js/.py -> a NOTE. A widening, not a break, and the asymmetry
+    #     favours it: installing a script nothing referenced costs a file, missing
+    #     one ships a red build.
     #
     #   * outside the contract -> a FAILURE. The derivation's declared contract is
     #     .js/.py under .github/scripts/ plus exactly package.json there (#398), so
-    #     this is the pattern accepting
-    #     something outside its own contract. The live instance:
-    #     `grep -E '\.(js|py)'` unterminated matches the `.js` inside `.json`, so
-    #     `.github/scripts/package-lock.json` enters the install list as a script.
-    #     Printing that and exiting 0 is the fail-open shape (#323) -- a green run
-    #     with a note nobody reads is indistinguishable from a guard that passed.
+    #     this is the derivation accepting something outside its own contract.
+    #     The live instance: `grep -E '\.(js|py)'` unterminated matches the `.js`
+    #     inside `.json`, so `.github/scripts/package-lock.json` enters the
+    #     install list as a script. Printing that and exiting 0 is the fail-open
+    #     shape (#323) -- a green run with a note nobody reads is
+    #     indistinguishable from a guard that passed.
     extra = sorted(documented_all - per_caller)
     off_contract = [s for s in extra if not in_contract(s)]
     if off_contract:
         return fail(
-            "the documented derivation matches path(s) OUTSIDE its own contract.\n"
+            "the derivation matches path(s) OUTSIDE its own contract.\n"
             "      It is meant to yield .js/.py under .github/scripts/, plus exactly\n"
             f"      {PACKAGE_JSON}. These are neither,\n"
             "      so a refresh would install them as scripts:\n\n"
             + "".join(f"      OFF-CONTRACT: {s}\n" for s in off_contract)
-            + "\n      Usual causes: an unterminated extension filter (`\\.(js|py)` with no `$`\n"
-            "      matches the `.js` inside `.json`), or a token pattern reaching a path this\n"
-            "      guard's ground truth cannot express.\n"
-            f"      documented pattern: {token_pat}  then  {filter_pat}\n"
-            f"      Fix the pattern in {COMMAND}, not this guard."
+            + "\n      Usual cause: an unterminated extension filter (`\\.(js|py)` with no `$`\n"
+            "      matches the `.js` inside `.json`).\n"
+            f"      Fix {DERIVE}, not this guard."
         )
     for script in extra:
         print(f"note: derivation also matches {script}, which the truth scan does not reach")
 
-    # ---- check 5: every copy derives exactly the contract from PROBES ---------
-    # Check 4 compares the copies with each other, so two copies that widened
-    # (or narrowed) the SAME way agree and pass it. Measure each against the
-    # contract instead.
-    for i, m in enumerate(copies):
-        stages = stages_of(text, m.start())
-        got, err = run_stages(stages, PROBES)
-        if err:
-            return engine_error(err, f"copy {i + 1} stages: {stages}")
-        if got != PROBES_CONTRACT:
-            which = "the install pipeline" if m.start() == token_m.start() else f"copy {i + 1}"
-            return fail(
-                f"{which} in {COMMAND} derives OFF ITS CONTRACT from the probe inputs.\n"
-                "      The contract is .js/.py under .github/scripts/ plus exactly\n"
-                f"      {PACKAGE_JSON}. Agreeing with the other copy is not enough: both can\n"
-                "      widen or narrow together, and check 4 then passes them.\n"
-                + "".join(f"      only {which} derives: {s}\n" for s in sorted(got - PROBES_CONTRACT))
-                + "".join(f"      only the contract admits: {s}\n" for s in sorted(PROBES_CONTRACT - got))
-                + f"      stages: {stages}\n"
-                f"      Fix the pattern in {COMMAND}, not this guard."
-            )
+    # ---- check 5: the derivation reads the probes exactly to the contract -----
+    got, err = derive(PROBES)
+    if err:
+        return engine_error(err, "over the probe set")
+    if got != PROBES_CONTRACT:
+        return fail(
+            f"{DERIVE} derives OFF ITS CONTRACT from the probe inputs.\n"
+            "      The contract is .js/.py under .github/scripts/ plus exactly\n"
+            f"      {PACKAGE_JSON}. The shipped callers may not exercise every edge,\n"
+            "      so the probes do:\n"
+            + "".join(f"      only the derivation gives: {s}\n" for s in sorted(got - PROBES_CONTRACT))
+            + "".join(f"      only the contract admits: {s}\n" for s in sorted(PROBES_CONTRACT - got))
+            + f"      Fix {DERIVE}, not this guard."
+        )
 
     # ---- check 6: every caller NAMES what it needs ----------------------------
     unnamed = []
     for caller in callers:
-        got, err = run_stages(install, bodies[caller])
-        if err:
-            return engine_error(err, f"token: {token_pat}   filter: {filter_pat}")
-        named = {m.group(0) for h in got for m in [TRUTH_RE.search(h)] if m}
+        named = named_by[caller]
         try:
             need = needs(caller, bodies[caller], named)
         except ValueError as e:
@@ -769,9 +680,10 @@ def main():
 
     print(
         f"check-refresh-derivation: OK — {len(per_caller)} referenced script(s) across "
-        f"{len(callers)} caller(s), found per-caller, via grep -E"
+        f"{len(callers)} caller(s), found per-caller, via {DERIVE.name}"
     )
-    print(f"  contract: every copy derives exactly the {len(PROBES_CONTRACT)}-path contract set from the probes")
+    print(f"  one copy: {COMMAND.name} and {STAMP.name} both run {DERIVE.name}")
+    print(f"  contract: the derivation gives exactly the {len(PROBES_CONTRACT)}-path contract set from the probes")
     if ragged:
         print(
             f"  concatenation: {len(ragged)} caller(s) lack a trailing newline, each paired "

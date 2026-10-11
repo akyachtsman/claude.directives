@@ -195,6 +195,9 @@ def plan(workflow, job, root):
                 if i != 1:
                     raise CannotRun(f"step {i} ({label}) is a checkout after other steps, whose "
                                     "workspace cleanup this runner does not reproduce")
+                # Skipped, but its syntax is still GitHub's to reject (#432).
+                if "timeout-minutes" in step:
+                    minutes(step["timeout-minutes"], f"step {i} ({label})")
                 continue
             if not uses.startswith("./"):
                 raise CannotRun(f"step {i} ({label}) uses {uses}, which cannot run locally")
@@ -361,6 +364,9 @@ def read_env_file(path):
         line = lines[i]
         if "<<" in line and ("=" not in line or line.index("<<") < line.index("=")):
             key, delim = line.split("<<", 1)
+            # GitHub's runner rejects an empty name or delimiter (#432).
+            if not key.strip() or not delim.strip():
+                raise BadEnvFile(f"line {line!r} has an empty name or delimiter")
             body = []
             i += 1
             while i < len(lines) and lines[i] != delim:

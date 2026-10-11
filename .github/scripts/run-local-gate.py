@@ -18,6 +18,11 @@ WHAT IT RUNS, per step, in order:
   - `$GITHUB_ENV` and `$GITHUB_PATH` are real files, read after each step, so a
     step that exports a variable (the shfmt install sets SHFMT) hands it on.
     `$RUNNER_TEMP` is a temporary directory removed at the end.
+  - The runner defaults a local run can know are set: CI and GITHUB_ACTIONS
+    (`true`), RUNNER_OS, RUNNER_ARCH, GITHUB_WORKFLOW and GITHUB_JOB. A script
+    naming any other GITHUB_* or RUNNER_* variable is refused (SEEDED).
+  - `timeout-minutes` is enforced: a step's own, cut to what remains of the
+    job's. A step past it is killed with its whole process group and FAILS.
 
 WHAT IT REFUSES (exit 2, CANNOT RUN), rather than run something else:
   - any key at workflow, job or step level it does not emulate (an allow-list:
@@ -45,6 +50,9 @@ Its own guard: .github/scripts/run-local-gate-cases.py.
 """
 
 import argparse
+import platform
+import re
+import signal
 import os
 import shutil
 import subprocess
@@ -96,8 +104,17 @@ def refuse_unknown(keys, allowed, where):
                         "emulate (see WORKFLOW_KEYS / JOB_KEYS / STEP_KEYS)")
 
 
+def minutes(value, where):
+    """A `timeout-minutes` as seconds; anything but a positive number is refused."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise CannotRun(f"{where} has timeout-minutes {value!r}, not a positive number")
+    return value * 60
+
+
 def plan(workflow, job, root):
-    """The job's steps as (label, script, shell, cwd, env, left) tuples, or CannotRun."""
+    """(steps, context): the job's steps as (label, script, shell, cwd, env,
+    left, timeout seconds or None) tuples, and what the run seeds from the
+    workflow (its name, the job id, the job's own timeout). Or CannotRun."""
     doc = load(workflow)
     if not isinstance(doc, dict):
         raise CannotRun(f"{workflow} is not a workflow mapping")
@@ -107,6 +124,8 @@ def plan(workflow, job, root):
     if not isinstance(steps, list) or not steps:
         raise CannotRun(f"{workflow} has no steps for job {job!r}")
     refuse_unknown(body, JOB_KEYS, f"job {job!r}")
+    context = {"workflow": str(doc.get("name") or os.path.basename(workflow)), "job": job,
+               "deadline": minutes(body["timeout-minutes"], f"job {job!r}") if "timeout-minutes" in body else None}
     out = []
     for i, step in enumerate(steps, 1):
         label = step.get("name") or step.get("uses") or f"step {i}"
@@ -119,6 +138,8 @@ def plan(workflow, job, root):
                 continue
             if not uses.startswith("./"):
                 raise CannotRun(f"step {i} ({label}) uses {uses}, which cannot run locally")
+            if "timeout-minutes" in step:
+                raise CannotRun(f"step {i} ({label}) bounds a whole composite, which this runner does not")
             action = load(os.path.join(root, uses, "action.yml"))
             if (action or {}).get("inputs"):
                 raise CannotRun(f"{uses}/action.yml declares inputs, which this runner does not pass")
@@ -137,7 +158,32 @@ def plan(workflow, job, root):
         if "run" not in step:
             raise CannotRun(f"step {i} ({label}) has neither `run:` nor `uses:`")
         out.append(make(label, step, root))
-    return out
+    return out, context
+
+
+# The runner variables a local run can set truthfully. Actions also sets
+# GITHUB_SHA, GITHUB_REF, GITHUB_EVENT_NAME and the like, whose values only a
+# real run knows; a script that names one is CANNOT RUN rather than run with
+# it unset (Codex, #431). What a script CALLS may read the environment too;
+# that is the called program's own business, as it is on a laptop.
+SEEDED = {"GITHUB_ACTIONS", "GITHUB_WORKSPACE", "GITHUB_ENV", "GITHUB_PATH", "GITHUB_WORKFLOW",
+          "GITHUB_JOB", "RUNNER_TEMP", "RUNNER_OS", "RUNNER_ARCH"}
+RUNNER_VARIABLE = re.compile(r"\$\{?((?:GITHUB|RUNNER)_[A-Z0-9_]+)")
+RUNNER_OS = {"Linux": "Linux", "Darwin": "macOS", "Windows": "Windows"}
+RUNNER_ARCH = {"x86_64": "X64", "amd64": "X64", "aarch64": "ARM64", "arm64": "ARM64"}
+
+
+def run_bounded(argv, cwd, env, timeout):
+    """Run argv; return its exit code, or None when `timeout` seconds pass first.
+    The whole process group is killed then, so a hung download does not
+    outlive the step that started it."""
+    proc = subprocess.Popen(argv, cwd=cwd, env=env, start_new_session=True)
+    try:
+        return proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        return None
 
 
 def make(label, step, root):
@@ -146,6 +192,9 @@ def make(label, step, root):
         raise CannotRun(f"{label}: its `run:` is not a string (quote it)")
     if "${{" in script:
         raise CannotRun(f"{label}: its script holds a ${{{{ }}}} expression")
+    unseeded = sorted(set(RUNNER_VARIABLE.findall(script)) - SEEDED)
+    if unseeded:
+        raise CannotRun(f"{label}: its script reads {', '.join(unseeded)}, which only an Actions runner sets")
     shell = step.get("shell")
     if shell not in SHELLS:
         raise CannotRun(f"{label}: shell {shell!r} is not bash")
@@ -156,7 +205,8 @@ def make(label, step, root):
             left.append(key)
         else:
             env[key] = str(value)
-    return label, script, shell, cwd, env, left
+    timeout = minutes(step["timeout-minutes"], label) if "timeout-minutes" in step else None
+    return label, script, shell, cwd, env, left, timeout
 
 
 def read_env_file(path):
@@ -182,15 +232,18 @@ def read_env_file(path):
     return out
 
 
-def run(steps, root):
+def run(steps, root, context):
     temp = tempfile.mkdtemp(prefix="local-gate-")
-    env = dict(os.environ)
+    env = dict(os.environ, CI="true", GITHUB_ACTIONS="true", GITHUB_WORKFLOW=context["workflow"],
+               GITHUB_JOB=context["job"], RUNNER_OS=RUNNER_OS.get(platform.system(), platform.system()),
+               RUNNER_ARCH=RUNNER_ARCH.get(platform.machine().lower(), platform.machine()))
+    job_end = time.monotonic() + context["deadline"] if context["deadline"] else None
     env_file, path_file = os.path.join(temp, "env"), os.path.join(temp, "path")
     runner_temp = os.path.join(temp, "runner")
     os.mkdir(runner_temp)
     failed = []
     try:
-        for n, (label, script, shell, cwd, step_env, left) in enumerate(steps, 1):
+        for n, (label, script, shell, cwd, step_env, left, step_timeout) in enumerate(steps, 1):
             open(env_file, "w").close()
             open(path_file, "w").close()
             script_file = os.path.join(temp, f"step{n}.sh")
@@ -202,9 +255,19 @@ def run(steps, root):
             for key in left:
                 print(f"    ({key}: an expression in qa.yml, left to this environment)", flush=True)
             start = time.monotonic()
-            code = subprocess.call(SHELLS[shell] + [script_file], cwd=cwd, env=full)
+            # The step's own bound, cut to what is left of the job's: GitHub
+            # cancels the job at its timeout-minutes whatever step is running.
+            bounds = [b for b in (step_timeout, job_end - start if job_end else None) if b is not None]
+            if bounds and min(bounds) <= 0:
+                print(f"FAIL [{n}] {label} (not run: the job's timeout-minutes had passed)", flush=True)
+                failed.append(f"[{n}] {label}")
+                continue
+            code = run_bounded(SHELLS[shell] + [script_file], cwd, full, min(bounds) if bounds else None)
             took = time.monotonic() - start
-            if code == 0:
+            if code is None:
+                print(f"FAIL [{n}] {label} (timed out after {took:.1f}s)", flush=True)
+                failed.append(f"[{n}] {label}")
+            elif code == 0:
                 print(f"PASS [{n}] {label} ({took:.1f}s)", flush=True)
             else:
                 print(f"FAIL [{n}] {label} (exit {code}, {took:.1f}s)", flush=True)
@@ -229,7 +292,7 @@ def main():
     root = os.path.abspath(args.root)
     workflow = args.workflow or os.path.join(root, ".github", "workflows", "qa.yml")
     try:
-        steps = plan(workflow, args.job, root)
+        steps, context = plan(workflow, args.job, root)
     except CannotRun as e:
         print(f"run-local-gate: CANNOT RUN — {e}", file=sys.stderr)
         return 2
@@ -237,7 +300,7 @@ def main():
         for n, (label, *_rest) in enumerate(steps, 1):
             print(f"[{n}] {label}")
         return 0
-    failed = run(steps, root)
+    failed = run(steps, root, context)
     if failed:
         print(f"\nrun-local-gate: FAIL — {len(failed)} of {len(steps)} step(s):")
         for line in failed:

@@ -64,6 +64,8 @@ function findMarkdown(dir) {
 //   the network — so a freshly consolidated repo's `main`-pinned self-links validate
 //   before they have been merged to `main`.
 // --external: only check links to other repos / off-repo URLs, verified over the network.
+// --external-plan: print each external URL and the URL actually fetched for it,
+//   fetching nothing (what check-links-cases.js pins).
 const mode = process.argv[2] ?? '--all';
 
 const REPO = 'akyachtsman/claude.directives';
@@ -105,7 +107,7 @@ const internalPath = url => {
 
 const targets = [...urls].filter(url =>
   mode === '--internal' ? isInternal(url) :
-  mode === '--external' ? !isInternal(url) :
+  mode === '--external' || mode === '--external-plan' ? !isInternal(url) :
   true
 );
 
@@ -508,16 +510,35 @@ if (mode !== '--external') {
   console.log('      Keep every reference on one line. Widening what is parsed: #366.');
 }
 
+// A github.com blob/tree page is checked through the REST contents endpoint,
+// not as HTML. Those pages failed this job intermittently on files that exist
+// (#430, #431: three FAILs in a run, each after the full retry budget), while
+// the API answers a program authoritatively, and an authed call there is
+// within the token's documented rate limit. A ref containing a slash cannot
+// be told from the path here; such a URL is fetched as a page, as before.
+const GITHUB_PAGE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|tree)\/([^/#?]+)\/([^#?]+)(?:[#?].*)?$/;
+const fetchedAs = url => {
+  const m = url.match(GITHUB_PAGE);
+  return m ? `https://api.github.com/repos/${m[1]}/${m[2]}/contents/${m[4]}?ref=${m[3]}` : url;
+};
+
+if (mode === '--external-plan') {
+  for (const url of targets) console.log(`${url} -> ${fetchedAs(url)}`);
+  process.exit(0);
+}
+
 // External links: verify over the network with retry. Authed requests do not
 // follow redirects (`-L` forwards the Authorization header cross-host); without
 // `-L` a 3xx is a curl success, which is fine — the link resolved.
 const externalTargets = targets.filter(url => !isInternal(url));
 for (const url of externalTargets) {
-  const authed = hasToken && isGithubHost(url);
+  const target = fetchedAs(url);
+  const authed = hasToken && isGithubHost(target);
   const args = [
     '-sf', '--max-time', '10',
     ...(authed ? ['--config', '-'] : ['-L']),
-    url, '-o', '/dev/null',
+    ...(target === url ? [] : ['-H', 'Accept: application/vnd.github+json']),
+    target, '-o', '/dev/null',
   ];
   let ok = false;
   for (let attempt = 1; attempt <= 3; attempt++) {

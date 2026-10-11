@@ -675,6 +675,35 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
     `exit=${ok.code} got ${JSON.stringify(parsed(ok.out))} out=${ok.out.trim()}`);
 }
 
+// External GitHub pages are fetched through the contents API, not as HTML:
+// those pages failed the external job intermittently on files that exist
+// (#430, #431). --external-plan prints the URL each link is fetched as, and
+// fetches nothing, so the translation is pinned without the network.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'xref-'));
+  try {
+    writeTree(dir, { 'a.md': [
+      'https://github.com/o/r/blob/main/docs/x.md',
+      'https://github.com/o/r/tree/v1/src#readme',
+      'https://github.com/o/r',
+      'https://example.com/page',
+    ].join('\n') + '\n' });
+    const r = runNode(BIN, ['--external-plan'], { cwd: dir });
+    check('a github.com blob page is fetched through the contents API',
+      r.out.includes('https://github.com/o/r/blob/main/docs/x.md -> https://api.github.com/repos/o/r/contents/docs/x.md?ref=main'),
+      r.out.trim());
+    check('…a tree page too, its fragment dropped',
+      r.out.includes('https://github.com/o/r/tree/v1/src#readme -> https://api.github.com/repos/o/r/contents/src?ref=v1'),
+      r.out.trim());
+    check('…while a repo page and a non-GitHub URL are fetched as written',
+      r.out.includes('https://github.com/o/r -> https://github.com/o/r\n')
+        && r.out.includes('https://example.com/page -> https://example.com/page'),
+      r.out.trim());
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 if (failed) {
   console.error(`\n${failed} case(s) failed`);
   process.exit(1);

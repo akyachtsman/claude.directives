@@ -192,7 +192,7 @@ cd .github/scripts/ui-tests && npm install && cd -
 git add .github/scripts/ui-tests/package-lock.json
 ```
 
-After copying, fill in the *Project-Specific Test Scenarios* table in the project's `CLAUDE.md` (it comes from `templates/CLAUDE-template.md`) before the first CI run; the ui-tester agent adds one `app.spec.js` scenario per row (`agents/ui-tester.md` → *Project-Specific Scenarios*, which also says what counts as a gap).
+After copying, and before the first CI run, fill in the *Project-Specific Test Scenarios* table in the project's `CLAUDE.md` (it comes from `templates/CLAUDE-template.md`) and add one `app.spec.js` scenario per row, starting at S5. What counts as a gap, and the scenario shape, are in `agents/ui-tester.md` → *Project-Specific Scenarios*; the agent's own pass after the first successful run catches what this one missed.
 
 ---
 

@@ -39,8 +39,11 @@ STEP = "      - name: {name}\n        run: {run}\n"
 def gate(tmp, files, *extra):
     root = tempfile.mkdtemp(dir=tmp)
     write_tree(root, files)
+    # One timeout minute lasts a second here (RUN_LOCAL_GATE_MINUTE), so a
+    # `timeout-minutes: 1` case, a value GitHub accepts, expires quickly.
     return run([sys.executable, RUNNER, "--root", root,
-                "--workflow", os.path.join(root, "wf.yml"), *extra])
+                "--workflow", os.path.join(root, "wf.yml"), *extra],
+               env=dict(os.environ, RUN_LOCAL_GATE_MINUTE="1"))
 
 
 CASES = [
@@ -165,18 +168,33 @@ CASES = [
      {"wf.yml": workflow(STEP.format(name="e", run='echo "$GITHUB_SHA"'))},
      2, "reads GITHUB_SHA"),
     ("a step past its timeout-minutes is killed and FAILS",
-     {"wf.yml": workflow("      - name: slow\n        timeout-minutes: 0.02\n        run: sleep 30\n")},
+     {"wf.yml": workflow("      - name: slow\n        timeout-minutes: 1\n        run: sleep 30\n")},
      1, "FAIL [1] slow (timed out"),
     ("a step inside its timeout-minutes passes",
      {"wf.yml": workflow("      - name: quick\n        timeout-minutes: 1\n        run: echo ok\n")},
      0, "PASS [1] quick"),
     ("the job's timeout-minutes bounds the steps after it runs out",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    timeout-minutes: 0.02\n    steps:\n"
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    timeout-minutes: 1\n    steps:\n"
                 + STEP.format(name="first", run="sleep 30") + STEP.format(name="second", run="echo ok")},
      1, "FAIL [2] second (not run: the job's timeout-minutes had passed)"),
+    ("a fractional timeout-minutes — CANNOT RUN (GitHub takes whole minutes)",
+     {"wf.yml": workflow("      - name: z\n        timeout-minutes: 0.5\n        run: echo ok\n")},
+     2, "not a whole number from 1 to 360"),
+    ("a timeout-minutes over 360 — CANNOT RUN",
+     {"wf.yml": workflow("      - name: z\n        timeout-minutes: 361\n        run: echo ok\n")},
+     2, "not a whole number from 1 to 360"),
+    ("a working-directory holding an expression — CANNOT RUN",
+     {"wf.yml": workflow("      - name: w\n        run: echo ok\n        working-directory: ${{ github.workspace }}\n")},
+     2, "is not a literal path"),
+    # An expression-valued key is unset here (the cases' caller has no
+    # LOCAL_GATE_TEST_TOKEN), even after an earlier step exported one.
+    ("an expression-valued env key does not inherit a GITHUB_ENV value",
+     {"wf.yml": workflow(STEP.format(name="set", run='echo LOCAL_GATE_TEST_TOKEN=old >> "$GITHUB_ENV"')
+                         + "      - name: get\n        run: test -z \"${LOCAL_GATE_TEST_TOKEN:-}\"\n        env:\n          LOCAL_GATE_TEST_TOKEN: ${{ secrets.NOT_SET }}\n")},
+     0, "PASS [2] get"),
     ("a timeout-minutes that is not a positive number — CANNOT RUN",
      {"wf.yml": workflow("      - name: z\n        timeout-minutes: 0\n        run: echo ok\n")},
-     2, "not a positive number"),
+     2, "not a whole number from 1 to 360"),
     ("a runs-on this runner cannot reproduce — CANNOT RUN",
      {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: macos-latest\n    steps:\n" + STEP.format(name="one", run="echo ok")},
      2, "is not a GitHub-hosted ubuntu-<release>"),

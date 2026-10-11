@@ -137,11 +137,18 @@ def refuse_unknown(keys, allowed, where):
                         "emulate (see WORKFLOW_KEYS / JOB_KEYS / STEP_KEYS)")
 
 
+# Seconds per timeout minute. 60, except that the cases set RUN_LOCAL_GATE_MINUTE
+# to 1 so a `timeout-minutes: 1` case expires in a second: the bound under
+# test stays a value GitHub accepts, rather than a fraction it rejects.
+MINUTE = float(os.environ.get("RUN_LOCAL_GATE_MINUTE", "60"))
+
+
 def minutes(value, where):
-    """A `timeout-minutes` as seconds; anything but a positive number is refused."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-        raise CannotRun(f"{where} has timeout-minutes {value!r}, not a positive number")
-    return value * 60
+    """A `timeout-minutes` as seconds. GitHub takes a whole number of minutes,
+    at most 360; anything else is refused, never run (Codex, #431)."""
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 360:
+        raise CannotRun(f"{where} has timeout-minutes {value!r}, not a whole number from 1 to 360")
+    return value * MINUTE
 
 
 def plan(workflow, job, root):
@@ -292,7 +299,10 @@ def make(label, step, root):
     shell = step.get("shell")
     if shell not in SHELLS:
         raise CannotRun(f"{label}: shell {shell!r} is not bash")
-    cwd = os.path.join(root, step.get("working-directory", "."))
+    workdir = step.get("working-directory", ".")
+    if not isinstance(workdir, str) or "${{" in workdir:
+        raise CannotRun(f"{label}: its working-directory {workdir!r} is not a literal path")
+    cwd = os.path.join(root, workdir)
     env, left = {}, []
     for key, value in (step.get("env") or {}).items():
         if isinstance(value, str) and "${{" in value:
@@ -354,6 +364,15 @@ def run(steps, root, context):
                 handle.write(script)
             full = dict(env, GITHUB_WORKSPACE=root, RUNNER_TEMP=runner_temp,
                         GITHUB_ENV=env_file, GITHUB_PATH=path_file, **step_env)
+            # An expression-valued key is the CALLER's value, as it was when
+            # the run began, or unset: on GitHub the step's own value wins
+            # over anything an earlier step carried through $GITHUB_ENV
+            # (Codex, #431).
+            for key in left:
+                if key in os.environ:
+                    full[key] = os.environ[key]
+                else:
+                    full.pop(key, None)
             print(f"\n=== [{n}/{len(steps)}] {label}", flush=True)
             for key in left:
                 print(f"    ({key}: an expression in qa.yml, left to this environment)", flush=True)

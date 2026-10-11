@@ -12,9 +12,10 @@ workflow name, so they diverge from their templates on purpose (`CLAUDE.md` →
 *Self-application*, the "adapted" pattern). That divergence is ONE field, the
 `on.workflow_run.workflows` list; the rest (about 250 lines of shared logic) was
 compared by nothing, so a fix landed in one copy could silently skip the other.
-ADAPTED below holds them to that: each side is PARSED (PyYAML, as
-workflow-ref-guard.py does), its watch list set aside (it must name at least
-one workflow), and the rest must be EQUAL, type for type: `false` is not `0`. YAML comments and blank lines drop out in the parse, so they may
+ADAPTED below holds them to that: each side is COMPOSED (PyYAML's node tree,
+as workflow-ref-guard.py reads it), its watch list set aside (it must name at
+least one workflow), and the rest must be EQUAL as source text: every scalar
+compared by its text and by plain-or-quoted, never by a resolved value. YAML comments and blank lines drop out in the parse, so they may
 differ. A `run:` script is a string the parse keeps whole, and the copies DO
 word their shell comments differently ("this repo's qa.yml" against
 "qa-live.yml"), so each script's whole-line comments and blank lines are set
@@ -71,18 +72,25 @@ WATCH_LIST = "<the watched workflows — adapted per repo>"
 
 
 def adapted_logic(path):
-    """The workflow at `path`, parsed, with its watch list replaced by a marker.
-    Raises ValueError when it has no workflow_run.workflows to set aside: a pair
-    that no longer watches anything is not the adapted shape at all."""
+    """The workflow at `path` as its YAML node tree, every scalar kept as its
+    SOURCE TEXT plus whether it is plain or quoted, with the watch list
+    replaced by a marker. Raises ValueError when there is no non-empty
+    on.workflow_run.workflows to set aside: a pair that watches nothing is not
+    the adapted shape at all.
+
+    WHY SOURCE TEXT, NOT VALUES. PyYAML resolves scalars by YAML 1.1 and GitHub
+    by YAML 1.2, and they disagree (`no`, `on`, `070`, `080`; see
+    check-job-bounds.py's GitHubIntLoader). Comparing resolved values let
+    `required: false` pass as `0`, then as `no` (Codex, #430). Two plain
+    scalars with the same text resolve the same under ANY schema, so comparing
+    the text closes that class instead of chasing it value by value. The cost
+    is strictness: `true` against `True` is reported though GitHub reads both
+    alike, which is the safe direction for copies meant to match."""
     import yaml   # imported here so the byte pairs run without PyYAML
     with open(path, encoding="utf-8") as handle:
-        doc = yaml.safe_load(handle)
+        doc = source_form(yaml.compose(handle, Loader=yaml.SafeLoader))
     if not isinstance(doc, dict):
         raise ValueError("is not a YAML mapping")
-    # YAML 1.1 reads a bare `on:` key as the boolean True; name it back, so
-    # the parsed document has string keys only and can be dumped for a diff.
-    if True in doc:
-        doc["on"] = doc.pop(True)
     on = doc.get("on")
     run = on.get("workflow_run") if isinstance(on, dict) else None
     if not isinstance(run, dict) or "workflows" not in run:
@@ -92,24 +100,30 @@ def adapted_logic(path):
     # templates to no required list, would pass it (Codex, #430).
     names = run["workflows"]
     if not (isinstance(names, list) and names
-            and all(isinstance(n, str) and n.strip() for n in names)):
+            and all(is_scalar(n) and n[1].strip() for n in names)):
         raise ValueError("on.workflow_run.workflows is not a non-empty list of workflow names")
     run["workflows"] = WATCH_LIST
     strip_run_comments(doc)
-    return typed(doc)
+    return doc
 
 
-def typed(node):
-    """`node` with every scalar tagged by its YAML-loaded type. Python equality
-    alone calls `false` and `0` equal (False == 0), and `5` and `5.0`; GitHub
-    does not, so a template whose `required: false` became `required: 0` must
-    not compare equal to its live copy (Codex, #430)."""
-    if isinstance(node, dict):
-        return {k if isinstance(k, str) else f"<{type(k).__name__}> {k}": typed(v)
-                for k, v in node.items()}
-    if isinstance(node, list):
-        return [typed(v) for v in node]
-    return [type(node).__name__, node]
+def source_form(node):
+    """A composed YAML node as plain data: a mapping keyed by its keys' text, a
+    list, or a scalar as ["plain" | "quoted", text]. Every quoted style (single,
+    double, block) is a string to GitHub, so they are one class; a plain
+    scalar is the only kind a schema resolves."""
+    import yaml
+    if isinstance(node, yaml.MappingNode):
+        return {(k.value if isinstance(k, yaml.ScalarNode) else repr(source_form(k))): source_form(v)
+                for k, v in node.value}
+    if isinstance(node, yaml.SequenceNode):
+        return [source_form(v) for v in node.value]
+    return ["plain" if node.style is None else "quoted", node.value]
+
+
+def is_scalar(value):
+    return isinstance(value, list) and len(value) == 2 and value[0] in ("plain", "quoted") \
+        and isinstance(value[1], str)
 
 
 def strip_run_comments(node):
@@ -117,12 +131,12 @@ def strip_run_comments(node):
     `node`, in place: the copies word those differently on purpose."""
     if isinstance(node, dict):
         for key, value in node.items():
-            if key == "run" and isinstance(value, str):
-                node[key] = "\n".join(line for line in value.splitlines()
-                                      if line.strip() and not line.lstrip().startswith("#"))
+            if key == "run" and is_scalar(value):
+                value[1] = "\n".join(line for line in value[1].splitlines()
+                                     if line.strip() and not line.lstrip().startswith("#"))
             else:
                 strip_run_comments(value)
-    elif isinstance(node, list):
+    elif isinstance(node, list) and not is_scalar(node):
         for item in node:
             strip_run_comments(item)
 

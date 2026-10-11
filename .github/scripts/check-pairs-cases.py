@@ -126,6 +126,10 @@ def cases():
         ("required: false turned to 0 — refused (no type coercion)",
          lambda r: replace(r, MONITOR[1], "required: false", "required: 0"),
          1, "differ beyond their watch list"),
+        # YAML 1.1 (PyYAML) reads `no` as false; YAML 1.2 (GitHub) reads a string.
+        ("required: false turned to no — refused (no YAML 1.1 resolution)",
+         lambda r: replace(r, MONITOR[1], "required: false", "required: no"),
+         1, "differ beyond their watch list"),
         ("required: false turned to 'false' — refused (a string is not a boolean)",
          lambda r: replace(r, MONITOR[1], "required: false", "required: 'false'"),
          1, "differ beyond their watch list"),

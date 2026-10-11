@@ -15,7 +15,8 @@ compared by nothing, so a fix landed in one copy could silently skip the other.
 ADAPTED below holds them to that: each side is COMPOSED (PyYAML's node tree,
 as workflow-ref-guard.py reads it), its watch list set aside (it must name at
 least one workflow), and the rest must be EQUAL as source text: every scalar
-compared by its text and by plain-or-quoted, never by a resolved value. YAML comments and blank lines drop out in the parse, so they may
+compared by its text, by plain-or-quoted and by its tag, never by a
+resolved value. YAML comments and blank lines drop out in the parse, so they may
 differ. A `run:` script is a string the parse keeps whole, and the copies DO
 word their shell comments differently ("this repo's qa.yml" against
 "qa-live.yml"), so each script's whole-line comments and blank lines are set
@@ -100,7 +101,7 @@ def adapted_logic(path):
     # templates to no required list, would pass it (Codex, #430).
     names = run["workflows"]
     if not (isinstance(names, list) and names
-            and all(is_scalar(n) and n[1].strip() for n in names)):
+            and all(is_scalar(n) and n[2].strip() for n in names)):
         raise ValueError("on.workflow_run.workflows is not a non-empty list of workflow names")
     run["workflows"] = WATCH_LIST
     strip_run_comments(doc)
@@ -109,21 +110,29 @@ def adapted_logic(path):
 
 def source_form(node):
     """A composed YAML node as plain data: a mapping keyed by its keys' text, a
-    list, or a scalar as ["plain" | "quoted", text]. Every quoted style (single,
-    double, block) is a string to GitHub, so they are one class; a plain
-    scalar is the only kind a schema resolves."""
+    list, or a scalar as ["plain" | "quoted", tag, text]. Every quoted style
+    (single, double, block) is a string to GitHub, so they are one class; a
+    plain scalar is the only kind a schema resolves. The tag is kept because an
+    explicit one (`!!str false`) changes what GitHub reads where the text does
+    not (Codex, #430); for a plain scalar without one it follows from the text,
+    so it adds no difference the text did not already show. A collection with
+    a non-default tag carries it too."""
     import yaml
     if isinstance(node, yaml.MappingNode):
-        return {(k.value if isinstance(k, yaml.ScalarNode) else repr(source_form(k))): source_form(v)
-                for k, v in node.value}
+        out = {(k.value if isinstance(k, yaml.ScalarNode) else repr(source_form(k))): source_form(v)
+               for k, v in node.value}
+        if node.tag != "tag:yaml.org,2002:map":
+            out["<tag>"] = node.tag
+        return out
     if isinstance(node, yaml.SequenceNode):
-        return [source_form(v) for v in node.value]
-    return ["plain" if node.style is None else "quoted", node.value]
+        items = [source_form(v) for v in node.value]
+        return items if node.tag == "tag:yaml.org,2002:seq" else [["<tag>", node.tag]] + items
+    return ["plain" if node.style is None else "quoted", node.tag, node.value]
 
 
 def is_scalar(value):
-    return isinstance(value, list) and len(value) == 2 and value[0] in ("plain", "quoted") \
-        and isinstance(value[1], str)
+    return isinstance(value, list) and len(value) == 3 and value[0] in ("plain", "quoted") \
+        and isinstance(value[2], str)
 
 
 def strip_run_comments(node):
@@ -132,7 +141,7 @@ def strip_run_comments(node):
     if isinstance(node, dict):
         for key, value in node.items():
             if key == "run" and is_scalar(value):
-                value[1] = "\n".join(line for line in value[1].splitlines()
+                value[2] = "\n".join(line for line in value[2].splitlines()
                                      if line.strip() and not line.lstrip().startswith("#"))
             else:
                 strip_run_comments(value)

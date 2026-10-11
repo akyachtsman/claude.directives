@@ -130,6 +130,10 @@ def cases():
         ("required: false turned to no — refused (no YAML 1.1 resolution)",
          lambda r: replace(r, MONITOR[1], "required: false", "required: no"),
          1, "differ beyond their watch list"),
+        # An explicit tag keeps the text and changes what GitHub reads.
+        ("required: false turned to !!str false — refused (explicit tag)",
+         lambda r: replace(r, MONITOR[1], "required: false", "required: !!str false"),
+         1, "differ beyond their watch list"),
         ("required: false turned to 'false' — refused (a string is not a boolean)",
          lambda r: replace(r, MONITOR[1], "required: false", "required: 'false'"),
          1, "differ beyond their watch list"),

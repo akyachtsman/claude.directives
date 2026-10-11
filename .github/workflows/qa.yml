@@ -168,7 +168,9 @@ jobs:
       # These pairs are intentionally byte-identical (the template IS the live copy).
       # The list lives in the script and nowhere else; it also checks the modes a
       # content diff cannot see, including that both SessionStart hook copies are
-      # executable. ci-monitor.yml is exempt: its watched-workflow list differs.
+      # executable. ci-monitor.yml and ci-notify.yml differ from their templates
+      # in their watch list, so they are compared parsed, apart from it and
+      # from comments (the script's ADAPTED list).
       - name: Check intentionally-identical file pairs
         run: python3 .github/scripts/check-pairs.py
 

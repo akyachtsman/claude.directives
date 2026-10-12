@@ -99,9 +99,11 @@ first direction generated from a few taste questions — distills it to
 `styles/tokens.css` + `styles/components.css` + an approved reference page (the
 **look-gate**: sign off before building out, since the look is cheapest to fix on
 one page), and writes `specs/<slug>/design.md`. `/sdd-loop` then implements the
-remaining tasks against that contract so every page matches. No build: plain
-semantic HTML/CSS, no framework. Non-UI work skips the design-intake half and
-goes straight to implement.
+remaining tasks against that contract so every page matches. Plain semantic
+HTML/CSS with no framework and no build, unless the project's `CLAUDE.md`
+records an approved CI build opt-in (`global.md` → *Hosting & Deployment*); then
+implement against that build. Non-UI work skips the design-intake half and goes
+straight to implement.
 
 ### 6 · Review — official plugins + monitors *(delegated — do not rebuild)*
 This is already gstack's multi-lens + Codex second opinion, inherited:

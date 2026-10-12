@@ -944,8 +944,9 @@ a webhook) also stops and asks when:
 - the root cause is still ambiguous after reading every available log
 - the notification came from a person, not an automated system
 
-These always escalate: production data loss or deletion, authentication or
-secret rotation, billing or quota alerts, and any message from a person.
+For such a session, these always escalate: production data loss or deletion,
+authentication or secret rotation, billing or quota alerts, and a notification
+that came from a person rather than an automated system.
 
 The gates above fire BEFORE the work. → *A Knowing Deviation Is an Escalation*
 covers the other direction: an instruction you have already decided not to follow.

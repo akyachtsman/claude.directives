@@ -18,8 +18,10 @@ importing only *methods* that fit the constraint below:
 > **Constraint that governs every choice here:** the OWNER is browser-only —
 > he has no terminal, so nothing may depend on him running a command
 > (`global.md` → *A Blocked Command Is Not a Blocked Capability*). The session
-> has a terminal and git, but the site has no build (`global.md` → *Hosting & Deployment*)
-> and nothing may depend on a local server or daemon outliving the session.
+> has a terminal and git. The site has no build by default; a CI build is a
+> per-project opt-in, and a step that reads the site reads the deployed build
+> output where one exists (`global.md` → *Hosting & Deployment*). Nothing may
+> depend on a local server or daemon outliving the session.
 > Every step below is plain Markdown methodology, repo files, delegated official
 > plugins, or MCP/CI.
 

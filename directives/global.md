@@ -12,6 +12,60 @@ A `docs/…` path in these directives resolves against claude.directives:
 - Email: akyachtsman@gmail.com
 - GitHub: https://github.com/akyachtsman
 
+## Session Start
+At the start of every session:
+1. Read this file fully and fetch all imported directive URLs.
+2. Verify the `directives-toolkit` plugin attached (commands/agents resolve —
+   see Skill Bootstrap below), and run `/env-chk`'s scope verification to
+   confirm which repo(s) this session can actually act on before promising
+   anything cross-repo.
+3. Confirm the active branch is not `main` before writing any code.
+4. Review open PRs for this repo before starting new work.
+5. Do not subscribe to PR activity as a session-start step — opening a PR
+   subscribes the session harness-side. `subscribe_pr_activity` is only for
+   taking over a PR this session did not open (`git.md` → *PR Lifecycle*).
+
+## Skill Bootstrap
+The toolkit — commands, auto-skills, agents, and guard hooks — ships as the
+**`directives-toolkit` plugin** from this repo's own marketplace. Nothing is
+fetched into `.claude/`.
+- **Claude Code on the web:** the project environment's setup script installs it
+  before session start (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) — required,
+  because web containers are ephemeral and `enabledPlugins` enables but never
+  installs.
+- **CLI / desktop:** run `scripts/install-toolkit.sh` (the same source the web
+  setup script curls). The toolkit alone is NOT enough — `.claude/settings.json`
+  also enables the official plugins it installs alongside. The review and
+  security sources are an owner ruling (2026-10-07: Anthropic-maintained over
+  self-maintained;
+  `test.md` → *QA/data agents — ship in the directives-toolkit plugin*).
+  Enabling `frontend-design` (design) and `plugin-dev` (plugin authoring) is
+  **current practice, not a stamped ruling** (owner, 2026-10-08): sessions follow
+  it, but may propose an alternative to the owner.
+- Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
+  `enabledPlugins` (copy `templates/claude-settings.json`).
+
+At session start, **verify the plugin attached**: the `directives-toolkit:*`
+commands/skills resolve and the QA agents are available. If they don't, the
+environment's setup script didn't run — fix that rather than hand-fetching
+files. Updates track this repo's `main` (SHA-versioned). A project carrying the
+`SessionStart` hook (`.claude/hooks/session-start.sh`, current scaffold) re-runs
+the installer every web session, so an update lands in the session AFTER the one
+that fetched it. A project without it still waits on its environment's cached
+setup script — a setup-script/network change or roughly weekly expiry. Commands invoke
+as `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
+
+See docs/standards/automations.md for monitor setup.
+See docs/standards/ci-triage.md for CI and Codex failure triage rules.
+
+## Imported Directives
+These directives inherit from this file — they are downstream consumers, not overrides.
+They now live alongside this file in the consolidated `claude.directives` repo:
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
+https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
+
 ## Behavior Rules
 - Read CLAUDE.md and every imported directive URL before starting any task
 - Follow design.md's universal craft rules (cross-platform, accessibility,
@@ -65,6 +119,29 @@ A `docs/…` path in these directives resolves against claude.directives:
   are suggestions to *evaluate*, not orders. Restate the requirement, verify the
   claim against the code, then apply the fix or push back with technical
   reasoning. No performative agreement, no change you cannot justify.
+
+## Reuse Before Rewrite (owner ruling, 2026-07-23)
+When a requested feature resembles one the project already has, **the existing
+implementation is the source — find it, read it, and reuse it.**
+- **Search before you write — every time, no exceptions.** Before authoring any
+  component, handler, view, renderer, or query, search for the nearest existing
+  equivalent (by feature name, UI role, table, or the words in the request).
+  "Add X to portal B, like the one in portal A" is a **reuse task, not an
+  authoring task**.
+- **Preferred order, strictly:** (1) call/extend the existing shared
+  implementation; (2) generalize it into one parameterized unit serving both
+  callers, with a flag for the small differences; (3) copy it verbatim and adapt
+  the minimum. **Re-deriving from scratch requires the owner's explicit say-so.**
+- **"Similar but not identical" is a parameter, not a new file.** Labels, table
+  names, permissions, one extra column — all arguments to shared code. Only
+  genuinely different *behavior* justifies divergence, and the PR states why.
+- **Say what you reused.** Every PR touching a feature resembling an existing
+  one names what it reused or generalized — or, if it wrote new code, why
+  nothing fit. Silence reads as a rewrite.
+- **The bar is total codebase size.** Adding a near-copy is a regression even
+  when it works. Prefer the diff that leaves the codebase flat or smaller.
+
+# Communicating with the owner
 
 ## Plain Language First (owner ruling, 2026-08-04)
 The owner reviews outcomes, not implementations. Mechanism detail is welcome; it
@@ -122,6 +199,27 @@ fenced code block**, so the copy button takes it in one click.
   `SESSION HANDOFF — <repo-name>` header. Its one-line empty form is exempt.
 - **A file is still right when the artifact IS a file** — something to commit,
   run, or open in another tool. This governs messages, not deliverables.
+
+## Progress Visibility (owner ruling, 2026-07-17)
+Silent processing is indistinguishable from a hang. For any operation expected
+to take more than ~1 minute (subagent fan-outs, CI/deploy watches, large sweeps,
+multi-file audits):
+- **Announce before starting**: one line saying what is about to run and a rough
+  estimate ("fanning out 5 audit agents — expect ~4–6 min"). The ~1 minute
+  threshold is a floor, not an invitation — anything quicker gets no
+  announcement, and the lines are verb phrases (→ *Say It in Verbs*).
+- **Never go silent for more than ~1–2 minutes of active work.** Emit a one-line
+  status between steps: what just finished, what's next, revised estimate if it
+  moved. Structure long work to CREATE those update points — prefer background
+  agents and stepwise tool calls over one monolithic blocking wait, because a
+  session cannot emit text mid-wait inside a single blocking call.
+- **Parked is not silent.** When waiting on an external event, say so before
+  ending the turn, WITH what you started or what blocks the rest — "parked on
+  PR #N's green comment (~3 min); the guard audit is done and in the PR body,
+  nothing else is independent of that CI run" — so quiet reads as waiting, not
+  hung (→ *Parallel Tasking via Subagents*).
+- **Estimate misses get an update, not silence.** Say what's still running and
+  the new expectation.
 
 ## Status Line on Every Stop (owner ruling, 2026-08-18)
 Every time a session stops working — end of turn, end of task, blocked, or
@@ -189,368 +287,144 @@ Everything else routes three ways:
 **"Nothing to hand off — the repo holds everything" is a complete and correct
 handoff.** Never pad to fill a format.
 
-## Reuse Before Rewrite (owner ruling, 2026-07-23)
-When a requested feature resembles one the project already has, **the existing
-implementation is the source — find it, read it, and reuse it.**
-- **Search before you write — every time, no exceptions.** Before authoring any
-  component, handler, view, renderer, or query, search for the nearest existing
-  equivalent (by feature name, UI role, table, or the words in the request).
-  "Add X to portal B, like the one in portal A" is a **reuse task, not an
-  authoring task**.
-- **Preferred order, strictly:** (1) call/extend the existing shared
-  implementation; (2) generalize it into one parameterized unit serving both
-  callers, with a flag for the small differences; (3) copy it verbatim and adapt
-  the minimum. **Re-deriving from scratch requires the owner's explicit say-so.**
-- **"Similar but not identical" is a parameter, not a new file.** Labels, table
-  names, permissions, one extra column — all arguments to shared code. Only
-  genuinely different *behavior* justifies divergence, and the PR states why.
-- **Say what you reused.** Every PR touching a feature resembling an existing
-  one names what it reused or generalized — or, if it wrote new code, why
-  nothing fit. Silence reads as a rewrite.
-- **The bar is total codebase size.** Adding a near-copy is a regression even
-  when it works. Prefer the diff that leaves the codebase flat or smaller.
+# When to stop and when to keep going
 
-## Repo Structure Standard
-Every project repo should contain (what `/new-repo` scaffolds, plus the
-`index.html` the first build writes):
-```
-CLAUDE.md        ← project context + imported directive URLs
-index.html       ← the app's entry page, written by the first build, not by
-                   /new-repo (additional pages are fine — every page matches
-                   the styles/ contract, per design.md)
-styles/          ← the committed design contract (tokens.css + components.css)
-.github/
-  workflows/     ← the standard template set from templates/workflows/ —
-                   7 unconditional:
-    qa.yml, qa-live.yml, qa-response.yml,
-    ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml
-                 ← + cron-notify.yml ONLY when the project has a scheduled
-                   task (owner ruling, 2026-10-10). A `schedule:` workflow
-                   starts recurring work the moment it lands, so it is added
-                   with the task, not before (/new-repo does not install it;
-                   docs/standards/cicd-setup.md Step 9f adds it)
-                 ← + pages-retry.yml ONLY on a BRANCH-SOURCE project. On an
-                   Actions-source one it must not be installed (or must be
-                   repointed under W3's idempotent exception) — it watches the
-                   managed build a visibility flip can fire, so installed there
-                   it arms a retry of a rogue unfiltered deploy
-                   (→ *Hosting & Deployment*)
-                 ← + pages-deploy.yml ONLY on an ACTIONS-SOURCE project: the
-                   converse, it is that project's deploy (retry built in)
-                 ← keepalive.yml is NOT standard: it pushes to main weekly, which
-                   the required default-branch ruleset refuses, and a repo where
-                   PRs land never hits the public-repo 60-day inactivity limit it exists for
-  scripts/
-    ui-tests/
-```
+## Escalation Rules
+- Stop and ask the user if a change touches more than one file's core logic
+- Stop and ask if CI has failed 3+ times on the same issue without progress
+- Stop and ask before deleting any file that exists on `main`
+- Stop and ask before modifying any workflow file's trigger conditions
+- **Never escalate a shell command to the owner.** He has no terminal, so it is
+  not a smaller ask than doing it yourself — it is an impossible one
+  (→ *A Blocked Command Is Not a Blocked Capability*).
 
-`codex-monitor.yml` is **required in every repo (owner ruling, 2026-10-07)**: it
-turns a flagged Codex round into the `codex-flagged` merge blocker that
-`git.md` → *PR Lifecycle* gates on, so a repo without it merges past Codex's
-findings unseen.
+A session acting on an automated notification (a CI failure, a monitor issue,
+a webhook) also stops and asks when:
+- the fix needs a secret or credential the session does not have
+- the fix would need a destructive data operation (deleting records, dropping
+  fields)
+- the root cause is still ambiguous after reading every available log
+- the notification came from a person, not an automated system
 
-## Backend
-- All backend/data rules — provider, connection config, keys, RLS, MCP setup —
-  are governed by `data.md`, the single source of truth for the backend. Read it
-  before touching any backend code.
-- Never hardcode a secret key (the service-role key) or server-side connection
-  details — store them as the GitHub Secrets/variables named in `data.md`.
-- **The publishable/anon key and the project URL are the exception:** on the
-  no-build stack the client needs them at runtime, so they ship in client code
-  (`data.md` → *Keys*), safe because RLS is the enforcement boundary. A
-  service-role or other secret key never goes client-side.
-- Project/connection IDs and table/column names are defined in each repo's
-  CLAUDE.md.
+For such a session, these always escalate: production data loss or deletion,
+authentication or secret rotation, billing or quota alerts, and a notification
+that came from a person rather than an automated system.
 
-## Automations (owner ruling, 2026-09-24)
-- Scheduled and event-driven automations run as GitHub Actions workflows
-- Claude routines handle agent-driven tasks (alerts, reports, monitors)
-- No external automation platforms — logic lives in the repo, defined at project level
+The gates above fire BEFORE the work. → *A Knowing Deviation Is an Escalation*
+covers the other direction: an instruction you have already decided not to follow.
 
-## GitHub Workflow
-- Work happens in Claude Code sessions (web, desktop, or CLI) scoped to a repo
-- Terminal and git are always available. In a web session `gh api` (REST)
-  works through the session's GitHub proxy; other `gh` subcommands are
-  unavailable there, so use `gh api` or the GitHub MCP tools instead
-  (`git.md` → *Repo-settings preflight*)
-- All code changes go through a `claude/<name>` branch and a PR to `main`
-- Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
-  after each squash-merge — recycling branches tangles lineage and can attach
-  the wrong diff to a PR
-- PR activity arrives on its own — opening a PR subscribes the session
-  harness-side; leave it alone — the harness drops it at merge
-  (`git.md` → *PR Lifecycle*)
-- Fix CI before marking ready
-- Deploy to **GitHub Pages** — the only target; any other host needs explicit
-  owner sign-off (→ *Hosting & Deployment*)
+## A Knowing Deviation Is an Escalation (owner ruling, 2026-09-02)
+**When you knowingly depart from a clear instruction — overruling it, following
+only part of it, deferring it, or substituting your own judgement for it — say so
+in bold, at the top of your reply, as a question the owner must answer.** Not
+**only** in the ledger, not in the commit message, not as a caveat after the work
+is done. The ledger still carries its line — a deviation raised as a question is
+an ask, and → *Burst Intake — Multiple Asks at Once* admits no exceptions — but a
+ledger line is where the ask is TRACKED, never where it is raised.
 
-## Repository Scope
-Two different scopes — never conflate them:
-- **ACT scope (hard-limited):** the GitHub MCP can write — branch, push, PR,
-  comment, merge — only against the repo(s) this session was opened on, and
-  there is no attach path around it: work targeting another repo belongs to
-  that repo's own session (→ *One Session, One Repo*) — say so plainly.
-- **READ scope (unrestricted for public repos):** any public repo is always
-  readable — a file at `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`,
-  refs and listings over git transport (`git ls-remote`, or a blob-less shallow
-  clone into a scratch directory) — no MCP, no `gh`, no attach needed. Not
-  `api.github.com` or the codeload tarball: a web session's proxy refuses both
-  for any repo the session was not opened on (verified 2026-10-08, 403 "not
-  enabled for this session"). `/do-repo` packages this. **NEVER claim a
-  public repo "can't be seen"** — that confuses ACT scope with READ scope;
-  verify by fetching, then answer from data.
-- The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
-  the same verification at session start.
+The test is whether the owner can miss it while skimming: if they can, it was not
+raised. An instruction given and never heard about again is one the owner will
+assume was followed, and they will build the next decision on that assumption.
 
-## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26, 2026-10-06)
-**GitHub Pages is the deployment target.** Plain HTML/CSS/JS, dynamic via
-client-side Supabase + RLS.
+⚠️ **A note in a commit message, a PR body, or a design doc is NOT raising it.**
+Those are records — read after the fact, by someone already looking. A deviation
+is a decision the owner has not made yet, so it belongs in the conversation,
+before or alongside the work, in a form that demands a reply.
 
-**No build by default; a CI build is a per-project opt-in (owner ruling,
-2026-10-06).**
-- **Why no build by default:** what is committed is what is served. Any file
-  can be read or edited anywhere, the owner's browser included, and is correct
-  the moment it lands; no compile or build stage stands between a merge and the
-  live site. (A deploy can still fail, GitHub's own or a filtered-copy workflow;
-  the Pages monitoring below watches that.) An opted-in project gives that up knowingly, and its CI
-  watches the build.
-- **A session never builds the served site and commits the output**, terminal
-  or not. Generated files committed beside their source drift from it, and an
-  edit to either is silently lost on the next build. The exception is a
-  generated file that CI itself regenerates and compares with `--check` on every
-  run, so it cannot drift unseen; nothing else qualifies.
-- **The opt-in:** when a project has a concrete need a build serves —
-  TypeScript, a CSS utility library such as Tailwind, bundled npm libraries,
-  minification, image optimisation — it may build **in CI**: a GitHub Actions
-  workflow that builds on push and deploys through Actions-source Pages. A
-  build therefore **forces Actions-source**, whatever the sourcing test below
-  says. Where that test also requires a filtered copy, the build runs first,
-  the deny-list filter then runs over its output, and the 200/404 assertions
-  stay in the deploy workflow. **One rule produces every obligation of the
-  switch, and it outranks any list:** whatever tests, serves or watches the site
-  must act on the **build output**, and whatever decides whether to run must
-  count **build inputs** as changes. Applied to today's workflows, in the same
-  change:
-  - **PR QA (`qa.yml`)** runs the same build, serves the build's output
-    directory instead of the repo root, and counts the build inputs (sources,
-    build config) as UI changes alongside `UI_PATHS`. Otherwise a TypeScript- or Tailwind-only PR
-    skips the UI suite, or tests the unbuilt tree. The template does all three
-    once its `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` are set, the first two
-    to the same values as `pages-deploy.yml`.
-  - **Live QA and the monitor:** add the deploy workflow's exact `name:`
-    ("Pages Deploy" for `pages-deploy.yml`) to `qa-live.yml`'s
-    `workflow_run.workflows`, and a `workflow_run` arm to `pages-monitor.yml`,
-    and list each under its own file in `.github/workflow-ref-required.json`
-    so a later template refresh cannot drop them silently.
-  - **The retry:** delete `pages-retry.yml` and its `REQUIRED` entry (W3's
-    exception is closed to a build), and build the retry into the deploy
-    workflow.
+⚠️ **Partial compliance and deferral are deviations.** *"I did four of the five"*,
+*"I'll do that part later"*, *"I did it a different way that gets the same
+result"* — each is a decision the owner did not make. Name which part, say why,
+and ask.
 
-  The first project that opts in checks every workflow it ships against the
-  rule above and reports any gap upstream. The deploy is
-  `templates/workflows/pages-deploy.yml`; the rest of the switch:
-  `/new-repo` step 5 and `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*. It needs the
-  owner's sign-off, recorded with the need on the `Build:` bullet under
-  *Project Overview* in the project's own `CLAUDE.md`; a missing bullet means
-  none is recorded, so the project has no build. An owner request for something
-  that needs a build (TypeScript, Tailwind) starts it, but because the switch
-  changes how Pages is sourced, confirm once in one line that it means a CI
-  build and Actions-source Pages, then record the yes. Raise it only when the
-  need is concrete; never as a setup question. A Tailwind opt-in may compile
-  utilities on top of `tokens.css` and `components.css`; replacing those files
-  with a utility system is a further owner decision (`design.md` → *Stack*).
-- **Application and UI frameworks stay rejected either way** (below). An
-  opted-in project's deploy is no longer idempotent, so W3's retry exception
-  does not apply to it.
+⚠️ **If the repo's own record contradicts the instruction, that is the most urgent
+case, not a licence.** A design doc, comment or rules file asserting the opposite
+of what the owner said — especially one attributed to the owner — is not evidence
+they changed their mind. It is evidence the record is wrong. Do not reason from it
+and do not quietly follow it. Raise the contradiction, quote both, ask which
+stands, and fix the record in the same change.
 
-⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one.**
-Branch-source publishes the **whole repository** at the public URL. Choose by
-this test, in order:
+⚠️ **What is NOT a deviation:** a judgement call in a gap the instruction does not
+cover. Instructions are never exhaustive, and treating every unstated detail as an
+escalation makes the real ones invisible. This rule binds where an instruction
+exists and you are about to not follow it.
 
-1. **Is the repository private, or does it hold any file that must not be
-   public** — a real secret, unreleased material, anything whose exposure is a
-   problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
-   rather than the tree: rsync the repo minus a deny-list, upload that artifact,
-   deploy it (`templates/workflows/pages-deploy.yml` does exactly this, build
-   step included for an opted-in project).
-2. **Otherwise** → branch-source is fine and the push is the deploy, unless the
-   project has opted into a CI build, which forces Actions-source (above).
+> Asking costs one sentence. Not asking costs a round trip — and sometimes the
+> owner's confidence that the instruction was heard at all.
 
-- **The test is "must not be public", NOT "is internal-facing".** A file can be
-  internal in purpose and harmless in public, and a repo whose internal files
-  expose nothing stays on branch-source. The worked example:
-  `docs/standards/hosting-mechanics.md` → *Choosing the Pages source*.
-- **Deny-list, never allow-list — and verify the live URL after publishing:**
-  assert the app serves 200, each named internal path serves 404, and any
-  internal-looking-but-public asset still serves 200. Fail the run otherwise.
-  Verify with `curl`, not by reading the config. Why a deny-list:
-  `docs/standards/hosting-mechanics.md` → *Deny-list, not allow-list*.
-- ⚠️ **Flipping repo visibility fires the LEGACY managed branch build** ("pages
-  build and deployment", event `dynamic`) even when an Actions workflow also
-  runs — and it can finish *later* and republish the whole tree over the
-  filtered copy. Set Settings → Pages → Source = **GitHub Actions** and confirm
-  it. If internal paths reappear on the live URL, look for a
-  `pages build and deployment` run first.
-- ⚠️ **A plain `curl` of a Pages URL can return a CACHED edge copy**
-  (`max-age=600`), so it may show the old file minutes after a good deploy. Use
-  `-H "Cache-Control: no-cache"` and a cache-busting query param before
-  concluding anything about what is live.
+**No fifth gate; dependent work waits.** → *Escalation Rules* keeps its gates
+as written and this adds none. It adds a wait: work depending on the deviation stops
+until the question is answered, work independent of it continues.
 
-⚠️ **Switching to Actions-source SILENTLY DISABLES the repo's Pages monitoring,
-and that is not optional to handle.** `pages-monitor.yml` triggers on `page_build`
-and `pages-retry.yml` on `workflow_run` of the managed `pages-build-deployment`;
-both fire only for **branch-source** builds, except that a visibility flip can
-still run `pages-build-deployment`, and with it the retry.
-`docs/standards/automations.md` → *Watcher Rules* (W2, W3) carries the table.
-- **The monitor: ADD, never replace.** `pages-monitor.yml` takes a `workflow_run`
-  trigger naming your own deploy workflow (`Pages Deploy` for `pages-deploy.yml`;
-  its file header ships the snippet), and keeps `page_build:`; `qa-live.yml`
-  keeps `pages-build-deployment`, with the same name added. List each watcher
-  under its own file in `.github/workflow-ref-required.json`, so a refresh that
-  drops either trigger fails the build. The new name goes **alongside**: those
-  arms are what see the **legacy managed build**
-  a visibility flip can fire even while Actions-source is configured
-  (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
-- **The retry: do NOT repoint it, by default.** It re-runs the **whole** watched
-  run and would replay your entire build; an Actions-source project builds retry
-  into its own deploy workflow instead (`templates/workflows/pages-deploy.yml`
-  ships it) (`docs/standards/automations.md` → *Automation 4b — Pages Deploy Retry*).
-  W3's one narrow exception stands: a project MAY extend the retry anyway **if
-  its deploy is genuinely idempotent** — no build, no compile, no tests, same
-  commit in and same tree out — provided it records in its own `CLAUDE.md` both
-  that reasoning **and a revisit trigger**, the condition that ends the
-  exception (*"if the deploy ever gains a build or test stage, move the retry
-  inside it"*). Detail: `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*.
-- **DELETE an unrepointed `pages-retry.yml`** and its `REQUIRED` entry, or
-  repoint it under that exception. On the visibility-flip path the name it
-  watches is exactly what fires, so a retry left installed will **re-run the
-  rogue unfiltered deployment**: an unrepointed monitor merely fails to notice,
-  while an unrepointed retry participates. Why:
-  `docs/standards/hosting-mechanics.md` → *Why an unrepointed retry must go*.
-- **A watcher that only OBSERVES can name both sources, and should; one that
-  RE-RUNS what it watches can not** — a second name is a second thing it may
-  replay. This generalises to any watcher you add later
-  (`docs/standards/hosting-mechanics.md` → *Observers versus re-runners*).
-- ⚠️ **Keeping the arm is NOT detecting the exposure.** A rogue build that
-  republishes the unfiltered tree serves the app as 200 and passes the monitor's
-  default checks. **Declare the forbidden paths in `.github/pages-deny.txt`**
-  (one path per line) and `pages-monitor.yml` asserts each serves 404 on every
-  run. Without that file, a visibility-flip exposure is still caught only by
-  someone looking (`docs/standards/hosting-mechanics.md` → *Arms are not detection*).
+**Under a standing authorization and under "proceed", raise it anyway.** A
+knowing deviation IS the *genuinely important and critical* case → *"Proceed" — the Standing Directive* item 2 names, not an exception to it — the owner made
+the decision and it is not being executed. Item 7 there covers a question you
+have not answered; this covers one you have answered differently.
 
-⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
-monitor — they catch different failures.** Put the 200/404 assertions **inside
-the deploy workflow**, where a bad filter fails the run that produced it, AND
-add the `workflow_run` watcher on `types: [completed]`, which fires on a deploy
-that **failed before reaching its own assertions** — a failure otherwise silent
-(`docs/standards/hosting-mechanics.md` → *Verification versus the monitor*). A
-deploy that hangs and never completes is covered by **neither**; catching that
-needs timeout or staleness monitoring, a third thing — do not overclaim either
-instrument (`docs/standards/hosting-mechanics.md` → *The bound on completed-run watchers*).
-These rules were written from an incident
-(`docs/standards/hosting-mechanics.md` → *Where these rules came from*).
+## Standing Authorization (owner ruling, 2026-07-22)
+Escalation Rules define when to STOP; this defines the default everywhere else,
+which is KEEP GOING.
+- An owner-approved plan, task list, or "continue" instruction is a **standing
+  authorization** covering every task in the declared list, not just the next
+  one. Work task-to-task without re-asking; checkpoint reports replace
+  permission requests.
+- **Re-asking at a task boundary that trips no stop gate is a directive
+  violation**, symmetric to idle-waiting during verification — a launched
+  verification is the start signal for the next ready task, and the queue is
+  worked until drained (→ *Parallel Tasking via Subagents*).
+- The stop gates are NEVER overridden by a standing authorization: Escalation
+  Rules above, the surviving merge stops (`git.md` → *Conditional Auto-Merge on Green* — secrets or personal data in the diff; invented scope),
+  and genuine scope changes. Work NOT in the declared plan still needs the
+  owner — momentum is never a license to invent scope.
+- When the declared list drains: report done and stop. A standing authorization
+  expires with its list.
 
-**A React / Next.js-on-Vercel "production tier" was evaluated and REJECTED** —
-a different development platform, changing a lot of code for a need no project
-had. Do not re-propose it, and do not scaffold toward it.
+## "Proceed" — the Standing Directive (owner ruling, 2026-08-27)
+When the owner says **proceed**, it means all seven of these, and none of it
+needs restating.
 
-- **Needing a server is not a reason to reach for one.** The gap a framework
-  tier would have filled is server-side execution — a real secret at request
-  time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth Pattern*). **Supabase Edge Functions already cover that**, with no framework,
-  no build and no new platform (`data.md` → *Reversible-by-Design Backend Changes*) — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling.
-- **If a project ever genuinely outgrows Pages**, the owner's stated direction
-  is **Cloudflare** — response time, caching, security. That names a direction,
-  not a decision: it still needs explicit sign-off, against a real requirement.
-- No other host without explicit owner sign-off.
+1. **Complete as much of the task as possible, autonomously.** Do not come back
+   between steps.
+2. **Do not involve the owner unless the decision is genuinely important and
+   critical.** A decision he has already made is not a new decision — executing
+   it is not an escalation.
+3. **Pipeline the work.** Recruit agents and run independent work in parallel
+   rather than idling, especially while waiting on CI, a deploy, or a review
+   (→ *Parallel Tasking via Subagents*).
+4. **Auto-merge.** Where the work produces a PR, take it through to merged,
+   clearing a `codex-flagged` blocker by **requesting the review pass** rather
+   than removing the label. Take the label off by hand only where `git.md` → *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
+   rule requires. Work that produces no PR has nothing to merge — see item 5.
+5. **Keep going until the whole task is done.** Merging is a milestone, not the
+   finish line: the task is done when every effect the work was for has
+   happened and been verified — the deploy and `qa-live` where the change is
+   deploy-backed and the repo carries the workflows, and equally the migration
+   applied and checked, the edge function redeployed, the rollout completed
+   (`data.md` → *Reversible-by-Design Backend Changes*). **INFORMATIONAL** work
+   — a read-only command, an investigation, a question answered, a change
+   correctly judged unnecessary — is done when the finding is reported with its
+   evidence. Absence of a PR is not what makes it done: work that CHANGES
+   something is done when that change is verified whether or not it produced a
+   PR, so a migration applied by hand, an edge function redeployed, a service
+   restarted, a setting changed outside the repo are each done at the verified
+   effect, never at the report. Never manufacture a PR to reach a terminal state.
+6. **The Escalation Rules still bind — all of them, as written.** Proceed
+   removes the need to ask about **steps**. It does not narrow that section, and
+   nothing here restates it: read it. Two of its gates are the ones "proceed"
+   most invites a session to skip, because they fire on ordinary recoverable
+   work rather than on damage — **a change touching more than one file's core
+   logic**, and **CI failing 3+ times on the same issue without progress**. Item
+   2 above never overrides them: a gate the owner set is not a decision he has
+   already made.
+7. **Never invent an answer to an open question.** Where a decision is genuinely
+   unresolved rather than merely unstated, do every part that does not depend on
+   it, then ask that one question. Guessing under a mandate to be autonomous is
+   how a wrong assumption ships silently.
 
-## Security
-- Never commit API tokens, secrets, or credentials to any repo
-- Never echo secrets in workflow logs
-- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share). **`-l` is load-bearing**: it prints matching FILENAMES, never the matched line — an accidentally committed token is not a registered repo secret, so Actions will not mask it, and a scan that echoes the line leaks the credential it just caught: `git grep --untracked -lE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]|sb_secret_[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|NlcnZpY2Vfcm9sZ|zZXJ2aWNlX3JvbG)|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}" -- '*.js' '*.ts' '*.tsx' '*.mjs' '*.html' '*.css' '*.json' '*.md' '*.sh' '*.py' '*.toml' '*.env' '.env.*' '*/.env.*' '*.yml' '*.yaml' ':!*node_modules/*'`
+*Standing Authorization* above governs a declared list of tasks; this is the same
+posture invoked by a single word, plus the merge and verify obligations in 4 and
+5. Neither touches the stop gates.
 
-## Pre-Push Verification (Local Gate)
-Before committing or pushing, verify locally — never rely on CI alone:
-- Run the repo's full test suite, plus lint/type checks if configured.
-- Check current CI status; if a run is in progress, wait for green.
-- Review `git status` and the diff — no unintended changes staged.
-
-Report the result before pushing; fix failures locally rather than on the PR.
-`/commit-chk` is the manual backup when this auto-check did not fire.
-
-The plugin's push-gate hook catches an obvious direct push to main in the
-session running it, but it is a local speed bump and **not** an enforcement
-point — its bypass surface is not enumerable, so never read a green hook run as
-evidence that main is protected. The enforcement is a **GitHub ruleset on the
-default branch**, which every repo installing this toolkit must have; the setup
-and its verification probes are in the toolkit repo's
-`MAINTAIN-REPO-USER-INSTRUCTIONS.md`.
-
-## PR Lifecycle
-Lives in `directives/git.md` → *PR Lifecycle*: draft-first, auto-subscribed on
-open, subscribed until the harness drops it, green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
-never force-push `main`.
-
-## Conditional Auto-Merge on Green
-Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner rulings,
-2026-07-12 / 2026-08-18): auto-merge on green is the rule for every diff class —
-plus the two surviving stops (secrets or personal data in the diff; invented
-scope) and the revert-first safety net.
-
-## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
-Falsifying your own claims is carried by Behavior Rules' *Evidence before
-assertions*, which binds on every report rather than at some moment. This
-section is about the rounds themselves.
-
-**A round ends only when every remaining item is one that cannot be checked at
-all** — speculation about unwritten code, staging plans for work that does not
-exist, arguments for different phrasing. A concrete finding you merely lack the
-access or tooling to prove is not that: hand it off or escalate it by name, and
-never end a round on it. A mixed review does not end one either: fix the
-checkable findings first. A round does **not** end on a finding you can check —
-including one about test code, and including a wording finding that names a
-factual claim the tree contradicts.
-
-**Record each round's findings by cause in the PR itself** — new, introduced by
-a previous round's fix, or left unresolved by one — since a session does not
-survive a handoff and a run of correct findings is not evidence of convergence.
-**When the same mechanism fails again across rounds, that mechanism is in the
-wrong place:** revert or redesign rather than patch a third time. What has to
-recur is the mechanism or the violated invariant, not merely the defect
-category; independent bugs that share a label are ordinary iteration. **If a
-redesign reproduces either the mechanism or the invariant, revert the whole
-change — not merely the latest edit — and stop there pending the escalation.**
-Where the change is one the owner directed, raise it and let him rule on the
-revert; stopping is not optional, reverting before he answers is.
-
-**Prove the environment under test is the tree under test**, and prove it for
-the baseline too. Reachability proves nothing, and neither does a version string
-maintained by hand. Where the asset is served untransformed, compare the bytes
-served against the bytes on disk. Where the environment transpiles, bundles,
-minifies, server-renders or injects dev assets, bind identity to the checkout
-with a content-derived digest or a sentinel the build carries — derived, not
-declared. A separate port is not a separate tree, and a checkout named `main`
-may be stale.
-
-## Progress Visibility (owner ruling, 2026-07-17)
-Silent processing is indistinguishable from a hang. For any operation expected
-to take more than ~1 minute (subagent fan-outs, CI/deploy watches, large sweeps,
-multi-file audits):
-- **Announce before starting**: one line saying what is about to run and a rough
-  estimate ("fanning out 5 audit agents — expect ~4–6 min"). The ~1 minute
-  threshold is a floor, not an invitation — anything quicker gets no
-  announcement, and the lines are verb phrases (→ *Say It in Verbs*).
-- **Never go silent for more than ~1–2 minutes of active work.** Emit a one-line
-  status between steps: what just finished, what's next, revised estimate if it
-  moved. Structure long work to CREATE those update points — prefer background
-  agents and stepwise tool calls over one monolithic blocking wait, because a
-  session cannot emit text mid-wait inside a single blocking call.
-- **Parked is not silent.** When waiting on an external event, say so before
-  ending the turn, WITH what you started or what blocks the rest — "parked on
-  PR #N's green comment (~3 min); the guard audit is done and in the PR body,
-  nothing else is independent of that CI run" — so quiet reads as waiting, not
-  hung (→ *Parallel Tasking via Subagents*).
-- **Estimate misses get an update, not silence.** Say what's still running and
-  the new expectation.
+# Parallel work
 
 ## Pipelined Execution (owner ruling, 2026-07-18)
 Merged into → *Parallel Tasking via Subagents* (2026-09-10). Stub kept so
@@ -818,6 +692,8 @@ naming what remains open, or "nothing open" — never absent.
   "one more thing"; anything worth saying goes above. The ledger is the reply's
   final block, the status line its final line (→ *Status Line on Every Stop*).
 
+# Waiting and scheduling
+
 ## Async Operations
 - After triggering a long-running operation (CI, deploy, dispatch), don't block
   waiting. The result must surface **proactively** — the user never re-prompts
@@ -929,187 +805,6 @@ naming what remains open, or "nothing open" — never absent.
   `main`'s head at that moment, which may be a later commit. See the
   `update-pages` skill (step 5 for a stuck deploy).
 
-## Escalation Rules
-- Stop and ask the user if a change touches more than one file's core logic
-- Stop and ask if CI has failed 3+ times on the same issue without progress
-- Stop and ask before deleting any file that exists on `main`
-- Stop and ask before modifying any workflow file's trigger conditions
-- **Never escalate a shell command to the owner.** He has no terminal, so it is
-  not a smaller ask than doing it yourself — it is an impossible one
-  (→ *A Blocked Command Is Not a Blocked Capability*).
-
-A session acting on an automated notification (a CI failure, a monitor issue,
-a webhook) also stops and asks when:
-- the fix needs a secret or credential the session does not have
-- the fix would need a destructive data operation (deleting records, dropping
-  fields)
-- the root cause is still ambiguous after reading every available log
-- the notification came from a person, not an automated system
-
-For such a session, these always escalate: production data loss or deletion,
-authentication or secret rotation, billing or quota alerts, and a notification
-that came from a person rather than an automated system.
-
-The gates above fire BEFORE the work. → *A Knowing Deviation Is an Escalation*
-covers the other direction: an instruction you have already decided not to follow.
-
-## A Knowing Deviation Is an Escalation (owner ruling, 2026-09-02)
-**When you knowingly depart from a clear instruction — overruling it, following
-only part of it, deferring it, or substituting your own judgement for it — say so
-in bold, at the top of your reply, as a question the owner must answer.** Not
-**only** in the ledger, not in the commit message, not as a caveat after the work
-is done. The ledger still carries its line — a deviation raised as a question is
-an ask, and → *Burst Intake — Multiple Asks at Once* admits no exceptions — but a
-ledger line is where the ask is TRACKED, never where it is raised.
-
-The test is whether the owner can miss it while skimming: if they can, it was not
-raised. An instruction given and never heard about again is one the owner will
-assume was followed, and they will build the next decision on that assumption.
-
-⚠️ **A note in a commit message, a PR body, or a design doc is NOT raising it.**
-Those are records — read after the fact, by someone already looking. A deviation
-is a decision the owner has not made yet, so it belongs in the conversation,
-before or alongside the work, in a form that demands a reply.
-
-⚠️ **Partial compliance and deferral are deviations.** *"I did four of the five"*,
-*"I'll do that part later"*, *"I did it a different way that gets the same
-result"* — each is a decision the owner did not make. Name which part, say why,
-and ask.
-
-⚠️ **If the repo's own record contradicts the instruction, that is the most urgent
-case, not a licence.** A design doc, comment or rules file asserting the opposite
-of what the owner said — especially one attributed to the owner — is not evidence
-they changed their mind. It is evidence the record is wrong. Do not reason from it
-and do not quietly follow it. Raise the contradiction, quote both, ask which
-stands, and fix the record in the same change.
-
-⚠️ **What is NOT a deviation:** a judgement call in a gap the instruction does not
-cover. Instructions are never exhaustive, and treating every unstated detail as an
-escalation makes the real ones invisible. This rule binds where an instruction
-exists and you are about to not follow it.
-
-> Asking costs one sentence. Not asking costs a round trip — and sometimes the
-> owner's confidence that the instruction was heard at all.
-
-**No fifth gate; dependent work waits.** → *Escalation Rules* keeps its gates
-as written and this adds none. It adds a wait: work depending on the deviation stops
-until the question is answered, work independent of it continues.
-
-**Under a standing authorization and under "proceed", raise it anyway.** A
-knowing deviation IS the *genuinely important and critical* case → *"Proceed" — the Standing Directive* item 2 names, not an exception to it — the owner made
-the decision and it is not being executed. Item 7 there covers a question you
-have not answered; this covers one you have answered differently.
-
-## Standing Authorization (owner ruling, 2026-07-22)
-Escalation Rules define when to STOP; this defines the default everywhere else,
-which is KEEP GOING.
-- An owner-approved plan, task list, or "continue" instruction is a **standing
-  authorization** covering every task in the declared list, not just the next
-  one. Work task-to-task without re-asking; checkpoint reports replace
-  permission requests.
-- **Re-asking at a task boundary that trips no stop gate is a directive
-  violation**, symmetric to idle-waiting during verification — a launched
-  verification is the start signal for the next ready task, and the queue is
-  worked until drained (→ *Parallel Tasking via Subagents*).
-- The stop gates are NEVER overridden by a standing authorization: Escalation
-  Rules above, the surviving merge stops (`git.md` → *Conditional Auto-Merge on Green* — secrets or personal data in the diff; invented scope),
-  and genuine scope changes. Work NOT in the declared plan still needs the
-  owner — momentum is never a license to invent scope.
-- When the declared list drains: report done and stop. A standing authorization
-  expires with its list.
-
-## "Proceed" — the Standing Directive (owner ruling, 2026-08-27)
-When the owner says **proceed**, it means all seven of these, and none of it
-needs restating.
-
-1. **Complete as much of the task as possible, autonomously.** Do not come back
-   between steps.
-2. **Do not involve the owner unless the decision is genuinely important and
-   critical.** A decision he has already made is not a new decision — executing
-   it is not an escalation.
-3. **Pipeline the work.** Recruit agents and run independent work in parallel
-   rather than idling, especially while waiting on CI, a deploy, or a review
-   (→ *Parallel Tasking via Subagents*).
-4. **Auto-merge.** Where the work produces a PR, take it through to merged,
-   clearing a `codex-flagged` blocker by **requesting the review pass** rather
-   than removing the label. Take the label off by hand only where `git.md` → *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
-   rule requires. Work that produces no PR has nothing to merge — see item 5.
-5. **Keep going until the whole task is done.** Merging is a milestone, not the
-   finish line: the task is done when every effect the work was for has
-   happened and been verified — the deploy and `qa-live` where the change is
-   deploy-backed and the repo carries the workflows, and equally the migration
-   applied and checked, the edge function redeployed, the rollout completed
-   (`data.md` → *Reversible-by-Design Backend Changes*). **INFORMATIONAL** work
-   — a read-only command, an investigation, a question answered, a change
-   correctly judged unnecessary — is done when the finding is reported with its
-   evidence. Absence of a PR is not what makes it done: work that CHANGES
-   something is done when that change is verified whether or not it produced a
-   PR, so a migration applied by hand, an edge function redeployed, a service
-   restarted, a setting changed outside the repo are each done at the verified
-   effect, never at the report. Never manufacture a PR to reach a terminal state.
-6. **The Escalation Rules still bind — all of them, as written.** Proceed
-   removes the need to ask about **steps**. It does not narrow that section, and
-   nothing here restates it: read it. Two of its gates are the ones "proceed"
-   most invites a session to skip, because they fire on ordinary recoverable
-   work rather than on damage — **a change touching more than one file's core
-   logic**, and **CI failing 3+ times on the same issue without progress**. Item
-   2 above never overrides them: a gate the owner set is not a decision he has
-   already made.
-7. **Never invent an answer to an open question.** Where a decision is genuinely
-   unresolved rather than merely unstated, do every part that does not depend on
-   it, then ask that one question. Guessing under a mandate to be autonomous is
-   how a wrong assumption ships silently.
-
-*Standing Authorization* above governs a declared list of tasks; this is the same
-posture invoked by a single word, plus the merge and verify obligations in 4 and
-5. Neither touches the stop gates.
-
-## Session Start
-At the start of every session:
-1. Read this file fully and fetch all imported directive URLs.
-2. Verify the `directives-toolkit` plugin attached (commands/agents resolve —
-   see Skill Bootstrap below), and run `/env-chk`'s scope verification to
-   confirm which repo(s) this session can actually act on before promising
-   anything cross-repo.
-3. Confirm the active branch is not `main` before writing any code.
-4. Review open PRs for this repo before starting new work.
-5. Do not subscribe to PR activity as a session-start step — opening a PR
-   subscribes the session harness-side. `subscribe_pr_activity` is only for
-   taking over a PR this session did not open (`git.md` → *PR Lifecycle*).
-
-## Skill Bootstrap
-The toolkit — commands, auto-skills, agents, and guard hooks — ships as the
-**`directives-toolkit` plugin** from this repo's own marketplace. Nothing is
-fetched into `.claude/`.
-- **Claude Code on the web:** the project environment's setup script installs it
-  before session start (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) — required,
-  because web containers are ephemeral and `enabledPlugins` enables but never
-  installs.
-- **CLI / desktop:** run `scripts/install-toolkit.sh` (the same source the web
-  setup script curls). The toolkit alone is NOT enough — `.claude/settings.json`
-  also enables the official plugins it installs alongside. The review and
-  security sources are an owner ruling (2026-10-07: Anthropic-maintained over
-  self-maintained;
-  `test.md` → *QA/data agents — ship in the directives-toolkit plugin*).
-  Enabling `frontend-design` (design) and `plugin-dev` (plugin authoring) is
-  **current practice, not a stamped ruling** (owner, 2026-10-08): sessions follow
-  it, but may propose an alternative to the owner.
-- Each project's `.claude/settings.json` carries `extraKnownMarketplaces` +
-  `enabledPlugins` (copy `templates/claude-settings.json`).
-
-At session start, **verify the plugin attached**: the `directives-toolkit:*`
-commands/skills resolve and the QA agents are available. If they don't, the
-environment's setup script didn't run — fix that rather than hand-fetching
-files. Updates track this repo's `main` (SHA-versioned). A project carrying the
-`SessionStart` hook (`.claude/hooks/session-start.sh`, current scaffold) re-runs
-the installer every web session, so an update lands in the session AFTER the one
-that fetched it. A project without it still waits on its environment's cached
-setup script — a setup-script/network change or roughly weekly expiry. Commands invoke
-as `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
-
-See docs/standards/automations.md for monitor setup.
-See docs/standards/ci-triage.md for CI and Codex failure triage rules.
-
 ## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)
 Self-scheduling is how a session resumes after CI and re-arms check-ins — a
 permission prompt the owner must click defeats the point. It is NOT how a
@@ -1183,13 +878,51 @@ anything subtler (`docs/standards/session-mechanics.md` → *The settings block 
 The security trade-offs the owner accepted are recorded in
 https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/accepted-residuals.md.
 
-## Imported Directives
-These directives inherit from this file — they are downstream consumers, not overrides.
-They now live alongside this file in the consolidated `claude.directives` repo:
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
+# Environment and repository scope
+
+## Repository Scope
+Two different scopes — never conflate them:
+- **ACT scope (hard-limited):** the GitHub MCP can write — branch, push, PR,
+  comment, merge — only against the repo(s) this session was opened on, and
+  there is no attach path around it: work targeting another repo belongs to
+  that repo's own session (→ *One Session, One Repo*) — say so plainly.
+- **READ scope (unrestricted for public repos):** any public repo is always
+  readable — a file at `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>`,
+  refs and listings over git transport (`git ls-remote`, or a blob-less shallow
+  clone into a scratch directory) — no MCP, no `gh`, no attach needed. Not
+  `api.github.com` or the codeload tarball: a web session's proxy refuses both
+  for any repo the session was not opened on (verified 2026-10-08, 403 "not
+  enabled for this session"). `/do-repo` packages this. **NEVER claim a
+  public repo "can't be seen"** — that confuses ACT scope with READ scope;
+  verify by fetching, then answer from data.
+- The `scope-chk` auto-skill fires before any cross-repo offer; `/env-chk` runs
+  the same verification at session start.
+
+## One Session, One Repo (owner ruling, 2026-08-18)
+A session works in exactly the repository it was opened for. Never attach,
+clone, or write to another repository mid-session — not to "help", not because
+a request seems to belong there. When a request targets a different repo —
+including this directives repo — say which repo it belongs to and do none of it
+here. Then get it to that repo's own session one of two ways: **message that
+session directly** when you know which one it is (heads-up to the owner first,
+below), or **write a paste-ready hand-off** for the owner to carry when you do
+not, or when the owner should judge it first (per the Downstream-Finding Loop). A finding about an upstream file
+names the **SHA it was verified at**, re-resolved from the upstream default
+branch as the finding is written — never the SHA fetched earlier. Read the
+file's header comments before reporting it. Read access is unchanged
+(→ *Repository Scope*): the mandatory session-start directive fetches and
+read-only inspection of public repos (`/do-repo`) stay open — and reading
+never becomes an attach.
+
+**Messaging another session is a standing feature of this account (owner
+ruling, 2026-10-06).** A session may send a message straight to another session
+on the account. That carries information and writes nothing in the other repo:
+the receiving session decides what to do and acts in its own repo, under its own
+rules. Use the procedure in `docs/standards/automations.md` → *Automation 6 — Cross-Session Messaging*.
+**Give the owner a heads-up every time:** before sending, say in this session's
+chat which session you are messaging and why, in one line, then send. The
+paste-ready hand-off above stays the route when the target session is unknown,
+or when the owner should judge the message before it goes.
 
 ## A Blocked Command Is Not a Blocked Capability (owner ruling, 2026-08-25)
 The owner works in a **browser chat only**. No terminal, no CLI, no local
@@ -1308,28 +1041,307 @@ before reporting "no access":
    typography, spacing, and interaction behavior from the image before
    implementing.
 
-## One Session, One Repo (owner ruling, 2026-08-18)
-A session works in exactly the repository it was opened for. Never attach,
-clone, or write to another repository mid-session — not to "help", not because
-a request seems to belong there. When a request targets a different repo —
-including this directives repo — say which repo it belongs to and do none of it
-here. Then get it to that repo's own session one of two ways: **message that
-session directly** when you know which one it is (heads-up to the owner first,
-below), or **write a paste-ready hand-off** for the owner to carry when you do
-not, or when the owner should judge it first (per the Downstream-Finding Loop). A finding about an upstream file
-names the **SHA it was verified at**, re-resolved from the upstream default
-branch as the finding is written — never the SHA fetched earlier. Read the
-file's header comments before reporting it. Read access is unchanged
-(→ *Repository Scope*): the mandatory session-start directive fetches and
-read-only inspection of public repos (`/do-repo`) stay open — and reading
-never becomes an attach.
+# Repository, code and delivery
 
-**Messaging another session is a standing feature of this account (owner
-ruling, 2026-10-06).** A session may send a message straight to another session
-on the account. That carries information and writes nothing in the other repo:
-the receiving session decides what to do and acts in its own repo, under its own
-rules. Use the procedure in `docs/standards/automations.md` → *Automation 6 — Cross-Session Messaging*.
-**Give the owner a heads-up every time:** before sending, say in this session's
-chat which session you are messaging and why, in one line, then send. The
-paste-ready hand-off above stays the route when the target session is unknown,
-or when the owner should judge the message before it goes.
+## Repo Structure Standard
+Every project repo should contain (what `/new-repo` scaffolds, plus the
+`index.html` the first build writes):
+```
+CLAUDE.md        ← project context + imported directive URLs
+index.html       ← the app's entry page, written by the first build, not by
+                   /new-repo (additional pages are fine — every page matches
+                   the styles/ contract, per design.md)
+styles/          ← the committed design contract (tokens.css + components.css)
+.github/
+  workflows/     ← the standard template set from templates/workflows/ —
+                   7 unconditional:
+    qa.yml, qa-live.yml, qa-response.yml,
+    ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml
+                 ← + cron-notify.yml ONLY when the project has a scheduled
+                   task (owner ruling, 2026-10-10). A `schedule:` workflow
+                   starts recurring work the moment it lands, so it is added
+                   with the task, not before (/new-repo does not install it;
+                   docs/standards/cicd-setup.md Step 9f adds it)
+                 ← + pages-retry.yml ONLY on a BRANCH-SOURCE project. On an
+                   Actions-source one it must not be installed (or must be
+                   repointed under W3's idempotent exception) — it watches the
+                   managed build a visibility flip can fire, so installed there
+                   it arms a retry of a rogue unfiltered deploy
+                   (→ *Hosting & Deployment*)
+                 ← + pages-deploy.yml ONLY on an ACTIONS-SOURCE project: the
+                   converse, it is that project's deploy (retry built in)
+                 ← keepalive.yml is NOT standard: it pushes to main weekly, which
+                   the required default-branch ruleset refuses, and a repo where
+                   PRs land never hits the public-repo 60-day inactivity limit it exists for
+  scripts/
+    ui-tests/
+```
+
+`codex-monitor.yml` is **required in every repo (owner ruling, 2026-10-07)**: it
+turns a flagged Codex round into the `codex-flagged` merge blocker that
+`git.md` → *PR Lifecycle* gates on, so a repo without it merges past Codex's
+findings unseen.
+
+## Backend
+- All backend/data rules — provider, connection config, keys, RLS, MCP setup —
+  are governed by `data.md`, the single source of truth for the backend. Read it
+  before touching any backend code.
+- Never hardcode a secret key (the service-role key) or server-side connection
+  details — store them as the GitHub Secrets/variables named in `data.md`.
+- **The publishable/anon key and the project URL are the exception:** on the
+  no-build stack the client needs them at runtime, so they ship in client code
+  (`data.md` → *Keys*), safe because RLS is the enforcement boundary. A
+  service-role or other secret key never goes client-side.
+- Project/connection IDs and table/column names are defined in each repo's
+  CLAUDE.md.
+
+## Automations (owner ruling, 2026-09-24)
+- Scheduled and event-driven automations run as GitHub Actions workflows
+- Claude routines handle agent-driven tasks (alerts, reports, monitors)
+- No external automation platforms — logic lives in the repo, defined at project level
+
+## GitHub Workflow
+- Work happens in Claude Code sessions (web, desktop, or CLI) scoped to a repo
+- Terminal and git are always available. In a web session `gh api` (REST)
+  works through the session's GitHub proxy; other `gh` subcommands are
+  unavailable there, so use `gh api` or the GitHub MCP tools instead
+  (`git.md` → *Repo-settings preflight*)
+- All code changes go through a `claude/<name>` branch and a PR to `main`
+- Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
+  after each squash-merge — recycling branches tangles lineage and can attach
+  the wrong diff to a PR
+- PR activity arrives on its own — opening a PR subscribes the session
+  harness-side; leave it alone — the harness drops it at merge
+  (`git.md` → *PR Lifecycle*)
+- Fix CI before marking ready
+- Deploy to **GitHub Pages** — the only target; any other host needs explicit
+  owner sign-off (→ *Hosting & Deployment*)
+
+## Security
+- Never commit API tokens, secrets, or credentials to any repo
+- Never echo secrets in workflow logs
+- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share). **`-l` is load-bearing**: it prints matching FILENAMES, never the matched line — an accidentally committed token is not a registered repo secret, so Actions will not mask it, and a scan that echoes the line leaks the credential it just caught: `git grep --untracked -lE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]|sb_secret_[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|NlcnZpY2Vfcm9sZ|zZXJ2aWNlX3JvbG)|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}" -- '*.js' '*.ts' '*.tsx' '*.mjs' '*.html' '*.css' '*.json' '*.md' '*.sh' '*.py' '*.toml' '*.env' '.env.*' '*/.env.*' '*.yml' '*.yaml' ':!*node_modules/*'`
+
+## Pre-Push Verification (Local Gate)
+Before committing or pushing, verify locally — never rely on CI alone:
+- Run the repo's full test suite, plus lint/type checks if configured.
+- Check current CI status; if a run is in progress, wait for green.
+- Review `git status` and the diff — no unintended changes staged.
+
+Report the result before pushing; fix failures locally rather than on the PR.
+`/commit-chk` is the manual backup when this auto-check did not fire.
+
+The plugin's push-gate hook catches an obvious direct push to main in the
+session running it, but it is a local speed bump and **not** an enforcement
+point — its bypass surface is not enumerable, so never read a green hook run as
+evidence that main is protected. The enforcement is a **GitHub ruleset on the
+default branch**, which every repo installing this toolkit must have; the setup
+and its verification probes are in the toolkit repo's
+`MAINTAIN-REPO-USER-INSTRUCTIONS.md`.
+
+## PR Lifecycle
+Lives in `directives/git.md` → *PR Lifecycle*: draft-first, auto-subscribed on
+open, subscribed until the harness drops it, green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
+never force-push `main`.
+
+## Conditional Auto-Merge on Green
+Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner rulings,
+2026-07-12 / 2026-08-18): auto-merge on green is the rule for every diff class —
+plus the two surviving stops (secrets or personal data in the diff; invented
+scope) and the revert-first safety net.
+
+## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
+Falsifying your own claims is carried by Behavior Rules' *Evidence before
+assertions*, which binds on every report rather than at some moment. This
+section is about the rounds themselves.
+
+**A round ends only when every remaining item is one that cannot be checked at
+all** — speculation about unwritten code, staging plans for work that does not
+exist, arguments for different phrasing. A concrete finding you merely lack the
+access or tooling to prove is not that: hand it off or escalate it by name, and
+never end a round on it. A mixed review does not end one either: fix the
+checkable findings first. A round does **not** end on a finding you can check —
+including one about test code, and including a wording finding that names a
+factual claim the tree contradicts.
+
+**Record each round's findings by cause in the PR itself** — new, introduced by
+a previous round's fix, or left unresolved by one — since a session does not
+survive a handoff and a run of correct findings is not evidence of convergence.
+**When the same mechanism fails again across rounds, that mechanism is in the
+wrong place:** revert or redesign rather than patch a third time. What has to
+recur is the mechanism or the violated invariant, not merely the defect
+category; independent bugs that share a label are ordinary iteration. **If a
+redesign reproduces either the mechanism or the invariant, revert the whole
+change — not merely the latest edit — and stop there pending the escalation.**
+Where the change is one the owner directed, raise it and let him rule on the
+revert; stopping is not optional, reverting before he answers is.
+
+**Prove the environment under test is the tree under test**, and prove it for
+the baseline too. Reachability proves nothing, and neither does a version string
+maintained by hand. Where the asset is served untransformed, compare the bytes
+served against the bytes on disk. Where the environment transpiles, bundles,
+minifies, server-renders or injects dev assets, bind identity to the checkout
+with a content-derived digest or a sentinel the build carries — derived, not
+declared. A separate port is not a separate tree, and a checkout named `main`
+may be stale.
+
+## Hosting & Deployment (owner ruling, 2026-08-21; amended 2026-08-26, 2026-10-06)
+**GitHub Pages is the deployment target.** Plain HTML/CSS/JS, dynamic via
+client-side Supabase + RLS.
+
+**No build by default; a CI build is a per-project opt-in (owner ruling,
+2026-10-06).**
+- **Why no build by default:** what is committed is what is served. Any file
+  can be read or edited anywhere, the owner's browser included, and is correct
+  the moment it lands; no compile or build stage stands between a merge and the
+  live site. (A deploy can still fail, GitHub's own or a filtered-copy workflow;
+  the Pages monitoring below watches that.) An opted-in project gives that up knowingly, and its CI
+  watches the build.
+- **A session never builds the served site and commits the output**, terminal
+  or not. Generated files committed beside their source drift from it, and an
+  edit to either is silently lost on the next build. The exception is a
+  generated file that CI itself regenerates and compares with `--check` on every
+  run, so it cannot drift unseen; nothing else qualifies.
+- **The opt-in:** when a project has a concrete need a build serves —
+  TypeScript, a CSS utility library such as Tailwind, bundled npm libraries,
+  minification, image optimisation — it may build **in CI**: a GitHub Actions
+  workflow that builds on push and deploys through Actions-source Pages. A
+  build therefore **forces Actions-source**, whatever the sourcing test below
+  says. Where that test also requires a filtered copy, the build runs first,
+  the deny-list filter then runs over its output, and the 200/404 assertions
+  stay in the deploy workflow. **One rule produces every obligation of the
+  switch, and it outranks any list:** whatever tests, serves or watches the site
+  must act on the **build output**, and whatever decides whether to run must
+  count **build inputs** as changes. Applied to today's workflows, in the same
+  change:
+  - **PR QA (`qa.yml`)** runs the same build, serves the build's output
+    directory instead of the repo root, and counts the build inputs (sources,
+    build config) as UI changes alongside `UI_PATHS`. Otherwise a TypeScript- or Tailwind-only PR
+    skips the UI suite, or tests the unbuilt tree. The template does all three
+    once its `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` are set, the first two
+    to the same values as `pages-deploy.yml`.
+  - **Live QA and the monitor:** add the deploy workflow's exact `name:`
+    ("Pages Deploy" for `pages-deploy.yml`) to `qa-live.yml`'s
+    `workflow_run.workflows`, and a `workflow_run` arm to `pages-monitor.yml`,
+    and list each under its own file in `.github/workflow-ref-required.json`
+    so a later template refresh cannot drop them silently.
+  - **The retry:** delete `pages-retry.yml` and its `REQUIRED` entry (W3's
+    exception is closed to a build), and build the retry into the deploy
+    workflow.
+
+  The first project that opts in checks every workflow it ships against the
+  rule above and reports any gap upstream. The deploy is
+  `templates/workflows/pages-deploy.yml`; the rest of the switch:
+  `/new-repo` step 5 and `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*. It needs the
+  owner's sign-off, recorded with the need on the `Build:` bullet under
+  *Project Overview* in the project's own `CLAUDE.md`; a missing bullet means
+  none is recorded, so the project has no build. An owner request for something
+  that needs a build (TypeScript, Tailwind) starts it, but because the switch
+  changes how Pages is sourced, confirm once in one line that it means a CI
+  build and Actions-source Pages, then record the yes. Raise it only when the
+  need is concrete; never as a setup question. A Tailwind opt-in may compile
+  utilities on top of `tokens.css` and `components.css`; replacing those files
+  with a utility system is a further owner decision (`design.md` → *Stack*).
+- **Application and UI frameworks stay rejected either way** (below). An
+  opted-in project's deploy is no longer idempotent, so W3's retry exception
+  does not apply to it.
+
+⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one.**
+Branch-source publishes the **whole repository** at the public URL. Choose by
+this test, in order:
+
+1. **Is the repository private, or does it hold any file that must not be
+   public** — a real secret, unreleased material, anything whose exposure is a
+   problem? → **MUST deploy from GitHub Actions**, publishing a **filtered copy**
+   rather than the tree: rsync the repo minus a deny-list, upload that artifact,
+   deploy it (`templates/workflows/pages-deploy.yml` does exactly this, build
+   step included for an opted-in project).
+2. **Otherwise** → branch-source is fine and the push is the deploy, unless the
+   project has opted into a CI build, which forces Actions-source (above).
+
+- **The test is "must not be public", NOT "is internal-facing".** A file can be
+  internal in purpose and harmless in public, and a repo whose internal files
+  expose nothing stays on branch-source. The worked example:
+  `docs/standards/hosting-mechanics.md` → *Choosing the Pages source*.
+- **Deny-list, never allow-list — and verify the live URL after publishing:**
+  assert the app serves 200, each named internal path serves 404, and any
+  internal-looking-but-public asset still serves 200. Fail the run otherwise.
+  Verify with `curl`, not by reading the config. Why a deny-list:
+  `docs/standards/hosting-mechanics.md` → *Deny-list, not allow-list*.
+- ⚠️ **Flipping repo visibility fires the LEGACY managed branch build** ("pages
+  build and deployment", event `dynamic`) even when an Actions workflow also
+  runs — and it can finish *later* and republish the whole tree over the
+  filtered copy. Set Settings → Pages → Source = **GitHub Actions** and confirm
+  it. If internal paths reappear on the live URL, look for a
+  `pages build and deployment` run first.
+- ⚠️ **A plain `curl` of a Pages URL can return a CACHED edge copy**
+  (`max-age=600`), so it may show the old file minutes after a good deploy. Use
+  `-H "Cache-Control: no-cache"` and a cache-busting query param before
+  concluding anything about what is live.
+
+⚠️ **Switching to Actions-source SILENTLY DISABLES the repo's Pages monitoring,
+and that is not optional to handle.** `pages-monitor.yml` triggers on `page_build`
+and `pages-retry.yml` on `workflow_run` of the managed `pages-build-deployment`;
+both fire only for **branch-source** builds, except that a visibility flip can
+still run `pages-build-deployment`, and with it the retry.
+`docs/standards/automations.md` → *Watcher Rules* (W2, W3) carries the table.
+- **The monitor: ADD, never replace.** `pages-monitor.yml` takes a `workflow_run`
+  trigger naming your own deploy workflow (`Pages Deploy` for `pages-deploy.yml`;
+  its file header ships the snippet), and keeps `page_build:`; `qa-live.yml`
+  keeps `pages-build-deployment`, with the same name added. List each watcher
+  under its own file in `.github/workflow-ref-required.json`, so a refresh that
+  drops either trigger fails the build. The new name goes **alongside**: those
+  arms are what see the **legacy managed build**
+  a visibility flip can fire even while Actions-source is configured
+  (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
+- **The retry: do NOT repoint it, by default.** It re-runs the **whole** watched
+  run and would replay your entire build; an Actions-source project builds retry
+  into its own deploy workflow instead (`templates/workflows/pages-deploy.yml`
+  ships it) (`docs/standards/automations.md` → *Automation 4b — Pages Deploy Retry*).
+  W3's one narrow exception stands: a project MAY extend the retry anyway **if
+  its deploy is genuinely idempotent** — no build, no compile, no tests, same
+  commit in and same tree out — provided it records in its own `CLAUDE.md` both
+  that reasoning **and a revisit trigger**, the condition that ends the
+  exception (*"if the deploy ever gains a build or test stage, move the retry
+  inside it"*). Detail: `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*.
+- **DELETE an unrepointed `pages-retry.yml`** and its `REQUIRED` entry, or
+  repoint it under that exception. On the visibility-flip path the name it
+  watches is exactly what fires, so a retry left installed will **re-run the
+  rogue unfiltered deployment**: an unrepointed monitor merely fails to notice,
+  while an unrepointed retry participates. Why:
+  `docs/standards/hosting-mechanics.md` → *Why an unrepointed retry must go*.
+- **A watcher that only OBSERVES can name both sources, and should; one that
+  RE-RUNS what it watches can not** — a second name is a second thing it may
+  replay. This generalises to any watcher you add later
+  (`docs/standards/hosting-mechanics.md` → *Observers versus re-runners*).
+- ⚠️ **Keeping the arm is NOT detecting the exposure.** A rogue build that
+  republishes the unfiltered tree serves the app as 200 and passes the monitor's
+  default checks. **Declare the forbidden paths in `.github/pages-deny.txt`**
+  (one path per line) and `pages-monitor.yml` asserts each serves 404 on every
+  run. Without that file, a visibility-flip exposure is still caught only by
+  someone looking (`docs/standards/hosting-mechanics.md` → *Arms are not detection*).
+
+⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
+monitor — they catch different failures.** Put the 200/404 assertions **inside
+the deploy workflow**, where a bad filter fails the run that produced it, AND
+add the `workflow_run` watcher on `types: [completed]`, which fires on a deploy
+that **failed before reaching its own assertions** — a failure otherwise silent
+(`docs/standards/hosting-mechanics.md` → *Verification versus the monitor*). A
+deploy that hangs and never completes is covered by **neither**; catching that
+needs timeout or staleness monitoring, a third thing — do not overclaim either
+instrument (`docs/standards/hosting-mechanics.md` → *The bound on completed-run watchers*).
+These rules were written from an incident
+(`docs/standards/hosting-mechanics.md` → *Where these rules came from*).
+
+**A React / Next.js-on-Vercel "production tier" was evaluated and REJECTED** —
+a different development platform, changing a lot of code for a need no project
+had. Do not re-propose it, and do not scaffold toward it.
+
+- **Needing a server is not a reason to reach for one.** The gap a framework
+  tier would have filled is server-side execution — a real secret at request
+  time, or rate limiting, which RLS cannot do (`data.md` → *Client Auth Pattern*). **Supabase Edge Functions already cover that**, with no framework,
+  no build and no new platform (`data.md` → *Reversible-by-Design Backend Changes*) — this ruling rests on `data.md` → *Preferred Backend*, which is itself an owner ruling.
+- **If a project ever genuinely outgrows Pages**, the owner's stated direction
+  is **Cloudflare** — response time, caching, security. That names a direction,
+  not a decision: it still needs explicit sign-off, against a real requirement.
+- No other host without explicit owner sign-off.

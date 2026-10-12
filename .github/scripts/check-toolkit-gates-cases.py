@@ -53,6 +53,11 @@ swapped in alone:
        after a `#` -- with and without jq.
   GATE_LIB_BIN = the fourth draft (930e783), which reparsed a kept comment
     -> the kept-comment case -- with and without jq.
+  GATE_LIB_BIN = the fifth draft (671b9b0), whose ${...} scanner tried to
+  find the expansion's end through quotes
+    -> the ANSI-C escaped quote and the `}`-in-a-comment cases -- with and
+       without jq. The substitution, backtick and command-word cases pass
+       against it too; they pin the fail-closed scanner, not a bug fixed.
   PUSH_GATE_BIN = the old push-gate.sh
     -> `main>/dev/null`, `git -c x=y push`, `git -C dir push` (M-13).
   GATE_LIB_BIN = this change's own first draft (heredocs detected before the
@@ -184,6 +189,19 @@ PUSH_CASES = [
     # quote that swallowed the next line.
     ("a kept comment is not reparsed for quotes",
      "true # ${x} don't\ngit push origin main\necho 'ok'", BLOCK),
+    # Fifth round: the ${...} scanner fails closed. Only a plain expansion
+    # (word characters and :-+=?%/) is skipped as a unit; any other keeps the
+    # rest of the input verbatim and unparsed.
+    ("an ANSI-C escaped quote inside ${...} does not end it early",
+     "echo ${x:-$'\\'}'}; git push origin main; echo 'done now'", BLOCK),
+    ("a `}` in a comment inside ${x:-$(...)} does not close the expansion",
+     "echo ${x:-$(true # }'\n)}; git push origin main; echo 'a b'", BLOCK),
+    ("a substitution with a `}` inside ${...}, then a push",
+     "echo ${x:-$(echo })}; git push origin main; echo \"done now\"", BLOCK),
+    ("a backtick span with a `}` inside ${...}, then a push",
+     "echo ${x:-`echo }`}; git push origin main; echo \"done now\"", BLOCK),
+    ("an ANSI-C span inside ${...} as the command word, then a push",
+     "${x:-$'\\'}'} ; git push origin main", BLOCK),
     # ...and the complement.
     ("a spaced quoted delimiter's body is still dropped, then a branch push",
      "cat <<'E O F'\ngit push origin main\nE O F\ngit push -u origin claude/x", ALLOW),

@@ -100,8 +100,9 @@ gate_served() {
 #  - a heredoc DELIMITER is read as a shell word: a quoted part runs to its
 #    matching quote, spaces included (`<<'E O F'`); an unbalanced quote
 #    registers no heredoc. A `${...}` parameter expansion is copied whole, so a
-#    `#` inside it is never a comment; its braces are counted outside quoted
-#    spans and escapes (second and third security-review rounds).
+#    `#` inside it is never a comment. Only a PLAIN expansion (word
+#    characters and `:-+=?%/`) is skipped as a unit; any other `${` keeps
+#    the rest of the input verbatim and unparsed (security-review rounds 2-5).
 #  - FAIL TOWARD CHECKING: text that could expand -- a `$(`, `${` or backtick
 #    -- is never dropped, whether the parser took it for a comment, a
 #    multi-word quoted span or a quoted-heredoc body. A false block is
@@ -172,19 +173,14 @@ gate_strip_quotes() {
         # `${#arr}`) is never a comment. Unbalanced, it runs to the end and
         # every character is kept.
         if (c == "$" && c2 == "{") {
-          # Braces are counted outside quoted spans and escapes; unbalanced,
-          # it runs to the end of the input and every character is kept.
-          st = i; i += 2; d = 1
-          while (i <= n && d > 0) {
-            x = substr(s, i, 1)
-            if (x == "\\") i++
-            else if (x == "\047") { e = index(substr(s, i + 1), "\047"); i = e ? i + e : n }
-            else if (x == "\"") { i++; while (i <= n && substr(s, i, 1) != "\"") i += (substr(s, i, 1) == "\\" ? 2 : 1) }
-            else if (x == "{") d++
-            else if (x == "}") d--
-            i++
+          # Only a plain expansion -- word characters and the operators
+          # : - + = ? % / -- is skipped as a unit. Anything else (a #, a quote,
+          # a substitution, a nested or unbalanced brace) is not parsed at
+          # all: the rest of the input is kept verbatim, so it is checked.
+          if (match(substr(s, i), /^[$][{][A-Za-z0-9_:+=?%\/-]*[}]/)) {
+            OUT[sp] = OUT[sp] substr(s, i, RLENGTH); WB[sp] = 0; i += RLENGTH; continue
           }
-          OUT[sp] = OUT[sp] substr(s, st, (i > n ? n + 1 : i) - st); WB[sp] = 0; continue
+          OUT[sp] = OUT[sp] substr(s, i); i = n + 1; nh = 0; continue
         }
         if (substr(s, i, 3) == "$((" || (c == "(" && c2 == "(" && WB[sp])) {
           st = i; i += (c == "$" ? 3 : 2); d = 2

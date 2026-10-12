@@ -53,9 +53,10 @@ project-owned.
 ### W2 — Pages has two sources, and only one name is ours to supply
 
 The managed branch build is `pages-build-deployment`, created by GitHub — that
-is the only Pages name a template can pre-fill. An Actions-sourced deploy runs
-the project's own workflow, whose `name:` this template set neither ships nor
-can guess. Setting Settings → Pages → Source to "GitHub Actions" makes the
+is the only Pages name every template can pre-fill. An Actions-sourced deploy
+runs the project's own workflow: `Pages Deploy` when it is the shipped
+`templates/workflows/pages-deploy.yml`, otherwise a `name:` this template set
+cannot guess. Setting Settings → Pages → Source to "GitHub Actions" makes the
 managed build inert, so a watcher naming only it stops firing with no error —
 and a repo scaffolded on the Actions source from day one gets a watcher that has
 never fired at all, with no "it used to work" phase to notice.
@@ -359,7 +360,8 @@ feedback. The subscription is **harness-side and automatic** — no tool call:
   not a substitute, because a timer cannot know whether anything changed
 - Webhooks don't deliver new pushes or merge-conflict transitions — and deliver
   CI success only via `ci-notify.yml`'s PR comment (Automation 4c) — so re-check
-  PR state on wake and re-arm silently if nothing changed
+  PR state on wake and, if nothing changed, re-arm and emit the heartbeat line
+  (`global.md` → *Status Line on Every Stop*); never re-arm silently
 - This is the fast-feedback layer; `ci-monitor.yml` is the always-on backbone
 
 ---
@@ -453,7 +455,7 @@ first explained it.
 - [ ] Confirm `ci-monitor.yml` is present and its `workflow_run.workflows` list is correct
 - [ ] Confirm `codex-monitor.yml` is present
 - [ ] Confirm `pages-monitor.yml` is present (any project with a GitHub Pages site)
-- [ ] Confirm `pages-retry.yml` is present (branch-source Pages projects)
+- [ ] Confirm `pages-retry.yml` matches the Pages source (W3): **branch-source** → present, with its `REQUIRED` entry. **Actions-source** → absent, with its `REQUIRED` entry dropped; **or** repointed under W3's idempotent exception, with the `REQUIRED` entry updated to the project's own deploy name
 - [ ] Confirm `ci-notify.yml` is present (wakes web sessions on CI green — success only, watched workflows only, unambiguous PR only; Automation 4c)
 - [ ] Check for any open `ci-failure` tracking issues before starting work
 - [ ] Do **not** subscribe to open PRs as a blanket session-start step — subscription is harness-side on open. The one exception stands: a session TAKING OVER a PR it did not open subscribes explicitly (Automation 5)

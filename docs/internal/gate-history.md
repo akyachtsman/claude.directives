@@ -26,6 +26,7 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 | `check-run-quoting.py`, `check-run-quoting-cases.py` | each script's header |
 | `check-browser-ladder-cases.js` | that script's header |
 | `check-links.js`, `check-links-cases.js` | each script's header |
+| `check-exports-cases.js` | that script's header |
 | `check-py-warnings.py` and `check-ui-suite-env.py` (shipped scripts), the ui-tests `npm install` step, the gate as a whole | this file |
 | the `Repo Map UI` suite | `docs/internal/repo-map-ui.md` |
 | `/refresh-repo`'s rules (the command `check-refresh-derivation.py` reads its pattern out of) | this file, *Refresh-repo history* |

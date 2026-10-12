@@ -340,7 +340,10 @@ was retired 2026-07-21). Three layers, all CI-validated so they can't rot:
   honoring its interface and nothing outside it moves. The compartment's
   paths ARE the shopping list for a swap, across all delivery modes at once.
 - **`swap`** — the classes. **Permanent** paths (the five directive contracts;
-  the whole `meta` domain) evolve via PR, never wholesale replacement.
+  the whole `meta` domain) evolve via PR, never wholesale replacement. A domain
+  permanent in its entirety is named once in `swap.permanent_domains`, and
+  `check-exports.js` expands it from `domains`: never re-list its paths under
+  `swap.permanent` (the check fails on a re-listed or unknown one).
   **Orchestrators** (`sdd-loop` for development, `/qa-pipeline` for testing)
   are permanent AND define the interfaces components must fit — **a new
   component does not exist until its orchestrator sequences it**. Everything

@@ -70,6 +70,11 @@ const CASES = [
   // --- the records themselves (B6)
   ['records: a well-formed fixture passes and reports every record',
     null, 0, '[paths] 5 records, each with a known domain (2), a compartment, and a known class (1)', 'FAIL'],
+  ['refusal: a path recorded twice fails instead of JSON keeping the last (Codex, #445)',
+    m => { m.__raw = t => t.replace('"free.md": {', '"free.md": { "domain": "meta", "compartment": "kit", "class": "standard" },\n    "free.md": {'); },
+    1, 'duplicate key "free.md"; JSON keeps only the last one', null],
+  ['twin: escaped quotes and a path used as both a value and a key are not duplicates',
+    m => { m.classes.standard.blurb = 'a "quoted" \\ word: {[x]}'; }, 0, OK, 'duplicate key'],
   ['refusal: a record beneath a directory record fails, marked or not (Codex, #445)',
     m => { m.paths['metadir/x.md'] = rec('global', 'core'); }, 1,
     '[paths] metadir/x.md is already covered by the directory record metadir/', null],
@@ -145,7 +150,12 @@ function runCase(edit, drop) {
   try {
     const m = base();
     if (edit) edit(m);
-    const files = { ...FILES, 'EXPORTS.json': JSON.stringify(m, null, 2) };
+    // A case that needs text JSON cannot express (a repeated key) sets __raw,
+    // which rewrites the serialized manifest.
+    const { __raw } = m;
+    delete m.__raw;
+    const text = JSON.stringify(m, null, 2);
+    const files = { ...FILES, 'EXPORTS.json': __raw ? __raw(text) : text };
     if (drop) delete files[drop];
     writeTree(tmp, files);
     // The guard enumerates tracked files through `git ls-files`.

@@ -13,11 +13,43 @@ import { execFileSync } from 'child_process';
 import { join } from 'path';
 
 const REPO = 'akyachtsman/claude.directives';
-const manifest = JSON.parse(readFileSync('EXPORTS.json', 'utf8'));
+const manifestText = readFileSync('EXPORTS.json', 'utf8');
+const manifest = JSON.parse(manifestText);
 
 let failed = false;
 let failCount = 0;
 const fail = m => { console.error(`FAIL: ${m}`); failed = true; failCount++; };
+
+// 0) No object in the manifest repeats a key. JSON.parse keeps the LAST of two
+// equal keys and says nothing, so a path recorded twice under `paths` would lose
+// its first domain/class/swap silently, defeating one record per path (Codex,
+// #445). The text already parsed, so a scan of strings and braces is enough.
+{
+  const stack = [];                       // one Set of seen keys per open object; null for arrays
+  let i = 0, line = 1;
+  while (i < manifestText.length) {
+    const c = manifestText[i];
+    if (c === '\n') line++;
+    if (c === '"') {
+      let j = i + 1;
+      while (manifestText[j] !== '"') j += manifestText[j] === '\\' ? 2 : 1;
+      const key = JSON.parse(manifestText.slice(i, j + 1));
+      let k = j + 1;
+      while (/\s/.test(manifestText[k])) k++;
+      const top = stack[stack.length - 1];
+      if (manifestText[k] === ':' && top) {
+        if (top.has(key)) fail(`[EXPORTS.json:${line}] duplicate key ${JSON.stringify(key)}; JSON keeps only the last one`);
+        top.add(key);
+      }
+      i = j + 1;
+      continue;
+    }
+    if (c === '{') stack.push(new Set());
+    else if (c === '[') stack.push(null);
+    else if (c === '}' || c === ']') stack.pop();
+    i++;
+  }
+}
 
 // 1) Every manifest path exists.
 const exportPaths = [];

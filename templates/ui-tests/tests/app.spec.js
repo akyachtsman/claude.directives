@@ -463,13 +463,14 @@ test('S3: interactive elements discovered and exercised without errors', async (
   const getApiCalls = await captureApiCalls(page);
   // LOAD_SETTLE_MS: what follows this preamble is discoverElements(). An element
   // that renders late is never swept, so a broken control can leave S3 green by
-  // arriving after the settle. Measurement, not overhead. gotoAuthReady IS that
-  // settle — with no readiness condition it is the LOAD_SETTLE_MS networkidle
-  // wait, with one the project's own condition replaces it. A separate settle
-  // in front of it ran the window TWICE with no condition (+25s on a polling
-  // app), and with TEST_AUTH_READY_REQUEST let the named request complete
+  // arriving after the settle. Measurement, not overhead. gotoAuthReady with
+  // { settle: true } is that settle: with no readiness condition it is the
+  // LOAD_SETTLE_MS networkidle wait, and with one it waits for the condition
+  // and THEN settles, since the condition proves auth readiness, not a rendered
+  // page (Codex, #438). A settle in FRONT of it ran the window twice with no
+  // condition, and with TEST_AUTH_READY_REQUEST let the named request complete
   // before anything listened, failing S3 on a healthy app (audit 2026-10-11, C-2).
-  await gotoAuthReady(page);
+  await gotoAuthReady(page, './', { settle: true });
   // Authenticate if we have a credential AND a real gate is present; if there's
   // a gate but no credential, skip — sweeping the login screen would fire
   // spurious PIN/password attempts and 401/403s don't block, so the job could
@@ -649,10 +650,11 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page, rende
   await page.setViewportSize({ width: 390, height: 844 });
   // LOAD_SETTLE_MS: scrollWidth is read below as a VERDICT. Content that renders
   // late and introduces horizontal overflow arrives after an IDLE_MS settle and
-  // S4 passes green on a layout that is broken. gotoAuthReady IS that settle
-  // (or the project's readiness condition in its place) — the same single
-  // preamble wait S3 uses, for the same two reasons (audit 2026-10-11, C-2).
-  await gotoAuthReady(page);
+  // S4 passes green on a layout that is broken. gotoAuthReady with
+  // { settle: true } is that settle, after the readiness condition when one is
+  // configured — the same preamble S3 uses, for the same reasons (audit
+  // 2026-10-11, C-2; Codex, #438).
+  await gotoAuthReady(page, './', { settle: true });
   // Authenticate only when a real auth gate (PIN/password) is detected, so overflow is
   // measured against the real app rather than the login screen. Gate on detectAuthGate()
   // — NOT just "a credential exists" — so a public-first app with a stray text input

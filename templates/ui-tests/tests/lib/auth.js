@@ -161,15 +161,23 @@ async function awaitAuthReady(page, armed) {
 }
 
 // goto + readiness, in the order that cannot race. Returns the evidence grade
-// ('windowed' | 'proven'). This IS the load settle for every caller: with no
-// condition configured it is the LOAD_SETTLE_MS networkidle wait; with one, the
-// project's own condition replaces that wait (a settle in front of it only
-// delayed the condition and, for a request, let it complete unseen).
-async function gotoAuthReady(page, url = './') {
+// ('windowed' | 'proven'). With no condition configured, the readiness wait IS
+// the LOAD_SETTLE_MS networkidle settle. A condition proves only that the auth
+// decision is available, not that the rest of the page has rendered, so a
+// caller that next INSPECTS the page (S3's sweep, S4's scrollWidth) passes
+// { settle: true } and gets the settle AFTER the condition as well: a late
+// control or late overflow would otherwise land after the verdict and leave it
+// green (Codex, #438). The settle comes after, never in front: in front it let a
+// named request complete before anything listened (audit 2026-10-11, C-2).
+async function gotoAuthReady(page, url = './', { settle = false } = {}) {
   const armed = armAuthReady(page);
   try {
     await page.goto(url);
-    return await awaitAuthReady(page, armed);
+    const grade = await awaitAuthReady(page, armed);
+    if (settle && grade === 'proven') {
+      await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+    }
+    return grade;
   } finally {
     armed.dispose();
   }

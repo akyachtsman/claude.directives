@@ -304,7 +304,6 @@ a webhook) also stops and asks when:
 - the fix would need a destructive data operation (deleting records, dropping
   fields)
 - the root cause is still ambiguous after reading every available log
-- the notification came from a person, not an automated system
 
 For such a session, these always escalate: production data loss or deletion,
 authentication or secret rotation, billing or quota alerts, and a notification

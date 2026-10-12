@@ -459,12 +459,6 @@ first explained it.
 
 ---
 
-## PR Lifecycle Rules
+## PR Lifecycle and Escalation Rules
 
-Moved to the directives: the superseded-PR handoff comment to `directives/git.md` → *PR Lifecycle*, the merge conditions to `directives/test.md` → *CI triage*, and the post-merge live check to `directives/global.md` → *Async Operations*. CI triage, including when to trigger `qa-live.yml`: `docs/standards/ci-triage.md`.
-
----
-
-## Escalation Rules
-
-Moved: the automation triggers and always-escalate keywords are in `directives/global.md` → *Escalation Rules*.
+Moved to the directives: the superseded-PR handoff comment to `directives/git.md` → *Superseded PRs*, the merge conditions to `directives/test.md` → *CI triage*, the post-merge live check to `directives/global.md` → *Async Operations*, and the automation triggers and always-escalate keywords to `directives/global.md` → *Escalation Rules*. CI triage, including when to trigger `qa-live.yml`: `docs/standards/ci-triage.md`.

@@ -3,7 +3,7 @@
 This repo's own infrastructure monitors **and its self-test triage**. For the
 **exported** automation standard that downstream projects inherit (email,
 watcher rules, CI/Codex/Pages monitors, in-session subscription, cross-session
-messaging, PR lifecycle, escalation, test-scenario bootstrap), see `docs/standards/automations.md`; for the exported **project** CI triage,
+messaging, test-scenario bootstrap), see `docs/standards/automations.md`; for the exported **project** CI triage,
 see `docs/standards/ci-triage.md`.
 
 ### Infrastructure Monitors (always on, no session required)
@@ -88,5 +88,4 @@ Repo-specific notes:
 
 ---
 
-**Escalation:** see `directives/global.md` → *Escalation Rules* (canonical) and
-`docs/standards/automations.md` → *Escalation Rules* (automation additions) — both apply here.
+**Escalation:** see `directives/global.md` → *Escalation Rules*, which also carries the automation triggers.

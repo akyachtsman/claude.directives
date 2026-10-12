@@ -38,9 +38,29 @@ if [ -z "$tpl" ] || ! jq -e '.permissions.allow | type == "array"' >/dev/null 2>
   echo "CANNOT CHECK — the template's permissions.allow could not be read; nothing compared"; exit 0
 fi
 # One line per template entry that is not pre-approved: "<disposition>\t<entry>",
-# the disposition being what Claude Code would do with it (deny > ask > allow).
+# the disposition being what Claude Code would do with it. Rules are matched as
+# Claude Code matches them (code.claude.com/docs/en/permissions, read
+# 2026-10-12), not as exact strings (Codex, #439):
+#   - deny, then ask, then allow; the first that matches decides;
+#   - `mcp__<server>` names every tool of that server;
+#   - a deny or ask rule may glob anywhere in the name (`*`, `mcp__*`), matched
+#     against the full name;
+#   - an allow glob counts only after a literal, glob-free `mcp__<server>__`
+#     prefix (`mcp__github__get_*`); an unanchored one (`mcp__*`) approves nothing;
+#   - an `mcp__` rule with parentheses is skipped when settings load.
 if ! notok=$(jq -r --argjson t "$tpl" '
-      def has($k; $e): any((.permissions[$k] // [])[]; . == $e);
+      def glob($r): "^" + ($r | gsub("(?<c>[.+?^${}()|\\[\\]\\\\])"; "\\\(.c)") | gsub("\\*"; ".*")) + "$";
+      def server_rule($r): ($r | startswith("mcp__")) and ($r[5:] | (contains("__") or contains("*")) | not);
+      def anchored($r): ($r | startswith("mcp__")) and ($r[5:] | index("__") as $i
+                          | $i != null and $i > 0 and (.[:$i] | contains("*") | not));
+      def hits($r; $e; $k):
+        if ($r | type) != "string" or (($r | startswith("mcp__")) and ($r | contains("("))) then false
+        elif $r == $e then true
+        elif server_rule($r) then ($e | startswith($r + "__"))
+        elif ($r | contains("*")) then
+          (if $k == "allow" and (anchored($r) | not) then false else ($e | test(glob($r))) end)
+        else false end;
+      def has($k; $e): any((.permissions[$k] // [])[]; hits(.; $e; $k));
       . as $l
       | ($t.permissions.allow // [])[] as $e
       | (if ($l | has("deny"; $e)) then "denied"

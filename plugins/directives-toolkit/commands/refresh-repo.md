@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: "Re-sync this project with claude.directives mid-session — re-read the rules and report the upstream delta since the last sync."
 phase: cross-cutting
 ---

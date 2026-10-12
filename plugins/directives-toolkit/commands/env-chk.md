@@ -108,7 +108,8 @@ verdict. Read-only — do NOT modify files. Execute in order:
    ```
    It compares every `permissions.allow` entry of `templates/claude-settings.json`
    (fetched from upstream outside claude.directives) with the project's file, and
-   names each one missing; report the verdict line and the missing entries.
+   names each one that is not pre-approved — `missing`, or held under `ask`
+   (still prompts) or `deny` (refused); report the verdict line and those entries.
    This check exists because the rule it enforces went unfollowed for a month
    with no signal. `global.md` → *Async Operations* tells a session to PR the
    allowlist in the FIRST time it hits a scheduling prompt — but a session
@@ -118,7 +119,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
    party who can fix it, so it must be reported unprompted rather than waited
    for. Note the two distinct states the probe separates: the file MISSING
    pre-approves nothing at all, while a file present with a stale or partial
-   `permissions` block (`PARTIAL`) pre-approves only what it lists. Missing is the more common and the more
+   `permissions` block (`PARTIAL`) pre-approves only what it lists under `allow` alone. Missing is the more common and the more
    expensive. Remediation either way is one small PR carrying the current
    `templates/claude-settings.json` → `permissions` block verbatim; say plainly
    that it takes effect from the NEXT session, never this one, so the owner is

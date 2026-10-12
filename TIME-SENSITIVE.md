@@ -73,7 +73,7 @@ is added by the pass that finds it.
 | PR subscription lifecycle (auto-subscribe on open, drop on merge) | `CLAUDE.md` → *Notifications* | 2026-09-24 | ⏳ The next PR a session opens and merges |
 | Scheduling-tool names the settings pre-approve | `global.md` → *Scheduling Tools Never Prompt* | 2026-10-09 | This session's tool list against `templates/claude-settings.json` |
 | Wake envelopes cannot be switched off | `CLAUDE.md` → *Notifications* | 2026-10-09 | Claude Code settings docs |
-| `claude plugin eval` availability (minimum Claude Code version) | `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)* | 2026-10-09 | `claude --version` and `claude plugin eval --help`; code.claude.com/docs/en/plugin-evals for the minimum version |
+| `claude plugin eval` availability (minimum Claude Code version) | `docs/internal/skill-eval-notes.md` → *Running it* | 2026-10-09 | `claude --version` and `claude plugin eval --help`; code.claude.com/docs/en/plugin-evals for the minimum version |
 | How `plugin eval` scores a `tool_used: Skill` grader in a two-arm run (`arm: both`) | `docs/internal/skill-eval-notes.md` → *What the score and Δ mean* | 2026-10-09 | `claude plugin eval --help` (the `--ablation` option), and code.claude.com/docs/en/plugin-evals, section *Compare against a no-plugin baseline* |
 | Hosts the default network level blocks | `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0* | 2026-10-09 | Claude Code on the web docs, network access |
 | When a network-allowlist change reaches running sessions | `global.md` → *Network Access Playbook (cloud sessions)* | 2026-10-09 | code.claude.com/docs/en/cloud-environments, section *Network access* |
@@ -94,7 +94,7 @@ is added by the pass that finds it.
 | Native-parity verdicts | `EXPORTS.json` → `considered` | 2026-09-24 | The `/audit-repo` native-parity pass |
 | The Anthropic-authored LSP plugin set (twelve names) | `EXPORTS.json` → `considered.lsp-plugins` | 2026-10-09 | the `claude-plugins-official` `marketplace.json` |
 | `discord`, `telegram`, `imessage`, `fakechat` are third-party plugins listed under the official marketplace's `external_plugins/`, not Anthropic-built | `EXPORTS.json` → `considered.messaging-channels` | 2026-10-09 | In the `claude-plugins-official` `marketplace.json`, each plugin's `source` path still starts `./external_plugins/`; if one moves under `./plugins/` or gains Anthropic authorship, re-judge the entry |
-| The built-in `anthropic-plugin-directory` marketplace keeps its inventory in `~/.claude/plugins/plugin-directory-cache-v2.json` (no clone), with the fields the parity pass's ownership filter reads | `CLAUDE.md` → *Session Start* | 2026-10-09 | `ls ~/.claude/plugins/`, then read the file's top-level keys and one entry of `listings` (`name`, `source.repository`, `checks.review.by`) |
+| The built-in `anthropic-plugin-directory` marketplace keeps its inventory in `~/.claude/plugins/plugin-directory-cache-v2.json` (no clone), with the fields the parity pass's ownership filter reads | `plugins/directives-toolkit/commands/audit-repo.md`, the native-parity bullet | 2026-10-09 | `ls ~/.claude/plugins/`, then read the file's top-level keys and one entry of `listings` (`name`, `source.repository`, `checks.review.by`) |
 
 ## GitHub
 | Topic | Source | Last checked | Check |
@@ -133,7 +133,7 @@ is added by the pass that finds it.
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
 | The Ubuntu release web sessions run, which this repo's CI pins to match | `.github/workflows/qa.yml`, every job's `runs-on`; `.github/scripts/run-local-gate-cases.py` reads the host's | 2026-10-12 | `grep VERSION_ID /etc/os-release` in a web session (24.04 on 2026-10-12); move qa.yml's pins only with it |
-| This repo's sandbox ceiling | `CLAUDE.md` → *Local gate — CI scripts* | 2026-10-08 | From `templates/ui-tests`: `node ../scripts/browser-ladder.js chromium` |
+| This repo's sandbox ceiling | `CLAUDE.md` → *Local gate — CI scripts (this repo)*; measurements in `docs/internal/repo-map-ui.md` → *Sandbox ceiling* | 2026-10-08 | From `templates/ui-tests`: `node ../scripts/browser-ladder.js chromium` |
 | Fleet sandbox ceilings and egress | `test.md` → *Sandboxed local runs* | 2026-08-26 | ⏳ The next session in each app repo |
 | Which Playwright version the kit resolves to | `templates/ui-tests/package.json` | 2026-10-09 | `npm view "@playwright/test@^1.62.1" version` (a registry read, installs nothing) |
 | Playwright behaviour the kit and the viewport gate rely on — each measurement is dated in its source | `test.md` → *Playwright* | 2026-10-08 | ⏳ The next Playwright version bump: re-run the measurements the source and `templates/scripts/check-ui-viewports.js` cite |

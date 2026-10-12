@@ -160,6 +160,46 @@ Each assertion was proven able to fail before shipping (2026-10-05): a trace tha
 follows the re-sync loop, connections hidden at rest, and a box moved into a
 gutter all turn the suite red. A harmless attribute change does not.
 
+## Sandbox ceiling
+
+`CLAUDE.md` → *Local gate — CI scripts (this repo)* keeps the record that
+`test.md` → *Sandboxed local runs* asks for: the ceiling (NONE), its dates, its
+causes and what would make it wrong. This section holds the measurements behind it.
+
+**The measurements.** Measured 2026-08-26, then re-derived 2026-09-05 with
+`templates/scripts/browser-ladder.js`, run as `node <that path> chromium` from
+`templates/ui-tests`: **LAUNCHES**. The rung depends on the container, not the
+repo. Re-run 2026-10-08 with the kit resolving Playwright 1.64.0, it launched at
+rung "install" and then at rung "as-is" on the next run. The image's chromium is
+the build for its own global Playwright, not the kit's, so a run that finds the
+kit's build absent installs it. That install also prunes `/opt/pw-browsers`
+builds no surviving install references, so a later `ls` there is not the image's
+contents. The ladder is the instrument to re-derive the record with: it grades
+on the launch and quotes the error when there is one, which is what `test.md`
+asks the record to carry. Because it may install, `TIME-SENSITIVE.md` checks the
+record with a launch that installs nothing, and the ladder is for re-deriving it.
+
+**Why the suite passes here.** `check-repo-map-ui.js` passes, all cases, exit 0.
+`docs/site/logical-map.html` loads no external resource of any kind, so the
+blocked-CDN cause that dominates the fleet's app repos cannot reach it, and the
+suite drives chromium, which installs and launches here. So a local failure here
+is evidence about the map, not the environment: the opposite of the downstream
+default.
+
+**What would make it wrong.** Re-derive on any of these rather than trusting the
+record:
+- chromium ceasing to **launch** here, whether the image drops it or it stays
+  present and stops starting (host libraries, sandbox policy, permissions, the
+  browser/runtime pairing). Presence is not usability, so do not shorten this to
+  a binary check.
+- the suite's **browser matrix or runner changing**. Adding a webkit or firefox
+  project would put the ceiling back in question even with chromium fine and the
+  map still self-contained. The image ships neither preinstalled (a webkit build
+  under `/opt/pw-browsers` was put there by a session's install, not the image),
+  which per `test.md` is **not** the same as unavailable: attempt the install and
+  check whether it launches.
+- the map gaining **any external resource**.
+
 ## Retired
 
 The class view with draggable frames and its routed edges (2026-10-05). The

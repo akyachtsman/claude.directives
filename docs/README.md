@@ -40,9 +40,10 @@ Referenced by the exported directives and the qa agents.
 | File | What it covers |
 |------|----------------|
 | `internal/repo-monitors.md` | This repo's own CI and its six watcher workflows (`ci-monitor`, `ci-notify`, `codex-monitor`, `pages-monitor`, `pages-retry`, `watcher-liveness`) **and self-test triage** (the `ci-failure` / `codex-flagged` flow) |
-| `internal/repo-map-ui.md` | How the repo map is built and what the `Repo Map UI` suite covers — the evidence rule, the start-to-finish check, the layout and its invariants. Read before changing the map, the generator or the suite |
+| `internal/repo-map-ui.md` | How the repo map is built and what the `Repo Map UI` suite covers — the evidence rule, the start-to-finish check, the layout and its invariants, and the measurements behind this repo's sandbox ceiling. Read before changing the map, the generator or the suite |
 | `internal/gate-history.md` | Why the local gate looks like it does — the history `CLAUDE.md`'s *Local gate* no longer carries, and where each script's history now lives (its own header) |
-| `internal/skill-eval-notes.md` | Auto-skill eval baseline and the worked description-tuning cases behind it |
+| `internal/skill-eval-notes.md` | How the auto-skill eval runs and is scored, its baseline, and the worked description-tuning cases behind it |
+| `internal/native-parity.md` | This repo's half of the `/audit-repo` native-parity pass — where the verdicts live in `EXPORTS.json`, how the inventory is matched against them, and what counts as a finding |
 | `internal/accepted-residuals.md` | Security trade-offs the owner explicitly accepted, with the reasoning (currently: the scheduling-tool allowlist) |
 
 ## `site/` — GitHub Pages assets

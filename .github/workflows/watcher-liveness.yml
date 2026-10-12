@@ -32,7 +32,9 @@ name: Watcher Liveness
 # Not in qa.yml, deliberately: it needs API calls and a time window, and per-PR is
 # the wrong cadence (`git.md` → *GitHub API Quota Economy*). Weekly, plus manual.
 # Findings go to the job summary as warnings and to at most ONE open
-# `watcher-liveness` issue, edited in place rather than re-filed.
+# `watcher-liveness` issue, edited in place rather than re-filed. A run with no
+# SILENT/GAPS edits that issue to its own table too, and closes it when every
+# pair was checked (left open, edited, while any pair is NOT CHECKED).
 on:
   schedule:
     - cron: '17 6 * * 1'
@@ -257,6 +259,35 @@ jobs:
                   return f"Could not file the advisory issue: {exc}"
 
 
+          def settle_issue(table, unchecked):
+              """No SILENT/GAPS this run: bring an open advisory issue up to date
+              rather than leave it asserting a gap this run did not find (M-5).
+              Closed when every pair was checked; edited and left open when some
+              were NOT CHECKED, since a gap there is unseen, not gone."""
+              try:
+                  open_issues = [i for pg in gh(f"repos/{REPO}/issues?labels={LABEL}&state=open&per_page=100", paginate=True)
+                                 for i in pg if "pull_request" not in i]
+                  if not open_issues:
+                      return None
+                  num = min(i["number"] for i in open_issues)
+                  if unchecked:
+                      head = (f"**The latest run found no watcher silent while its subject ran, but {unchecked} "
+                              "pair(s) were NOT CHECKED, so this stays open until a run checks them.**")
+                      title = f"Watcher liveness (advisory): {unchecked} watcher/subject pair(s) not checked"
+                  else:
+                      head = "**Closed by the latest run: every watcher fired for its subject, or the subject was quiet.**"
+                      title = "Watcher liveness (advisory): no silent watcher in the latest run"
+                  body = (head + f"\n\n`.github/workflows/watcher-liveness.yml`, last {WINDOW} day(s):\n\n" + table
+                          + "\n\nA later run that finds a gap reopens the record by filing a fresh issue.\n")
+                  args = ["-X", "PATCH", f"repos/{REPO}/issues/{num}", "-f", f"title={title}", "-f", f"body={body}"]
+                  if not unchecked:
+                      args += ["-f", "state=closed", "-f", "state_reason=completed"]
+                  gh(*args)
+                  return f"{'Updated' if unchecked else 'Closed'} advisory issue #{num}: no SILENT/GAPS this run."
+              except Exception as exc:  # advisory: an issue failure is reported, never fatal
+                  return f"Could not update the advisory issue: {exc}"
+
+
           out = ["## Watcher liveness — ADVISORY, not a gate (#318)", ""]
           try:
               rows = main()
@@ -273,6 +304,10 @@ jobs:
                   print(f"::warning title=Watcher liveness ({v})::{w} watching '{s}': {d}")
           if findings:
               out.append(file_issue(findings, table))
+          else:
+              settled = settle_issue(table, sum(1 for r in rows if r[2] == "NOT CHECKED"))
+              if settled:
+                  out.append(settled)
           with open(SUMMARY, "a", encoding="utf-8") as fh:
               fh.write("\n".join(out) + "\n")
           PY

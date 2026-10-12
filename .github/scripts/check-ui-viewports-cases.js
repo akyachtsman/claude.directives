@@ -21,7 +21,8 @@
 
 // ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
 // CLAUDE.md now keeps a one-line purpose per gate command; the history and
-// evidence it carried about this script moved here, verbatim.
+// evidence it carried about this script moved here, verbatim (the `qa.yml`
+// bullet's part since replaced by a citation of the guard's header, M-46).
 //
 // From CLAUDE.md → Local gate, the comment on `node .github/scripts/check-ui-viewports-cases.js`:
 //   the viewport gate's own guard — pinned config shapes, each exit code and
@@ -29,47 +30,14 @@
 //   RUN a Playwright suite, so this takes minutes rather than seconds. Re-prove
 //   discrimination with CHECK_UI_VIEWPORTS_BIN=<mutant>
 //
-// From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet:
-//   the viewport gate on the shipped Playwright config (`check-ui-viewports.js`,
-//   plus `check-ui-viewports-cases.js` guarding the gate itself — it IMPORTS the
-//   config so Node expands the device spreads; a static read was tried three
-//   times and failed twelve ways, every failure silent, #282. Since #335 it also
-//   OBSERVES: given `--report <playwright json>` after the run, the declared
-//   widths are joined against what the run's own report says was SCHEDULED — a
-//   non-skipped result under a project declaring that width, which a hook
-//   failing before the test body still produces. A listing (`playwright test
-//   --list`) was the first design and lost on four measured differences from a
-//   run — argv, `filterOnly`, `globalSetup`, and no disposition at all, so a
-//   reporter that skips every test lists a full inventory. Predicting discovery
-//   from the config cost eight rounds and twenty findings; the refusals that
-//   bought — root selection keys, the reporter allowlist, the `--forbid-only`
-//   probe — are retired, and a key that narrows nothing now passes. The verdict
-//   is **SCHEDULED**, not EXECUTED, and says so: a result proves a test ran in a
-//   project DECLARING that width, never that a page was that wide. #347 rounds
-//   5-7 tried three mechanisms for the stronger claim — a `viewport-override`
-//   marker, a fixture recording the viewport at teardown, then one recording it
-//   at navigation — and three variants of ONE finding (a hook that throws, a
-//   hook that throws after requesting `page`, a hook that NAVIGATES and throws)
-//   defeated all three. Withdrawn rather than lost to a fourth round; #348
-//   carries the work. ⚠️ The gate reads the config through artifacts produced by
-//   processes the CONFIG RUNS IN — the JSON report, and the projects it imports
-//   — so a config's own exit handler can replace the report, and a corrupted
-//   array primitive can forge a declaration row. Both reproduced, #347 round 11.
-//   It catches DRIFT, not FORGERY, and every candidate mechanism is either
-//   inside the same process or an enumeration. #347 round 22 found the gate
-//   creating a distinguisher of its own — the `--declared` sidecar is absent
-//   when the pre-run pass imports the config and present when Playwright does,
-//   so a config reading it declared one thing to the check and another to the
-//   run, and the carried mapping became the lie. The post-run pass now
-//   re-imports and the two declarations must AGREE (exit 21); the verdict is
-//   still computed from the PRE-RUN reading. Round 22 claimed that preserved
-//   round 14's property exactly; round 23 corrected it — a second import makes
-//   post-run IMPORTABILITY a prerequisite, so a suite leaving the config
-//   unloadable now refuses with its widths unchanged. Kept as a refusal because
-//   a fallback would certify without corroboration and is also the evasion.
-//   Agreement proves CONSISTENCY, never honesty; the fixture is pinned at exit 0
-//   in the direction of STAYING a limit, so if it starts being caught the case
-//   reddens and gets read. #349)
+// From CLAUDE.md → Self-test monitoring, the `qa.yml` bullet: the viewport
+//   gate's design history it carried (#282's static readers, #335's SCHEDULED
+//   verdict and the retired listing, #347 rounds 5-7, 11, 22 and 23, the #349
+//   drift-not-forgery limit) is the guard's own record. History: templates/scripts/check-ui-viewports.js header
+//   (WHY THIS SHAPE, A LISTING WAS TRIED FIRST, THE STANDING LIMIT, the exit-code
+//   list) and its comments at "READ THE MAPPING RATHER THAN RE-DERIVE IT" and
+//   "POST-RUN IMPORTABILITY IS NOW A PREREQUISITE". The exit-0 pin on the limit
+//   is THE RECORDED LIMIT case below.
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, rmSync, unlinkSync, lstatSync, existsSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
@@ -562,13 +530,7 @@ const CASES = [
 
   // ── UNNAMED PROJECTS: the fix, and the hole the fix opened ───────────────
   // ── AN EXPLICIT NON-STRING NAME IS NOT "unnamed" (#347 round 27) ───────
-  // `typeof p.name === 'string' ? p.name : ''` coerced these to the SAME key a
-  // legitimately unnamed project uses, so a leftover report carrying
-  // `projectName: ""` joined against them and certified at exit 0 — while
-  // Playwright 1.62.1 (and 1.64.0) refuses the config outright (`config.projects[0].name must
-  // be a string`, measured), so no run could have produced those results at all.
-  // Round 24 made the REPORT's projectName refuse a non-string and left the
-  // CONFIG's key coercing one: the same defect on the other side of the join.
+  // History: check-ui-viewports.js, "AND AN EXPLICIT NON-STRING NAME IS NOT "unnamed"".
   ...[['a number', '42'], ['null', 'null'], ['an array', "['a']"], ['an object', '{}']]
     .map(([what, value]) => [
       `a project whose name is ${what} — CANNOT CHECK`,
@@ -597,11 +559,7 @@ const CASES = [
     ]),
 
   // ── ROUND 27'S ENTRY RULE WAS STRICTER THAN PLAYWRIGHT'S (#347 round 28) ──
-  // `Array.isArray` was not Playwright's check. An array carrying `name` and
-  // `use` is LISTED and RUN normally by 1.62.1 and 1.64.0 (measured), so refusing it blocked
-  // a config the run accepts. A gate that refuses what the run accepts is the
-  // same defect as one that certifies what the run refuses — it just fails
-  // loudly, which is how it survived a round.
+  // History: check-ui-viewports.js, "ARRAYS ARE OBJECTS".
   ['an array carrying name and use — accepted, as Playwright does',
     { 'playwright.config.js':
       "const p = [];\np.name = 'laptop';\np.use = { viewport: { width: 1440, height: 900 } };\n"
@@ -754,8 +712,7 @@ const CASES = [
     12, 'declared by: laptop-empty', { reportArg: 'flip.json' }],
 
   // ── A PRESENT ROOT NAME IS VALIDATED (#347 round 31) ───────────────────
-  // Round 30 added root-name inheritance and coerced a non-string to '',
-  // reintroducing on the root the exact defect round 27 fixed on projects.
+  // History: check-ui-viewports.js, "AND A PRESENT ROOT NAME IS VALIDATED LIKE A PROJECT NAME".
   ...[['a number', '42'], ['null', 'null'], ['an object', '{}']]
     .map(([what, value]) => [
       `a root name that is ${what} — CANNOT CHECK`,
@@ -766,10 +723,7 @@ const CASES = [
     ]),
 
   // ── THE ROOT `name` IS INHERITED (#347 round 30) ───────────────────────
-  // Playwright resolves a project's reported name as project.name, then the
-  // ROOT config's name, then "" — measured: a root `name: 'desktop-root'` with
-  // an unnamed project reports `[desktop-root]`. Keying it "" made the join look
-  // for a row the report never carries. Predates this PR.
+  // History: check-ui-viewports.js, "AND THE ROOT `name` IS INHERITED". Predates this PR.
   ['an unnamed project inherits the root name for the join',
     { 'playwright.config.js':
       "export default { testDir: '.', name: 'desktop-root', projects: [\n"
@@ -1153,10 +1107,7 @@ const CASES = [
         + `  projects: [\n${PHONE}  ],\n});\n` },
     1, 'no project declares a laptop viewport'],
 
-  // Codex round 17: the child writes its verdict and then keeps running until the
-  // event loop drains, so a config that schedules a throw crashes AFTER record(0).
-  // The child printed an uncaught exception and exited 1; the parent reported 0.
-  // A recorded PASS is now accepted only when the child also ended cleanly.
+  // Codex round 17. History: check-ui-viewports.js, "A RECORDED SUCCESS NEEDS A CLEAN EXIT TO CORROBORATE IT".
   ['config throws on a timer AFTER the gate passes — pass is not accepted',
     { 'playwright.config.js': `${IMPORT}setTimeout(() => { throw new Error('later'); }, 200);\n`
         + `export default defineConfig({\n  testDir: './tests',\n`
@@ -1278,12 +1229,7 @@ const CASES = [
     1, 'no project declares a laptop viewport',
     { subdir: 'suite', configArg: 'configdir', configArgRelative: true }],
 
-  // Codex round 12: Playwright's --config is "Configuration file, OR a test
-  // directory with optional playwright.config" (1.62.1 and 1.64.0 --help). Treating a
-  // directory as a file made import() fail and the gate exit 4 on an invocation
-  // Playwright handles — a refusal on a valid config, so it counts against the
-  // muting risk. Same precedence list as the implicit search, so the two paths
-  // cannot disagree about which file Playwright would read.
+  // Codex round 12: --config may name a directory. History: check-ui-viewports.js, the --config resolution comment ("Playwright's own --config is …").
   ['--config names a DIRECTORY, not a file',
     { 'cfgdir/tests/a.spec.js': SPEC,
       'cfgdir/playwright.config.js': `${IMPORT}export default defineConfig({\n  testDir: '.',\n`
@@ -1639,9 +1585,7 @@ const CASES = [
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     0, 'mapping written for the post-run check', { declaredNested: true }],
 
-  // A MISSING MAPPING REFUSES RATHER THAN RE-IMPORTING. Falling back would
-  // silently restore the re-evaluation the flag replaced — the fail-open shape
-  // this file exists to catch.
+  // A MISSING MAPPING REFUSES RATHER THAN RE-IMPORTING (history: check-ui-viewports.js, exit 20 in the exit-code list).
   ['--declared with --report and no mapping — refused, not re-imported',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE) },
     20, 'declared mapping from before the run could not be read',
@@ -1697,12 +1641,7 @@ const CASES = [
     8, '--tests-dir was given with no value', { env: true, extraArgs: ['--tests-dir', ''] }],
 
   // ── BOUNDS ARE A USAGE ERROR ON THE CARRIED PATH TOO (#347 round 19) ────
-  // The child refuses nonsensical bounds at exit 8 before importing anything,
-  // and `--declared` with `--report` never reaches the child. So this command
-  // fell through to the banding guard, produced an empty cover map, and
-  // surfaced as exit 14 — "a pass its own data does not support", blaming the
-  // mapping for the caller's command line. Two paths that band rows have to
-  // refuse the same bounds or the exit code stops meaning anything.
+  // History: check-ui-viewports.js, decideFromRows(), "BOUNDS ARE A USAGE ERROR HERE TOO".
   ['inverted bounds on the carried-mapping path — exit 8, not 14',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'declared.json': JSON.stringify({
@@ -1798,12 +1737,7 @@ const CASES = [
     12, 'NOTHING RAN at that width', { reportArg: 'empty-report.json' }],
 
   // ── null IS PRESENT (#347 round 21) ─────────────────────────────────────
-  // Round 20 stated the rule as "a present non-array is malformed" and then
-  // implemented `undefined || null` as absent — the old `x || []` behaviour
-  // wearing the new rule's clothes. So the dangerous half of the round-20
-  // family came straight back: a confident exit-12 NOTHING RAN on a document
-  // that was never read. Playwright omits keys it has nothing for; it does not
-  // null them.
+  // History: check-ui-viewports.js, readReport(), "ONLY `undefined` IS AN OMITTED FIELD".
   ...[
     ['specs', '{"suites":[{"specs":null}]}'],
     ['tests', '{"suites":[{"specs":[{"tests":null}]}]}'],
@@ -1816,11 +1750,7 @@ const CASES = [
   ]),
 
   // ── THE CARRIED MAPPING'S testsDir IS PART OF ITS SHAPE (#347 round 21) ──
-  // Only `rows` was validated. `testsDir` goes straight to `realpathSync` and
-  // `resolve()`, so a mapping missing it produced Node's ERR_INVALID_ARG_TYPE
-  // at exit 1 with a stack trace instead of the exit-20 refusal this branch
-  // promises. Validating the fields you happen to look at is the same partial
-  // check as `x || []`.
+  // History: check-ui-viewports.js, "`testsDir` IS PART OF THE SHAPE".
   ...[
     ['missing', JSON.stringify({ rows: [{ name: 'desktop', width: 1440 }] })],
     ['null', JSON.stringify({ testsDir: null, rows: [{ name: 'desktop', width: 1440 }] })],
@@ -1853,12 +1783,7 @@ const CASES = [
     0, 'OVERRIDDEN on the command line', { extraArgs: ['--tablet-min', '700'] }],
 
   // ── ONLY PLAYWRIGHT'S OWN STATUSES COUNT (#347 round 22) ────────────────
-  // The predicate was `r.status && r.status !== 'skipped'`, which counts any
-  // truthy value. Codex certified three bands at exit 0 with
-  // `"not-a-playwright-status"`; measuring the family found an OBJECT does it
-  // too, and null/primitive elements were silently ignored rather than refused.
-  // An unknown status is a report this gate does not understand, and the honest
-  // answer to that is CANNOT CHECK, not a verdict.
+  // History: check-ui-viewports.js, readReport(), "PLAYWRIGHT'S OWN STATUSES, AND NOTHING ELSE COUNTS".
   ...[
     ['a string Playwright never emits', '"not-a-playwright-status"'],
     ['an object', '{"a":1}'],
@@ -1927,16 +1852,9 @@ const CASES = [
   ]),
 
   // ── A SEARCH MAY STOP EARLY; A VALIDATION MAY NOT (#347 round 23) ───────
-  // Round 22 put the result validation inside a `some()` predicate, which
-  // short-circuits on the first qualifying element — so `[passed, null]`
-  // certified three bands because the null was never reached.
+  // History: check-ui-viewports.js, readReport(), "VALIDATE EVERY RESULT, THEN DECIDE".
   // ── REQUIRED IS NOT PRESENT-AND-VALID (#347 round 24) ──────────────────
-  // `arr(undefined)` read an OMITTED `specs` as a legitimately empty suite, so a
-  // malformed branch was skipped in silence beside a valid one and the gate
-  // still returned a verdict. Measured against a real 1.62.1 report, re-checked on
-  // 1.64.0: every suite
-  // carries `specs`; only nested `suites` is omitted when empty. Rounds 20-23
-  // fixed one field per round — this is the schema instead of a fifth instance.
+  // History: check-ui-viewports.js, readReport(), "REQUIRED IS NOT THE SAME AS PRESENT-AND-VALID".
   ...[
     ['a suite omits specs', '{"suites":[{},{"specs":[{"tests":[{"projectName":"desktop","annotations":[],"results":[{"status":"passed"}]}]}]}]}',
       'suite.specs is missing'],
@@ -1950,9 +1868,7 @@ const CASES = [
   ]),
 
   // ── THE JOIN KEY IS EVIDENCE TOO (#347 round 24) ───────────────────────
-  // A missing or non-string `projectName` was coerced to '', which is the label
-  // a legitimately UNNAMED project uses — so a malformed test could certify that
-  // project's band on a key the report never carried.
+  // History: check-ui-viewports.js, readReport(), "THE JOIN KEY IS EVIDENCE TOO".
   ...[
     ['missing', '{"suites":[{"specs":[{"tests":[{"results":[{"status":"passed"}]}]}]}]}'],
     ['a number', '{"suites":[{"specs":[{"tests":[{"projectName":7,"results":[{"status":"passed"}]}]}]}]}'],
@@ -1964,10 +1880,7 @@ const CASES = [
   ]),
 
   // ── ANNOTATION ENTRIES, NOT JUST THE CONTAINER (#347 round 24) ─────────
-  // Round 23 validated the annotations ARRAY and stopped at its edge. A `null`,
-  // a string or `{ type: 42 }` inside it read as a non-override, so a malformed
-  // annotation silently turns exclusion OFF and a passed result certifies its
-  // band. One field at a time, again — hence the schema above.
+  // History: check-ui-viewports.js, readReport(), "AND THE ENTRIES, not just the container".
   ...[
     ['null', 'null'], ['a string', '"viewport-override"'], ['a non-string type', '{"type":42}'],
   ].map(([what, entry]) => [
@@ -1977,12 +1890,7 @@ const CASES = [
     15, 'expected an object with a string type', { reportArg: 'ann-el.json' },
   ]),
   // ── TEST-LEVEL ANNOTATIONS ARE REQUIRED (#347 round 25) ────────────────
-  // Round 24's schema said "OPTIONAL at BOTH levels" and cited round 8's
-  // measurement two lines above it, which says the opposite: on the 1.44 floor
-  // the key is absent from every RESULT while `tests[].annotations` CARRIES the
-  // marker. The fallback exists because the per-result field is missing there —
-  // the test-level one is what it falls back TO. Optional let a report omit the
-  // field carrying `viewport-override` evidence and read as an empty list.
+  // History: check-ui-viewports.js, readReport(), the REQUIRED schema ("Round 24 wrote "OPTIONAL at BOTH levels"").
   ['a test omits annotations — CANNOT CHECK',
     { 'playwright.config.js': withProjects(LAPTOP + TABLET + PHONE),
       'noann.json': '{"suites":[{"specs":[{"tests":[{"projectName":"desktop",'

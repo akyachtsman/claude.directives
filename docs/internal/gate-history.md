@@ -18,7 +18,7 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 | Gate command | History is in |
 |---|---|
 | `check-claims.js`, `check-claims-cases.js` | each script's header |
-| `check-ui-viewports-cases.js` (incl. the viewport gate's design history from the `qa.yml` bullet) | that script's header |
+| `check-ui-viewports-cases.js` | that script's header; the viewport gate's design history from the `qa.yml` bullet is in `check-ui-viewports.js`'s own header, which the suite cites (M-46) |
 | `check-ui-suite-env-cases.py`, `check-report-path-cases.py` | each script's header |
 | `check-job-bounds-cases.py`, `check-contrast-cases.js` | each script's header |
 | `check-refresh-derivation.py`, `check-refresh-derivation-cases.py` | each script's header |

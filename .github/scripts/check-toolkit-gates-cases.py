@@ -51,7 +51,7 @@ swapped in alone:
   braces inside quotes
     -> the double- and single-quoted `}` cases and the kept substitution
        after a `#` -- with and without jq.
-  GATE_LIB_BIN = the fourth draft (930e783), which reparsed a kept comment
+  GATE_LIB_BIN = the fourth draft (6679c79), which reparsed a kept comment
     -> the kept-comment case -- with and without jq.
   GATE_LIB_BIN = the fifth draft (671b9b0), whose ${...} scanner tried to
   find the expansion's end through quotes

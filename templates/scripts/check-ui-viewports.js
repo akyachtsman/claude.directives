@@ -201,10 +201,15 @@
 // loud "cannot check", never a pass.
 //
 // CommonJS deliberately: the other templates/scripts helpers are CJS
-// (notify-email.js, check-contrast.js), and a downstream .github/scripts/package.json
-// (the copy of templates/scripts/package.json) carries no "type" field, so an ESM
-// .js dropped there would not load at all. Dynamic import() of an ESM config from
-// CJS works on Node 20+.
+// (notify-email.js, check-contrast.js), and the downstream .github/scripts/package.json
+// (the copy of templates/scripts/package.json) declares "type": "commonjs", so an
+// ESM .js dropped there would not load at all. That manifest is NOT optional:
+// without it Node takes this file's module type from the nearest package.json
+// above, and a Vite/Astro/SvelteKit root declaring "type": "module" makes the
+// first require() throw "require is not defined in ES module scope" (audit
+// 2026-10-11, C-3). qa.yml and the ui-suite composite name it, so the script
+// derivation installs it with them. Dynamic import() of an ESM config from CJS
+// works on Node 20+.
 //
 // Usage:
 //   node .github/scripts/check-ui-viewports.js --tests-dir .github/scripts/ui-tests
@@ -1694,7 +1699,7 @@ console.log(`config:    ${configPath}`);
         '  Playwright\'s own runner WOULD load it, so this is a refusal on a config the',
         '  run accepts. Either raise this step to Node >= 22.18 (type stripping is on by',
         '  default there), or keep the config\'s imports to JavaScript.',
-        '  The ui-suite composite pins Node 20; see its header note.']
+        '  The ui-suite composite pins Node 22, where this loads; see its header note.']
       : [];
     die(5, [
       'CANNOT CHECK: importing the config threw.',

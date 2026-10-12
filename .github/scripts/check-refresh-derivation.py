@@ -119,6 +119,11 @@ from pathlib import Path
 
 import yaml
 
+# The shared YAML 1.2 reader (templates/scripts/gh_yaml.py), found from this
+# file, not the cwd, which the cases point at a fixture tree (I-24).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "templates" / "scripts"))
+import gh_yaml  # noqa: E402
+
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")
 # Phase 3's applied-check runs from this script, not from a fenced block in the
 # command: a command's arguments are substituted into its text on load, and the
@@ -481,7 +486,7 @@ def needs(caller, body, named):
     need = {}
     if caller.suffix in (".yml", ".yaml"):
         try:
-            doc = yaml.safe_load(body)
+            doc = gh_yaml.load(body)
         except yaml.YAMLError as e:
             raise ValueError(f"{caller} is not readable YAML ({e.__class__.__name__})")
         if npm_in_scripts(doc):

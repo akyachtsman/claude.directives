@@ -132,7 +132,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Blocking — this is the authoritative live UI gate.
       - uses: ./.github/actions/ui-suite

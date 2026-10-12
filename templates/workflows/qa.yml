@@ -75,7 +75,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ── Secret scan (composite — single source of truth for the pattern) ────
       - uses: ./.github/actions/secret-scan
@@ -86,10 +86,18 @@ jobs:
       # per theme file). With no stylesheet at all it exits with a notice (no
       # failure) until /design-intake creates tokens.css; once the project has
       # any CSS, a missing tokens file FAILS the check.
+      # CommonJS, like every .js under .github/scripts/: it runs only because
+      # .github/scripts/package.json declares "type": "commonjs". Without that
+      # manifest Node takes the module type from the ROOT package.json, and a
+      # Vite/Astro/SvelteKit root ("type": "module") kills this step with
+      # "require is not defined in ES module scope".
       - name: Contrast guardrail (WCAG AA)
         run: node .github/scripts/check-contrast.js
 
 
+      # The three Python guards below that read YAML (workflow-ref-guard,
+      # check-job-bounds, check-ui-suite-env) import .github/scripts/gh_yaml.py,
+      # which reads it as GitHub does (YAML 1.2), so install it beside them.
       - name: Workflow cross-reference guard
         # Every `workflow_run.workflows:` entry must name a real workflow. GitHub
         # raises no error when one does not — the watcher simply never fires.
@@ -138,7 +146,7 @@ jobs:
 
     steps:
       - name: Checkout (full history for base diff)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -259,16 +267,20 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # CI-build opt-in only: build exactly as pages-deploy.yml does and serve
       # its output, so the suite tests what is deployed rather than the
       # unbuilt tree. With BUILD_CMD empty these two steps are skipped.
       - name: Setup Node (build)
         if: env.BUILD_CMD != ''
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
+          # setup-node v5+ turns npm caching ON by itself when the root
+          # package.json names npm in `packageManager` (or devEngines), and then
+          # needs a lockfile. This step never cached under v4; keep it that way.
+          package-manager-cache: false
 
       - name: Build
         if: env.BUILD_CMD != ''

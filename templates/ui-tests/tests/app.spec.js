@@ -31,7 +31,7 @@ import {
   AUTH_CREDENTIAL,
   AUTH_EMAIL,
   AUTH_SUCCESS_SELECTOR,
-  awaitAuthReady,
+  gotoAuthReady,
   AUTH_INCOMPLETE,
   authIncompleteNote,
   gateShipsCredential,
@@ -107,6 +107,33 @@ test('S1: page loads without JS errors', async ({ page, renderWitness }) => {
   expect(errors.all(), `Errors on load: ${errors.all().join('; ')}`).toHaveLength(0);
 });
 
+// The text of every VISIBLE, non-empty error-like element, in DOM order — S2's
+// rejection read. WORD-BOUND, not substring (audit 2026-10-11, I-8): the former
+// `[id*="err"], [class*="err"]` matched `referral-banner`, `override`,
+// `terrain`, and S2 then failed an ACCEPTED credential with "onscreenError:
+// Invite a friend and get a month free". An id or class token is split into
+// words on `-`, `_` and camelCase humps, and the element counts only when one
+// word is `err`, `error` or `errors` (`login-error`, `errorText`, `form__err`
+// do; `referral`, `terrain` do not). `error-boundary` is excluded by name: a
+// React error boundary wraps the whole app, so its text is the page.
+// Deliberately NOT role=alert / aria-live: a success toast uses them too, and
+// expectGateCleared already owns the retained-gate verdict those would add.
+async function visibleErrorTexts(page) {
+  return page.evaluate(() => {
+    const words = (v) => (v || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .split(/[^A-Za-z0-9]+/).map(w => w.toLowerCase()).filter(Boolean);
+    const errorish = (el) => {
+      const w = [...words(el.id), ...words(el.getAttribute('class'))];
+      return w.some(x => x === 'err' || x === 'error' || x === 'errors') && !w.includes('boundary');
+    };
+    return [...document.querySelectorAll('[id*="err" i], [class*="err" i]')]
+      .filter(errorish)
+      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
+      .map(el => (el.textContent || '').trim())
+      .filter(Boolean);
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SCENARIO 2 — Auth Discovery & Login (with API diagnostics)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,7 +185,6 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
   // measured on — see BUDGET SIZING at the top of this file.
   test.setTimeout(300_000);
   const getApiCalls = await captureApiCalls(page);
-  await page.goto('./');
   // LOAD_SETTLE_MS, not IDLE_MS: what follows this wait is detectAuthGate(), and
   // its answer is read as a CONCLUSION — "no gate" becomes mechanism 'none' and
   // S2 passes without ever trying the credential. A gate that renders after the
@@ -169,7 +195,10 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
   // gate-determining request is still pending at 30s still reads as mechanism
   // 'none'. Closing that needs an explicit auth-readiness condition (a named
   // request settling, or a gate/app-shell selector), not a larger number.
-  const s2Evidence = await awaitAuthReady(page);
+  // gotoAuthReady, not goto + awaitAuthReady: a TEST_AUTH_READY_REQUEST wait
+  // must be listening BEFORE the navigation, or a response that lands before
+  // `load` is never seen (audit 2026-10-11, C-2 — see armAuthReady).
+  const s2Evidence = await gotoAuthReady(page);
 
   // Resolve the gate ONCE — each detectAuthGate() call burns its 5s waitFor
   // when no gate is present, the same reason S3 and gotoAndAuth detect once.
@@ -242,6 +271,9 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
 
   const beforeSnap = await domSnapshot(page);
   const gateViewBefore = await viewSignature(page);
+  // Error-like text ALREADY on screen before the attempt — excluded from the
+  // rejection read below, so a standing banner is never mistaken for one.
+  const errorTextsBefore = new Set(await visibleErrorTexts(page));
   // Gate the auth attempt on detectAuthGate() — same as S4 and gotoAndAuth. Unguarded,
   // detectAndAuth's text-input fallback would type the credential into the first visible
   // text input (e.g. a public app's search box) and then falsely report auth failure.
@@ -271,13 +303,9 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
   // apps often keep hidden/empty `.error` placeholders, so `.first().textContent()` could
   // read the wrong node. Synchronous evaluate — no locator waiting, so it can't burn the
   // test timeout either. Read BEFORE the verifier below, so a retained-gate
-  // failure still reports the rejection text.
-  const onscreenError = await page.evaluate(() => {
-    const els = [...document.querySelectorAll('[id*="err"], [class*="err"], [class*="error"]')]
-      .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
-    for (const el of els) { const t = (el.textContent || '').trim(); if (t) return t; }
-    return '';
-  });
+  // failure still reports the rejection text. Only text that was NOT on screen
+  // before the attempt counts (see visibleErrorTexts for the word-bound match).
+  const onscreenError = (await visibleErrorTexts(page)).find(t => !errorTextsBefore.has(t)) || '';
 
   // Attached by BOTH failure paths — the shared verifier's throw and S2's own
   // softer checks below. The retained gate IS the common rejection case, and
@@ -309,8 +337,8 @@ test('S2: auth gate discovered and credential accepted', async ({ page, renderWi
   // The SHARED retained-gate verdict, same as S3/S4/gotoAndAuth — S2 was the
   // one auth path without it. S2's own checks miss a plain [role=alert]
   // rejection: the alert text changes domSnapshot's bodyText prefix (so
-  // domChanged reads as progress) while the error selector below only matches
-  // id/class substrings containing "err" — and S2 then CERTIFIED the
+  // domChanged reads as progress) while the error read above only matches
+  // id/class WORDS err/error — and S2 then CERTIFIED the
   // credential as accepted with the gate still on screen. The verifier the
   // rest of the suite trusts must not be bypassable by the scenario whose
   // whole job is the auth verdict.
@@ -433,11 +461,16 @@ test('S3: interactive elements discovered and exercised without errors', async (
   const apiAnomalies  = [];
 
   const getApiCalls = await captureApiCalls(page);
-  await page.goto('./');
   // LOAD_SETTLE_MS: what follows this preamble is discoverElements(). An element
   // that renders late is never swept, so a broken control can leave S3 green by
-  // arriving after the settle. Measurement, not overhead.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  // arriving after the settle. Measurement, not overhead. gotoAuthReady with
+  // { settle: true } is that settle: with no readiness condition it is the
+  // LOAD_SETTLE_MS networkidle wait, and with one it waits for the condition
+  // and THEN settles, since the condition proves auth readiness, not a rendered
+  // page (Codex, #438). A settle in FRONT of it ran the window twice with no
+  // condition, and with TEST_AUTH_READY_REQUEST let the named request complete
+  // before anything listened, failing S3 on a healthy app (audit 2026-10-11, C-2).
+  await gotoAuthReady(page, './', { settle: true });
   // Authenticate if we have a credential AND a real gate is present; if there's
   // a gate but no credential, skip — sweeping the login screen would fire
   // spurious PIN/password attempts and 401/403s don't block, so the job could
@@ -448,7 +481,6 @@ test('S3: interactive elements discovered and exercised without errors', async (
   // post-attempt verdict then read that same search box plus a "Log in" header
   // as a retained gate, failing S3 on an app with no login screen at all. The
   // old comment PROMISED the fall-through; the guard is what delivers it.
-  await awaitAuthReady(page);
   const s3Gated = await detectAuthGate(page);
   // "A credential exists" is not "TEST_AUTH_CREDENTIAL is set" (#312): a login
   // form that ships a working credential is the other source, and a project
@@ -616,18 +648,19 @@ test('S4: no horizontal overflow at 390px mobile viewport', async ({ page, rende
   // setViewportSize() needs the same line.
   test.info().annotations.push({ type: 'viewport-override', description: '390' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('./');
   // LOAD_SETTLE_MS: scrollWidth is read below as a VERDICT. Content that renders
   // late and introduces horizontal overflow arrives after an IDLE_MS settle and
-  // S4 passes green on a layout that is broken.
-  await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
+  // S4 passes green on a layout that is broken. gotoAuthReady with
+  // { settle: true } is that settle, after the readiness condition when one is
+  // configured — the same preamble S3 uses, for the same reasons (audit
+  // 2026-10-11, C-2; Codex, #438).
+  await gotoAuthReady(page, './', { settle: true });
   // Authenticate only when a real auth gate (PIN/password) is detected, so overflow is
   // measured against the real app rather than the login screen. Gate on detectAuthGate()
   // — NOT just "a credential exists" — so a public-first app with a stray text input
   // (search/filter) isn't mutated by detectAndAuth's text-input fallback before measuring.
   // Same two-source rule as S3 and gotoAndAuth (#312). S4 still does not skip
   // when the gate stands — see the paragraph below the branch.
-  await awaitAuthReady(page);
   if (await detectAuthGate(page) && (AUTH_CREDENTIAL || await gateShipsCredential(page))) {
     const { mechanism, viewBefore } = await detectAndAuth(page, AUTH_CREDENTIAL);
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
@@ -879,7 +912,18 @@ test('NAV: back navigation strictly unwinds (no loop)', async ({ page, renderWit
     const left = forward[i];          // current level, before pressing back
     const expected = forward[i - 1];  // the level back should return to
     const back = backControl(page);
-    if (!await back.isVisible().catch(() => false)) break;
+    // A MISSING BACK CONTROL HERE IS A FAILURE, not the end of the walk (audit
+    // 2026-10-11, I-10). Every level from forward[1] on was entered WITH a
+    // visible back control (the drill pushes a level only when hasBack), and the
+    // first iteration is already covered by the skip above — so a control that
+    // vanishes at an intermediate level is the path failing to unwind, which is
+    // the property under test. It used to `break` with no assertion and report
+    // NAV green from above the start level. toBeVisible() waits expect's own
+    // timeout (5s) first, so a back control that renders late still passes.
+    await expect(back,
+      `No in-app back control at level ${i} — the unwind stopped ${i} level(s) above the start ` +
+      `level, so back navigation does not strictly unwind (trail: ${trail.length} step(s) taken).`
+    ).toBeVisible();
     await back.click({ timeout: 3000 });
     await page.waitForTimeout(800);
     await page.waitForLoadState('networkidle', { timeout: IDLE_MS }).catch(() => {});
@@ -1076,8 +1120,31 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
   const OVERLAY = 'dialog[open], [role="dialog"], [aria-modal="true"], .modal, .drawer, .popover, .overlay';
   const CLOSE = '[aria-label*="close" i], .close, .modal-close, button:has-text("Close"), button:has-text("Cancel"), button:has-text("×"), button:has-text("✕")';
   const TRIGGERS = 'button, [role=button], [aria-haspopup="dialog"]';
+  // AN OVERLAY ALREADY ON SCREEN IS NOT THE TRIGGER'S (audit 2026-10-11, I-9).
+  // Ownership used to be "any matching overlay is visible after the click", so a
+  // decorative `.overlay` (a hero caption) — or an overlay an EARLIER trigger
+  // failed to close — was credited to every trigger, and each one then reported
+  // "no close control" / "still visible" against an element it never opened.
+  // Before each click the overlays visible at that moment are MARKED, and only
+  // an unmarked visible overlay counts as the trigger's: a newly mounted node, or
+  // a reused one that was hidden before the click. After a navigation the marks
+  // are gone with the old document, which is the right answer — nothing on the
+  // new page was there before. RESIDUE: an app that re-mounts a standing overlay
+  // as a NEW node on every click still reads it as owned.
+  const PREOPEN = 'data-uitests-preopen';
+  const OWNED = `:is(${OVERLAY}):not([${PREOPEN}])`;
+  const markOpenOverlays = async () => {
+    // Through locators on both sides, so an overlay inside an open shadow root
+    // is marked and unmarked like any other.
+    await page.locator(`[${PREOPEN}]`)
+      .evaluateAll((els, attr) => { for (const el of els) el.removeAttribute(attr); }, PREOPEN)
+      .catch(() => {});
+    await page.locator(OVERLAY).locator('visible=true')
+      .evaluateAll((els, attr) => { for (const el of els) el.setAttribute(attr, ''); }, PREOPEN)
+      .catch(() => {});
+  };
   const overlayVisible = async () => {
-    for (const el of await page.locator(OVERLAY).all()) {
+    for (const el of await page.locator(OWNED).all()) {
       if (await el.isVisible().catch(() => false)) return el;
     }
     return null;
@@ -1110,6 +1177,7 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
     const name = ((await trigger.textContent().catch(() => '')) || '').trim().slice(0, 40) || `trigger[${i}]`;
 
     const urlBefore = page.url();
+    await markOpenOverlays();
     await trigger.click({ timeout: 2000 }).catch(() => {});
     await page.waitForTimeout(600);
     if (page.url() !== urlBefore && !(await overlayVisible())) {

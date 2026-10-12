@@ -47,7 +47,7 @@ jobs:
             echo "::error::KEEPALIVE_PAT is not set, so the 60-day scheduler clock (public repositories only) cannot be reset. Add the secret (Settings -> Secrets and variables -> Actions), or delete this workflow if the repo does not need it."
             exit 1
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.KEEPALIVE_PAT }}
       - run: |

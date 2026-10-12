@@ -50,8 +50,8 @@ from cases_lib import Cases, bin_path, run
 # so a RELATIVE mutant path stopped resolving there and every mutant failed
 # those cases for "can't open file" -- perfect discrimination, nothing tested
 # (audit, 2026-10-06; the trap check-links-cases.js documents).
-GUARD = bin_path("CHECK_UI_SUITE_ENV_BIN", Path(__file__).resolve().parent / "check-ui-suite-env.py")
 REPO_ROOT = Path(__file__).resolve().parents[2]
+GUARD = bin_path("CHECK_UI_SUITE_ENV_BIN", REPO_ROOT / "templates" / "scripts" / "check-ui-suite-env.py")
 LIVE = REPO_ROOT / "templates/actions/ui-suite/action.yml"
 
 # The stale-report clear joined SEQUENCE in #347 round 21, so every fixture needs
@@ -112,7 +112,7 @@ VALIDATE_ENV = {"REPORT_PATH": "${{ inputs.report-path }}",
 # the one the validator exists for (#347 rounds 9 and 28). Spelled out here
 # rather than imported, like every other pin in this file.
 UPLOAD = "Upload test results"
-UPLOAD_USES = "actions/upload-artifact@v4"
+UPLOAD_USES = "actions/upload-artifact@v7"
 UPLOAD_PATH = ".agent-reports/screenshots/\n${{ steps.report-path.outputs.path }}"
 # The working directory is pinned to the action input as of #347 round 20, so
 # the default fixture has to use the real expression rather than a stand-in.
@@ -693,6 +693,12 @@ CASES = [
     ("include-hidden-files turned off — refused",
      action(dict(BOTH), dict(BOTH), upload_hidden=False), 1,
      "include-hidden-files"),
+    # `yes` is YAML 1.1's true, which PyYAML read, but the string "yes" to
+    # GitHub (YAML 1.2), and not a boolean input the upload action accepts:
+    # read through gh_yaml, it is refused (audit 2026-10-11, I-24).
+    ("include-hidden-files: yes — refused, a string to GitHub",
+     action(dict(BOTH), dict(BOTH), upload_hidden="yes"), 1,
+     "include-hidden-files"),
     # THE UPLOAD MUST STILL BLOCK (#347 round 36). Every pin above passed with
     # `continue-on-error: true` on this step, so an upload failure vanished behind
     # a green job while the guard stayed green — the round-11 defect, one step
@@ -714,14 +720,14 @@ CASES = [
      "does not block on failure"),
     ("the upload switched to another action — refused",
      action(dict(BOTH), dict(BOTH), upload_uses="actions/upload-artifact@v3"), 1,
-     "not 'actions/upload-artifact@v4'"),
+     "not 'actions/upload-artifact@v7'"),
     ("the upload removed entirely — refused",
      action(dict(BOTH), dict(BOTH), upload=False), 1,
      '0 steps are named "Upload test results"'),
     ("a duplicate upload step — refused",
      action(dict(BOTH), dict(BOTH)).replace(
          "    - name: Upload test results\n",
-         "    - name: Upload test results\n      uses: actions/upload-artifact@v4\n"
+         "    - name: Upload test results\n      uses: actions/upload-artifact@v7\n"
          "      with:\n        path: |\n          /etc/passwd\n"
          "    - name: Upload test results\n", 1),
      1, '2 steps are named "Upload test results"'),
@@ -876,6 +882,16 @@ def main():
             c.fail(label, f"expected no NOT-wired line.\n      {out}")
         else:
             c.expect(label, code, out, 0, '": APP_URL (read from')
+
+        # The ONE built-in exemption: the runner sets GITHUB_WORKSPACE on every
+        # job, and the shipped playwright.config.js reads it (M-10). Accepted with
+        # no project file, and reported as exempted rather than as wired.
+        (tests / "a.spec.js").write_text("const w = process.env.GITHUB_WORKSPACE;\n", encoding="utf-8")
+        exempt.unlink(missing_ok=True)
+        extra += 1
+        c.expect("GITHUB_WORKSPACE, set by the runner, needs no project exemption — accepted",
+                 *run([sys.executable, GUARD], cwd=tmp), 0,
+                 "spec env exempted, NOT wired (per its recorded reason): GITHUB_WORKSPACE")
 
     return c.finish(f"{len(CASES) + len(SPEC_CASES) + 1 + extra} pinned shapes read correctly.")
 

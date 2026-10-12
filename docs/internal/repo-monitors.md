@@ -71,7 +71,8 @@ subject that did not run is QUIET, not a finding, so healthy dormancy stays quie
 It reuses the ref guard's own extraction, never fails its job, and says NOT
 CHECKED rather than guessing (branch-filtered watcher, truncated listing, API
 error). Findings go to the job summary and to at most one open
-`watcher-liveness` issue, edited in place. Promotion rule (owner ruling
+`watcher-liveness` issue, edited in place; a run with none edits that issue to
+its own table and closes it once every pair was checked. Promotion rule (owner ruling
 2026-09-23, recorded on #318): after 4 consecutive weekly runs with no
 false-alarm SILENT/GAPS verdict, SILENT/GAPS start failing the job; a false alarm
 resets the count and is recorded on #318. QUIET and NOT CHECKED neither count

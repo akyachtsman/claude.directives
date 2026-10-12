@@ -63,7 +63,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Event data is passed through env, never interpolated directly into the
       # run: script — a repository_dispatch client_payload is attacker-influenceable,
@@ -92,7 +92,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Without APP_URL there is nothing to test against: the suite would run
       # every scenario against the placeholder and fail for a config gap rather

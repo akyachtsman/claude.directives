@@ -40,6 +40,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `index.html` | The repo's GitHub Pages landing page (links to the repo map and the commands reference) — the site's only one: `docs/site/index.html` is a redirect stub back to it (merged 2026-10-08). The site is published **verbatim**: a tracked `.nojekyll` turns Jekyll off (2026-10-08), and `check-paths.js` refuses to run without it |
 | `docs/site/commands.html` | The commands reference — every toolkit slash command by pipeline phase, linked from `index.html` |
 | `docs/site/logical-map.html` | The repo map — a lifecycle flow, stage by stage, with every connection read out of the files. **Generated** by `.github/scripts/build-logical-map.js` from `EXPORTS.json` and the files themselves; never hand-edit it. Its behaviour (pan/zoom, search, trace a file's chain with the evidence for each link) is hand-written in `docs/site/logical-map.js` |
+| `.gitignore` | Keeps local-only files out of git: `node_modules/`, the project MCP file `.mcp.json` and its legacy path, both kept out of git per `data.md` → *MCP Configuration*, plugin-eval results, and Python bytecode from running the gates |
 | `.claude-plugin/marketplace.json` | This repo doubles as a plugin marketplace (`claude-directives`) |
 | `plugins/directives-toolkit/` | **The canonical toolkit** (Phase 2 complete — the old `.claude/skills` + `agents` are retired): the full command set, 3 auto-skills, 5 agents, guard hooks incl. the push-gate. Generic code/security review is **not** maintained here — it comes from Anthropic-official sources (`pr-review-toolkit` + `security-guidance` plugins, built-in `/code-review` and `/security-review` skills); the toolkit keeps only workflow-specific agents. Edit plugin files directly; they are the source, not generated. **Web sessions do not attach plugins by themselves** — an environment's setup script performs the FIRST install (see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0); after that the `SessionStart` hook re-runs the same installer each session and moves it to current |
 | `.claude/settings.json` | Plugin enablement (`extraKnownMarketplaces` + `enabledPlugins`) plus the `SessionStart` hook registration; the guard hooks themselves ship inside the plugin |
@@ -49,7 +50,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/workflows/` | CI/CD workflow templates projects copy into `.github/workflows/` |
 | `templates/actions/` | Composite actions (`secret-scan`, `ui-suite`) projects copy into `.github/actions/` — the shared run blocks the qa workflows reference |
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
-| `templates/scripts/` | Project scripts — guards, notifiers, the browser ladder, and the `package.json` the notifiers install from — that projects copy into `.github/scripts/`; which ones a project gets is derived from the workflows and directives that name them (`/new-repo`, `/refresh-repo`). Only the four on `check-pairs.py`'s pair list have a byte-identical `.github/scripts/` twin here; `check-ui-viewports.js` is run straight from this path by `qa.yml`, so it has none |
+| `templates/scripts/` | Project scripts — guards, notifiers, the browser ladder, and the `package.json` the notifiers install from — that projects copy into `.github/scripts/`; which ones a project gets is derived from the workflows and directives that name them (`/new-repo`, `/refresh-repo`). `qa.yml` runs the guards straight from this path, so none has a `.github/scripts/` twin here |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
@@ -124,44 +125,14 @@ Repo-specific deltas:
    verification (global.md's Session Start step 2), so it need not be run separately here
 5. **Periodically** run `/audit-repo` — a structural/efficiency sweep for
    directive↔code drift, redundancy, and simplification opportunities, including a
-   **native-parity pass** per the standing upkeep mandate above. That pass needs an
-   authoritative inventory, not recall: read the registered marketplaces' own
-   manifests (`claude plugin marketplace list`, and the `marketplace.json` in each
-   clone under `~/.claude/plugins/marketplaces/`) together with this session's own
-   skill list and its harness tools — the remote-session, scheduling and
-   notification tools (`EXPORTS.json` → `externals.ccr-harness-tools` and
-   `considered.ccr-session-mutators` list the ones evaluated). Core tools (Read,
-   Edit, Bash, Agent, AskUserQuestion and the like) are the platform the
-   toolkit runs on, not natives to weigh against it, so they are out of scope.
-   The built-in `anthropic-plugin-directory` marketplace has
-   no clone: its inventory is `plugin-directory-cache-v2.json` in
-   `~/.claude/plugins/`, whose `listings` each carry a `name`, a
-   `source.repository` (`url` and `path`) and a `checks.review.by.type`. Read it
-   too, comparing each `name` lowercased with spaces as hyphens
-   (`Plugin Management` is `plugin-management`). Then diff that surface against
-   `EXPORTS.json` →
-   `externals` + `considered` (a grouped entry covers its key AND every name in
-   its `names` array). Only `borrowed` and `rejected` entries suppress a
-   finding: a `deferred` verdict means the work still fits and has not been done,
-   so it stays a finding on every pass, carrying its recorded rationale rather
-   than being re-derived. Match names after normalising: strip a `-builtin`
-   suffix from a manifest key before comparing it to an inventory name (the
-   inventory calls it `dataviz`, the manifest `dataviz-builtin`), and record a
-   skill under its **parent plugin's** name, since that is what a marketplace
-   manifest advertises. Count only **Anthropic-owned** capabilities —
-   the `anthropics/*` marketplaces and the built-in skills — and exclude this
-   repo's own `claude-directives` marketplace, which advertises
-   `directives-toolkit`. In the directory cache, an entry is Anthropic-owned only
-   when its repository is under `github.com/anthropics/`, its review is by
-   `anthropic`, and its path is not under `external_plugins/` or
-   `partner-built/` — partner-built entries are not Anthropic's, even in an
-   Anthropic repository. Without that filter the pass flags the toolkit it is
-   auditing, plus every third-party vendor plugin, as a missing native. What
-   survives the filter and is in neither list is the finding. The same pass
-   walks `TIME-SENSITIVE.md` row by row and re-checks each fact it lists. Not every
-   session: run it when starting on a fresh `main`, or when the repo has changed
-   materially since the last audit. Never let it delay the user's actual request —
-   skip or defer if a task is already queued.
+   **native-parity pass** per the standing upkeep mandate above, and a walk of
+   `TIME-SENSITIVE.md` that re-checks each fact it lists. The command carries the
+   inventory procedure; this repo's half of the pass (diffing that inventory
+   against `EXPORTS.json` → `externals` + `considered`) is in
+   `docs/internal/native-parity.md`. Not every session: run it when starting on a
+   fresh `main`, or when the repo has changed materially since the last audit.
+   Never let it delay the user's actual request — skip or defer if a task is
+   already queued.
 
 ## Mid-session change semantics
 What a live session sees when these files change mid-session — don't assume
@@ -217,34 +188,12 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 **Auto-skills are the only surface nothing else proves.** `update-pages`,
 `scope-chk` and `doc-comp` fire on description match, so a description that
 drifts stops firing silently — no error, just absence. `claude plugin eval`
-(Anthropic) is the harness: cases live in `plugins/directives-toolkit/evals/`,
-each a `prompt.md` plus a skill-fired grader under its own `graders/` dir, using
-(`type: tool_used`, `tool: Skill`, `input_match` on the skill name, `arm: both`). Run it from
-the plugin directory:
+(Anthropic) runs the cases in `plugins/directives-toolkit/evals/`;
+run it when a description changes, from the plugin directory:
 `claude plugin eval --no-publish .`
-It defaults to `--ablation with-without`, running every case twice — with the
-plugin and without it. **`arm: both` is load-bearing:** in a two-arm run the
-harness excludes a `tool_used: Skill` grader from the score and shows it only as
-a "plugin-fired indicator", unless the grader says `arm: both` (or it is the
-case's only grader). Every grader here says it, so the score IS whether the
-skill fired. The without arm has no plugin, so a should-fire case scores 0 there
-by construction and its Δ is simply the with-arm firing rate; a should-not-fire
-case passes in both arms at Δ 0. Read the score, not Δ, as the result. It costs
-real tokens and is NOT in CI; run it when a description changes.
-
-Availability: `plugin eval` requires Claude Code v2.1.269 or later. If
-`claude plugin eval --help` reports no such command, run `claude update` and
-check again.
-
-Measured baseline (2026-09-29, 3 runs/case, with/without arms): **12 of 12 pass**,
-mean Δ +0.75 (9 should-fire cases at +1, 3 negatives at 0) — neither under- nor over-triggering. The durable lesson, and the
-reason to keep measuring: **a description triggers on the WORDS a request
-actually uses, not on what the skill is for.** All three gaps found were fixed by
-rewriting the description against the measurement; the worked cases are in
-`docs/internal/skill-eval-notes.md`.
-
-Re-run the negatives whenever a description is widened: over-triggering is the
-failure mode a broader description buys, and it is invisible without them.
+and re-run the negatives whenever a description is widened. It costs real tokens
+and is NOT in CI. How the cases are built, what the score and Δ mean, the Claude
+Code version it needs and the measured baseline: `docs/internal/skill-eval-notes.md`.
 
 ## Local gate — CI scripts (this repo)
 Before committing or pushing, run `qa.yml`'s `validate` job locally. The runner
@@ -285,40 +234,15 @@ before pushing rather than pushing and fixing on the PR. The Playwright UI
 check needs a browser; it always runs in `qa.yml` (`Repo Map UI` job), so a
 local skip is fine for non-map changes.
 
-**This repo's agent-sandbox ceiling: NONE, measured 2026-08-26, re-derived
-2026-09-05 with the ladder** — `templates/scripts/browser-ladder.js`, run as
-`node <that path> chromium` from `templates/ui-tests`: **LAUNCHES**. The rung
-depends on the container, not the repo: re-run 2026-10-08 with the kit resolving
-Playwright 1.64.0, it launched at rung "install" — the image's chromium is the
-build for its own global Playwright, not the kit's, so a run that finds the kit's
-build absent installs it — and at rung "as-is" on the next run. That install also
-prunes `/opt/pw-browsers` builds no surviving install references, so a later
-`ls` there is not the image's contents. The ladder is the instrument to re-derive this line
-with from now on; it grades on the launch and quotes the error when there is one,
-which is what `test.md` asks the record to carry.
-`test.md` → *Sandboxed local runs* asks every project to record its own limit with
-the date, the causes and what would make it wrong. Ours: `check-repo-map-ui.js`
-**PASS, all cases, exit 0**. `docs/site/logical-map.html` loads no external
-resource of any kind, so the blocked-CDN cause that dominates the fleet's app
-repos cannot reach it, and the suite drives chromium, which installs and launches
-here. So a
-local failure here is evidence about the map, not the environment — the opposite
-of the downstream default.
-
-**What would make this wrong** — re-derive on any of these rather than trusting
-the line:
-- chromium ceasing to **launch** here, whether the image drops it or it stays
-  present and stops starting (host libraries, sandbox policy, permissions, the
-  browser/runtime pairing). Presence is not usability, so do not shorten this to
-  a binary check.
-- the suite's **browser matrix or runner changing** — adding a webkit or firefox
-  project would put the ceiling back in question even with chromium fine and the
-  map still self-contained. (The image ships neither preinstalled — a webkit
-  build under `/opt/pw-browsers` was put there by a session's install, not the
-  image — which per
-  `test.md` is **not** the same as unavailable: attempt the install and check
-  whether it launches.)
-- the map gaining **any external resource**.
+**This repo's agent-sandbox ceiling: NONE** (measured 2026-08-26, re-derived with
+`templates/scripts/browser-ladder.js` on 2026-09-05 and 2026-10-08), the record
+`test.md` → *Sandboxed local runs* asks every project to keep. Causes: chromium
+installs and launches here, and `docs/site/logical-map.html` loads no external
+resource, so `check-repo-map-ui.js` passes locally and a local failure is evidence
+about the map, not the environment. **What would make it wrong:** chromium ceasing
+to launch here, the suite's browser matrix or runner changing, or the map gaining
+any external resource. The measurements, and what each of those conditions means:
+`docs/internal/repo-map-ui.md` → *Sandbox ceiling*.
 
 ## Escalation rules
 `global.md` → *Escalation Rules* apply here unchanged — all four gates, not a

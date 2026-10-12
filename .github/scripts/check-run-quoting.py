@@ -87,6 +87,10 @@ import sys
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# The shared YAML 1.2 reader (templates/scripts/gh_yaml.py): a value is read
+# as GitHub reads it, not by PyYAML's 1.1 (audit 2026-10-11, I-24).
+sys.path.insert(0, os.path.join(ROOT, "templates", "scripts"))
+import gh_yaml  # noqa: E402
 # Both extensions: GitHub accepts .yml and .yaml for workflows and for action
 # metadata, and a file this list misses is a file the OK line never saw (Codex,
 # #408).
@@ -290,8 +294,8 @@ def blocks(path):
     """Yield (first content line, text, 'bash'|'other'|'unknown') per step `run:`."""
     with open(path, encoding="utf-8") as f:
         source = f.read()
-    node = yaml.compose(source)
-    data = yaml.safe_load(source)
+    node = gh_yaml.compose(source)
+    data = gh_yaml.load(source)
     if node is None or not isinstance(data, dict):
         return
 
@@ -310,10 +314,10 @@ def blocks(path):
     jobs = value_node(node, "jobs")
     if isinstance(jobs, yaml.MappingNode):
         for k, job in jobs.value:
-            # From the job's OWN node: safe_load resolves YAML 1.1 keys, so a job
-            # named `yes`, `no` or `on` becomes a boolean key and a lookup by its
-            # name finds nothing (Codex, #408).
-            job_data = (yaml.safe_load(yaml.serialize(job))
+            # From the job's OWN node, not a lookup by its name in `data`: a
+            # name is matched on its raw text here, which no schema resolves
+            # into a boolean or a number (Codex, #408).
+            job_data = (gh_yaml.load(yaml.serialize(job))
                         if isinstance(job, yaml.MappingNode) else None)
             step_lists.append((steps_of(job) if isinstance(job, yaml.MappingNode) else [],
                                shell_of(job_data) or top_shell, platform_of(job_data)))

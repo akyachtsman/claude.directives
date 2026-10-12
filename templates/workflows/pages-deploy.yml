@@ -129,13 +129,17 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
         if: env.BUILD_CMD != ''
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
+          # setup-node v5+ turns npm caching ON by itself when the root
+          # package.json names npm in `packageManager` (or devEngines), and then
+          # needs a lockfile. This step never cached under v4; keep it that way.
+          package-manager-cache: false
 
       - name: Build
         if: env.BUILD_CMD != ''
@@ -425,7 +429,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Root serves 200, deny-listed paths 404, declared public paths 200
         env:

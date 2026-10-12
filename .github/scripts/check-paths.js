@@ -47,10 +47,10 @@ const EXPORTED = Object.values(
   JSON.parse(readFileSync('EXPORTS.json', 'utf8')).categories,
 ).flatMap((c) => c.paths || []);
 
-// Plus two surfaces EXPORTS.json deliberately omits: this repo's own paired
-// workflow copies (live files, not exports) and the maintainer runbook
-// (internal-only by design). Both cite docs and both can rot.
-const EXTRA = ['.github/workflows', 'MAINTAIN-REPO-USER-INSTRUCTIONS.md'];
+// Plus the one surface EXPORTS.json deliberately omits: this repo's own paired
+// workflow copies (live files, not exports), which cite docs and can rot. The
+// maintainer runbook is NOT here: EXPORTS.json lists it under referenced-docs.
+const EXTRA = ['.github/workflows'];
 
 // Never descend into installed or generated trees. templates/ui-tests carries a
 // package.json, so a developer who has run the suite locally has a node_modules

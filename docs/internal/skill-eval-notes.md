@@ -1,11 +1,37 @@
 # Auto-skill eval notes
 
-Internal. The rule lives in `CLAUDE.md` → *Toolkit*; this file holds the worked
-measurements behind it, so the rule text stays short.
+Internal. The rule lives in `CLAUDE.md` → *Toolkit (commands, skills, agents, hooks)*;
+this file holds how the eval works and the worked measurements behind it, so the
+rule text stays short.
 
 Auto-skills (`update-pages`, `scope-chk`, `doc-comp`) fire on description match.
 A description that drifts stops firing **silently** — no error, just absence — so
 `claude plugin eval` is the only thing that proves they still work.
+
+## Running it
+
+`claude plugin eval` (Anthropic) is the harness. Cases live in
+`plugins/directives-toolkit/evals/`, each a `prompt.md` plus a skill-fired grader
+under its own `graders/` dir (`type: tool_used`, `tool: Skill`, `input_match` on
+the skill name, `arm: both`). Run it from the plugin directory:
+
+```
+(cd plugins/directives-toolkit && claude plugin eval --no-publish .)
+```
+
+It defaults to `--ablation with-without`, running every case twice: with the
+plugin and without it. **`arm: both` is load-bearing**; why is in *What the score
+and Δ mean* below. It costs real tokens and is NOT in CI; run it when a
+description changes.
+
+**Availability:** `plugin eval` requires Claude Code v2.1.269 or later. If
+`claude plugin eval --help` reports no such command, run `claude update` and
+check again.
+
+**The durable lesson, and the reason to keep measuring:** a description triggers
+on the WORDS a request actually uses, not on what the skill is for. All three
+gaps found so far were fixed by rewriting the description against the
+measurement (*The three gaps, and what fixed them* below).
 
 ## Baseline
 

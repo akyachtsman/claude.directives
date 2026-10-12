@@ -9,7 +9,7 @@
 // column.
 //
 // Nothing on the page is asserted from memory. The build FAILS when:
-//   1. an exported file (EXPORTS.json → classes) is not placed in a stage, or a
+//   1. an exported file (EXPORTS.json → paths) is not placed in a stage, or a
 //      placed id is unknown;
 //   2. a declared connection has no EVIDENCE — the source file (or, for an edge
 //      marked 'b', the target) must actually name the other file. The line that
@@ -89,7 +89,7 @@ const GROUPS = {
   },
 };
 {
-  const exportedPaths = Object.entries(manifest.classes).filter(([k]) => !k.startsWith('_')).flatMap(([, c]) => c.paths);
+  const exportedPaths = Object.keys(manifest.paths).filter(k => !k.startsWith('_'));
   const isExported = f => exportedPaths.some(p => p.endsWith('/') ? f.startsWith(p) : f === p);
   const ci = new Set(GROUPS['self:ci'].files);
   const tracked = TRACKED;
@@ -305,20 +305,12 @@ function evidence(src, dst, only = null, quote = null, all = false) {
 }
 
 /* ------------------------------------------------------------------ nodes */
-const exported = [];
-for (const [cls, def] of Object.entries(manifest.classes)) {
-  if (cls.startsWith('_')) continue;
-  for (const p of def.paths) exported.push({ p, cls });
-}
+// One record per exported path (EXPORTS.json → paths); check-exports.js
+// validates each record, so they are read here as given.
+const records = Object.entries(manifest.paths).filter(([p]) => !p.startsWith('_'));
+const exported = records.map(([p, r]) => ({ p, cls: r.class }));
 const clsOf = new Map(exported.map(e => [e.p, e.cls]));
-const compartmentOf = new Map();
-for (const [dom, comps] of Object.entries(manifest.domains)) {
-  if (dom.startsWith('_')) continue;
-  for (const [comp, paths] of Object.entries(comps)) {
-    if (comp.startsWith('_')) continue;
-    for (const p of paths) compartmentOf.set(p, `${dom}.${comp}`);
-  }
-}
+const compartmentOf = new Map(records.map(([p, r]) => [p, `${r.domain}.${r.compartment}`]));
 const vendors = Object.entries(manifest.externals).filter(([k]) => !k.startsWith('_'));
 PLACE.vendors = vendors.map(([n]) => `vendor:${n}`);
 

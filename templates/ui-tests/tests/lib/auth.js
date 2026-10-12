@@ -99,17 +99,21 @@ const AUTH_SUCCESS_SELECTOR = process.env.TEST_AUTH_SUCCESS_SELECTOR || null;
 // The LOAD_SETTLE_MS window still starts after goto(), as it always did, so no
 // budget term moves. gotoAuthReady() does all three in the one order that works
 // — callers use it rather than pairing the halves by hand.
+// It resolves on `requestfinished`, not `response`: `response` fires once the
+// status and headers arrive, before the body has downloaded, so an app that
+// streams or parses a slow session payload was marked ready before the code
+// awaiting that body could render the gate (Codex, #438).
 function armAuthReady(page) {
   if (AUTH_READY_SELECTOR || !AUTH_READY_REQUEST) return { response: null, dispose: () => {} };
   let resolve;
   const response = new Promise((r) => { resolve = r; });
-  const onResponse = (r) => {
-    if (!r.url().includes(AUTH_READY_REQUEST)) return;
-    page.off('response', onResponse);
-    resolve(r);
+  const onFinished = (request) => {
+    if (!request.url().includes(AUTH_READY_REQUEST)) return;
+    page.off('requestfinished', onFinished);
+    resolve(request);
   };
-  page.on('response', onResponse);
-  return { response, dispose: () => page.off('response', onResponse) };
+  page.on('requestfinished', onFinished);
+  return { response, dispose: () => page.off('requestfinished', onFinished) };
 }
 
 async function awaitAuthReady(page, armed) {

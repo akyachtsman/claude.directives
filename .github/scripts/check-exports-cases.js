@@ -28,19 +28,23 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK = binPath('CHECK_EXPORTS_BIN', join(HERE, 'check-exports.js'));
 
 // A minimal tree the guard can pass on: one permanent path outside any permanent
-// domain (std.md), one meta path (meta/tool.md), one swappable path (free.md).
-// Every path is exported, in a domain, and in exactly one class, so the only
-// thing a case varies is `swap`.
-const FILES = { 'std.md': 'x\n', 'meta/tool.md': 'x\n', 'free.md': 'x\n' };
+// domain (std.md), one meta file (meta/tool.md), one meta DIRECTORY (metadir/),
+// a non-meta file whose name merely starts like it (metadir.md), and one
+// swappable path (free.md). Every path is exported, in a domain, and in exactly
+// one class, so the only thing a case varies is `swap`.
+const FILES = {
+  'std.md': 'x\n', 'meta/tool.md': 'x\n', 'metadir/x.md': 'x\n', 'metadir.md': 'x\n', 'free.md': 'x\n',
+};
+const PATHS = ['std.md', 'meta/tool.md', 'metadir/', 'metadir.md', 'free.md'];
 const manifest = (swap) => JSON.stringify({
-  categories: { docs: { paths: ['std.md', 'meta/tool.md', 'free.md'] } },
+  categories: { docs: { paths: PATHS } },
   domains: {
     _comment: 'fixture',
-    global: { core: ['std.md'], misc: ['free.md'] },
-    meta: { _comment: 'fixture', session: ['meta/tool.md'] },
+    global: { core: ['std.md', 'metadir.md'], misc: ['free.md'] },
+    meta: { _comment: 'fixture', session: ['meta/tool.md'], kit: ['metadir/'] },
   },
   swap,
-  classes: { standard: { paths: ['std.md', 'meta/tool.md', 'free.md'] } },
+  classes: { standard: { paths: PATHS } },
 }, null, 2);
 
 const DERIVED = 'OK:   [swap:permanent] meta/tool.md (domain meta)';
@@ -65,6 +69,10 @@ const CASES = [
     { permanent_domains: 'meta', permanent: ['std.md'] }, 1, '[swap:permanent_domains] must be a list', null],
   ['refusal: a meta path re-enumerated under permanent fails (the duplication M-46 removed)',
     { permanent_domains: ['meta'], permanent: ['std.md', 'meta/tool.md'] }, 1, `meta/tool.md ${REDUNDANT}`, null],
+  ['refusal: a file under a derived DIRECTORY re-enumerated under permanent fails (Codex, #443)',
+    { permanent_domains: ['meta'], permanent: ['std.md', 'metadir/x.md'] }, 1, `metadir/x.md ${REDUNDANT}`, null],
+  ['twin: a path that only starts like a derived directory is not under it',
+    { permanent_domains: ['meta'], permanent: ['std.md', 'metadir.md'] }, 0, 'check-exports: OK', REDUNDANT],
   ['refusal: a derived permanent path missing from the tree still fails as permanent',
     { permanent_domains: ['meta'], permanent: ['std.md'], __drop: 'meta/tool.md' }, 1,
     '[swap:permanent] path missing from tree: meta/tool.md', null],

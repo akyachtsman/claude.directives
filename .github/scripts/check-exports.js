@@ -66,9 +66,18 @@ for (const dom of permanentDomains) {
     for (const p of paths) derivedPermanent.set(p, dom);
   }
 }
+// A derived entry in directory form (`dir/`) covers every path under it, so a
+// file re-listed beneath one is the same duplication as an exact repeat (Codex,
+// #443). The `/` is the boundary: `dir.md` is not under `dir/`.
+const coveringDomain = (p) => {
+  if (derivedPermanent.has(p)) return derivedPermanent.get(p);
+  for (const [d, dom] of derivedPermanent) if (d.endsWith('/') && p.startsWith(d)) return dom;
+  return null;
+};
 for (const p of manifest.swap?.permanent ?? []) {
-  if (derivedPermanent.has(p)) {
-    fail(`[swap:permanent] ${p} is already permanent via permanent_domains (${derivedPermanent.get(p)}); drop the enumerated entry`);
+  const dom = coveringDomain(p);
+  if (dom) {
+    fail(`[swap:permanent] ${p} is already permanent via permanent_domains (${dom}); drop the enumerated entry`);
   }
 }
 const swapClasses = {

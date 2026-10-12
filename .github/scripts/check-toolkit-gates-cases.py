@@ -390,7 +390,7 @@ def main():
                 c.fail(label, f"expected a silent allow (exit 0); got {code}\n      {out}")
             else:
                 c.ok(label)
-    n = len(PUSH_CASES) + len(PUSH_EXTRA_CASES) + len(WAIT_CASES) + len(PAGES_CASES) + 6
+    n = len(PUSH_CASES) + len(PUSH_EXTRA_CASES) + len(WAIT_CASES) + len(PAGES_CASES) + 10
     return c.finish(f"{2 * n + 2} gate payloads read correctly, with and without jq.")
 
 
@@ -434,6 +434,11 @@ def bare_dir_cases(c, push, env, tag):
             ("from a main checkout, a plain bare push", "onmain", "git push", BLOCK),
             ("from a feature checkout, a plain bare push", "onfeature", "git push", ALLOW),
             ("a quoted -C path the gate cannot read", "onfeature", 'git -C "../onmain" push', BLOCK),
+            # Security review, #439: what the shell rewrites, and what git cannot open.
+            ("a ~ -C path the gate cannot read", "onfeature", "git -C ~/onmain push", BLOCK),
+            ("a glob -C path the gate cannot read", "onfeature", "git -C ../onma* push", BLOCK),
+            ("a -C path that is not a repository", "onfeature", "git -C /nonexistent-dir push", BLOCK),
+            ("a -c after -C does not apply the path twice", "onmain", f"git -C {repos['onfeature']} -c x=y push", ALLOW),
         ]
         for label, cwd, command, expected in cases:
             payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})

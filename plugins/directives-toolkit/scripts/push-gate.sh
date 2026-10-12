@@ -134,6 +134,7 @@ names_ref() {
 # expansion is not evaluated here. The caller blocks then, so an unreadable -C
 # fails toward checking.
 seg_dir() {
+  set -f                                      # split words, never expand globs
   # shellcheck disable=SC2086
   set -- $1
   d=.
@@ -142,11 +143,13 @@ seg_dir() {
     case "$1" in
       -C) [ $# -ge 2 ] && [ "$2" != push ] || return 1; p=$2; shift 2 ;;
       -C?*) p=${1#-C}; shift ;;
-      -c) shift 2 ;;
+      -c) shift 2; continue ;;
       *) shift; continue ;;
     esac
+    # Anything the shell would rewrite before git saw it is unreadable here:
+    # an expansion, a `~`, a glob (security review, #439).
     case "$p" in
-      *'$'*|*'`'*) return 1 ;;
+      *'$'*|*'`'*|'~'*|*[*?[]*) return 1 ;;
       /*) d=$p ;;
       *) d=$d/$p ;;
     esac
@@ -159,6 +162,12 @@ while IFS= read -r seg; do
   names_ref "$seg" && continue
   if ! dir=$(seg_dir "$seg"); then
     echo 'BLOCKED by directives push-gate: a bare push into a repository named by an unreadable -C path; name the branch you are pushing (git push origin <branch>).' >&2
+    exit 2
+  fi
+  # A directory that is not a repository has no branch to read; an empty answer
+  # must not pass as "not main" (security review, #439).
+  if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
+    echo 'BLOCKED by directives push-gate: a bare push whose repository could not be read; name the branch you are pushing (git push origin <branch>).' >&2
     exit 2
   fi
   branch=$(git -C "$dir" branch --show-current 2>/dev/null)

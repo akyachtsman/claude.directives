@@ -71,7 +71,7 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/validate-report-path.py \
   -o .github/actions/ui-suite/validate-report-path.py
 
-# qa.yml's static job runs these five scripts by path, so they install WITH it —
+# qa.yml's static job runs these six scripts by path, so they install WITH it —
 # without them the job fails at its first missing file. What each one guards is
 # in 9c-bis, 9c-ter and design.md → *Accessibility*.
 mkdir -p .github/scripts
@@ -85,8 +85,11 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
   -o .github/scripts/check-py-warnings.py
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
   -o .github/scripts/check-ui-suite-env.py
-# Three of them (workflow-ref-guard, check-job-bounds, check-ui-suite-env) import
-# this sibling, which reads YAML the way GitHub does (1.2, not PyYAML's 1.1).
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-yaml-anchors.py \
+  -o .github/scripts/check-yaml-anchors.py
+# Four of them (workflow-ref-guard, check-job-bounds, check-ui-suite-env,
+# check-yaml-anchors) import this sibling, which reads YAML the way GitHub does
+# (1.2, not PyYAML's 1.1, and refusing the anchors and merge keys GitHub refuses).
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/gh_yaml.py \
   -o .github/scripts/gh_yaml.py
 
@@ -392,8 +395,8 @@ file's own header.
 An unbounded job runs to GitHub's 6-hour default showing neither pass nor fail,
 and a bound set BELOW the work it bounds is worse: it cancels healthy runs, and
 a cancelled run reads as inconclusive rather than red, so nobody chases it.
-The guard, `check-py-warnings.py` and `check-ui-suite-env.py` are installed in
-Step 1.
+The guard, `check-py-warnings.py`, `check-ui-suite-env.py` and
+`check-yaml-anchors.py` are installed in Step 1.
 
 `check-ui-suite-env.py` keeps the ui-suite composite's viewport checks on the
 same environment as its Playwright run: the checks import the config, so a
@@ -406,8 +409,14 @@ with no reason is refused. Two kinds qualify: a name set outside the composite
 deliberately never set in CI because the code reading it handles it unset (a
 local-sandbox hatch such as a browser-executable override).
 
-`qa.yml` already invokes it. It needs no config file — the three rules are the
-same in every repo:
+`check-yaml-anchors.py` reads every workflow and every `.github/actions/**/action.yml`
+as GitHub reads them and refuses two things PyYAML accepts: an anchor or alias in
+an action's `action.yml` (GitHub's runner refuses them there; a workflow may use
+them) and a merge key (`<<`) anywhere, which GitHub never merges. It needs no
+config. Write the shared values out instead.
+
+`qa.yml` already invokes the job bounds guard. It needs no config file — the
+three rules are the same in every repo:
 
 1. Every job declares `timeout-minutes` (except jobs that `uses:` a reusable
    workflow, where GitHub does not accept it).
@@ -748,7 +757,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
-- [ ] `.github/scripts/` holds the five scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py` (Step 1)
+- [ ] `.github/scripts/` holds the six scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py`, `check-yaml-anchors.py` (Step 1)
 - [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it

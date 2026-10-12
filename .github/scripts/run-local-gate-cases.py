@@ -137,6 +137,19 @@ CASES = [
      {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
       "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - name: inner\n      shell: bash\n      run: echo INNER-RAN\n"},
      0, "INNER-RAN"),
+    # GitHub's runner reads an action.yml with anchors off, a workflow with
+    # them on, and a merge key nowhere (gh_yaml.py, 2026-10-12).
+    ("an anchor in a local composite's action.yml — CANNOT RUN",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - name: inner\n      shell: bash\n      env: &e\n        A: '1'\n      run: echo INNER-RAN\n"},
+     2, "found the anchor &e"),
+    ("an anchor and alias in the workflow itself — run",
+     {"wf.yml": workflow("      - name: one\n        env: &e\n          A: '1'\n        run: test \"$A\" = 1\n"
+                         "      - name: two\n        env: *e\n        run: test \"$A\" = 1\n")},
+     0, "all 2 steps of job 'validate' passed"),
+    ("a merge key in the workflow — CANNOT RUN",
+     {"wf.yml": workflow("      - name: one\n        env:\n          <<: {A: '1'}\n        run: echo hi\n")},
+     2, "found a merge key (<<)"),
     ("a failing local composite step — refused",
      {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
       "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - name: inner\n      shell: bash\n      run: exit 4\n"},

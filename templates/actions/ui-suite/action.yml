@@ -524,7 +524,8 @@ runs:
       # and it must be the one the other three read and write.
       # The four blocks stay written out: GitHub's runner refuses YAML anchors in
       # an action.yml ("Anchors are not currently supported"), workflows only
-      # (audit R8, declined 2026-10-12; TIME-SENSITIVE.md → GitHub).
+      # (audit R8, declined 2026-10-12; TIME-SENSITIVE.md → GitHub), and
+      # check-yaml-anchors.py refuses one here before GitHub does.
       env:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}

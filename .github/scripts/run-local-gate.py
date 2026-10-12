@@ -33,7 +33,9 @@ WHAT IT REFUSES (exit 2, CANNOT RUN), rather than run something else:
   - a `${{ ... }}` expression inside a `run:` script;
   - a `shell:` other than bash;
   - a shape GitHub rejects (a step that is not a mapping, `uses: 4`, a list
-    as an `env:` value), rather than a traceback (M-4).
+    as an `env:` value), rather than a traceback (M-4);
+  - YAML GitHub cannot read: a merge key (`<<`) anywhere, or an anchor or
+    alias in a composite's action.yml (gh_yaml.py, 2026-10-12).
 An `env:` value holding an expression (`${{ secrets.GITHUB_TOKEN }}`) is left to
 the caller's environment, and the run says so.
 
@@ -83,11 +85,13 @@ def env_value(value):
     return "" if value is None else str(value)
 
 
-def load(path):
+def load(path, allow_anchors=True):
     """The workflow as GitHub reads it: YAML 1.2's core schema, from the shared
     templates/scripts/gh_yaml.py (`yes`/`on` stay strings, `070` is 70, `080`
     is 80; PyYAML's own 1.1 reading made `070` a 56-minute bound and crashed
-    on `080`, audit 2026-10-11 I-4)."""
+    on `080`, audit 2026-10-11 I-4). A merge key is refused everywhere, and a
+    composite's action.yml is read with allow_anchors=False, as GitHub's runner
+    reads it (2026-10-12)."""
     sys.path.insert(0, os.path.join(ROOT, "templates", "scripts"))
     try:
         import yaml
@@ -96,7 +100,7 @@ def load(path):
         raise CannotRun(f"the workflow cannot be read: {e} (PyYAML, and templates/scripts/gh_yaml.py)")
     try:
         with open(path, encoding="utf-8") as handle:
-            return gh_yaml.load(handle)
+            return gh_yaml.load(handle, allow_anchors=allow_anchors)
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
         raise CannotRun(f"cannot read {path}: {e}")
 
@@ -206,7 +210,8 @@ def plan(workflow, job, root):
                 raise CannotRun(f"step {i} ({label}) uses {uses}, which cannot run locally")
             if "timeout-minutes" in step:
                 raise CannotRun(f"step {i} ({label}) bounds a whole composite, which this runner does not")
-            action = mapping(load(os.path.join(root, uses, "action.yml")), f"{uses}/action.yml")
+            action = mapping(load(os.path.join(root, uses, "action.yml"), allow_anchors=False),
+                             f"{uses}/action.yml")
             if action.get("inputs"):
                 raise CannotRun(f"{uses}/action.yml declares inputs, which this runner does not pass")
             runs = mapping(action.get("runs"), f"{uses}/action.yml's runs")

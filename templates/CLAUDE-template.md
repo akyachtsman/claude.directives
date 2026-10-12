@@ -38,7 +38,7 @@ This project's look is its own — established at kickoff via `/design-intake`
 | Purpose | Command |
 |---|---|
 | Validate HTML | `npx html-validate index.html` (with a `Build:`: run the build, then validate the generated HTML under `SITE_DIR`, never the source root) |
-| Validate workflow YAML | `python3 -c "import yaml, sys; yaml.safe_load(open('.github/workflows/qa.yml'))"` |
+| Validate workflow YAML | `python3 .github/scripts/check-yaml-anchors.py` (every workflow and `.github/actions/**/action.yml`, read as GitHub reads them) |
 
 ## Project-Specific Security Constraints
 - [List any accepted security trade-offs, e.g. client-side token usage]

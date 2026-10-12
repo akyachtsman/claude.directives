@@ -172,17 +172,20 @@ jobs:
             echo "OK: $f"
           done
 
-      - name: Validate workflow YAML
-        run: |
-          python3 -c "
-          import yaml, sys, glob
-          files = glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml') \
-                + glob.glob('templates/workflows/*.yml') + glob.glob('templates/workflows/*.yaml') \
-                + glob.glob('templates/actions/*/action.yml') + glob.glob('templates/actions/*/action.yaml')
-          for f in files:
-              yaml.safe_load(open(f))
-              print(f'OK: {f}')
-          "
+      # Every workflow and action file, parsed as GitHub parses it. It replaced
+      # an inline yaml.safe_load over the same files, which accepted what GitHub
+      # refuses: an anchor or alias in an action.yml ("Anchors are not currently
+      # supported") and a merge key (`<<`) anywhere, so such a file passed here
+      # and failed in every project that copied it (2026-10-12).
+      # --include-templates as in the job-bounds step above: this repo's flag.
+      - name: Check workflow and action YAML parses as GitHub parses it
+        run: python3 templates/scripts/check-yaml-anchors.py --include-templates
+
+      # Nothing here uses either construct, so the guard above prints the same
+      # OK whether its rules work or do nothing. Drive a mutated copy (with its
+      # gh_yaml.py beside it) with CHECK_YAML_ANCHORS_BIN to re-prove it.
+      - name: Check the YAML anchor guard enforces what it claims
+        run: python3 .github/scripts/check-yaml-anchors-cases.py
 
       # The SessionStart hook runs at the start of every web session in this repo
       # and in every project scaffolded from the template. A syntax error there

@@ -211,11 +211,13 @@ implementation is the source — find it, read it, and reuse it.**
   when it works. Prefer the diff that leaves the codebase flat or smaller.
 
 ## Repo Structure Standard
-Every project repo should contain (matching what `/new-repo` scaffolds):
+Every project repo should contain (what `/new-repo` scaffolds, plus the
+`index.html` the first build writes):
 ```
 CLAUDE.md        ← project context + imported directive URLs
-index.html       ← the app's entry page (additional pages are fine — every
-                   page matches the styles/ contract, per design.md)
+index.html       ← the app's entry page, written by the first build, not by
+                   /new-repo (additional pages are fine — every page matches
+                   the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
   workflows/     ← the standard template set from templates/workflows/ —
@@ -251,8 +253,12 @@ findings unseen.
 - All backend/data rules — provider, connection config, keys, RLS, MCP setup —
   are governed by `data.md`, the single source of truth for the backend. Read it
   before touching any backend code.
-- Never hardcode connection details or keys — store them as the GitHub
-  Secrets/variables named in `data.md`.
+- Never hardcode a secret key (the service-role key) or server-side connection
+  details — store them as the GitHub Secrets/variables named in `data.md`.
+- **The publishable/anon key and the project URL are the exception:** on the
+  no-build stack the client needs them at runtime, so they ship in client code
+  (`data.md` → *Keys*), safe because RLS is the enforcement boundary. A
+  service-role or other secret key never goes client-side.
 - Project/connection IDs and table/column names are defined in each repo's
   CLAUDE.md.
 
@@ -1267,11 +1273,14 @@ before reporting "no access":
    even when access exists.
 3. **WebSearch** — runs server-side and bypasses the container's network policy
    entirely. Use for documentation, examples, and corroborating facts.
-4. **WebFetch** — subject to the environment's egress policy too: a host the
-   policy denies fails with `EGRESS_BLOCKED` ("blocked by the network egress
-   proxy"; measured 2026-10-09 on a host curl also gets a CONNECT 403 for), so
-   it is not a way around rung 5. A 403 from a host it does reach may be the
-   target site's bot protection, not the environment policy.
+4. **WebFetch** — subject to the environment's egress policy too, so it is not
+   a way around rung 5. A host the policy denies fails with
+   `getaddrinfo ENOTFOUND <host>` (measured 2026-10-12; it read
+   `EGRESS_BLOCKED` on 2026-10-09), so ENOTFOUND can mean "blocked by policy",
+   not only "no such host": confirm with curl (a CONNECT 403 is the policy) or
+   the `recentRelayFailures` in `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
+   A 403 from a host it does reach may be the target site's bot protection, not
+   the environment policy.
 5. **curl/CLI in the sandbox** — goes through the agent proxy; the environment
    allowlist applies. A 403 on CONNECT is a policy denial: report it, never
    route around it. The owner can add the host in the environment's network

@@ -67,6 +67,8 @@ const CASES = [
     { permanent_domains: ['_comment'], permanent: ['std.md'] }, 1, `${UNKNOWN} _comment`, null],
   ['refusal: permanent_domains must be a list',
     { permanent_domains: 'meta', permanent: ['std.md'] }, 1, '[swap:permanent_domains] must be a list', null],
+  ['refusal: an explicit null is not "no domains" (Codex, #443)',
+    { permanent_domains: null, permanent: ['std.md'] }, 1, '[swap:permanent_domains] must be a list', null],
   ['refusal: a meta path re-enumerated under permanent fails (the duplication M-46 removed)',
     { permanent_domains: ['meta'], permanent: ['std.md', 'meta/tool.md'] }, 1, `meta/tool.md ${REDUNDANT}`, null],
   ['refusal: a file under a derived DIRECTORY re-enumerated under permanent fails (Codex, #443)',

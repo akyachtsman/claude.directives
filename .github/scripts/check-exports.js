@@ -49,7 +49,10 @@ for (const [dom, comps] of Object.entries(manifest.domains ?? {})) {
 // through it. An unknown domain name fails — expanding it to nothing would
 // silently make that domain's paths swappable — and so does a `swap.permanent`
 // entry the expansion already covers, which is the enumeration this replaced.
-let permanentDomains = manifest.swap?.permanent_domains ?? [];
+// Only an ABSENT key defaults to none; an explicit `null` is a non-list and fails
+// below rather than silently making every derived path swappable (Codex, #443).
+let permanentDomains = manifest.swap && Object.hasOwn(manifest.swap, 'permanent_domains')
+  ? manifest.swap.permanent_domains : [];
 if (!Array.isArray(permanentDomains)) {
   fail(`[swap:permanent_domains] must be a list of domain names, got: ${JSON.stringify(permanentDomains)}`);
   permanentDomains = [];

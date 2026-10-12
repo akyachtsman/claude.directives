@@ -731,10 +731,10 @@ Qualifiers:
 ⚠️ **An agent definition's `model:` frontmatter is only its fallback** — the
 call's `model` overrides it, so the call is still where the choice is made. The
 toolkit's reviewers and verifiers carry `model: sonnet` as that fallback; its
-agents that write code or data carry no `model:` line, so an omitted call
-inherits. ⚠️ Leaving `model` out on an agent type whose frontmatter names one
-runs THAT model, not the session's — so build work goes to an agent type with no
-`model:` line (e.g. not test-verifier). The `/qa-pipeline` command applies this
+agents that write code or data carry `model: inherit`, so an omitted call runs
+the session's model. ⚠️ Leaving `model` out on an agent type whose frontmatter
+names a model runs THAT model, not the session's — so build work goes to an
+agent type whose `model:` is `inherit` (e.g. not test-verifier). The `/qa-pipeline` command applies this
 rule to every agent it spawns.
 ⚠️ **A fork always runs the session's model** — the Agent tool ignores `model`
 for it — so haiku-tier work goes to a named agent type, never a fork.

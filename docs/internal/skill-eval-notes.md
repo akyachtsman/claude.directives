@@ -39,8 +39,10 @@ measurement (*The three gaps, and what fixed them* below).
 All three negatives correctly never fire in either arm. (Previous: 2026-08-19,
 2 runs/case, 9 of 9, mean Δ +0.67.)
 
-The cases' frontmatter says `runs: 2`, so repeating the baseline at 3 runs/case
-needs `--runs 3` on the command line.
+The cases' frontmatter says `runs: 3`, the baseline's own count. That baseline
+covers the 12 auto-skill cases; `/learn`'s two cases (`learn-lesson`,
+`learn-negative`) were measured on their own on 2026-10-12: 3 of 3 fired, 3 of 3
+silent. Re-measure all 14 together on the next description change.
 
 ## What the score and Δ mean (re-checked 2026-10-08)
 

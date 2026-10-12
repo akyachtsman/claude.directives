@@ -104,6 +104,7 @@ is added by the pass that finds it.
 ## GitHub
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
+| YAML anchors work in workflow files but not in a composite action's `action.yml` | `templates/actions/ui-suite/action.yml`, the comment above the `Clear any stale Playwright report` step's `env:` | 2026-10-12 | github/docs `content/actions/reference/workflows-and-actions/reusing-workflow-configurations.md` (anchors, workflows only) and `metadata-syntax.md` (no anchors); actions/runner `src/Runner.Worker/ActionManifestManagerWrapper.cs` and the manifest's `YamlObjectReader` (`allowAnchors` off). Anchors become usable when the runner reads manifests with them on |
 | The Ubuntu release `ubuntu-latest` resolves to | `.github/scripts/run-local-gate.py` → `UBUNTU_LATEST`; `templates/actions/ui-suite/action.yml`, the `Install Playwright browsers` step | 2026-10-12 | The label table in the README of `actions/runner-images` (raw.githubusercontent.com/actions/runner-images/main/README.md) and its Announcement issues: #14748 moves the label to 26.04 runner by runner from 2026-10-19, done by 2026-11-19 |
 | API quotas and which calls are REST vs GraphQL | `git.md` → *GitHub API Quota Economy* | 2026-10-11 | `GET /rate_limit`; GitHub REST and GraphQL docs |
 | What the session proxy lets through (`api.github.com`, git) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-10-11 | A read-only curl and `git ls-remote` from this session |

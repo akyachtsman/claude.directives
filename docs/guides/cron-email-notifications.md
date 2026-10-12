@@ -98,8 +98,10 @@ every push you and your sessions make. See
 `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
 
 ## When the GitHub cron isn't enough
-If timing must be exact or the job is data-heavy, move it to the **data tier** —
-your database's native scheduler plus a serverless function (e.g. Supabase
-`pg_cron` + an Edge Function) — for exact timing and no inactivity rule.
+Scheduled jobs run as GitHub Actions, data-heavy and timing-sensitive ones
+included (`global.md` → *Automations*; owner ruling 2026-10-12: a database
+scheduler such as Supabase `pg_cron` plus an Edge Function is not an
+alternative). GitHub's cron can start minutes late, so write each job to
+tolerate a late or skipped start rather than moving it off Actions.
 Avoid putting durable production crons on **Claude Routines**: routine runs are
 capped per day, so reserve that quota for interactive/agentic work.

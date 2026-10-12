@@ -52,7 +52,8 @@ project repo that needs persistence, auth, realtime, or storage. Project-level
 
 ## Client Auth Pattern (static app + anon key)
 The reference hardening recipe for the standard stack — static HTML/JS served
-from Pages, anon key in the client, no Supabase Auth. Never ship `USING (true)`
+from Pages, anon key in the client, no Supabase Auth (owner ruling, 2026-10-12:
+the company-wide stack). Never ship `USING (true)`
 write policies instead of this.
 - **Login** goes through a `SECURITY DEFINER` function (e.g.
   `login_with_pin(text)`): pin `search_path`, return only the columns the app

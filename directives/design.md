@@ -17,8 +17,9 @@ contract:
    - **An image** (default, browser-only): attach a screenshot/mockup from Google
      Stitch, Figma, or anywhere — the `frontend-design` skill reads it.
    - **Stitch HTML** — pull real markup via Stitch's remote MCP, or paste a download.
-   - **Figma** — read variables/styles via a Figma MCP (for plain HTML, use a
-     descriptive MCP and let Claude author the markup).
+   - **Figma** — read variables/styles via a Figma MCP (owner ruling,
+     2026-10-12; for plain HTML, use a descriptive MCP and let Claude author the
+     markup).
 2. **Distill** the import into the project's contract (below) + one approved
    **reference page** (the look-gate).
 3. **Build** the remaining pages against that contract via `/sdd-loop` — so every

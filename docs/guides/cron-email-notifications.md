@@ -1,8 +1,10 @@
 # Scheduled jobs with email notifications
 
 A scheduled **GitHub Actions** job that runs a Node script and emails a
-notification. Transport-agnostic (any SMTP provider), DST-safe, and protected
-against GitHub's 60-day scheduler auto-disable (public repositories only).
+notification. Transport-agnostic (any SMTP provider) and DST-safe. It carries
+no guard against GitHub's 60-day scheduler auto-disable (public repositories
+only); that limit counts inactivity, so a repo where PRs land is not at risk
+(*Keep it alive* below).
 
 A project gets this kit **when it has a scheduled task** (owner ruling,
 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands,

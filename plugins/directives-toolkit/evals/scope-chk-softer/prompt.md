@@ -1,7 +1,7 @@
 ---
 max_turns: 6
 allowed_tools: [Read, Glob, Grep, Skill]
-runs: 2
+runs: 3
 plugins: ["../.."]
 ---
 

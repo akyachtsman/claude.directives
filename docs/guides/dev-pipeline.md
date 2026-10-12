@@ -34,7 +34,7 @@ importing only *methods* that fit the constraint below:
 | — | **Plan-gate** | folded into `/sdd-loop plan` (consistency check + self-review) | exists | `plan.md` → `## Consistency` |
 | 5 | **Build** | `/design-intake` (look-gate) · `/sdd-loop` implement | exists — gated | `design.md` + built pages |
 | 6 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` review reports |
-| 7 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `.agent-reports/` test reports |
+| 7 | **Test** | `/qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `.agent-reports/` test reports |
 | 8 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | none — the PR and the reported live check |
 | 9 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/refresh-repo` (re-sync); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
@@ -114,7 +114,7 @@ import:** superpowers `receiving-code-review` **anti-sycophancy** rule (no
 "You're absolutely right!", restate the requirement, push back with technical
 reasoning) — added as a review-handling directive.
 
-### 7 · Test — `qa-pipeline` / `test-verifier` / `ui-tester` *(exists — gated)*
+### 7 · Test — `/qa-pipeline` / `test-verifier` / `ui-tester` *(exists — gated)*
 **Methods imported:** superpowers `verification-before-completion` as a hard
 gate (identify the proving command, run it *fresh*, read full output, *then*
 claim done); gstack **circuit-breakers** (stop after 3 failed fix attempts —

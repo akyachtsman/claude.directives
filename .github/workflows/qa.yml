@@ -143,6 +143,11 @@ jobs:
       - name: Check the logical map is regenerated
         run: node .github/scripts/build-logical-map.js --check
 
+      # docs/site/commands.html is generated from the commands' frontmatter, so
+      # a description or phase changed without regenerating it fails here.
+      - name: Check the commands page is regenerated
+        run: node .github/scripts/build-commands-page.js --check
+
       # NOTHING ELSE IN THIS REPO PARSES THE EXPORTED JS TEMPLATES. `Repo Map UI`
       # exercises this repo's own map suite, not templates/ui-tests/, so a syntax
       # error in the largest and most-edited file we ship would reach every

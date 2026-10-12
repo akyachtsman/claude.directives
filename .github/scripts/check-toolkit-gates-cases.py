@@ -22,7 +22,51 @@ behind a quoted commit message (audit, 2026-10-09).
 Both gates source gate-lib.sh from their own directory, so every run copies
 the gate under test and the library into one temp directory -- the installed
 layout -- which lets each be swapped for a MUTANT independently:
-PUSH_GATE_BIN / WAIT_GATE_BIN / GATE_LIB_BIN.
+PUSH_GATE_BIN / WAIT_GATE_BIN / GATE_LIB_BIN / PAGES_GATE_BIN.
+
+PAGES-EDIT GATE (audit 2026-10-11). pages-edit-gate.sh is the PostToolUse
+reminder for an edit that changes what Pages serves. Its cases are Edit
+payloads naming a file inside a scratch git repository whose qa.yml carries a
+chosen BUILD_PATHS shape; 2 = reminded, 0 = silent. It replaced an inline
+hooks.json command that sent nothing for root-served files (I-12), and
+build-input-gate.sh, whose BUILD_PATHS reader read a commented `env:` or a
+block scalar as empty (M-12).
+
+MEASURED 2026-10-12 against the pre-fix scripts (origin/main 1328c41), each
+swapped in alone:
+  PAGES_GATE_BIN = the old inline served-file hook + build-input-gate.sh
+    -> root-served script, nested served script, root-served page, served
+       SVG, commented env:, folded block scalar, and a non-input under a
+       literal block scalar (read as the regex `|`, which matches anything);
+  GATE_LIB_BIN = the old gate-lib.sh
+    -> the heredoc, comment, `\\main` and `$'main'` push shapes and their
+       complements (M-13), and, without jq, the later-"command"-key case
+       (M-11); the pages cases fail too, since gate_served is new;
+  GATE_LIB_BIN = the second draft (7ff7315), after a second review round
+    -> the spaced single- and double-quoted heredoc delimiters, the `#` inside
+       `${...}`, and the spaced-delimiter complement -- with and without jq.
+    (The unbalanced-delimiter case passes against it too: it pins the
+    keep-the-text direction for the new delimiter reader, not a bug fixed.)
+  GATE_LIB_BIN = the third draft (cb2bfc2), whose ${...} scanner counted
+  braces inside quotes
+    -> the double- and single-quoted `}` cases and the kept substitution
+       after a `#` -- with and without jq.
+  GATE_LIB_BIN = the fourth draft (6679c79), which reparsed a kept comment
+    -> the kept-comment case -- with and without jq.
+  GATE_LIB_BIN = the fifth draft (671b9b0), whose ${...} scanner tried to
+  find the expansion's end through quotes
+    -> the ANSI-C escaped quote and the `}`-in-a-comment cases -- with and
+       without jq. The substitution, backtick and command-word cases pass
+       against it too; they pin the fail-closed scanner, not a bug fixed.
+  PUSH_GATE_BIN = the old push-gate.sh
+    -> `main>/dev/null`, `git -c x=y push`, `git -C dir push` (M-13).
+  GATE_LIB_BIN = this change's own first draft (heredocs detected before the
+  quote/comment/arithmetic state was known, comments keyed off the last
+  output character, `$'...'` read as a plain single-quoted span), which a
+  security review flagged
+    -> the six "parser differential" cases: `<<'EOF'` inside quotes, inside a
+       comment and inside `$((...))`; `#` after `\\ ` and after a quote span;
+       `\\'` inside `$'...'` -- with and without jq.
 
 Run: python3 .github/scripts/check-toolkit-gates-cases.py
 """
@@ -41,6 +85,7 @@ SCRIPTS = ROOT / "plugins/directives-toolkit/scripts"
 PUSH = bin_path("PUSH_GATE_BIN", SCRIPTS / "push-gate.sh")
 WAIT = bin_path("WAIT_GATE_BIN", SCRIPTS / "wait-gate.sh")
 LIB = bin_path("GATE_LIB_BIN", SCRIPTS / "gate-lib.sh")
+PAGES = bin_path("PAGES_GATE_BIN", SCRIPTS / "pages-edit-gate.sh")
 
 BLOCK, ALLOW = 2, 0
 
@@ -80,6 +125,99 @@ PUSH_CASES = [
     ("an escaped quote, then a branch push",
      'echo \\" && git push -u origin claude/x && echo "done"', ALLOW),
     ("not a push at all", "git log main..HEAD", ALLOW),
+    # -- audit 2026-10-11, M-13: accidental shapes, cheap to close -----------
+    ("a quoted heredoc commit message with a stray double quote, then a push",
+     "git commit -m \"$(cat <<'EOF'\nUse a 5\" screen\nEOF\n)\" && git push origin main && echo \"done now\"", BLOCK),
+    ("a quoted heredoc with an apostrophe, then a push",
+     "cat > m <<'EOF'\nthe user's fix\nEOF\ngit push origin main && echo 'done ok'", BLOCK),
+    ("an apostrophe in a # comment, then a push",
+     "git status # don't worry\ngit push origin main 2>&1 | grep -v 'remote: x'", BLOCK),
+    ("a backslash-escaped ref", "git push origin \\main", BLOCK),
+    ("an ANSI-C quoted ref", "git push origin $'main'", BLOCK),
+    ("a ref followed by a redirection", "git push origin main>/dev/null", BLOCK),
+    ("a global -c option before push", "git -c x=y push origin main", BLOCK),
+    ("a global -C option before push", "git -C /tmp/repo push origin main", BLOCK),
+    ("a live substitution inside a BARE heredoc body",
+     "cat <<EOF\n$(git push origin main)\nEOF", BLOCK),
+    ("a heredoc marker inside a message, with no terminator, then a push",
+     'git commit -m "see <<EOF" && git push origin main', BLOCK),
+    # ...and the complement.
+    ("main only in a trailing comment", "git push origin claude/fix # main", ALLOW),
+    ("push text inside a QUOTED heredoc body, then a branch push",
+     "cat > m <<'EOF'\ngit push origin main\nEOF\ngit push -u origin claude/x", ALLOW),
+    ("a global -c option, then a branch push", "git -c x=y push -u origin claude/x", ALLOW),
+    # -- security review of the M-13 draft: parser differentials ------------
+    # 1. a `<<` the draft took for a heredoc operator before knowing the quote,
+    #    comment or arithmetic state, so it dropped a live line as a "body".
+    ("a heredoc-looking `<<` inside quotes does not hide the next line",
+     'echo "a <<\'EOF\'"\ngit push origin main\nEOF', BLOCK),
+    ("a heredoc-looking `<<` inside a comment does not hide the next line",
+     "true # <<'EOF'\ngit push origin main\nEOF", BLOCK),
+    ("a `<<` inside $((...)) is not a heredoc operator",
+     "echo $((1<<'X'))\ngit push origin main\nX", BLOCK),
+    # 2. `#` mid-word: after an escaped character or a quote span bash is still
+    #    inside the word, so the rest of the line is live.
+    ("`#` after an escaped space is not a comment",
+     "echo \\ #; git push origin main", BLOCK),
+    ("`#` right after a dropped quote span is not a comment",
+     'echo "a b"#; git push origin main', BLOCK),
+    # 3. ANSI-C quoting: `\'` does not end a $'...' span.
+    ("an escaped quote inside $'...' does not end the span",
+     "echo $'it\\'s' && git push origin main && echo 'x y'", BLOCK),
+    # Second review round: a quoted delimiter with a space, read as its first
+    # word, ended the "body" at a later line naming that word, dropping the
+    # live line before it; and a `#` after a space inside ${...} dropped the
+    # rest of the line as a comment.
+    ("a single-quoted heredoc delimiter with spaces is read whole",
+     "cat <<'E O F'\nit's\nE O F\ngit push origin main\nE", BLOCK),
+    ("a double-quoted heredoc delimiter with spaces is read whole",
+     'cat <<"a b"\nit"s\na b\ngit push origin main\na', BLOCK),
+    ("a `#` after a space inside ${...} is not a comment",
+     "echo ${x:- #y}; git push origin main", BLOCK),
+    ("an unbalanced heredoc delimiter quote drops nothing",
+     "cat <<'EOF\nEOF\ngit push origin main\nEOF", BLOCK),
+    # Third review round: braces inside quotes within ${...} were counted, so
+    # the expansion closed early and the parser lost sync.
+    ("a quoted `}` inside ${...} does not close it",
+     'echo ${x:-"}"}; git push origin main; echo "done now"', BLOCK),
+    ("a single-quoted `}` inside ${...} does not close it",
+     "echo ${x:-'}'}; git push origin main; echo 'done now'", BLOCK),
+    # Fail toward checking: text that could expand is never dropped.
+    ("a substitution after a # is kept, not dropped as a comment",
+     "true # $(git push origin main)", BLOCK),
+    # Fourth round: a kept comment was reparsed, so its apostrophe opened a
+    # quote that swallowed the next line.
+    ("a kept comment is not reparsed for quotes",
+     "true # ${x} don't\ngit push origin main\necho 'ok'", BLOCK),
+    # Fifth round: the ${...} scanner fails closed. Only a plain expansion
+    # (word characters and :-+=?%/) is skipped as a unit; any other keeps the
+    # rest of the input verbatim and unparsed.
+    ("an ANSI-C escaped quote inside ${...} does not end it early",
+     "echo ${x:-$'\\'}'}; git push origin main; echo 'done now'", BLOCK),
+    ("a `}` in a comment inside ${x:-$(...)} does not close the expansion",
+     "echo ${x:-$(true # }'\n)}; git push origin main; echo 'a b'", BLOCK),
+    ("a substitution with a `}` inside ${...}, then a push",
+     "echo ${x:-$(echo })}; git push origin main; echo \"done now\"", BLOCK),
+    ("a backtick span with a `}` inside ${...}, then a push",
+     "echo ${x:-`echo }`}; git push origin main; echo \"done now\"", BLOCK),
+    ("an ANSI-C span inside ${...} as the command word, then a push",
+     "${x:-$'\\'}'} ; git push origin main", BLOCK),
+    # ...and the complement.
+    ("a spaced quoted delimiter's body is still dropped, then a branch push",
+     "cat <<'E O F'\ngit push origin main\nE O F\ngit push -u origin claude/x", ALLOW),
+    ("${#arr} is not a comment, and a branch push after it passes",
+     "echo ${#arr[@]}; git push -u origin claude/x", ALLOW),
+    ("an ANSI-C span with an escaped quote, then a branch push",
+     "echo $'it\\'s' && git push -u origin claude/x && echo 'x y'", ALLOW),
+    ("a real comment at a word boundary still hides its text",
+     "git push -u origin claude/x; # then git push origin main", ALLOW),
+]
+
+# M-11: the no-jq reader must take tool_input's command, the FIRST "command"
+# key, not a later one. jq reads .tool_input.command either way.
+PUSH_EXTRA_CASES = [
+    ("a later \"command\" key does not replace tool_input's (no-jq reader)",
+     "git push origin main", {"tool_response": {"command": "echo ok"}}, BLOCK),
 ]
 
 WAIT_CASES = [
@@ -145,17 +283,70 @@ WAIT_CASES = [
 
 def install(tmp):
     """The plugin's scripts/ layout: each gate beside the library it sources."""
-    for src, name in ((PUSH, "push-gate.sh"), (WAIT, "wait-gate.sh"), (LIB, "gate-lib.sh")):
+    for src, name in ((PUSH, "push-gate.sh"), (WAIT, "wait-gate.sh"), (LIB, "gate-lib.sh"),
+                      (PAGES, "pages-edit-gate.sh")):
         shutil.copyfile(src, Path(tmp) / name)
-    return Path(tmp) / "push-gate.sh", Path(tmp) / "wait-gate.sh"
+    return Path(tmp) / "push-gate.sh", Path(tmp) / "wait-gate.sh", Path(tmp) / "pages-edit-gate.sh"
 
 
-def run(gate, command, background=None, env=None):
+def run(gate, command, background=None, env=None, extra=None):
     tool_input = {"command": command}
     if background is not None:
         tool_input["run_in_background"] = background
-    payload = json.dumps({"tool_name": "Bash", "tool_input": tool_input})
+    payload = json.dumps({"tool_name": "Bash", "tool_input": tool_input, **(extra or {})})
     return run_argv(["bash", gate], input=payload.encode(), cwd=ROOT, env=env)
+
+
+# -- pages-edit-gate.sh ------------------------------------------------------
+REMIND, SILENT = 2, 0
+QA_PLAIN = "env:\n  BUILD_PATHS: '^src/'\njobs: {}\n"
+QA_EMPTY = "env:\n  BUILD_PATHS: ''\njobs: {}\n"
+QA_COMMENTED_ENV = "env:   # project settings\n  BUILD_PATHS: '^src/'\njobs: {}\n"
+# Folding joins lines with a space, as YAML does, so a folded pattern is one line.
+QA_FOLDED = "env:\n  BUILD_PATHS: >-  # inputs\n    ^src/|^package\\.json$\n\n  OTHER: x\njobs: {}\n"
+QA_LITERAL = "env:\n  BUILD_PATHS: |\n    ^src/\n    ^package\\.json$\njobs: {}\n"
+# (label, path relative to the repo root, qa.yml text or None, expected)
+PAGES_CASES = [
+    ("a root index.html", "index.html", None, REMIND),
+    ("a root-served script (I-12)", "app.js", None, REMIND),
+    ("a nested served script (I-12)", "js/main.js", None, REMIND),
+    ("a root-served page that is not index.html (I-12)", "about.html", None, REMIND),
+    ("a stylesheet", "styles/tokens.css", None, REMIND),
+    ("an HTML file under docs/", "docs/site/x.html", None, REMIND),
+    ("a served SVG", "img/logo.svg", None, REMIND),
+    # ...and what Pages never serves to users.
+    ("a CI script under .github/", ".github/scripts/check.js", None, SILENT),
+    ("a template under templates/", "templates/x/index.html", None, SILENT),
+    ("a dependency under node_modules/", "node_modules/x/index.js", None, SILENT),
+    ("a markdown file", "README.md", None, SILENT),
+    ("a build input with no build (BUILD_PATHS empty)", "src/app.ts", QA_EMPTY, SILENT),
+    # BUILD_PATHS shapes (M-12).
+    ("a build input under a plain BUILD_PATHS", "src/app.ts", QA_PLAIN, REMIND),
+    ("a non-input under a plain BUILD_PATHS", "notes/todo.txt", QA_PLAIN, SILENT),
+    ("a build input under a commented env: line", "src/app.ts", QA_COMMENTED_ENV, REMIND),
+    ("a build input under a folded block scalar", "package.json", QA_FOLDED, REMIND),
+    ("a build input under a literal block scalar", "package.json", QA_LITERAL, REMIND),
+    ("a non-input under a literal block scalar", "notes/todo.txt", QA_LITERAL, SILENT),
+]
+
+
+def pages_case(c, gate, label, rel, qa, expected, env, tag):
+    with tempfile.TemporaryDirectory() as repo:
+        run_argv(["git", "init", "-q", repo])
+        if qa is not None:
+            (Path(repo) / ".github/workflows").mkdir(parents=True)
+            (Path(repo) / ".github/workflows/qa.yml").write_text(qa)
+        f = Path(repo) / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("x\n")
+        payload = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": str(f)},
+                              "tool_response": {"filePath": str(f)}})
+        code, out = run_argv(["bash", gate], input=payload.encode(), cwd=repo, env=env)
+    verdict = "reminds" if expected == REMIND else "stays silent"
+    if code != expected:
+        c.fail(f"pages-edit-gate{tag}: {label}", f"expected exit {expected}; got {code}\n      {rel}\n      {out}")
+    else:
+        c.ok(f"pages-edit-gate{tag} {verdict} on {label}")
 
 
 def no_jq_env(tmp):
@@ -174,7 +365,7 @@ def no_jq_env(tmp):
 
 
 def main():
-    for path in (PUSH, WAIT, LIB):
+    for path in (PUSH, WAIT, LIB, PAGES):
         if not path.is_file():
             print(f"CANNOT RUN: {path} does not exist")
             return 1
@@ -199,10 +390,11 @@ def main():
                 c.fail(label, f"expected a silent allow (exit 0); got {code}\n      {out}")
             else:
                 c.ok(label)
-    return c.finish(f"{2 * (len(PUSH_CASES) + len(WAIT_CASES)) + 2} gate payloads read correctly, with and without jq.")
+    n = len(PUSH_CASES) + len(PUSH_EXTRA_CASES) + len(WAIT_CASES) + len(PAGES_CASES) + 10
+    return c.finish(f"{2 * n + 2} gate payloads read correctly, with and without jq.")
 
 
-def check(c, push, wait, env=None, tag=""):
+def check(c, push, wait, pages, env=None, tag=""):
     for name, gate, cases in (("push-gate" + tag, push, [(l, cmd, None, e) for l, cmd, e in PUSH_CASES]),
                               ("wait-gate" + tag, wait, WAIT_CASES)):
         for label, command, background, expected in cases:
@@ -212,6 +404,50 @@ def check(c, push, wait, env=None, tag=""):
                 c.fail(f"{name}: {label}", f"expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
             else:
                 c.ok(f"{name} {verdict}s {label}")
+    for label, command, extra, expected in PUSH_EXTRA_CASES:
+        code, out = run(push, command, None, env, extra)
+        if code != expected:
+            c.fail(f"push-gate{tag}: {label}", f"expected exit {expected}; got {code}\n      {out}")
+        else:
+            c.ok(f"push-gate{tag}: {label}")
+    for label, rel, qa, expected in PAGES_CASES:
+        pages_case(c, pages, label, rel, qa, expected, env, tag)
+    bare_dir_cases(c, push, env, tag)
+
+
+def bare_dir_cases(c, push, env, tag):
+    """A bare push reads the branch of the repository it acts on: `git -C <path>`
+    selects it, so the invoking checkout's branch must not decide (Codex, #439).
+    Two scratch repositories, one on main and one on a feature branch, each
+    invoking the gate against the other."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repos = {}
+        for name, branch in (("onmain", "main"), ("onfeature", "claude/x")):
+            d = Path(tmp) / name
+            d.mkdir()
+            run_argv(["git", "init", "-q", "-b", branch, str(d)])
+            repos[name] = d
+        cases = [
+            ("from a main checkout, -C into a feature checkout", "onmain", f"git -C {repos['onfeature']} push", ALLOW),
+            ("from a feature checkout, -C into a main checkout", "onfeature", f"git -C {repos['onmain']} push", BLOCK),
+            ("from a feature checkout, a relative -C into a main checkout", "onfeature", "git -C ../onmain push", BLOCK),
+            ("from a main checkout, a plain bare push", "onmain", "git push", BLOCK),
+            ("from a feature checkout, a plain bare push", "onfeature", "git push", ALLOW),
+            ("a quoted -C path the gate cannot read", "onfeature", 'git -C "../onmain" push', BLOCK),
+            # Security review, #439: what the shell rewrites, and what git cannot open.
+            ("a ~ -C path the gate cannot read", "onfeature", "git -C ~/onmain push", BLOCK),
+            ("a glob -C path the gate cannot read", "onfeature", "git -C ../onma* push", BLOCK),
+            ("a -C path that is not a repository", "onfeature", "git -C /nonexistent-dir push", BLOCK),
+            ("a -c after -C does not apply the path twice", "onmain", f"git -C {repos['onfeature']} -c x=y push", ALLOW),
+        ]
+        for label, cwd, command, expected in cases:
+            payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+            code, out = run_argv(["bash", str(push)], input=payload.encode(), cwd=repos[cwd], env=env)
+            verdict = "block" if expected == BLOCK else "allow"
+            if code != expected:
+                c.fail(f"push-gate{tag}: bare push, {label}", f"expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
+            else:
+                c.ok(f"push-gate{tag} {verdict}s a bare push, {label}")
 
 
 if __name__ == "__main__":

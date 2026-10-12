@@ -26,10 +26,9 @@ where its verdicts are recorded, and how the inventory is matched against them.
 - Strip a `-builtin` suffix from a manifest key before comparing it to an
   inventory name: the inventory calls it `dataviz`, `EXPORTS.json` calls it
   `dataviz-builtin`.
-- Compare a directory-cache `name` lowercased, with spaces as hyphens:
-  `Plugin Management` is `considered.plugin-management`.
-- Record a skill under its **parent plugin's** name, since that is what a
-  marketplace manifest advertises.
+- Name normalisation otherwise follows `/audit-repo` (lowercased directory-cache
+  names, a skill recorded under its parent plugin): `Plugin Management` is
+  `considered.plugin-management`.
 
 ## What is a finding
 - An Anthropic-owned native that is in neither `externals` nor `considered`.

@@ -20,8 +20,8 @@ Run in order:
 
 1. **Pre-flight (local gate).** Before pushing, run the repo's configured
    validation gates — whatever THIS project wires into CI (in `claude.directives`
-   itself that's `node .github/scripts/check-*.js` — `check-paths`,
-   `check-sections`, `check-links.js --internal`; a project will have its own) — plus `npx html-validate <changed .html>` for
+   itself that's its local gate, `python3 .github/scripts/run-local-gate.py`,
+   which runs `qa.yml`'s whole validate job; a project will have its own) — plus `npx html-validate <changed .html>` for
    any HTML touched. Fix failures before pushing.
 
 2. **Commit, push, merge — then capture the MERGE commit's SHA.** Commit to the
@@ -125,8 +125,11 @@ Run in order:
      path goes public, and a build project serves its unbuilt sources. The
      None → main toggle is a branch-source fix only.
 
-6. **Report proactively on the terminal state** (message / `SendUserFile` with
-   `status: proactive` so it reaches the user's phone). On a successful build,
+6. **Report proactively on the terminal state** — a message, or, where the
+   session has a tool that pushes to the user's phone (`SendUserFile` with
+   `status: proactive`, or a push-notification tool), that tool. Verify which
+   exists in this session's tool list before naming one; without either, the
+   message is the report. On a successful build,
    do step 7's cache-busted fetch FIRST: its result chooses among the first
    three lines below, so the report never precedes the check it reports.
    - **SUCCESS** (the fetch served the new content): `✅ Deployed <short-sha> —

@@ -4,12 +4,21 @@ description: "Use whenever asked to compare, diff, redline, or say what changed 
 phase: cross-cutting
 ---
 When asked to compare two documents, produce a self-contained HTML file with a
-line-by-line side-by-side comparison, then **publish it with the `Artifact`
-tool** and hand the user the returned URL. (Load the `artifact-design` skill
-before writing it, and `artifact-capabilities` if the page needs any runtime
-behaviour.) Do NOT promise a "downloadable file" and a local path: in a
-web/remote session a path is not a link, and the viewer sandbox blocks
-page-initiated downloads — the Artifact URL is the deliverable.
+line-by-line side-by-side comparison, then deliver it by the first path that
+fits:
+- **Publish it with the `Artifact` tool** and hand the user the returned URL —
+  the default. (Load the `artifact-design` skill before writing it, and
+  `artifact-capabilities` if the page needs any runtime behaviour.) Do NOT
+  promise a "downloadable file" and a local path here: in a web/remote session
+  a path is not a link, and the viewer sandbox blocks page-initiated downloads
+  — the Artifact URL is the deliverable.
+- **Sensitive documents: build the file, let the person decide.** When the user
+  presents either document as confidential or sensitive (a marked NDA, a
+  contract under negotiation, personal data), write the HTML file and give its
+  path; offer to publish it, and publish only on a yes. Artifacts start
+  private, but a published page is one share away from others.
+- **No `Artifact` tool in this session** (a CLI or desktop session without it):
+  write the HTML file locally, give its path, and say it opens in any browser.
 
 Reading the inputs:
 - A `.docx` or `.pdf` input is read with the session's `anthropic-skills:docx` /

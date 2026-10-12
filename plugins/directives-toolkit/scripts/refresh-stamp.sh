@@ -75,13 +75,8 @@ check() {
 }
 
 if [ "$tree" = yes ]; then
-  # The kit's installed location, exactly as Kit defects derives it.
-  kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null \
-    | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
-             -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
-             -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \
-             -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sed -E 's#/+$##' | sort -u; true)
-  [ -n "$kit_dirs" ] || { [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests; }
+  # The kit's installed location, from the SAME file Kit defects runs.
+  kit_dirs=$(bash "$(dirname "${BASH_SOURCE[0]}")/kit-dirs.sh")
 
   # 1. Every path the delta lists.
   while IFS=$(printf '\t') read -r st t; do

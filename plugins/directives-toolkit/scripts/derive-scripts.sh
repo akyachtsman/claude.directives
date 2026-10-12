@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # derive-scripts.sh — the ONE derivation of the .github/scripts/* files a text
 # references. Reads the text on stdin and prints one path per line (unsorted,
-# repeats possible). Both /refresh-repo callers run this file:
+# repeats possible). Every caller runs this file:
 #   - Phase 2's install derivation (commands/refresh-repo.md → *Deriving the
 #     referenced-script set*), over the fetched upstream callers;
+#   - /new-repo's step 5, the same derivation over the callers a bootstrap
+#     installs (commands/new-repo.md carries its own block, because the plugin
+#     root is substituted only in the command being loaded);
 #   - Phase 3's applied-check (scripts/refresh-stamp.sh, scan()).
 # One file, so the two can never derive different sets: a check wider than the
 # install refuses a stamp the install can never satisfy, and a narrower one

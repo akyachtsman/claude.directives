@@ -348,7 +348,7 @@ was retired 2026-07-21). Three layers, all CI-validated so they can't rot:
   paths ARE the shopping list for a swap, across all delivery modes at once.
 - **`swap`** — the classes. **Permanent** paths (the five directive contracts;
   the whole `meta` domain) evolve via PR, never wholesale replacement.
-  **Orchestrators** (`sdd-loop` for development, `qa-pipeline` for testing)
+  **Orchestrators** (`sdd-loop` for development, `/qa-pipeline` for testing)
   are permanent AND define the interfaces components must fit — **a new
   component does not exist until its orchestrator sequences it**. Everything
   else is swappable.

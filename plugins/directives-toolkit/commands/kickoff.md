@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: "Start a spec-driven build of a new app — scaffold, product brief, optional discovery, then /sdd-loop."
 phase: plan
 benefits-from: [new-repo]
@@ -51,10 +52,11 @@ Execute in order:
    for the user's reply before proceeding.**
 
 2. **State the plan, then go hands-off.** Tell the user what happens next so the
-   autonomous stretch isn't a surprise: "I'll now scaffold the repo, [run
-   discovery,] and start the spec — I'll pause for you again at the spec's
-   clarification questions and at plan approval; merges happen automatically on
-   green per `git.md`."
+   autonomous stretch isn't a surprise, stated as what happens, not as
+   narration (`global.md` → *Say It in Verbs*): "Next: scaffold the repo, [run
+   discovery,] start the spec. I pause for you at the spec's clarification
+   questions and at plan approval; merges happen automatically on green per
+   `git.md`."
 
 3. **Bootstrap if needed.** If `CLAUDE.md` is absent, run **`/new-repo`** and let it
    finish (it scaffolds `CLAUDE.md` + inherited directives, CI, the Playwright kit,
@@ -90,7 +92,7 @@ Execute in order:
    **`/sdd-loop specify`**, then proceed phase by phase
    (`specify → plan → implement` — `clarify` folded into `specify`, `tasks` and
    `analyze` into `plan`). `/sdd-loop` owns the phase mechanics and delegates
-   review to the `pr-review-toolkit` reviewers and `qa-pipeline`; the directives
+   review to the `pr-review-toolkit` reviewers and `/qa-pipeline`; the directives
    are the constitution. Honor the Pre-Push gate (`/commit-chk`) and PR
    lifecycle.
 

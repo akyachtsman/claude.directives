@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: "Re-sync this project with claude.directives mid-session — re-read the rules and report the upstream delta since the last sync."
 phase: cross-cutting
 ---
@@ -10,6 +11,10 @@ upstream paths, and the project's *installed copies* of upstream templates.
 
 In `claude.directives` itself, run only Phase 0 — the templates ARE the source,
 and CI validates references.
+
+The self-contained mechanisms live in this plugin's `scripts/` and each block
+below runs one; the reasons for each guard are in that file's comments. Run
+every one from the project root.
 
 ## Phase 0 — Re-read the rules (context refresh)
 
@@ -29,47 +34,7 @@ old path. Validate every explicit `claude.directives` reference in this project
 against the upstream tree:
 
 ```bash
-# Runs the same under ANY shell options a session has set (`-e`, `-u`,
-# `-o pipefail`). The fetch sits in an `if`, so errexit cannot end the block
-# before the guard reports.
-src=https://github.com/akyachtsman/claude.directives.git
-sha= tree= rc=1
-# A blob-less shallow clone into a SCRATCH dir: trees only, no file contents,
-# no checkout, nothing written to this project's .git. An EMPTY $objs must stop
-# everything: `git -C ""` is a no-op, so every call would run against THIS
-# project instead.
-objs=$(mktemp -d) || objs=
-if [ -n "$objs" ] \
-   && git clone -q --depth 1 --filter=blob:none --no-checkout "$src" "$objs" \
-   && sha=$(git -C "$objs" rev-parse HEAD) \
-   && tree=$(git -C "$objs" ls-tree -r --name-only HEAD); then
-  rc=0
-fi
-if [ -n "$objs" ]; then rm -rf "$objs"; fi
-# GUARD: a failed fetch makes EVERY path look BROKEN. So require a clean exit,
-# a HEAD that is a commit SHA, and a non-empty listing. Never test for a path
-# being present: a renamed or deleted path is exactly what this phase reports,
-# so using one as the sentinel would turn the breakage into CANNOT CHECK.
-# `git ls-tree` is never truncated (the API's recursive tree could be, and was
-# refused when it was), and a failed clone leaves $tree empty rather than
-# filling it with an error body. Feed grep with here-strings: under pipefail an
-# early-closing reader fed by `echo` can fail a pipeline whose match succeeded.
-if [ "$rc" -ne 0 ] || ! grep -qE '^[0-9a-f]{40}$' <<<"$sha" || [ -z "$tree" ]; then
-  echo "CANNOT CHECK: upstream tree not readable from this session — reference validation SKIPPED (no BROKEN verdicts). Use the raw-URL fallback below."
-else
-  # `|| true`: a project with no upstream references is a grep that matched
-  # nothing, not a failure to stop on. A github.com `blob/main/` link names the
-  # same file as a raw one, so that prefix is stripped. A `tree/` link names a
-  # DIRECTORY, which this file listing cannot confirm: it stays unchecked.
-  refs=$(grep -rhoE 'claude\.directives/(main/)?[A-Za-z0-9._/-]+\.[A-Za-z0-9]+' \
-    --include='*.md' --include='*.yml' --include='*.json' . 2>/dev/null \
-    | sed -E 's#.*claude\.directives/(blob/)?(main/)?##' | sort -u \
-    | grep -E '^(directives|docs|templates|plugins|\.claude|\.github)/' || true)
-  while read -r p; do
-    [ -n "$p" ] || continue
-    grep -qxF -- "$p" <<<"$tree" || echo "BROKEN: $p"
-  done <<<"$refs"
-fi
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-broken-refs.sh"
 ```
 **Transport is git, never the API.** A web session's proxy refuses
 `api.github.com` for every repository the session was not opened on — from a
@@ -93,28 +58,7 @@ compares every installed verbatim drop-in against the CURRENT upstream template,
 regardless of delta:
 
 ```bash
-repo="akyachtsman/claude.directives"
-raw="https://raw.githubusercontent.com/$repo/main"
-for f in .github/workflows/*.yml .github/actions/*/* \
-         .claude/hooks/session-start.sh; do
-  [ -f "$f" ] || continue
-  case "$f" in
-    .github/workflows/*) t="templates/workflows/$(basename "$f")";;
-    .claude/hooks/*)     t="templates/claude-hooks/$(basename "$f")";;
-    *)                   t="templates/actions/$(basename "$(dirname "$f")")/$(basename "$f")";;
-  esac
-  # The status decides, never curl's exit alone: only a 404 means upstream ships
-  # no such template. A blocked host, a timeout or a 5xx is CANNOT-VERIFY;
-  # reading it as NO-TEMPLATE would skip a file that may well have drifted.
-  tmpl=$(mktemp)
-  code=$(curl -sSL -o "$tmpl" -w '%{http_code}' "$raw/$t" 2>/dev/null) || code=000
-  case "$code" in
-    200) diff -q "$tmpl" "$f" >/dev/null 2>&1 || echo "DRIFT: $f" ;;
-    404) echo "NO-TEMPLATE: $f (project-specific — skip)" ;;
-    *)   echo "CANNOT-VERIFY: $f (fetch returned $code) — not compared, not DRIFT" ;;
-  esac
-  rm -f "$tmpl"
-done
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
 ```
 (raw.githubusercontent.com is CDN-served and works from remote sessions.)
 
@@ -142,9 +86,9 @@ above never inspects `.claude/settings.json`, and Phase 2 only sees upstream
 changes, so a current-stamped project would otherwise refresh forever without
 being fixed. After the install block below, repair registration and the exec
 bit; the registration is a settings write, so it goes through *Settings writes*
-below. The registration test is the same `jq` expression `/env-chk` runs; it
-parses the `SessionStart` array rather than grepping the file, for the reason
-the comment in the block gives:
+below. The registration test is `session-start-registered.sh` in this plugin's
+`scripts/`, the same file `/env-chk` runs; it parses the `SessionStart` array
+rather than grepping the file, for the reason its header gives:
 
 ```bash
 # exec bit: invisible to a content diff, and a non-executable hook never runs
@@ -153,14 +97,8 @@ the comment in the block gives:
   && echo "REPAIRED: exec bit on .claude/hooks/session-start.sh"
 
 # registration: merge the SessionStart row when the script exists but nothing runs it
-# Parse the SessionStart array; do not grep the file. A project may already run an
-# unrelated SessionStart hook AND reference this script under some other event, so
-# file-wide greps can both succeed while nothing invokes the updater at session start.
 if [ -f .claude/hooks/session-start.sh ] \
-   && ! jq -e '[.hooks.SessionStart[]?.hooks[]? | ((.command // empty) | strings
-                | gsub("\"";"") | split(" ")[0]), (.args[]? | strings)]
-            | any(endswith("hooks/session-start.sh"))' \
-       .claude/settings.json >/dev/null 2>&1; then
+   && ! bash "${CLAUDE_PLUGIN_ROOT}/scripts/session-start-registered.sh"; then
   echo "MISSING-REGISTRATION: .claude/settings.json has no SessionStart row —"
   echo "  merge the row from templates/claude-settings.json via Settings writes"
   echo "  (do not overwrite the file; the project may carry its own keys),"
@@ -177,28 +115,7 @@ truncated hook written to the final path would pass the `[ ! -f ]` test as
 "already installed" on every later refresh. A half-install is worse than none.
 
 ```bash
-repo="akyachtsman/claude.directives"
-raw="https://raw.githubusercontent.com/$repo/main"
-if [ -f .claude/settings.json ] && [ ! -f .claude/hooks/session-start.sh ]; then
-  mkdir -p .claude/hooks
-  # mktemp inside the DESTINATION dir: a bare `mktemp` lands in /tmp, and when
-  # /tmp is a different filesystem `mv` degrades from an atomic rename to a copy
-  # — reintroducing the partial-final-file this block exists to prevent.
-  tmp=$(mktemp .claude/hooks/.session-start.XXXXXX) || tmp=''
-  # chmod and mv are INSIDE the tested condition: without set -e a failing
-  # `&&` chain would still fall through to the success message.
-  if [ -n "$tmp" ] \
-     && curl -fsSL --connect-timeout 5 --max-time 60 \
-          "$raw/templates/claude-hooks/session-start.sh" -o "$tmp" \
-     && [ -s "$tmp" ] && bash -n "$tmp" \
-     && chmod +x "$tmp" \
-     && mv "$tmp" .claude/hooks/session-start.sh; then
-    echo "INSTALLED: .claude/hooks/session-start.sh (was absent)"
-  else
-    [ -n "$tmp" ] && rm -f "$tmp"
-    echo "COULD-NOT-INSTALL: .claude/hooks/session-start.sh — nothing written; report it"
-  fi
-fi
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-hook-install.sh"
 ```
 Install the settings row in the same pass (through *Settings writes* below), so
 the registration and its target always land together.
@@ -310,68 +227,7 @@ session (`CLAUDE_CODE_REMOTE=true`, 2026-09-23): `--depth=100` fetched in ~1s
 and 1.6 MB, and `--deepen 100` reached 200 commits.
 
 ```bash
-classified=
-last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
-head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
-# INVALIDATE FIRST. Any marker left by an earlier invocation is cleared before
-# this run attempts anything, so a verdict can only ever be THIS run's. Without
-# it, a run interrupted after writing the marker left approval lying around: a
-# later run against the same head whose delta listing FAILED would find the stale
-# marker, match it against the unchanged head, and permanently advance the stamp
-# past a delta nobody dispositioned. SHA-binding alone does not catch that,
-# because the SHA is the same.
-rm -f "$(git rev-parse --git-path refresh-repo-classified)" \
-      "$(git rev-parse --git-path refresh-repo-delta)"
-
-if [ -z "$head" ]; then
-  echo "upstream head unavailable this run — SKIPPING Phases 2-3, stamp unchanged"
-elif [ -n "$last" ] && [ "$last" != "$head" ]; then
-  # File-level classification over git transport. Degrade loudly when it fails.
-  # Lists EVERY changed path, not just templates|docs|directives: a delta made
-  # only of plugins/ changes printed nothing while still recording "classified",
-  # so the next run treated an unseen change as handled. The disposition table
-  # below covers plugins/ as informational — it still has to be SEEN.
-  # Fetch by the SHA ls-remote returned, never `main`: main can move between
-  # the two calls, and a delta listed against a different head is not this one.
-  src=https://github.com/akyachtsman/claude.directives.git
-  # An EMPTY $objs must stop everything: `git -C ""` is a no-op, so every call
-  # below would run against THIS project's .git — the pollution the scratch
-  # repo exists to avoid.
-  objs=$(mktemp -d) || objs=
-  if [ -n "$objs" ] && git init -q --bare "$objs"; then
-    git -C "$objs" fetch -q --depth=100 "$src" "$head"
-    git -C "$objs" cat-file -e "$last^{commit}" 2>/dev/null \
-      || git -C "$objs" fetch -q --deepen 100 "$src" "$head"   # ONE bounded retry
-  else
-    objs=
-  fi
-  if [ -n "$objs" ] \
-     && git -C "$objs" cat-file -e "$last^{commit}" 2>/dev/null \
-     && git -C "$objs" cat-file -e "$head^{commit}" 2>/dev/null \
-     && delta_list=$(git -C "$objs" diff --no-renames --name-status "$last" "$head"); then
-    printf '%s\n' "$delta_list"
-    # Kept for Phase 3, which re-checks every listed path was APPLIED before it
-    # stamps. Reading the delta is not applying it (claude.prop, PROP7 #2).
-    printf '%s\n' "$delta_list" > "$(git rev-parse --git-path refresh-repo-delta)"
-    classified=yes   # the delta was READ — Phase 3 still checks it was APPLIED
-    # Written only AFTER the delta has actually been listed. Records WHICH head
-    # was classified, so Phase 3 can refuse a verdict made against a different
-    # head. `git rev-parse --git-path` because in a linked worktree .git is a
-    # FILE, and a redirect into it fails.
-    printf '%s' "$head" > "$(git rev-parse --git-path refresh-repo-classified)"
-  else
-    echo "delta listing unavailable (fetch failed, or $last beyond the fetched"
-    echo "depth) — delta known by SHA only ($last -> $head); classify per the"
-    echo "Propagation Matrix in MAINTAIN-REPO-USER-INSTRUCTIONS.md. The stamp will NOT advance."
-  fi
-  [ -n "$objs" ] && rm -rf "$objs"
-else
-  # Nothing to classify: either no prior stamp (first run — the per-file policy
-  # is applied directly, below) or the stamp already equals head. Both are
-  # legitimately stampable.
-  classified=yes
-  printf '%s' "$head" > "$(git rev-parse --git-path refresh-repo-classified)"
-fi
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-delta.sh"
 ```
 (First run with no stamp: skip the delta and apply the per-file policy directly.)
 
@@ -387,10 +243,10 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ **EXCEPT `pages-retry.yml`, whose ABSENCE can be deliberate — never batch-install it.** An Actions-source project is required to delete it (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered deploy on a visibility flip. Decide it in both branches rather than as a single condition: **branch-source** → install it and restore its `REQUIRED` entry in the same edit; **Actions-source** → leave it absent, **unless** the project has taken W3's idempotent exception, in which case it carries a repointed copy whose `REQUIRED` entry names the project's own deploy — never overwrite that with the template or drop that entry. This row is the reason that deletion needs a rule at all: without it, the first refresh that touches the retry template undoes the fix silently. ⚠️ **`pages-deploy.yml` is the mirror case, ACTIONS-SOURCE ONLY: never batch-install it on a branch-source project**, where the push already deploys and it would be a second, competing deploy on every push; on an Actions-source project it IS the deploy, and its filled-in `BUILD_CMD`/`SITE_DIR` make a local copy `DRIFT` by design, so keep those two values when taking a template change (and the same holds for `qa.yml`'s `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` in a project with a build: resetting them to the shipped empties would skip or mis-serve its UI suite), and make sure `.github/workflow-ref-required.json` lists both of its watchers (`"qa-live.yml": ["Pages Deploy"]`, `"pages-monitor.yml": ["Pages Deploy"]`) — add a missing entry in the same edit, since without it a refresh that drops either trigger passes the guard. Likewise on Actions-source, `qa-live.yml` and `pages-monitor.yml` carry the deploy's `name:` added beside the template's arms (W2), so they are `DRIFT` by design: take a template change around that name, never drop it (`.github/workflow-ref-required.json` refuses the drop when it lists them). ⚠️ **And NEVER `keepalive.yml`, absent or present:** `/new-repo` deliberately does not scaffold it — it pushes to `main` weekly, which the required default-branch ruleset refuses, so installed it fails every week (`cicd-setup.md` → *9f — Scheduled-job notifications*); an installed copy is a finding to delete, not a template to refresh. For each `DRIFT` file, show the diff and decide singly — local drift is as often an improvement this repo has not yet absorbed as it is corruption, and only the diff distinguishes them; keep local only when the diff leaves it genuinely unclear (see Phase 1.5's disposition rule, which this row defers to). Anything worth keeping is a finding for the Downstream-Finding Loop — hand it upstream rather than letting the next refresh delete it again |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ Four files carry their own rules — `pages-retry.yml`, `pages-deploy.yml`, the Actions-source watchers and `keepalive.yml`: read *Workflow refresh rules* below the table before installing any workflow |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
-| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* immediately below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
+| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge, through *Settings writes* (Phase 1.5). Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
@@ -409,6 +265,46 @@ names by path is not optional, and skipping it ships a broken reference.
   **documented command** for one only a directive names (`browser-ladder.js`,
   named by `test.md`). Deriving a path is not installing it: the derivation
   below and this exception must name the same set.
+
+### Workflow refresh rules
+
+The `templates/workflows/<wf>.yml` row above defers here.
+- ⚠️ **`pages-retry.yml`: its ABSENCE can be deliberate — never batch-install
+  it.** An Actions-source project is required to delete it
+  (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended
+  end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered
+  deploy on a visibility flip. Decide it in both branches rather than as a
+  single condition: **branch-source** → install it and restore its `REQUIRED`
+  entry in the same edit; **Actions-source** → leave it absent, **unless** the
+  project has taken W3's idempotent exception, in which case it carries a
+  repointed copy whose `REQUIRED` entry names the project's own deploy — never
+  overwrite that with the template or drop that entry. Without this rule, the
+  first refresh that touches the retry template undoes the deletion silently.
+- ⚠️ **`pages-deploy.yml` is the mirror case, ACTIONS-SOURCE ONLY: never
+  batch-install it on a branch-source project**, where the push already deploys
+  and it would be a second, competing deploy on every push. On an Actions-source
+  project it IS the deploy, and its filled-in `BUILD_CMD`/`SITE_DIR` make a local
+  copy `DRIFT` by design, so keep those two values when taking a template change
+  (the same holds for `qa.yml`'s `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` in a
+  project with a build: resetting them to the shipped empties would skip or
+  mis-serve its UI suite). Make sure `.github/workflow-ref-required.json` lists
+  both of its watchers (`"qa-live.yml": ["Pages Deploy"]`,
+  `"pages-monitor.yml": ["Pages Deploy"]`) — add a missing entry in the same
+  edit, since without it a refresh that drops either trigger passes the guard.
+- **The Actions-source watchers.** On Actions-source, `qa-live.yml` and
+  `pages-monitor.yml` carry the deploy's `name:` added beside the template's arms
+  (W2), so they are `DRIFT` by design: take a template change around that name,
+  never drop it (`.github/workflow-ref-required.json` refuses the drop when it
+  lists them).
+- ⚠️ **NEVER `keepalive.yml`, absent or present.** `/new-repo` deliberately does
+  not scaffold it (`cicd-setup.md` → *9f — Scheduled-job notifications* has the
+  reason); an installed copy is a finding to delete, not a template to refresh.
+- **Every `DRIFT` file:** show the diff and decide singly — local drift is as
+  often an improvement this repo has not yet absorbed as it is corruption, and
+  only the diff distinguishes them; keep local only when the diff leaves it
+  genuinely unclear (Phase 1.5's disposition rule, which this row defers to).
+  Anything worth keeping is a finding for the Downstream-Finding Loop — hand it
+  upstream rather than letting the next refresh delete it again.
 
 ⚠️ **And one absence that must be RESPECTED rather than filled.** The
 `templates/workflows/<wf>.yml` row batch-installs files "absent locally", which
@@ -433,26 +329,7 @@ unconditionally, so a taskless project may run it daily with nothing to do. When
 older starter differs from today's.
 
 ```bash
-# STARTER = the file matches some shipped version (no task body written yet).
-# A blob-less clone carries every commit's trees, which is all the test reads.
-d=$(mktemp -d) || d=
-if [ -f .github/scripts/notify-task.js ] && [ -n "$d" ] \
-   && git clone -q --bare --filter=blob:none https://github.com/akyachtsman/claude.directives.git "$d"; then
-  h=$(git hash-object .github/scripts/notify-task.js)
-  # Collect first, then match with a here-string: `grep -q` in a pipe exits on
-  # the first hit, and under pipefail the writer's SIGPIPE turns a match into
-  # a miss (it did, for the current starter).
-  shipped=$(git -C "$d" log --format=%H -- templates/scripts/notify-task.js \
-    | while read -r c; do git -C "$d" rev-parse -q --verify "$c:templates/scripts/notify-task.js" 2>/dev/null || true; done)
-  if grep -qxF "$h" <<<"$shipped"; then echo STARTER
-  # An edit that left the starter's placeholder body in place wrote no task.
-  elif grep -qF 'Add your scheduled notification in notify-task.js' .github/scripts/notify-task.js; then
-    echo "STARTER (edited, placeholder body still in place)"
-  else echo MODIFIED; fi
-else
-  echo "CANNOT CHECK: notify-task.js absent or upstream history not readable"
-fi
-if [ -n "$d" ]; then rm -rf "$d"; fi
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/notify-starter.sh"
 ```
 
 - **`MODIFIED`** → show the diff against the template at the fetched head. A
@@ -467,7 +344,7 @@ if [ -n "$d" ]; then rm -rf "$d"; fi
   so each is removed only when BOTH hold, and otherwise kept and named to the
   owner:
   - **unchanged:** `notify-email.js` and `package.json` match a shipped version
-    (run the test above with the path swapped in); `package-lock.json` goes
+    (run `notify-starter.sh` with that path as its argument); `package-lock.json` goes
     only with `package.json`.
   - **no other consumer:** nothing else in the repository reads it. A workflow
     can use `package.json` without naming it (an `npm` step whose
@@ -508,24 +385,16 @@ whether or not the delta touches the kit**. The kit may live elsewhere
 (`cicd-setup.md` lets `UI_TESTS_DIR` point anywhere), so find it from the
 workflows rather than assuming the default:
 ```bash
-# The YAML scalar, not the rest of the line: a quoted value ends at its closing
-# quote (a `#` inside it is part of the path) with its escapes decoded (`\"` in
-# double quotes, `''` in single); an unquoted one ends at ` #` (a comment).
-# A trailing `/` is dropped, so `e2e/` and `e2e` name one kit, not `e2e//x`.
-kit_dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null \
-  | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
-           -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
-           -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \
-           -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sed -E 's#/+$##' | sort -u)
-if [ -z "$kit_dirs" ]; then   # no UI_TESTS_DIR set: the default, if the project has a kit at all
-  [ -d .github/scripts/ui-tests ] && kit_dirs=.github/scripts/ui-tests || echo "no UI-test kit in this project — kit defects step skipped"
-fi
+# kit-dirs.sh is the one derivation; Phase 3's applied-check runs it too.
+kit_dirs=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/kit-dirs.sh")
+[ -n "$kit_dirs" ] || echo "no UI-test kit in this project — kit defects step skipped"
 printf '%s\n' "$kit_dirs" | while IFS= read -r d; do   # one path per LINE: a path with spaces stays whole
   [ -n "$d" ] || continue
   [ -d "$d" ] && echo "kit: $d" || echo "kit dir named but missing: $d — kit defects NOT checked there"
 done
 ```
-The accepted value forms are a CLOSED set (#375): unquoted (ending at ` #`),
+`kit-dirs.sh` (in this plugin's `scripts/`) reads the YAML scalar, not the rest
+of the line, and drops a trailing `/`. The accepted value forms are a CLOSED set (#375): unquoted (ending at ` #`),
 single-quoted with `''`, and double-quoted with `\"` and `\\` only. Anything else —
 another double-quoted escape such as `\x20`, a block or flow scalar, an anchor, a
 `${{ }}` expression — is not decoded, so the literal text is taken as the path and

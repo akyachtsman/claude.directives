@@ -16,7 +16,7 @@
       "consumers": [
         "CLAUDE.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "plugins/directives-toolkit/commands/qa-pipeline.md",
         ".github/workflows/codex-monitor.yml",
         "templates/workflows/codex-monitor.yml"
       ],

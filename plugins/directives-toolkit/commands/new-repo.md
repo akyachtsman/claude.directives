@@ -132,11 +132,33 @@ Execute in order:
    Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
 
    **Scripts the installed files name by path — DERIVE the set, never hand-list
-   it** (a hand list falls behind: #321, #353, #355). Run the pipeline `/refresh-repo` uses,
-   `refresh-repo.md` → *Deriving the referenced-script set*, with every file this bootstrap installs as a caller — the
-   workflows above, `templates/actions/*/action.yml`, and the five
-   `directives/*.md` from step 1 (a directive is a caller too) — all fetched at
-   step 1's SHA, never a moving `main`. Copy each derived
+   it** (a hand list falls behind: #321, #353, #355). Every file this bootstrap
+   installs is a caller — the workflows above, `templates/actions/*/action.yml`,
+   and the five `directives/*.md` from step 1 (a directive is a caller too) — all
+   fetched at step 1's SHA, never a moving `main`. Run this block; it is the same
+   derivation `/refresh-repo` runs (`refresh-repo.md` → *Deriving the referenced-script set*
+   explains each stage), and the plugin file it calls is resolved when this
+   command loads, so run it from here rather than from that command's text:
+
+   ```bash
+   sha="…step 1's SHA…"   # NOT main — that ref moves under you
+   raw="https://raw.githubusercontent.com/akyachtsman/claude.directives/$sha"
+   callers="…every templates/workflows/*.yml this step installs, every
+            templates/actions/*/action.yml, and directives/global.md git.md
+            design.md test.md data.md (each as directives/<name>)…"
+   buf=$(mktemp)
+   for c in $callers; do
+     curl -fsSL "$raw/$c" >>"$buf" \
+       || { echo "FETCH FAILED: $c — bootstrap STOPS here" >&2; rm -f "$buf"; exit 1; }
+     printf '\n' >>"$buf"   # token boundary: a caller need not end in a newline
+   done
+   derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf") \
+     || { echo "DERIVATION FAILED — bootstrap STOPS here" >&2; rm -f "$buf"; exit 1; }
+   rm -f "$buf"
+   printf '%s\n' "$derived" | sort -u
+   ```
+
+   Copy each derived
    `.github/scripts/<f>` from `claude.directives/templates/scripts/<f>`. A missing
    one fails its caller at step resolution, so a failed caller or script fetch
    stops the bootstrap; never install a caller without what it names. Config
@@ -179,10 +201,11 @@ Execute in order:
    **Scheduled-job scripts** — not at bootstrap: they ride with
    `cron-notify.yml`, which is added only when the project has a scheduled task
    (`docs/standards/cicd-setup.md` Step 9f). `cron-notify.yml` names
-   `.github/scripts/notify-task.js`, `.github/scripts/notify-email.js` and
-   `.github/scripts/package.json` by path, so once it is installed the
-   derivation above (and a later `/refresh-repo`) copies all three (#398); Step
-   9f carries the commands. Then run `npm install` in `.github/scripts/` and **commit** the generated
+   `.github/scripts/notify-task.js` and `.github/scripts/notify-email.js` by
+   path, so once it is installed the derivation above (and a later
+   `/refresh-repo`) copies both (#398); Step 9f carries the commands.
+   `.github/scripts/package.json` is not cron-only: the qa workflows name it for
+   its `"type": "commonjs"`, so every project already has it. Then run `npm install` in `.github/scripts/` and **commit** the generated
    `package-lock.json` (`cron-notify.yml`'s `cache:` step needs
    `.github/scripts/package-lock.json`, same policy as the Playwright kit).
    `notify-task.js` ships as a starter that emails via `notify-email.js`; it
@@ -261,8 +284,9 @@ Execute in order:
    `package-lock.json` (before Playwright even runs), so commit the lockfile and
    never add it to `.gitignore`. Confirm
    `playwright.config.js` resolves the live URL from the `APP_URL` variable, and
-   update any project-specific selector constants in `app.spec.js` to match the
-   actual UI (the kit is generic/exploratory by default and takes the credential
+   update any project-specific selector constants in the kit's helpers,
+   `tests/lib/auth.js` and `tests/lib/fixtures.js` (e.g. `IDENTIFIER_RUNGS`,
+   `ADVANCE_NAME`, `BACK_OR_HOME`), to match the actual UI (the kit is generic/exploratory by default and takes the credential
    at runtime from the `TEST_AUTH_CREDENTIAL` secret or, when that is unset,
    from a login form that ships a working one in a visible, editable password
    field, so it may need no selector edits; it never reads `CLAUDE.md`). Set the
@@ -295,10 +319,15 @@ Execute in order:
    while there's no `index.html` yet** (expected; the blocking gate is `Static
    Checks`).
 
-10. **Report to the human.** Summarize: files/dirs created, the PR link, and
-    exactly which placeholder sections in `CLAUDE.md` still need human input
-    (Project name, Stack, Application Architecture, security constraints, coding
-    standards) before the PR is merged. The project's **look** is set later via
+10. **Report to the human.** Lead with the outcome in plain language
+    (`global.md` → *Plain Language First*): the project now carries the standard,
+    its CI checks every PR, and the bootstrap PR (link it) merges itself on green
+    under `git.md` → *Conditional Auto-Merge on Green* — the human's approval is
+    not part of that gate. Then name exactly which placeholder sections in
+    `CLAUDE.md` the human fills in **after the merge**, as step 4 and the template
+    say (Project name, Stack, Application Architecture, security constraints,
+    coding standards); they never hold the merge. A list of created files is not
+    the summary — give it only on request. The project's **look** is set later via
     `/design-intake` (or `/kickoff`, which calls it). To start a spec-driven build
     from here, point the human at **`/kickoff`** (it gathers the brief, establishes
     the look via `/design-intake`, and drives `/sdd-loop`).

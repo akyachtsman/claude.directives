@@ -46,8 +46,9 @@
 # SUBSTITUTION, not documentation: stripping them let `result=`git push origin
 # main`` through the matcher entirely and the gate exited 0 — a bypass, verified
 # on a scratch repo. The cost is a known false positive: a commit message that
-# quotes a push command inside backticks, passed inline via a heredoc, still
-# trips the gate. The fix belongs on the calling side, not here — write long
+# quotes a push command inside backticks, passed inline via a heredoc with a
+# BARE delimiter (`<<EOF`), still trips the gate; under a quoted one (`<<'EOF'`)
+# the body is inert and gate-lib.sh drops it. The fix belongs on the calling side, not here — write long
 # prose to a file and use `git commit -F <file>`, so message text never reaches
 # the command line. A false BLOCK is recoverable; a false ALLOW is not.
 
@@ -67,13 +68,16 @@ stripped=$(gate_strip_quotes "$cmd")
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var
-# prefix (`GIT_TRACE=1 git push ...`) must not defeat the anchor.
-GIT_PUSH='(^|[;&|(`][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*|[$]\([[:space:]]*|=[`]|=[$]\()([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]]|$)'
+# prefix (`GIT_TRACE=1 git push ...`) must not defeat the anchor, and neither
+# may a global option that takes a value (`git -c x=y push`, `git -C dir push`;
+# audit 2026-10-11, M-13).
+GIT_OPTS='([[:space:]]+(-[cC][[:space:]]+[^[:space:]]+|-[^[:space:]]+))*'
+GIT_PUSH='(^|[;&|(`][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*|[$]\([[:space:]]*|=[`]|=[$]\()([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git'"$GIT_OPTS"'[[:space:]]+push([[:space:]]|$)'
 printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 
 # Isolate every push subcommand segment — a compound command can carry more
 # than one push, and each must pass the gate.
-pushparts=$(printf '%s' "$stripped" | grep -oE 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push[^|;&]*')
+pushparts=$(printf '%s' "$stripped" | grep -oE 'git'"$GIT_OPTS"'[[:space:]]+push[^|;&]*')
 
 # The VALUE of an option that takes one is not a ref: `-o +main` is a push
 # option, so drop such values before looking for main (Codex, #396). The list is
@@ -84,7 +88,8 @@ refparts=$(printf '%s\n' "$pushparts" \
 # Any push that names main/master as a target ref (standalone word, after `/` or
 # `:`, or with the force marker `+` -- which git reads only at the START of a
 # refspec, so `foo+main` and `claude/+main` are ordinary branch names; Codex, #396).
-if printf '%s\n' "$refparts" | grep -qE '([[:space:]:/]|[[:space:]][+])(main|master)([[:space:]`)]|$)'; then
+# A redirection ends the ref too: `main>/dev/null` names main (M-13).
+if printf '%s\n' "$refparts" | grep -qE '([[:space:]:/]|[[:space:]][+])(main|master)([[:space:]`)<>]|$)'; then
   echo 'BLOCKED by directives push-gate: direct push to main is never allowed — all main updates go through a claude/<name> branch and a PR (squash-merge on green CI). Push to your feature branch instead.' >&2
   exit 2
 fi
@@ -121,20 +126,57 @@ names_ref() {
   return 1
 }
 
-bare=0
+# The repository a push segment acts on: `git -C <path>` selects it, and several
+# -C options compose as git composes them (a relative one resolves against the
+# one before). A bare push's branch must be read THERE, not in the invoking
+# checkout (Codex, #439). Returns 1 when the path cannot be known from the
+# stripped command: a quoted path is blanked by gate_strip_quotes, and an
+# expansion is not evaluated here. The caller blocks then, so an unreadable -C
+# fails toward checking.
+seg_dir() {
+  set -f                                      # split words, never expand globs
+  # shellcheck disable=SC2086
+  set -- $1
+  d=.
+  [ "$1" = git ] && shift
+  while [ $# -gt 0 ] && [ "$1" != push ]; do
+    case "$1" in
+      -C) [ $# -ge 2 ] && [ "$2" != push ] || return 1; p=$2; shift 2 ;;
+      -C?*) p=${1#-C}; shift ;;
+      -c) shift 2; continue ;;
+      *) shift; continue ;;
+    esac
+    # Anything the shell would rewrite before git saw it is unreadable here:
+    # an expansion, a `~`, a glob (security review, #439).
+    case "$p" in
+      *'$'*|*'`'*|'~'*|*[*?[]*) return 1 ;;
+      /*) d=$p ;;
+      *) d=$d/$p ;;
+    esac
+  done
+  printf '%s\n' "$d"
+}
+
 while IFS= read -r seg; do
   [ -n "$seg" ] || continue
-  names_ref "$seg" || bare=1
-done <<PUSHPARTS
-$pushparts
-PUSHPARTS
-
-if [ "$bare" = 1 ]; then
-  branch=$(git branch --show-current 2>/dev/null)
+  names_ref "$seg" && continue
+  if ! dir=$(seg_dir "$seg"); then
+    echo 'BLOCKED by directives push-gate: a bare push into a repository named by an unreadable -C path; name the branch you are pushing (git push origin <branch>).' >&2
+    exit 2
+  fi
+  # A directory that is not a repository has no branch to read; an empty answer
+  # must not pass as "not main" (security review, #439).
+  if ! git -C "$dir" rev-parse --git-dir >/dev/null 2>&1; then
+    echo 'BLOCKED by directives push-gate: a bare push whose repository could not be read; name the branch you are pushing (git push origin <branch>).' >&2
+    exit 2
+  fi
+  branch=$(git -C "$dir" branch --show-current 2>/dev/null)
   if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
     echo 'BLOCKED by directives push-gate: you are on main and this would push it directly. Work on a claude/<name> branch and open a PR.' >&2
     exit 2
   fi
-fi
+done <<PUSHPARTS
+$pushparts
+PUSHPARTS
 
 exit 0

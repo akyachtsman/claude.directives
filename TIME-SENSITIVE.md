@@ -99,7 +99,7 @@ is added by the pass that finds it.
 ## GitHub
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
-| The Ubuntu release `ubuntu-latest` resolves to | `.github/scripts/run-local-gate.py` → `UBUNTU_LATEST` | 2026-10-11 | The label table in the README of `actions/runner-images` (raw.githubusercontent.com/actions/runner-images/main/README.md) |
+| The Ubuntu release `ubuntu-latest` resolves to | `.github/scripts/run-local-gate.py` → `UBUNTU_LATEST`; `templates/actions/ui-suite/action.yml`, the `Install Playwright browsers` step | 2026-10-12 | The label table in the README of `actions/runner-images` (raw.githubusercontent.com/actions/runner-images/main/README.md) and its Announcement issues: #14748 moves the label to 26.04 runner by runner from 2026-10-19, done by 2026-11-19 |
 | API quotas and which calls are REST vs GraphQL | `git.md` → *GitHub API Quota Economy* | 2026-10-09 | `GET /rate_limit`; GitHub REST and GraphQL docs |
 | What the session proxy lets through (`api.github.com`, git) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-10-09 | A read-only curl and `git ls-remote` from this session |
 | Pages caching | `global.md` → *Hosting & Deployment* | 2026-10-09 | `curl -I` a Pages URL |
@@ -108,7 +108,6 @@ is added by the pass that finds it.
 | Where repo settings live (auto-merge, branch delete, conversation resolution) | `git.md` → *Repo-settings preflight* | 2026-10-09 | GitHub docs, read over `raw.githubusercontent.com/github/docs/main/content/` (`repositories/configuring-branches-and-merges-in-your-repository/`; docs.github.com is egress-blocked in web sessions); `GET /repos/{owner}/{repo}/rules/branches/main` |
 | Scheduled-workflow inactivity auto-disable | `plugins/directives-toolkit/commands/new-repo.md` | 2026-10-09 | GitHub Actions docs, read over `raw.githubusercontent.com/github/docs/main/content/` (`actions/how-tos/manage-workflow-runs/disable-and-enable-workflows.md`; docs.github.com is egress-blocked in web sessions) |
 | Actions cache scope | `docs/standards/cicd-setup.md` → *Step 1* | 2026-10-09 | GitHub Actions cache docs, read over `raw.githubusercontent.com/github/docs/main/content/` (`actions/reference/workflows-and-actions/dependency-caching.md`; docs.github.com is egress-blocked in web sessions) |
-| What `ubuntu-latest` runs (moving to Ubuntu 26.04, 2026-10-19 to 2026-11-19) | `templates/actions/ui-suite/action.yml`, the `Install Playwright browsers` step | 2026-10-09 | actions/runner-images README's image table and its Announcement issues (#14748) |
 | Pages serves every committed path of a branch-source site | `docs/standards/hosting-mechanics.md` → *Choosing the Pages source* | 2026-10-09 | `curl -I` this repo's Pages URL for `CLAUDE.md` and a `docs/internal/` file |
 | What the GitHub MCP reads return for reactions and labels on a PR | `docs/standards/pr-mechanics.md` → *Reading reactions* | 2026-10-09 | `issue_read` (`get`, `get_labels`) and `pull_request_read` (`get`) on a merged PR of this repo |
 | What each GitHub MCP write tool commits | `global.md` → *A Blocked Command Is Not a Blocked Capability* | 2026-10-09 | The descriptions and parameters of `create_or_update_file`, `push_files`, `delete_file` and `create_branch` in this session's tool list |
@@ -133,6 +132,7 @@ is added by the pass that finds it.
 ## Test environment
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
+| The Ubuntu release web sessions run, which this repo's CI pins to match | `.github/workflows/qa.yml`, every job's `runs-on`; `.github/scripts/run-local-gate-cases.py` reads the host's | 2026-10-12 | `grep VERSION_ID /etc/os-release` in a web session (24.04 on 2026-10-12); move qa.yml's pins only with it |
 | This repo's sandbox ceiling | `CLAUDE.md` → *Local gate — CI scripts* | 2026-10-08 | From `templates/ui-tests`: `node ../scripts/browser-ladder.js chromium` |
 | Fleet sandbox ceilings and egress | `test.md` → *Sandboxed local runs* | 2026-08-26 | ⏳ The next session in each app repo |
 | Which Playwright version the kit resolves to | `templates/ui-tests/package.json` | 2026-10-09 | `npm view "@playwright/test@^1.62.1" version` (a registry read, installs nothing) |

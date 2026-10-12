@@ -34,7 +34,13 @@ concurrency:
 jobs:
   validate:
     name: Validate Directives
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: GitHub moves that label to Ubuntu 26.04 from
+    # 2026-10-19 (actions/runner-images#14748), runner by runner, so for weeks
+    # a run lands on either release. This job runs run-local-gate-cases.py,
+    # which needs the host to BE the release the job names, and the local gate
+    # reproduces it in web sessions, which run 24.04. Every job here pins the
+    # same release; move them together, with the web container (TIME-SENSITIVE.md).
+    runs-on: ubuntu-24.04
     # Bounded because it fetches: checkout, and npx for the validators. It once
     # ran in ~7s, which is exactly why the missing bound went unnoticed — a job
     # that always finishes quickly is still unbounded when it does not. Now
@@ -380,7 +386,7 @@ jobs:
 
   check-external-links:
     name: Check External Links (warn only)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned with validate: see there
     # The most network-dependent job here — it resolves external URLs, so a slow
     # or black-holing host is its normal failure mode. Warn-only means a hang
     # blocks the run without ever reporting anything, which is worse than a red.
@@ -401,7 +407,7 @@ jobs:
   # run is deterministic (unlike the downstream local-server UI tests).
   ui-tests:
     name: Repo Map UI (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned with validate: see there
     # ⚠️ BOUND THE JOB. Without this, a wedged browser download runs to GitHub's
     # 6-hour default and the PR shows neither pass nor fail for the whole time —
     # no signal at all, which reads as "still working" and then as nothing.

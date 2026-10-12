@@ -99,6 +99,7 @@
 //   resolves against the caller, not the temp tree; left relative it crashed
 //   every case and read as perfect discrimination)
 import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,11 +112,22 @@ const BIN = binPath('CHECK_LINKS_BIN', join(HERE, 'check-links.js'));
 
 let failed = 0;
 
+// The checker reads git's TRACKED files, so every tree is a repository with
+// its files added. `untracked` files are written AFTER the add: present on
+// disk, absent from the index, as a gitignored agent worktree is.
+function gitTree(dir, files, untracked = {}) {
+  writeTree(dir, files);
+  const q = { cwd: dir, stdio: 'ignore' };
+  execFileSync('git', ['init', '-q'], q);
+  execFileSync('git', ['add', '-A'], q);
+  writeTree(dir, untracked);
+}
+
 // Runs the checker over a temp tree. `files` maps relative path -> contents.
-function run(files) {
+function run(files, untracked = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'xref-'));
   try {
-    writeTree(dir, files);
+    gitTree(dir, files, untracked);
     return runNode(BIN, ['--internal'], { cwd: dir });
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -682,14 +694,15 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
 {
   const dir = mkdtempSync(join(tmpdir(), 'xref-'));
   try {
-    writeTree(dir, { 'a.md': [
+    gitTree(dir, { 'a.md': [
       'https://github.com/o/r/blob/main/docs/x.md',
       'https://github.com/o/r/tree/0123abc/src#readme',
       'https://github.com/o/r/blob/feature/topic/docs/x.md',
       'https://github.com/o/r/blob/main/docs/✓.md',
       'https://github.com/o/r',
       'https://example.com/page',
-    ].join('\n') + '\n' });
+      'https://github.com/o/r/blob/main/docs/100%.md',
+    ].join('\n') + '\n', 'b.md': 'see `missing.md` → *Nowhere*\n' });
     const r = runNode(BIN, ['--external-plan'], { cwd: dir });
     check('a github.com blob page is fetched through the contents API',
       r.out.includes('https://github.com/o/r/blob/main/docs/x.md -> https://api.github.com/repos/o/r/contents/docs/x.md?ref=main'),
@@ -708,9 +721,36 @@ for (const [label, arrow] of [['→', '→'], ['ASCII ->', '->']]) {
       r.out.includes('https://github.com/o/r -> https://github.com/o/r\n')
         && r.out.includes('https://example.com/page -> https://example.com/page'),
       r.out.trim());
+    // A stray `%` once threw URIError and aborted the whole job (audit
+    // 2026-10-11, I-5): it is fetched as written instead.
+    check('…and a segment that is not valid percent-encoding is fetched as written',
+      r.code === 0 && r.out.includes('https://github.com/o/r/blob/main/docs/100%.md -> https://github.com/o/r/blob/main/docs/100%.md'),
+      `exit=${r.code} out=${r.out.trim()}`);
+    // The plan fetches nothing and checks nothing else: b.md's broken
+    // cross-reference is not scanned, so it neither prints nor fails here
+    // (audit 2026-10-11, M-1).
+    check('…and the plan runs no cross-reference scan',
+      r.code === 0 && !/section cross-references/.test(r.out), r.out.trim());
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// The checker resolves against git's TRACKED files, never a disk walk
+// (audit 2026-10-11, I-3). An untracked copy of a file -- an agent worktree
+// under .claude/worktrees/ is gitignored and holds whole copies of the docs --
+// must neither make a bare name ambiguous nor stand in for a missing file.
+{
+  const r = run({ 'docs/x.md': HEADINGS, 'b.md': 'see `x.md` → *Gamma Delta*\n' },
+    { '.claude/worktrees/a/docs/x.md': HEADINGS });
+  check('an untracked copy does not make a bare name ambiguous',
+    r.code === 0 && parsed(r.out)?.good === 1, `exit=${r.code} out=${r.out.trim()}`);
+}
+{
+  const r = run({ 'b.md': 'see `missing.md` → *Gamma Delta*\n' },
+    { '.claude/worktrees/a/missing.md': HEADINGS });
+  check('an untracked file does not satisfy a reference to a file the repo lacks',
+    r.code !== 0, `exit=${r.code} out=${r.out.trim()}`);
 }
 
 if (failed) {

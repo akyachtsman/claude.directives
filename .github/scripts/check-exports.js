@@ -5,7 +5,7 @@
 //     file can never be moved or deleted without either updating the manifest
 //     or breaking here, instead of 404ing silently in every downstream repo.
 // ESM (matches the other check-*.js).
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join } from 'path';
 
@@ -115,22 +115,19 @@ for (const [name, c] of Object.entries(manifest.considered ?? {})) {
   if (failCount === failsBefore) console.log(`OK:   [considered:${name}] ${c.verdict} (${c.vendor})`);
 }
 
-// 2) Every raw-URL self-reference resolves inside a manifest path.
-function findTextFiles(dir) {
-  const out = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (['node_modules', '.git', 'dist', 'build', 'out', 'vendor'].includes(entry.name)) continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...findTextFiles(full));
-    else if (/\.(md|yml|yaml|js|json|html|sh|css)$/.test(entry.name)) out.push(full);
-  }
-  return out;
-}
+// 2) Every raw-URL self-reference resolves inside a manifest path. The files
+// scanned are git's TRACKED ones, not a disk walk: a walk read gitignored agent
+// worktrees under .claude/worktrees/ and reported their copies (audit
+// 2026-10-11, I-3).
+const findTextFiles = () => execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+  .split('\0')
+  .filter(f => f && /\.(md|yml|yaml|js|json|html|sh|css)$/.test(f) && existsSync(f)
+    && !/(^|\/)(node_modules|dist|build|out|vendor)\//.test(f));
 
 const SELF_RE = new RegExp(
   `raw\\.githubusercontent\\.com/${REPO.replace(/[.]/g, '\\.')}/main/([A-Za-z0-9_./-]+)`, 'g');
 const seen = new Set();
-for (const file of findTextFiles('.')) {
+for (const file of findTextFiles()) {
   const content = readFileSync(file, 'utf8');
   for (const m of content.matchAll(SELF_RE)) {
     const path = m[1];

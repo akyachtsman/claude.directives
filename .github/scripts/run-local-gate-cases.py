@@ -30,11 +30,31 @@ RUNNER = bin_path("RUN_LOCAL_GATE_BIN", os.path.join(ROOT, ".github", "scripts",
 
 CHECKOUT = "      - uses: actions/checkout@v4\n"
 
+# Fixtures target THIS host's Ubuntu release, read from the host, so they mean
+# "a job this host can stand in for" whatever `ubuntu-latest` resolves to now.
+# The label mapping itself has its own case below.
+def _host_release():
+    try:
+        with open("/etc/os-release", encoding="utf-8") as handle:
+            fields = dict(l.rstrip("\n").split("=", 1) for l in handle if "=" in l)
+    except OSError:
+        return "none"
+    return fields.get("VERSION_ID", "").strip('"') or "none"
+
+
+HOST_RELEASE = _host_release()
+HOST_LABEL = f"ubuntu-{HOST_RELEASE}"
+OTHER_RELEASE = "22.04" if HOST_RELEASE != "22.04" else "20.04"
+# What ubuntu-latest resolves to per actions/runner-images' README, the same
+# TIME-SENSITIVE.md row as run-local-gate.py's UBUNTU_LATEST: the case below
+# pins the runner's value against it, so the two move together.
+LATEST_IS = "24.04"
+
 
 def workflow(steps, checkout=True):
     """A one-job workflow whose job `validate` has `steps` (YAML text, indented
     6), after the checkout every job here must open with."""
-    return ("name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n"
+    return (f"name: t\non: push\njobs:\n  validate:\n    runs-on: {HOST_LABEL}\n    steps:\n"
             + (CHECKOUT if checkout else "") + steps)
 
 
@@ -144,10 +164,10 @@ CASES = [
      2, "is not a plain `run:` step"),
     # ── keys the runner does not emulate are refused, never ignored ─────────
     ("a workflow-level env: — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\nenv:\n  X: '1'\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\nenv:\n  X: '1'\njobs:\n  validate:\n    runs-on: " + HOST_LABEL + "\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "the workflow sets env"),
     ("a job's defaults.run — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        shell: bash\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: " + HOST_LABEL + "\n    defaults:\n      run:\n        shell: bash\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "job 'validate' sets defaults"),
     ("a step's continue-on-error — CANNOT RUN",
      {"wf.yml": workflow("      - name: c\n        continue-on-error: true\n        run: exit 1\n")},
@@ -179,7 +199,7 @@ CASES = [
      {"wf.yml": workflow("      - name: quick\n        timeout-minutes: 1\n        run: echo ok\n")},
      0, "PASS [1] quick"),
     ("the job's timeout-minutes bounds the steps after it runs out",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    timeout-minutes: 1\n    steps:\n" + CHECKOUT
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: " + HOST_LABEL + "\n    timeout-minutes: 1\n    steps:\n" + CHECKOUT
                 + STEP.format(name="first", run="sleep 30") + STEP.format(name="second", run="echo ok")},
      1, "FAIL [2] second (not run: the job's timeout-minutes had passed)"),
     ("a fractional timeout-minutes — CANNOT RUN (GitHub takes whole minutes)",
@@ -205,7 +225,7 @@ CASES = [
      2, "is not a GitHub-hosted ubuntu-<release>"),
     # This host is Linux X64; an ARM target is a real mismatch, not a label.
     ("a runs-on this host cannot stand in for — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-24.04-arm\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: " + HOST_LABEL + "-arm\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "this host is"),
     ("RUNNER_OS and RUNNER_ARCH describe the target",
      {"wf.yml": workflow(STEP.format(name="t", run='test "$RUNNER_OS" = Linux && test "$RUNNER_ARCH" = X64'))},
@@ -216,11 +236,17 @@ CASES = [
     ("a malformed GITHUB_ENV line FAILS the step",
      {"wf.yml": workflow(STEP.format(name="set", run='echo not-an-assignment >> "$GITHUB_ENV"'))},
      1, "neither KEY=VALUE nor KEY<<DELIMITER"),
-    # This host is Ubuntu 24.04, which ubuntu-latest resolves to; 22.04 is a
-    # different image even on the same OS and architecture.
+    # Another Ubuntu release is a different image even on the same OS and
+    # architecture.
     ("a runs-on naming another Ubuntu release — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-22.04\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
-     2, "Ubuntu 22.04"),
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-" + OTHER_RELEASE + "\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
+     2, "Ubuntu " + OTHER_RELEASE),
+    # `ubuntu-latest` is read as the release the runner-images README names
+    # (LATEST_IS): runnable where the host is that release, CANNOT RUN where
+    # it is not -- never silently run on the wrong image.
+    ("ubuntu-latest is read as " + LATEST_IS + ", runnable only on that release",
+     {"wf.yml": "name: t\non: push\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
+     *((0, "all 1 steps") if HOST_RELEASE == LATEST_IS else (2, "Ubuntu " + LATEST_IS))),
     ("a checkout after another step — CANNOT RUN",
      {"wf.yml": workflow(STEP.format(name="one", run="echo ok") + "      - uses: actions/checkout@v4\n")},
      2, "is a checkout after other steps"),
@@ -268,7 +294,7 @@ CASES = [
      {"wf.yml": workflow("      - uses: actions/checkout@v4\n        run: exit 1\n")},
      2, "has both `uses:` and `run:`"),
     ("a numeric top-level key — CANNOT RUN (1 is not True here)",
-     {"wf.yml": "name: t\non: push\n1: bogus\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
+     {"wf.yml": "name: t\non: push\n1: bogus\njobs:\n  validate:\n    runs-on: " + HOST_LABEL + "\n    steps:\n" + CHECKOUT + STEP.format(name="one", run="echo ok")},
      2, "the workflow sets 1"),
     ("a job whose first step is not checkout — CANNOT RUN",
      {"wf.yml": workflow(STEP.format(name="one", run="echo ok"), checkout=False)},
@@ -290,7 +316,7 @@ CASES = [
      {"wf.yml": workflow("      - uses: actions/checkout@v4\n        timeout-minutes: 0.5\n" + STEP.format(name="one", run="echo ok"), checkout=False)},
      2, "not a whole number from 1 to 360"),
     ("no such job — CANNOT RUN",
-     {"wf.yml": "name: t\non: push\njobs:\n  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: 'true'\n"},
+     {"wf.yml": "name: t\non: push\njobs:\n  other:\n    runs-on: " + HOST_LABEL + "\n    steps:\n      - run: 'true'\n"},
      2, "no steps for job 'validate'"),
     # A refused workflow runs NOTHING: the plan is checked whole before step 1.
     ("a refusal anywhere runs nothing",

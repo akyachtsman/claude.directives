@@ -264,8 +264,12 @@ HOST_ARCH = {"x86_64": "X64", "amd64": "X64", "aarch64": "ARM64", "arm64": "ARM6
 # What `ubuntu-latest` resolves to. A fact about GitHub that moves when GitHub
 # migrates the label, so it is a TIME-SENSITIVE.md row: the source of truth is
 # actions/runner-images' README label table (24.04 there, checked 2026-10-11).
-# When GitHub moves it, every ubuntu-latest job here is CANNOT RUN until this
-# line follows, and qa.yml's own run of the cases turns red: a loud signal.
+# GitHub moves it to 26.04 runner by runner from 2026-10-19, completing by
+# 2026-11-19 (#14748); set this to "26.04" when the README table says so. This
+# repo's own jobs pin `ubuntu-24.04` (qa.yml), so the value no longer decides
+# whether QA here can run -- it decides only how a job that names
+# `ubuntu-latest` is read. Following the move makes such a job CANNOT RUN on a
+# 24.04 host, which is the truth: it would run on another image.
 UBUNTU_LATEST = "24.04"
 UBUNTU_LABEL = re.compile(r"ubuntu-(latest|\d\d\.\d\d)(-arm)?$")
 

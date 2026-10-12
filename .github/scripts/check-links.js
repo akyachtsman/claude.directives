@@ -1,5 +1,4 @@
-import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync } from 'fs';
 import { execFileSync } from 'child_process';
 
 // ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -44,20 +43,30 @@ import { execFileSync } from 'child_process';
 //   the wrong-target route for UNBACKTICKED names outside the class (a+b.md
 //       → *X* is read as SELF; my file.md → *X* reads only file.md).
 
-// Recursively collect all .md files, skipping node_modules and .git.
-function findMarkdown(dir) {
-  const out = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (['node_modules', '.git', 'dist', 'build', 'out'].includes(entry.name)) continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...findMarkdown(full));
-    } else if (entry.name.endsWith('.md')) {
-      out.push(full);
-    }
-  }
-  return out;
+// The files this checker reads and resolves against are git's TRACKED files
+// (index included, so a staged new file counts), never a walk of the disk. A
+// disk walk read gitignored trees -- agent worktrees under .claude/worktrees/
+// hold whole copies of the directives -- so a bare-name reference matched
+// several files and failed (764 false failures on a clean main), and an
+// untracked copy there let a reference to a file missing from the repo pass
+// (audit 2026-10-11, I-3). check-claims, check-paths and build-logical-map
+// already enumerate this way.
+let TRACKED;
+try {
+  TRACKED = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
+    .split('\0').filter(f => f && existsSync(f));
+} catch (e) {
+  console.error(`check-links: CANNOT RUN -- \`git ls-files\` failed here (${e.message.split('\n')[0]}); run it inside the repo`);
+  process.exit(2);
 }
+const TRACKED_SET = new Set(TRACKED);
+// A path names a tracked file, or a directory holding one (a tree URL).
+const isTracked = p => {
+  const n = p.replace(/^\.\//, '').replace(/\/+$/, '');
+  return TRACKED_SET.has(n) || TRACKED.some(f => f.startsWith(n + '/'));
+};
+const MARKDOWN = TRACKED.filter(f => f.endsWith('.md')
+  && !/(^|\/)(node_modules|dist|build|out)\//.test(f));
 
 // --internal: only check links that point at THIS repo. These are verified against
 //   the local working tree (the file the URL names must exist in the repo), not over
@@ -79,7 +88,7 @@ const URL_RE = /https:\/\/[^\s)>'"`]+/g;
 const SKIP_HOSTS = ['claude.ai', 'stitch.googleapis.com'];
 
 const urls = new Set();
-for (const file of findMarkdown('.')) {
+for (const file of MARKDOWN) {
   const content = readFileSync(file, 'utf8');
   for (let url of content.match(URL_RE) ?? []) {
     url = url.replace(/[.,;:]+$/, ''); // strip trailing prose punctuation
@@ -119,16 +128,49 @@ const hasToken = Boolean(process.env.GITHUB_TOKEN);
 const isGithubHost = url =>
   /^https:\/\/(raw\.githubusercontent\.com|api\.github\.com|github\.com)\//.test(url);
 
+// A github.com blob/tree page is checked through the REST contents endpoint,
+// not as HTML. Those pages failed this job intermittently on files that exist
+// (#430, #431: three FAILs in a run, each after the full retry budget), while
+// the API answers a program authoritatively, and an authed call there is
+// within the token's documented rate limit. Only refs that cannot contain a
+// slash are translated -- `main` or a commit SHA, the forms links here pin --
+// because a URL does not say where a ref like `feature/topic` ends and its
+// path begins (Codex, #434). Any other ref is fetched as a page, as before.
+// The ref and each path segment are re-encoded for the API URL.
+const GITHUB_PAGE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|tree)\/(main|[0-9a-f]{7,40})\/([^#?]+)(?:[#?].*)?$/;
+// A segment that is not valid percent-encoding (a stray `%`) is fetched as the
+// page, as written: an uncaught URIError here once aborted the whole job, and
+// the job is warn-only, so the abort read as a warning (audit 2026-10-11, I-5).
+const fetchedAs = url => {
+  const m = url.match(GITHUB_PAGE);
+  if (!m) return url;
+  let path;
+  try {
+    path = m[4].split('/').map(seg => encodeURIComponent(decodeURIComponent(seg))).join('/');
+  } catch {
+    return url;
+  }
+  return `https://api.github.com/repos/${m[1]}/${m[2]}/contents/${path}?ref=${encodeURIComponent(m[3])}`;
+};
+
+// It returns before the internal checks and the cross-reference scan: a plan
+// that also ran them, then exited 0 whatever they found, reported a pass it
+// had not earned (audit 2026-10-11, M-1).
+if (mode === '--external-plan') {
+  for (const url of targets) console.log(`${url} -> ${fetchedAs(url)}`);
+  process.exit(0);
+}
+
 let failed = false;
 
 // Internal links: verify the named path exists in the local working tree.
 const internalTargets = targets.filter(isInternal);
 for (const url of internalTargets) {
   const path = internalPath(url);
-  if (path && existsSync(path)) {
+  if (path && isTracked(path)) {
     console.log(`OK:   ${url} → ${path}`);
   } else {
-    console.error(`FAIL: ${url} → ${path ?? '(unparseable)'} missing in working tree`);
+    console.error(`FAIL: ${url} → ${path ?? '(unparseable)'} not a tracked file`);
     failed = true;
   }
 }
@@ -176,7 +218,7 @@ if (mode !== '--external') {
   );
   const headingsOf = (file) => {
     if (!headingCache.has(file)) {
-      const heads = existsSync(file)
+      const heads = isTracked(file)
         ? [...stripFences(readSource(file)).matchAll(/^#{1,6}[ \t]+(.+?)\s*$/gm)]
             .map(m => flatten(m[1]))
         : null;
@@ -388,7 +430,7 @@ if (mode !== '--external') {
     String.raw`(?<![\x60\w])` + ARROW + `[ \t]*` + OPEN + NAME + CLOSE, 'gu');
 
   let xrefs = 0, badXrefs = 0, bareInSpan = 0;
-  for (const file of findMarkdown('.')) {
+  for (const file of MARKDOWN) {
     // Fence-stripped on the SOURCE side as well as the target side: an
     // illustrative block showing the `foo.md` -> *Bar* syntax is sample text, not
     // a live reference, and collecting it fails CI on correct documentation.
@@ -425,9 +467,9 @@ if (mode !== '--external') {
       const at = `${file}:${lineOf(off)}`;
       // Resolve a bare filename against the repo's known locations.
       let path = target;
-      if (explicit && !existsSync(path)) {
+      if (explicit && !isTracked(path)) {
         const base = target.split('/').pop();
-        const cand = findMarkdown('.').filter(f => f.endsWith('/' + base) || f === base);
+        const cand = MARKDOWN.filter(f => f.endsWith('/' + base) || f === base);
         if (cand.length === 1) path = cand[0];
       }
       const r = resolves(path, section);
@@ -510,27 +552,6 @@ if (mode !== '--external') {
   console.log('      Keep every reference on one line. Widening what is parsed: #366.');
 }
 
-// A github.com blob/tree page is checked through the REST contents endpoint,
-// not as HTML. Those pages failed this job intermittently on files that exist
-// (#430, #431: three FAILs in a run, each after the full retry budget), while
-// the API answers a program authoritatively, and an authed call there is
-// within the token's documented rate limit. Only refs that cannot contain a
-// slash are translated -- `main` or a commit SHA, the forms links here pin --
-// because a URL does not say where a ref like `feature/topic` ends and its
-// path begins (Codex, #434). Any other ref is fetched as a page, as before.
-// The ref and each path segment are re-encoded for the API URL.
-const GITHUB_PAGE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|tree)\/(main|[0-9a-f]{7,40})\/([^#?]+)(?:[#?].*)?$/;
-const fetchedAs = url => {
-  const m = url.match(GITHUB_PAGE);
-  if (!m) return url;
-  const path = m[4].split('/').map(seg => encodeURIComponent(decodeURIComponent(seg))).join('/');
-  return `https://api.github.com/repos/${m[1]}/${m[2]}/contents/${path}?ref=${encodeURIComponent(m[3])}`;
-};
-
-if (mode === '--external-plan') {
-  for (const url of targets) console.log(`${url} -> ${fetchedAs(url)}`);
-  process.exit(0);
-}
 
 // External links: verify over the network with retry. Authed requests do not
 // follow redirects (`-L` forwards the Authorization header cross-host); without

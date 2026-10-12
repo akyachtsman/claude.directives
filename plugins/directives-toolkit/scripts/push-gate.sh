@@ -126,20 +126,48 @@ names_ref() {
   return 1
 }
 
-bare=0
+# The repository a push segment acts on: `git -C <path>` selects it, and several
+# -C options compose as git composes them (a relative one resolves against the
+# one before). A bare push's branch must be read THERE, not in the invoking
+# checkout (Codex, #439). Returns 1 when the path cannot be known from the
+# stripped command: a quoted path is blanked by gate_strip_quotes, and an
+# expansion is not evaluated here. The caller blocks then, so an unreadable -C
+# fails toward checking.
+seg_dir() {
+  # shellcheck disable=SC2086
+  set -- $1
+  d=.
+  [ "$1" = git ] && shift
+  while [ $# -gt 0 ] && [ "$1" != push ]; do
+    case "$1" in
+      -C) [ $# -ge 2 ] && [ "$2" != push ] || return 1; p=$2; shift 2 ;;
+      -C?*) p=${1#-C}; shift ;;
+      -c) shift 2 ;;
+      *) shift; continue ;;
+    esac
+    case "$p" in
+      *'$'*|*'`'*) return 1 ;;
+      /*) d=$p ;;
+      *) d=$d/$p ;;
+    esac
+  done
+  printf '%s\n' "$d"
+}
+
 while IFS= read -r seg; do
   [ -n "$seg" ] || continue
-  names_ref "$seg" || bare=1
-done <<PUSHPARTS
-$pushparts
-PUSHPARTS
-
-if [ "$bare" = 1 ]; then
-  branch=$(git branch --show-current 2>/dev/null)
+  names_ref "$seg" && continue
+  if ! dir=$(seg_dir "$seg"); then
+    echo 'BLOCKED by directives push-gate: a bare push into a repository named by an unreadable -C path; name the branch you are pushing (git push origin <branch>).' >&2
+    exit 2
+  fi
+  branch=$(git -C "$dir" branch --show-current 2>/dev/null)
   if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
     echo 'BLOCKED by directives push-gate: you are on main and this would push it directly. Work on a claude/<name> branch and open a PR.' >&2
     exit 2
   fi
-fi
+done <<PUSHPARTS
+$pushparts
+PUSHPARTS
 
 exit 0

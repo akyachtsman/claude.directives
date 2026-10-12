@@ -390,7 +390,7 @@ def main():
                 c.fail(label, f"expected a silent allow (exit 0); got {code}\n      {out}")
             else:
                 c.ok(label)
-    n = len(PUSH_CASES) + len(PUSH_EXTRA_CASES) + len(WAIT_CASES) + len(PAGES_CASES)
+    n = len(PUSH_CASES) + len(PUSH_EXTRA_CASES) + len(WAIT_CASES) + len(PAGES_CASES) + 6
     return c.finish(f"{2 * n + 2} gate payloads read correctly, with and without jq.")
 
 
@@ -412,6 +412,37 @@ def check(c, push, wait, pages, env=None, tag=""):
             c.ok(f"push-gate{tag}: {label}")
     for label, rel, qa, expected in PAGES_CASES:
         pages_case(c, pages, label, rel, qa, expected, env, tag)
+    bare_dir_cases(c, push, env, tag)
+
+
+def bare_dir_cases(c, push, env, tag):
+    """A bare push reads the branch of the repository it acts on: `git -C <path>`
+    selects it, so the invoking checkout's branch must not decide (Codex, #439).
+    Two scratch repositories, one on main and one on a feature branch, each
+    invoking the gate against the other."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repos = {}
+        for name, branch in (("onmain", "main"), ("onfeature", "claude/x")):
+            d = Path(tmp) / name
+            d.mkdir()
+            run_argv(["git", "init", "-q", "-b", branch, str(d)])
+            repos[name] = d
+        cases = [
+            ("from a main checkout, -C into a feature checkout", "onmain", f"git -C {repos['onfeature']} push", ALLOW),
+            ("from a feature checkout, -C into a main checkout", "onfeature", f"git -C {repos['onmain']} push", BLOCK),
+            ("from a feature checkout, a relative -C into a main checkout", "onfeature", "git -C ../onmain push", BLOCK),
+            ("from a main checkout, a plain bare push", "onmain", "git push", BLOCK),
+            ("from a feature checkout, a plain bare push", "onfeature", "git push", ALLOW),
+            ("a quoted -C path the gate cannot read", "onfeature", 'git -C "../onmain" push', BLOCK),
+        ]
+        for label, cwd, command, expected in cases:
+            payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+            code, out = run_argv(["bash", str(push)], input=payload.encode(), cwd=repos[cwd], env=env)
+            verdict = "block" if expected == BLOCK else "allow"
+            if code != expected:
+                c.fail(f"push-gate{tag}: bare push, {label}", f"expected {verdict} (exit {expected}); got {code}\n      {command!r}\n      {out}")
+            else:
+                c.ok(f"push-gate{tag} {verdict}s a bare push, {label}")
 
 
 if __name__ == "__main__":

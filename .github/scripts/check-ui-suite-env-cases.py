@@ -883,6 +883,16 @@ def main():
         else:
             c.expect(label, code, out, 0, '": APP_URL (read from')
 
+        # The ONE built-in exemption: the runner sets GITHUB_WORKSPACE on every
+        # job, and the shipped playwright.config.js reads it (M-10). Accepted with
+        # no project file, and reported as exempted rather than as wired.
+        (tests / "a.spec.js").write_text("const w = process.env.GITHUB_WORKSPACE;\n", encoding="utf-8")
+        exempt.unlink(missing_ok=True)
+        extra += 1
+        c.expect("GITHUB_WORKSPACE, set by the runner, needs no project exemption — accepted",
+                 *run([sys.executable, GUARD], cwd=tmp), 0,
+                 "spec env exempted, NOT wired (per its recorded reason): GITHUB_WORKSPACE")
+
     return c.finish(f"{len(CASES) + len(SPEC_CASES) + 1 + extra} pinned shapes read correctly.")
 
 

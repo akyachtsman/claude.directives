@@ -124,15 +124,19 @@ if not SPEC_FILES:
     # fail-open shape this rule exists to close. Refuse instead.
     sys.exit(f"CANNOT CHECK: no JS/TS files found under {KIT_DIR} (run from the repo root)")
 # Variables a spec may read WITHOUT the composite wiring them, as {name: reason}.
-# Empty on purpose: every variable the shipped kit reads today is a per-project
-# value that only an input can carry. An entry is one of two kinds, and its
-# reason says which (claude.prop, 2026-10-06):
+# One entry, and only one on purpose: every other variable the shipped kit reads
+# is a per-project value that only an input can carry. An entry is one of two
+# kinds, and its reason says which (claude.prop, 2026-10-06):
 # - a name something OUTSIDE the composite sets: the runner (`CI`, `GITHUB_*`)
 #   or a self-hosted runner image;
 # - a name deliberately NEVER set in CI, because its reader handles it unset (a
 #   local-sandbox hatch such as a browser-executable override).
 # Either way the entry is a claim nothing here can check.
-ENV_EXEMPT = {}
+ENV_EXEMPT = {
+    "GITHUB_WORKSPACE": "set by the runner on every job; playwright.config.js roots the "
+                        "screenshot folder at it, where the composite's upload step looks "
+                        "(audit 2026-10-11, M-10)",
+}
 # A PROJECT extends it in its own file, never by editing this one: an edited copy
 # is drift /refresh-repo has to stop on, and the reason would be lost the next
 # time the template is taken. Each entry needs a REASON -- the same claim as

@@ -86,16 +86,56 @@ const AUTH_READY_REQUEST  = process.env.TEST_AUTH_READY_REQUEST  || null;
 // the login screen shares.
 const AUTH_SUCCESS_SELECTOR = process.env.TEST_AUTH_SUCCESS_SELECTOR || null;
 
-async function awaitAuthReady(page) {
+// ⚠️ THE REQUEST CONDITION MUST BE LISTENING BEFORE THE NAVIGATION, which is
+// why it is armed in two halves (audit 2026-10-11, C-2). A waitForResponse()
+// registered AFTER goto() only sees responses that arrive later still — and the
+// request this condition names is, by definition, one the page makes WHILE it
+// loads. On a healthy app it had usually finished by the time the wait began, so
+// the wait ran its full LOAD_SETTLE_MS and threw "never resolved": S3 and S4
+// (which settled on networkidle FIRST) failed every run, and S2 / gotoAndAuth
+// passed only when the response happened to land after the `load` event.
+// armAuthReady() starts recording before goto(); awaitAuthReady() then reads
+// the recording first and waits only for a response that has not arrived yet.
+// The LOAD_SETTLE_MS window still starts after goto(), as it always did, so no
+// budget term moves. gotoAuthReady() does all three in the one order that works
+// — callers use it rather than pairing the halves by hand.
+function armAuthReady(page) {
+  if (AUTH_READY_SELECTOR || !AUTH_READY_REQUEST) return { response: null, dispose: () => {} };
+  let resolve;
+  const response = new Promise((r) => { resolve = r; });
+  const onResponse = (r) => {
+    if (!r.url().includes(AUTH_READY_REQUEST)) return;
+    page.off('response', onResponse);
+    resolve(r);
+  };
+  page.on('response', onResponse);
+  return { response, dispose: () => page.off('response', onResponse) };
+}
+
+async function awaitAuthReady(page, armed) {
   if (!AUTH_READY_SELECTOR && !AUTH_READY_REQUEST) {
     await page.waitForLoadState('networkidle', { timeout: LOAD_SETTLE_MS }).catch(() => {});
     return 'windowed';
+  }
+  // Not armed is a CALLER bug, and loud: falling back to a late waitForResponse
+  // would rebuild the race above, which fails a healthy app.
+  if (!AUTH_READY_SELECTOR && !armed?.response) {
+    throw new Error(
+      'awaitAuthReady: TEST_AUTH_READY_REQUEST is set but no response recorder was armed before ' +
+      'navigation. Call gotoAuthReady(page) instead of page.goto() + awaitAuthReady(page) — the ' +
+      'request this condition names completes during the load, so a wait registered after goto() ' +
+      'misses it.'
+    );
   }
   try {
     if (AUTH_READY_SELECTOR) {
       await page.waitForSelector(AUTH_READY_SELECTOR, { timeout: LOAD_SETTLE_MS, state: 'attached' });
     } else {
-      await page.waitForResponse((r) => r.url().includes(AUTH_READY_REQUEST), { timeout: LOAD_SETTLE_MS });
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), LOAD_SETTLE_MS);
+      });
+      try { await Promise.race([armed.response, timeout]); } finally { clearTimeout(timer); }
     }
     return 'proven';
   } catch {
@@ -109,9 +149,25 @@ async function awaitAuthReady(page) {
       `present or absent.\n` +
       `  A SELECTOR must match WHICHEVER outcome occurs — the gate itself OR the authenticated ` +
       `app shell — not only one of them; a selector that names just the gate times out on every ` +
-      `signed-in run. Failing rather than falling back to the settle, because a silent fallback ` +
+      `signed-in run. A REQUEST is matched as a substring of the response URL, recorded from ` +
+      `before navigation. Failing rather than falling back to the settle, because a silent fallback ` +
       `rebuilds the windowed-vs-proven ambiguity this condition exists to remove (directives#302).`
     );
+  }
+}
+
+// goto + readiness, in the order that cannot race. Returns the evidence grade
+// ('windowed' | 'proven'). This IS the load settle for every caller: with no
+// condition configured it is the LOAD_SETTLE_MS networkidle wait; with one, the
+// project's own condition replaces that wait (a settle in front of it only
+// delayed the condition and, for a request, let it complete unseen).
+async function gotoAuthReady(page, url = './') {
+  const armed = armAuthReady(page);
+  try {
+    await page.goto(url);
+    return await awaitAuthReady(page, armed);
+  } finally {
+    armed.dispose();
   }
 }
 
@@ -194,6 +250,12 @@ const AUTH_CONTEXT_SRC =
 // budget in this file (each step costs a full settle) and there is no third
 // step this suite knows how to answer.
 const AUTH_STEP_CAP = 2;
+// The keypad half of the two ready-waits' selector. `[class*="pin"]` alone
+// matched `spinner`, so a visible loading spinner resolved a wait meant for the
+// auth UI before that UI rendered (audit 2026-10-11, I-8). A wait is a speed-up
+// only, so CSS's lack of a word boundary is approximated by excluding "spin";
+// the verdict-bearing count in pinGateVisible() is word-bound exactly.
+const PIN_CLASS_HINT = '[class*="pin"]:not([class*="spin"])';
 
 // Mechanisms that mean THIS SUITE DID NOT COMPLETE AN AUTHENTICATION ATTEMPT.
 // Neither is a verdict about the app — both are facts about what the suite did,
@@ -472,7 +534,7 @@ async function detectAndAuth(page, credential) {
     // this file's two ready-waits could ever resolve, so both burned their full
     // timeout (10s here, 5s in detectAuthGate) before concluding. Widening is a
     // speed-up only — no branch reads whether the wait resolved.
-    await page.locator('[class*="keypad"], [class*="pin"], input[type="password"], input[type="email"], input[type="text"]')
+    await page.locator(`[class*="keypad"], ${PIN_CLASS_HINT}, input[type="password"], input[type="email"], input[type="text"]`)
       .first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
     // PER-STEP pre-attempt state. Captured INSIDE the loop because a split flow
     // has two pre-attempt states and the verdict grades the LAST one: compared
@@ -481,11 +543,14 @@ async function detectAndAuth(page, credential) {
     viewBefore = await viewSignature(page);
     snapBefore = await domSnapshot(page);
 
-    // Heuristic 1: numeric keypad (buttons 0-9 + dot indicators)
-    const hasNumericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).count();
-    const hasDotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').count();
-
-    if (hasNumericButtons >= 9 && hasDotIndicator > 0) {
+    // Heuristic 1: numeric keypad (buttons 0-9 + dot indicators). THE SAME
+    // SIGNAL DETECTION READS — pinGateVisible(), visible elements only, the rule
+    // heuristic 2 states below ("attempt and detection must select from the same
+    // set"). The attempt used to count HIDDEN digit buttons and every
+    // `[class*="pin"]` (a `.spinner` included), so a password form carrying a
+    // hidden 1-9 date picker took this branch and then waited out actionTimeout
+    // clicking a digit nobody could see (audit 2026-10-11, I-8).
+    if (await pinGateVisible(page)) {
       // A keypad ships no value to read, so gateShipsCredential() can never
       // unlock this branch and only an env credential reaches it. Guarded
       // anyway: without this, String(null) types the digits of "null".
@@ -493,7 +558,7 @@ async function detectAndAuth(page, credential) {
       credentialSource = 'env';
       // PIN keypad — click each digit as a string (preserve leading zeros)
       for (const digit of String(credential).split('')) {
-        await page.locator('button').filter({ hasText: new RegExp(`^${digit}$`) }).first().click();
+        await page.locator('button').filter({ hasText: new RegExp(`^${digit}$`) }).locator('visible=true').first().click();
         await page.waitForTimeout(80);
       }
       await page.waitForTimeout(3000);
@@ -556,8 +621,37 @@ async function detectAndAuth(page, credential) {
       // them to measure the login screen — the exact silent failure #309 exists
       // to prevent. AUTH_INCOMPLETE is what the callers skip on instead.
       if (!cred.source) return done('no-credential');
-      const submitBtn = page.locator('button[type=submit], input[type=submit], button').filter({ hasText: /sign.?in|log.?in|submit|enter/i }).first();
-      if (await submitBtn.isVisible().catch(() => false)) await submitBtn.click();
+      // SUBMIT, resolved the way heuristic 2.5 resolves its advance control
+      // (audit 2026-10-11, I-8). The old locator was a page-wide CSS union with
+      // an unbounded substring filter, taken `.first()` in DOM ORDER: "Sign in
+      // with Google" above the form won (an OAuth redirect instead of a login),
+      // "Help Center" and "Blog index" matched, and its input[type=submit] arm
+      // could never match a text filter at all. Now, in order:
+      //   1. the PASSWORD'S OWN FORM's explicit type=submit control, visible and
+      //      not social — read through `form.elements`, so a control associated
+      //      by the `form` attribute counts;
+      //   2. a word-bound ADVANCE_NAME control anywhere, social excluded;
+      //   3. Enter in the password field, which submits its form natively.
+      const formSubmit = await passwordInput.evaluateHandle((pw, socialSrc) => {
+        const social = new RegExp(socialSrc, 'i');
+        if (!pw.form) return null;
+        const vis = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+        };
+        return [...pw.form.elements].find((el) =>
+          /^(button|input)$/i.test(el.tagName)
+          && (el.getAttribute('type') || '').toLowerCase() === 'submit'
+          && !el.disabled && vis(el)
+          && !social.test(`${el.textContent || ''} ${el.value || ''} ${el.getAttribute('aria-label') || ''}`)) || null;
+      }, SOCIAL_NAME.source).then((h) => h.asElement()).catch(() => null);
+      const namedSubmit = page.locator('button, [role=button], input[type=submit]')
+        .locator('visible=true')
+        .filter({ hasText: ADVANCE_NAME })
+        .filter({ hasNotText: SOCIAL_NAME })
+        .first();
+      if (formSubmit) await formSubmit.click();
+      else if (await namedSubmit.isVisible().catch(() => false)) await namedSubmit.click();
       else await passwordInput.press('Enter');
       await page.waitForTimeout(3000);
       return done('password-form');
@@ -583,13 +677,14 @@ async function detectAndAuth(page, credential) {
         // THE PAGE — a locator is a query, so one built after the restore would
         // match nothing. isVisible() does not wait, so an app with no form-scoped
         // submit costs a lookup rather than an actionTimeout.
-        // Heuristic 2's page-scoped `button[type=submit], input[type=submit],
-        // button` + `.first()` is NOT reused here: a CSS union returns DOM order,
-        // not selector order, so on a split-step screen carrying "Continue with
-        // Google" above "Continue" it would start an OAuth redirect. Left
-        // untouched there (out of scope, noted in the PR), avoided here — and
-        // scoping to the identifier's OWN form rather than any form on the page
-        // is what keeps that union from reintroducing the same DOM-order trap.
+        // A page-scoped `button[type=submit], input[type=submit], button` +
+        // `.first()` is NOT used here: a CSS union returns DOM order, not
+        // selector order, so on a split-step screen carrying "Continue with
+        // Google" above "Continue" it would start an OAuth redirect. Heuristic 2
+        // carried exactly that union until audit 2026-10-11 (I-8) moved it onto
+        // this resolution order — and scoping to the identifier's OWN form
+        // rather than any form on the page is what keeps that union from
+        // reintroducing the same DOM-order trap.
         const inForm = scope
           ? page.locator(`form:has([data-uitests-identifier="${marked.marker}"]) :is(button[type=submit], input[type=submit])`)
               .locator('visible=true').first()
@@ -654,7 +749,7 @@ async function detectAndAuth(page, credential) {
 // text inputs (a search/filter box is not an auth gate). Used to decide whether to
 // skip/auth without firing spurious login attempts.
 async function detectAuthGate(page) {
-  await page.locator('[class*="keypad"], [class*="pin"], input[type="password"], input[type="email"]')
+  await page.locator(`[class*="keypad"], ${PIN_CLASS_HINT}, input[type="password"], input[type="email"]`)
     .first().waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
   if (await pinGateVisible(page)) return true;
   if (await passwordGateVisible(page)) return true;
@@ -681,7 +776,18 @@ async function detectAuthGate(page) {
 // user cannot see is not a gate.
 async function pinGateVisible(page) {
   const numericButtons = await page.locator('button').filter({ hasText: /^[0-9]$/ }).locator('visible=true').count();
-  const dotIndicator   = await page.locator('[class*="dot"], [class*="pin"]').locator('visible=true').count();
+  // WORD-BOUND, not substring (audit 2026-10-11, I-8): `[class*="pin"]` matched
+  // `spinner`, so any loading indicator beside a date picker satisfied half of
+  // this signal. The CSS pre-filter is case-insensitive; the evaluate keeps an
+  // element only when a WORD of its class list — split on whitespace, `-`, `_`
+  // and camelCase humps — starts with "pin" or "dot": `pin-dot`, `PinPad_dot__x1`,
+  // `pinIndicator` and `dots` count; `spinner`, `anecdote` do not.
+  const dotIndicator = await page.locator('[class*="dot" i], [class*="pin" i]').locator('visible=true')
+    .evaluateAll((els) => els.filter((el) => (el.getAttribute('class') || '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .split(/[^A-Za-z0-9]+/)
+      .some((w) => /^(pin|dot)/i.test(w))).length)
+    .catch(() => 0);
   return numericButtons >= 9 && dotIndicator > 0;
 }
 async function passwordGateVisible(page) {
@@ -858,8 +964,8 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
   // or newly revealed second one). It throws. The PIN signal (page-wide
   // digit-button count + dot/pin class names) proves nothing in EITHER
   // position: as a new-gate detector after a password login it reads a
-  // calculator or dial pad — or any visible class containing "pin"
-  // ("spinner", "pinned") — as a second factor, and even as SAME-KIND
+  // calculator or dial pad — or any visible class with a word starting "pin"
+  // ("pinned", "pink") — as a second factor, and even as SAME-KIND
   // retention it cannot tell a rejected PIN's standing gate from the
   // post-login view of a PIN-gated calculator app, whose own keypad
   // satisfies the identical page-wide signals. The count cannot associate
@@ -921,12 +1027,11 @@ async function expectGateCleared(page, mechanism, gateViewBefore) {
 // the navigation/control invariants below never just exercise the login screen)
 // ─────────────────────────────────────────────────────────────────────────────
 async function gotoAndAuth(page) {
-  await page.goto('./');
   // LOAD_SETTLE_MS at BOTH settles here, because every caller measures the view
   // this function returns: CTRL counts primary controls (a late duplicate = a
   // green on a duplicated CTA), DISMISS computes triggerCount (a late trigger is
   // never swept), NAV fingerprints the view. Overhead for none of them.
-  await awaitAuthReady(page);
+  await gotoAuthReady(page);
   // Detect once and branch — each detectAuthGate() call burns a 5s waitFor timeout when
   // no gate is present, so calling it in both branches wasted ~10s of the test timeout.
   const gated = await detectAuthGate(page);
@@ -993,7 +1098,9 @@ export {
   AUTH_CREDENTIAL,
   AUTH_EMAIL,
   AUTH_SUCCESS_SELECTOR,
+  armAuthReady,
   awaitAuthReady,
+  gotoAuthReady,
   AUTH_INCOMPLETE,
   authIncompleteNote,
   gateShipsCredential,

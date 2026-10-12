@@ -74,14 +74,16 @@ function attachJson(name, data) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IDLE CAP — every networkidle wait is bounded, because NOTHING ELSE BOUNDS IT
+// IDLE CAP — every networkidle wait passes its OWN bound, never the config's
 // ─────────────────────────────────────────────────────────────────────────────
-// Playwright Test defaults `use.navigationTimeout` to 0 = NO TIMEOUT, and
-// waitForLoadState() inherits that default. So an un-timed
-// waitForLoadState('networkidle', { timeout: IDLE_MS }) on a page that polls, holds a websocket open,
-// or streams is bounded ONLY by the enclosing test timeout — one call can eat a
-// whole scenario's budget. The `.catch(() => {})` at each call site does not
-// help: with no timeout the promise never rejects, it just never settles.
+// waitForLoadState() with no `timeout` inherits `use.navigationTimeout`, which
+// Playwright Test defaults to 0 = NO TIMEOUT. The shipped playwright.config.js
+// sets it to 30s, so there an un-timed waitForLoadState('networkidle') on a page
+// that polls, holds a websocket open, or streams costs the full 30s every call;
+// in a config that drops the setting it is bounded only by the enclosing test
+// timeout, and one call can eat a whole scenario's budget. The
+// `.catch(() => {})` at each call site does not help: with no timeout the
+// promise never rejects, it just never settles.
 //
 // That made every per-scenario budget in this file a fiction, since each was
 // derived by adding up terms that were themselves unbounded. Cap it here, and
@@ -166,7 +168,12 @@ const LOAD_SETTLE_MS = 25_000;
 //
 // `.js` is a real array of JS errors (what the diagnostics in S2/S3 report);
 // `.all()` adds the resource failures that genuinely break a page, and is what
-// the load gates (S1, ENTRY) assert.
+// the load gates (S1, ENTRY) assert. `.all()` is in ARRIVAL ORDER, one array
+// both kinds append to, because callers slice it by an earlier length (S3 per
+// element, ENTRY per page): the former `[...js, ...resources]` put a later JS
+// error IN FRONT of an earlier resource failure, so the slice kept the count
+// right but reported the old failure's text and hid the new one (audit
+// 2026-10-11, M-9).
 // `document` is here because the navigation itself is the page: a 404/500 for
 // the URL under test is reported as a document response, its console copy is
 // discarded as "Failed to load resource", and a provider's styled error page
@@ -186,6 +193,7 @@ const blockingStatus = (type) => (API_TYPES.has(type) ? 500 : 400);
 function watchPageErrors(page) {
   const js = [];
   const resources = [];
+  const ordered = [];
   // The MAIN DOCUMENT is the page under test, so a 404/500 for it blocks
   // whatever origin it is on — and it must NOT go through the same-origin
   // filter below. At document-response time `page.url()` is still the PREVIOUS
@@ -220,15 +228,18 @@ function watchPageErrors(page) {
         return;
       }
     }
-    resources.push(`${type} ${why}: ${url}`);
+    const entry = `${type} ${why}: ${url}`;
+    resources.push(entry);
+    ordered.push(entry);
   };
-  page.on('pageerror', e => js.push(e.message));
+  const noteJs = (msg) => { js.push(msg); ordered.push(msg); };
+  page.on('pageerror', e => noteJs(e.message));
   page.on('console', m => {
     if (m.type() !== 'error') return;
     // Classification comes from the request handlers below; skipping the console
     // copy keeps a single 404 from also counting as a JS error.
     if (/Failed to load resource/i.test(m.text())) return;
-    js.push(m.text());
+    noteJs(m.text());
   });
   page.on('requestfailed', r =>
     noteResource(r.url(), 'request failed', r.resourceType(), isMainDocument(r)));
@@ -240,7 +251,7 @@ function watchPageErrors(page) {
     if (r.status() < blockingStatus(type)) return;
     noteResource(r.url(), `HTTP ${r.status()}`, type, isMainDocument(req));
   });
-  return { js, resources, all: () => [...js, ...resources] };
+  return { js, resources, all: () => [...ordered] };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -258,8 +269,12 @@ async function captureApiCalls(page) {
       // Record the call (with its status) IMMEDIATELY so non-JSON 4xx/5xx responses
       // (e.g. an HTML 500 page) are captured — clone.json() rejects on those, and the
       // old code only pushed inside .then(), silently dropping them as "no call".
+      // fetch() takes a string, a Request or ANY stringifiable object — a URL
+      // instance is the common one, and it has no `.url`, so the old
+      // `args[0]?.url` recorded `undefined` for it (audit 2026-10-11, M-9).
+      const target = args[0];
       const entry = {
-        url: typeof args[0] === 'string' ? args[0] : args[0]?.url,
+        url: (typeof Request !== 'undefined' && target instanceof Request) ? target.url : String(target),
         status: res.status,
         recordCount: null,
         firstFieldKey: null,

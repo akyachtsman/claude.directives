@@ -12,7 +12,7 @@ standard. It merges the three former repos — `claude.global.directives`,
 substance that downstream projects inherit lives in `directives/`; this file
 covers only how to operate *on this repo*.
 
-**Standing upkeep mandate.** This repo tracks Claude itself. Keep the scaffolding
+**Standing upkeep mandate (owner ruling, 2026-10-12).** This repo tracks Claude itself. Keep the scaffolding
 current against what Claude Code ships natively, and prefer a native Anthropic
 capability over one maintained here: when a plugin, skill, or built-in covers what
 a toolkit command, agent, hook, or directive section does, adopt it and record it
@@ -188,7 +188,7 @@ Everything ships in the `directives-toolkit` plugin (`plugins/directives-toolkit
 **Auto-skills are the only surface nothing else proves.** `update-pages`,
 `scope-chk`, `doc-comp` and the model-invocable `/learn` fire on description match, so a description that
 drifts stops firing silently — no error, just absence. `claude plugin eval`
-(Anthropic) runs the cases in `plugins/directives-toolkit/evals/`;
+(Anthropic; owner ruling, 2026-10-12) runs the cases in `plugins/directives-toolkit/evals/`;
 run it when a description changes, from the plugin directory:
 `claude plugin eval --no-publish .`
 and re-run the negatives whenever a description is widened. It costs real tokens

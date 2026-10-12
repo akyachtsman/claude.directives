@@ -1099,6 +1099,7 @@ findings unseen.
 - Scheduled and event-driven automations run as GitHub Actions workflows
 - Claude routines handle agent-driven tasks (alerts, reports, monitors)
 - No external automation platforms — logic lives in the repo, defined at project level
+- A database scheduler (Supabase `pg_cron` plus an Edge Function, say) is not an alternative for scheduled jobs (owner ruling, 2026-10-12)
 
 ## GitHub Workflow
 - Work happens in Claude Code sessions (web, desktop, or CLI) scoped to a repo

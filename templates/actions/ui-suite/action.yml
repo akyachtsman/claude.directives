@@ -522,6 +522,9 @@ runs:
       # An `rm` does not import the config, so most of this block is inert here —
       # deliberately, and REPORT_PATH is not: it decides which file is cleared,
       # and it must be the one the other three read and write.
+      # The four blocks stay written out: GitHub's runner refuses YAML anchors in
+      # an action.yml ("Anchors are not currently supported"), workflows only
+      # (audit R8, declined 2026-10-12; TIME-SENSITIVE.md → GitHub).
       env:
         APP_URL: ${{ inputs.app-url }}
         TEST_AUTH_CREDENTIAL: ${{ inputs.test-auth-credential }}

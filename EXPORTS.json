@@ -513,7 +513,7 @@
       "sockets": [
         "plugins/directives-toolkit/skills/doc-comp/SKILL.md"
       ],
-      "note": "Adoption covers doc-comp's dependencies only (the built-in skills its SKILL.md names); skill-creator, also in anthropic-skills, stays rejected (considered -> skill-creator)."
+      "note": "Adoption covers doc-comp's dependencies only (the built-in docx and pdf skills its SKILL.md names). skill-creator stays rejected (considered -> skill-creator); the other sibling skills are recorded in considered -> out-of-domain."
     },
     "update-config-builtin": {
       "vendor": "Anthropic (built-in skill)",
@@ -542,6 +542,7 @@
         "Monitor",
         "subscribe_pr_activity",
         "unsubscribe_pr_activity",
+        "ReadNotifications",
         "ScheduleWakeup",
         "SendUserFile"
       ],
@@ -637,14 +638,30 @@
     "lsp-plugins": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "names": ["clangd-lsp", "csharp-lsp", "gopls-lsp", "jdtls-lsp", "kotlin-lsp", "lua-lsp", "php-lsp", "pyright-lsp", "ruby-lsp", "rust-analyzer-lsp", "swift-lsp", "typescript-lsp"],
+      "names": [
+        "clangd-lsp",
+        "csharp-lsp",
+        "gopls-lsp",
+        "jdtls-lsp",
+        "kotlin-lsp",
+        "lua-lsp",
+        "php-lsp",
+        "pyright-lsp",
+        "ruby-lsp",
+        "rust-analyzer-lsp",
+        "swift-lsp",
+        "typescript-lsp"
+      ],
       "rationale": "The twelve Anthropic language-server plugins listed in names (liquid-lsp, in the same marketplace, is Shopify's and outside the parity pass). This repo is markdown, small Node scripts and YAML; a language server buys nothing over node --check and the existing validators. Recorded as one entry so a future parity pass does not re-derive twelve verdicts.",
       "stays": "CLAUDE.md"
     },
     "output-styles": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "names": ["explanatory-output-style", "learning-output-style"],
+      "names": [
+        "explanatory-output-style",
+        "learning-output-style"
+      ],
       "rationale": "explanatory-output-style and learning-output-style change how a session narrates. global.md -> Plain Language First and Say It in Verbs already own that, as owner rulings; a plugin that overrides them would contradict the directives.",
       "stays": "directives/global.md"
     },
@@ -678,6 +695,17 @@
       "rationale": "Built-in skill that re-runs a prompt on an interval. git.md -> GitHub API Quota Economy says never poll for CI, deploy, or PR status (webhook wakes + ci-notify instead), and CLAUDE.md -> Notifications forbids arming a timed check-in as a substitute for a subscription. A recurring prompt is the mechanism both rulings exclude.",
       "stays": "directives/git.md"
     },
+    "cron-tools": {
+      "vendor": "Anthropic (Claude Code harness tools)",
+      "verdict": "rejected",
+      "names": [
+        "CronCreate",
+        "CronDelete",
+        "CronList"
+      ],
+      "rationale": "Session-scoped tools that schedule a prompt to re-run on a cron schedule: the same mechanism as the loop skill, rejected on the same grounds (considered -> loop). git.md -> GitHub API Quota Economy says never poll for CI, deploy or PR status, and CLAUDE.md -> Notifications forbids arming a timed check-in as a substitute for a subscription, since a timer cannot know whether anything changed. A one-off follow-up the rules do allow uses send_later (externals -> ccr-harness-tools).",
+      "stays": "directives/git.md"
+    },
     "run": {
       "vendor": "Anthropic",
       "verdict": "rejected",
@@ -699,9 +727,42 @@
     "out-of-domain": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "names": ["agent-sdk-dev", "claude-opus-4-5-migration", "code-modernization", "cwc-makers", "math-olympiad", "mcp-apps", "mcp-server-dev", "mcp-tunnels", "receipts", "claude-api", "workflow-authoring", "keybindings-help"],
-      "rationale": "The nine plugins and three built-in skills listed in names. Each serves a job this repo and its toolkit do not have (SDK or MCP development, model migration, legacy modernisation, hardware onboarding, competition math, usage reports, API reference, Workflow scripts, keybindings). Recorded as one entry so a future parity pass does not re-derive twelve verdicts.",
+      "names": [
+        "agent-sdk-dev",
+        "claude-opus-4-5-migration",
+        "code-modernization",
+        "cwc-makers",
+        "math-olympiad",
+        "mcp-apps",
+        "mcp-server-dev",
+        "mcp-tunnels",
+        "receipts",
+        "claude-api",
+        "keybindings-help",
+        "built-in-browser",
+        "chrome-browser",
+        "computer-use",
+        "deep-research",
+        "docs",
+        "google-workspace",
+        "import-memory",
+        "morning",
+        "pptx",
+        "xlsx",
+        "watch_url",
+        "unwatch_url"
+      ],
+      "rationale": "Natives listed in names, each serving a job this repo and its toolkit do not have. Plugins: agent-sdk-dev and mcp-server-dev (SDK or MCP server development), mcp-apps and mcp-tunnels (MCP app and tunnel work), claude-opus-4-5-migration (model migration), code-modernization (legacy modernisation), cwc-makers (hardware onboarding), math-olympiad (competition math), receipts (usage reports). Built-in skills: claude-api (API reference), keybindings-help (keybindings). anthropic-skills siblings of the adopted docx/pdf (externals -> anthropic-skills): built-in-browser, chrome-browser and computer-use drive a browser or desktop on the person's own machine, while this repo verifies UI with headless Playwright in CI (test.md); deep-research writes cited research reports, not repo changes; docs makes Claude Docs living documents, while this repo's documents are committed Markdown; google-workspace edits Google files; import-memory imports another assistant's memory, while project memory here is learnings.jsonl; morning renders a personal daily brief; pptx and xlsx make slide decks and spreadsheets, which nothing here produces. Harness tools: watch_url and unwatch_url receive artifact-service webhooks, and this repo publishes no artifacts it watches. Recorded as one entry so a future parity pass does not re-derive each verdict.",
       "stays": "CLAUDE.md"
+    },
+    "workflow-authoring": {
+      "vendor": "Anthropic (built-in skill and Claude Code tool)",
+      "verdict": "rejected",
+      "names": [
+        "Workflow"
+      ],
+      "rationale": "The workflow-authoring skill and the Workflow tool it writes scripts for: a script that orchestrates many subagents in the background (code.claude.com/docs/en/workflows). Its shape fits qa-pipeline, a fixed multi-agent sequence, and it runs from the top level, which matters because sub-agent nesting is off in this cloud environment (TIME-SENSITIVE.md, Models & sub-agents). Rejected for its opt-in cost, not its fit: Claude may start a workflow only when the user opts in. The skill's own description says it is for a workflow the user already opted into and does not itself authorize running one; the docs make the opt-in the user's own typed request or ultracode, and in manual permission mode the launch also asks for approval on every run. /sdd-loop runs the pipeline itself after every task, unattended, so the pipeline cannot depend on a per-run opt-in. Resolution (owner-approved, 2026-10-11 audit, I-25): qa-pipeline becomes a top-level toolkit command instead. Re-judge if a plugin-shipped workflow can be started by a command without the user's per-run opt-in.",
+      "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
     },
     "math-proof": {
       "vendor": "Anthropic",
@@ -730,9 +791,27 @@
     "ccr-session-mutators": {
       "vendor": "Anthropic (Claude Code harness tools)",
       "verdict": "rejected",
-      "rationale": "Evaluated and kept behind a permission prompt, never pre-approved: each mutates or widens a session's reach (attaches a repository, spawns, archives, unarchives or interrupts a session). global.md -> Scheduling Tools Never Prompt lists them under what must keep prompting; a session uses one only when the user asks for exactly that.",
-      "names": ["add_repo", "create_session", "archive_session", "unarchive_session", "interrupt_session"],
+      "rationale": "Evaluated and kept behind a permission prompt, never pre-approved: each mutates or widens a session's reach (attaches a repository or registers its clone, spawns, archives, unarchives, interrupts, retags or renames a session). global.md -> Scheduling Tools Never Prompt lists the first five under what must keep prompting, and the same section says anything absent from `allow` prompts by default, which covers the other three; a session uses one only when the user asks for exactly that.",
+      "names": [
+        "add_repo",
+        "create_session",
+        "archive_session",
+        "unarchive_session",
+        "interrupt_session",
+        "register_repo_root",
+        "set_session_tags",
+        "set_session_title"
+      ],
       "stays": "directives/global.md"
+    },
+    "push-notification": {
+      "vendor": "Anthropic (Claude Code harness tool)",
+      "verdict": "rejected",
+      "names": [
+        "PushNotification"
+      ],
+      "rationale": "Sends the person a desktop or phone notification. CLAUDE.md -> Notifications makes the PR subscription the wake channel: it is kept until merge and its events arrive in the session, and global.md -> Status Line on Every Stop reports status on a wake that already happens, never on an extra one. A push on top would add a second, unruled channel to the owner for events the subscription and the status line already carry.",
+      "stays": "CLAUDE.md"
     },
     "code-review": {
       "vendor": "Anthropic",

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/pages-edit-gate.sh"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/pages-edit-gate.sh  # on an edit to a served file or a build input, tells Claude to apply the update-pages skill"
           },
           {
             "type": "command",

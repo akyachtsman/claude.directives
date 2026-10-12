@@ -106,7 +106,7 @@
     "test": {
       "core": [
         "directives/test.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md"
+        "plugins/directives-toolkit/commands/qa-pipeline.md"
       ],
       "static-ci": [
         "templates/workflows/qa.yml",
@@ -218,7 +218,7 @@
     ],
     "orchestrators": [
       "plugins/directives-toolkit/commands/sdd-loop.md",
-      "plugins/directives-toolkit/agents/qa-pipeline.md"
+      "plugins/directives-toolkit/commands/qa-pipeline.md"
     ]
   },
   "classes": {
@@ -245,7 +245,7 @@
       "blurb": "Define the flow and the interfaces components must fit. A component does not exist until its orchestrator sequences it.",
       "paths": [
         "plugins/directives-toolkit/commands/sdd-loop.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md"
+        "plugins/directives-toolkit/commands/qa-pipeline.md"
       ]
     },
     "behavioral": {
@@ -349,7 +349,7 @@
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
         "directives/test.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "directives/git.md",
         "plugins/directives-toolkit/commands/sdd-loop.md",
         "templates/CLAUDE-template.md",
@@ -363,7 +363,7 @@
       "serves": "test.review",
       "sockets": [
         "directives/test.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "directives/git.md",
         "plugins/directives-toolkit/commands/sdd-loop.md",
         "plugins/directives-toolkit/commands/audit-repo.md"
@@ -376,7 +376,7 @@
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
         "directives/test.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md"
+        "plugins/directives-toolkit/commands/qa-pipeline.md"
       ]
     },
     "security-review-builtin": {
@@ -384,7 +384,7 @@
       "serves": "global.security",
       "sockets": [
         "directives/test.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "templates/CLAUDE-template.md",
         "templates/pr-checklist.md",
         "plugins/directives-toolkit/agents/test-verifier.md",
@@ -409,7 +409,7 @@
         "docs/standards/session-mechanics.md",
         "directives/test.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "plugins/directives-toolkit/agents/qa-pipeline.md",
+        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "plugins/directives-toolkit/skills/update-pages/SKILL.md",
         "directives/global.md",
         "templates/claude-settings.json"
@@ -829,7 +829,7 @@
       "vendor": "Anthropic",
       "verdict": "rejected",
       "rationale": "knowledge-work-plugins engineering (Cowork-first): /standup, /review (a code-review skill also named code-review), /debug, /architecture, /incident, /deploy-checklist, plus ten MCP connectors (Slack, PagerDuty, Datadog, ...). Its review lane is already delegated to pr-review-toolkit and the built-in /code-review and /security-review through qa-pipeline; /debug and /architecture overlap /diagnose; /deploy-checklist overlaps /commit-chk and update-pages. Its code-review skill name would shadow the built-in /code-review the directives name.",
-      "stays": "plugins/directives-toolkit/agents/qa-pipeline.md"
+      "stays": "plugins/directives-toolkit/commands/qa-pipeline.md"
     },
     "plugin-management": {
       "vendor": "Anthropic",

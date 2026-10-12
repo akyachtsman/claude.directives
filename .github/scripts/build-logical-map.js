@@ -115,7 +115,7 @@ const PLACE = {
     'docs/standards/session-mechanics.md', `${P}/commands/env-chk.md`, `${P}/skills/scope-chk/`],
   build: [`${P}/commands/diagnose.md`, `${P}/commands/sdd-loop.md`,
     `${P}/commands/design-intake.md`, 'docs/guides/design-tooling.md', 'templates/styles/',
-    `${P}/agents/qa-pipeline.md`, `${P}/agents/test-verifier.md`, `${P}/agents/ui-tester.md`,
+    `${P}/commands/qa-pipeline.md`, `${P}/agents/test-verifier.md`, `${P}/agents/ui-tester.md`,
     'templates/scripts/browser-ladder.js', `${P}/agents/supabase.md`,
     'templates/project-test-plan-template.md', 'templates/implementation-summary-template.md',
     `${P}/skills/doc-comp/`],
@@ -191,6 +191,8 @@ const ALIASES = {
   [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'pages-edit-gate.sh', 'refresh-stamp.sh', 'derive-scripts.sh', 'kit-dirs.sh', 'session-start-registered.sh', `${P}/scripts`],
   [`${P}/evals/`]: [`${P}/evals`],
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
+  // Was an agent until 2026-10-11 (audit I-19); prose still names it bare.
+  [`${P}/commands/qa-pipeline.md`]: [/(?<![\w/.:-])qa-pipeline(?![\w-])/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
   'templates/ui-tests/': ['templates/ui-tests', '.github/scripts/ui-tests'],
   // A bare `package.json` is ambiguous (the kit ships one too), so only the
@@ -463,7 +465,7 @@ const FLOW = [
   ['design.md', 'design-tooling.md', 'det', 'tool setup in'],
   ['design.md', 'styles/', 'gov', 'tokens contract'],
   ['design.md', 'check-contrast.js', 'gov', 'contrast guardrail'],
-  ['test.md', 'qa-pipeline', 'gov', 'QA runs through'],
+  ['test.md', '/qa-pipeline', 'gov', 'QA runs through'],
   ['test.md', 'ui-tests/', 'gov', 'the UI test kit'],
   ['test.md', 'project-test-plan-template.md', 'det', 'test plan structure in'],
   ['test.md', 'implementation-summary-template.md', 'gov', 'requires'],
@@ -487,11 +489,11 @@ const FLOW = [
   ['design-tooling.md', '/design-intake', 'exp', 'tools for'],
   ['/design-intake', '/sdd-loop', 'seq', 'hands off to', 'a', 'Next: `/sdd-loop`'],
   ['/design-intake', 'styles/', 'pro', 'writes the project\'s tokens.css', 'a', 'Writes:'],
-  ['/sdd-loop', 'qa-pipeline', 'run', 'runs', 'a', 'run the `directives-toolkit:qa-pipeline`'],
+  ['/sdd-loop', '/qa-pipeline', 'run', 'runs', 'a', 'Batch verification'],
   ['/sdd-loop', '/commit-chk', 'seq', 'before pushing', 'a', 'Pre-Push gate'],
-  ['qa-pipeline', 'test-verifier', 'run', 'runs', 'a', '1. **test-verifier**'],
-  ['qa-pipeline', 'ui-tester', 'run', 'runs', 'a', '2. **ui-tester**'],
-  ['qa-pipeline', 'pr-readiness-reviewer', 'run', 'ends with', 'a', '5. **pr-readiness-reviewer**'],
+  ['/qa-pipeline', 'test-verifier', 'run', 'runs', 'a', '1. **test-verifier**'],
+  ['/qa-pipeline', 'ui-tester', 'run', 'runs', 'a', '2. **ui-tester'],
+  ['/qa-pipeline', 'pr-readiness-reviewer', 'run', 'ends with', 'a', '5. **pr-readiness-reviewer**'],
   ['ui-tester', 'ui-tests/', 'run', 'drives', 'a', 'Runnable source of truth'],
   // pr & review
   // The workflows run the kit: the arrow starts at the actor (Codex audit, #393).

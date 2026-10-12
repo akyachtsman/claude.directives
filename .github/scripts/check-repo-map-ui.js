@@ -147,7 +147,7 @@ const traced = () => page.evaluate(() => ({
 }));
 const sameSet = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
 
-const QA = 'plugins/directives-toolkit/agents/qa-pipeline.md';
+const QA = 'plugins/directives-toolkit/commands/qa-pipeline.md';
 await page.click(box(QA));
 await settle();
 {
@@ -155,7 +155,7 @@ await settle();
   if (!t.tracing || !t.panel) fail('clicking a box did not start a trace with its panel');
   else if (!sameSet(new Set(t.nodes), want.nodes)) fail(`trace lit ${t.nodes.length} boxes, the data says ${want.nodes.size}`);
   else if (!sameSet(new Set(t.edges), want.edges)) fail(`trace lit ${t.edges.length} connections, the data says ${want.edges.size}`);
-  else if (t.title !== 'qa-pipeline') fail(`panel shows "${t.title}", expected qa-pipeline`);
+  else if (t.title !== '/qa-pipeline') fail(`panel shows "${t.title}", expected /qa-pipeline`);
   else if (t.ev.some(e => !/^\S+\.\w+ — \S/.test(e))) fail('a panel entry has no file — quoted-line evidence');
   else ok(`trace lights ${t.nodes.length} boxes and ${t.edges.length} connections — exactly the data's chain, each with evidence`);
 }
@@ -177,7 +177,7 @@ await page.click('#panel [data-go]');
 await settle();
 {
   const t = await traced();
-  if (t.title === 'qa-pipeline' || !t.title) fail('a panel link did not move the trace');
+  if (t.title === '/qa-pipeline' || !t.title) fail('a panel link did not move the trace');
   else ok(`a panel link moves the trace (to ${t.title})`);
 }
 await page.keyboard.press('Escape');
@@ -218,7 +218,7 @@ await settle();
     const w = document.getElementById('wrap').getBoundingClientRect();
     return r.left >= w.left && r.right <= w.right && r.top >= w.top && r.bottom <= w.bottom;
   }, QA);
-  if (t.title !== 'qa-pipeline') fail('Enter in search did not trace the first match');
+  if (t.title !== '/qa-pipeline') fail('Enter in search did not trace the first match');
   else if (!inView) fail('the traced search match was not brought into view');
   else ok('Enter traces the first match and brings it into view');
 }
@@ -379,7 +379,7 @@ await page.click('#t_fit');
   await page.focus(box(QA));
   await page.keyboard.press('Enter');
   await settle();
-  if ((await traced()).title !== 'qa-pipeline') fail('Enter on a focused box does not trace it');
+  if ((await traced()).title !== '/qa-pipeline') fail('Enter on a focused box does not trace it');
   else ok('a box is keyboard-reachable and Enter traces it');
   await page.keyboard.press('Escape');
 }
@@ -445,7 +445,7 @@ await page.click('#t_fit');
   await phone.press('#search', 'Enter');
   await phone.waitForTimeout(300);
   const [boxR, panelTop, wrapTop] = await phone.evaluate(() => {
-    const b = document.querySelector('.n[data-id$="agents/qa-pipeline.md"]').getBoundingClientRect();
+    const b = document.querySelector('.n[data-id$="commands/qa-pipeline.md"]').getBoundingClientRect();
     return [[b.top, b.bottom], document.getElementById('panel').getBoundingClientRect().top,
       document.getElementById('wrap').getBoundingClientRect().top];
   });

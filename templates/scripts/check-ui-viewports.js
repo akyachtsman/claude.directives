@@ -201,10 +201,15 @@
 // loud "cannot check", never a pass.
 //
 // CommonJS deliberately: the other templates/scripts helpers are CJS
-// (notify-email.js, check-contrast.js), and a downstream .github/scripts/package.json
-// (the copy of templates/scripts/package.json) carries no "type" field, so an ESM
-// .js dropped there would not load at all. Dynamic import() of an ESM config from
-// CJS works on Node 20+.
+// (notify-email.js, check-contrast.js), and the downstream .github/scripts/package.json
+// (the copy of templates/scripts/package.json) declares "type": "commonjs", so an
+// ESM .js dropped there would not load at all. That manifest is NOT optional:
+// without it Node takes this file's module type from the nearest package.json
+// above, and a Vite/Astro/SvelteKit root declaring "type": "module" makes the
+// first require() throw "require is not defined in ES module scope" (audit
+// 2026-10-11, C-3). qa.yml and the ui-suite composite name it, so the script
+// derivation installs it with them. Dynamic import() of an ESM config from CJS
+// works on Node 20+.
 //
 // Usage:
 //   node .github/scripts/check-ui-viewports.js --tests-dir .github/scripts/ui-tests

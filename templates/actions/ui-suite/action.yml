@@ -580,6 +580,8 @@ runs:
         # requires identical env, and two of these steps import the config. See
         # the run step for why this variable is pinned at all (#347 round 18).
         PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ steps.report-path.outputs.relative }}
+      # CommonJS: it loads only because .github/scripts/package.json declares
+      # "type": "commonjs" — without it a root "type": "module" manifest wins.
       run: node "$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js" --tests-dir . --declared "$RUNNER_TEMP/ui-viewports-declared.json"
 
     - name: Run Playwright tests

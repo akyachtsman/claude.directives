@@ -86,6 +86,11 @@ jobs:
       # per theme file). With no stylesheet at all it exits with a notice (no
       # failure) until /design-intake creates tokens.css; once the project has
       # any CSS, a missing tokens file FAILS the check.
+      # CommonJS, like every .js under .github/scripts/: it runs only because
+      # .github/scripts/package.json declares "type": "commonjs". Without that
+      # manifest Node takes the module type from the ROOT package.json, and a
+      # Vite/Astro/SvelteKit root ("type": "module") kills this step with
+      # "require is not defined in ES module scope".
       - name: Contrast guardrail (WCAG AA)
         run: node .github/scripts/check-contrast.js
 

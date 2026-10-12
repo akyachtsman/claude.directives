@@ -52,43 +52,54 @@ Copy the QA workflow templates from `claude.directives` into the target repo's `
 mkdir -p .github/workflows .github/actions/secret-scan .github/actions/ui-suite
 
 # Fetch from the public template repo
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa.yml \
   -o .github/workflows/qa.yml
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-live.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-live.yml \
   -o .github/workflows/qa-live.yml
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/secret-scan/action.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/secret-scan/action.yml \
   -o .github/actions/secret-scan/action.yml
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/action.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/action.yml \
   -o .github/actions/ui-suite/action.yml
 
 # The ui-suite composite runs a SIBLING script by path. Install it WITH the
 # YAML — the composite's first step is `python3
 # "$GITHUB_ACTION_PATH/validate-report-path.py"`, so without this file every UI
 # job dies at that step with "No such file".
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/validate-report-path.py \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/validate-report-path.py \
   -o .github/actions/ui-suite/validate-report-path.py
 
 # qa.yml's static job runs these five scripts by path, so they install WITH it —
 # without them the job fails at its first missing file. What each one guards is
 # in 9c-bis, 9c-ter and design.md → *Accessibility*.
 mkdir -p .github/scripts
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-contrast.js \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-contrast.js \
   -o .github/scripts/check-contrast.js
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.py \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.py \
   -o .github/scripts/workflow-ref-guard.py
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-job-bounds.py \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-job-bounds.py \
   -o .github/scripts/check-job-bounds.py
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-py-warnings.py \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-py-warnings.py \
   -o .github/scripts/check-py-warnings.py
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
   -o .github/scripts/check-ui-suite-env.py
 # Three of them (workflow-ref-guard, check-job-bounds, check-ui-suite-env) import
 # this sibling, which reads YAML the way GitHub does (1.2, not PyYAML's 1.1).
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/gh_yaml.py \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/gh_yaml.py \
   -o .github/scripts/gh_yaml.py
+
+# The .js scripts in .github/scripts/ are CommonJS, and this manifest is what
+# says so: without it Node takes their module type from the ROOT package.json,
+# and a Vite/Astro/SvelteKit root ("type": "module") makes every one of them die
+# with "require is not defined in ES module scope". Installed with every
+# project, never only with the cron kit. An existing manifest is left alone —
+# Step 9f extends it — but it must not declare "type": "module".
+if [ ! -f .github/scripts/package.json ]; then
+  curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
+    -o .github/scripts/package.json
+fi
 ```
 
 ⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
@@ -115,7 +126,7 @@ Event-driven QA dispatch hook — **part of the standard set**, so
 automations trigger QA via `repository_dispatch`:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-response.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/qa-response.yml \
   -o .github/workflows/qa-response.yml
 ```
 
@@ -142,19 +153,19 @@ Copy the Playwright test scaffold into the target repo if not already present:
 ```bash
 mkdir -p .github/scripts/ui-tests/tests/lib
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/playwright.config.js \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/playwright.config.js \
   -o .github/scripts/ui-tests/playwright.config.js
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/package.json \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/package.json \
   -o .github/scripts/ui-tests/package.json
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/app.spec.js \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/app.spec.js \
   -o .github/scripts/ui-tests/tests/app.spec.js
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/lib/fixtures.js \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/lib/fixtures.js \
   -o .github/scripts/ui-tests/tests/lib/fixtures.js
 
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/lib/auth.js \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/ui-tests/tests/lib/auth.js \
   -o .github/scripts/ui-tests/tests/lib/auth.js
 ```
 
@@ -163,7 +174,7 @@ composite, not after: the composite names it by path, so an updated composite
 without it fails every UI job at step resolution.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-viewports.js \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-viewports.js \
   -o .github/scripts/check-ui-viewports.js
 ```
 
@@ -183,7 +194,7 @@ sandbox run fails and you need to know whether the browser is the reason. No
 workflow invokes it, so take it deliberately:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/browser-ladder.js \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/browser-ladder.js \
   -o .github/scripts/browser-ladder.js
 ```
 
@@ -293,7 +304,7 @@ Drop-in — copy it verbatim. It ships pre-wired to watch all three QA workflows
 that come with it (`qa.yml`, `qa-live.yml`, `qa-response.yml`):
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-monitor.yml \
   -o .github/workflows/ci-monitor.yml
 ```
 
@@ -312,7 +323,7 @@ After pushing, verify with a manual `workflow_dispatch` run before relying on it
 Drop-in, no customization needed:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/codex-monitor.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/codex-monitor.yml \
   -o .github/workflows/codex-monitor.yml
 ```
 
@@ -337,7 +348,7 @@ that invalidates it. Rules: `docs/standards/automations.md` → *Watcher Rules*
 (W2, W3).
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-monitor.yml \
   -o .github/workflows/pages-monitor.yml
 ```
 
@@ -485,7 +496,7 @@ entry to `.github/workflow-ref-required.json` in the same edit (Step 9c-bis), so
 the guard fails if the retry ever stops watching the managed build:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-retry.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-retry.yml \
   -o .github/workflows/pages-retry.yml
 ```
 
@@ -505,7 +516,7 @@ or a project with the CI-build opt-in (`directives/global.md` → *Hosting & Dep
 project does not install it; there the push is the deploy.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-deploy.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/pages-deploy.yml \
   -o .github/workflows/pages-deploy.yml
 ```
 
@@ -529,7 +540,7 @@ Drop-in — edit only the watched names to match the QA workflows you installed
 (`docs/standards/automations.md` → *Watcher Rules*, W1):
 
 ```bash
-curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-notify.yml \
+curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/workflows/ci-notify.yml \
   -o .github/workflows/ci-notify.yml
 ```
 
@@ -542,7 +553,7 @@ call it a dud.
 
 ### 9f — Scheduled-job notifications
 
-Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. The starter exits before its task body when the SMTP settings are unset, so a task that sends no email also deletes that guard (the `REQUIRED` check) when it replaces the body. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note). The block below stages the files but does not commit them. Before committing, set `on.schedule` in `cron-notify.yml` to the task's own cadence (the template's `cron: '0 7 * * *'` is a placeholder; add the DST guard if it needs a fixed local time, per `docs/guides/cron-email-notifications.md`) and replace the starter task body, then stage those edits again (`git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js`): the block's own `git add` captured the unedited templates:
+Installed only when the project has a scheduled task (`global.md` → *Repo Structure Standard*, owner ruling 2026-10-10): a `schedule:` workflow starts recurring work the moment it lands, so it is added with the task, not before. The starter exits before its task body when the SMTP settings are unset, so a task that sends no email also deletes that guard (the `REQUIRED` check) when it replaces the body. Install it with its scripts (`.github/scripts/notify-task.js`, `.github/scripts/notify-email.js`, `.github/scripts/package.json`, as step 5 of `/new-repo` lists them under its scheduled-job scripts note). `.github/scripts/package.json` is normally already there from Step 1, where every project gets it for its `"type": "commonjs"`; the block below keeps it, adding `nodemailer` only when it is missing, rather than overwriting it. The block below stages the files but does not commit them. Before committing, set `on.schedule` in `cron-notify.yml` to the task's own cadence (the template's `cron: '0 7 * * *'` is a placeholder; add the DST guard if it needs a fixed local time, per `docs/guides/cron-email-notifications.md`) and replace the starter task body, then stage those edits again (`git add .github/workflows/cron-notify.yml .github/scripts/notify-task.js`): the block's own `git add` captured the unedited templates:
 
 ```bash
 mkdir -p .github/workflows .github/scripts
@@ -653,8 +664,11 @@ else
 fi
 ```
 
-**What it does:** `cron-notify.yml` surfaces scheduled-job failures the same way
-`ci-monitor` surfaces CI failures.
+**What it does:** `cron-notify.yml` runs the project's scheduled task
+(`notify-task.js`) on its cron and sends email through `notify-email.js`. It
+does **not** surface its own failures: nothing in it opens an issue or comments
+when a run fails, so a failed run shows only as a red run in the Actions tab.
+That is unlike `ci-monitor`, which watches QA from outside.
 
 **Do not install `keepalive.yml`.** It pushes to `main` weekly, and the
 default-branch ruleset every repo must have (with an empty bypass list) refuses

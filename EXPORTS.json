@@ -78,7 +78,6 @@
         "templates/workflows/codex-monitor.yml"
       ],
       "automation": [
-        "templates/workflows/keepalive.yml",
         "templates/workflows/cron-notify.yml",
         "templates/scripts/notify-email.js",
         "templates/scripts/notify-task.js",
@@ -266,7 +265,6 @@
         "templates/workflows/ci-monitor.yml",
         "templates/workflows/ci-notify.yml",
         "templates/workflows/codex-monitor.yml",
-        "templates/workflows/keepalive.yml",
         "templates/workflows/cron-notify.yml",
         "templates/scripts/notify-email.js",
         "templates/scripts/notify-task.js",

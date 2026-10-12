@@ -296,9 +296,9 @@ The `templates/workflows/<wf>.yml` row above defers here.
   (W2), so they are `DRIFT` by design: take a template change around that name,
   never drop it (`.github/workflow-ref-required.json` refuses the drop when it
   lists them).
-- ⚠️ **NEVER `keepalive.yml`, absent or present.** `/new-repo` deliberately does
-  not scaffold it (`cicd-setup.md` → *9f — Scheduled-job notifications* has the
-  reason); an installed copy is a finding to delete, not a template to refresh.
+- ⚠️ **NEVER `keepalive.yml`, absent or present.** Its template was deleted
+  (`cicd-setup.md` → *9f — Scheduled-job notifications* has the reason); an
+  installed copy is a finding to delete, not a file to refresh.
 - **Every `DRIFT` file:** show the diff and decide singly — local drift is as
   often an improvement this repo has not yet absorbed as it is corruption, and
   only the diff distinguishes them; keep local only when the diff leaves it

@@ -109,8 +109,6 @@ Execute in order:
      recurring work the moment it lands. Add it with the task, per
      `docs/standards/cicd-setup.md` Step 9f.
 
-   **Do NOT copy `keepalive.yml`** — why: `docs/standards/cicd-setup.md` → *9f — Scheduled-job notifications*.
-
    Drop-in for a **branch-source** Pages project — copy verbatim, no edits.
    `ci-monitor.yml` and `ci-notify.yml` ship watching all three QA workflows,
    which all resolve because this step installs the full set.

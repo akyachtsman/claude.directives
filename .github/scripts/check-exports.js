@@ -69,12 +69,15 @@ for (const dom of permanentDomains) {
     for (const p of paths) derivedPermanent.set(p, dom);
   }
 }
-// A derived entry in directory form (`dir/`) covers every path under it, so a
-// file re-listed beneath one is the same duplication as an exact repeat (Codex,
-// #443). The `/` is the boundary: `dir.md` is not under `dir/`.
+// An entry in directory form (`dir/`) covers every path under it, so ANY overlap
+// between an enumerated entry and a derived one is the same duplication as an
+// exact repeat, in either direction: a file re-listed beneath a derived
+// directory, or an enumerated directory over a derived file, which would keep
+// that file permanent after its domain stopped claiming it (Codex, #443). The
+// `/` is the boundary: `dir.md` is not under `dir/`.
+const covers = (a, b) => a === b || (a.endsWith('/') && b.startsWith(a));
 const coveringDomain = (p) => {
-  if (derivedPermanent.has(p)) return derivedPermanent.get(p);
-  for (const [d, dom] of derivedPermanent) if (d.endsWith('/') && p.startsWith(d)) return dom;
+  for (const [d, dom] of derivedPermanent) if (covers(d, p) || covers(p, d)) return dom;
   return null;
 };
 for (const p of manifest.swap?.permanent ?? []) {

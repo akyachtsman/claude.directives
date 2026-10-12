@@ -73,6 +73,8 @@ const CASES = [
     { permanent_domains: ['meta'], permanent: ['std.md', 'meta/tool.md'] }, 1, `meta/tool.md ${REDUNDANT}`, null],
   ['refusal: a file under a derived DIRECTORY re-enumerated under permanent fails (Codex, #443)',
     { permanent_domains: ['meta'], permanent: ['std.md', 'metadir/x.md'] }, 1, `metadir/x.md ${REDUNDANT}`, null],
+  ['refusal: an enumerated directory over a derived file fails (Codex, #443)',
+    { permanent_domains: ['meta'], permanent: ['std.md', 'meta/'] }, 1, `meta/ ${REDUNDANT}`, null],
   ['twin: a path that only starts like a derived directory is not under it',
     { permanent_domains: ['meta'], permanent: ['std.md', 'metadir.md'] }, 0, 'check-exports: OK', REDUNDANT],
   ['refusal: a derived permanent path missing from the tree still fails as permanent',

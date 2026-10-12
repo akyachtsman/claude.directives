@@ -47,17 +47,14 @@ runs end with no wake, and why even a unique match is not proof: `directives/git
 ## CI never registered on a PR
 
 No run at all is a different failure from a red run — usually nothing in the
-repo is broken. Follow the escalation ladder in `directives/git.md` → *Conditional Auto-Merge on Green* (close→reopen → empty commit → fresh branch/PR → scope diagnosis).
-The distinguishing test: if push-to-main runs fire while `pull_request` runs
-don't, it's a GitHub event-delivery outage, not your workflow file — run the
-gate manually via `qa.yml`'s `workflow_dispatch` on the PR's branch, and do
-not edit workflows chasing a bug that isn't there.
+repo is broken. Follow the escalation ladder in `directives/git.md` → *Conditional Auto-Merge on Green* (close→reopen → empty commit → fresh branch/PR → scope diagnosis),
+and do not edit workflows chasing a bug that isn't there.
 
 ## What not to do
 
 - Do not close a `ci-failure` issue without fixing the underlying failure
 - Do not remove `codex-flagged` by hand as a routine path — request another pass
-  (step 3 of the `codex-flagged` procedure above); hand removal is the last resort `directives/git.md` → *PR Lifecycle* bounds
+  (step 3 of the `codex-flagged` procedure above); hand removal is the last resort, bounded by `directives/git.md` → *PR Lifecycle*
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

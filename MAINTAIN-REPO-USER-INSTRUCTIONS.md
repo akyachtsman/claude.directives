@@ -190,21 +190,14 @@ unprotected no matter what the hook reports.
    renamed workflow silently blocks every merge; sessions already verify CI
    green before merging and `ci-monitor` catches failures independently.
 
-**Why conversation resolution is on that list (owner ruling, 2026-08-26).**
-`git.md`'s merge gates include *no unresolved review threads*, and until this
-rule that gate had no mechanism at all — it was satisfied by an agent remembering
-to make one call, the thread read is GraphQL through the MCP, and it fails **exactly when** the
-pool is empty, while the `codex-flagged` label is REST and stays readable at that
-same moment. The cheap wrong path was always available precisely when the correct
-one was not, which is why a stronger warning could not fix it: `claude.prop`
-merged with 5 of 9 threads unresolved on 2026-08-23 having checked and reported
-the other three gates. The ruleset moves that one server-side, where no session
-can forget it and no quota can block it. Note what you will NOT see: nothing
-announces that the rule is in force, and neither probe below tests it (both would
-need a second actor to leave a review thread). The first evidence is an ordinary
-merge refused as blocked with every other gate green — until you have seen one in
-a repo, sessions there still treat the thread gate as theirs to check
-(`directives/git.md` → *Repo-settings preflight*).
+**Why conversation resolution is on that list (owner ruling, 2026-08-26).** It
+moves `git.md`'s *no unresolved review threads* gate server-side, where no session
+can forget it and no quota can block it: `claude.prop` merged with 5 of 9 threads
+unresolved on 2026-08-23 having checked and reported the other three gates. Why
+the agent-side check alone kept failing, and how a session reads a blocked merge: `directives/git.md` → *Conditional Auto-Merge on Green*.
+Note what you will NOT see: nothing announces that the rule is in force, and
+neither probe below tests it (both would need a second actor to leave a review
+thread).
 
 **The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
 with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
@@ -389,15 +382,8 @@ Hard-won; each cost a real debugging session:
 - **Scheduling tools are pre-approved via committed settings** (`global.md` → *Scheduling Tools Never Prompt*, 2026-08-18): the allowlist in
   `.claude/settings.json` (the six scheduling tools plus the read-only tools that
   ruling admits) loads at session start; a one-time prompt in an
-  already-running session is accepted. ci-notify's webhook wake covers a
-  PR-attached completion **only when that completion emits one** — success
-  conclusion, watched workflow, and exactly one open PR resolved. It is not a
-  no-scheduling guarantee: the ways a run ends with no wake are listed in
-  `git.md` → *PR Lifecycle* and in full in `docs/standards/pr-mechanics.md` → *Wakes that never arrive*, and that list is evidence the class is broad, not a set to check against.
-  And a unique match is not a guaranteed wake for YOUR session: a
-  `repository_dispatch` run can uniquely match an unrelated PR, which gets the comment instead.
-  Where nothing will wake you a check-in is
-  the only observer (`git.md` → *PR Lifecycle*; `global.md` → *Async Operations*, item 1's exception).
+  already-running session is accepted. ci-notify's wake is not a no-scheduling
+  guarantee — when a run emits none and a check-in is the only observer: `git.md` → *PR Lifecycle*.
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,
   not the UI prose title.
 - **Mid-session staleness** — `CLAUDE.md` → *Mid-session change semantics*:

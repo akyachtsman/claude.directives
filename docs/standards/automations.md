@@ -350,14 +350,10 @@ that set, arm a check-in — that is not polling (`git.md` → *PR Lifecycle*,
 ## Automation 5 — In-Session Reactive Subscription
 
 When a Claude Code session opens a PR, it receives that PR's activity for fast
-feedback. The subscription is **harness-side and automatic** — no tool call:
-- **Do not subscribe at session start.** `subscribe_pr_activity` exists for
-  taking over a PR this session did not open, or re-subscribing after an
-  unsubscribe (`git.md` → *PR Lifecycle*)
-- **Never unsubscribe from a PR you are driving.** The harness drops it at merge
-  or close. Dropping it yourself disables `ci-notify.yml`'s wake (Automation 4c)
-  and leaves a review round with no push signal at all; a scheduled check-in is
-  not a substitute, because a timer cannot know whether anything changed
+feedback. The subscription is **harness-side and automatic** — when to subscribe explicitly, and why never to unsubscribe from a PR you are driving: `git.md` → *PR Lifecycle*.
+- Dropping it yourself disables `ci-notify.yml`'s wake (Automation 4c) and
+  leaves a review round with no push signal at all; a scheduled check-in is not
+  a substitute, because a timer cannot know whether anything changed
 - Webhooks don't deliver new pushes or merge-conflict transitions — and deliver
   CI success only via `ci-notify.yml`'s PR comment (Automation 4c) — so re-check
   PR state on wake and, if nothing changed, re-arm and emit the heartbeat line

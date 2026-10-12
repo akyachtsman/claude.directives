@@ -29,8 +29,8 @@ improvise one.
 ## Commands
 
 ### inspect
-List every file in the repo (full recursive tree), with sizes, at the default
-branch's head:
+List every file in the repo (full recursive tree) at the default branch's head
+— paths only; the blob-less listing carries no sizes:
 ```bash
 repo="<owner/name>"
 src="https://github.com/$repo.git"

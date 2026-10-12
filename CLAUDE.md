@@ -87,18 +87,14 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 `/audit-repo` treats a shipped-downstream-but-applicable-here miss as drift.
 
 ## Branch policy
-`global.md` → *GitHub Workflow* and `git.md` → *PR Lifecycle* apply here unchanged.
-The merge gate is `git.md` → *Conditional Auto-Merge on Green*.
+`global.md` → *GitHub Workflow* (a fresh branch per change) and `git.md` → *PR Lifecycle* apply here unchanged.
+The merge gate is `git.md` → *Conditional Auto-Merge on Green*; the file-list check is `git.md` → *Before merging*.
 
-Repo-specific deltas:
+Repo-specific delta:
 - `main` here enforces **Require conversation resolution before merging**
   server-side (owner, 2026-08-26), so in this repo that backstop is known to be on:
   a blocked merge with every other gate green is that rule firing — resolve the
   threads, do not retry the merge. The other gates are still the session's to check.
-- Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
-  next from updated `main` rather than reusing/force-pushing one long-lived branch.
-- Before merging, verify the PR's file list against GitHub's own diff, not the
-  local clone — a surprise file count means a stale/tangled branch.
 
 ## Session Start
 1. Read all five exported directive files under `directives/` fully — from the

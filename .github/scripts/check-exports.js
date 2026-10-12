@@ -115,6 +115,12 @@ for (const [p, r] of records) {
   if (existsSync(p)) console.log(`OK:   ${tag} ${p}${via}`);
   else fail(`${tag} path missing from tree: ${p}${via}`);
 }
+// One record per exported path: a directory record covers every path under it,
+// so a second record beneath it classifies that path twice, possibly into
+// another domain or class (Codex, #445). `covers` is the same `/`-bounded rule.
+for (const [a] of records) for (const [b] of records) {
+  if (a !== b && covers(a, b)) fail(`[paths] ${b} is already covered by the directory record ${a}; one record per path`);
+}
 // A listed domain no record names is a stale name, and a permanent one would
 // expand to nothing — the silent failure M-46's refusals exist to stop.
 for (const d of DOMAINS) if (!records.some(([, r]) => r?.domain === d)) fail(`[domains] ${d} is listed but no record names it`);

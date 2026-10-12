@@ -70,6 +70,9 @@ const CASES = [
   // --- the records themselves (B6)
   ['records: a well-formed fixture passes and reports every record',
     null, 0, '[paths] 5 records, each with a known domain (2), a compartment, and a known class (1)', 'FAIL'],
+  ['refusal: a record beneath a directory record fails, marked or not (Codex, #445)',
+    m => { m.paths['metadir/x.md'] = rec('global', 'core'); }, 1,
+    '[paths] metadir/x.md is already covered by the directory record metadir/', null],
   ['refusal: a record naming an unlisted domain fails',
     at('free.md', r => { r.domain = 'nope'; }), 1, '[paths] free.md: unknown domain: nope', null],
   ['refusal: a record with no domain fails',

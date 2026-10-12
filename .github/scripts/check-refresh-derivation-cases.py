@@ -73,6 +73,13 @@ them passes (6). MEASURED 2026-10-08 via CHECK_REFRESH_DERIVATION_BIN: with
 check 5's comparison disabled, exactly the two contract refusals fail; with
 check 6's, exactly the two "reworded comment" refusals. Check 4 replaced a
 two-copy comparison in batch C (R1), when the derivation moved into one file.
+
+/new-repo joined check 4 in the 2026-10-11 audit (I-1): it pointed at
+refresh-repo.md's block, whose ${CLAUDE_PLUGIN_ROOT} is substituted only when
+/refresh-repo itself loads. MEASURED 2026-10-12 against the pre-fix guard
+(origin/main 1328c41) via CHECK_REFRESH_DERIVATION_BIN: the seven new-repo
+cases fail (pointer-only, prose-only, inline copy, missing file, non-plugin-root
+path, undelimited loop, indented fence) plus the one-copy success needle.
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -127,16 +134,17 @@ def derive_sh(token=SLASHED, ext=EXT_SHIPPED, sed=True):
 CALL = 'derived=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" <"$buf")'
 
 
-def command_md(delimited=True, calls=True, inline=False, commented=False, prose=False):
+def command_md(delimited=True, calls=True, inline=False, commented=False, prose=False,
+               call=None, indent=""):
     """A refresh-repo.md whose install block runs derive-scripts.sh over $buf --
     unless `calls` is False. When it does not, `commented` leaves the call behind
     as a comment in the block and `prose` quotes it outside any fence. When
     `inline`, the block also carries its own copy of the token grep."""
-    run = CALL if calls else ("# " + CALL + "\nderived=$(cat \"$buf\")" if commented
+    call = call or CALL
+    run = call if calls else ("# " + CALL + "\nderived=$(cat \"$buf\")" if commented
                               else 'derived=$(cat "$buf")')
-    return (
-        ("The install runs `" + CALL + "`.\n\n" if prose else "")
-        + "```bash\n"
+    block = (
+        "```bash\n"
         "for c in $callers; do\n"
         '  curl -fsSL "$raw/$c" >>"$buf"\n'
         + (DELIM + "\n" if delimited else "")
@@ -145,6 +153,8 @@ def command_md(delimited=True, calls=True, inline=False, commented=False, prose=
         + (f"refs=$(grep -oE '{SLASHED}' \"$buf\" | sort -u)\n" if inline else "")
         + "```\n"
     )
+    return (("The install runs `" + CALL + "`.\n\n" if prose else "")
+            + "".join(indent + ln if ln.strip() else ln for ln in block.splitlines(True)))
 
 
 def stamp_sh(calls=True, inline=False, commented=False):
@@ -160,12 +170,15 @@ def stamp_sh(calls=True, inline=False, commented=False):
             "scan() {\n" + body + "}\n")
 
 
-def build(tmp, command_text, callers, stamp_text=KEEP, derive_text=KEEP):
+def build(tmp, command_text, callers, stamp_text=KEEP, derive_text=KEEP, new_repo_text=KEEP):
     """A synthetic repo. command_text/stamp_text/derive_text None means the file
     is absent; KEEP means the well-formed default."""
     root = Path(tmp)
     files = {
         "plugins/directives-toolkit/commands/refresh-repo.md": command_text,
+        # /new-repo carries its own block, indented inside a numbered step.
+        "plugins/directives-toolkit/commands/new-repo.md":
+            command_md(indent="   ") if new_repo_text is KEEP else new_repo_text,
         "plugins/directives-toolkit/scripts/refresh-stamp.sh":
             stamp_sh() if stamp_text is KEEP else stamp_text,
         "plugins/directives-toolkit/scripts/derive-scripts.sh":
@@ -188,11 +201,11 @@ CASES = Cases("check-refresh-derivation-cases")
 
 
 def case(name, *, callers, expect_exit, needle, command_text=KEEP, stamp_text=KEEP,
-         derive_text=KEEP):
+         derive_text=KEEP, new_repo_text=KEEP):
     if command_text is KEEP:
         command_text = command_md()
     with TemporaryDirectory() as tmp:
-        root = build(tmp, command_text, callers, stamp_text, derive_text)
+        root = build(tmp, command_text, callers, stamp_text, derive_text, new_repo_text)
         rc, out = run(root)
     # A traceback is never a catch, whatever the exit code and output say: a
     # crash can exit 1 with the needle already printed.
@@ -336,8 +349,8 @@ case("a derivation without the trailing-period stage is refused against the cont
 # Check 4 -- ONE copy. Batch C (R1) moved the derivation into derive-scripts.sh;
 # before it, the command and the Phase 3 script each carried a copy and this
 # suite compared them stage by stage. Now a copy anywhere else is refused.
-case("both callers running derive-scripts.sh pass the one-copy check",
-     callers=PKG, expect_exit=0, needle="both run derive-scripts.sh")
+case("every caller running derive-scripts.sh passes the one-copy check",
+     callers=PKG, expect_exit=0, needle="all run derive-scripts.sh")
 
 case("an INLINE copy of the derivation in refresh-repo.md is refused",
      command_text=command_md(inline=True), callers=PKG, expect_exit=1,
@@ -367,6 +380,40 @@ case("a call quoted only in the command's PROSE is refused",
 case("a COMMENTED-OUT `bash \"$derive\"` in refresh-stamp.sh is refused",
      stamp_text=stamp_sh(calls=False, commented=True), callers=PKG, expect_exit=1,
      needle="refresh-stamp.sh does not run derive-scripts.sh")
+
+# Audit 2026-10-11, I-1: /new-repo pointed at refresh-repo.md's block, whose
+# ${CLAUDE_PLUGIN_ROOT} is substituted only when /refresh-repo itself loads, so
+# the bootstrap ran `bash /scripts/derive-scripts.sh` and stopped. It now
+# carries its own block, held to the same checks.
+case("a new-repo.md that only POINTS at refresh-repo's block is refused",
+     new_repo_text=("Run the pipeline `/refresh-repo` uses, `refresh-repo.md` → "
+                    "*Deriving the referenced-script set*.\n"),
+     callers=PKG, expect_exit=1,
+     needle="new-repo.md does not run derive-scripts.sh over the fetched buffer")
+
+case("a new-repo.md that quotes the call only in PROSE is refused",
+     new_repo_text=command_md(calls=False, prose=True), callers=PKG, expect_exit=1,
+     needle="new-repo.md does not run derive-scripts.sh over the fetched buffer")
+
+case("an INLINE copy of the derivation in new-repo.md is refused",
+     new_repo_text=command_md(inline=True), callers=PKG, expect_exit=1,
+     needle="new-repo.md carries an INLINE copy")
+
+case("a missing new-repo.md is refused, not skipped",
+     new_repo_text=None, callers=GOOD, expect_exit=1, needle="new-repo.md not found")
+
+case("a call by a path that is not the plugin root is refused",
+     new_repo_text=command_md(call='derived=$(bash scripts/derive-scripts.sh <"$buf")'),
+     callers=PKG, expect_exit=1,
+     needle="new-repo.md does not run derive-scripts.sh over the fetched buffer")
+
+case("an UNDELIMITED new-repo loop that loses a script is refused",
+     new_repo_text=command_md(delimited=False), callers=RAGGED, expect_exit=1,
+     needle="delimiter in plugins/directives-toolkit/commands/new-repo.md")
+
+case("an INDENTED fence (inside a numbered step) still counts as the block",
+     new_repo_text=command_md(indent="   "), callers=PKG, expect_exit=0,
+     needle="all run derive-scripts.sh")
 
 # Check 5 -- a derivation the shipped callers cannot show is wrong. The callers
 # here give no ui-tests/package.json and no package.json, so only the probes can

@@ -47,9 +47,14 @@ form-independent scan, these ways:
   3. OFF-CONTRACT. Anything the derivation accepts that is not .js/.py under
      .github/scripts/, or exactly .github/scripts/package.json (#398) -- see the
      extras split below.
-  4. ONE COPY. The install derivation and the Phase 3 applied-check must both
-     RUN derive-scripts.sh, and neither may carry an inline copy of the token
-     grep. They once carried a copy each, and keeping two copies in step took
+  4. ONE COPY. Both install derivations -- /refresh-repo's and /new-repo's --
+     and the Phase 3 applied-check must all RUN derive-scripts.sh, and none may
+     carry an inline copy of the token grep. An installer must name the file as
+     "${CLAUDE_PLUGIN_ROOT}/scripts/derive-scripts.sh" in its OWN fenced block:
+     the token is substituted only in the text of the command being loaded, so
+     /new-repo pointing at refresh-repo.md's block ran `bash
+     /scripts/derive-scripts.sh` and stopped the bootstrap (audit 2026-10-11,
+     I-1). They once carried a copy each, and keeping two copies in step took
      three Codex rounds on #409 and a stage-by-stage comparison here; one file
      makes "the check is never wider or narrower than the install" (#398)
      structural rather than policed (batch C, R1).
@@ -125,6 +130,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "templates" / "scri
 import gh_yaml  # noqa: E402
 
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")
+# /new-repo installs callers too, from a project with no templates/ of its own,
+# so it runs the same derivation over the same kind of fetched buffer (I-1).
+NEW_REPO = Path("plugins/directives-toolkit/commands/new-repo.md")
+INSTALLERS = (COMMAND, NEW_REPO)
 # Phase 3's applied-check runs from this script, not from a fenced block in the
 # command: a command's arguments are substituted into its text on load, and the
 # check's functions take positional parameters.
@@ -144,7 +153,9 @@ CALLER_GLOBS = ("templates/workflows/*.yml", "templates/actions/*/action.yml",
 INLINE_COPY = re.compile(r"grep -oE '[^']*\\\.github/scripts/[^']*'")
 # How each caller must run DERIVE: the install over the fetched buffer, the
 # applied-check from its own directory.
-COMMAND_CALL = re.compile(r'derive-scripts\.sh"?\s*<\s*"\$buf"')
+# The path must be the plugin-root form: a bare or relative path resolves
+# against the project, which has no scripts/ of the plugin's.
+COMMAND_CALL = re.compile(r'"\$\{CLAUDE_PLUGIN_ROOT\}/scripts/derive-scripts\.sh"\s*<\s*"\$buf"')
 # The applied-check must both point `derive` at the file and RUN it: naming the
 # path alone (a variable set and never used) is not running it.
 STAMP_DEF = re.compile(r'^\s*derive=.*derive-scripts\.sh', re.M)
@@ -152,7 +163,8 @@ STAMP_CALL = re.compile(r'\bbash\s+"\$\{?derive\}?"')
 # The calls are matched in EXECUTABLE text only: a call left behind as a comment,
 # or quoted in prose, is not one (Codex, #427). The command's code is its fenced
 # bash blocks; in both files a comment line is dropped and a trailing comment cut.
-FENCE = re.compile(r"^```(?:bash|sh)[ \t]*\n(.*?)^```", re.M | re.S)
+# Indented fences count: /new-repo's block sits inside a numbered step.
+FENCE = re.compile(r"^[ \t]*```(?:bash|sh)[ \t]*\n(.*?)^[ \t]*```", re.M | re.S)
 
 
 def shell_code(text):
@@ -530,15 +542,17 @@ def derived_paths(data, what):
 
 def main():
     for f, role in ((COMMAND, "the command that installs by the derivation"),
+                    (NEW_REPO, "the bootstrap, which installs by the derivation"),
                     (DERIVE, "the derivation itself"),
                     (STAMP, "the Phase 3 applied-check")):
         if not f.exists():
             return fail(f"{f} not found ({role}) — what this guard pins has moved or been deleted.")
 
-    command, stamp = COMMAND.read_text(encoding="utf-8"), STAMP.read_text(encoding="utf-8")
+    installers = {f: f.read_text(encoding="utf-8") for f in INSTALLERS}
+    stamp = STAMP.read_text(encoding="utf-8")
 
-    # ---- check 4: ONE copy, run by both callers --------------------------------
-    for f, text in ((COMMAND, command), (STAMP, stamp)):
+    # ---- check 4: ONE copy, run by every caller --------------------------------
+    for f, text in (*installers.items(), (STAMP, stamp)):
         if INLINE_COPY.search(text):
             return fail(
                 f"{f} carries an INLINE copy of the script derivation.\n"
@@ -548,13 +562,16 @@ def main():
                 "      never satisfy, or passes a dependency it never saw (#398).\n"
                 f"      Run {DERIVE.name} there instead."
             )
-    if not COMMAND_CALL.search(command_code(command)):
-        return fail(
-            f"{COMMAND} does not run {DERIVE.name} over the fetched buffer.\n"
-            f"      The install derivation must RUN `bash .../{DERIVE.name} <\"$buf\"` in a\n"
-            "      fenced bash block (a comment or prose mention is not a call), so it\n"
-            "      derives exactly what the Phase 3 applied-check verifies."
-        )
+    for f, text in installers.items():
+        if not COMMAND_CALL.search(command_code(text)):
+            return fail(
+                f"{f} does not run {DERIVE.name} over the fetched buffer.\n"
+                f"      The install derivation must RUN `bash \"${{CLAUDE_PLUGIN_ROOT}}/scripts/{DERIVE.name}\" <\"$buf\"`\n"
+                "      in a fenced bash block of its OWN (a comment, a prose mention, or a pointer\n"
+                "      to another command's block is not a call: the plugin root is substituted\n"
+                "      only in the command being loaded), so it derives exactly what the\n"
+                "      Phase 3 applied-check verifies."
+            )
     stamp_code = shell_code(stamp)
     if not (STAMP_DEF.search(stamp_code) and STAMP_CALL.search(stamp_code)):
         return fail(
@@ -607,7 +624,8 @@ def main():
     # to fail. Only callers missing a trailing newline can cause this, so pair
     # each of those against every other caller instead of guessing an order.
     per_caller = set().union(*(truth(b) for b in bodies.values()))
-    delimited = bool(DELIMITER_LINE.search(command))
+    undelimited = [f for f, text in installers.items() if not DELIMITER_LINE.search(text)]
+    delimited = not undelimited
     ragged = [c for c in callers if not bodies[c].endswith("\n")]
     joiner = "\n" if delimited else ""
 
@@ -634,10 +652,11 @@ def main():
             "      whose last scalar ends in a script path merges into the next file's first\n"
             "      word — `.github/scripts/a.js` + `name:` = `.github/scripts/a.jsname`, which\n"
             "      the token grep consumes whole and the extension filter drops.\n"
-            f"      The fetch loop {'DOES' if delimited else 'DOES NOT'} append a delimiter.\n"
+            f"      The fetch loop {'DOES' if delimited else 'DOES NOT'} append a delimiter"
+            f"{'' if delimited else ' in ' + ', '.join(str(f) for f in undelimited)}.\n"
             f"      Concatenating {lost_pair[0]} before {lost_pair[1]} loses:\n"
             + "".join(f"      LOST: {s}\n" for s in lost)
-            + f"      Append a token boundary after every fetch in {COMMAND}."
+            + f"      Append a token boundary after every fetch in {', '.join(str(f) for f in undelimited) or COMMAND}."
         )
 
     # ---- check 3: extras -----------------------------------------------------
@@ -711,7 +730,7 @@ def main():
         f"check-refresh-derivation: OK — {len(per_caller)} referenced script(s) across "
         f"{len(callers)} caller(s), found per-caller, via {DERIVE.name}"
     )
-    print(f"  one copy: {COMMAND.name} and {STAMP.name} both run {DERIVE.name}")
+    print(f"  one copy: {', '.join(f.name for f in INSTALLERS)} and {STAMP.name} all run {DERIVE.name}")
     print(f"  contract: the derivation gives exactly the {len(PROBES_CONTRACT)}-path contract set from the probes")
     if ragged:
         print(

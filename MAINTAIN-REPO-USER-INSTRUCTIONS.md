@@ -199,17 +199,9 @@ Note what you will NOT see: nothing announces that the rule is in force, and
 neither probe below tests it (both would need a second actor to leave a review
 thread).
 
-**The one exception: `keepalive.yml`.** It pushes an empty commit to main weekly
-with `secrets.KEEPALIVE_PAT`, to stop GitHub disabling scheduled workflows after
-60 days (a rule for public repositories only). Protection blocks that push, the workflow goes red, and ~60 days later
-every cron in that repo is disabled — a slow, quiet failure.
-
-**Delete `keepalive.yml`; do not bypass anything.** GitHub disables scheduled
-workflows in a public repository after 60 days of *repository inactivity* — not on a timer. A repo where
-PRs land never approaches that, so the workflow buys nothing there. Remove it and
-its `KEEPALIVE_PAT` secret, and keep the ruleset's bypass list **empty**. If a
-genuinely idle repo ever does trip the limit, GitHub emails and one click
-re-enables the workflow — cheaper than a standing exemption.
+**The one exception: `keepalive.yml`**, which pushes to main weekly and so is
+refused by this protection. Delete `keepalive.yml` and its `KEEPALIVE_PAT` secret; do not bypass anything.
+Why: `docs/standards/cicd-setup.md` → *9f — Scheduled-job notifications*.
 
 **Never resolve it by bypassing your own account.** A bypass entry exempts an
 **actor**, not a workflow and not a token. The account that owns

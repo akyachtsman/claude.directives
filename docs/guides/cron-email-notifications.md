@@ -88,14 +88,7 @@ inactivity, not elapsed time, so a repo where PRs land never approaches it and
 needs nothing here. GitHub emails repo admins before disabling, and re-enabling
 is one click.
 
-`templates/workflows/keepalive.yml` makes a weekly empty commit via
-`KEEPALIVE_PAT` to reset that clock. **Do not install it under this standard.**
-It pushes directly to `main`, and the required default-branch ruleset — empty
-bypass list — refuses that, so it would be red on every run. The template is
-retained only for a repo outside this standard. Do not resolve the conflict by
-bypassing your own account: a bypass exempts an *actor*, so it would exempt
-every push you and your sessions make. See
-`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
+`templates/workflows/keepalive.yml` exists to reset that clock; **do not install it under this standard** — why: `docs/standards/cicd-setup.md` → *9f — Scheduled-job notifications*.
 
 ## When the GitHub cron isn't enough
 Scheduled jobs run as GitHub Actions, data-heavy and timing-sensitive ones

@@ -670,14 +670,18 @@ does **not** surface its own failures: nothing in it opens an issue or comments
 when a run fails, so a failed run shows only as a red run in the Actions tab.
 That is unlike `ci-monitor`, which watches QA from outside.
 
-**Do not install `keepalive.yml`.** It pushes to `main` weekly, and the
-default-branch ruleset every repo must have (with an empty bypass list) refuses
-that — so under this standard the workflow is red on every run, not merely
-unnecessary. It is also unnecessary: the 60-day auto-disable applies to public
-repositories only and counts repository *inactivity*, which a repo where PRs land never approaches. If a genuinely idle
-repo ever does trip the limit, GitHub emails admins and re-enabling is one click.
-The template is retained only for a repo outside this standard; see
-`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
+**Do not install `keepalive.yml`.** This is the one full statement of why; every
+other mention points here. It pushes an empty commit to `main` weekly with
+`secrets.KEEPALIVE_PAT`, and the default-branch ruleset every repo must have
+(with an empty bypass list) refuses that — so under this standard the workflow
+is red on every run, not merely unnecessary. It is also unnecessary: the 60-day
+auto-disable applies to public repositories only and counts repository
+*inactivity*, not elapsed time, which a repo where PRs land never approaches. If a genuinely idle
+repo ever does trip the limit, GitHub emails admins and re-enabling is one click
+— cheaper than a standing exemption. A project that already has it: delete it
+and its `KEEPALIVE_PAT` secret, keep the ruleset's bypass list empty, and never
+exempt your own account to keep it green (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection* says why).
+The template is retained only for a repo outside this standard.
 
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.
@@ -741,7 +745,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/workflows/pages-retry.yml`: **branch-source** → present, with its `REQUIRED` entry; **Actions-source** → absent with no entry, **or** repointed under W3's exception with the entry updated to the deploy's name (Step 9d)
 - [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present, `BUILD_CMD`/`SITE_DIR` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
 - [ ] `.github/workflows/ci-notify.yml` present, watch list matching the QA workflows installed
-- [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT — it cannot run under the required ruleset (Step 9f)
+- [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
 - [ ] `.github/scripts/` holds the five scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py` (Step 1)

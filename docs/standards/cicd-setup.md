@@ -23,7 +23,7 @@ Three GitHub Actions workflows replace manual agent invocation for the mechanica
 | `qa-live.yml` | After GitHub Pages deployment completes, or manual dispatch | Playwright against the live deployed URL |
 | `qa-response.yml` | `repository_dispatch` / manual dispatch | Static checks + Playwright against the live URL |
 
-Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — so seven are standard (`global.md` → *Repo Structure Standard*). The scheduled `cron-notify.yml` (Step 9f) is added only when the project has a scheduled task. Two files are conditional on the Pages source, so every project has a baseline of eight, nine with the scheduled job: `pages-retry.yml` (Step 9d; `automations.md` → *Watcher Rules* W3) — **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name — and its converse `pages-deploy.yml` (Step 9d-bis), the deploy itself, installed **only** on Actions-source. `keepalive.yml` is NOT installed (Step 9f).
+Four event-driven monitors run alongside them in every project — `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml` and `ci-notify.yml` (Step 9) — so seven are standard (`global.md` → *Repo Structure Standard*). The scheduled `cron-notify.yml` (Step 9f) is added only when the project has a scheduled task. Two files are conditional on the Pages source, so every project has a baseline of eight, nine with the scheduled job: `pages-retry.yml` (Step 9d; `automations.md` → *Watcher Rules* W3) — **branch-source** → install it, with its `REQUIRED` entry; **Actions-source** → leave it out, **or** repoint it under W3's idempotent-deploy exception, **updating** its `REQUIRED` entry to the project's own deploy name — and its converse `pages-deploy.yml` (Step 9d-bis), the deploy itself, installed **only** on Actions-source. `keepalive.yml` is not part of the standard (Step 9f).
 
 The AI review steps (the official `pr-review-toolkit` code review, the `/security-review` skill, and `pr-readiness-reviewer`) remain manually invoked via Claude Code. Add them to CI only if `ANTHROPIC_API_KEY` is available as a repository secret.
 
@@ -670,18 +670,18 @@ does **not** surface its own failures: nothing in it opens an issue or comments
 when a run fails, so a failed run shows only as a red run in the Actions tab.
 That is unlike `ci-monitor`, which watches QA from outside.
 
-**Do not install `keepalive.yml`.** This is the one full statement of why; every
-other mention points here. It pushes an empty commit to `main` weekly with
+**`keepalive.yml` is not part of this standard**, and its template was deleted
+(owner ruling, 2026-10-12). This is the one full statement of why; every
+other mention points here. It pushed an empty commit to `main` weekly with
 `secrets.KEEPALIVE_PAT`, and the default-branch ruleset every repo must have
 (with an empty bypass list) refuses that — so under this standard the workflow
-is red on every run, not merely unnecessary. It is also unnecessary: the 60-day
+was red on every run, not merely unnecessary. It is also unnecessary: the 60-day
 auto-disable applies to public repositories only and counts repository
 *inactivity*, not elapsed time, which a repo where PRs land never approaches. If a genuinely idle
 repo ever does trip the limit, GitHub emails admins and re-enabling is one click
 — cheaper than a standing exemption. A project that already has it: delete it
 and its `KEEPALIVE_PAT` secret, keep the ruleset's bypass list empty, and never
 exempt your own account to keep it green (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection* says why).
-The template is retained only for a repo outside this standard.
 
 At the start of every new session, check for open `ci-failure` /
 `pages-deploy-failure` issues and `codex-flagged` PR labels before starting work.

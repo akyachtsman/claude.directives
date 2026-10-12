@@ -142,7 +142,7 @@ const PLACE = {
   upkeep: [`${P}/commands/refresh-repo.md`, `${P}/scripts/`, `${P}/commands/audit-repo.md`,
     `${P}/commands/learn.md`, `${P}/commands/handoff-session.md`, `${P}/commands/do-repo.md`,
     `${P}/commands/my-list.md`, 'MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'docs/standards/kit-defects.md',
-    'templates/workflows/keepalive.yml', 'templates/workflows/cron-notify.yml',
+    'templates/workflows/cron-notify.yml',
     'templates/scripts/notify-email.js', 'templates/scripts/notify-task.js',
     'templates/scripts/package.json', 'docs/guides/cron-email-notifications.md'],
   // vendors: filled from EXPORTS.json → externals below.
@@ -505,7 +505,6 @@ const FLOW = [
   ['/refresh-repo', 'scripts/', 'run', 'runs Phase 3 (applied-check + stamp)', 'a', 'scripts/refresh-stamp.sh'],
   ['/do-repo', '/audit-repo', 'run', "runs its checklist on another repo", 'a', 'checklist'],
   ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', '/refresh-repo', 'seq', 'resync with', 'a', 'Run `/refresh-repo`'],
-  ['MAINTAIN-REPO-USER-INSTRUCTIONS.md', 'keepalive.yml', 'rem', 'delete it from projects', 'a', 'Delete'],
   ['notify-task.js', 'notify-email.js', 'run', 'sends through', 'a', 'require('],
   ['cron-email-notifications.md', 'cron-notify.yml', 'exp', 'sets up'],
   ['cron-email-notifications.md', 'notify-task.js', 'exp', 'sets up'],

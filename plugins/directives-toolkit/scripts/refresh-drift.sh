@@ -2,13 +2,21 @@
 # refresh-drift.sh — /refresh-repo Phase 1.5: compare every installed verbatim
 # drop-in with the CURRENT upstream template, whatever the delta. Run from the
 # project root:  bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
-# Prints DRIFT / NO-TEMPLATE / CANNOT-VERIFY per file; how to disposition each
+# Prints DRIFT / NO-TEMPLATE / CANNOT-VERIFY / RETIRED per file; how to disposition each
 # is commands/refresh-repo.md → Phase 1.5.
 repo="akyachtsman/claude.directives"
 raw="https://raw.githubusercontent.com/$repo/main"
 for f in .github/workflows/*.yml .github/actions/*/* \
          .claude/hooks/session-start.sh; do
   [ -f "$f" ] || continue
+  # A template upstream DELETED also answers 404, which would read as a
+  # project-specific file and be kept. An installed copy is a removal finding
+  # instead, so retired names are matched before any fetch (Codex, #444).
+  case "$f" in
+    .github/workflows/keepalive.yml)
+      echo "RETIRED: $f — upstream deleted this template; delete it and its KEEPALIVE_PAT secret (docs/standards/cicd-setup.md → 9f)"
+      continue ;;
+  esac
   case "$f" in
     .github/workflows/*) t="templates/workflows/$(basename "$f")";;
     .claude/hooks/*)     t="templates/claude-hooks/$(basename "$f")";;

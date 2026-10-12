@@ -62,6 +62,10 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
 ```
 (raw.githubusercontent.com is CDN-served and works from remote sessions.)
 
+`RETIRED` names a file whose template upstream deleted (today only
+`keepalive.yml`): it is a removal finding, never a project-specific file to
+keep. Delete it, with any secret the line names, in this refresh's PR.
+
 `.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
 `ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
 step — so a locally corrupted sibling next to an unmodified `action.yml` is
@@ -296,9 +300,9 @@ The `templates/workflows/<wf>.yml` row above defers here.
   (W2), so they are `DRIFT` by design: take a template change around that name,
   never drop it (`.github/workflow-ref-required.json` refuses the drop when it
   lists them).
-- ⚠️ **NEVER `keepalive.yml`, absent or present.** `/new-repo` deliberately does
-  not scaffold it (`cicd-setup.md` → *9f — Scheduled-job notifications* has the
-  reason); an installed copy is a finding to delete, not a template to refresh.
+- ⚠️ **NEVER `keepalive.yml`, absent or present.** Its template was deleted
+  (`cicd-setup.md` → *9f — Scheduled-job notifications* has the reason); an
+  installed copy is a finding to delete, not a file to refresh.
 - **Every `DRIFT` file:** show the diff and decide singly — local drift is as
   often an improvement this repo has not yet absorbed as it is corruption, and
   only the diff distinguishes them; keep local only when the diff leaves it

@@ -618,13 +618,15 @@ for (const claim of claims) {
     //     and inside the echo the PreToolUse hook DELIVERS. The claim-level
     //     pattern matched the header, so deleting it from the delivered message
     //     left the guard green on the copy that carries the most authority.
-    //   * CLAUDE.md states response-is-not-a-verdict anaphorically.
+    //   * CLAUDE.md stated response-is-not-a-verdict anaphorically (until
+    //     2026-10-12, when that restatement became a pointer and the claim,
+    //     left with no consumer, was retired).
     // Case-sensitive literal pinning settles both without a mechanism. The
     // header says "arms a check-in alongside it"; the delivered message says
     // "ARM A CHECK-IN ALONGSIDE IT" — different text, so pinning the delivered
     // wording pins the delivered occurrence. Verified by deleting the rule from
     // the echo alone and watching this guard go red. The anaphoric CLAUDE.md
-    // wording is simply another phrasing.
+    // wording was simply another phrasing.
     // So the override branch ran ZERO times, and an unexercised branch in a
     // guard is the failure this repo keeps paying for — #342 found two of its
     // checks fail-open for exactly that reason. If a carrier ever again states a

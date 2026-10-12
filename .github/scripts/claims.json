@@ -3,18 +3,15 @@
   "claims": [
     {
       "id": "verdict-lookup",
-      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found that narrowed form in nine files while the source said both — this claim's best case, and the reason it is pinned. The phrasings carry their connector ('so check …', 'predictable: check …') rather than the bare instruction: with the bare form, inverting automations.md to 'so never check …' PASSED, because a phrasing is a substring of its own negation. Measured on #341, not imagined. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, automations.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in; a phrasing above that only they carried is kept as an approved wording, not as a live pin.",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found that narrowed form in nine files while the source said both — this claim's best case, and the reason it is pinned. The phrasings carry their connector ('so check …', 'predictable: check …') rather than the bare instruction: with the bare form, inverting automations.md to 'so never check …' PASSED, because a phrasing is a substring of its own negation. Measured on #341, not imagined. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, automations.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording.",
       "source": "directives/git.md",
       "phrasings": [
         "predictable: check the comments AND the review threads",
-        "so check the PR's comments AND its review threads",
-        "them: check the PR's comments and its review threads.",
         "Look for the verdict in the PR's comments AND its review threads:",
         "Look for the verdict in the PR's comments and its review threads:",
         "— read the PR's comments AND its review threads"
       ],
       "consumers": [
-        "CLAUDE.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
         "plugins/directives-toolkit/commands/qa-pipeline.md",
         ".github/workflows/codex-monitor.yml",
@@ -41,30 +38,6 @@
       ]
     },
     {
-      "id": "response-is-not-a-verdict",
-      "why": "Codex-authored and naming the current head proves the run happened, not that it was clean — a review WITH live findings names the head too. Round 36 of #294 fixed the inverted form, which had authorised merging over open findings. The three phrasings are the three carriers' actual wordings; CLAUDE.md states it anaphorically ('a response naming the head is not one'), which is why its wording is listed separately rather than approximated by a shared one. 2026-09-23 (owner ruling): the non-directive carriers automations.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in; a phrasing above that only they carried is kept as an approved wording, not as a live pin.",
-      "source": "directives/git.md",
-      "phrasings": [
-        "A response is not a verdict.",
-        "a RESPONSE, not a verdict:",
-        "a response naming the head is not one, since a review with live findings names it too"
-      ],
-      "consumers": [
-        {
-          "file": "CLAUDE.md",
-          "why": "Found by review, NOT by --derive, and it is the entry's own recorded limit made concrete: this carrier states the claim ANAPHORICALLY — 'a clean current-head Codex verdict — a response naming the head is not one' — where the predicate is the pronoun 'one', pointing back to 'verdict' a clause earlier. Under the old regex this needed a per-consumer override, because no widening reached the pronoun without also matching sentences that are not this claim. Under literal pinning it is simply one more approved phrasing. This is the repo's PRIMARY instruction file and the merge gate it describes is the one that authorises merging over live findings, so it is the last carrier that should have been unlisted."
-        }
-      ],
-      "mustNotMatch": [
-        "a reaction is not a verdict you can attribute",
-        "a response naming the head is a clean verdict",
-        "a Codex response is a verdict",
-        "a response is usually not a verdict",
-        "a response is not, if it is clean, a verdict",
-        "A response is not a verdict unless it contains no findings."
-      ]
-    },
-    {
       "id": "terminal-states-list-is-closed",
       "why": "The companion entry `unreachable-review-terminal-states` pins the SENTENCE 'The two states are …' at each consumer. Codex, #336 round 9: that catches a consumer drifting away from the sentence and NOT a third bullet appended to the list in git.md, after which every consumer keeps asserting 'the two states' truthfully-as-written while the source admits three. Closing it needs a check about STRUCTURE, not wording, so this is the one `raw` claim: it requires the summary sentence to follow the outage bullet with NO further list item between them. Round 10 is why the gap rejects a LIST ITEM rather than a literal '- ': a third state written '* ', '+ ' or '3. ' left the guard green while the source listed three and every consumer still said two. ⚠️ It does NOT catch a bullet inserted BEFORE the outage one, or a state added outside this list. sourceOnly because the structure exists only in git.md.",
       "source": "directives/git.md",
@@ -85,13 +58,12 @@
     },
     {
       "id": "unreachable-review-terminal-states",
-      "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half: the closed two-item list, pinned as the sentence all three carriers share verbatim. The phrasing runs to '— never elapsed silence' on purpose — the mustNotMatch entries are the same sentence with that tail removed, which is precisely how the rule was weakened before.",
+      "why": "`unreachable-review-test-name` pins the test's NAME and says in its own rationale that it cannot see the CONTENT; #336 round 7 proved that by finding five files that named the test while stating the opposite rule around it. This entry is the other half: the closed two-item list, pinned as the sentence its carriers share verbatim. The phrasing runs to '— never elapsed silence' on purpose — the mustNotMatch entries are the same sentence with that tail removed, which is precisely how the rule was weakened before. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement of the merge gate became a pointer at git.md and left `consumers`.",
       "source": "directives/git.md",
       "phrasings": [
         "an unavailable reply still inside its reset window, or a request that could not be made or accepted at all — never elapsed silence."
       ],
       "consumers": [
-        "CLAUDE.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
       ],
       "mustNotMatch": [
@@ -109,48 +81,16 @@
       ]
     },
     {
-      "id": "no-label-no-escalation",
-      "why": "#336 round 5 made every reaction-only round escalate to the owner. Round 6 showed that is wrong for the common case: when a PR's FIRST Codex pass comes back clean as a reaction, codex-monitor never adds `codex-flagged` at all, so the reaction ladder clears the verdict gate, the absent label satisfies the label gate, and the merge proceeds unattended. All five carriers state it in one shared sentence, so one phrasing pins it everywhere. 2026-09-23 (owner ruling): the non-directive carriers automations.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in; a phrasing above that only they carried is kept as an approved wording, not as a live pin.",
-      "source": "directives/git.md",
-      "phrasings": [
-        "Where no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended."
-      ],
-      "consumers": [
-        "CLAUDE.md"
-      ],
-      "mustNotMatch": [
-        "a codex-flagged label is present, so the merge proceeds",
-        "no codex-flagged label is present, but never let the merge proceeds",
-        "no codex-flagged label is present",
-        "the ladder is the whole gate and the merge proceeds",
-        "no codex-flagged label is present, so escalate; instead the merge proceeds",
-        "Where no codex-flagged label is present, the merge proceeds",
-        "no codex-flagged label is present, and the ladder is the whole gate",
-        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended only after escalating to the owner.",
-        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended after owner approval.",
-        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended unless the owner objects.",
-        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended once the owner has signed off;",
-        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended; however, owner approval is required first.",
-        "no codex-flagged label is present, the ladder is the whole gate and the merge proceeds unattended; the owner must still be told first."
-      ]
-    },
-    {
       "id": "unreachable-review-test-name",
-      "why": "#336 defined the *unreachable-review test* — the one condition under which a session may take `codex-flagged` off by hand — and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath. A NAME is undone by a suffix rather than by a clause, so each phrasing pins the character that follows it ('test.', 'test admits', 'test, and', 'test:') — that boundary is what keeps 'tests', 'tester', 'testing' and 'test-cases' from counting as the name, and the mustNotMatch entries are exactly those four. ⚠️ Pinning the name cannot see the CONTENT of the rule; `unreachable-review-terminal-states` is the entry that does. 2026-09-23 (owner ruling): the non-directive carriers automations.md, ci-triage.md, cicd-setup.md, repo-monitors.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in; a phrasing above that only they carried is kept as an approved wording, not as a live pin.",
+      "why": "#336 defined the *unreachable-review test* — the one condition under which a session may take `codex-flagged` off by hand — and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath. A NAME is undone by a suffix rather than by a clause, so each phrasing pins the character that follows it ('test.', 'test admits', 'test, and') — that boundary is what keeps 'tests', 'tester', 'testing' and 'test-cases' from counting as the name, and the mustNotMatch entries are exactly those four. ⚠️ Pinning the name cannot see the CONTENT of the rule; `unreachable-review-terminal-states` is the entry that does. 2026-09-23 (owner ruling): the non-directive carriers automations.md, ci-triage.md, cicd-setup.md, repo-monitors.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording.",
       "source": "directives/git.md",
       "phrasings": [
         "the unreachable-review test.",
-        "its unreachable-review test admits, stated on the PR.",
-        "by a unreachable-review test.",
-        "PR Lifecycle's unreachable-review test:",
         "PR Lifecycle's unreachable-review test, and",
-        "PR Lifecycle's unreachable-review test admits, with the evidence that rule requires.",
         "PR Lifecycle's unreachable-review test admits it, with the evidence that rule requires.",
-        "PR Lifecycle's unreachable-review test admits.",
-        "bounds by its unreachable-review test, and"
+        "PR Lifecycle's unreachable-review test admits."
       ],
       "consumers": [
-        "CLAUDE.md",
         "directives/global.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
         ".github/workflows/codex-monitor.yml",
@@ -193,11 +133,10 @@
     },
     {
       "id": "exits-stay-reachable-never-silent",
-      "why": "#299 moved the Codex gate's mechanism out of git.md into docs/standards/pr-mechanics.md, and this is the one must-stay rule the issue named that had no pin: every exit from the verdict gate (the reaction ladder, unavailable, outage) stays reachable, and none clears the gate silently. Both exits lived inside the block being moved, so a split that dropped the rule and left only the pointer would have passed every other claim. Each phrasing runs to its sentence terminator so an appended condition changes the pinned text. automations.md states it as the ladder's last rung ('ask Codex a direct question or attest on the PR'), pinned from 'Where that endpoint is out of reach' so a negation of the exit falls inside the pin. ⚠️ Pinning git.md's summary sentence cannot see the list of exits beside it; a refactor that deletes one exit from that list and keeps this sentence stays green. 2026-09-23 (owner ruling): the non-directive carriers automations.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in; a phrasing above that only they carried is kept as an approved wording, not as a live pin.",
+      "why": "#299 moved the Codex gate's mechanism out of git.md into docs/standards/pr-mechanics.md, and this is the one must-stay rule the issue named that had no pin: every exit from the verdict gate (the reaction ladder, unavailable, outage) stays reachable, and none clears the gate silently. Both exits lived inside the block being moved, so a split that dropped the rule and left only the pointer would have passed every other claim. Each phrasing runs to its sentence terminator so an appended condition changes the pinned text. ⚠️ Pinning git.md's summary sentence cannot see the list of exits beside it; a refactor that deletes one exit from that list and keeps this sentence stays green. 2026-09-23 (owner ruling): the non-directive carriers automations.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): the automations.md phrasing, carried by no file since 2026-09-23, was removed with the mustNotMatch entries that existed only to constrain it.",
       "source": "directives/git.md",
       "phrasings": [
         "Every exit stays reachable, and none clears the gate silently.",
-        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently.",
         "every exit from the Codex verdict gate stays reachable, and none clears the gate silently."
       ],
       "consumers": [
@@ -210,33 +149,21 @@
         "Not every exit stays reachable, and none clears the gate silently.",
         "Every exit stays reachable.",
         "none clears the gate silently.",
-        "Where that endpoint is out of reach, never ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently.",
-        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is permitted is clearing the gate silently.",
-        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate loudly.",
-        "Where that endpoint is out of reach, ask Codex a direct question or attest on the PR; what is forbidden is clearing the gate silently only after owner approval.",
-        "what is forbidden is clearing the gate silently.",
         "every exit from the Codex verdict gate stays reachable, and one may clear the gate silently.",
         "every exit from the Codex verdict gate stays reachable, and none clears the gate silently unless the owner approves."
       ]
     },
     {
       "id": "ci-notify-unique-match-is-not-proof",
-      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. Both capitalisations are listed because CLAUDE.md opens a sentence with it and the others do not. Three carriers state it ANAPHORICALLY, in words no earlier phrasing reached and --derive therefore could not surface (#314): repo-monitors.md ('Nor does a unique match guarantee one', antecedent in the previous sentence), ci-triage.md ('Unique is not the same as correct.'), and git.md's PR Lifecycle bullet, which states the consequence ('that unrelated PR is commented while the session that triggered the dispatch waits.'). git.md's neighbouring 'it uniquely resolves the one matching workflow_run.head_branch' is the lookup MECHANISM, not this warning, and is deliberately left untracked rather than pinned under this id — the response-is-not-a-verdict mistake of certifying a neighbouring rule. 2026-09-23 (owner ruling): the non-directive carriers cicd-setup.md, repo-monitors.md, ci-triage.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in; a phrasing above that only they carried is kept as an approved wording, not as a live pin.",
+      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. A carrier can state it ANAPHORICALLY, in words no earlier phrasing reached and --derive therefore could not surface (#314): git.md's PR Lifecycle bullet states the consequence ('that unrelated PR is commented while the session that triggered the dispatch waits.'). git.md's neighbouring 'it uniquely resolves the one matching workflow_run.head_branch' is the lookup MECHANISM, not this warning, and is deliberately left untracked rather than pinned under this id — the response-is-not-a-verdict mistake of certifying a neighbouring rule. 2026-09-23 (owner ruling): the non-directive carriers cicd-setup.md, repo-monitors.md, ci-triage.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): the CLAUDE.md and MAINTAIN-REPO-USER-INSTRUCTIONS.md restatements became pointers at git.md and left `consumers`; every phrasing no tracked file still carried was removed, with the two mustNotMatch entries that existed only to constrain them.",
       "source": "docs/standards/automations.md",
       "phrasings": [
-        ". ⚠️ A unique match is not a guaranteed wake for YOUR session",
         "a unique match is not a guaranteed wake for YOUR session.",
-        "a unique match is not a guaranteed wake for YOUR session:",
         ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN, EITHER.",
-        ". ⚠️ A unique match is not proof of coverage either:",
         "even a unique match is not proof of coverage,",
-        ". ⚠️ Nor does a unique match guarantee one:",
-        ". ⚠️ Unique is not the same as correct.",
         "say) that unrelated PR is commented while the session that triggered the dispatch waits."
       ],
       "consumers": [
-        "CLAUDE.md",
-        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
         ".github/workflows/ci-notify.yml",
         "templates/workflows/ci-notify.yml",
         "plugins/directives-toolkit/commands/new-repo.md",
@@ -250,30 +177,23 @@
         "a unique match is not a guaranteed wake unless the owner confirms it",
         "If the owner asks, a unique match is not a guaranteed wake",
         "waits. Only if the owner asks, A unique match is not a guaranteed wake for YOUR session",
-        "check-in. ⚠️ Nor does a non-unique match guarantee one:",
-        "silent. ⚠️ Non-unique is not the same as correct.",
         "say) that unrelated PR is not commented while the session that triggered the dispatch waits."
       ]
     },
     {
       "id": "arm-the-check-in",
-      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in wait-gate.sh, which states the rule twice and whose DELIVERED message is the copy that matters. Eleven carriers word it eleven ways, which is why there are eleven phrasings and why #341 abandoned trying to infer the shape. Each lowercase one carries its connector: with a bare 'arm the check-in whenever …', inverting CLAUDE.md to 'Never arm the check-in whenever …' PASSED, because ci-notify's lowercase wording matched inside the negation — one carrier's phrasing covering another carrier's inversion. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in; a phrasing above that only they carried is kept as an approved wording, not as a live pin.",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in wait-gate.sh, which states the rule twice and whose DELIVERED message is the copy that matters. Its carriers word it differently, which is why there is one phrasing per wording and why #341 abandoned trying to infer the shape. Each lowercase one carries its connector: with a bare 'arm the check-in whenever …', inverting CLAUDE.md to 'Never arm the check-in whenever …' PASSED, because ci-notify's lowercase wording matched inside the negation — one carrier's phrasing covering another carrier's inversion. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording.",
       "source": "directives/git.md",
       "phrasings": [
         "is: arm the check-in, then drop it when THAT OUTCOME is observed terminal",
-        "comment instead. Arm the check-in whenever the run's SHA is not your PR's head",
         "coverage -- arm the check-in whenever the run's SHA is not your PR's head",
         "so arm the check-in alongside the event wake, never instead of it, and drop it when THAT outcome is terminal.",
-        "the waiting session still arms a check-in.",
         "that set, arm a check-in — that is not polling",
         "otherwise arm a check-in.",
-        "the rule: arm a check-in for any awaited outcome that can end without emitting a wake, and drop it when THAT outcome is terminal.",
-        ". Arm a check-in rather than treating a green run",
         "so arm a check-in whenever the run's SHA is not the PR's head",
         "— and ARM A CHECK-IN ALONGSIDE IT, not instead of it:"
       ],
       "consumers": [
-        "CLAUDE.md",
         "directives/global.md",
         "docs/standards/automations.md",
         ".github/workflows/ci-notify.yml",

@@ -304,7 +304,6 @@ a webhook) also stops and asks when:
 - the fix would need a destructive data operation (deleting records, dropping
   fields)
 - the root cause is still ambiguous after reading every available log
-- the notification came from a person, not an automated system
 
 For such a session, these always escalate: production data loss or deletion,
 authentication or secret rotation, billing or quota alerts, and a notification
@@ -1141,15 +1140,10 @@ and its verification probes are in the toolkit repo's
 `MAINTAIN-REPO-USER-INSTRUCTIONS.md`.
 
 ## PR Lifecycle
-Lives in `directives/git.md` → *PR Lifecycle*: draft-first, auto-subscribed on
-open, subscribed until the harness drops it, green-before-ready, auto-merge-on-green, `codex-flagged` blocker, diff check,
-never force-push `main`.
+Lives in `directives/git.md` → *PR Lifecycle*.
 
 ## Conditional Auto-Merge on Green
-Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner rulings,
-2026-07-12 / 2026-08-18): auto-merge on green is the rule for every diff class —
-plus the two surviving stops (secrets or personal data in the diff; invented
-scope) and the revert-first safety net.
+Lives in `directives/git.md` → *Conditional Auto-Merge on Green* (owner rulings, 2026-07-12 / 2026-08-18).
 
 ## Review Rounds Have to Terminate (owner ruling, 2026-09-10)
 Falsifying your own claims is carried by Behavior Rules' *Evidence before

@@ -87,34 +87,14 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 `/audit-repo` treats a shipped-downstream-but-applicable-here miss as drift.
 
 ## Branch policy
-`global.md` → *GitHub Workflow* and `git.md` → *PR Lifecycle* apply here unchanged:
-`claude/<name>` branches, never commit to `main`, draft PR on first push,
-squash-merge on green — no approval is sought.
+`global.md` → *GitHub Workflow* (a fresh branch per change) and `git.md` → *PR Lifecycle* apply here unchanged.
+The merge gate is `git.md` → *Conditional Auto-Merge on Green*; the file-list check is `git.md` → *Before merging*.
 
-The gate is `git.md` → *Conditional Auto-Merge on Green*: a **clean** current-head Codex verdict — a response
-naming the head is not one, since a review with live findings names it too — or
-the reaction ladder's attestation, or any state its *unreachable-review test*
-admits, stated on the PR. The two states are an *unavailable* reply still inside
-its reset window, or a
-request that could not be made or accepted at all — never elapsed silence. Every
-admitted state needs the fallback reviewer's clean verdict — an independent Claude agent (`git.md` → *PR Lifecycle*). Note that the ladder
-clears the verdict gate ONLY. Where no `codex-flagged` label is present, the
-ladder is the whole gate and the merge proceeds unattended. Where one is, a reaction-only
-round leaves it and escalates. The rest of the gate is unchanged: no `codex-flagged` label,
-no unresolved review threads, diff limited to the intended files.
-
-Repo-specific deltas:
+Repo-specific delta:
 - `main` here enforces **Require conversation resolution before merging**
-  server-side (owner, 2026-08-26), so an unresolved thread refuses the merge
-  rather than depending on a thread read that fails when the quota is out. It
-  backstops exactly one gate: a blocked merge with CI green and no
-  `codex-flagged` label is that rule firing — resolve the threads, do not retry
-  the merge — and everything else in the list above is still checked by the
-  session.
-- Use a **fresh** `claude/<name>` branch per change; after each squash-merge, cut the
-  next from updated `main` rather than reusing/force-pushing one long-lived branch.
-- Before merging, verify the PR's file list against GitHub's own diff, not the
-  local clone — a surprise file count means a stale/tangled branch.
+  server-side (owner, 2026-08-26), so in this repo that backstop is known to be on:
+  a blocked merge with every other gate green is that rule firing — resolve the
+  threads, do not retry the merge. The other gates are still the session's to check.
 
 ## Session Start
 1. Read all five exported directive files under `directives/` fully — from the
@@ -162,8 +142,8 @@ A directive repo must pass its own CI before it can be trusted downstream.
   `docs/internal/repo-map-ui.md`; read that before changing the map, the router,
   or the suite.
 - `ci-monitor.yml` — opens/updates a deduplicated `ci-failure` issue when QA fails.
-- `ci-notify.yml` — comments on the PR when QA goes green, to wake a watching session. ⚠️ A unique match is not a guaranteed wake for YOUR session — it can hit an unrelated PR, which gets the comment instead. Arm the check-in whenever the run's SHA is not your PR's head.
-- `codex-monitor.yml` — adds/clears the `codex-flagged` label from Codex's verdict comments; it misses 👍 and inline-reply verdicts, so check the PR's comments AND its review threads.
+- `ci-notify.yml` — comments on the PR when QA goes green, to wake a watching session. When a green run may not wake yours: `git.md` → *PR Lifecycle*.
+- `codex-monitor.yml` — adds/clears the `codex-flagged` label from Codex's verdict comments. The verdict forms it misses, and where to look instead: `git.md` → *PR Lifecycle*.
 - `pages-monitor.yml` — verifies each Pages build is live and opens/updates a `pages-deploy-failure` issue on a problem; `pages-retry.yml` re-runs a transiently failed deploy, bounded.
 - `watcher-liveness.yml` — advisory weekly check that each watcher still fires; not a gate.
 
@@ -254,19 +234,11 @@ its third bullet in order: raise the contradiction, quote both, **ask which
 stands**, and fix the record in the same change once he has answered.
 
 ## Notifications (owner ruling, 2026-08-23)
-**Keep the PR subscription until the PR merges.** Opening a PR auto-subscribes the
-session harness-side — leave it alone; the harness drops it at merge. Never
-unsubscribe from a PR you are driving (`git.md` → *PR Lifecycle*). This replaces
-the former preference for immediate unsubscription plus one consolidated check-in.
-
-Do not arm a timed check-in as a substitute for a subscription. A timer cannot
-know whether anything changed.
+Keep the PR subscription until the PR merges, and never substitute a timer for it: `git.md` → *PR Lifecycle*.
+Heartbeat: `global.md` → *Status Line on Every Stop* — it rides on a wake that already happens.
 
 No setting suppresses the `<wake reason=…>` envelopes themselves (verified
 2026-08-21) — don't hunt for a config toggle.
-
-**Heartbeat.** `global.md` → *Status Line on Every Stop* rides on a wake that
-already happens. Never arm an extra wake to keep a rhythm.
 
 ## Toolkit changes
 

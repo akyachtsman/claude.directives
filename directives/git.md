@@ -10,12 +10,18 @@ A `docs/…` path in these directives resolves against claude.directives:
 `https://raw.githubusercontent.com/akyachtsman/claude.directives/main/<path>`.
 
 ## PR Lifecycle
+### Opening a PR and its subscription
 - Open a draft PR as soon as a branch has a first commit
 - PR activity arrives on its own: opening a PR subscribes the session
   harness-side, with no tool call involved. **Keep that subscription for the PR's
   whole life** — never drop it earlier than the merge, and never poll a PR you
   could have stayed subscribed to. `subscribe_pr_activity` is for taking over a
   PR you did not open, or re-subscribing after unsubscribing
+- **Never unsubscribe from your own PR.** The harness drops the subscription
+  itself when the PR merges or closes; `unsubscribe_pr_activity` is for a PR you
+  were asked to stop watching, not for one you are driving.
+
+### Outcomes no subscription reports
 - **A subscription covers that PR and nothing else.** A Pages deploy, a live gate
   on `main`, a scheduled workflow, or a `workflow_dispatch` run **with no open PR
   on its branch** — none of it is PR activity, and no subscription reports it. For
@@ -61,6 +67,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   Read the green it does produce with the caveat the workflow itself attaches: a
   branch match can name a **superseded** commit, so verify the SHA is still head
   before treating it as a gate.
+
+### Readiness and auto-merge
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
   next ready task — a launched verification is the start signal, and the queue
   is worked until drained (`global.md` → *Parallel Tasking via Subagents*)
@@ -70,9 +78,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   *Conditional Auto-Merge on Green* below for the gate list and the two
   surviving stops. If any gate fails, pause and surface it instead of merging.
   Always report the merge result; reporting is not asking.
-- **Never unsubscribe from your own PR.** The harness drops the subscription
-  itself when the PR merges or closes; `unsubscribe_pr_activity` is for a PR you
-  were asked to stop watching, not for one you are driving.
+
+### Codex review and the `codex-flagged` label
 - **Codex is the required PR reviewer (owner ruling, 2026-10-07).** This names
   the reviewer; it does not restate the gate. What counts as its verdict, every
   exit included (the reaction ladder, and the fallback reviewer when Codex
@@ -90,6 +97,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   any of them. A label still present means concerns not yet re-reviewed, a clean
   round delivered in a form the monitor cannot see, or an all-clear that failed
   the SHA match — read the PR, never the label alone.
+
+### Removing `codex-flagged` by hand
 - **Taking `codex-flagged` off by hand is the last resort — request another
   review pass and let the monitor clear the label.** Removing it asserts the
   concern is resolved, which is the author claiming what the reviewer should
@@ -134,6 +143,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   unattended. The escalation above applies only where a label from an earlier
   flagged round is still sitting there and no observable terminal state explains
   it.
+
+### The verdict gate
 - **Neither a missing label nor an empty review list is proof.** Before merging,
   clear the gate against the current head. **On the normal path — some
   SHA-bearing Codex response names HEAD — every check below is NECESSARY and
@@ -201,113 +212,123 @@ A `docs/…` path in these directives resolves against claude.directives:
     leaves the gate shut, per the rung above.
   - **Match by SHA, not by clock.** Reviews, clean comments and inline replies all
     name the commit — compare it to HEAD.
-  - **A bare 👍 never clears the gate FROM THE EMBEDDED SUMMARY.** `issue_read` →
-    `get` returns reactions as counts only — no author, no timestamp — so a 👍
-    there cannot be tied to Codex or to the current head, and treating it as
-    clean can merge an **unreviewed head**. **Check for a SHA-bearing response at
-    the current head FIRST**: only once nothing from Codex names HEAD does
-    `"+1": 0` mean genuinely pending. A 👀 means *received*, not *clean*. How to
-    read the counts, and what the reaction LIST endpoint adds:
-    `docs/standards/pr-mechanics.md` → *Reading reactions*.
-  - **The clean-round escape hatch — for when the reaction really is all there
-    is.** ⚠️ **Check the COMMENTS and the REVIEW THREADS first.** The ladder
-    applies **only when no SHA-bearing Codex response names the CURRENT head** —
-    judge that by the current head, never by whether the lists are empty, since
-    they only grow. Work down it and stop at the first rung that is available:
-    1. **Reaction list** — author + `created_at`, the push → request → reaction
-       ordering, AND no earlier request left unanswered.
-    2. **Ask, don't re-review** — a direct `@codex` question naming the SHA,
-       answered as a comment.
-    3. **Attest, never infer** — merge on the reaction only by stating on the
-       PR: the head SHA, when the review was requested, the reaction count now,
-       and that the reaction cannot be attributed on this tool surface. A
-       missing before-count weakens the record; it never blocks this rung.
-    A second clean pass adds no new 👍 when an earlier clean pass already left
-    one, so on such a PR rungs 2–3 are the usual path; if the earlier pass came
-    as a comment or inline reply instead, a new 👍 still counts for rung 1. Each rung's conditions and why:
-    `docs/standards/pr-mechanics.md` → *The reaction ladder*.
-  - **A CLEAN verdict leaves NO REVIEW — but it may still leave a comment.**
-    It arrives in one of the three forms the `codex-flagged` bullet above names,
-    none of them a review, so an empty REVIEW list means nothing on its own. A SHA-bearing
-    CLEAN verdict in a comment or a review thread clears the gate normally; a
-    review carrying live findings is a response, not a clearance. A label left
-    by a 👍 or inline-reply rerun follows the last-resort rule above — **do not
-    read the stuck label as unaddressed concerns; read the PR.** Observed forms
-    and the four delivery modes: `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
-  - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
-    current head.** Its `head_sha` is whatever the suite ran against, often a
-    commit you have already replaced. **Resolve the head from the API at use
-    time, never from the record** — an event, a check-in prompt, a PR body, a
-    handoff or a relay message, including a SHA you wrote yourself
-    (`global.md` → *Async Operations*). The measurements:
-    `docs/standards/pr-mechanics.md` → *Stale SHAs in wakes and records*.
-  - **Read the inline comments** (`pull_request_read` → `get_review_comments`).
-    `get_reviews` cannot tell a clean `COMMENTED` review from an actionable one.
-  - **Check EVERY unresolved thread, not just this round's.** An all-clear
-    covers only the round it reviews; it never re-raises threads left open by an
-    earlier one, so a clean verdict can sit above unaddressed findings on the
-    same head. Findings arrive as review THREADS while the issue comments show
-    nothing — judging from comments alone reads an unreviewed PR as clean.
-  - **Unreadable reviews do not clear the gate** — through the MCP that call is
-    GraphQL and fails when the pool is empty. In a web session, read the threads
-    over REST first (`.../pulls/<n>/ccr/review_threads`, → *GitHub API Quota
-    Economy*); only then wait or surface. Never fall back to the label, which
-    is REST and stays readable at exactly the moment the correct check is
-    blocked. Where the repo's ruleset requires conversation resolution the server
-    refuses that merge for you (→ *Conditional Auto-Merge on Green*) — a backstop
-    against the fall-back, never a licence to stop looking: it is not on in every
-    repo, and it says nothing about the Codex verdict.
-  - **A usage-limit reply is a fourth outcome: _unavailable_ — not clean, not
-    pending.** When the allowance is spent, Codex answers with a comment saying so
-    instead of reviewing, and no amount of further waiting produces a review. The
-    allowance is **weekly and shared across Codex, Work, Workspace Agents and
-    ChatGPT for Excel**, so it can be exhausted by work in another repo entirely —
-    check the account, not the repo, before concluding anything about config.
-    Treat it as the gate being DOWN: it never counts as clean, and it opens the
-    merge decision only through the **fallback reviewer** (next bullet), stated on
-    the PR — never on one reader. Merging while silently omitting it is precisely
-    the failure this gate exists to prevent: an absent signal read as a passing one.
-  - **Fallback reviewer when Codex is down (owner ruling, 2026-09-29).** In
-    every state the *unreachable-review test* admits — today's two and any
-    added later — the second reader is an **independent Claude agent**:
-    - **Independent** means a fresh sub-agent with `model: "sonnet"` (`global.md` → *Subagent Model Selection*),
-      given the PR number, the head SHA and the repo — never the session's own
-      plan, reasoning or summary of the change. The session that wrote the
-      change never grades it.
-    - It runs the built-in `/code-review` on the PR at that head (the
-      `pr-review-toolkit:code-reviewer` agent where the skill is not listed) and
-      reports each finding with file and line.
-    - Its findings bind like Codex's: each is fixed or answered on the PR with
-      why it is wrong. A fix is a new head, so a fresh agent reviews again; only a
-      clean review of the head being merged clears the gate, and
-      `global.md` → *Review Rounds Have to Terminate* governs its rounds.
-    - **Record it on the PR before merging**, in one comment: the observable
-      terminal state that shows Codex cannot review (for *unavailable*, the
-      reset time its reply named; for an outage, what was observed), the head
-      SHA reviewed, and the verdict with what was fixed.
-    - It clears the verdict gate only; the `codex-flagged` label rule above is
-      unchanged. When the allowance returns, the next PR goes back to Codex, and
-      nothing already merged is re-reviewed.
-  - **Codex reviews are metered per REQUEST, not per push.** Each request spends
-    from that shared weekly pool, and every trigger the next bullet names is a
-    request. Verify locally, open the PR once, and reserve `@codex review` for a fix you
-    genuinely want re-read. Check which trigger the account is on first: under
-    "On every push" every commit spends a review, and the setting is
-    account-level. The measurement: `docs/standards/pr-mechanics.md` → *Review metering*.
-  - **Request a review after pushing a fix**; Codex responds on open,
-    ready-for-review and `@codex review`, not on a push. Un-drafting leaves no
-    comment to carry a 👀, so silence is indistinguishable from a missed trigger.
-  - **Ready-for-review fires SOMETIMES, at a rate that differs by repo — learn
-    yours, don't assume.** Default to waiting ~10 minutes, then request
-    explicitly, **once only**. After **two consecutive un-drafts draw nothing in
-    a repo, stop waiting there** and request as soon as CI is green.
-  - **Re-test that judgement, or it never unsticks.** While in the no-wait
-    state, **take the full wait again every ~5th PR in that repo**, and
-    immediately after any change to the account's Codex settings. One firing
-    returns the repo to the default; two consecutive misses re-enter no-wait.
-    Rates and reasoning: `docs/standards/pr-mechanics.md` → *Review triggers*.
-  - Do not generalise either way: where the trigger works, a reflex explicit
-    request is a duplicate, and its metered cost (above) lands on every other repo.
+
+### When the only signal is a reaction
+- **A bare 👍 never clears the gate FROM THE EMBEDDED SUMMARY.** `issue_read` →
+  `get` returns reactions as counts only — no author, no timestamp — so a 👍
+  there cannot be tied to Codex or to the current head, and treating it as
+  clean can merge an **unreviewed head**. **Check for a SHA-bearing response at
+  the current head FIRST**: only once nothing from Codex names HEAD does
+  `"+1": 0` mean genuinely pending. A 👀 means *received*, not *clean*. How to
+  read the counts, and what the reaction LIST endpoint adds:
+  `docs/standards/pr-mechanics.md` → *Reading reactions*.
+- **The clean-round escape hatch — for when the reaction really is all there
+  is.** ⚠️ **Check the COMMENTS and the REVIEW THREADS first.** The ladder
+  applies **only when no SHA-bearing Codex response names the CURRENT head** —
+  judge that by the current head, never by whether the lists are empty, since
+  they only grow. Work down it and stop at the first rung that is available:
+  1. **Reaction list** — author + `created_at`, the push → request → reaction
+     ordering, AND no earlier request left unanswered.
+  2. **Ask, don't re-review** — a direct `@codex` question naming the SHA,
+     answered as a comment.
+  3. **Attest, never infer** — merge on the reaction only by stating on the
+     PR: the head SHA, when the review was requested, the reaction count now,
+     and that the reaction cannot be attributed on this tool surface. A
+     missing before-count weakens the record; it never blocks this rung.
+  A second clean pass adds no new 👍 when an earlier clean pass already left
+  one, so on such a PR rungs 2–3 are the usual path; if the earlier pass came
+  as a comment or inline reply instead, a new 👍 still counts for rung 1. Each rung's conditions and why:
+  `docs/standards/pr-mechanics.md` → *The reaction ladder*.
+- **A CLEAN verdict leaves NO REVIEW — but it may still leave a comment.**
+  It arrives in one of the three forms the `codex-flagged` bullet above names,
+  none of them a review, so an empty REVIEW list means nothing on its own. A SHA-bearing
+  CLEAN verdict in a comment or a review thread clears the gate normally; a
+  review carrying live findings is a response, not a clearance. A label left
+  by a 👍 or inline-reply rerun follows the last-resort rule above — **do not
+  read the stuck label as unaddressed concerns; read the PR.** Observed forms
+  and the four delivery modes: `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
+
+### Threads, inline comments and stale wakes
+- **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
+  current head.** Its `head_sha` is whatever the suite ran against, often a
+  commit you have already replaced. **Resolve the head from the API at use
+  time, never from the record** — an event, a check-in prompt, a PR body, a
+  handoff or a relay message, including a SHA you wrote yourself
+  (`global.md` → *Async Operations*). The measurements:
+  `docs/standards/pr-mechanics.md` → *Stale SHAs in wakes and records*.
+- **Read the inline comments** (`pull_request_read` → `get_review_comments`).
+  `get_reviews` cannot tell a clean `COMMENTED` review from an actionable one.
+- **Check EVERY unresolved thread, not just this round's.** An all-clear
+  covers only the round it reviews; it never re-raises threads left open by an
+  earlier one, so a clean verdict can sit above unaddressed findings on the
+  same head. Findings arrive as review THREADS while the issue comments show
+  nothing — judging from comments alone reads an unreviewed PR as clean.
+- **Unreadable reviews do not clear the gate** — through the MCP that call is
+  GraphQL and fails when the pool is empty. In a web session, read the threads
+  over REST first (`.../pulls/<n>/ccr/review_threads`, → *GitHub API Quota
+  Economy*); only then wait or surface. Never fall back to the label, which
+  is REST and stays readable at exactly the moment the correct check is
+  blocked. Where the repo's ruleset requires conversation resolution the server
+  refuses that merge for you (→ *Conditional Auto-Merge on Green*) — a backstop
+  against the fall-back, never a licence to stop looking: it is not on in every
+  repo, and it says nothing about the Codex verdict.
+
+### When Codex cannot review
+- **A usage-limit reply is a fourth outcome: _unavailable_ — not clean, not
+  pending.** When the allowance is spent, Codex answers with a comment saying so
+  instead of reviewing, and no amount of further waiting produces a review. The
+  allowance is **weekly and shared across Codex, Work, Workspace Agents and
+  ChatGPT for Excel**, so it can be exhausted by work in another repo entirely —
+  check the account, not the repo, before concluding anything about config.
+  Treat it as the gate being DOWN: it never counts as clean, and it opens the
+  merge decision only through the **fallback reviewer** (next bullet), stated on
+  the PR — never on one reader. Merging while silently omitting it is precisely
+  the failure this gate exists to prevent: an absent signal read as a passing one.
+- **Fallback reviewer when Codex is down (owner ruling, 2026-09-29).** In
+  every state the *unreachable-review test* admits — today's two and any
+  added later — the second reader is an **independent Claude agent**:
+  - **Independent** means a fresh sub-agent with `model: "sonnet"` (`global.md` → *Subagent Model Selection*),
+    given the PR number, the head SHA and the repo — never the session's own
+    plan, reasoning or summary of the change. The session that wrote the
+    change never grades it.
+  - It runs the built-in `/code-review` on the PR at that head (the
+    `pr-review-toolkit:code-reviewer` agent where the skill is not listed) and
+    reports each finding with file and line.
+  - Its findings bind like Codex's: each is fixed or answered on the PR with
+    why it is wrong. A fix is a new head, so a fresh agent reviews again; only a
+    clean review of the head being merged clears the gate, and
+    `global.md` → *Review Rounds Have to Terminate* governs its rounds.
+  - **Record it on the PR before merging**, in one comment: the observable
+    terminal state that shows Codex cannot review (for *unavailable*, the
+    reset time its reply named; for an outage, what was observed), the head
+    SHA reviewed, and the verdict with what was fixed.
+  - It clears the verdict gate only; the `codex-flagged` label rule above is
+    unchanged. When the allowance returns, the next PR goes back to Codex, and
+    nothing already merged is re-reviewed.
+
+### Requesting a Codex review
+- **Codex reviews are metered per REQUEST, not per push.** Each request spends
+  from that shared weekly pool, and every trigger the next bullet names is a
+  request. Verify locally, open the PR once, and reserve `@codex review` for a fix you
+  genuinely want re-read. Check which trigger the account is on first: under
+  "On every push" every commit spends a review, and the setting is
+  account-level. The measurement: `docs/standards/pr-mechanics.md` → *Review metering*.
+- **Request a review after pushing a fix**; Codex responds on open,
+  ready-for-review and `@codex review`, not on a push. Un-drafting leaves no
+  comment to carry a 👀, so silence is indistinguishable from a missed trigger.
+- **Ready-for-review fires SOMETIMES, at a rate that differs by repo — learn
+  yours, don't assume.** Default to waiting ~10 minutes, then request
+  explicitly, **once only**. After **two consecutive un-drafts draw nothing in
+  a repo, stop waiting there** and request as soon as CI is green.
+- **Re-test that judgement, or it never unsticks.** While in the no-wait
+  state, **take the full wait again every ~5th PR in that repo**, and
+  immediately after any change to the account's Codex settings. One firing
+  returns the repo to the default; two consecutive misses re-enter no-wait.
+  Rates and reasoning: `docs/standards/pr-mechanics.md` → *Review triggers*.
+- Do not generalise either way: where the trigger works, a reflex explicit
+  request is a duplicate, and its metered cost (above) lands on every other repo.
+
+### Before merging
 - Before merging, confirm the PR's file list is **only** what you changed. A
   surprise file count signals a stale or tangled branch — verify against
   GitHub's own PR diff, not a possibly-stale local clone (re-fetch/prune, or
@@ -322,6 +343,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   workflow's TRIGGER conditions remains stop-and-ask before making the change
   (`global.md` → Escalation Rules) — a change-authority gate, not a merge gate.
 - Never force-push to `main`
+
+### Superseded PRs
 - **A superseded PR points at its successor.** When a new PR takes over a PR's
   work, comment on the previous one so further review goes to the right place:
   ```

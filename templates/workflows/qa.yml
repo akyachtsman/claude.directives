@@ -4,8 +4,8 @@
 #
 # Jobs:
 #   static-checks — secret scan (composite), contrast guardrail, and the
-#                   workflow-ref, job-bounds, Python-compile and ui-suite env
-#                   guards; the blocking gate, runs on every trigger.
+#                   workflow-ref, job-bounds, Python-compile, ui-suite env and
+#                   YAML-anchor guards; the blocking gate, runs on every trigger.
 #   ui-changes    — diffs the PR against its base and decides whether the
 #                   browser job is needed. Non-PR events (push to main)
 #                   always run UI tests.
@@ -95,9 +95,10 @@ jobs:
         run: node .github/scripts/check-contrast.js
 
 
-      # The three Python guards below that read YAML (workflow-ref-guard,
-      # check-job-bounds, check-ui-suite-env) import .github/scripts/gh_yaml.py,
-      # which reads it as GitHub does (YAML 1.2), so install it beside them.
+      # The four Python guards below that read YAML (workflow-ref-guard,
+      # check-job-bounds, check-ui-suite-env, check-yaml-anchors) import
+      # .github/scripts/gh_yaml.py, which reads it as GitHub does (YAML 1.2),
+      # so install it beside them.
       - name: Workflow cross-reference guard
         # Every `workflow_run.workflows:` entry must name a real workflow. GitHub
         # raises no error when one does not — the watcher simply never fires.
@@ -137,6 +138,15 @@ jobs:
         # same UI_TESTS_DIR the ui-suite runs: a moved kit left the guard scanning
         # the default (Codex, #395).
         run: python3 .github/scripts/check-ui-suite-env.py --kit-dir "$UI_TESTS_DIR"
+
+      - name: Workflow and action YAML parses as GitHub parses it
+        # PyYAML accepts what GitHub refuses: an anchor or alias in an action's
+        # action.yml (the runner: "Anchors are not currently supported";
+        # workflows may use them) and a merge key (`<<`) anywhere. A composite
+        # is read only by a job that uses it, and fails there; this reads every
+        # workflow and every .github/actions/**/action.yml on every trigger and
+        # names the file and line instead.
+        run: python3 .github/scripts/check-yaml-anchors.py
   ui-changes:
     name: Detect UI-relevant changes
     runs-on: ubuntu-latest

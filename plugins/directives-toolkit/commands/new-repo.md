@@ -291,8 +291,8 @@ Execute in order:
    - `npx html-validate` on each HTML entry point that exists — none yet at
      bootstrap (step 4), so this runs from the first build onward
    - syntax-check the Playwright scripts (`node --check` on each `.js`)
-   - validate every workflow's YAML
-     (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/<file>'))"`)
+   - validate every workflow's and action's YAML as GitHub reads it
+     (`python3 .github/scripts/check-yaml-anchors.py`, installed in step 5)
    - run the project's security grep from `global.md`
    - confirm `git status` shows only intended changes
    Fix any failure before pushing.

@@ -113,6 +113,7 @@
     "templates/workflows/qa-response.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/scripts/workflow-ref-guard.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/scripts/check-job-bounds.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    "templates/scripts/check-yaml-anchors.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/scripts/check-py-warnings.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/scripts/gh_yaml.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/actions/ui-suite/": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },

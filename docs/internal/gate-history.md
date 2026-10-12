@@ -28,6 +28,7 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 | `check-links.js`, `check-links-cases.js` | each script's header |
 | `check-exports-cases.js` | that script's header |
 | `check-py-warnings.py` and `check-ui-suite-env.py` (shipped scripts), the ui-tests `npm install` step, the gate as a whole | this file |
+| `check-yaml-anchors.py` (shipped script) | this file; its cases suite, `check-yaml-anchors-cases.py`, carries its own in its header |
 | the `Repo Map UI` suite | `docs/internal/repo-map-ui.md` |
 | `/refresh-repo`'s rules (the command `check-refresh-derivation.py` reads its pattern out of) | this file, *Refresh-repo history* |
 
@@ -77,6 +78,31 @@ From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-ui-
   `false` blocks identically and refusing it would be another
   form-for-construct false refusal
 
+## `check-yaml-anchors.py`
+
+It ships to projects from `templates/scripts/` and runs here from there, so its
+history lives here rather than in its header, where every downstream copy would
+carry it. Added 2026-10-12 (owner-approved), after audit R8 was declined: the
+ui-suite composite's four identical `env:` blocks could not become one anchor,
+because GitHub's runner reads an `action.yml` with anchors off ("Anchors are not
+currently supported"), workflows only (`TIME-SENSITIVE.md` → GitHub). Nothing here
+would have said so. PyYAML accepts anchors, aliases and merge keys, and every
+local check read YAML through it, so an anchored `action.yml` passed the whole
+gate and would have failed in every project that copied it.
+
+The detection lives in `gh_yaml.py`, from the parser's EVENTS, so every guard
+reading YAML through it shares it: a merge key is refused by every loader, and
+`allow_anchors=False` refuses anchors and aliases. Before this, `gh_yaml.py` read
+`<<` as a literal key and PyYAML's own loader merged it; both passed it. A regex
+over the text was rejected: it refuses an `&` or `*` inside a quoted string or a
+block scalar (`sleep 1 &`, `ls *.txt`), and measured as a mutant it failed both
+twin cases and this repo's own tree.
+
+The guard replaced `qa.yml`'s inline `Validate workflow YAML` step (*Retired
+gates*) and, in projects, the `yaml.safe_load` line in `templates/CLAUDE-template.md`
+and `/new-repo` step 8. `run-local-gate.py` reads a composite's `action.yml` with
+anchors off too, so the local gate refuses what GitHub's runner refuses.
+
 ## The ui-tests `npm install` step
 
 From the Local gate comment: RUN THIS FIRST: BOTH viewport checks below resolve
@@ -105,6 +131,7 @@ downstream project's CI rather than ours.
 
 | Gate | Retired | Why |
 |---|---|---|
+| The inline `Validate workflow YAML` step in `qa.yml` | 2026-10-12 | It ran `yaml.safe_load` over the workflows and `templates/actions/*/action.yml`, which accepts an anchor in an `action.yml` and a merge key anywhere, both refused by GitHub. Replaced by `check-yaml-anchors.py --include-templates`, which reads the same files and more (an `action.yml` or `action.yaml` at any depth) through `gh_yaml.py` |
 | `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it. Its single-page assertions were NOT retired: they moved into `check-paths.js`'s third pass — each card is an `<a>` with an `href` of the shape `docs/site/<filename>.html`, closed by `</a>`, the root page has at least one card, and every target is a tracked regular file; the target check widened to every same-site link in every tracked `.html` page, read by a spec tokenizer and resolved as a browser would (Codex on #415). Only the sync half (count, order, attributes, content across two pages) went |
 
 ## Refresh-repo history

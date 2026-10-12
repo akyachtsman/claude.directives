@@ -29,9 +29,32 @@ qa.yml, and /refresh-repo's derivation of a template script's local imports).
                                it has no evidence GitHub rejects those spellings,
                                and a red build over one nobody has observed costs
                                more than a missed one (owner, 2026-10-11).
+    loader(allow_anchors=False) the same, refusing every anchor and alias: for
+                               an action's metadata file (`action.yml`)
     load(stream, ...)          yaml.load with that loader
-    compose(stream)            the node tree, scalars tagged by the core schema
+    compose(stream, ...)       the node tree, scalars tagged by the core schema
     github_int(text)           a scalar's integer value as GitHub reads it, or None
+    Refused                    what load/compose raise for a construct GitHub
+                               refuses; a yaml.YAMLError, so an existing
+                               `except yaml.YAMLError` already catches it
+
+ANCHORS, ALIASES AND MERGE KEYS (2026-10-12). PyYAML accepts all three. GitHub:
+  - a WORKFLOW may use anchors and aliases;
+  - an action's metadata file (`action.yml`) may use neither: the runner reads
+    it with actions/runner's YamlObjectReader, which throws "Anchors are not
+    currently supported" on an anchor and refuses an alias as an unexpected
+    parsing event (TIME-SENSITIVE.md -> GitHub);
+  - a merge key (`<<`) is merged NOWHERE: GitHub reads it as a literal key
+    named `<<`, which no workflow or action schema accepts.
+So every loader refuses a merge key (a plain `<<` mapping key, or one tagged
+`!!merge`; a QUOTED '<<' is an ordinary string, as YAML has it), and
+allow_anchors=False refuses anchors and aliases too. Both are read from the
+parser's EVENTS, never from the text: an `&` or `*` inside a quoted string or a
+block scalar is content, not an anchor. Before this, PyYAML's own reader merged
+`<<` and this one read it as a key, and both accepted an anchored action.yml,
+so the file passed every local check and failed on GitHub in every project
+that copied it. templates/scripts/check-yaml-anchors.py applies these rules to
+every workflow and action file.
 """
 
 import re
@@ -65,9 +88,53 @@ def github_int(text):
     return int(text, 10)
 
 
-def _build(lenient_ints):
+class Refused(yaml.MarkedYAMLError):
+    """A construct GitHub refuses (an anchor or alias where anchors are off, or
+    a merge key). Its text names the construct, then the file, line and column,
+    as PyYAML's own errors do. The file is named when the stream has a name (an
+    open file); a string reads as "<unicode string>", so a caller loading text
+    names the file itself."""
+
+
+def _is_merge_key(event):
+    # A merge key is the PLAIN scalar `<<` (YAML 1.1's implicit merge tag) or a
+    # scalar tagged `!!merge` explicitly. A quoted '<<' is a string in YAML too.
+    if not isinstance(event, yaml.ScalarEvent):
+        return False
+    if event.tag == "tag:yaml.org,2002:merge":
+        return True
+    return event.value == "<<" and event.style is None and event.tag is None
+
+
+def _build(lenient_ints, allow_anchors):
     class Loader(yaml.SafeLoader):
-        pass
+        def compose_node(self, parent, index):
+            # Read from the event stream, before PyYAML resolves anything: an
+            # alias is already the anchored node once composed, and an anchor
+            # leaves no trace on a node at all.
+            event = self.peek_event()
+            if not allow_anchors:
+                if isinstance(event, yaml.AliasEvent):
+                    raise Refused(None, None,
+                                  f"found the alias *{event.anchor}, in a file GitHub reads without "
+                                  "anchors (an action.yml: its runner refuses them); write the value out",
+                                  event.start_mark)
+                if getattr(event, "anchor", None) is not None:
+                    raise Refused(None, None,
+                                  f"found the anchor &{event.anchor}, in a file GitHub reads without "
+                                  "anchors (an action.yml: its runner says \"Anchors are not currently "
+                                  "supported\"); write the value out",
+                                  event.start_mark)
+            # A mapping composes each key with index None (and its value with
+            # the key node), so this is a mapping KEY, never a value.
+            if isinstance(parent, yaml.MappingNode) and index is None and _is_merge_key(event):
+                what = "<<" if event.tag is None else f"!!merge {event.value}"
+                raise Refused(None, None,
+                              f"found a merge key ({what}); GitHub merges nothing: it reads `<<` as a "
+                              "literal key, which no workflow or action schema accepts; write the "
+                              "keys out",
+                              event.start_mark)
+            return super().compose_node(parent, index)
     # Replace the 1.1 resolvers outright: adding to them would keep `yes`,
     # `on` and `no` booleans.
     Loader.yaml_implicit_resolvers = {}
@@ -98,18 +165,21 @@ def _build(lenient_ints):
     return Loader
 
 
-_LOADERS = {False: _build(False), True: _build(True)}
+_LOADERS = {(ints, anchors): _build(ints, anchors)
+            for ints in (False, True) for anchors in (False, True)}
 
 
-def loader(lenient_ints=False):
-    return _LOADERS[bool(lenient_ints)]
+def loader(lenient_ints=False, allow_anchors=True):
+    return _LOADERS[(bool(lenient_ints), bool(allow_anchors))]
 
 
-def load(stream, lenient_ints=False):
-    """Load one YAML document as GitHub resolves it. Raises yaml.YAMLError."""
-    return yaml.load(stream, Loader=loader(lenient_ints))
+def load(stream, lenient_ints=False, *, allow_anchors=True):
+    """Load one YAML document as GitHub resolves it. Raises yaml.YAMLError
+    (Refused for a merge key, or an anchor or alias with allow_anchors=False)."""
+    return yaml.load(stream, Loader=loader(lenient_ints, allow_anchors))
 
 
-def compose(stream):
-    """The node tree, scalars tagged by the core schema. Raises yaml.YAMLError."""
-    return yaml.compose(stream, Loader=loader())
+def compose(stream, *, allow_anchors=True):
+    """The node tree, scalars tagged by the core schema. Raises yaml.YAMLError,
+    with Refused as load() raises it."""
+    return yaml.compose(stream, Loader=loader(allow_anchors=allow_anchors))

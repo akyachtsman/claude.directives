@@ -149,8 +149,9 @@ Every project using these agents runs two Playwright workflows:
 
 ### When to trigger qa-live.yml manually
 
-- After a PR merges, only once the deploy run for the merge commit's SHA has
-  succeeded and `qa-live.yml` did not fire on it
+- After a PR merges, only once a deploy run that contains the merge commit has
+  succeeded and `qa-live.yml` did not fire on it. That run's SHA may be a later
+  `main` head: a stuck deploy's recovery dispatches `main` as it then stands.
 - Any time live app behavior needs verification and auto-trigger cannot be
   waited on, once the live site serves the commit under test
 

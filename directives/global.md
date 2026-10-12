@@ -924,8 +924,10 @@ naming what remains open, or "nothing open" — never absent.
   (headless browser, incognito) proves the *new* deploy but not a *returning*
   visitor's cached state. No deploy run for the merge commit within ~2 minutes
   is a stuck deploy: recover it rather than running live QA against the old
-  site, and trigger `qa-live.yml` by hand only once the deploy for that SHA has
-  succeeded. See the `update-pages` skill (step 5 for a stuck deploy).
+  site, and trigger `qa-live.yml` by hand only once a deploy that contains the
+  merge commit has succeeded and serves its content. A recovery deploy builds
+  `main`'s head at that moment, which may be a later commit. See the
+  `update-pages` skill (step 5 for a stuck deploy).
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic

@@ -44,8 +44,15 @@ const domainNames = manifest.domains?.names;
 if (!Array.isArray(domainNames)) {
   fail(`[domains] names must be a list of domain names, got: ${JSON.stringify(domainNames)}`);
 }
-const DOMAINS = new Set((Array.isArray(domainNames) ? domainNames : [])
-  .filter(d => typeof d === 'string' && d && !d.startsWith('_')));
+// Each entry is validated, never filtered: a dropped entry would escape the
+// stale-domain check below and leave the list promising a name nothing checks
+// (Codex, #445).
+const DOMAINS = new Set();
+for (const d of Array.isArray(domainNames) ? domainNames : []) {
+  if (typeof d !== 'string' || !d || d.startsWith('_')) fail(`[domains] not a domain name: ${JSON.stringify(d)}`);
+  else if (DOMAINS.has(d)) fail(`[domains] listed twice: ${d}`);
+  else DOMAINS.add(d);
+}
 const CLASSES = new Set(real(manifest.classes).map(([k]) => k));
 const records = real(manifest.paths);
 

@@ -41,10 +41,59 @@ for (const [dom, comps] of Object.entries(manifest.domains ?? {})) {
   }
 }
 
-// 1c) Swap-class paths exist.
-for (const cls of ['permanent', 'orchestrators']) {
-  for (const p of manifest.swap?.[cls] ?? []) {
-    if (existsSync(p)) console.log(`OK:   [swap:${cls}] ${p}`);
+// 1c) Swap-class paths exist. `swap.permanent_domains` names domains that are
+// permanent in their entirety (the whole `meta` domain); their paths are DERIVED
+// from `domains` here rather than re-enumerated in `swap.permanent`, so a path
+// added to such a domain is permanent without a second edit (audit M-46). The
+// expansion is the one definition of the permanent set: every reader goes
+// through it. An unknown domain name fails — expanding it to nothing would
+// silently make that domain's paths swappable — and so does a `swap.permanent`
+// entry the expansion already covers, which is the enumeration this replaced.
+// Only an ABSENT key defaults to none; an explicit `null` is a non-list and fails
+// below rather than silently making every derived path swappable (Codex, #443).
+let permanentDomains = manifest.swap && Object.hasOwn(manifest.swap, 'permanent_domains')
+  ? manifest.swap.permanent_domains : [];
+if (!Array.isArray(permanentDomains)) {
+  fail(`[swap:permanent_domains] must be a list of domain names, got: ${JSON.stringify(permanentDomains)}`);
+  permanentDomains = [];
+}
+const derivedPermanent = new Map();          // path -> domain it was derived from
+for (const dom of permanentDomains) {
+  const comps = manifest.domains?.[dom];
+  if (typeof dom !== 'string' || dom.startsWith('_') || !comps || typeof comps !== 'object') {
+    fail(`[swap:permanent_domains] unknown domain: ${dom}`);
+    continue;
+  }
+  for (const [comp, paths] of Object.entries(comps)) {
+    if (comp.startsWith('_')) continue;
+    for (const p of paths) derivedPermanent.set(p, dom);
+  }
+}
+// An entry in directory form (`dir/`) covers every path under it, so ANY overlap
+// between an enumerated entry and a derived one is the same duplication as an
+// exact repeat, in either direction: a file re-listed beneath a derived
+// directory, or an enumerated directory over a derived file, which would keep
+// that file permanent after its domain stopped claiming it (Codex, #443). The
+// `/` is the boundary: `dir.md` is not under `dir/`.
+const covers = (a, b) => a === b || (a.endsWith('/') && b.startsWith(a));
+const coveringDomain = (p) => {
+  for (const [d, dom] of derivedPermanent) if (covers(d, p) || covers(p, d)) return dom;
+  return null;
+};
+for (const p of manifest.swap?.permanent ?? []) {
+  const dom = coveringDomain(p);
+  if (dom) {
+    fail(`[swap:permanent] ${p} is already permanent via permanent_domains (${dom}); drop the enumerated entry`);
+  }
+}
+const swapClasses = {
+  permanent: [...(manifest.swap?.permanent ?? []), ...derivedPermanent.keys()],
+  orchestrators: manifest.swap?.orchestrators ?? [],
+};
+for (const [cls, paths] of Object.entries(swapClasses)) {
+  for (const p of paths) {
+    const via = derivedPermanent.has(p) && cls === 'permanent' ? ` (domain ${derivedPermanent.get(p)})` : '';
+    if (existsSync(p)) console.log(`OK:   [swap:${cls}] ${p}${via}`);
     else fail(`[swap:${cls}] path missing from tree: ${p}`);
   }
 }

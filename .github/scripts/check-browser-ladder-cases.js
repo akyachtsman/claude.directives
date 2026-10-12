@@ -332,11 +332,7 @@ function eq(actual, expected, what) {
   });
 
   // ── #355 round 4: a signal is an interruption even with no `error` ────────
-  // Node reports a signal-terminated child as `status: null, signal: 'SIGTERM'`
-  // and sets NO `proc.error`. Keying `interrupted` on `error` alone therefore let
-  // a killed installer through as a completed rung with code -1, and the launch
-  // that failed for want of the browser it never fetched was reported as a
-  // CEILING -- defect 3 through the one door round 3 left open.
+  // History: browser-ladder.js, classifyInstall().
   await check('an installer killed by a signal is interrupted even without proc.error', () => {
     const out = classifyInstall({ status: null, signal: 'SIGTERM', stdout: 'half a download', stderr: '' });
     if (!out.interrupted) throw new Error('a signal-terminated install must not read as a completed rung');
@@ -624,11 +620,7 @@ function eq(actual, expected, what) {
     }
   });
 
-  // An explicitly named directory is authoritative for RESOLUTION, not only for
-  // existence. main() already refuses one that does not exist; this fallback
-  // quietly undid half of that, resolving from the cwd while the installer ran in
-  // the named directory -- two different trees, and the mismatch came out as a
-  // CEILING.
+  // History: browser-ladder.js, "AN EXPLICIT DIRECTORY IS AUTHORITATIVE FOR RESOLUTION" (#355).
   await check('an explicit --tests-dir does not fall back to the cwd', () => {
     const found = resolvePlaywright('/nonexistent-tests-dir-for-cases', true);
     eq(found.mod, null, 'unresolved');
@@ -730,10 +722,7 @@ function eq(actual, expected, what) {
   });
 
   // ── the interruption reason must survive truncation ──────────────────────
-  // `classifyInstall` appended it to the END of the captured output, and the
-  // report prints the FIRST ten lines -- so any installer that had already said
-  // ten lines (a download, an apt run) lost the one sentence saying whether it
-  // timed out, overflowed, or was signalled (Codex, #355 round 7).
+  // History: browser-ladder.js, classifyInstall(), "THE REASON IS A FIELD" (#355 round 7).
   await check('the CANNOT CHECK report names the interruption reason above the output', async () => {
     const noisy = Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n');
     const out = await ladder({
@@ -998,9 +987,7 @@ function eq(actual, expected, what) {
 
   // ── #355 round 9: the same rule, the branch it did not cover ────────────
 
-  // The BOUND killed the group; a leader terminated by an EXTERNAL signal did
-  // not, so its descendants outlived the rung. Reproduced: the orphan wrote its
-  // marker after realInstall had already returned "interrupted".
+  // History: browser-ladder.js, realInstall(), "THE GROUP IS REAPED WHEN THE LEADER EXITS" (#355).
   await check('an externally signalled installer still takes its tree with it', async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ladder-sig-')));
     const marker = join(dir, 'orphan.txt');
@@ -1284,10 +1271,7 @@ function eq(actual, expected, what) {
     };
     const handled = cleanupSignalsFor(darwin);
 
-    // THE FINDING. SIGINFO's default action is to be IGNORED, and Ctrl-T is how
-    // a user asks a long install how it is going. Handling it reaped the install
-    // and then re-raised a signal the OS discards — so the ladder stayed alive
-    // having destroyed the work, because someone asked for a progress report.
+    // THE FINDING (history: browser-ladder.js, "WHICH SIGNALS ARE CLEANED UP", version 2): SIGINFO is ignored by default.
     if (handled.includes('SIGINFO')) {
       throw new Error('SIGINFO would be handled on macOS; its default is IGNORE, so a '
         + 'Ctrl-T progress request would reap the install and leave the ladder running');
@@ -1416,10 +1400,7 @@ function eq(actual, expected, what) {
     }
   });
 
-  // Handlers are armed only while an install is in flight. A three-rung ladder
-  // must not accumulate three of them, and a process that merely REQUIRES this
-  // file must carry none — otherwise the fix leaks listeners instead of
-  // processes.
+  // Handlers are armed only while an install is in flight (history: browser-ladder.js, the comment above ACTIVE_INSTALLS).
   await check('parent handlers are armed during an install and removed after', async () => {
     const baseline = CLEANUP_SIGNALS.map((sig) => process.listenerCount(sig));
     const exitBaseline = process.listenerCount('exit');

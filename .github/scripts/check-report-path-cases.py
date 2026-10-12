@@ -118,9 +118,7 @@ CASES = [
      "inside the workspace", "~reports/run.json"),
 
     # ── #347 round 32: A BACKSLASH IS AN ESCAPE TO THE UPLOADER ──────────────
-    # Measured: `minimatch('foobar.json', 'foo\\bar.json')` is TRUE and the
-    # pattern does not match its own name, so the gate verifies one file and the
-    # artifact collects another.
+    # History: validate-report-path.py, forbid_chars(), the backslash rule.
     ("a backslash in the filename", "foo\\bar.json", 1, "contains a backslash", None),
 
     # The twin: a `~` that is NOT the first component is not expanded by
@@ -149,22 +147,16 @@ CASES = [
 
     ("a character class", "r[12].json", 1, "contains a character class", None),
 
-    # A CLASS IS THE CONSTRUCT, NOT ITS LETTERS (#347 round 30). minimatch reads
-    # an unmatched bracket as literal, so these name exactly one file and every
-    # consumer resolves them that way. Banning the characters was the fourth
-    # false refusal on this PR — after the colon (r24), Array.isArray (r28) and
-    # the leading `!` on the wrong value (r29).
+    # A CLASS IS THE CONSTRUCT, NOT ITS LETTERS (#347 round 30): an unmatched
+    # bracket is literal. History: validate-report-path.py, forbid_chars().
     ("an unmatched closing bracket", "report].json", 0,
      "inside the workspace", ".github/scripts/ui-tests/report].json"),
 
     ("an unmatched opening bracket", "report[.json", 0,
      "inside the workspace", ".github/scripts/ui-tests/report[.json"),
 
-    # A NEGATION MARKER IS NOT A MEMBER (#347 round 35). Measured with
-    # `minimatch(p, p)` on 9 and 10: `[!]` and `[^]` compile to escaped
-    # literals and self-match. Eighth false refusal on this PR and the THIRD on
-    # this one rule — round 30 banned the brackets, round 31 required a
-    # non-empty body, round 35 found the body can be a marker alone.
+    # A NEGATION MARKER IS NOT A MEMBER (#347 round 35): `[!]` and `[^]` are
+    # literal. History: validate-report-path.py, _has_class() docstring.
     ("a negation marker with no member", "report[!].json", 0,
      "inside the workspace", ".github/scripts/ui-tests/report[!].json"),
 
@@ -255,8 +247,8 @@ CASES = [
     # rules and is refused for what it is, rather than being read as absent.
     ("whitespace only", "   ", 1, "whitespace", None),
 
-    # Same correction: the uploader trims the whole ENTRY, so a space at the raw
-    # value's edge is interior once the tests-dir prefix is prepended.
+    # Same correction (#347 round 29; history: validate-report-path.py,
+    # forbid_edges() docstring).
     ("a leading space that lands mid-entry", " r.json", 0,
      "inside the workspace", ".github/scripts/ui-tests/ r.json"),
 

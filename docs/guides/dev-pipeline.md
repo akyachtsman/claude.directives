@@ -208,9 +208,9 @@ What `/new-repo` scaffolds in **every** project:
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
 - the standard workflows — **seven unconditionally**: `qa.yml`, `qa-live.yml`,
   `ci-notify.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`,
-  `qa-response.yml` (`keepalive.yml` is NOT installed — it pushes to `main`,
-  which the required ruleset refuses; `cron-notify.yml` is added only when the
-  project has a scheduled task, owner ruling 2026-10-10)
+  `qa-response.yml` (`keepalive.yml` is NOT installed — `cicd-setup.md` Step 9f;
+  `cron-notify.yml` is added only when the project has a scheduled task, owner
+  ruling 2026-10-10)
 - **plus one of two source-conditional files**, so every project has a baseline of eight
   (nine once `cron-notify.yml` is added with a scheduled task):
   `pages-retry.yml` and its converse `pages-deploy.yml`. State `pages-retry.yml`
@@ -251,8 +251,7 @@ which needs none
 (`cicd-setup.md` Step 5). The email
 transport (`SMTP_PASS` secret; `SMTP_HOST`, `SMTP_USER`, `ALERT_TO` variables) is
 needed only if the project sends email (owner ruling, 2026-10-07).
-No `KEEPALIVE_PAT`: `keepalive.yml` is not scaffolded, so a standard repo has no
-consumer for that Contents-write PAT and should not hold one. The Supabase connection (`.mcp.json`) stays
+No `KEEPALIVE_PAT`: `keepalive.yml` is not scaffolded (`cicd-setup.md` Step 9f). The Supabase connection (`.mcp.json`) stays
 per-repo + gitignored by the data directive's security rule — the one thing never
 committed.
 
@@ -279,7 +278,7 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   subagent scores `plan.md`, revises under ~8, forces data-flow/failure-mode).
 - **Phase 4 — complete standard scaffold (done):** no opt-in toggle — `/new-repo`
   scaffolds the full set (all standard workflows + Playwright kit;
-  `keepalive.yml` is excluded). Since 2026-10-10 (owner ruling) the scheduled
+  `keepalive.yml` is excluded, `cicd-setup.md` Step 9f). Since 2026-10-10 (owner ruling) the scheduled
   job and its scripts are added only when a project has a scheduled task.
   Once installed, the email kit is active, with a config-guard notice in
   `notify-task.js`; its secrets are needed only if the project sends email. See "Complete standard scaffold" above.

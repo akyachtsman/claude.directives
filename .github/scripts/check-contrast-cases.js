@@ -263,8 +263,7 @@ const CASES = [
   ['an @use is refused at its brace like an @import',
     { 'styles/tokens.css': BASE + '@use "theme" { }\n' }, 1, '@use rule'],
 
-  // CSS normalises CRLF to one newline before tokenizing, so a backslash
-  // continues the string across both characters.
+  // A backslash before CRLF continues the string (history: check-contrast.js, scanDeclarations(), the string scan).
   ['a string continued across an escaped CRLF is still a string',
     { 'styles/tokens.css': plus('.e::before { content: "x\\\r\nnext"; }\n') }, 0, OK9],
 
@@ -350,9 +349,7 @@ const CASES = [
     1, BLOCK],
 
   // ── #337 round 7: CSS whitespace is not JavaScript's ──────────────────────
-  // U+00A0 is an IDENTIFIER character in CSS and whitespace to String.trim().
-  // Suffixing every name with one leaves the browser with no palette, while the
-  // gate trimmed each name back to the token it measures and printed 9/9.
+  // History: check-contrast.js, the cssTrim comment ("CSS whitespace, not JavaScript's").
   ['a non-breaking space in a token name is a different property, and is refused',
     { 'styles/tokens.css': BASE.replace(/--color-([a-z-]+):/g, '--color-$1\u00a0:') },
     1, 'cannot compare literally'],
@@ -367,9 +364,7 @@ const CASES = [
     1, 'pairs were evaluable'],
 
   // ── #337 round 7: a non-ASCII name character before url() ─────────────────
-  // CSS makes every code point at U+0080 and up an identifier character, so
-  // `éurl(` is one function token. The ASCII-only boundary opened a URL state
-  // inside it, closed at a `)` sitting in a comment, and red-built a valid file.
+  // History: check-contrast.js, scanDeclarations(), the url( boundary comment.
   ['a url( preceded by a non-ASCII name character is not a URL token',
     { 'styles/tokens.css': plus('.e { unknown: \u00e9url(/* ) */ ; --color-accent: #0D47A1;); }\n') },
     0, OK9],
@@ -443,9 +438,7 @@ const CASES = [
     1, ROOT],
 
   // ── #337 round 8: canon() undid the CSS trim ──────────────────────────────
-  // The capture keeps a U+00A0 because CSS reads it as part of a token; canon()
-  // trimmed it off again, collapsing a valid hex and one CSS rejects to the same
-  // value, so the ambiguity check saw one value and said nothing.
+  // History: check-contrast.js, canon().
   ['an NBSP-prefixed hex override is a distinct value, not the same one',
     { 'styles/tokens.css': plus(':root { --color-accent: \u00a0#1565C0; }\n') }, 1, DUP],
 
@@ -469,9 +462,7 @@ const CASES = [
     { 'styles/tokens.css': plus('.btn { background: url(x/*); }\n:root { --color-accent: #0D47A1; }\n/* note */\n') },
     1, DUP],
 
-  // CSS turns a lone CR and a form feed into newlines, so both end an unescaped
-  // string. Recognising only \n ran the "string" past a live override and
-  // certified the palette instead of refusing it.
+  // A lone CR and a form feed end an unescaped string (history: check-contrast.js, scanDeclarations(), the string scan).
   ['a lone CR ends an unescaped string',
     { 'styles/tokens.css': plus('.btn { content:"x\r; --color-accent:#fff; /* " */ }\n') },
     1, 'unterminated'],
@@ -485,9 +476,7 @@ const CASES = [
   // brace was read as opening a custom-property value.
 
   // ── #337 round 5 ──────────────────────────────────────────────────────────
-  // `myurl(` is an ordinary function; CSS does not enter the URL state for it.
-  // An unanchored match closed the "URL" at a `)` inside a comment and read the
-  // rest as declarations.
+  // `myurl(` is not url( (history: check-contrast.js, scanDeclarations(), the url( boundary comment).
   ['url( only matches at an identifier boundary',
     { 'styles/tokens.css': plus('.e { unknown: myurl(/* ) */ ; --color-accent: #0D47A1;); }\n') },
     0, OK9],
@@ -497,9 +486,7 @@ const CASES = [
   ['a backslash inside a url() is refused like any other escape',
     { 'styles/tokens.css': plus('.e { background: url(foo\\ bar); }\n') }, 1, 'backslash escape'],
 
-  // pop() on an empty stack was a no-op, so a file closing more blocks than it
-  // opens reached the end "balanced" and exited 0 — contradicting the refusal
-  // this same scanner documents.
+  // An unmatched `}` underflows (history: check-contrast.js, scanDeclarations(), the closing-brace comment).
   ['an unmatched closing brace is refused',
     { 'styles/tokens.css': BASE + '}\n' }, 1, 'closing brace with no matching open'],
 
@@ -549,9 +536,7 @@ const CASES = [
     1, DUP],
 
   // ── #337 round 6: ) and ] underflow like } ────────────────────────────────
-  // A non-matching top fell through into `buf`, so the stack was empty at EOF
-  // and the file read as "balanced" — the underflow the closing brace already
-  // refused, surviving in the two bracket types nobody re-checked.
+  // History: check-contrast.js, scanDeclarations(), the closer-mismatch comment.
   ['an unmatched closing paren is refused',
     { 'styles/tokens.css': BASE + ')\n' }, 1, 'closing ) with no matching open'],
 
@@ -595,9 +580,7 @@ const CASES = [
     0, OK9],
 
   // ── #337 round 10: an at-rule need not SUPPLY a palette to break one ──────
-  // Registering a MEASURED token is the sharpest failure this gate has: the root
-  // declaration stays intact and measurable while every descendant renders the
-  // initial value instead.
+  // History: check-contrast.js, "THIS LIST HAS BEEN INVERTED TWICE" and atRuleProblem()'s @property comment.
   ['@property registering a MEASURED token is refused',
     { 'styles/tokens.css': plus('@property --color-accent { syntax: "<color>"; inherits: false; initial-value: #FFFFFF; }\n') },
     1, 'registration of the measured token'],
@@ -606,8 +589,7 @@ const CASES = [
     { 'styles/tokens.css': plus('@property --spacing-x { syntax: "<length>"; inherits: false; initial-value: 4px; }\n') },
     0, OK9],
 
-  // A DEFAULT namespace re-points the implied universal selector, so `:root` no
-  // longer matches the HTML document root and the whole palette is inert.
+  // A DEFAULT @namespace makes `:root` inert (history: check-contrast.js, "THIS LIST HAS BEEN INVERTED TWICE").
   ['a default @namespace is refused',
     { 'styles/tokens.css': '@namespace url("http://www.w3.org/2000/svg");\n' + BASE }, 1, ATRULE],
 
@@ -702,9 +684,7 @@ const CASES = [
     { 'styles/tokens.css': BASE + '@whatever { }\n' }, 1, ATRULE],
 
   // ── #337 round 11: the invisible characters and the backtrack ─────────────
-  // A BOM is the sharpest of these: CSS decoding removes it, Node's utf8 read
-  // keeps it, and one U+FEFF made `head.startsWith('@')` false for the FIRST
-  // at-rule in the file — so the entire allow-list was skipped.
+  // History: check-contrast.js, scanDeclarations()'s preprocessing comment (the BOM).
   ['a BOM must not hide the first at-rule',
     { 'styles/tokens.css': '\ufeff@property --color-accent { syntax: "<color>"; inherits: false; initial-value: #FFFFFF; }\n' + BASE },
     1, 'registration of the measured token'],

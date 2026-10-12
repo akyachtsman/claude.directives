@@ -109,11 +109,7 @@ Execute in order:
      recurring work the moment it lands. Add it with the task, per
      `docs/standards/cicd-setup.md` Step 9f.
 
-   **Do NOT copy `keepalive.yml`.** It pushes to `main` weekly, which the
-   required default-branch ruleset refuses — so it would be red on every run.
-   It is also unnecessary: the 60-day auto-disable applies to public
-   repositories only and counts repository *inactivity*, not elapsed time, and a repo where PRs land never approaches
-   it. See `MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*.
+   **Do NOT copy `keepalive.yml`** — why: `docs/standards/cicd-setup.md` → *9f — Scheduled-job notifications*.
 
    Drop-in for a **branch-source** Pages project — copy verbatim, no edits.
    `ci-monitor.yml` and `ci-notify.yml` ship watching all three QA workflows,

@@ -181,7 +181,8 @@
     }
   },
   "swap": {
-    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced \u2014 this covers directives/ and the exported standards under docs/standards/, since both carry blocking criteria; the meta domain is permanent in its entirety, so every meta path is enumerated here too. ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit \u2014 a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
+    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced \u2014 this covers directives/ and the exported standards under docs/standards/, since both carry blocking criteria; PERMANENT_DOMAINS names domains that are permanent in their entirety (the whole meta domain): their paths are derived from `domains` by check-exports.js and are NOT re-listed under `permanent`, which holds only the permanent paths outside such a domain (an unknown domain name, or a listed path a permanent domain already covers, fails the check). ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit \u2014 a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
+    "permanent_domains": ["meta"],
     "permanent": [
       "directives/global.md",
       "directives/git.md",
@@ -195,26 +196,7 @@
       "docs/standards/session-mechanics.md",
       "docs/standards/hosting-mechanics.md",
       "docs/standards/cicd-setup.md",
-      "docs/standards/kit-defects.md",
-      ".claude-plugin/marketplace.json",
-      "plugins/directives-toolkit/.claude-plugin/plugin.json",
-      "scripts/install-toolkit.sh",
-      "templates/claude-settings.json",
-      "templates/claude-hooks/session-start.sh",
-      "plugins/directives-toolkit/commands/env-chk.md",
-      "plugins/directives-toolkit/commands/refresh-repo.md",
-      "plugins/directives-toolkit/commands/new-repo.md",
-      "plugins/directives-toolkit/commands/audit-repo.md",
-      "plugins/directives-toolkit/commands/handoff-session.md",
-      "plugins/directives-toolkit/commands/do-repo.md",
-      "plugins/directives-toolkit/commands/my-list.md",
-      "plugins/directives-toolkit/skills/scope-chk/",
-      "plugins/directives-toolkit/skills/doc-comp/",
-      "plugins/directives-toolkit/hooks/",
-      "plugins/directives-toolkit/scripts/",
-      "NEW-REPO-USER-INSTRUCTIONS.md",
-      "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
-      "plugins/directives-toolkit/evals/"
+      "docs/standards/kit-defects.md"
     ],
     "orchestrators": [
       "plugins/directives-toolkit/commands/sdd-loop.md",

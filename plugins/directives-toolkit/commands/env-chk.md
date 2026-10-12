@@ -81,10 +81,7 @@ verdict. Read-only — do NOT modify files. Execute in order:
      ```bash
      [ "${CLAUDE_CODE_REMOTE:-}" = true ] \
        && [ -x .claude/hooks/session-start.sh ] \
-       && jq -e '[.hooks.SessionStart[]?.hooks[]? | ((.command // empty) | strings
-                | gsub("\"";"") | split(" ")[0]), (.args[]? | strings)]
-            | any(endswith("hooks/session-start.sh"))' \
-       .claude/settings.json >/dev/null 2>&1 \
+       && bash "${CLAUDE_PLUGIN_ROOT}/scripts/session-start-registered.sh" \
        && echo "self-updating" || echo "needs remediation"
      ```
      On CLI/desktop the first condition is false by design — the hook exits early
@@ -107,10 +104,11 @@ verdict. Read-only — do NOT modify files. Execute in order:
    alarm found: it is not a delta item, and a project whose stamp is current
    can lack it just as well. Report it, because nothing else will.
    ```bash
-   jq -e '.permissions.allow | index("mcp__Claude_Code_Remote__create_trigger")' \
-     .claude/settings.json >/dev/null 2>&1 \
-     && echo "pre-approved" || echo "PROMPTS ON EVERY SCHEDULING CALL"
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/allowlist-check.sh"
    ```
+   It compares every `permissions.allow` entry of `templates/claude-settings.json`
+   (fetched from upstream outside claude.directives) with the project's file, and
+   names each one missing; report the verdict line and the missing entries.
    This check exists because the rule it enforces went unfollowed for a month
    with no signal. `global.md` → *Async Operations* tells a session to PR the
    allowlist in the FIRST time it hits a scheduling prompt — but a session
@@ -118,9 +116,9 @@ verdict. Read-only — do NOT modify files. Execute in order:
    window, forever; claude.insurance reached four-figure click counts that way
    while its sibling repos were fine. The failure is invisible to the only
    party who can fix it, so it must be reported unprompted rather than waited
-   for. Note the two distinct states: the file MISSING pre-approves nothing at
-   all, while a file present with a stale or partial `permissions` block
-   pre-approves only what it lists. Missing is the more common and the more
+   for. Note the two distinct states the probe separates: the file MISSING
+   pre-approves nothing at all, while a file present with a stale or partial
+   `permissions` block (`PARTIAL`) pre-approves only what it lists. Missing is the more common and the more
    expensive. Remediation either way is one small PR carrying the current
    `templates/claude-settings.json` → `permissions` block verbatim; say plainly
    that it takes effect from the NEXT session, never this one, so the owner is

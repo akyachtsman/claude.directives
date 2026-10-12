@@ -113,7 +113,8 @@
         "templates/workflows/qa-response.yml",
         "templates/scripts/workflow-ref-guard.py",
         "templates/scripts/check-job-bounds.py",
-        "templates/scripts/check-py-warnings.py"
+        "templates/scripts/check-py-warnings.py",
+        "templates/scripts/gh_yaml.py"
       ],
       "ui-kit": [
         "templates/actions/ui-suite/",
@@ -304,6 +305,7 @@
         "templates/scripts/workflow-ref-guard.py",
         "templates/scripts/check-job-bounds.py",
         "templates/scripts/check-py-warnings.py",
+        "templates/scripts/gh_yaml.py",
         "templates/scripts/check-ui-viewports.js",
         "templates/scripts/check-ui-suite-env.py",
         "templates/scripts/browser-ladder.js"

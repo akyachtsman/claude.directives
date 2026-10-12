@@ -166,6 +166,25 @@ CASES = [
     ['a zero bound still fails',
      {"a.yml": wf(plain=job(0))}, 1, "no usable execution", {}],
 
+    # ── Read as GitHub reads it: YAML 1.2, through gh_yaml ───────────────────
+    # 1.1 reads `0130` as octal 88, under the floor; GitHub reads 130.
+    ['a leading-zero bound is decimal, as on GitHub (0130 is 130, not octal 88)',
+     {"a.yml": wf(ui=job("0130", ui=True))}, 0, "ui-suite callers >= 120", {}],
+
+    # 1.1 has no integer `080` at all, so it reached the check as a string.
+    ['a leading-zero bound with an 8 is still a number (080 is 80)',
+     {"a.yml": wf(plain=job("080"))}, 0, "none of the 1 range-checked >= 360", {}],
+
+    # The owner's call (2026-10-11): keep PyYAML's reading of the 1.1-only
+    # integer spellings, so `1_000` is 1000 and fails rule 2, not rule-less.
+    ['a 1.1-only integer spelling keeps its 1.1 value (1_000 is 1000)',
+     {"a.yml": wf(plain=job("1_000"))}, 1, "timeout-minutes: 1000", {}],
+
+    # Under 1.1 both keys were the boolean True, and the bounded `on` job
+    # overwrote the unbounded `yes` one: no finding, while GitHub ran both.
+    ['jobs named yes and on stay two jobs',
+     {"a.yml": wf(yes=job(None), on=job(10))}, 1, "job 'yes' has no timeout-minutes", {}],
+
     ['unparseable YAML fails closed, never counts as empty',
      {"a.yml": "on: push\njobs:\n  a: [\n"}, 1, "never checked", {}],
 ]

@@ -79,7 +79,7 @@ def adapted_logic(path, shfmt):
 
     WHY SOURCE TEXT, NOT VALUES. PyYAML resolves scalars by YAML 1.1 and GitHub
     by YAML 1.2, and they disagree (`no`, `on`, `070`, `080`; see
-    check-job-bounds.py's GitHubIntLoader). Comparing resolved values let
+    templates/scripts/gh_yaml.py). Comparing resolved values let
     `required: false` pass as `0`, then as `no` (Codex, #430). Two plain
     scalars with the same text resolve the same under ANY schema, so comparing
     the text closes that class instead of chasing it value by value. The cost

@@ -85,6 +85,10 @@ curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/te
   -o .github/scripts/check-py-warnings.py
 curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
   -o .github/scripts/check-ui-suite-env.py
+# Three of them (workflow-ref-guard, check-job-bounds, check-ui-suite-env) import
+# this sibling, which reads YAML the way GitHub does (1.2, not PyYAML's 1.1).
+curl -sL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/gh_yaml.py \
+  -o .github/scripts/gh_yaml.py
 ```
 
 ⚠️ **One thing about the ui-suite browser cache is easy to over-generalise.**
@@ -460,7 +464,8 @@ change** — adoption, not a regression the adoption caused
 (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*).
 
 Like `workflow-ref-guard.py` it parses with PyYAML (present on GitHub's runner
-images) and fails loudly if that import is missing, rather than skipping.
+images), through its sibling `gh_yaml.py`, and fails loudly if either import is
+missing, rather than skipping.
 
 ### 9d — Pages Retry
 

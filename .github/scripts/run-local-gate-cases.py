@@ -267,6 +267,17 @@ CASES = [
     ("an env key ON stays the name ON",
      {"wf.yml": workflow("      - name: e\n        run: test \"$ON\" = x\n        env:\n          ON: x\n")},
      0, "PASS [1] e"),
+    # Integers too (I-4): YAML 1.1 reads a leading 0 as octal, so 0361 was a
+    # 241-minute bound that ran, and 080 crashed the gate with a traceback.
+    ("timeout-minutes 0361 is 361, as on GitHub, not octal 241 — CANNOT RUN",
+     {"wf.yml": workflow("      - name: z\n        timeout-minutes: 0361\n        run: echo ok\n")},
+     2, "not a whole number from 1 to 360"),
+    ("timeout-minutes 080 is 80, not a traceback",
+     {"wf.yml": workflow("      - name: z\n        timeout-minutes: 080\n        run: echo ok\n")},
+     0, "PASS [1] z"),
+    ("env V: 070 reaches the shell as 70",
+     {"wf.yml": workflow("      - name: e\n        run: test \"$V\" = 70\n        env:\n          V: 070\n")},
+     0, "PASS [1] e"),
     # ── metadata GitHub rejects is not run ──────────────────────────────────
     ("a composite run step without shell — CANNOT RUN",
      {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),

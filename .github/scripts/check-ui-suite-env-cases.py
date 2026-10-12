@@ -693,6 +693,12 @@ CASES = [
     ("include-hidden-files turned off — refused",
      action(dict(BOTH), dict(BOTH), upload_hidden=False), 1,
      "include-hidden-files"),
+    # `yes` is YAML 1.1's true, which PyYAML read, but the string "yes" to
+    # GitHub (YAML 1.2), and not a boolean input the upload action accepts:
+    # read through gh_yaml, it is refused (audit 2026-10-11, I-24).
+    ("include-hidden-files: yes — refused, a string to GitHub",
+     action(dict(BOTH), dict(BOTH), upload_hidden="yes"), 1,
+     "include-hidden-files"),
     # THE UPLOAD MUST STILL BLOCK (#347 round 36). Every pin above passed with
     # `continue-on-error: true` on this step, so an upload failure vanished behind
     # a green job while the guard stayed green — the round-11 defect, one step

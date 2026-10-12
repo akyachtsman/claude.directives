@@ -55,7 +55,14 @@ import os
 import re
 import sys
 
-import yaml
+# The shared YAML 1.2 reader, this file's sibling: the action is read as GitHub
+# reads it, so `include-hidden-files: yes` is the string GitHub sees, not
+# PyYAML's 1.1 boolean (audit 2026-10-11, I-24).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import gh_yaml
+except ModuleNotFoundError as e:
+    sys.exit(f"CANNOT CHECK: {e} -- it needs PyYAML and templates/scripts/gh_yaml.py beside this script")
 
 
 def _take_option(argv, flag, default):
@@ -523,7 +530,7 @@ def check_spec_env(doc, run_env, problems):
 
 def main():
     with open(ACTION, encoding="utf-8") as handle:
-        doc = yaml.safe_load(handle)
+        doc = gh_yaml.load(handle)
     steps = (doc.get("runs") or {}).get("steps") or []
 
     envs = {label: env_of(steps, label) for label, *_ in SEQUENCE}

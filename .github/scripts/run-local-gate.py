@@ -72,27 +72,6 @@ class CannotRun(Exception):
     pass
 
 
-def core_schema_loader(yaml):
-    """A SafeLoader that resolves plain scalars by YAML 1.2's core schema, as
-    GitHub does, not PyYAML's 1.1: `yes`, `on`, `y` stay strings, `true`
-    and `false` (any case form the spec allows) are booleans, `~`/`null`
-    are null, and integers and floats are 1.2 forms (Codex, #431)."""
-    class Core(yaml.SafeLoader):
-        pass
-    Core.yaml_implicit_resolvers = {}
-    rules = [
-        ("tag:yaml.org,2002:bool", r"^(?:true|True|TRUE|false|False|FALSE)$", "tTfF"),
-        ("tag:yaml.org,2002:null", r"^(?:~|null|Null|NULL|)$", ["~", "n", "N", ""]),
-        ("tag:yaml.org,2002:int", r"^(?:[-+]?[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+)$", list("-+0123456789")),
-        ("tag:yaml.org,2002:float",
-         r"^(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$",
-         list("-+.0123456789")),
-    ]
-    for tag, pattern, first in rules:
-        Core.add_implicit_resolver(tag, re.compile(pattern), list(first))
-    return Core
-
-
 def env_value(value):
     """An `env:` value as GitHub hands it to the shell: booleans as `true` /
     `false`, null as empty, everything else as its string."""
@@ -102,14 +81,20 @@ def env_value(value):
 
 
 def load(path):
+    """The workflow as GitHub reads it: YAML 1.2's core schema, from the shared
+    templates/scripts/gh_yaml.py (`yes`/`on` stay strings, `070` is 70, `080`
+    is 80; PyYAML's own 1.1 reading made `070` a 56-minute bound and crashed
+    on `080`, audit 2026-10-11 I-4)."""
+    sys.path.insert(0, os.path.join(ROOT, "templates", "scripts"))
     try:
         import yaml
-    except ImportError:
-        raise CannotRun("PyYAML is not installed, so the workflow cannot be read")
+        import gh_yaml
+    except ImportError as e:
+        raise CannotRun(f"the workflow cannot be read: {e} (PyYAML, and templates/scripts/gh_yaml.py)")
     try:
         with open(path, encoding="utf-8") as handle:
-            return yaml.load(handle, Loader=core_schema_loader(yaml))
-    except (OSError, yaml.YAMLError) as e:
+            return gh_yaml.load(handle)
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
         raise CannotRun(f"cannot read {path}: {e}")
 
 

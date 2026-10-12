@@ -31,6 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Overridable so a MUTANT can be pointed at, like the other guards' suites;
 # resolved, so a relative path survives the temp-tree cwd.
 GUARD = bin_path("WORKFLOW_REF_GUARD_BIN", REPO_ROOT / "templates" / "scripts" / "workflow-ref-guard.py")
+GH_YAML = REPO_ROOT / "templates" / "scripts" / "gh_yaml.py"
 NBSP = "\u00A0"
 
 JOBS = 'jobs: {a: {runs-on: ubuntu-latest, steps: [{run: "true"}]}}\n'
@@ -409,6 +410,8 @@ def run_case(files, required):
         os.makedirs(os.path.join(tmp, ".github", "workflows"))
         os.makedirs(os.path.join(tmp, ".github", "scripts"))
         shutil.copy(GUARD, os.path.join(tmp, ".github", "scripts", GUARD.name))
+        # Installed as a project installs it: with the YAML reader it imports.
+        shutil.copy(GH_YAML, os.path.join(tmp, ".github", "scripts", "gh_yaml.py"))
         # A bare filename is a workflow; a path is placed where it says.
         write_tree(tmp, {(f if "/" in f else f".github/workflows/{f}"): body
                          for f, body in files.items()})

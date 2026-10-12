@@ -90,6 +90,9 @@ jobs:
         run: node .github/scripts/check-contrast.js
 
 
+      # The three Python guards below that read YAML (workflow-ref-guard,
+      # check-job-bounds, check-ui-suite-env) import .github/scripts/gh_yaml.py,
+      # which reads it as GitHub does (YAML 1.2), so install it beside them.
       - name: Workflow cross-reference guard
         # Every `workflow_run.workflows:` entry must name a real workflow. GitHub
         # raises no error when one does not — the watcher simply never fires.

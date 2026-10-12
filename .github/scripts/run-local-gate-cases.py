@@ -326,6 +326,78 @@ CASES = [
     ("a fractional timeout-minutes on the checkout step — CANNOT RUN (#432)",
      {"wf.yml": workflow("      - uses: actions/checkout@v4\n        timeout-minutes: 0.5\n" + STEP.format(name="one", run="echo ok"), checkout=False)},
      2, "not a whole number from 1 to 360"),
+    # ── composite refusals, each with no case until 2026-10-11 (I-7) ────────
+    ("a timeout-minutes on a composite step — CANNOT RUN",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n        timeout-minutes: 5\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo hi\n"},
+     2, "bounds a whole composite"),
+    ("a composite that declares inputs — CANNOT RUN",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
+      "act/action.yml": "name: a\ninputs:\n  x:\n    description: d\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo hi\n"},
+     2, "declares inputs"),
+    # The needle matters: without the `if` test, the key allow-list below
+    # would still refuse it, for a different stated reason.
+    ("an if: on a composite step — CANNOT RUN",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - if: always()\n      shell: bash\n      run: echo hi\n"},
+     2, "./act step 1 is not a plain `run:` step"),
+    ("an unknown key on a composite step — CANNOT RUN",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      continue-on-error: true\n      run: exit 1\n"},
+     2, "./act step 1 sets continue-on-error"),
+    # GitHub prepends each entry, so the LAST one written is searched first.
+    ("GITHUB_PATH: the entry written last wins",
+     {"wf.yml": workflow("      - name: set\n        run: |\n"
+                         "          for d in a b; do mkdir -p \"$RUNNER_TEMP/$d\"\n"
+                         "            printf '#!/bin/sh\\necho FROM-%s\\n' \"$d\" > \"$RUNNER_TEMP/$d/shim\"\n"
+                         "            chmod +x \"$RUNNER_TEMP/$d/shim\"; echo \"$RUNNER_TEMP/$d\" >> \"$GITHUB_PATH\"; done\n"
+                         + STEP.format(name="get", run="test \"$(shim)\" = FROM-b"))},
+     0, "PASS [2] get"),
+    # ── $GITHUB_ENV read as GitHub's runner reads it (I-6) ──────────────────
+    # FileCommandManager.cs, EnvFileKeyValuePairs: lines end at \n only.
+    ("a GITHUB_ENV heredoc closed only by EOF\\r FAILS the step, as on GitHub",
+     {"wf.yml": workflow("      - name: set\n        run: printf 'M<<EOF\\nv\\nEOF\\r\\n' >> \"$GITHUB_ENV\"\n")},
+     1, "never closed by EOF"),
+    ("a whitespace-only GITHUB_ENV line FAILS the step, as on GitHub",
+     {"wf.yml": workflow("      - name: set\n        run: printf 'K=v\\n \\n' >> \"$GITHUB_ENV\"\n")},
+     1, "neither KEY=VALUE nor KEY<<DELIMITER"),
+    # Accepted on GitHub too: its empty-name test reads the line, not the name.
+    ("a GITHUB_ENV =v line is accepted, as on GitHub",
+     {"wf.yml": workflow(STEP.format(name="set", run="printf '=v\\nK=w\\n' >> \"$GITHUB_ENV\"")
+                         + STEP.format(name="get", run="test \"$K\" = w"))},
+     0, "PASS [2] get"),
+    # .NET decodes an invalid byte as U+FFFD; it was a traceback here.
+    ("a non-UTF-8 GITHUB_ENV byte is read as U+FFFD, not a traceback",
+     {"wf.yml": workflow(STEP.format(name="set", run="printf 'K=\\377\\n' >> \"$GITHUB_ENV\"")
+                         + STEP.format(name="get", run="test \"$K\" = \"$(printf '\\357\\277\\275')\""))},
+     0, "PASS [2] get"),
+    ("a non-UTF-8 GITHUB_PATH byte is not a traceback",
+     {"wf.yml": workflow(STEP.format(name="set", run="printf '/nonexistent\\377\\n' >> \"$GITHUB_PATH\"")
+                         + STEP.format(name="after", run="echo ok"))},
+     0, "PASS [2] after"),
+    # ── malformed shapes are CANNOT RUN, never a traceback (M-4) ────────────
+    ("a step that is a bare string — CANNOT RUN",
+     {"wf.yml": workflow("      - echo hi\n")},
+     2, "step 2 is a str, not a mapping"),
+    ("uses: 4 — CANNOT RUN",
+     {"wf.yml": workflow("      - uses: 4\n")},
+     2, "not an action reference"),
+    ("a composite step that is a bare string — CANNOT RUN",
+     {"wf.yml": workflow("      - name: comp\n        uses: ./act\n"),
+      "act/action.yml": "name: a\nruns:\n  using: composite\n  steps:\n    - echo hi\n"},
+     2, "./act step 1 is a str, not a mapping"),
+    ("an env that is a list — CANNOT RUN",
+     {"wf.yml": workflow("      - name: e\n        run: echo ok\n        env: [A, B]\n")},
+     2, "its env is a list, not a mapping"),
+    ("an env value that is a list — CANNOT RUN",
+     {"wf.yml": workflow("      - name: e\n        run: echo ok\n        env:\n          A: [1, 2]\n")},
+     2, "env A is a list, not a string"),
+    ("jobs that is a list — CANNOT RUN",
+     {"wf.yml": "name: t\non: push\njobs: [validate]\n"},
+     2, "jobs is a list, not a mapping"),
+    ("a shell that is a list — CANNOT RUN",
+     {"wf.yml": workflow("      - name: s\n        shell: [bash]\n        run: echo ok\n")},
+     2, "is not bash"),
     ("no such job — CANNOT RUN",
      {"wf.yml": "name: t\non: push\njobs:\n  other:\n    runs-on: " + HOST_LABEL + "\n    steps:\n      - run: 'true'\n"},
      2, "no steps for job 'validate'"),

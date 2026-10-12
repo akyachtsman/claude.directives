@@ -31,7 +31,9 @@ WHAT IT REFUSES (exit 2, CANNOT RUN), rather than run something else:
   - a `uses:` that is neither checkout nor a local composite;
   - an `if:` on a step: its condition cannot be evaluated here;
   - a `${{ ... }}` expression inside a `run:` script;
-  - a `shell:` other than bash.
+  - a `shell:` other than bash;
+  - a shape GitHub rejects (a step that is not a mapping, `uses: 4`, a list
+    as an `env:` value), rather than a traceback (M-4).
 An `env:` value holding an expression (`${{ secrets.GITHUB_TOKEN }}`) is left to
 the caller's environment, and the run says so.
 
@@ -51,6 +53,7 @@ Its own guard: .github/scripts/run-local-gate-cases.py.
 """
 
 import argparse
+import codecs
 import platform
 import re
 import signal
@@ -138,6 +141,16 @@ def minutes(value, where):
     return value * MINUTE
 
 
+def mapping(value, where):
+    """`value` when it is a mapping (absent counts as empty), else CannotRun: a
+    malformed shape is a workflow GitHub rejects, never a traceback here (M-4)."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise CannotRun(f"{where} is a {type(value).__name__}, not a mapping")
+    return value
+
+
 def plan(workflow, job, root):
     """(steps, context): the job's steps as (label, script, shell, cwd, env,
     left, timeout seconds or None) tuples, and what the run seeds from the
@@ -146,7 +159,7 @@ def plan(workflow, job, root):
     if not isinstance(doc, dict):
         raise CannotRun(f"{workflow} is not a workflow mapping")
     refuse_unknown(doc, WORKFLOW_KEYS, "the workflow")
-    body = (doc.get("jobs") or {}).get(job)
+    body = mapping(doc.get("jobs"), f"{workflow}'s jobs").get(job)
     steps = body.get("steps") if isinstance(body, dict) else None
     if not isinstance(steps, list) or not steps:
         raise CannotRun(f"{workflow} has no steps for job {job!r}")
@@ -160,6 +173,7 @@ def plan(workflow, job, root):
         raise CannotRun("the job's first step is not actions/checkout: on a hosted runner its steps "
                         "would start in an empty workspace, while this runner starts in the tree")
     for i, step in enumerate(steps, 1):
+        step = mapping(step, f"step {i}")
         label = step.get("name") or step.get("uses") or f"step {i}"
         if "if" in step:
             raise CannotRun(f"step {i} ({label}) has an `if:`, which cannot be evaluated here")
@@ -167,6 +181,8 @@ def plan(workflow, job, root):
         uses = step.get("uses")
         if uses is not None and "run" in step:
             raise CannotRun(f"step {i} ({label}) has both `uses:` and `run:`; GitHub takes one or the other")
+        if uses is not None and not isinstance(uses, str):
+            raise CannotRun(f"step {i} ({label}) has `uses: {uses!r}`, not an action reference")
         if uses is not None:
             if uses.startswith("actions/checkout@"):
                 # Only refs known to resolve: Actions fails a job whose
@@ -188,15 +204,18 @@ def plan(workflow, job, root):
                 raise CannotRun(f"step {i} ({label}) uses {uses}, which cannot run locally")
             if "timeout-minutes" in step:
                 raise CannotRun(f"step {i} ({label}) bounds a whole composite, which this runner does not")
-            action = load(os.path.join(root, uses, "action.yml"))
-            if (action or {}).get("inputs"):
+            action = mapping(load(os.path.join(root, uses, "action.yml")), f"{uses}/action.yml")
+            if action.get("inputs"):
                 raise CannotRun(f"{uses}/action.yml declares inputs, which this runner does not pass")
-            if ((action or {}).get("runs") or {}).get("using") != "composite":
+            runs = mapping(action.get("runs"), f"{uses}/action.yml's runs")
+            if runs.get("using") != "composite":
                 raise CannotRun(f"{uses}/action.yml is not `runs.using: composite`")
-            inner = ((action or {}).get("runs") or {}).get("steps")
+            inner = runs.get("steps")
             if not isinstance(inner, list):
                 raise CannotRun(f"{uses}/action.yml has no composite steps")
+            outer_env = mapping(step.get("env"), f"step {i} ({label})'s env")
             for j, sub in enumerate(inner, 1):
+                sub = mapping(sub, f"{uses} step {j}")
                 if "run" not in sub or "uses" in sub or "if" in sub:
                     raise CannotRun(f"{uses} step {j} is not a plain `run:` step")
                 refuse_unknown(sub, COMPOSITE_STEP_KEYS, f"{uses} step {j}")
@@ -204,7 +223,7 @@ def plan(workflow, job, root):
                     raise CannotRun(f"{uses} step {j} has `run:` without `shell:`, which GitHub requires in a composite")
                 # The calling step's env reaches the composite's steps, as on
                 # GitHub; a key the inner step sets itself wins (Codex, #431).
-                merged = dict(sub, env={**(step.get("env") or {}), **(sub.get("env") or {})})
+                merged = dict(sub, env={**outer_env, **mapping(sub.get("env"), f"{uses} step {j}'s env")})
                 out.append(make(f"{label} / {sub.get('name') or j}", merged, root))
             continue
         if "run" not in step:
@@ -319,16 +338,19 @@ def make(label, step, root):
     if unseeded:
         raise CannotRun(f"{label}: its script reads {', '.join(unseeded)}, which only an Actions runner sets")
     shell = step.get("shell")
-    if shell not in SHELLS:
+    if not (shell is None or isinstance(shell, str)) or shell not in SHELLS:
         raise CannotRun(f"{label}: shell {shell!r} is not bash")
     workdir = step.get("working-directory", ".")
     if not isinstance(workdir, str) or "${{" in workdir:
         raise CannotRun(f"{label}: its working-directory {workdir!r} is not a literal path")
     cwd = os.path.join(root, workdir)
     env, left = {}, []
-    for key, value in (step.get("env") or {}).items():
+    for key, value in mapping(step.get("env"), f"{label}: its env").items():
         if str(key) in DEFAULT_VARIABLES:
             continue
+        # GitHub takes a scalar here; a list or mapping is rejected (M-4).
+        if isinstance(value, (list, dict)):
+            raise CannotRun(f"{label}: env {key} is a {type(value).__name__}, not a string")
         if isinstance(value, str) and "${{" in value:
             left.append(str(key))
         else:
@@ -341,13 +363,40 @@ class BadEnvFile(Exception):
     pass
 
 
+# The runner's file-command reader is the reference for both files below:
+# actions/runner, src/Runner.Worker/FileCommandManager.cs (read 2026-10-12 at
+# 67f01c2): EnvFileKeyValuePairs for $GITHUB_ENV, AddPathFileCommand for
+# $GITHUB_PATH. Where this differed from it (audit 2026-10-11, I-6), a local
+# run passed what CI fails, or crashed on what CI accepts.
+
+
+def read_text(path):
+    """A file-command file as the runner decodes it: .NET's File.ReadAllText /
+    ReadAllLines, UTF-8 with a BOM stripped and an invalid byte read as U+FFFD
+    (never an error). A UTF-16 or UTF-32 BOM, which .NET would also honour, is
+    refused rather than guessed at."""
+    with open(path, "rb") as handle:
+        raw = handle.read()
+    if raw.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        raise BadEnvFile("it starts with a UTF-16 or UTF-32 byte-order mark, which this runner does not decode")
+    return raw.decode("utf-8-sig", "replace")
+
+
 def read_env_file(path):
-    """Parse a $GITHUB_ENV file: `KEY=VALUE` lines and `KEY<<DELIM` blocks.
+    r"""Parse a $GITHUB_ENV file: `KEY=VALUE` lines and `KEY<<DELIM` blocks,
+    as EnvFileKeyValuePairs does on Linux:
+      - lines end at `\n` only (ReadLine; CRLF is a Windows-only branch), so
+        `EOF\r` does not close an `EOF` heredoc;
+      - only an EMPTY line is skipped; a whitespace-only one is neither form
+        and fails, as on GitHub (`Invalid format`);
+      - `=v` is ACCEPTED, as on GitHub: its empty-name check tests the whole
+        line, not the name (`string.IsNullOrEmpty(line)`), so it never fires.
     A block with no closing delimiter, or a line of neither form, raises
     BadEnvFile: GitHub's runner fails the step on either (Codex, #431)."""
     out = {}
-    with open(path, encoding="utf-8") as handle:
-        lines = handle.read().splitlines()
+    lines = read_text(path).split("\n")
+    if lines[-1] == "":
+        lines.pop()   # the newline that ends the last line starts no line
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -369,7 +418,7 @@ def read_env_file(path):
         elif "=" in line:
             key, value = line.split("=", 1)
             out[key] = value
-        elif line.strip():
+        elif line:
             raise BadEnvFile(f"line {line!r} is neither KEY=VALUE nor KEY<<DELIMITER")
         i += 1
     return out
@@ -440,8 +489,15 @@ def run(steps, root, context):
                 print(f"FAIL [{n}] {label} ($GITHUB_ENV: {e})", flush=True)
                 if not failed or failed[-1] != f"[{n}] {label}":
                     failed.append(f"[{n}] {label}")
-            with open(path_file, encoding="utf-8") as handle:
-                added = [p for p in handle.read().splitlines() if p]
+            # ReadAllLines: a line ends at \r\n, \r or \n, empty ones are
+            # skipped, and the LAST entry written is searched first.
+            try:
+                added = [p for p in re.split(r"\r\n|\r|\n", read_text(path_file)) if p]
+            except BadEnvFile as e:
+                print(f"FAIL [{n}] {label} ($GITHUB_PATH: {e})", flush=True)
+                if not failed or failed[-1] != f"[{n}] {label}":
+                    failed.append(f"[{n}] {label}")
+                added = []
             if added:
                 env["PATH"] = os.pathsep.join(list(reversed(added)) + [env.get("PATH", "")])
     finally:

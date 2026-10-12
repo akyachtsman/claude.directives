@@ -916,7 +916,10 @@ naming what remains open, or "nothing open" — never absent.
   serves the new content. On a failed deploy, re-run to a terminal state before
   reporting done — never leave the site stale. A clean/empty-cache render
   (headless browser, incognito) proves the *new* deploy but not a *returning*
-  visitor's cached state. See the `update-pages` skill.
+  visitor's cached state. No deploy run for the merge commit within ~2 minutes
+  is a stuck deploy: recover it rather than running live QA against the old
+  site, and trigger `qa-live.yml` by hand only once the deploy for that SHA has
+  succeeded. See the `update-pages` skill (step 5 for a stuck deploy).
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic
@@ -926,6 +929,17 @@ naming what remains open, or "nothing open" — never absent.
 - **Never escalate a shell command to the owner.** He has no terminal, so it is
   not a smaller ask than doing it yourself — it is an impossible one
   (→ *A Blocked Command Is Not a Blocked Capability*).
+
+A session acting on an automated notification (a CI failure, a monitor issue,
+a webhook) also stops and asks when:
+- the fix needs a secret or credential the session does not have
+- the fix would need a destructive data operation (deleting records, dropping
+  fields)
+- the root cause is still ambiguous after reading every available log
+- the notification came from a person, not an automated system
+
+These always escalate: production data loss or deletion, authentication or
+secret rotation, billing or quota alerts, and any message from a person.
 
 The gates above fire BEFORE the work. → *A Knowing Deviation Is an Escalation*
 covers the other direction: an instruction you have already decided not to follow.
@@ -968,8 +982,8 @@ exists and you are about to not follow it.
 > Asking costs one sentence. Not asking costs a round trip — and sometimes the
 > owner's confidence that the instruction was heard at all.
 
-**No fifth gate; dependent work waits.** → *Escalation Rules* still has exactly
-four and this adds none. It adds a wait: work depending on the deviation stops
+**No fifth gate; dependent work waits.** → *Escalation Rules* keeps its gates
+as written and this adds none. It adds a wait: work depending on the deviation stops
 until the question is answered, work independent of it continues.
 
 **Under a standing authorization and under "proceed", raise it anyway.** A
@@ -1084,8 +1098,7 @@ that fetched it. A project without it still waits on its environment's cached
 setup script — a setup-script/network change or roughly weekly expiry. Commands invoke
 as `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
 
-See docs/standards/automations.md for monitor setup and the automation-specific
-PR-lifecycle/escalation additions.
+See docs/standards/automations.md for monitor setup.
 See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 
 ## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)

@@ -36,292 +36,124 @@
     }
   },
   "domains": {
-    "_comment": "The LOGICAL view, orthogonal to categories (which encode propagation): domain \u2192 compartment \u2192 paths. A compartment is the swappable unit \u2014 replace its file set honoring its interface and nothing outside it moves. Rendered visually at docs/site/logical-map.html; boundaries and swap procedure in MAINTAIN-REPO-USER-INSTRUCTIONS.md \u2192 Domain Boundaries. Validated by check-exports.js: every path must exist.",
-    "global": {
-      "core": [
-        "directives/global.md",
-        "docs/standards/session-mechanics.md"
-      ],
-      "method": [
-        "plugins/directives-toolkit/commands/sdd-loop.md",
-        "plugins/directives-toolkit/commands/diagnose.md",
-        "plugins/directives-toolkit/commands/kickoff.md",
-        "plugins/directives-toolkit/commands/learn.md",
-        "docs/guides/ai-first-principles.md",
-        "docs/guides/dev-pipeline.md",
-        "docs/guides/usage-guide.md"
-      ],
-      "security": [
-        "templates/actions/secret-scan/"
-      ],
-      "deploy": [
-        "docs/standards/hosting-mechanics.md",
-        "plugins/directives-toolkit/skills/update-pages/",
-        "templates/workflows/pages-monitor.yml",
-        "templates/workflows/pages-retry.yml",
-        "templates/workflows/pages-deploy.yml"
-      ],
-      "starter": [
-        "templates/CLAUDE-template.md"
-      ]
-    },
-    "git": {
-      "lifecycle": [
-        "directives/git.md",
-        "docs/standards/pr-mechanics.md",
-        "templates/pr-checklist.md",
-        "plugins/directives-toolkit/commands/commit-chk.md"
-      ],
-      "monitors": [
-        "templates/workflows/ci-monitor.yml",
-        "templates/workflows/ci-notify.yml",
-        "templates/workflows/codex-monitor.yml"
-      ],
-      "automation": [
-        "templates/workflows/cron-notify.yml",
-        "templates/scripts/notify-email.js",
-        "templates/scripts/notify-task.js",
-        "templates/scripts/package.json",
-        "docs/guides/cron-email-notifications.md"
-      ],
-      "setup": [
-        "docs/standards/automations.md",
-        "docs/standards/cicd-setup.md"
-      ]
-    },
-    "design": {
-      "method": [
-        "directives/design.md",
-        "plugins/directives-toolkit/commands/design-intake.md",
-        "docs/guides/design-tooling.md"
-      ],
-      "contract": [
-        "templates/styles/"
-      ],
-      "guards": [
-        "templates/scripts/check-contrast.js"
-      ]
-    },
-    "test": {
-      "core": [
-        "directives/test.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md"
-      ],
-      "static-ci": [
-        "templates/workflows/qa.yml",
-        "templates/workflows/qa-response.yml",
-        "templates/scripts/workflow-ref-guard.py",
-        "templates/scripts/check-job-bounds.py",
-        "templates/scripts/check-py-warnings.py",
-        "templates/scripts/gh_yaml.py"
-      ],
-      "ui-kit": [
-        "templates/actions/ui-suite/",
-        "templates/ui-tests/",
-        "docs/standards/kit-defects.md",
-        "docs/standards/viewport-classes-history.md",
-        "templates/scripts/check-ui-viewports.js",
-        "templates/scripts/check-ui-suite-env.py",
-        "templates/scripts/browser-ladder.js",
-        "plugins/directives-toolkit/agents/ui-tester.md"
-      ],
-      "live": [
-        "templates/workflows/qa-live.yml"
-      ],
-      "review": [
-        "docs/standards/code-review-standard.md",
-        "templates/implementation-summary-template.md"
-      ],
-      "verify": [
-        "plugins/directives-toolkit/agents/test-verifier.md",
-        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "templates/project-test-plan-template.md"
-      ],
-      "triage": [
-        "docs/standards/ci-triage.md"
-      ]
-    },
-    "data": {
-      "core": [
-        "directives/data.md",
-        "plugins/directives-toolkit/agents/supabase.md"
-      ]
-    },
-    "meta": {
-      "delivery": [
-        ".claude-plugin/marketplace.json",
-        "plugins/directives-toolkit/.claude-plugin/plugin.json",
-        "scripts/install-toolkit.sh",
-        "templates/claude-settings.json",
-        "templates/claude-hooks/session-start.sh"
-      ],
-      "session": [
-        "plugins/directives-toolkit/commands/env-chk.md",
-        "plugins/directives-toolkit/commands/refresh-repo.md",
-        "plugins/directives-toolkit/commands/new-repo.md",
-        "plugins/directives-toolkit/commands/audit-repo.md",
-        "plugins/directives-toolkit/commands/handoff-session.md",
-        "plugins/directives-toolkit/commands/do-repo.md",
-        "plugins/directives-toolkit/commands/my-list.md",
-        "plugins/directives-toolkit/skills/scope-chk/",
-        "plugins/directives-toolkit/skills/doc-comp/"
-      ],
-      "guards": [
-        "plugins/directives-toolkit/hooks/",
-        "plugins/directives-toolkit/scripts/"
-      ],
-      "runbooks": [
-        "NEW-REPO-USER-INSTRUCTIONS.md",
-        "MAINTAIN-REPO-USER-INSTRUCTIONS.md"
-      ],
-      "evals": [
-        "plugins/directives-toolkit/evals/"
-      ]
-    }
+    "_comment": "The LOGICAL view, orthogonal to categories (which encode propagation): domain \u2192 compartment \u2192 paths. `names` lists the domains; each record under `paths` names its domain and compartment, so a compartment's paths are the records that name it. A compartment is the swappable unit \u2014 replace its file set honoring its interface and nothing outside it moves. Rendered visually at docs/site/logical-map.html; boundaries and swap procedure in MAINTAIN-REPO-USER-INSTRUCTIONS.md \u2192 Domain Boundaries. Validated by check-exports.js: a record naming a domain not listed here fails, and so does a listed domain no record names.",
+    "names": ["global", "git", "design", "test", "data", "meta"]
   },
   "swap": {
-    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced \u2014 this covers directives/ and the exported standards under docs/standards/, since both carry blocking criteria; PERMANENT_DOMAINS names domains that are permanent in their entirety (the whole meta domain): their paths are derived from `domains` by check-exports.js and are NOT re-listed under `permanent`, which holds only the permanent paths outside such a domain (an unknown domain name, or a listed path a permanent domain already covers, fails the check). ORCHESTRATORS are permanent AND define the flow/interfaces their components must fit \u2014 a new component does not exist until its orchestrator sequences it. Everything else is swappable within its compartment's interface.",
-    "permanent_domains": ["meta"],
-    "permanent": [
-      "directives/global.md",
-      "directives/git.md",
-      "directives/test.md",
-      "directives/data.md",
-      "directives/design.md",
-      "docs/standards/code-review-standard.md",
-      "docs/standards/ci-triage.md",
-      "docs/standards/automations.md",
-      "docs/standards/pr-mechanics.md",
-      "docs/standards/session-mechanics.md",
-      "docs/standards/hosting-mechanics.md",
-      "docs/standards/cicd-setup.md",
-      "docs/standards/kit-defects.md"
-    ],
-    "orchestrators": [
-      "plugins/directives-toolkit/commands/sdd-loop.md",
-      "plugins/directives-toolkit/commands/qa-pipeline.md"
-    ]
+    "_comment": "Swap classes over the domain view. PERMANENT paths evolve via PR and are never wholesale-replaced \u2014 this covers directives/ and the exported standards under docs/standards/, since both carry blocking criteria; PERMANENT_DOMAINS names domains that are permanent in their entirety (the whole meta domain): every record in such a domain is permanent by derivation in check-exports.js and does NOT carry `swap: permanent`, which marks only the permanent paths outside such a domain (an unknown domain name, or a `swap: permanent` record that overlaps a path a permanent domain already covers, fails the check). ORCHESTRATORS (`swap: orchestrator`) are permanent AND define the flow/interfaces their components must fit \u2014 a new component does not exist until its orchestrator sequences it. A record with no `swap` is swappable within its compartment's interface.",
+    "permanent_domains": ["meta"]
   },
   "classes": {
-    "_comment": "Durability classes over the exported set \u2014 WHAT KIND of thing each file is, and therefore what happens to it as models improve. Independent of `swap` (which says whether a path may be replaced) and of `domains` (which says what it belongs to). Every path in `domains` must appear in exactly one class; check-exports.js enforces the partition, so this view cannot rot the way an unchecked diagram would. Drawn at docs/site/logical-map.html, which build-logical-map.js generates from this file.",
+    "_comment": "Durability classes over the exported set \u2014 WHAT KIND of thing each file is, and therefore what happens to it as models improve. Independent of `swap` (which says whether a path may be replaced) and of the domain (which says what it belongs to). Every record under `paths` names exactly one class, and check-exports.js refuses a class not defined here, so this view cannot rot the way an unchecked diagram would. Drawn at docs/site/logical-map.html, which build-logical-map.js generates from this file.",
     "standard": {
       "label": "Standards",
-      "blurb": "State blocking criteria a change must satisfy. Model-independent: a smarter model still has to meet them.",
-      "paths": [
-        "directives/global.md",
-        "directives/git.md",
-        "docs/standards/automations.md",
-        "docs/standards/cicd-setup.md",
-        "directives/design.md",
-        "directives/test.md",
-        "docs/standards/code-review-standard.md",
-        "docs/standards/ci-triage.md",
-        "docs/standards/kit-defects.md",
-        "directives/data.md",
-        "plugins/directives-toolkit/evals/"
-      ]
+      "blurb": "State blocking criteria a change must satisfy. Model-independent: a smarter model still has to meet them."
     },
     "orchestrator": {
       "label": "Orchestrators",
-      "blurb": "Define the flow and the interfaces components must fit. A component does not exist until its orchestrator sequences it.",
-      "paths": [
-        "plugins/directives-toolkit/commands/sdd-loop.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md"
-      ]
+      "blurb": "Define the flow and the interfaces components must fit. A component does not exist until its orchestrator sequences it."
     },
     "behavioral": {
       "label": "Behavioral scaffolding",
-      "blurb": "Tells a model HOW to act. The only class that decays as models improve \u2014 audit it whenever the model tier changes.",
-      "paths": [
-        "plugins/directives-toolkit/commands/diagnose.md",
-        "plugins/directives-toolkit/commands/kickoff.md",
-        "plugins/directives-toolkit/commands/learn.md",
-        "plugins/directives-toolkit/skills/update-pages/",
-        "plugins/directives-toolkit/commands/commit-chk.md",
-        "plugins/directives-toolkit/commands/design-intake.md",
-        "plugins/directives-toolkit/agents/ui-tester.md",
-        "plugins/directives-toolkit/agents/test-verifier.md",
-        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "plugins/directives-toolkit/agents/supabase.md",
-        "plugins/directives-toolkit/commands/env-chk.md",
-        "plugins/directives-toolkit/commands/refresh-repo.md",
-        "plugins/directives-toolkit/commands/new-repo.md",
-        "plugins/directives-toolkit/commands/audit-repo.md",
-        "plugins/directives-toolkit/commands/handoff-session.md",
-        "plugins/directives-toolkit/commands/do-repo.md",
-        "plugins/directives-toolkit/commands/my-list.md",
-        "plugins/directives-toolkit/skills/scope-chk/",
-        "plugins/directives-toolkit/skills/doc-comp/"
-      ]
+      "blurb": "Tells a model HOW to act. The only class that decays as models improve \u2014 audit it whenever the model tier changes."
     },
     "mechanical": {
       "label": "Mechanical enforcement",
-      "blurb": "Runs with no model in the loop. Immune to model change; the backstop when scaffolding is trimmed.",
-      "paths": [
-        "templates/actions/secret-scan/",
-        "templates/workflows/pages-monitor.yml",
-        "templates/workflows/pages-retry.yml",
-        "templates/workflows/pages-deploy.yml",
-        "templates/workflows/ci-monitor.yml",
-        "templates/workflows/ci-notify.yml",
-        "templates/workflows/codex-monitor.yml",
-        "templates/workflows/cron-notify.yml",
-        "templates/scripts/notify-email.js",
-        "templates/scripts/notify-task.js",
-        "templates/scripts/package.json",
-        "templates/scripts/check-contrast.js",
-        "templates/workflows/qa.yml",
-        "templates/workflows/qa-response.yml",
-        "templates/actions/ui-suite/",
-        "templates/ui-tests/",
-        "templates/workflows/qa-live.yml",
-        ".claude-plugin/marketplace.json",
-        "plugins/directives-toolkit/.claude-plugin/plugin.json",
-        "scripts/install-toolkit.sh",
-        "templates/claude-settings.json",
-        "plugins/directives-toolkit/hooks/",
-        "plugins/directives-toolkit/scripts/",
-        "templates/claude-hooks/session-start.sh",
-        "templates/scripts/workflow-ref-guard.py",
-        "templates/scripts/check-job-bounds.py",
-        "templates/scripts/check-py-warnings.py",
-        "templates/scripts/gh_yaml.py",
-        "templates/scripts/check-ui-viewports.js",
-        "templates/scripts/check-ui-suite-env.py",
-        "templates/scripts/browser-ladder.js"
-      ]
+      "blurb": "Runs with no model in the loop. Immune to model change; the backstop when scaffolding is trimmed."
     },
     "artifact": {
       "label": "Artifacts",
-      "blurb": "Fill-in templates and scaffolds. Consumed by a project, never executed here.",
-      "paths": [
-        "templates/CLAUDE-template.md",
-        "templates/pr-checklist.md",
-        "templates/styles/",
-        "templates/implementation-summary-template.md",
-        "templates/project-test-plan-template.md"
-      ]
+      "blurb": "Fill-in templates and scaffolds. Consumed by a project, never executed here."
     },
     "reference": {
       "label": "Reference",
-      "blurb": "Read on demand. Explains and illustrates; binds nothing on its own.",
-      "paths": [
-        "docs/guides/ai-first-principles.md",
-        "docs/guides/dev-pipeline.md",
-        "docs/guides/usage-guide.md",
-        "docs/guides/cron-email-notifications.md",
-        "docs/guides/design-tooling.md",
-        "NEW-REPO-USER-INSTRUCTIONS.md",
-        "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
-        "docs/standards/viewport-classes-history.md",
-        "docs/standards/session-mechanics.md",
-        "docs/standards/hosting-mechanics.md",
-        "docs/standards/pr-mechanics.md"
-      ]
+      "blurb": "Read on demand. Explains and illustrates; binds nothing on its own."
     }
   },
+  "paths": {
+    "_comment": "One record per exported path: its domain and compartment (the logical view), its durability class, and, where it has one, its swap class. Keyed by path; a key ending in '/' is a directory and covers every file under it. Validated by check-exports.js: every path must exist, every record must name a domain listed under `domains`, a compartment, and a class defined under `classes`, and every shipped file under an exported root must fall inside a record (the reverse pass).",
+    "directives/global.md": { "domain": "global", "compartment": "core", "class": "standard", "swap": "permanent" },
+    "docs/standards/session-mechanics.md": { "domain": "global", "compartment": "core", "class": "reference", "swap": "permanent" },
+    "plugins/directives-toolkit/commands/sdd-loop.md": { "domain": "global", "compartment": "method", "class": "orchestrator", "swap": "orchestrator" },
+    "plugins/directives-toolkit/commands/diagnose.md": { "domain": "global", "compartment": "method", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/kickoff.md": { "domain": "global", "compartment": "method", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/learn.md": { "domain": "global", "compartment": "method", "class": "behavioral" },
+    "docs/guides/ai-first-principles.md": { "domain": "global", "compartment": "method", "class": "reference" },
+    "docs/guides/dev-pipeline.md": { "domain": "global", "compartment": "method", "class": "reference" },
+    "docs/guides/usage-guide.md": { "domain": "global", "compartment": "method", "class": "reference" },
+    "templates/actions/secret-scan/": { "domain": "global", "compartment": "security", "class": "mechanical" },
+    "docs/standards/hosting-mechanics.md": { "domain": "global", "compartment": "deploy", "class": "reference", "swap": "permanent" },
+    "plugins/directives-toolkit/skills/update-pages/": { "domain": "global", "compartment": "deploy", "class": "behavioral" },
+    "templates/workflows/pages-monitor.yml": { "domain": "global", "compartment": "deploy", "class": "mechanical" },
+    "templates/workflows/pages-retry.yml": { "domain": "global", "compartment": "deploy", "class": "mechanical" },
+    "templates/workflows/pages-deploy.yml": { "domain": "global", "compartment": "deploy", "class": "mechanical" },
+    "templates/CLAUDE-template.md": { "domain": "global", "compartment": "starter", "class": "artifact" },
+    "directives/git.md": { "domain": "git", "compartment": "lifecycle", "class": "standard", "swap": "permanent" },
+    "docs/standards/pr-mechanics.md": { "domain": "git", "compartment": "lifecycle", "class": "reference", "swap": "permanent" },
+    "templates/pr-checklist.md": { "domain": "git", "compartment": "lifecycle", "class": "artifact" },
+    "plugins/directives-toolkit/commands/commit-chk.md": { "domain": "git", "compartment": "lifecycle", "class": "behavioral" },
+    "templates/workflows/ci-monitor.yml": { "domain": "git", "compartment": "monitors", "class": "mechanical" },
+    "templates/workflows/ci-notify.yml": { "domain": "git", "compartment": "monitors", "class": "mechanical" },
+    "templates/workflows/codex-monitor.yml": { "domain": "git", "compartment": "monitors", "class": "mechanical" },
+    "templates/workflows/cron-notify.yml": { "domain": "git", "compartment": "automation", "class": "mechanical" },
+    "templates/scripts/notify-email.js": { "domain": "git", "compartment": "automation", "class": "mechanical" },
+    "templates/scripts/notify-task.js": { "domain": "git", "compartment": "automation", "class": "mechanical" },
+    "templates/scripts/package.json": { "domain": "git", "compartment": "automation", "class": "mechanical" },
+    "docs/guides/cron-email-notifications.md": { "domain": "git", "compartment": "automation", "class": "reference" },
+    "docs/standards/automations.md": { "domain": "git", "compartment": "setup", "class": "standard", "swap": "permanent" },
+    "docs/standards/cicd-setup.md": { "domain": "git", "compartment": "setup", "class": "standard", "swap": "permanent" },
+    "directives/design.md": { "domain": "design", "compartment": "method", "class": "standard", "swap": "permanent" },
+    "plugins/directives-toolkit/commands/design-intake.md": { "domain": "design", "compartment": "method", "class": "behavioral" },
+    "docs/guides/design-tooling.md": { "domain": "design", "compartment": "method", "class": "reference" },
+    "templates/styles/": { "domain": "design", "compartment": "contract", "class": "artifact" },
+    "templates/scripts/check-contrast.js": { "domain": "design", "compartment": "guards", "class": "mechanical" },
+    "directives/test.md": { "domain": "test", "compartment": "core", "class": "standard", "swap": "permanent" },
+    "plugins/directives-toolkit/commands/qa-pipeline.md": { "domain": "test", "compartment": "core", "class": "orchestrator", "swap": "orchestrator" },
+    "templates/workflows/qa.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    "templates/workflows/qa-response.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    "templates/scripts/workflow-ref-guard.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    "templates/scripts/check-job-bounds.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    "templates/scripts/check-py-warnings.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    "templates/scripts/gh_yaml.py": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    "templates/actions/ui-suite/": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
+    "templates/ui-tests/": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
+    "docs/standards/kit-defects.md": { "domain": "test", "compartment": "ui-kit", "class": "standard", "swap": "permanent" },
+    "docs/standards/viewport-classes-history.md": { "domain": "test", "compartment": "ui-kit", "class": "reference" },
+    "templates/scripts/check-ui-viewports.js": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
+    "templates/scripts/check-ui-suite-env.py": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
+    "templates/scripts/browser-ladder.js": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
+    "plugins/directives-toolkit/agents/ui-tester.md": { "domain": "test", "compartment": "ui-kit", "class": "behavioral" },
+    "templates/workflows/qa-live.yml": { "domain": "test", "compartment": "live", "class": "mechanical" },
+    "docs/standards/code-review-standard.md": { "domain": "test", "compartment": "review", "class": "standard", "swap": "permanent" },
+    "templates/implementation-summary-template.md": { "domain": "test", "compartment": "review", "class": "artifact" },
+    "plugins/directives-toolkit/agents/test-verifier.md": { "domain": "test", "compartment": "verify", "class": "behavioral" },
+    "plugins/directives-toolkit/agents/pr-readiness-reviewer.md": { "domain": "test", "compartment": "verify", "class": "behavioral" },
+    "templates/project-test-plan-template.md": { "domain": "test", "compartment": "verify", "class": "artifact" },
+    "docs/standards/ci-triage.md": { "domain": "test", "compartment": "triage", "class": "standard", "swap": "permanent" },
+    "directives/data.md": { "domain": "data", "compartment": "core", "class": "standard", "swap": "permanent" },
+    "plugins/directives-toolkit/agents/supabase.md": { "domain": "data", "compartment": "core", "class": "behavioral" },
+    ".claude-plugin/marketplace.json": { "domain": "meta", "compartment": "delivery", "class": "mechanical" },
+    "plugins/directives-toolkit/.claude-plugin/plugin.json": { "domain": "meta", "compartment": "delivery", "class": "mechanical" },
+    "scripts/install-toolkit.sh": { "domain": "meta", "compartment": "delivery", "class": "mechanical" },
+    "templates/claude-settings.json": { "domain": "meta", "compartment": "delivery", "class": "mechanical" },
+    "templates/claude-hooks/session-start.sh": { "domain": "meta", "compartment": "delivery", "class": "mechanical" },
+    "plugins/directives-toolkit/commands/env-chk.md": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/refresh-repo.md": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/new-repo.md": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/audit-repo.md": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/handoff-session.md": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/do-repo.md": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/commands/my-list.md": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/skills/scope-chk/": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/skills/doc-comp/": { "domain": "meta", "compartment": "session", "class": "behavioral" },
+    "plugins/directives-toolkit/hooks/": { "domain": "meta", "compartment": "guards", "class": "mechanical" },
+    "plugins/directives-toolkit/scripts/": { "domain": "meta", "compartment": "guards", "class": "mechanical" },
+    "NEW-REPO-USER-INSTRUCTIONS.md": { "domain": "meta", "compartment": "runbooks", "class": "reference" },
+    "MAINTAIN-REPO-USER-INSTRUCTIONS.md": { "domain": "meta", "compartment": "runbooks", "class": "reference" },
+    "plugins/directives-toolkit/evals/": { "domain": "meta", "compartment": "evals", "class": "standard" }
+  },
   "externals": {
-    "_comment": "Vendor-owned capabilities this system depends on but does not contain \u2014 we hold only the sockets. To swap a vendor: rewire the listed socket files, never fork the vendor's code. serves = domain.compartment from the domains view. sockets = the files here that name/enable/configure it (must exist; validated).",
+    "_comment": "Vendor-owned capabilities this system depends on but does not contain \u2014 we hold only the sockets. To swap a vendor: rewire the listed socket files, never fork the vendor's code. serves = a domain.compartment some record under `paths` names. sockets = the files here that name/enable/configure it (must exist; validated).",
     "pr-review-toolkit": {
       "vendor": "Anthropic",
       "serves": "test.review",

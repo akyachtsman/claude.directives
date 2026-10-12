@@ -85,10 +85,12 @@ jobs:
       - name: Check export boundary (EXPORTS.json)
         run: node .github/scripts/check-exports.js
 
-      # swap.permanent_domains is a derivation, and a derivation that expands to
-      # nothing is silent: the domain's paths turn swappable and the check above
-      # stays green. These cases pin the expansion and its refusals (audit M-46).
-      - name: Check the export guard expands permanent domains correctly
+      # A per-path record that names nothing real reads as fine, and
+      # swap.permanent_domains is a derivation, which is silent when it expands
+      # to nothing: the domain's paths turn swappable and the check above stays
+      # green. These cases pin the record checks (audit B6) and the expansion
+      # with its refusals (audit M-46).
+      - name: Check the export guard reads path records and expands permanent domains correctly
         run: node .github/scripts/check-exports-cases.js
 
       - name: Check learnings.jsonl is well-formed

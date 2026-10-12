@@ -325,21 +325,27 @@ The folder layout is **physical** (organized by delivery mode, because that is
 what the raw-URL / plugin / template machinery enforces). The **logical** view
 lives in `EXPORTS.json` and is drawn interactively at
 `docs/site/logical-map.html`, the repo's single map (the physical-folders view
-was retired 2026-07-21). Three layers, all CI-validated so they can't rot:
+was retired 2026-07-21). Every exported path has **one record** under
+`paths` — `{ "domain", "compartment", "class", "swap"? }` — so the views below
+are fields of that record, never separate lists that could disagree. All
+CI-validated by `check-exports.js` so they can't rot:
 
-- **`domains`** — domain → compartment → paths. The **compartment** is the
-  swappable unit (e.g. `test.ui-kit`, `git.monitors`): replace its file set
-  honoring its interface and nothing outside it moves. The compartment's
-  paths ARE the shopping list for a swap, across all delivery modes at once.
-- **`swap`** — the classes. **Permanent** paths (the five directive contracts;
+- **Domain and compartment** — `domains.names` lists the domains; a record
+  naming any other fails. The **compartment** is the swappable unit (e.g.
+  `test.ui-kit`, `git.monitors`): replace its file set honoring its interface
+  and nothing outside it moves. The records naming a compartment ARE the
+  shopping list for a swap, across all delivery modes at once.
+- **Durability class** — what kind of thing the file is (`classes` defines
+  the six, each with a label and blurb); a record naming an undefined class fails.
+- **Swap class** — **Permanent** paths (the five directive contracts;
   the whole `meta` domain) evolve via PR, never wholesale replacement. A domain
   permanent in its entirety is named once in `swap.permanent_domains`, and
-  `check-exports.js` expands it from `domains`: never re-list its paths under
-  `swap.permanent` (the check fails on a re-listed or unknown one).
-  **Orchestrators** (`sdd-loop` for development, `/qa-pipeline` for testing)
+  `check-exports.js` expands it over the records: never mark one of its records
+  `"swap": "permanent"` (the check fails on such a record, and on an unknown domain name).
+  **Orchestrators** (`"swap": "orchestrator"`: `sdd-loop` for development, `/qa-pipeline` for testing)
   are permanent AND define the interfaces components must fit — **a new
-  component does not exist until its orchestrator sequences it**. Everything
-  else is swappable.
+  component does not exist until its orchestrator sequences it**. A record
+  with no `swap` is swappable.
 - **`externals`** — vendor-owned capabilities we hold only **sockets** for
   (pr-review-toolkit, security-guidance, Playwright, Codex, Stitch,
   Supabase MCP, …). Each entry records the vendor, the compartment it serves,

@@ -48,7 +48,7 @@ jobs:
     # that drive Playwright: re-check the headroom if that grows past ~7 minutes.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Self-application: run the same secret scan every downstream project runs
       # (global.md → Security), dogfooding the composite straight from its
@@ -393,7 +393,7 @@ jobs:
     timeout-minutes: 10
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check external URLs resolve
         run: node .github/scripts/check-links.js --external
@@ -422,11 +422,11 @@ jobs:
     # anything; it fails on a schedule.
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
 
       # Keyed on this workflow file, which only works because the Playwright
       # version below is PINNED. Unpinned, `npm install playwright` floats to
@@ -438,7 +438,7 @@ jobs:
       # restore-keys means an unrelated edit still reuses the previous browsers.
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('.github/workflows/qa.yml') }}
@@ -463,7 +463,7 @@ jobs:
       # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
       # here on every run (locally it's only needed when a map changed).
       - name: Validate map HTML
-        run: npx --yes html-validate@10.17.0 docs/site/logical-map.html   # pinned: a new release could turn this red with no change here. 10.x: 11.x needs Node >=22.22 and this job runs Node 20
+        run: npx --yes html-validate@10.17.0 docs/site/logical-map.html   # pinned: a new release could turn this red with no change here. 10.x was chosen while this job ran Node 20 (11.x needs >=22.22); the job is on 22 now, so a move to 11.x is its own change
 
       - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js

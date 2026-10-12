@@ -1699,7 +1699,7 @@ console.log(`config:    ${configPath}`);
         '  Playwright\'s own runner WOULD load it, so this is a refusal on a config the',
         '  run accepts. Either raise this step to Node >= 22.18 (type stripping is on by',
         '  default there), or keep the config\'s imports to JavaScript.',
-        '  The ui-suite composite pins Node 20; see its header note.']
+        '  The ui-suite composite pins Node 22, where this loads; see its header note.']
       : [];
     die(5, [
       'CANNOT CHECK: importing the config threw.',

@@ -112,7 +112,7 @@ VALIDATE_ENV = {"REPORT_PATH": "${{ inputs.report-path }}",
 # the one the validator exists for (#347 rounds 9 and 28). Spelled out here
 # rather than imported, like every other pin in this file.
 UPLOAD = "Upload test results"
-UPLOAD_USES = "actions/upload-artifact@v4"
+UPLOAD_USES = "actions/upload-artifact@v7"
 UPLOAD_PATH = ".agent-reports/screenshots/\n${{ steps.report-path.outputs.path }}"
 # The working directory is pinned to the action input as of #347 round 20, so
 # the default fixture has to use the real expression rather than a stand-in.
@@ -720,14 +720,14 @@ CASES = [
      "does not block on failure"),
     ("the upload switched to another action — refused",
      action(dict(BOTH), dict(BOTH), upload_uses="actions/upload-artifact@v3"), 1,
-     "not 'actions/upload-artifact@v4'"),
+     "not 'actions/upload-artifact@v7'"),
     ("the upload removed entirely — refused",
      action(dict(BOTH), dict(BOTH), upload=False), 1,
      '0 steps are named "Upload test results"'),
     ("a duplicate upload step — refused",
      action(dict(BOTH), dict(BOTH)).replace(
          "    - name: Upload test results\n",
-         "    - name: Upload test results\n      uses: actions/upload-artifact@v4\n"
+         "    - name: Upload test results\n      uses: actions/upload-artifact@v7\n"
          "      with:\n        path: |\n          /etc/passwd\n"
          "    - name: Upload test results\n", 1),
      1, '2 steps are named "Upload test results"'),

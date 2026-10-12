@@ -35,15 +35,16 @@
 #   setup/install/server/upload always stay blocking, so a broken install can
 #   never pass green.
 # - The viewport gate below runs on THIS composite's Node, which `setup-node` pins
-#   to 20. That Node cannot import a TypeScript module ANYWHERE IN THE CONFIG'S
-#   GRAPH — a `playwright.config.js` that imports a `.ts` helper fails exactly as
-#   a `playwright.config.ts` does, so "keep a .js config" is not the escape hatch
-#   this note used to claim (Codex, #333 round 11). A project in that position must
-#   either raise the pin to 22 (type stripping is on by default from 22.18) or keep
-#   the config's ENTIRE import graph in JavaScript. The gate names the condition
-#   when it hits ERR_UNKNOWN_FILE_EXTENSION rather than passing quiet — and it is a
-#   refusal on a config Playwright's own runner would have loaded, so it counts
-#   against the muting risk, not for it.
+#   to 22 — the same major the CI build (qa.yml, pages-deploy.yml) uses, so the
+#   gate imports the config on the Node that built the app. It was 20 until audit
+#   2026-10-11 (I-20): Node 20 reached end-of-life on 2026-04-30. `'22'` resolves
+#   to the newest 22.x, where type stripping is on by default (from 22.18), so a
+#   `.ts` module ANYWHERE IN THE CONFIG'S GRAPH loads. A local run on an older
+#   Node still cannot import one — a `playwright.config.js` that imports a `.ts`
+#   helper fails exactly as a `playwright.config.ts` does (Codex, #333 round 11).
+#   The gate names the condition when it hits ERR_UNKNOWN_FILE_EXTENSION rather
+#   than passing quiet — and it is a refusal on a config Playwright's own runner
+#   would have loaded, so it counts against the muting risk, not for it.
 #
 # ═══ CALLER BOUND — the sizing record for the callers' `timeout-minutes: 120` ═══
 # The ONLY copy. Until 2026-10-07 this block was repeated above `timeout-minutes`
@@ -275,9 +276,9 @@ runs:
   using: composite
   steps:
     - name: Setup Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
         # Requires a committed package-lock.json at this path — generate it
         # once (`npm install` in tests-dir) and COMMIT it.
@@ -376,7 +377,7 @@ runs:
     # without re-measuring.
     - name: Cache Playwright browsers
       id: pw-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.cache/ms-playwright
         key: pw-${{ runner.os }}-${{ hashFiles(format('{0}/package-lock.json', inputs.tests-dir)) }}
@@ -694,7 +695,7 @@ runs:
       # anyway. Both halves are needed: run whatever else failed, but not on a
       # path that was refused.
       if: ${{ always() && steps.report-path.outcome == 'success' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}
         # FROM THE VALIDATED OUTPUT, never the raw input. `report-path` lets a

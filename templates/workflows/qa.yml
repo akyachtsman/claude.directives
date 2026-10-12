@@ -75,7 +75,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ── Secret scan (composite — single source of truth for the pattern) ────
       - uses: ./.github/actions/secret-scan
@@ -146,7 +146,7 @@ jobs:
 
     steps:
       - name: Checkout (full history for base diff)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -267,16 +267,20 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # CI-build opt-in only: build exactly as pages-deploy.yml does and serve
       # its output, so the suite tests what is deployed rather than the
       # unbuilt tree. With BUILD_CMD empty these two steps are skipped.
       - name: Setup Node (build)
         if: env.BUILD_CMD != ''
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
+          # setup-node v5+ turns npm caching ON by itself when the root
+          # package.json names npm in `packageManager` (or devEngines), and then
+          # needs a lockfile. This step never cached under v4; keep it that way.
+          package-manager-cache: false
 
       - name: Build
         if: env.BUILD_CMD != ''

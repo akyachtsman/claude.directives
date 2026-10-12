@@ -370,7 +370,7 @@ PARITY_STEPS = tuple(e[0] for e in SEQUENCE if e[5] is PARITY)
 # path list, and `include-hidden-files`, which round 16 added because a report
 # under a dot directory is silently omitted without it.
 UPLOAD_STEP = "Upload test results"
-UPLOAD_USES = "actions/upload-artifact@v4"
+UPLOAD_USES = "actions/upload-artifact@v7"
 UPLOAD_IF = IF_POST
 UPLOAD_PATH = (".agent-reports/screenshots/",
                "${{ steps.report-path.outputs.path }}")

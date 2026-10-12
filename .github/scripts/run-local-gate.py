@@ -117,7 +117,9 @@ STEP_KEYS = {"name", "id", "run", "uses", "env", "shell", "working-directory", "
 COMPOSITE_STEP_KEYS = {"name", "id", "run", "env", "shell", "working-directory"}
 # The checkout refs skipped as "the working tree IS the checkout". A ref
 # outside this set is CANNOT RUN: add one here once it is known to exist.
-CHECKOUT_REFS = {"v4", "v5"}
+# v6 and v7 joined when qa.yml moved to checkout@v7 (audit 2026-10-11, I-20):
+# both tags verified on github.com/actions/checkout with git ls-remote.
+CHECKOUT_REFS = {"v4", "v5", "v6", "v7"}
 
 
 def refuse_unknown(keys, allowed, where):

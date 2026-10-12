@@ -47,6 +47,10 @@ swapped in alone:
        `${...}`, and the spaced-delimiter complement -- with and without jq.
     (The unbalanced-delimiter case passes against it too: it pins the
     keep-the-text direction for the new delimiter reader, not a bug fixed.)
+  GATE_LIB_BIN = the third draft (cb2bfc2), whose ${...} scanner counted
+  braces inside quotes
+    -> the double- and single-quoted `}` cases and the kept substitution
+       after a `#` -- with and without jq.
   PUSH_GATE_BIN = the old push-gate.sh
     -> `main>/dev/null`, `git -c x=y push`, `git -C dir push` (M-13).
   GATE_LIB_BIN = this change's own first draft (heredocs detected before the
@@ -165,6 +169,15 @@ PUSH_CASES = [
      "echo ${x:- #y}; git push origin main", BLOCK),
     ("an unbalanced heredoc delimiter quote drops nothing",
      "cat <<'EOF\nEOF\ngit push origin main\nEOF", BLOCK),
+    # Third review round: braces inside quotes within ${...} were counted, so
+    # the expansion closed early and the parser lost sync.
+    ("a quoted `}` inside ${...} does not close it",
+     'echo ${x:-"}"}; git push origin main; echo "done now"', BLOCK),
+    ("a single-quoted `}` inside ${...} does not close it",
+     "echo ${x:-'}'}; git push origin main; echo 'done now'", BLOCK),
+    # Fail toward checking: text that could expand is never dropped.
+    ("a substitution after a # is kept, not dropped as a comment",
+     "true # $(git push origin main)", BLOCK),
     # ...and the complement.
     ("a spaced quoted delimiter's body is still dropped, then a branch push",
      "cat <<'E O F'\ngit push origin main\nE O F\ngit push -u origin claude/x", ALLOW),

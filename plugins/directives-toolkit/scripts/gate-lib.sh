@@ -100,16 +100,24 @@ gate_served() {
 #  - a heredoc DELIMITER is read as a shell word: a quoted part runs to its
 #    matching quote, spaces included (`<<'E O F'`); an unbalanced quote
 #    registers no heredoc. A `${...}` parameter expansion is copied whole, so a
-#    `#` inside it is never a comment (second security-review round).
+#    `#` inside it is never a comment; its braces are counted outside quoted
+#    spans and escapes (second and third security-review rounds).
+#  - FAIL TOWARD CHECKING: text that could expand -- a `$(`, `${` or backtick
+#    -- is never dropped, whether the parser took it for a comment, a
+#    multi-word quoted span or a quoted-heredoc body. A false block is
+#    recoverable; a false allow is not.
 #  - outside quotes, a backslash before a word character is removed as bash
 #    removes it (`\main` is `main`). `$'...'` (ANSI-C quoting) is its own quote
 #    state: a backslash escapes the next character, so `\'` does not end it, and
 #    the span is then treated as a single-quoted one.
 gate_strip_quotes() {
   printf '%s' "$1" | awk '
+  # Text that could expand -- `$(`, `${` or a backtick -- is never dropped,
+  # wherever the parser would otherwise drop it: when unsure, keep it.
+  function live(t) { return t ~ /[$][({]|`/ }
   function close_span(   q, b) {
     q = Q[sp]; b = BUF[sp]
-    if (b !~ /[[:space:]]/ || (q == "\"" && b ~ /[$`]/)) OUT[sp] = OUT[sp] b
+    if (b !~ /[[:space:]]/ || (q == "\"" && b ~ /[$`]/) || live(b)) OUT[sp] = OUT[sp] b
     Q[sp] = ""; BUF[sp] = ""; WB[sp] = 0
   }
   # Consume the pending heredoc bodies, starting at index i (the line after the
@@ -128,7 +136,7 @@ gate_strip_quotes() {
         body = body ln "\n"
       }
       if (!found) { nh = 0; return start }
-      if (!HQ[k]) { gsub(/[\047"]/, "", body); KEEP[k] = body } else KEEP[k] = ""
+      if (!HQ[k] || live(body)) { gsub(/[\047"]/, "", body); KEEP[k] = body } else KEEP[k] = ""
       i = j
     }
     for (k = 1; k <= nh; k++) OUT[sp] = OUT[sp] KEEP[k]
@@ -146,7 +154,10 @@ gate_strip_quotes() {
         if (c == "\\" && i < n) {
           OUT[sp] = OUT[sp] (c2 ~ /[A-Za-z0-9_]/ ? c2 : c c2); WB[sp] = 0; i += 2; continue
         }
-        if (c == "#" && WB[sp]) { while (i <= n && substr(s, i, 1) != "\n") i++; continue }
+        if (c == "#" && WB[sp]) {
+          e = index(substr(s, i), "\n"); seg = e ? substr(s, i, e - 1) : substr(s, i)
+          if (!live(seg)) { i += length(seg); continue }
+        }
         if (c == "\n") {
           OUT[sp] = OUT[sp] c; WB[sp] = 1; i++
           if (nh) i = heredocs(i)
@@ -158,9 +169,19 @@ gate_strip_quotes() {
         # `${#arr}`) is never a comment. Unbalanced, it runs to the end and
         # every character is kept.
         if (c == "$" && c2 == "{") {
+          # Braces are counted outside quoted spans and escapes; unbalanced,
+          # it runs to the end of the input and every character is kept.
           st = i; i += 2; d = 1
-          while (i <= n && d > 0) { x = substr(s, i, 1); if (x == "{") d++; else if (x == "}") d--; i++ }
-          OUT[sp] = OUT[sp] substr(s, st, i - st); WB[sp] = 0; continue
+          while (i <= n && d > 0) {
+            x = substr(s, i, 1)
+            if (x == "\\") i++
+            else if (x == "\047") { e = index(substr(s, i + 1), "\047"); i = e ? i + e : n }
+            else if (x == "\"") { i++; while (i <= n && substr(s, i, 1) != "\"") i += (substr(s, i, 1) == "\\" ? 2 : 1) }
+            else if (x == "{") d++
+            else if (x == "}") d--
+            i++
+          }
+          OUT[sp] = OUT[sp] substr(s, st, (i > n ? n + 1 : i) - st); WB[sp] = 0; continue
         }
         if (substr(s, i, 3) == "$((" || (c == "(" && c2 == "(" && WB[sp])) {
           st = i; i += (c == "$" ? 3 : 2); d = 2

@@ -36,7 +36,7 @@ runs:
         # are single-quoted so the SHELL never expands them; git's `*` crosses `/`.
         rc=0
         hits=$(git grep --untracked -lE \
-          'pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]' \
+          'pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]|sb_secret_[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|NlcnZpY2Vfcm9sZ|zZXJ2aWNlX3JvbG)|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}' \
           -- '*.js' '*.ts' '*.tsx' '*.mjs' '*.html' '*.css' '*.json' '*.md' '*.sh' '*.py' '*.toml' '*.env' '.env.*' '*/.env.*' '*.yml' '*.yaml' ':!*node_modules/*') || rc=$?
         # 0 = a match (a secret), 1 = clean, >=2 = git grep itself failed (128:
         # not a git repository, a bad pathspec). Folding

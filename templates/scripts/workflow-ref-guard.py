@@ -111,8 +111,8 @@ ALLOWED_EXTERNAL = {
 # Per-project intent — a template cannot know these names, only the RULE. Populate with
 # the deploy workflow's own name for each file that must keep watching it.
 # Loaded from `.github/workflow-ref-required.json`, NOT hard-coded here — the script
-# is byte-identical across every repo that installs it (CI diffs the shipped copy
-# against the live one), so a repo could never populate this while it lived in the
+# is the same file in every repo that installs it (claude.directives runs the
+# shipped copy itself), so a repo could never populate this while it lived in the
 # file. That left rule 2 permanently inert in the only place it runs, which is a
 # rule that exists on paper and nowhere else.
 #

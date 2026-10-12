@@ -50,8 +50,8 @@ from cases_lib import Cases, bin_path, run
 # so a RELATIVE mutant path stopped resolving there and every mutant failed
 # those cases for "can't open file" -- perfect discrimination, nothing tested
 # (audit, 2026-10-06; the trap check-links-cases.js documents).
-GUARD = bin_path("CHECK_UI_SUITE_ENV_BIN", Path(__file__).resolve().parent / "check-ui-suite-env.py")
 REPO_ROOT = Path(__file__).resolve().parents[2]
+GUARD = bin_path("CHECK_UI_SUITE_ENV_BIN", REPO_ROOT / "templates" / "scripts" / "check-ui-suite-env.py")
 LIVE = REPO_ROOT / "templates/actions/ui-suite/action.yml"
 
 # The stale-report clear joined SEQUENCE in #347 round 21, so every fixture needs

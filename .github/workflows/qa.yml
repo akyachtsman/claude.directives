@@ -98,10 +98,10 @@ jobs:
       # which point the guard stops running and stops checking. Script header
       # carries the full reasoning.
       - name: Check the Python guards compile without warnings
-        run: python3 .github/scripts/check-py-warnings.py
+        run: python3 templates/scripts/check-py-warnings.py
 
       - name: Workflow cross-reference guard
-        run: python3 .github/scripts/workflow-ref-guard.py
+        run: python3 templates/scripts/workflow-ref-guard.py
 
       # The guard's value is being trusted when it is QUIET, so a parser regression
       # in it is silent by construction: zero references found, success printed, the
@@ -119,7 +119,7 @@ jobs:
         # live workflows were fine. It replaced four attempts to DETECT which
         # repo was running, each forged by a legitimate downstream layout. Do
         # not remove it — a downstream copy simply omits it.
-        run: python3 .github/scripts/check-job-bounds.py --include-templates
+        run: python3 templates/scripts/check-job-bounds.py --include-templates
 
       # Same doctrine as the viewport gate's own guard below: this check is
       # trusted when it is QUIET, and #334 is what that costs — an expression
@@ -235,7 +235,7 @@ jobs:
       # The guard ships to projects (PROP6), so its defaults are a project's paths;
       # this repo points it at the templates it ships.
       - name: Check the ui-suite composite gives both steps the same environment
-        run: python3 .github/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml --kit-dir templates/ui-tests
+        run: python3 templates/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml --kit-dir templates/ui-tests
 
       # Same doctrine as the viewport gate's own guard above. This one was
       # hand-verified for three rounds and a previously-working branch broke

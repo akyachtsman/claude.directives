@@ -33,12 +33,12 @@ EXPORTED (PROP6, claude.prop 2026-10-05): a project carrying the ui-suite
 composite carries the same coupling, and a project edits its copy -- a variable
 added to its run step and not its check steps is exactly the #333 divergence,
 one repo over. Ships as templates/scripts/check-ui-suite-env.py; claude.directives
-runs a byte-identical copy from .github/scripts/ against its templates.
+runs that file itself against its templates.
 
 Run (a project, from its root -- the defaults are a project's paths):
     python3 .github/scripts/check-ui-suite-env.py
 Run (claude.directives, against the shipped templates):
-    python3 .github/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml \\
+    python3 templates/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml \\
         --kit-dir templates/ui-tests
 
 Options:

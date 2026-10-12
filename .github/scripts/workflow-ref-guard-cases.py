@@ -30,7 +30,7 @@ from cases_lib import Cases, bin_path, run, write_tree
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Overridable so a MUTANT can be pointed at, like the other guards' suites;
 # resolved, so a relative path survives the temp-tree cwd.
-GUARD = bin_path("WORKFLOW_REF_GUARD_BIN", REPO_ROOT / ".github" / "scripts" / "workflow-ref-guard.py")
+GUARD = bin_path("WORKFLOW_REF_GUARD_BIN", REPO_ROOT / "templates" / "scripts" / "workflow-ref-guard.py")
 NBSP = "\u00A0"
 
 JOBS = 'jobs: {a: {runs-on: ubuntu-latest, steps: [{run: "true"}]}}\n'

@@ -48,8 +48,8 @@ THREE RULES, because presence alone proves nothing:
      broken template job DECLARED a bound; the value was the fault.
 
 ────────────────────────────────────────────────────────────────────────────
-THIS FILE IS EXPORTED (templates/scripts/check-job-bounds.py, byte-paired with
-it) and runs in downstream repos that this repo has never seen. That inverts the
+THIS FILE IS EXPORTED (templates/scripts/check-job-bounds.py, which this repo's
+qa.yml runs directly) and runs in downstream repos that this repo has never seen. That inverts the
 usual risk, and the inversion is the single most important thing to understand
 before editing:
 

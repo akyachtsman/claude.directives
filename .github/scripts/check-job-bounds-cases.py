@@ -26,6 +26,10 @@ input (the lesson workflow-ref-guard-cases.py records from #237).
 
 NOT exported: .github/ is outside every EXPORTS.json category path.
 
+Re-prove discrimination with a mutant:
+
+    CHECK_JOB_BOUNDS_BIN=/tmp/mutant.py python3 .github/scripts/check-job-bounds-cases.py
+
 Run: python3 .github/scripts/check-job-bounds-cases.py
 """
 
@@ -41,10 +45,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from cases_lib import Cases, run, write_tree
+from cases_lib import Cases, bin_path, run, write_tree
 
-GUARD = Path(__file__).resolve().parent / "check-job-bounds.py"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# The shipped copy, run where it lives (no .github/scripts twin). Overridable
+# so a MUTANT can be pointed at, like every other suite here.
+GUARD = bin_path("CHECK_JOB_BOUNDS_BIN", REPO_ROOT / "templates" / "scripts" / "check-job-bounds.py")
 
 UI_SUITE = "./.github/actions/ui-suite"
 

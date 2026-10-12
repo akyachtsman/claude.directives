@@ -26,14 +26,15 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 | `check-run-quoting.py`, `check-run-quoting-cases.py` | each script's header |
 | `check-browser-ladder-cases.js` | that script's header |
 | `check-links.js`, `check-links-cases.js` | each script's header |
-| `check-py-warnings.py` and `check-ui-suite-env.py` (byte-identical pairs), the ui-tests `npm install` step, the gate as a whole | this file |
+| `check-py-warnings.py` and `check-ui-suite-env.py` (shipped scripts), the ui-tests `npm install` step, the gate as a whole | this file |
 | the `Repo Map UI` suite | `docs/internal/repo-map-ui.md` |
 | `/refresh-repo`'s rules (the command `check-refresh-derivation.py` reads its pattern out of) | this file, *Refresh-repo history* |
 
 ## `check-py-warnings.py`
 
-It has a byte-identical twin in `templates/scripts/`, so its history lives here
-rather than in either header.
+It ships to projects from `templates/scripts/` and runs here from there (its
+`.github/scripts/` twin was dropped on 2026-10-11), so its history lives here
+rather than in its header, where every downstream copy would carry it.
 
 From the Local gate comment: tracked .py compile clean: a `\` in a plain
 docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the
@@ -45,9 +46,9 @@ at compile time is a guard that stops running on a future interpreter).
 
 ## `check-ui-suite-env.py`
 
-It ships to projects from `templates/scripts/` and has a byte-identical twin in
-`.github/scripts/`, so its history lives here rather than in either header,
-where every downstream copy would carry it. Moved from the script's header on
+It ships to projects from `templates/scripts/` and runs here from there (its
+`.github/scripts/` twin was dropped on 2026-10-11), so its history lives here
+rather than in its header, where every downstream copy would carry it. Moved from the script's header on
 2026-10-08, where it had landed verbatim from `CLAUDE.md` on 2026-09-23.
 
 From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-ui-suite-env.py`:

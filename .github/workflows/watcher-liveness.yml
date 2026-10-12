@@ -136,7 +136,7 @@ jobs:
           def main():
               rows = []  # (watcher, subject, verdict, detail)
               # 1. The watcher list — workflow-ref-guard.py's own extraction, not a copy.
-              spec = importlib.util.spec_from_file_location("wrg", ".github/scripts/workflow-ref-guard.py")
+              spec = importlib.util.spec_from_file_location("wrg", "templates/scripts/workflow-ref-guard.py")
               mod = importlib.util.module_from_spec(spec)
               buf = io.StringIO()
               try:

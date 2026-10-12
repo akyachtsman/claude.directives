@@ -24,9 +24,9 @@ layout gone, every quoted string and heredoc body whole. That needs shfmt
 ($SHFMT or PATH, as check-run-quoting.py finds it); without it the adapted
 pairs fail as NOT checked, never pass (batch C, R7).
 
-WHY THE SCRIPT PAIRS. A guard that ships to projects from `templates/scripts/`
-while this repo runs the `.github/scripts/` copy can be repaired in the copy we
-execute while the shipped one stays broken -- and QA would stay green either way.
+NO SCRIPT PAIRS. A guard that ships from `templates/scripts/` is run from
+there by `qa.yml`, so there is no `.github/scripts/` twin to fix while the
+shipped copy stays broken (audit 2026-10-11, I-22).
 
 WHAT IT CHECKS, per pair:
   1. both files exist;
@@ -59,10 +59,6 @@ PAIRS = [
     (".github/workflows/codex-monitor.yml", "templates/workflows/codex-monitor.yml", False),
     (".github/workflows/pages-monitor.yml", "templates/workflows/pages-monitor.yml", False),
     (".github/workflows/pages-retry.yml", "templates/workflows/pages-retry.yml", False),
-    (".github/scripts/workflow-ref-guard.py", "templates/scripts/workflow-ref-guard.py", False),
-    (".github/scripts/check-job-bounds.py", "templates/scripts/check-job-bounds.py", False),
-    (".github/scripts/check-py-warnings.py", "templates/scripts/check-py-warnings.py", False),
-    (".github/scripts/check-ui-suite-env.py", "templates/scripts/check-ui-suite-env.py", False),
     (".claude/hooks/session-start.sh", "templates/claude-hooks/session-start.sh", True),
 ]
 

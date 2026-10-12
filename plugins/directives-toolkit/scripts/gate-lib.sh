@@ -79,69 +79,120 @@ gate_served() {
 #  - an unterminated quote keeps its text, so a parse oddity errs toward checking.
 # A backslash-newline continuation is joined first: bash reads it as one command.
 #
-# Three more shapes, each a cheap close of an accidental false verdict (audit
-# 2026-10-11, M-13; the gates stay speed bumps, not boundaries):
-#  - a HEREDOC body is not command text. Under a quoted delimiter (`<<'EOF'`,
-#    `<<"EOF"`) the body is inert and is dropped; under a bare one its quote
-#    characters are literal, so they are removed and the rest (where a live
-#    `$(...)` could sit) is kept. Before this, `Use a 5" screen` or `the user's
-#    fix` in a commit heredoc opened a quote span that swallowed the push after
-#    it. A delimiter with no terminator line drops nothing.
-#  - an unquoted `#` at the start of a word begins a COMMENT, dropped to the end
-#    of its line: `git status # don't worry` opened a span on the apostrophe, and
-#    `git push origin claude/fix # main` was blocked on the comment's word.
+# Audit 2026-10-11 (M-13), with three parser differentials a security review
+# found in its first draft folded in. The gates stay speed bumps, not
+# boundaries; each of these is a cheap close of an accidental false verdict:
+#  - `$(` inside double quotes opens a nested COMMAND context, parsed like the
+#    top level until its `)`, so the rules below apply inside
+#    `"$(cat <<'EOF' ... )"` too.
+#  - a HEREDOC body is not command text. The operator is recognised only in
+#    unquoted, non-comment, non-arithmetic text (`<<` inside quotes, a comment,
+#    `$((...))` or `((...))` is not one); its body starts after the next
+#    unquoted newline. Under a quoted delimiter (`<<'EOF'`, `<<"EOF"`, `<<\EOF`)
+#    the body is inert and dropped; under a bare one its quote characters are
+#    literal, so they are removed and the rest (where a live `$(...)` could sit)
+#    is kept. With no terminator line, nothing is dropped.
+#  - an unquoted `#` begins a COMMENT, dropped to the end of its line, only at a
+#    real word boundary: start of a command context, or after unescaped,
+#    unquoted whitespace, `;`, `&`, `|`, `(` or a newline. Any other character,
+#    an escaped character or a quote span clears the boundary (`\ #` and
+#    `"a b"#` are mid-word, as bash reads them).
 #  - outside quotes, a backslash before a word character is removed as bash
-#    removes it (`\main` is `main`), and `$'...'` (ANSI-C quoting) loses its `$`
-#    (`$'main'` is `main`).
+#    removes it (`\main` is `main`). `$'...'` (ANSI-C quoting) is its own quote
+#    state: a backslash escapes the next character, so `\'` does not end it, and
+#    the span is then treated as a single-quoted one.
 gate_strip_quotes() {
   printf '%s' "$1" | awk '
+  function close_span(   q, b) {
+    q = Q[sp]; b = BUF[sp]
+    if (b !~ /[[:space:]]/ || (q == "\"" && b ~ /[$`]/)) OUT[sp] = OUT[sp] b
+    Q[sp] = ""; BUF[sp] = ""; WB[sp] = 0
+  }
+  # Consume the pending heredoc bodies, starting at index i (the line after the
+  # operator line). Returns where parsing resumes; with any terminator missing,
+  # nothing is consumed.
+  function heredocs(i,   k, j, e, ln, t, body, found, start) {
+    start = i
+    for (k = 1; k <= nh; k++) {
+      j = i; body = ""; found = 0
+      while (j <= n) {
+        e = index(substr(s, j), "\n")
+        ln = e ? substr(s, j, e - 1) : substr(s, j)
+        t = ln; if (HT[k]) sub(/^\t+/, "", t)
+        j = e ? j + e : n + 1
+        if (t == HD[k]) { found = 1; break }
+        body = body ln "\n"
+      }
+      if (!found) { nh = 0; return start }
+      if (!HQ[k]) { gsub(/[\047"]/, "", body); KEEP[k] = body } else KEEP[k] = ""
+      i = j
+    }
+    for (k = 1; k <= nh; k++) OUT[sp] = OUT[sp] KEEP[k]
+    nh = 0; return i
+  }
   BEGIN { RS = "\001" }
   {
     gsub(/\\\n/, " ")
-    # ---- heredoc bodies --------------------------------------------------
-    nl = split($0, L, "\n"); text = ""; i = 1
-    while (i <= nl) {
-      line = L[i]; text = text (i > 1 ? "\n" : "") line; i++
-      if (!match(line, /(^|[^<])<<-?[[:space:]]*[\047"]?[A-Za-z_][A-Za-z_0-9]*[\047"]?/)) continue
-      op = substr(line, RSTART, RLENGTH); sub(/^[^<]?<<-?[[:space:]]*/, "", op)
-      quoted = (op ~ /^[\047"]/); delim = op; gsub(/[\047"]/, "", delim)
-      tabs = (substr(line, RSTART, RLENGTH) ~ /<<-/)
-      end = 0
-      for (j = i; j <= nl; j++) { t = L[j]; if (tabs) sub(/^\t+/, "", t); if (t == delim) { end = j; break } }
-      if (!end) continue
-      for (j = i; j < end; j++) {
-        if (!quoted) { b = L[j]; gsub(/[\047"]/, "", b); text = text "\n" b }
-      }
-      text = text "\n"; i = end + 1
-    }
-    $0 = text
-    # ---- quotes, comments, escapes ---------------------------------------
-    out = ""; q = ""; buf = ""
-    n = length($0)
-    for (i = 1; i <= n; i++) {
-      c = substr($0, i, 1)
+    s = $0; n = length(s)
+    sp = 0; OUT[0] = ""; Q[0] = ""; BUF[0] = ""; PD[0] = 0; WB[0] = 1; nh = 0
+    i = 1
+    while (i <= n) {
+      c = substr(s, i, 1); c2 = substr(s, i + 1, 1); q = Q[sp]
       if (q == "") {
         if (c == "\\" && i < n) {
-          d = substr($0, i + 1, 1); i++
-          out = out (d ~ /[A-Za-z0-9_]/ ? d : c d)
+          OUT[sp] = OUT[sp] (c2 ~ /[A-Za-z0-9_]/ ? c2 : c c2); WB[sp] = 0; i += 2; continue
         }
-        else if (c == "#" && (out == "" || out ~ /[[:space:];&|(]$/)) {
-          while (i < n && substr($0, i + 1, 1) != "\n") i++
+        if (c == "#" && WB[sp]) { while (i <= n && substr(s, i, 1) != "\n") i++; continue }
+        if (c == "\n") {
+          OUT[sp] = OUT[sp] c; WB[sp] = 1; i++
+          if (nh) i = heredocs(i)
+          continue
         }
-        else if (c == "\047" || c == "\"") {
-          if (c == "\047" && out ~ /\$$/) out = substr(out, 1, length(out) - 1)
-          q = c; buf = ""
-        } else { out = out c }
-      } else if (q == "\"" && c == "\\" && i < n) {
-        buf = buf c substr($0, i + 1, 1); i++
-      } else if (c == q) {
-        if (buf !~ /[[:space:]]/ || (q == "\"" && buf ~ /[$`]/)) out = out buf
-        q = ""; buf = ""
-      } else {
-        buf = buf c
+        if (c == "$" && c2 == "\047") { Q[sp] = "a"; BUF[sp] = ""; i += 2; continue }
+        if (c == "\047" || c == "\"") { Q[sp] = c; BUF[sp] = ""; i++; continue }
+        if (substr(s, i, 3) == "$((" || (c == "(" && c2 == "(" && WB[sp])) {
+          st = i; i += (c == "$" ? 3 : 2); d = 2
+          while (i <= n && d > 0) { x = substr(s, i, 1); if (x == "(") d++; else if (x == ")") d--; i++ }
+          OUT[sp] = OUT[sp] substr(s, st, i - st); WB[sp] = 0; continue
+        }
+        if (c == "<" && c2 == "<" && substr(s, i + 2, 1) != "<" && (i == 1 || substr(s, i - 1, 1) != "<")) {
+          j = i + 2; tabs = 0
+          if (substr(s, j, 1) == "-") { tabs = 1; j++ }
+          while (substr(s, j, 1) ~ /[ \t]/) j++
+          w = ""
+          while (j <= n && substr(s, j, 1) !~ /[ \t\n;&|()<>]/) { w = w substr(s, j, 1); j++ }
+          if (w != "") { dl = w; gsub(/[\047"\\]/, "", dl); nh++; HD[nh] = dl; HQ[nh] = (dl != w); HT[nh] = tabs }
+          OUT[sp] = OUT[sp] substr(s, i, j - i); WB[sp] = 0; i = j; continue
+        }
+        if (c == "(") PD[sp]++
+        if (c == ")") {
+          if (PD[sp] > 0) PD[sp]--
+          else if (sp > 0) { inner = OUT[sp]; sp--; BUF[sp] = BUF[sp] "$(" inner ")"; i++; continue }
+        }
+        OUT[sp] = OUT[sp] c; WB[sp] = (c ~ /[ \t;&|(]/) ? 1 : 0; i++; continue
       }
+      if (q == "\"") {
+        if (c == "\\" && i < n) { BUF[sp] = BUF[sp] c c2; i += 2; continue }
+        if (c == "$" && c2 == "(" && substr(s, i + 2, 1) != "(") {
+          sp++; OUT[sp] = ""; Q[sp] = ""; BUF[sp] = ""; PD[sp] = 0; WB[sp] = 1; i += 2; continue
+        }
+        if (c == "\"") { close_span(); i++; continue }
+        BUF[sp] = BUF[sp] c; i++; continue
+      }
+      if (q == "a") {
+        if (c == "\\" && i < n) { BUF[sp] = BUF[sp] c c2; i += 2; continue }
+        if (c == "\047") { close_span(); i++; continue }
+        BUF[sp] = BUF[sp] c; i++; continue
+      }
+      if (c == "\047") { close_span(); i++; continue }
+      BUF[sp] = BUF[sp] c; i++
     }
-    if (q != "") out = out buf
-    printf "%s", out
+    # Whatever is still open keeps its text: a parse oddity errs toward checking.
+    while (1) {
+      if (Q[sp] != "") OUT[sp] = OUT[sp] BUF[sp]
+      if (sp == 0) break
+      inner = OUT[sp]; sp--; BUF[sp] = BUF[sp] "$(" inner
+    }
+    printf "%s", OUT[0]
   }'
 }

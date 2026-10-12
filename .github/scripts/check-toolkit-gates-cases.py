@@ -44,6 +44,13 @@ swapped in alone:
        (M-11); the pages cases fail too, since gate_served is new;
   PUSH_GATE_BIN = the old push-gate.sh
     -> `main>/dev/null`, `git -c x=y push`, `git -C dir push` (M-13).
+  GATE_LIB_BIN = this change's own first draft (heredocs detected before the
+  quote/comment/arithmetic state was known, comments keyed off the last
+  output character, `$'...'` read as a plain single-quoted span), which a
+  security review flagged
+    -> the six "parser differential" cases: `<<'EOF'` inside quotes, inside a
+       comment and inside `$((...))`; `#` after `\\ ` and after a quote span;
+       `\\'` inside `$'...'` -- with and without jq.
 
 Run: python3 .github/scripts/check-toolkit-gates-cases.py
 """
@@ -123,6 +130,29 @@ PUSH_CASES = [
     ("push text inside a QUOTED heredoc body, then a branch push",
      "cat > m <<'EOF'\ngit push origin main\nEOF\ngit push -u origin claude/x", ALLOW),
     ("a global -c option, then a branch push", "git -c x=y push -u origin claude/x", ALLOW),
+    # -- security review of the M-13 draft: parser differentials ------------
+    # 1. a `<<` the draft took for a heredoc operator before knowing the quote,
+    #    comment or arithmetic state, so it dropped a live line as a "body".
+    ("a heredoc-looking `<<` inside quotes does not hide the next line",
+     'echo "a <<\'EOF\'"\ngit push origin main\nEOF', BLOCK),
+    ("a heredoc-looking `<<` inside a comment does not hide the next line",
+     "true # <<'EOF'\ngit push origin main\nEOF", BLOCK),
+    ("a `<<` inside $((...)) is not a heredoc operator",
+     "echo $((1<<'X'))\ngit push origin main\nX", BLOCK),
+    # 2. `#` mid-word: after an escaped character or a quote span bash is still
+    #    inside the word, so the rest of the line is live.
+    ("`#` after an escaped space is not a comment",
+     "echo \\ #; git push origin main", BLOCK),
+    ("`#` right after a dropped quote span is not a comment",
+     'echo "a b"#; git push origin main', BLOCK),
+    # 3. ANSI-C quoting: `\'` does not end a $'...' span.
+    ("an escaped quote inside $'...' does not end the span",
+     "echo $'it\\'s' && git push origin main && echo 'x y'", BLOCK),
+    # ...and the complement.
+    ("an ANSI-C span with an escaped quote, then a branch push",
+     "echo $'it\\'s' && git push -u origin claude/x && echo 'x y'", ALLOW),
+    ("a real comment at a word boundary still hides its text",
+     "git push -u origin claude/x; # then git push origin main", ALLOW),
 ]
 
 # M-11: the no-jq reader must take tool_input's command, the FIRST "command"

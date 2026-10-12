@@ -188,7 +188,7 @@ const ALIASES = {
   '.claude-plugin/marketplace.json': [/@claude-directives(?![\w-])/, /(?<![\w.-])claude-directives(?=["'\s]*:)/],
   [`${P}/.claude-plugin/plugin.json`]: [/(?<![\w.-])\.\/plugins\/directives-toolkit(?![\w/-])/, 'CLAUDE_PLUGIN_ROOT'],
   [`${P}/hooks/`]: ['hooks/hooks.json', `${P}/hooks`],
-  [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'build-input-gate.sh', 'refresh-stamp.sh', 'derive-scripts.sh', `${P}/scripts`],
+  [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'pages-edit-gate.sh', 'refresh-stamp.sh', 'derive-scripts.sh', 'kit-dirs.sh', 'session-start-registered.sh', `${P}/scripts`],
   [`${P}/evals/`]: [`${P}/evals`],
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],

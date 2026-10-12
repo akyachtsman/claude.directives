@@ -46,8 +46,9 @@
 # SUBSTITUTION, not documentation: stripping them let `result=`git push origin
 # main`` through the matcher entirely and the gate exited 0 — a bypass, verified
 # on a scratch repo. The cost is a known false positive: a commit message that
-# quotes a push command inside backticks, passed inline via a heredoc, still
-# trips the gate. The fix belongs on the calling side, not here — write long
+# quotes a push command inside backticks, passed inline via a heredoc with a
+# BARE delimiter (`<<EOF`), still trips the gate; under a quoted one (`<<'EOF'`)
+# the body is inert and gate-lib.sh drops it. The fix belongs on the calling side, not here — write long
 # prose to a file and use `git commit -F <file>`, so message text never reaches
 # the command line. A false BLOCK is recoverable; a false ALLOW is not.
 
@@ -67,13 +68,16 @@ stripped=$(gate_strip_quotes "$cmd")
 
 # `push` must appear as a git SUBCOMMAND (git [global-opts] push ...), at the
 # start or after a shell separator — not as a substring of a name. An env-var
-# prefix (`GIT_TRACE=1 git push ...`) must not defeat the anchor.
-GIT_PUSH='(^|[;&|(`][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*|[$]\([[:space:]]*|=[`]|=[$]\()([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]]|$)'
+# prefix (`GIT_TRACE=1 git push ...`) must not defeat the anchor, and neither
+# may a global option that takes a value (`git -c x=y push`, `git -C dir push`;
+# audit 2026-10-11, M-13).
+GIT_OPTS='([[:space:]]+(-[cC][[:space:]]+[^[:space:]]+|-[^[:space:]]+))*'
+GIT_PUSH='(^|[;&|(`][[:space:]]*|&&[[:space:]]*|\|\|[[:space:]]*|[$]\([[:space:]]*|=[`]|=[$]\()([A-Za-z_][A-Za-z_0-9]*=[^[:space:]]*[[:space:]]+)*git'"$GIT_OPTS"'[[:space:]]+push([[:space:]]|$)'
 printf '%s' "$stripped" | grep -qE "$GIT_PUSH" || exit 0
 
 # Isolate every push subcommand segment — a compound command can carry more
 # than one push, and each must pass the gate.
-pushparts=$(printf '%s' "$stripped" | grep -oE 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push[^|;&]*')
+pushparts=$(printf '%s' "$stripped" | grep -oE 'git'"$GIT_OPTS"'[[:space:]]+push[^|;&]*')
 
 # The VALUE of an option that takes one is not a ref: `-o +main` is a push
 # option, so drop such values before looking for main (Codex, #396). The list is
@@ -84,7 +88,8 @@ refparts=$(printf '%s\n' "$pushparts" \
 # Any push that names main/master as a target ref (standalone word, after `/` or
 # `:`, or with the force marker `+` -- which git reads only at the START of a
 # refspec, so `foo+main` and `claude/+main` are ordinary branch names; Codex, #396).
-if printf '%s\n' "$refparts" | grep -qE '([[:space:]:/]|[[:space:]][+])(main|master)([[:space:]`)]|$)'; then
+# A redirection ends the ref too: `main>/dev/null` names main (M-13).
+if printf '%s\n' "$refparts" | grep -qE '([[:space:]:/]|[[:space:]][+])(main|master)([[:space:]`)<>]|$)'; then
   echo 'BLOCKED by directives push-gate: direct push to main is never allowed — all main updates go through a claude/<name> branch and a PR (squash-merge on green CI). Push to your feature branch instead.' >&2
   exit 2
 fi

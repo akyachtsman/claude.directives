@@ -51,7 +51,7 @@ This project's look is its own — established at kickoff via `/design-intake`
 2. For a non-trivial feature, run `/sdd-loop` (`specify` → `plan` → `implement`) before coding — separate WHAT from HOW; trivial changes skip to step 3
 3. Implement changes in [main source file] — or `/sdd-loop plan` then `/sdd-loop implement` to settle the approach and work its task list
 4. Run Required Commands above — all must pass
-5. Prefer `qa-pipeline`; run steps individually only if it fails:
+5. Prefer `/qa-pipeline`; run steps individually only if it fails:
    `test-verifier` → `pr-review-toolkit:code-reviewer` → `/security-review` (if security-relevant) → `pr-readiness-reviewer`
 6. Mark the draft PR ready once CI is green, then merge per `git.md` → *Conditional Auto-Merge on Green*
 

@@ -26,9 +26,11 @@ Agents arrive via the `directives-toolkit` plugin (see `global.md` → *Skill Bo
 `claude.directives/plugins/directives-toolkit/agents/`.
 - `test-verifier` — independent QA verification agent (runs the suite, merge verdict)
 - `pr-readiness-reviewer` — final merge gate agent
-- `qa-pipeline` — full pipeline orchestrator
 - `ui-tester` — Playwright browser testing agent
 - `supabase` — data/backend specialist (per `data.md`)
+
+The full pipeline orchestrator is the `/qa-pipeline` **command**, not an agent:
+it runs in the main session because a subagent cannot spawn subagents.
 
 Code review and security review are **not** toolkit agents — they come from
 Anthropic-official sources (owner ruling, 2026-10-07), enabled in each project's
@@ -50,7 +52,7 @@ preferred over one this toolkit would have to keep current itself.
 
 The test-verifier report format lives inline in its agent definition inside the
 plugin; code/security review findings are written to `.agent-reports/` by the
-official reviewers per qa-pipeline's adapter instructions. Workflow and
+official reviewers per `/qa-pipeline`'s adapter instructions. Workflow and
 Playwright-kit installation is `docs/standards/cicd-setup.md`'s job — don't
 re-derive it from the tree.
 
@@ -542,10 +544,10 @@ claiming the failure pre-existed the change needs a run on the parent commit.
 - Workflow YAML is validated on every CI run — keep it parseable
 
 ## Circuit breakers (autonomous fix loops)
-When fixing failures without a human in the loop (the `qa-pipeline` ui-tester
+When fixing failures without a human in the loop (the `/qa-pipeline` ui-tester
 loop, CI triage), stop before thrashing:
 - **Cap attempts** — at most 3 fix attempts on the same failure, then escalate
-  (the `global.md` 3-failures gate; `qa-pipeline` already enforces this for the
+  (the `global.md` 3-failures gate; `/qa-pipeline` already enforces this for the
   ui-tester loop).
 - **Watch the diff** — if a "fix" balloons or starts touching files unrelated to
   the failure, stop: that signals the diagnosis is wrong. Re-diagnose from the

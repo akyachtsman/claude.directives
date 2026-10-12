@@ -47,23 +47,53 @@ artifacts: node_modules, dist, .git, lockfiles, build output) and check for:
   its own verification stamp, never an `(owner ruling, <date>)` stamp. Also
   report anything the directives rely on about an outside system that has no row.
 - **Native parity.** Prefer a native Anthropic capability over one this repo
-  maintains. Inventory from what is installed, never recall: the registered
-  marketplaces' manifests (`claude plugin marketplace list`, and the
-  `marketplace.json` in each clone under `~/.claude/plugins/marketplaces/`) plus
-  this session's own skill and tool list. Count only Anthropic-owned entries —
-  the `anthropics/*` marketplaces and the built-in skills — and skip the
-  `claude-directives` marketplace: the toolkit's own parity is claude.directives'
-  pass (its `CLAUDE.md` → *Session Start*, step 5, against `EXPORTS.json` →
-  `externals` + `considered`). In a downstream project, compare that inventory
-  with the project's OWN commands, skills, agents and hooks (`.claude/`, and
-  any scripts doing the same job); each one a native covers is a finding naming
-  the native, unless the project's `CLAUDE.md` records why it was declined.
+  maintains. Inventory from what is installed, never recall — three sources:
+  1. the registered marketplaces' manifests: `claude plugin marketplace list`,
+     and the `marketplace.json` in each clone under
+     `~/.claude/plugins/marketplaces/`;
+  2. the built-in `anthropic-plugin-directory` marketplace, which has no clone:
+     its inventory is `~/.claude/plugins/plugin-directory-cache-v2.json`, whose
+     `listings` each carry a `name`, a `source.repository` (`url` and `path`)
+     and a `checks.review.by.type`;
+  3. this session's own skill list and its harness tools — the remote-session,
+     scheduling and notification tools. Core tools (Read, Edit, Bash, Agent,
+     AskUserQuestion and the like) are the platform the toolkit runs on, not
+     natives to weigh against it, so they are out of scope.
+
+  Match names after normalising: compare a directory-cache `name` lowercased
+  with spaces as hyphens (`Plugin Management` is `plugin-management`); strip a
+  `-builtin` suffix from a manifest key before comparing it with an inventory
+  name (the inventory calls it `dataviz`, the manifest `dataviz-builtin`); and
+  record a skill under its **parent plugin's** name, since that is what a
+  marketplace manifest advertises.
+
+  Count only **Anthropic-owned** capabilities: the `anthropics/*` marketplaces
+  and the built-in skills. In the directory cache an entry is Anthropic-owned
+  only when its repository is under `github.com/anthropics/`, its review is by
+  `anthropic`, and its path is not under `external_plugins/` or
+  `partner-built/` — partner-built entries are not Anthropic's, even in an
+  Anthropic repository. Skip the `claude-directives` marketplace, which
+  advertises the toolkit itself. Without these filters the pass flags the
+  toolkit it audits, and every third-party vendor plugin, as a missing native.
+
+  Then compare what survives with what the repo maintains. In
+  claude.directives, that is `EXPORTS.json` → `externals` + `considered`, under
+  the matching rules in its `CLAUDE.md` → *Session Start*, step 5. In a
+  downstream project, it is the project's OWN commands, skills, agents and hooks
+  (`.claude/`, and any scripts doing the same job); each one a native covers is
+  a finding naming the native, unless the project's `CLAUDE.md` records why it
+  was declined.
 - Errors — syntax errors, broken references, dead imports, invalid config,
-  malformed data, things that won't run. For per-file correctness depth, run
-  `/code-review high <path>` on each top-level directory in turn (read-only,
-  reports findings; the level is a bare word, and without a target it reviews
-  only the current diff, not the tree) and fold its
-  results in — never `/simplify` or `code-simplifier` here, which APPLY fixes
+  malformed data, things that won't run. For per-file correctness depth, review
+  the TREE, not a diff: split it by top-level directory and launch one
+  read-only review subagent per directory (Agent tool, `model: sonnet` per
+  `global.md` → *Subagent Model Selection*, run in parallel), each told to read
+  every file in its directory in full, report correctness findings with
+  file:line, and edit nothing. Do not use `/code-review` for this: with or
+  without a path it reviews a DIFF (a path target means that path's changes
+  against the local `main`), so on a fresh `main` it reviews nothing while
+  appearing to have run. Fold the agents' results in — never `/simplify` or
+  `code-simplifier` here, which APPLY fixes
   and would rewrite the tree before you approve anything, contradicting this
   command's findings-only contract; recommend those as follow-ups instead
   (`EXPORTS.json` → `considered.code-simplifier`). Keep this sweep on what they

@@ -61,14 +61,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 
 ## How it's imported downstream
-Projects import each directive by raw URL — the consolidated paths are:
-```
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/global.md
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/git.md
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/test.md
-https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/data.md
-```
+Projects import the five `directives/` files by raw URL; the URL list is `directives/global.md` → *Imported Directives* (plus `global.md`'s own).
 When you change an exported directive, edit the file under `directives/` — never
 relocate the export into this file.
 

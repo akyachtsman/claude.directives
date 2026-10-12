@@ -17,7 +17,7 @@ Referenced by the exported directives and the qa agents.
 
 | File | What it covers |
 |------|----------------|
-| `standards/automations.md` | The agent-session automation standard — email, the watcher rules, CI/Codex/Pages monitors, the Pages auto-retry, the CI-success wake, in-session subscription, cross-session messaging, PR lifecycle, escalation rules, test-scenario bootstrap |
+| `standards/automations.md` | The agent-session automation standard — email, the watcher rules, CI/Codex/Pages monitors, the Pages auto-retry, the CI-success wake, in-session subscription, cross-session messaging, and the new-session activation checklist |
 | `standards/cicd-setup.md` | Canonical CI/CD install procedure — workflow templates to copy, monitors, secrets/variables, verification checklist |
 | `standards/ci-triage.md` | **Project** CI triage — expected vs real Playwright failures, two-tier CI, when to trigger `qa-live.yml` (this repo's own self-test triage lives in `internal/repo-monitors.md`) |
 | `standards/code-review-standard.md` | Blocking vs non-blocking review criteria and output format |
@@ -39,7 +39,7 @@ Referenced by the exported directives and the qa agents.
 ## `internal/` — this repo only (not inherited downstream)
 | File | What it covers |
 |------|----------------|
-| `internal/repo-monitors.md` | This repo's own infrastructure monitors (`ci-monitor`, `codex-monitor`, `pages-monitor`) **and self-test triage** (the `ci-failure` / `codex-flagged` flow) |
+| `internal/repo-monitors.md` | This repo's own CI and its six watcher workflows (`ci-monitor`, `ci-notify`, `codex-monitor`, `pages-monitor`, `pages-retry`, `watcher-liveness`) **and self-test triage** (the `ci-failure` / `codex-flagged` flow) |
 | `internal/repo-map-ui.md` | How the repo map is built and what the `Repo Map UI` suite covers — the evidence rule, the start-to-finish check, the layout and its invariants. Read before changing the map, the generator or the suite |
 | `internal/gate-history.md` | Why the local gate looks like it does — the history `CLAUDE.md`'s *Local gate* no longer carries, and where each script's history now lives (its own header) |
 | `internal/skill-eval-notes.md` | Auto-skill eval baseline and the worked description-tuning cases behind it |

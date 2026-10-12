@@ -211,11 +211,13 @@ implementation is the source — find it, read it, and reuse it.**
   when it works. Prefer the diff that leaves the codebase flat or smaller.
 
 ## Repo Structure Standard
-Every project repo should contain (matching what `/new-repo` scaffolds):
+Every project repo should contain (what `/new-repo` scaffolds, plus the
+`index.html` the first build writes):
 ```
 CLAUDE.md        ← project context + imported directive URLs
-index.html       ← the app's entry page (additional pages are fine — every
-                   page matches the styles/ contract, per design.md)
+index.html       ← the app's entry page, written by the first build, not by
+                   /new-repo (additional pages are fine — every page matches
+                   the styles/ contract, per design.md)
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
   workflows/     ← the standard template set from templates/workflows/ —
@@ -251,8 +253,12 @@ findings unseen.
 - All backend/data rules — provider, connection config, keys, RLS, MCP setup —
   are governed by `data.md`, the single source of truth for the backend. Read it
   before touching any backend code.
-- Never hardcode connection details or keys — store them as the GitHub
-  Secrets/variables named in `data.md`.
+- Never hardcode a secret key (the service-role key) or server-side connection
+  details — store them as the GitHub Secrets/variables named in `data.md`.
+- **The publishable/anon key and the project URL are the exception:** on the
+  no-build stack the client needs them at runtime, so they ship in client code
+  (`data.md` → *Keys*), safe because RLS is the enforcement boundary. A
+  service-role or other secret key never goes client-side.
 - Project/connection IDs and table/column names are defined in each repo's
   CLAUDE.md.
 
@@ -916,7 +922,12 @@ naming what remains open, or "nothing open" — never absent.
   serves the new content. On a failed deploy, re-run to a terminal state before
   reporting done — never leave the site stale. A clean/empty-cache render
   (headless browser, incognito) proves the *new* deploy but not a *returning*
-  visitor's cached state. See the `update-pages` skill.
+  visitor's cached state. No deploy run for the merge commit within ~2 minutes
+  is a stuck deploy: recover it rather than running live QA against the old
+  site, and trigger `qa-live.yml` by hand only once a deploy that contains the
+  merge commit has succeeded and serves its content. A recovery deploy builds
+  `main`'s head at that moment, which may be a later commit. See the
+  `update-pages` skill (step 5 for a stuck deploy).
 
 ## Escalation Rules
 - Stop and ask the user if a change touches more than one file's core logic
@@ -926,6 +937,18 @@ naming what remains open, or "nothing open" — never absent.
 - **Never escalate a shell command to the owner.** He has no terminal, so it is
   not a smaller ask than doing it yourself — it is an impossible one
   (→ *A Blocked Command Is Not a Blocked Capability*).
+
+A session acting on an automated notification (a CI failure, a monitor issue,
+a webhook) also stops and asks when:
+- the fix needs a secret or credential the session does not have
+- the fix would need a destructive data operation (deleting records, dropping
+  fields)
+- the root cause is still ambiguous after reading every available log
+- the notification came from a person, not an automated system
+
+For such a session, these always escalate: production data loss or deletion,
+authentication or secret rotation, billing or quota alerts, and a notification
+that came from a person rather than an automated system.
 
 The gates above fire BEFORE the work. → *A Knowing Deviation Is an Escalation*
 covers the other direction: an instruction you have already decided not to follow.
@@ -968,8 +991,8 @@ exists and you are about to not follow it.
 > Asking costs one sentence. Not asking costs a round trip — and sometimes the
 > owner's confidence that the instruction was heard at all.
 
-**No fifth gate; dependent work waits.** → *Escalation Rules* still has exactly
-four and this adds none. It adds a wait: work depending on the deviation stops
+**No fifth gate; dependent work waits.** → *Escalation Rules* keeps its gates
+as written and this adds none. It adds a wait: work depending on the deviation stops
 until the question is answered, work independent of it continues.
 
 **Under a standing authorization and under "proceed", raise it anyway.** A
@@ -1084,8 +1107,7 @@ that fetched it. A project without it still waits on its environment's cached
 setup script — a setup-script/network change or roughly weekly expiry. Commands invoke
 as `/env-chk`, `/refresh-repo`, etc.; agents are namespaced `directives-toolkit:*`.
 
-See docs/standards/automations.md for monitor setup and the automation-specific
-PR-lifecycle/escalation additions.
+See docs/standards/automations.md for monitor setup.
 See docs/standards/ci-triage.md for CI and Codex failure triage rules.
 
 ## Scheduling Tools Never Prompt (owner ruling, 2026-08-18)
@@ -1254,11 +1276,14 @@ before reporting "no access":
    even when access exists.
 3. **WebSearch** — runs server-side and bypasses the container's network policy
    entirely. Use for documentation, examples, and corroborating facts.
-4. **WebFetch** — subject to the environment's egress policy too: a host the
-   policy denies fails with `EGRESS_BLOCKED` ("blocked by the network egress
-   proxy"; measured 2026-10-09 on a host curl also gets a CONNECT 403 for), so
-   it is not a way around rung 5. A 403 from a host it does reach may be the
-   target site's bot protection, not the environment policy.
+4. **WebFetch** — subject to the environment's egress policy too, so it is not
+   a way around rung 5. A host the policy denies fails with
+   `getaddrinfo ENOTFOUND <host>` (measured 2026-10-12; it read
+   `EGRESS_BLOCKED` on 2026-10-09), so ENOTFOUND can mean "blocked by policy",
+   not only "no such host": confirm with curl (a CONNECT 403 is the policy) or
+   the `recentRelayFailures` in `curl -sS "$HTTPS_PROXY/__agentproxy/status"`.
+   A 403 from a host it does reach may be the target site's bot protection, not
+   the environment policy.
 5. **curl/CLI in the sandbox** — goes through the agent proxy; the environment
    allowlist applies. A 403 on CONNECT is a policy denial: report it, never
    route around it. The owner can add the host in the environment's network

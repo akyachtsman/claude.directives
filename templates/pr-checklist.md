@@ -28,6 +28,7 @@
 
 ## CI and Readiness
 
-- [ ] CI is expected to pass.
+- [ ] CI is green on the current head SHA.
+- [ ] A change to rendered UI has rendered verification (`test.md` → *Rendered-verification gate (visual changes)*): a `ui-tester` run covering the head (`.agent-reports/ui-test-report.md`) for unauthenticated surfaces; auth-gated surfaces stay *pending visual verification* until `qa-live` passes on the deploy.
 - [ ] The `pr-readiness-reviewer` final status is Ready or accepted as Conditional with documented reasons.
 - [ ] Deployment, migration, or rollout notes are documented if applicable.

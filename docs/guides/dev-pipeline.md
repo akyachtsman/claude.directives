@@ -3,7 +3,7 @@
 This is the **working spec** for how `directives-toolkit` commands, skills, and
 agents compose into a single, ordered project-development procedure — a *chain*,
 not a menu. It is synthesised from three sources, keeping our spine and
-importing only browser-only-safe *methods*:
+importing only *methods* that fit the constraint below:
 
 - **our `/sdd-loop` + inherited directives** — the spine (constitution-driven,
   artifact-chained, already delegating review/test);
@@ -12,11 +12,18 @@ importing only browser-only-safe *methods*:
 - **`garrytan/gstack`** (MIT) — the methodology shape (forcing questions →
   multi-lens review → compounding memory → staleness-gated ship). Its thick
   Bun/TypeScript runtime (browser daemon, redaction server, iOS, evals) is
-  **deliberately not adopted** — it cannot run in a browser-only session.
+  **deliberately not adopted** — it is a local runtime the constraint below
+  rules out.
 
-> **Constraint that governs every choice here:** browser-only (Claude Code Web,
-> no terminal/CLI). Every step below is plain Markdown methodology, repo files,
-> delegated official plugins, or MCP/CI — never a local build step or daemon.
+> **Constraint that governs every choice here:** the OWNER is browser-only —
+> he has no terminal, so nothing may depend on him running a command
+> (`global.md` → *A Blocked Command Is Not a Blocked Capability*). The session
+> has a terminal and git. The site has no build by default; a CI build is a
+> per-project opt-in, and a step that reads the site reads the deployed build
+> output where one exists (`global.md` → *Hosting & Deployment*). Nothing may
+> depend on a local server or daemon outliving the session.
+> Every step below is plain Markdown methodology, repo files, delegated official
+> plugins, or MCP/CI.
 
 ## The pipeline at a glance
 
@@ -26,9 +33,9 @@ importing only browser-only-safe *methods*:
 | 1–2 | **Plan** | `/sdd-loop specify` → `/sdd-loop plan` (`/kickoff`) | exists — gated | `spec.md → plan.md` |
 | — | **Plan-gate** | folded into `/sdd-loop plan` (consistency check + self-review) | exists | `plan.md` → `## Consistency` |
 | 5 | **Build** | `/design-intake` (look-gate) · `/sdd-loop` implement | exists — gated | `design.md` + built pages |
-| 6 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` / `review.md` |
-| 7 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `qa.md` |
-| 8 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | `ship.md` |
+| 6 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` review reports |
+| 7 | **Test** | `qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `.agent-reports/` test reports |
+| 8 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | none — the PR and the reported live check |
 | 9 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/refresh-repo` (re-sync); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
@@ -51,9 +58,11 @@ specs/<slug>/
                  (plan.md also carries `## Tasks`, 2–5 min each, and the
                   `## Consistency` gate — formerly tasks.md and analysis.md)
   design.md      ← 5 Build (/design-intake look-gate → tokens.css + components.css)
-  review.md      ← 6 review findings (AUTO-FIX vs ASK)
-  qa.md          ← 7 test report (verification-before-completion)
-  ship.md        ← 8 ship record (PR URL + deploy SHA + live-check)
+.agent-reports/  ← 6 Review + 7 Test (repo-root, written by the agents:
+                   code-review-report.md, security-review-report.md,
+                   test-report.md, ui-test-report.md — see CLAUDE-template.md)
+                 ← 8 Ship writes no file: the PR and update-pages' reported
+                   live check are the record
 learnings.jsonl  ← 9 Reflect (repo-root, append-only + compaction, auto-consulted)
 ```
 
@@ -67,7 +76,7 @@ Force the problem to be understood before any code. **Method imported:** gstack
 `office-hours` six forcing questions + superpowers `brainstorming`
 one-question-per-message, *alternatives mandatory*, no "too simple" exemption —
 **stripped of the YC/startup framing**. Writes `brief.md`; gates entry to
-`specify`. Browser-only: pure Markdown + `AskUserQuestion`.
+`specify`. Needs nothing beyond Markdown + `AskUserQuestion`.
 
 ### 1–2 · Plan — `/sdd-loop specify|plan` *(exists — gated)*
 Keep our WHAT/HOW split and the constitution (inherited directives) as binding
@@ -90,9 +99,11 @@ first direction generated from a few taste questions — distills it to
 `styles/tokens.css` + `styles/components.css` + an approved reference page (the
 **look-gate**: sign off before building out, since the look is cheapest to fix on
 one page), and writes `specs/<slug>/design.md`. `/sdd-loop` then implements the
-remaining tasks against that contract so every page matches. Browser-only: plain
-semantic HTML/CSS, no framework. Non-UI work skips the design-intake half and
-goes straight to implement.
+remaining tasks against that contract so every page matches. Plain semantic
+HTML/CSS with no framework and no build, unless the project's `CLAUDE.md`
+records an approved CI build opt-in (`global.md` → *Hosting & Deployment*); then
+implement against that build. Non-UI work skips the design-intake half and goes
+straight to implement.
 
 ### 6 · Review — official plugins + monitors *(delegated — do not rebuild)*
 This is already gstack's multi-lens + Codex second opinion, inherited:
@@ -114,7 +125,9 @@ mirrors gstack's tiered testing; the `claude -p` cost-capped eval harness is
 
 ### 8 · Ship — `push-gate` + `update-pages` + `pages-monitor` *(exists — gated)*
 **Method imported:** gstack **Review Readiness staleness gate** —
-`pr-readiness-reviewer` blocks "ready" unless `review.md` is recent and clean.
+`pr-readiness-reviewer`'s evidence-currency check marks the PR Not Ready unless
+the `.agent-reports/` test and review reports and the CI results cover the
+current HEAD.
 Our `push-gate` hook + PR lifecycle + `pages-monitor` already cover gstack's
 land-and-deploy + canary.
 
@@ -123,7 +136,7 @@ Compounding institutional memory. **Method imported:** gstack `learnings.jsonl`
 — append-only, compacted on budget, **typed** (pattern / pitfall / preference / architecture / tool),
 **confidence 1–10**, file attribution, latest-key-wins; auto-consulted before
 recommendations. Today `/handoff-session` is a one-shot snapshot; `/learn` makes
-it compound. Browser-only: a repo file + a skill that greps it.
+it compound. Needs only a repo file + a command that greps it.
 
 ## Frontmatter schema
 
@@ -164,7 +177,9 @@ Every command and skill carries:
 
 - **gstack runtime** — browser daemon, GStack Browser, redaction/egress server,
   pair-agent tunnel, ONNX injection classifier, all iOS skills, the Conductor
-  app, `claude -p` evals: CLI/native, unusable browser-only.
+  app, `claude -p` evals: native runtimes and long-lived local daemons, which
+  the no-build stack and an owner without a terminal rule out (and the evals
+  are API-billed).
 - **superpowers** — the `using-git-worktrees` skill, local `finishing-a-development-branch`
   (use the GitHub UI/MCP instead), the bash `session-start` hook (use the
   plugin's own mechanism), multi-platform packaging.
@@ -174,7 +189,7 @@ Every command and skill carries:
 default for concurrent edits, and that rule stands here.
 - **frameworked AI UI generators** (v0, Lovable, Bolt, 21st.dev, official Figma
   codegen) — React/Tailwind output and (often) a local server; wrong target for a
-  plain-HTML, browser-only stack. (`frontend-design` + Stitch's *remote* MCP are
+  plain-HTML, no-build stack. (`frontend-design` + Stitch's *remote* MCP are
   adopted instead — see the Delegation map and `docs/guides/design-tooling.md`.)
 
 ## Complete standard scaffold (Phase 4)
@@ -183,12 +198,13 @@ default for concurrent edits, and that rule stands here.
 automatically.** (The toolkit *plugin* already ships all commands/skills/agents
 as one unit; this is about the per-project **scaffold**: workflows, scripts,
 secrets, directives.) Consistency over minimalism — every repo is identical and
-complete, nothing to toggle or forget. Browser-only throughout: the only "CLI"
-remains the one-time env setup-script paste.
+complete, nothing to toggle or forget. Nothing here asks the owner for a
+terminal: his only setup step is the one-time env setup-script paste.
 
 What `/new-repo` scaffolds in **every** project:
-- `CLAUDE.md` (from `CLAUDE-template.md`) + the five directive URLs + `index.html`
-  + per-project `styles/` (`tokens.css` + `components.css`, set by `/design-intake`)
+- `CLAUDE.md` (from `CLAUDE-template.md`) + the five directive URLs + per-project
+  `styles/` (`tokens.css` + `components.css`, set by `/design-intake`);
+  `index.html` is not scaffolded — the first build writes it
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
 - the standard workflows — **seven unconditionally**: `qa.yml`, `qa-live.yml`,
   `ci-notify.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`,

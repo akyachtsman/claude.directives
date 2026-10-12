@@ -263,7 +263,7 @@ travels either way: you paste a hand-off, or the session sends it straight to th
 target session and tells you first (owner ruling, 2026-10-06):
 
 1. **Capture** — the downstream session emits a hand-off block
-   (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT, GOTCHAS).
+   (`/handoff-session` canonical format: header, UNRESOLVED, CONTEXT).
    A finding that names an upstream file must **pin its claim to a SHA, and
    re-verify at the moment of asserting rather than of fetching** — upstream
    moves inside a session, so a correct fetch can be stale by the time the report
@@ -327,7 +327,7 @@ one after it idled does not count, because its VM is restored rather than
 rebuilt and keeps the old cache. The hook is still the lasting cure. If
 `/env-chk` in a new session after an edit-and-save still reports a stale or
 unwanted plugin, stop repeating it and **install the hook once** in that project — `/refresh-repo`
-does it (Phase 2 installs `.claude/hooks/session-start.sh` and merges the
+does it (Phase 1.5, its absent-hook install and hook repair, installs `.claude/hooks/session-start.sh` and merges the
 `SessionStart` row even when the local path does not exist). From then on the
 project heals itself every session and never needs this section again.
 
@@ -391,16 +391,11 @@ Hard-won; each cost a real debugging session:
   ruling admits) loads at session start; a one-time prompt in an
   already-running session is accepted. ci-notify's webhook wake covers a
   PR-attached completion **only when that completion emits one** — success
-  conclusion, watched workflow, and one of its two lookups resolving exactly one
-  open PR. It is not a blanket no-scheduling guarantee, but the exceptions are
-  narrower than they look: a **cancelled** run always ends silent (the job is
-  gated on success), and so does any run whose lookups are ambiguous or empty at
-  **both** steps. Neither an ambiguous SHA nor a dispatched PR-branch run is by
-  itself one of those cases — the branch fallback still runs, and dispatched
-  PR-branch runs are precisely what it was added to catch. And a unique match is
-  not a guaranteed wake for YOUR session: a `repository_dispatch` run whose
-  default-branch SHA uniquely matches an unrelated promotion PR gets commented
-  there, satisfying every condition above while the dispatching session waits.
+  conclusion, watched workflow, and exactly one open PR resolved. It is not a
+  no-scheduling guarantee: the ways a run ends with no wake are listed in
+  `git.md` → *PR Lifecycle* and in full in `docs/standards/pr-mechanics.md` → *Wakes that never arrive*, and that list is evidence the class is broad, not a set to check against.
+  And a unique match is not a guaranteed wake for YOUR session: a
+  `repository_dispatch` run can uniquely match an unrelated PR, which gets the comment instead.
   Where nothing will wake you a check-in is
   the only observer (`git.md` → *PR Lifecycle*; `global.md` → *Async Operations*, item 1's exception).
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,

@@ -62,6 +62,10 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
 ```
 (raw.githubusercontent.com is CDN-served and works from remote sessions.)
 
+`RETIRED` names a file whose template upstream deleted (today only
+`keepalive.yml`): it is a removal finding, never a project-specific file to
+keep. Delete it, with any secret the line names, in this refresh's PR.
+
 `.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
 `ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
 step — so a locally corrupted sibling next to an unmodified `action.yml` is

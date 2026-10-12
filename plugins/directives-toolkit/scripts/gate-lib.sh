@@ -97,6 +97,10 @@ gate_served() {
 #    unquoted whitespace, `;`, `&`, `|`, `(` or a newline. Any other character,
 #    an escaped character or a quote span clears the boundary (`\ #` and
 #    `"a b"#` are mid-word, as bash reads them).
+#  - a heredoc DELIMITER is read as a shell word: a quoted part runs to its
+#    matching quote, spaces included (`<<'E O F'`); an unbalanced quote
+#    registers no heredoc. A `${...}` parameter expansion is copied whole, so a
+#    `#` inside it is never a comment (second security-review round).
 #  - outside quotes, a backslash before a word character is removed as bash
 #    removes it (`\main` is `main`). `$'...'` (ANSI-C quoting) is its own quote
 #    state: a backslash escapes the next character, so `\'` does not end it, and
@@ -150,6 +154,14 @@ gate_strip_quotes() {
         }
         if (c == "$" && c2 == "\047") { Q[sp] = "a"; BUF[sp] = ""; i += 2; continue }
         if (c == "\047" || c == "\"") { Q[sp] = c; BUF[sp] = ""; i++; continue }
+        # A parameter expansion is copied whole: a `#` in it (`${x:- #y}`,
+        # `${#arr}`) is never a comment. Unbalanced, it runs to the end and
+        # every character is kept.
+        if (c == "$" && c2 == "{") {
+          st = i; i += 2; d = 1
+          while (i <= n && d > 0) { x = substr(s, i, 1); if (x == "{") d++; else if (x == "}") d--; i++ }
+          OUT[sp] = OUT[sp] substr(s, st, i - st); WB[sp] = 0; continue
+        }
         if (substr(s, i, 3) == "$((" || (c == "(" && c2 == "(" && WB[sp])) {
           st = i; i += (c == "$" ? 3 : 2); d = 2
           while (i <= n && d > 0) { x = substr(s, i, 1); if (x == "(") d++; else if (x == ")") d--; i++ }
@@ -159,8 +171,23 @@ gate_strip_quotes() {
           j = i + 2; tabs = 0
           if (substr(s, j, 1) == "-") { tabs = 1; j++ }
           while (substr(s, j, 1) ~ /[ \t]/) j++
-          w = ""
-          while (j <= n && substr(s, j, 1) !~ /[ \t\n;&|()<>]/) { w = w substr(s, j, 1); j++ }
+          # The delimiter is a shell WORD: a quoted part runs to its matching
+          # close quote, spaces included (a quoted E O F). An unbalanced quote
+          # registers no heredoc, so nothing after it is dropped.
+          w = ""; ok = 1
+          while (j <= n && substr(s, j, 1) !~ /[ \t\n;&|()<>]/) {
+            x = substr(s, j, 1)
+            if (x == "\047") {
+              e = index(substr(s, j + 1), "\047"); if (!e) { ok = 0; break }
+              w = w substr(s, j, e + 1); j += e + 1
+            } else if (x == "\"") {
+              k = j + 1; while (k <= n && substr(s, k, 1) != "\"") k += (substr(s, k, 1) == "\\" ? 2 : 1)
+              if (k > n) { ok = 0; break }
+              w = w substr(s, j, k - j + 1); j = k + 1
+            } else if (x == "\\" && j < n) { w = w substr(s, j, 2); j += 2 }
+            else { w = w x; j++ }
+          }
+          if (!ok) { OUT[sp] = OUT[sp] "<<"; WB[sp] = 0; i += 2; continue }
           if (w != "") { dl = w; gsub(/[\047"\\]/, "", dl); nh++; HD[nh] = dl; HQ[nh] = (dl != w); HT[nh] = tabs }
           OUT[sp] = OUT[sp] substr(s, i, j - i); WB[sp] = 0; i = j; continue
         }

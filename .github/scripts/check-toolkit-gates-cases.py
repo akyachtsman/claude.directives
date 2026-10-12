@@ -42,6 +42,11 @@ swapped in alone:
     -> the heredoc, comment, `\\main` and `$'main'` push shapes and their
        complements (M-13), and, without jq, the later-"command"-key case
        (M-11); the pages cases fail too, since gate_served is new;
+  GATE_LIB_BIN = the second draft (7ff7315), after a second review round
+    -> the spaced single- and double-quoted heredoc delimiters, the `#` inside
+       `${...}`, and the spaced-delimiter complement -- with and without jq.
+    (The unbalanced-delimiter case passes against it too: it pins the
+    keep-the-text direction for the new delimiter reader, not a bug fixed.)
   PUSH_GATE_BIN = the old push-gate.sh
     -> `main>/dev/null`, `git -c x=y push`, `git -C dir push` (M-13).
   GATE_LIB_BIN = this change's own first draft (heredocs detected before the
@@ -148,7 +153,23 @@ PUSH_CASES = [
     # 3. ANSI-C quoting: `\'` does not end a $'...' span.
     ("an escaped quote inside $'...' does not end the span",
      "echo $'it\\'s' && git push origin main && echo 'x y'", BLOCK),
+    # Second review round: a quoted delimiter with a space, read as its first
+    # word, ended the "body" at a later line naming that word, dropping the
+    # live line before it; and a `#` after a space inside ${...} dropped the
+    # rest of the line as a comment.
+    ("a single-quoted heredoc delimiter with spaces is read whole",
+     "cat <<'E O F'\nit's\nE O F\ngit push origin main\nE", BLOCK),
+    ("a double-quoted heredoc delimiter with spaces is read whole",
+     'cat <<"a b"\nit"s\na b\ngit push origin main\na', BLOCK),
+    ("a `#` after a space inside ${...} is not a comment",
+     "echo ${x:- #y}; git push origin main", BLOCK),
+    ("an unbalanced heredoc delimiter quote drops nothing",
+     "cat <<'EOF\nEOF\ngit push origin main\nEOF", BLOCK),
     # ...and the complement.
+    ("a spaced quoted delimiter's body is still dropped, then a branch push",
+     "cat <<'E O F'\ngit push origin main\nE O F\ngit push -u origin claude/x", ALLOW),
+    ("${#arr} is not a comment, and a branch push after it passes",
+     "echo ${#arr[@]}; git push -u origin claude/x", ALLOW),
     ("an ANSI-C span with an escaped quote, then a branch push",
      "echo $'it\\'s' && git push -u origin claude/x && echo 'x y'", ALLOW),
     ("a real comment at a word boundary still hides its text",

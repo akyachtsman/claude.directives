@@ -156,7 +156,10 @@ gate_strip_quotes() {
         }
         if (c == "#" && WB[sp]) {
           e = index(substr(s, i), "\n"); seg = e ? substr(s, i, e - 1) : substr(s, i)
-          if (!live(seg)) { i += length(seg); continue }
+          # Kept verbatim when it could expand, but never reparsed: no quote or
+          # heredoc state opens inside a comment.
+          if (live(seg)) OUT[sp] = OUT[sp] seg
+          i += length(seg); continue
         }
         if (c == "\n") {
           OUT[sp] = OUT[sp] c; WB[sp] = 1; i++

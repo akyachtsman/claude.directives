@@ -51,6 +51,8 @@ swapped in alone:
   braces inside quotes
     -> the double- and single-quoted `}` cases and the kept substitution
        after a `#` -- with and without jq.
+  GATE_LIB_BIN = the fourth draft (930e783), which reparsed a kept comment
+    -> the kept-comment case -- with and without jq.
   PUSH_GATE_BIN = the old push-gate.sh
     -> `main>/dev/null`, `git -c x=y push`, `git -C dir push` (M-13).
   GATE_LIB_BIN = this change's own first draft (heredocs detected before the
@@ -178,6 +180,10 @@ PUSH_CASES = [
     # Fail toward checking: text that could expand is never dropped.
     ("a substitution after a # is kept, not dropped as a comment",
      "true # $(git push origin main)", BLOCK),
+    # Fourth round: a kept comment was reparsed, so its apostrophe opened a
+    # quote that swallowed the next line.
+    ("a kept comment is not reparsed for quotes",
+     "true # ${x} don't\ngit push origin main\necho 'ok'", BLOCK),
     # ...and the complement.
     ("a spaced quoted delimiter's body is still dropped, then a branch push",
      "cat <<'E O F'\ngit push origin main\nE O F\ngit push -u origin claude/x", ALLOW),

@@ -149,6 +149,11 @@ Every project using these agents runs two Playwright workflows:
 
 ### When to trigger qa-live.yml manually
 
-- After a PR merges and the live app has not redeployed within ~2 minutes
-- After any fix pushed directly to the main branch
-- Any time live app behavior needs verification and auto-trigger cannot be waited on
+- After a PR merges, only once the deploy run for the merge commit's SHA has
+  succeeded and `qa-live.yml` did not fire on it
+- Any time live app behavior needs verification and auto-trigger cannot be
+  waited on, once the live site serves the commit under test
+
+No deploy run for the merge commit within ~2 minutes is a **stuck deploy**, not
+a cue for live QA: `qa-live.yml` run then would test the previous deploy.
+Recover the deploy per the `update-pages` skill's step 5 (stuck detection) first.

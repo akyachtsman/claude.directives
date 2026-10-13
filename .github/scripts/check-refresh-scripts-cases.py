@@ -654,6 +654,18 @@ r = project("drift-scripts-kitdir", at=S_FILES, changes={
 run(r, "refresh-delta.sh")
 expect("drift: a file inside a kit directory kit-dirs.sh names is not compared as a script",
        run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent=".github/scripts/package.json")
+# The same kit spelled with a leading `./` (a valid equivalent path): kit-dirs.sh
+# drops it, so the prefix match still holds and package.json stays a kit file
+# (Codex, #451).
+for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/")):
+    r = project(f"drift-scripts-kitdir-dot{i}", at=S_FILES, changes={
+        ".github/workflows/ci-monitor.yml": f"name: CI Monitor\nenv:\n  UI_TESTS_DIR: {spelling}\n",
+        ".github/scripts/package.json": "{}\n",
+        ".github/scripts/playwright.config.js": "// config\n",
+    })
+    run(r, "refresh-delta.sh")
+    expect(f"drift: a kit directory spelled {spelling!r} still keeps its package.json out of the script loop",
+           run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent=".github/scripts/package.json")
 
 # A CUSTOM file the project already decided on (claude.prop's check-contrast.js)
 # carries its refresh_kept reason, read as refresh-stamp.sh reads it: keyed by

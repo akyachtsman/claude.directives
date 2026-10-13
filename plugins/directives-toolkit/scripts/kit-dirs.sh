@@ -14,7 +14,10 @@
 # the line: a quoted value ends at its closing quote (a `#` inside it is part of
 # the path) with its escapes decoded (`\"` in double quotes, `''` in single); an
 # unquoted one ends at ` #` (a comment). A trailing `/` is dropped, so `e2e/`
-# and `e2e` name one kit, not `e2e//x`. The accepted forms are a CLOSED set
+# and `e2e` name one kit, not `e2e//x`; so is a leading `./` (repeated, or with
+# doubled slashes), so `./.github/scripts` and `.github/scripts` name one kit
+# and a caller's prefix match on a project-relative path still holds (Codex,
+# #451). The accepted forms are a CLOSED set
 # (#375); anything else is taken literally and lands on the callers' "named but
 # missing" report, never silently. With no UI_TESTS_DIR set, the default
 # `.github/scripts/ui-tests` counts when it exists.
@@ -23,7 +26,7 @@ dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/wor
   | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
            -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
            -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \
-           -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sed -E 's#/+$##' | sort -u; true)
+           -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | sed -E -e 's#/+$##' -e 's#^(\./+)+##' | sort -u; true)
 if [ -z "$dirs" ] && [ -d .github/scripts/ui-tests ]; then
   dirs=.github/scripts/ui-tests
 fi

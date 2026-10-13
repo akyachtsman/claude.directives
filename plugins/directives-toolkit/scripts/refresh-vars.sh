@@ -61,41 +61,56 @@ if [ -z "$up" ] || ! refresh_fetch "$up" "$pin"; then
   exit 2
 fi
 
-# exprs: stdin -> the text GitHub EVALUATES, one span per line: every
-# `${{ ... }}` (to the next `}}`, so a `}` inside a quoted argument is kept),
-# and the bare expression of an `if:` that carries no `${{`. Nothing else is a
-# read: `name: future vars.X support` or `echo 'set vars.X later'` is inert
-# text, so it is neither a baseline read nor an incoming one (Codex, #450). An
-# expression split across lines is not followed (none ships).
+# exprs: stdin -> the text GitHub EVALUATES, one span per line. A light YAML
+# reader, enough for workflow files (Codex, #450, six rounds):
+#   - a BLOCK SCALAR (`key: |` / `key: >`, any chomping) runs while lines are
+#     indented deeper than its key; its lines are data, so a `#`-led one is
+#     read too (`payload: |` then `#${{ secrets.X }}`), and an `if:` block is
+#     read whole as a bare expression (`if: >` on its own line, as
+#     qa-live.yml has);
+#   - outside a block, a line whose first non-space is `#` is a YAML comment
+#     and is skipped: a commented-out read (cron-notify.yml's optional DB
+#     lines) is no read, on either side;
+#   - a `#` later in a line is kept: inside a quoted value or a shell string
+#     it is no comment (`echo "a # ${{ secrets.X }}"` reads X), and a real
+#     trailing comment naming a read can only over-list;
+#   - from what is kept: every `${{ ... }}` (to the next `}}`, so a `}` inside
+#     a quoted argument is kept) and a single-line bare `if:`. Nothing else
+#     is a read: `name: future vars.X support` is inert text.
+# An expression split across lines outside a block scalar is not followed
+# (none ships).
 exprs() {
-  awk '{
+  awk '
+  function emit(text,   i, rest, j) {
+    while ((i = index(text, "${{")) > 0) {
+      rest = substr(text, i + 3); j = index(rest, "}}")
+      if (j == 0) { print rest; return }
+      print substr(rest, 1, j - 1); text = substr(rest, j + 2)
+    }
+  }
+  function ind(s) { match(s, /^ */); return RLENGTH }
+  {
     line = $0
+    if (inblk) {
+      if (line ~ /^[[:space:]]*$/) next
+      if (ind(line) > blkind) { if (blkif) print line; else emit(line); next }
+      inblk = 0
+    }
+    if (line ~ /^[[:space:]]*#/) next
+    if (line ~ /^[[:space:]]*(-[[:space:]]+)?[^#]*:[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$/) {
+      inblk = 1; blkind = ind(line)
+      blkif = (line ~ /^[[:space:]]*(-[[:space:]]+)?if:/)
+      next
+    }
     if (line ~ /^[[:space:]]*(-[[:space:]]+)?if:[[:space:]]*/ && index(line, "${{") == 0) {
       sub(/^[[:space:]]*(-[[:space:]]+)?if:[[:space:]]*/, "", line); print line; next
     }
-    while ((i = index(line, "${{")) > 0) {
-      rest = substr(line, i + 3); j = index(rest, "}}")
-      if (j == 0) { print rest; break }
-      print substr(rest, 1, j - 1); line = substr(rest, j + 2)
-    }
+    emit(line)
   }'
 }
 
 # reads: stdin -> one `vars NAME` / `secrets NAME` line per read in an
-# evaluated span, NAME upper-cased. A `#` may open a YAML comment, sit in a
-# quoted value or shell string, or lead a block-scalar line Actions evaluates,
-# and only a YAML + shell parser tells them apart (Codex, #450). So each side
-# is read twice -- WHOLE, and with every `#` to end of line set aside (bare)
-# -- and a name is new when EITHER
-#   - the incoming template reads it anywhere and the project's file nowhere
-#     (catches a read after a quoted `#` or on a `#`-led block-scalar line,
-#     and a read a CUSTOM copy had dropped), or
-#   - the incoming template reads it outside any `#` and the project's file
-#     only after one (catches a commented-out read upstream made live).
-# A read commented out on both sides (cron-notify.yml's optional DB lines) is
-# neither, so an unchanged template lists nothing. Known limit: a read the
-# project only had commented out that comes back live only after a quoted `#`
-# or on a `#`-led block line -- both rare forms at once.
+# evaluated span, NAME upper-cased; GITHUB_TOKEN never (GitHub supplies it).
 reads() {
   exprs \
     | grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
@@ -103,8 +118,6 @@ reads() {
     | awk '{ print $1, toupper($2) }' \
     | grep -v '^secrets GITHUB_TOKEN$'
 }
-
-bare_reads() { sed -E 's/#.*$//' | reads; }
 
 # The baseline is what the project RAN WITH when the stamp was written: its own
 # installed files in the last commit that touched .claude/directive-sync.json
@@ -118,26 +131,19 @@ echo "installed-at-stamp baseline: $base"
 
 # Plain lists, no associative arrays: stock macOS bash is 3.2 (Codex, #450).
 templates=()
-: >"$up/old"; : >"$up/old_bare"
+: >"$up/old"
 for f in .github/workflows/*.yml .github/actions/*/action.yml; do
   [ -f "$f" ] || continue
   t=$(refresh_template_of "$f")
   git -C "$up" cat-file -e "$pin:$t" 2>/dev/null || continue
   templates+=("$t")
-  if [ -n "$stamp" ]; then
-    git show "$base:$f" 2>/dev/null | reads >>"$up/old"
-    git show "$base:$f" 2>/dev/null | bare_reads >>"$up/old_bare"
-  fi
+  [ -n "$stamp" ] && git show "$base:$f" 2>/dev/null | reads >>"$up/old"
 done
 sort -u -o "$up/old" "$up/old"
-sort -u -o "$up/old_bare" "$up/old_bare"
 # `kind NAME<TAB>template` for every read at the pin not in the baseline, then
 # one line per name with its templates joined.
 for t in ${templates[@]+"${templates[@]}"}; do
-  {
-    git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | reads | { grep -vxF -f "$up/old" || true; }
-    git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | bare_reads | { grep -vxF -f "$up/old_bare" || true; }
-  } | sed "s|\$|	$t|"
+  git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | reads | { grep -vxF -f "$up/old" || true; } | sed "s|\$|	$t|"
 done | sort -u | awk -F '\t' '
   $1 != key { if (key != "") print key "\t" list; key = $1; list = $2; next }
   { list = list ", " $2 }

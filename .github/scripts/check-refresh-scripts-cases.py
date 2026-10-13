@@ -86,6 +86,10 @@ and 2d73710 fails the comment-goes-live case. Round five: inert text naming a
 variable (`name: … vars.X …`) counted as a baseline read; only what GitHub
 evaluates (`${{ }}` spans, a bare `if:`) is read now, and 921f9e7 fails the
 inert-text case. Checked against every shipped template: no read is lost.
+Round six: a folded `if: >` went unread and a first install listed a
+commented-out read. The whole/comment-free union gave way to one light YAML
+reader (block scalars are data, `#`-led lines outside them are comments);
+bada2fe fails the folded-if and commented-out cases.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -221,6 +225,14 @@ LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
         with:
           payload: |
             #${{ secrets.BLOCK_HASH }}
+      - name: gated
+        if: >
+          vars.DEPLOY_ENABLED == 'true'
+        run: echo gated
+      - name: optional db
+        env:
+          # DB_URL: ${{ vars.OPTIONAL_DB }}
+          X: "1"
 """
 SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
                        "hooks": {"SessionStart": [{"hooks": [
@@ -641,7 +653,11 @@ expect("vars: a #-led line of a block scalar is still a read (Codex, #450)",
 expect("vars: a name in plain text (no ${{ }}, no if:) is not a read",
        res, 0, "OWNER PRE-MERGE", absent="COMMENTED_ONLY")
 expect("vars: a bare if: expression is a read", res, 0, "OWNER PRE-MERGE: set repository variable GATE")
-expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 5 new", absent="OK: no new")
+expect("vars: a folded `if: >` block is read whole (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository variable DEPLOY_ENABLED")
+expect("vars: a commented-out read (cron-notify's optional DB lines) is no read, even first time (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE", absent="OPTIONAL_DB")
+expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 6 new", absent="OK: no new")
 
 r = project("vars-custom-dropped", at=S_FILES, workflows=LIVE,
             changes={".github/workflows/qa-live.yml": LIVE_S.replace(

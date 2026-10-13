@@ -71,16 +71,21 @@ fi
 #   - outside a block, a line whose first non-space is `#` is a YAML comment
 #     and is skipped: a commented-out read (cron-notify.yml's optional DB
 #     lines) is no read, on either side;
-#   - a `#` later in a line is kept: inside a quoted value or a shell string
-#     it is no comment (`echo "a # ${{ secrets.X }}"` reads X), and a real
-#     trailing comment naming a read can only over-list;
+#   - a `#` later in a line (outside a block): on the INCOMING side it is kept
+#     -- inside a quoted value or a shell string it is no comment (`echo "a #
+#     ${{ secrets.X }}"` reads X); on the BASELINE side (exprs strip) it and
+#     what follows are dropped, so a trailing comment the project never ran
+#     cannot hide a read upstream made live (Codex, #450). The baseline is
+#     thus never larger than what ran and the incoming side never smaller:
+#     every error lists an extra owner item, none hides one. (No shipped
+#     template has a read after a mid-line `#`, so this lists nothing extra.)
 #   - from what is kept: every `${{ ... }}` (to the next `}}`, so a `}` inside
 #     a quoted argument is kept) and a single-line bare `if:`. Nothing else
 #     is a read: `name: future vars.X support` is inert text.
 # An expression split across lines outside a block scalar is not followed
 # (none ships).
 exprs() {
-  awk '
+  awk -v strip="${1:-}" '
   function emit(text,   i, rest, j) {
     while ((i = index(text, "${{")) > 0) {
       rest = substr(text, i + 3); j = index(rest, "}}")
@@ -97,6 +102,7 @@ exprs() {
       inblk = 0
     }
     if (line ~ /^[[:space:]]*#/) next
+    if (strip) sub(/[[:space:]]#.*$/, "", line)
     if (line ~ /^[[:space:]]*(-[[:space:]]+)?[^#]*:[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$/) {
       inblk = 1; blkind = ind(line)
       blkif = (line ~ /^[[:space:]]*(-[[:space:]]+)?if:/)
@@ -112,7 +118,7 @@ exprs() {
 # reads: stdin -> one `vars NAME` / `secrets NAME` line per read in an
 # evaluated span, NAME upper-cased; GITHUB_TOKEN never (GitHub supplies it).
 reads() {
-  exprs \
+  exprs "${1:-}" \
     | grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
     | sed -E "s/^[^vs]*//; s/\[[[:space:]]*'/ /; s/'[[:space:]]*\]\$//; s/\./ /" \
     | awk '{ print $1, toupper($2) }' \
@@ -137,7 +143,7 @@ for f in .github/workflows/*.yml .github/actions/*/action.yml; do
   t=$(refresh_template_of "$f")
   git -C "$up" cat-file -e "$pin:$t" 2>/dev/null || continue
   templates+=("$t")
-  [ -n "$stamp" ] && git show "$base:$f" 2>/dev/null | reads >>"$up/old"
+  [ -n "$stamp" ] && git show "$base:$f" 2>/dev/null | reads strip >>"$up/old"
 done
 sort -u -o "$up/old" "$up/old"
 # `kind NAME<TAB>template` for every read at the pin not in the baseline, then

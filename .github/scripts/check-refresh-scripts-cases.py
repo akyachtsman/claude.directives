@@ -89,7 +89,10 @@ inert-text case. Checked against every shipped template: no read is lost.
 Round six: a folded `if: >` went unread and a first install listed a
 commented-out read. The whole/comment-free union gave way to one light YAML
 reader (block scalars are data, `#`-led lines outside them are comments);
-bada2fe fails the folded-if and commented-out cases.
+bada2fe fails the folded-if and commented-out cases. Round seven: a read in a
+trailing comment of the project's file hid one made live upstream; the
+baseline side now drops a mid-line `#` onward (the incoming side keeps it),
+and d4b92e8 fails the trailing-comment case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -674,6 +677,13 @@ refresh_installs(r, LIVE)
 expect("vars: a name the project only MENTIONED in a comment is listed when the template makes it live (Codex, #450)",
        run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
 
+r = project("vars-trailing-comment", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": LIVE_S.replace("name: QA Live", "name: QA Live # future: ${{ vars.APP_URL }}")})
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+expect("vars: a read only in a trailing comment of the project's file is no baseline read (Codex, #450)",
+       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
+
 r = project("vars-inert-text", at=S_FILES, workflows=LIVE,
             changes={".github/workflows/qa-live.yml": LIVE_S.replace("name: QA Live", "name: QA Live (vars.APP_URL later)")
                      + "      - run: echo 'configure vars.APP_URL later'\n"})
@@ -702,6 +712,15 @@ run(r, "refresh-delta.sh")
 expect("vars: a template the project does not install is not read: the OK line, never silence",
        run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="APP_URL")
 r = project("vars-current", workflows=LIVE, stamp=H)
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-vars.sh")
+# The one read the fixture keeps after a quoted `#` is the documented cost of a
+# baseline that drops a mid-line `#` onward: it is listed again even unchanged.
+# No shipped template has such a read (checked when this was written).
+expect("vars: an unchanged file lists only a read after a quoted # -- the documented cost",
+       res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED", absent="APP_URL")
+expect("vars: …and nothing else", res, 0, "SUMMARY: 1 new")
+r = project("vars-current-plain", stamp=H)
 run(r, "refresh-delta.sh")
 expect("vars: reads all present at the stamp print the explicit OK line",
        run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="OWNER PRE-MERGE")

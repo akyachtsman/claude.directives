@@ -19,7 +19,18 @@
 #     reminder. No build (BUILD_PATHS empty or absent): silent. It skips no
 #     `templates/` path: a project's own templates/ can be a build input.
 #
-# Fail-open by design: any parse problem exits 0. Exit 2 = feed stderr to Claude.
+# Fail-open by design: any parse problem exits 0, silent.
+#
+# An ADVISORY, never a block: the edit has already succeeded. So a reminder is
+# JSON on stdout with exit 0 -- hookSpecificOutput.additionalContext reaches
+# Claude beside the tool result, systemMessage is shown to the user -- the same
+# contract as the stale-copy advisory in hooks.json. Exit 2 also reached Claude,
+# but rendered as a hook blocking error after an edit that had worked (pilots
+# claude.trading + claude.prop, 2026-10-13; TIME-SENSITIVE.md has the row).
+advise() {
+  printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$1" "$1"
+  exit 0
+}
 in=$(cat)
 # shellcheck source=gate-lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/gate-lib.sh" 2>/dev/null || exit 0
@@ -40,8 +51,7 @@ if [ -d "$dir" ] && prefix=$(git -C "$dir" rev-parse --show-prefix 2>/dev/null);
   root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || root=
 fi
 if gate_served "$rel"; then
-  echo 'Edited a GitHub Pages file - apply the update-pages skill: ship it, watch the pages build for the merge commit SHA (not the branch head), and report live/stuck/failed proactively.' >&2
-  exit 2
+  advise 'Edited a GitHub Pages file - apply the update-pages skill: ship it, watch the pages build for the merge commit SHA (not the branch head), and report live/stuck/failed proactively.'
 fi
 [ -n "$root" ] || exit 0
 qa="$root/.github/workflows/qa.yml"
@@ -80,7 +90,6 @@ bp=$(awk '
   END { if (blk != "" && !done) print val }' "$qa") || exit 0
 [ -n "${bp//[[:space:]]/}" ] || exit 0
 if printf '%s\n' "$rel" | grep -qE -- "$bp" 2>/dev/null; then
-  echo 'Edited a build input of the GitHub Pages site (BUILD_PATHS in qa.yml) - the deployed site changes with it: apply the update-pages skill: ship it, watch the deploy for the merge commit SHA (not the branch head), and report live/stuck/failed proactively.' >&2
-  exit 2
+  advise 'Edited a build input of the GitHub Pages site (BUILD_PATHS in qa.yml) - the deployed site changes with it: apply the update-pages skill: ship it, watch the deploy for the merge commit SHA (not the branch head), and report live/stuck/failed proactively.'
 fi
 exit 0

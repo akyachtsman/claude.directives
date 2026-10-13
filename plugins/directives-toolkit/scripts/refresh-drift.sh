@@ -158,17 +158,23 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     # pilot, 2026-10-13). It is honoured only while it ALSO binds this file's
     # content: its `local` blob must equal the installed copy's, or a later
     # edit (or a replaced file) would inherit an old approval and go unreviewed
-    # (Codex, #451). A record without `local` is shown but not honoured.
+    # (Codex, #451). A record without `local` is shown but not honoured, and so
+    # is one without a reason (a non-blank string), which the stamp would not
+    # honour either.
     b=$(git -C "$up" rev-parse "$pin:$t" 2>/dev/null) || b=
     lb=$(git hash-object -- "$f" 2>/dev/null) || lb=
     rec=$(jq -r --arg p "$f" --arg b "$b" \
       '.refresh_kept[$p] | select(type == "object" and .blob == $b)
-       | [(.local // ""), ((.reason // "") | gsub("[\t\n\r]"; " "))] | @tsv' \
+       | [(.local // ""),
+          (.reason // "" | if type == "string" and test("\\S") then gsub("[\t\n\r]"; " ") else "" end)]
+       | @tsv' \
       .claude/directive-sync.json 2>/dev/null) || rec=
     kept=
     if [ -n "$rec" ]; then
       rl=${rec%%$'\t'*} why=${rec#*$'\t'}
-      if [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
+      if [ -z "$why" ]; then
+        kept=" (refresh_kept has a record but no reason -- review it, then re-record it with one)"
+      elif [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
         kept=" (recorded in refresh_kept: $why)"
       elif [ -n "$rl" ]; then
         kept=" (refresh_kept says \"$why\", but this file changed since it was recorded -- review it again)"

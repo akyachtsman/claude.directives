@@ -99,9 +99,9 @@ Over git transport, at the pinned head. Per file it prints one of:
   with its reason; do not re-ask. Once upstream changes that template, or the
   installed copy changes, the record stops binding and the line says so: review
   it as a fresh question (pilot claude.prop, 2026-10-13; Codex, #451). A record
-  without `local` (recorded before it existed) is shown but never honoured,
-  here or by the stamp: review that file once and re-record it with its local
-  blob.
+  without `local` (recorded before it existed), or without a reason (a
+  non-blank string), is shown but never honoured, here or by the stamp: review
+  that file once and re-record it with its local blob and a reason.
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.

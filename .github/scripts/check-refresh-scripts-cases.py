@@ -129,7 +129,10 @@ case, and the new stamp with only the local condition removed fails the
 and drift counts a file under a kit directory as the kit's only when
 templates/ui-tests ships its name. MEASURED: the 008b165 stamp fails 4 cases
 (no-local refuses, absent printed, absent covered, and the re-run that follows),
-the 008b165 drift fails the kit-at-the-scripts-root case.
+the 008b165 drift fails the kit-at-the-scripts-root case. Round 4: a reason
+must be a non-blank string in drift AND the stamp (kit_dir_kept's predicate).
+MEASURED: the 06a5267 drift fails the three no-reason cases, the 06a5267 stamp
+the blank-reason one and the re-run that follows it.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -524,6 +527,12 @@ if m:
     set_kept(r, ".github/workflows/ci-monitor.yml", {"blob": m.group(1), "reason": "a local watch list"})
     expect("stamp: a record without a local blob refuses, never inherits the approval (Codex, #451)",
            run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+    # Both blobs bound but a blank reason: drift shows it as needing a reason,
+    # so the stamp must not honour it either (Codex, #451).
+    set_kept(r, ".github/workflows/ci-monitor.yml",
+             {"blob": m.group(1), "local": m.group(2), "reason": "  \n"})
+    expect("stamp: a record with a blank reason refuses, as drift reports it",
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
     set_kept(r, ".github/workflows/ci-monitor.yml",
              {"blob": m.group(1), "local": m.group(2), "reason": "a local watch list"})
 res = run(r, "refresh-stamp.sh")
@@ -737,6 +746,21 @@ expect("drift: a file edited since its record was made does not inherit the appr
        res, 0, "CUSTOM: .github/scripts/lint.py (refresh_kept says \"approved content\", but this file changed since it was recorded")
 expect("drift: a record bound to an OLD template blob no longer covers it: the plain line",
        res, 0, "CUSTOM: .github/scripts/guard.py — differs", absent="decided against the old template")
+
+# A record binding both blobs but giving no reason is not honoured -- the stamp
+# would refuse it, so drift must not say "do not re-ask" (Codex, #451).
+for i, why in enumerate(("", "  \n", None)):
+    rec = {"blob": blob_id(H, "templates/scripts/check-contrast.js"), "local": obj_id(CONTRAST_LOCAL)}
+    if why is not None:
+        rec["reason"] = why
+    r = project(f"drift-kept-noreason{i}", at=S_FILES, changes={
+        ".github/scripts/check-contrast.js": CONTRAST_LOCAL,
+    }, sync_extra={"refresh_kept": {".github/scripts/check-contrast.js": rec}})
+    run(r, "refresh-delta.sh")
+    expect(f"drift: a record with reason {why!r} is shown as needing a reason, never as recorded",
+           run(r, "refresh-drift.sh"), 0,
+           "CUSTOM: .github/scripts/check-contrast.js (refresh_kept has a record but no reason",
+           absent="recorded in refresh_kept")
 
 r = project("drift-pin", at=S_FILES, stamp=S)
 marker(r, "classified").write_text(S)

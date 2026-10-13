@@ -61,23 +61,44 @@ if [ -z "$up" ] || ! refresh_fetch "$up" "$pin"; then
   exit 2
 fi
 
-# reads: stdin -> one `vars NAME` / `secrets NAME` line per read, NAME
-# upper-cased. A `#` may open a YAML comment, sit in a quoted value or shell
-# string, or lead a block-scalar line Actions evaluates, and only a YAML +
-# shell parser tells them apart (Codex, #450, four rounds). So each side is
-# read twice -- WHOLE, and with every `#` to end of line set aside (bare) --
-# and a name is new when EITHER
-#   - the incoming template names it anywhere and the project's file nowhere
+# exprs: stdin -> the text GitHub EVALUATES, one span per line: every
+# `${{ ... }}` (to the next `}}`, so a `}` inside a quoted argument is kept),
+# and the bare expression of an `if:` that carries no `${{`. Nothing else is a
+# read: `name: future vars.X support` or `echo 'set vars.X later'` is inert
+# text, so it is neither a baseline read nor an incoming one (Codex, #450). An
+# expression split across lines is not followed (none ships).
+exprs() {
+  awk '{
+    line = $0
+    if (line ~ /^[[:space:]]*(-[[:space:]]+)?if:[[:space:]]*/ && index(line, "${{") == 0) {
+      sub(/^[[:space:]]*(-[[:space:]]+)?if:[[:space:]]*/, "", line); print line; next
+    }
+    while ((i = index(line, "${{")) > 0) {
+      rest = substr(line, i + 3); j = index(rest, "}}")
+      if (j == 0) { print rest; break }
+      print substr(rest, 1, j - 1); line = substr(rest, j + 2)
+    }
+  }'
+}
+
+# reads: stdin -> one `vars NAME` / `secrets NAME` line per read in an
+# evaluated span, NAME upper-cased. A `#` may open a YAML comment, sit in a
+# quoted value or shell string, or lead a block-scalar line Actions evaluates,
+# and only a YAML + shell parser tells them apart (Codex, #450). So each side
+# is read twice -- WHOLE, and with every `#` to end of line set aside (bare)
+# -- and a name is new when EITHER
+#   - the incoming template reads it anywhere and the project's file nowhere
 #     (catches a read after a quoted `#` or on a `#`-led block-scalar line,
 #     and a read a CUSTOM copy had dropped), or
-#   - the incoming template names it outside any `#` and the project's file
-#     only after one (catches a comment upstream turned into a live read).
-# A name commented out on both sides (cron-notify.yml's optional DB lines) is
-# neither, so an unchanged template lists nothing. Known limit: a name the
-# project only commented on that comes back live only after a quoted `#` or
-# on a `#`-led block line -- both rare forms at once.
+#   - the incoming template reads it outside any `#` and the project's file
+#     only after one (catches a commented-out read upstream made live).
+# A read commented out on both sides (cron-notify.yml's optional DB lines) is
+# neither, so an unchanged template lists nothing. Known limit: a read the
+# project only had commented out that comes back live only after a quoted `#`
+# or on a `#`-led block line -- both rare forms at once.
 reads() {
-  grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
+  exprs \
+    | grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
     | sed -E "s/^[^vs]*//; s/\[[[:space:]]*'/ /; s/'[[:space:]]*\]\$//; s/\./ /" \
     | awk '{ print $1, toupper($2) }' \
     | grep -v '^secrets GITHUB_TOKEN$'

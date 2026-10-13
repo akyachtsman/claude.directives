@@ -82,7 +82,10 @@ custom-dropped and count cases; the one before that (bb3e993), the quoted-#
 case; the one before that (f97e46a), the installed-now case. Round four: a
 name the project only commented on, made live upstream, was hidden by the
 raw-text baseline; each side is now read whole AND with comments set aside,
-and 2d73710 fails the comment-goes-live case.
+and 2d73710 fails the comment-goes-live case. Round five: inert text naming a
+variable (`name: … vars.X …`) counted as a baseline read; only what GitHub
+evaluates (`${{ }}` spans, a bare `if:`) is read now, and 921f9e7 fails the
+inert-text case. Checked against every shipped template: no read is lost.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -214,6 +217,7 @@ LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
           token: ${{ secrets.GITHUB_TOKEN }}
       - run: echo "prefix # ${{ secrets.HASH_QUOTED }}"
       - uses: ./.github/actions/notify
+        if: vars.GATE == 'on'
         with:
           payload: |
             #${{ secrets.BLOCK_HASH }}
@@ -634,8 +638,9 @@ expect("vars: a read after a # inside a quoted string is still a read (Codex, #4
        res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED")
 expect("vars: a #-led line of a block scalar is still a read (Codex, #450)",
        res, 0, "OWNER PRE-MERGE: set repository secret BLOCK_HASH")
-expect("vars: a NEW mention in a comment is listed too -- over-listing is the safe side",
-       res, 0, "OWNER PRE-MERGE: set repository variable COMMENTED_ONLY")
+expect("vars: a name in plain text (no ${{ }}, no if:) is not a read",
+       res, 0, "OWNER PRE-MERGE", absent="COMMENTED_ONLY")
+expect("vars: a bare if: expression is a read", res, 0, "OWNER PRE-MERGE: set repository variable GATE")
 expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 5 new", absent="OK: no new")
 
 r = project("vars-custom-dropped", at=S_FILES, workflows=LIVE,
@@ -651,6 +656,14 @@ r = project("vars-comment-goes-live", at=S_FILES, workflows=LIVE,
 run(r, "refresh-delta.sh")
 refresh_installs(r, LIVE)
 expect("vars: a name the project only MENTIONED in a comment is listed when the template makes it live (Codex, #450)",
+       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
+
+r = project("vars-inert-text", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": LIVE_S.replace("name: QA Live", "name: QA Live (vars.APP_URL later)")
+                     + "      - run: echo 'configure vars.APP_URL later'\n"})
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+expect("vars: inert text naming a variable is no baseline read: the live one is listed (Codex, #450)",
        run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
 
 r = project("vars-installed-now", at=S_FILES)

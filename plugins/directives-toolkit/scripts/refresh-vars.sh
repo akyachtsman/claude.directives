@@ -18,9 +18,9 @@
 # reads are the project's own). For those, `vars.NAME`, `secrets.NAME` and the
 # bracket forms are read from the template text at the PIN and at the STAMP,
 # YAML comments set aside. A name is NEW when no stamp-era version of any of
-# those templates read it -- so a template newly installed by this refresh,
-# absent at the stamp, counts its reads as new unless another installed
-# template already read them. GITHUB_TOKEN is never listed: GitHub supplies it.
+# the templates installed at the stamp read it -- so a template this refresh
+# installs for the first time counts its reads as new unless a template the
+# project already ran read them. GITHUB_TOKEN is never listed: GitHub supplies it.
 # Names compare case-insensitively, as GitHub resolves them.
 #
 # WHAT IT CANNOT SEE. Whether the variable is SET (that needs the API above),
@@ -74,41 +74,53 @@ reads() {
     | grep -v '^secrets GITHUB_TOKEN$'
 }
 
-templates=()
+# The baseline is what the project had installed WHEN THE STAMP WAS WRITTEN: the
+# tree of the last commit that touched .claude/directive-sync.json (this runs
+# before the stamp, so that is the previous refresh's). A template this refresh
+# installs for the first time is therefore new even if upstream shipped it at
+# the stamp, so its reads are never hidden by a baseline the project never ran
+# (Codex, #450). No such commit: HEAD. Either way it is printed.
+base=$(git log -1 --format=%H -- .claude/directive-sync.json 2>/dev/null) || base=
+[ -n "$base" ] || base=HEAD
+echo "installed-at-stamp baseline: $base"
+
+# Plain lists, no associative arrays: stock macOS bash is 3.2 (Codex, #450).
+templates=() before=()
 for f in .github/workflows/*.yml .github/actions/*/action.yml; do
   [ -f "$f" ] || continue
   t=$(refresh_template_of "$f")
-  git -C "$up" cat-file -e "$pin:$t" 2>/dev/null && templates+=("$t")
+  git -C "$up" cat-file -e "$pin:$t" 2>/dev/null || continue
+  templates+=("$t")
+  git cat-file -e "$base:$f" 2>/dev/null && before+=("$t")
 done
 
-declare -A old=() new_in=()
 if [ -n "$stamp" ]; then
-  for t in "${templates[@]}"; do
-    while read -r kind name; do old["$kind $name"]=1; done < <(reads "$stamp" "$t")
-  done
+  for t in ${before[@]+"${before[@]}"}; do reads "$stamp" "$t"; done | sort -u >"$up/old"
+else
+  : >"$up/old"
 fi
-for t in "${templates[@]}"; do
-  while read -r kind name; do
-    [ -n "${old["$kind $name"]:-}" ] && continue
-    case ", ${new_in["$kind $name"]:-}, " in
-      *", $t, "*) ;;
-      *) new_in["$kind $name"]="${new_in["$kind $name"]:+${new_in["$kind $name"]}, }$t" ;;
-    esac
-  done < <(reads "$pin" "$t")
-done
-rm -rf "$up"
+# `kind NAME<TAB>template` for every read at the pin not in the baseline, then
+# one line per name with its templates joined.
+for t in ${templates[@]+"${templates[@]}"}; do
+  reads "$pin" "$t" | grep -vxF -f "$up/old" | sed "s|\$|	$t|"
+done | sort -u | awk -F '\t' '
+  $1 != key { if (key != "") print key "\t" list; key = $1; list = $2; next }
+  { list = list ", " $2 }
+  END { if (key != "") print key "\t" list }' >"$up/new"
 
 n=0
-while read -r kind name; do
-  [ -n "$kind" ] || continue
+while IFS='	' read -r key files; do
+  [ -n "$key" ] || continue
+  kind=${key%% *} name=${key#* }
   case "$kind" in vars) what="repository variable" ;; *) what="repository secret" ;; esac
   if [ -n "$stamp" ]; then
-    echo "OWNER PRE-MERGE: set $what $name — newly read by ${new_in["$kind $name"]}"
+    echo "OWNER PRE-MERGE: set $what $name — newly read by $files"
   else
-    echo "OWNER PRE-MERGE: set $what $name — read by ${new_in["$kind $name"]} (no stamp: every read is listed, none can be told from new)"
+    echo "OWNER PRE-MERGE: set $what $name — read by $files (no stamp: every read is listed, none can be told from new)"
   fi
   n=$((n + 1))
-done < <(for k in "${!new_in[@]}"; do printf '%s\n' "$k"; done | sort)
+done <"$up/new"
+rm -rf "$up"
 
 if [ "$n" -eq 0 ]; then
   echo "OK: no new repository variables or secrets read (${#templates[@]} installed template(s), ${stamp:-no stamp} -> $pin)"

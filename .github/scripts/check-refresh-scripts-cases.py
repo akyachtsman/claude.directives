@@ -609,6 +609,16 @@ run(r, "refresh-delta.sh")
 expect("vars: a template absent at the stamp counts its reads as new",
        run(r, "refresh-vars.sh"), 0,
        "OWNER PRE-MERGE: set repository variable FROM_NEW — newly read by templates/workflows/new.yml")
+# Codex, #450: a template upstream already shipped at the stamp but the project
+# installs only NOW never ran here, so the stamp-era reads of it are no baseline.
+r = project("vars-installed-now")
+run(r, "refresh-delta.sh")
+live = installed(H_FILES, workflows=LIVE)[".github/workflows/qa-live.yml"][0]
+(r / ".github/workflows/qa-live.yml").write_text(live)
+res = run(r, "refresh-vars.sh")
+expect("vars: a template installed by THIS refresh lists even its stamp-era reads",
+       res, 0, "OWNER PRE-MERGE: set repository secret TEST_AUTH_CREDENTIAL — newly read by templates/workflows/qa-live.yml")
+expect("vars: …and its new ones", res, 0, "OWNER PRE-MERGE: set repository variable APP_URL")
 r = project("vars-none")
 run(r, "refresh-delta.sh")
 expect("vars: a template the project does not install is not read: the OK line, never silence",

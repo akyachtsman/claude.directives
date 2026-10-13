@@ -30,7 +30,7 @@ MUTANTS. Each script is swapped by its own variable, copied into a temp
 directory beside the real siblings it sources or runs (the installed layout):
 REFRESH_STAMP_BIN, REFRESH_DELTA_BIN, REFRESH_DRIFT_BIN, REFRESH_MERGE_BIN,
 REFRESH_CALLERS_BIN, REFRESH_BROKEN_REFS_BIN, REFRESH_HOOK_INSTALL_BIN,
-KIT_DEFECTS_BIN, REFRESH_LIB_BIN.
+KIT_DEFECTS_BIN, REFRESH_VARS_BIN, REFRESH_LIB_BIN.
 
 MEASURED 2026-10-13 against the pre-fix scripts (100d6b4, with only the
 hard-coded upstream URL replaced by ${REFRESH_UPSTREAM:-...} so they could be
@@ -56,6 +56,23 @@ reverted at a time:
   merge --write ignoring conflicts -> both conflict cases;
   the callers' composite closure removed -> the caller-set case;
   kit-defects running an empty Check block -> the no-Check-block case.
+
+NEW REPOSITORY VARIABLES AND SECRETS (owner ruling, 2026-10-13: after the
+pilots merged, QA — UI Tests (live) went red on an unset APP_URL). Before
+refresh-vars.sh no step looked, so REFRESH_VARS_BIN = an empty file (the
+pre-change state) -> all 10 vars cases. Then the new script with one feature
+reverted at a time, MEASURED 2026-10-13:
+  the stamp baseline removed (every read new) -> the read-present-at-the-stamp,
+    no-OK-line-with-new-reads and all-present-at-the-stamp cases;
+  the GITHUB_TOKEN exclusion removed -> the GITHUB_TOKEN case (+ the count);
+  the comment stripping removed -> the comment-only case (+ the count);
+  `secrets.` reads dropped, or the bracket form dropped -> the secrets case
+    (+ the count);
+  the OK line removed -> both OK-line cases;
+  the installed-only filter removed (every template at the pin) -> the
+    not-installed case (+ the count);
+  a template absent at the stamp skipped -> the newly-installed case;
+  the Phase 2 marker requirement removed -> the after-the-stamp case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -86,6 +103,7 @@ BINS = {
     "refresh-broken-refs.sh": "REFRESH_BROKEN_REFS_BIN",
     "refresh-hook-install.sh": "REFRESH_HOOK_INSTALL_BIN",
     "kit-defects.sh": "KIT_DEFECTS_BIN",
+    "refresh-vars.sh": "REFRESH_VARS_BIN",
     "refresh-lib.sh": "REFRESH_LIB_BIN",
 }
 
@@ -167,6 +185,24 @@ KIT_DEFECTS = """# UI-test kit defects
 - **Revision:** 1
 - **Bug:** no check block here.
 """
+# The live workflow reads repository variables and secrets; the release adds
+# vars.APP_URL and secrets.NEW_SECRET (the pilots' unset APP_URL, 2026-10-13),
+# and also a GITHUB_TOKEN read and a name only a COMMENT mentions -- each NEW
+# at the head, so only the exclusion itself keeps them off the list.
+LIVE_S = """name: QA Live
+jobs:
+  live:
+    steps:
+      - uses: ./.github/actions/ui-suite
+        with:
+          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          ready: ${{ vars.TEST_AUTH_READY_SELECTOR }}
+"""
+LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
+          app-url: ${{ github.event.inputs.app_url || vars.APP_URL }}
+          extra: ${{ secrets['New_Secret'] }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+"""
 SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
                        "hooks": {"SessionStart": [{"hooks": [
                            {"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"}]}]}},
@@ -175,6 +211,7 @@ S_FILES = {
     "templates/workflows/qa.yml": QA_S,
     "templates/workflows/ci-monitor.yml": "name: CI Monitor\n# v1\n",
     "templates/workflows/cron-notify.yml": CRON,
+    "templates/workflows/qa-live.yml": LIVE_S,
     "templates/actions/ui-suite/action.yml": ACTION,
     "templates/actions/ui-suite/validate-report-path.py": "print('ok')\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v1\n",
@@ -198,7 +235,8 @@ H_FILES = {
     **S_FILES,
     "templates/workflows/qa.yml": QA_H,
     "templates/workflows/ci-monitor.yml": "name: CI Monitor\n# v2\n",
-    "templates/workflows/new.yml": "name: New\n",
+    "templates/workflows/qa-live.yml": LIVE_H,
+    "templates/workflows/new.yml": "name: New\n# read: ${{ vars.FROM_NEW }}\nenv:\n  X: ${{ vars.FROM_NEW }}\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v2\n",
 }
@@ -551,6 +589,37 @@ expect("kit-defects: the fixed copy reads CLEAR",
 r = project("kd-none", changes={p: None for p in installed(H_FILES) if "/ui-tests/" in p})
 expect("kit-defects: no kit is said, not silent",
        run(r, "kit-defects.sh"), 0, "OK: no UI-test kit")
+
+# ---- new repository variables and secrets: an OWNER PRE-MERGE item -------------
+LIVE = INSTALLED_WORKFLOWS + ("qa-live.yml",)
+r = project("vars-new", workflows=LIVE)
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-vars.sh")
+expect("vars: a release that adds a vars.APP_URL read names the variable and the file",
+       res, 0, "OWNER PRE-MERGE: set repository variable APP_URL — newly read by templates/workflows/qa-live.yml")
+expect("vars: a new secrets read is named the same way (the bracket form too)",
+       res, 0, "OWNER PRE-MERGE: set repository secret NEW_SECRET — newly read by templates/workflows/qa-live.yml")
+expect("vars: a read already present at the stamp is not flagged",
+       res, 0, "OWNER PRE-MERGE", absent="TEST_AUTH_CREDENTIAL")
+expect("vars: GITHUB_TOKEN is never flagged", res, 0, "OWNER PRE-MERGE", absent="GITHUB_TOKEN")
+expect("vars: a name only a comment mentions is not a read", res, 0, "OWNER PRE-MERGE", absent="COMMENTED_ONLY")
+expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 2 new", absent="OK: no new")
+r = project("vars-newly-installed", workflows=LIVE + ("new.yml",))
+run(r, "refresh-delta.sh")
+expect("vars: a template absent at the stamp counts its reads as new",
+       run(r, "refresh-vars.sh"), 0,
+       "OWNER PRE-MERGE: set repository variable FROM_NEW — newly read by templates/workflows/new.yml")
+r = project("vars-none")
+run(r, "refresh-delta.sh")
+expect("vars: a template the project does not install is not read: the OK line, never silence",
+       run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="APP_URL")
+r = project("vars-current", workflows=LIVE, stamp=H)
+run(r, "refresh-delta.sh")
+expect("vars: reads all present at the stamp print the explicit OK line",
+       run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="OWNER PRE-MERGE")
+run(r, "refresh-stamp.sh")
+expect("vars: after the stamp consumed Phase 2's marker it refuses, never a false OK",
+       run(r, "refresh-vars.sh"), 2, "no Phase 2 marker", absent="OK: no new")
 
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(CASES.finish(f"{CASES.passed} refresh-script behaviours hold against a fixture upstream."))

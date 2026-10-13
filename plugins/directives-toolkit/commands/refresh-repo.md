@@ -832,6 +832,35 @@ template did not change in the delta is compared only by Phase 1.5, which
 reports `STALE`, `CUSTOM` or `DRIFT` without holding the stamp. So "nothing
 named" is not "no divergence"; read Phase 1.5's report beside this one.
 
+### New repository variables and secrets (owner pre-merge)
+
+Run this after the installs, **before** `refresh-stamp.sh`: a written stamp
+consumes Phase 2's marker, and without it this script refuses rather than
+compare the head with itself.
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-vars.sh"
+```
+It reads every `vars.NAME` and `secrets.NAME` (`GITHUB_TOKEN` excepted) in the
+templates of the workflows and composites installed here, at the pin and at the
+stamp, and prints one line per name no stamp-era template read —
+`OWNER PRE-MERGE: set repository variable APP_URL — newly read by templates/workflows/qa-live.yml`
+(or `repository secret`) — or the explicit `OK: no new repository variables or secrets read` line; exit 2 when it
+could not compare. Each `OWNER PRE-MERGE` line goes, verbatim, into the
+refresh's report AND the top of its PR body as an item the owner completes
+**before merging**: setting a variable or secret needs the owner, because the
+web-session proxy blocks the Actions variables API, so the session can neither
+set one nor see whether it is set. A merged refresh that newly reads an unset
+variable goes red on its first run (pilots claude.prop + claude.trading,
+2026-10-13: `QA — UI Tests (live)` failed in seconds at `Require APP_URL`).
+
+What it cannot see, and the session states instead: a name read at the stamp
+that has only now become REQUIRED. `APP_URL` is that case — every version of
+`qa-live.yml` read it, and what the pilots lost was a filled-in `baseURL`
+default in the kit's `playwright.config.js`, which neither live workflow reads.
+So whenever this refresh installs or updates `qa-live.yml` or
+`qa-response.yml`, add `APP_URL` to the owner's pre-merge list as "confirm it
+is set" even on an `OK` line.
+
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-stamp.sh"
 ```
@@ -863,5 +892,8 @@ later", keep the old stamp, and never fabricate a SHA or an unverified delta
 
 Report: rules re-read (Phase 0), broken references and fixes, the upstream
 delta with per-file dispositions, which path wrote `.claude/settings.json`
-(*Settings writes*), the new stamp — and remind that any toolkit
-changes in the delta arrive via the plugin at next session start.
+(*Settings writes*), the new stamp, and **the owner's pre-merge checklist** —
+every `OWNER PRE-MERGE` line from *New repository variables and secrets*, also
+placed at the top of the refresh PR's body, so the owner sets each variable or
+secret before merging (or the `OK` line, said as such) — and remind that any
+toolkit changes in the delta arrive via the plugin at next session start.

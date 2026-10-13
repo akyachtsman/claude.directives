@@ -160,6 +160,14 @@ Corollaries worth memorizing:
    sets `disable-model-invocation`, so a session cannot start it, a hand-off
    cannot queue it, and a pasted "Run /refresh-repo" in plain text does not
    start it (pilots, 2026-10-13).
+   **Before merging the refresh PR, work its owner pre-merge checklist** — the
+   `OWNER PRE-MERGE` lines at the top of the PR body. Each names a repository
+   variable or secret the incoming workflows read that the old ones did not;
+   set it under `Settings → Secrets and variables → Actions` first, because a
+   session cannot (the web proxy blocks that API) and a merge without it goes
+   red on the first run. Both pilots merged without `APP_URL` and their live UI
+   workflow failed in seconds (2026-10-13). Where the checklist comes from:
+   `plugins/directives-toolkit/commands/refresh-repo.md` → *New repository variables and secrets (owner pre-merge)*.
 5. **Referenced only** → done.
 6. If the change closes out a downstream finding, paste the prepared reply
    back into the session that reported it (see the loop below).

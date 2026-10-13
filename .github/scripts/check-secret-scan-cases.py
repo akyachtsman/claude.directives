@@ -7,7 +7,8 @@ so the scan prints the same clean result whether its pattern works or matches
 nothing at all -- the fail-open family (#323). Downstream pilots found three
 real holes that way (claude.trading, claude.prop, 2026-10-13): an Anthropic key
 carries hyphens the generic sk- form refuses, nothing matched a private-key
-header, and the pathspec skipped *.sql and *.jsonl.
+header, and the pathspec skipped *.sql and *.jsonl -- and, Codex on #448,
+the key files themselves (*.pem, *.key, an extensionless id_rsa).
 
 Each case writes ONE file into a scratch git repository and runs the action's
 own `run:` script there, read out of the action.yml under test and run as a
@@ -103,6 +104,20 @@ CASES = [
      {"logs/run.jsonl": json.dumps({"event": "call", "key": ANT_KEY}) + "\n"}, True, "logs/run.jsonl"),
     ("a clean .sql file — clean",
      {"supabase/migrations/002.sql": "create table t (id int);\n"}, False, None),
+    # ── the key files themselves: a private key usually lives in its own file
+    ("a PRIVATE KEY in server.pem — caught",
+     {"deploy/server.pem": pem("PRIVATE KEY")}, True, "deploy/server.pem"),
+    ("an RSA PRIVATE KEY in client.key — caught",
+     {"certs/client.key": pem("RSA PRIVATE KEY")}, True, "certs/client.key"),
+    ("an EC PRIVATE KEY in an Apple .p8 — caught",
+     {"keys/AuthKey_ABC123.p8": pem("PRIVATE KEY")}, True, "keys/AuthKey_ABC123.p8"),
+    *[(f"an OPENSSH PRIVATE KEY in an extensionless {n} — caught",
+       {f".ssh/{n}": pem("OPENSSH PRIVATE KEY")}, True, f".ssh/{n}")
+      for n in ("id_rsa", "id_dsa", "id_ecdsa", "id_ed25519")],
+    ("a root-level id_rsa — caught",
+     {"id_rsa": pem("RSA PRIVATE KEY")}, True, "id_rsa"),
+    ("a CERTIFICATE in a .pem — clean",
+     {"certs/ca.pem": pem("CERTIFICATE")}, False, None),
     # ── the JWT forms the scan already had ──────────────────────────────────
     ("a service-role JWT in a .ts file — caught",
      {"src/admin.ts": f"const k = '{jwt('service_role')}';\n"}, True, "src/admin.ts"),

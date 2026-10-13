@@ -181,12 +181,18 @@ jobs:
           # suppression also needs the record GitHub leaves on a job cancelled by
           # its concurrency group ("Canceling since a higher priority waiting
           # request"), the same test ci-monitor.yml applies (claude.prop#124,
-          # Codex). Every page of jobs and annotations is read; a run with no job
-          # yet, or an unreadable answer, has no record and stays errored.
+          # Codex). The one exception is a run with NO job at all: the pending
+          # slot's eviction cancels a run before any job exists, so no annotation
+          # can be written (#447, Codex). Such a run deployed nothing, and the
+          # overlapping newer run carries the deploy, so it counts as superseded
+          # whoever cancelled it. Every page of jobs and annotations is read; an
+          # unreadable jobs answer is not "no job" and stays errored.
           # Anything else cancelled, or a lookup that fails, stays errored.
           cancelled_by_group() {
-            local msgs='' j
-            for j in $(gh api --paginate "repos/$REPO/actions/runs/$1/jobs?per_page=100" --jq '.jobs[].id' 2>/dev/null || true); do
+            local ids msgs='' j
+            ids=$(gh api --paginate "repos/$REPO/actions/runs/$1/jobs?per_page=100" --jq '.jobs[].id' 2>/dev/null) || return 1
+            [ -n "${ids//[[:space:]]/}" ] || return 0
+            for j in $ids; do
               msgs="$msgs
           $(gh api --paginate "repos/$REPO/check-runs/$j/annotations?per_page=100" --jq '.[].message' 2>/dev/null || true)"
             done

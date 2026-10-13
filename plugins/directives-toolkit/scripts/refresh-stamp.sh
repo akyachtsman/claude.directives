@@ -61,7 +61,7 @@ classified=no
 # comparison and the upstream listing; a fetch that fails refuses the stamp.
 # No `grep -q` fed by a pipe (the SIGPIPE hazard in Phase 1); `; true` keeps a
 # no-match from ending the block under errexit.
-unapplied=0; handled=" "; tree=no; kit_missing="
+unapplied=0; fetch_failed=0; handled=" "; tree=no; kit_missing="
 "
 up=
 if [ "$classified" = yes ]; then
@@ -72,7 +72,7 @@ if [ "$classified" = yes ]; then
     tree=yes
   else
     echo "CANNOT VERIFY: the upstream tree at $head could not be fetched -- nothing compared"
-    unapplied=1
+    unapplied=1 fetch_failed=1
   fi
 fi
 
@@ -361,6 +361,12 @@ elif [ "$classified" != "yes" ]; then
   echo "refresh-delta.sh (Phase 2) to classify this head, or classify by hand"
   echo "via MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix to clear it."
   exit 1
+elif [ "$fetch_failed" = 1 ]; then
+  # Could not run, not a refusal: nothing was compared, so there is nothing to
+  # apply or decline (Codex, #449). Phase 2's verdict is kept for the re-run.
+  echo "upstream tree unavailable this run — stamp left at $last, nothing compared;"
+  echo "re-run this script later (Phase 2's verdict is kept)"
+  exit 2
 elif [ "$unapplied" = 1 ]; then
   echo "stamp left at $last: the paths above are unapplied -- they differ from the"
   echo "template at $head, or are required and absent. Apply each one, or record why"

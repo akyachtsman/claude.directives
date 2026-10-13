@@ -637,10 +637,13 @@ cjs_case("an ESM script needs no package.json",
 cjs_case("a `require` only in a comment or a string does not make a script CommonJS",
          {"templates/scripts/esm.js": "// const x = require('x');\nconst s = \"module.exports\";\nexport default s;\n"},
          "esm.js", "", 0, "1 referenced script(s)")
-cjs_case("a CommonJS script under a directory with its OWN package.json is governed by that one",
+# A nested manifest does NOT exempt it: derive-scripts.sh installs exactly the
+# one .github/scripts/package.json, so the nested one would never arrive and a
+# root "type": "module" would break the first require (Codex, #449).
+cjs_case("a CommonJS script under a directory with its OWN package.json still needs the root one",
          {"templates/scripts/kit/x.js": "require('fs');\n",
           "templates/scripts/kit/package.json": "{}\n"}, "kit/x.js", "",
-         0, "1 referenced script(s)")
+         1, "UNNAMED: .github/scripts/package.json")
 cjs_case("a Python script needs no package.json",
          {"templates/scripts/p.py": "import os\n"}, "p.py", "",
          0, "1 referenced script(s)")

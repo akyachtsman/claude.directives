@@ -85,7 +85,17 @@ if [ "$n" -gt 0 ]; then
 fi
 if [ "$write" = yes ]; then
   # Content only: the installed file keeps its own mode (MODE lines report a
-  # mode difference separately).
-  cat "$merged" >"$f" && echo "WRITTEN: $f"
+  # mode difference separately). Written to a temporary file BESIDE it and
+  # renamed only on success, so a failed write (read-only, disk full) leaves
+  # the file untouched and says so with exit 2, never a truncated file
+  # reported as written (Codex, #449).
+  tmpw=$(mktemp "$(dirname -- "$f")/.refresh-merge.XXXXXX" 2>/dev/null) || tmpw=
+  if [ -n "$tmpw" ] && cp -p "$f" "$tmpw" && cat "$merged" >"$tmpw" && mv -f "$tmpw" "$f"; then
+    echo "WRITTEN: $f"
+  else
+    [ -n "$tmpw" ] && rm -f "$tmpw"
+    echo "NOT WRITTEN: $f — the write failed and the file is unchanged; the merge is in $merged"
+    exit 2
+  fi
 fi
 exit 0

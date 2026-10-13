@@ -299,6 +299,21 @@ def run(root, script, *args, env=None):
     return run_argv(["bash", BIN / script, *args], cwd=root, env=e)
 
 
+def failing(tool, when=""):
+    """A PATH whose `tool` fails -- every call, or only one whose arguments
+    contain `when` -- and defers to the real one otherwise. How a case makes a
+    write or a fetch fail as root, where a read-only mode would not."""
+    d = WORK / f"fail-{tool}-{when or 'all'}"
+    d.mkdir(exist_ok=True)
+    real = shutil.which(tool)
+    stub = d / tool
+    stub.write_text("#!/bin/bash\n"
+                    + (f'case " $* " in *" {when} "*) exit 1;; esac\nexec {real} "$@"\n' if when
+                       else "exit 1\n"))
+    stub.chmod(0o755)
+    return {"PATH": f"{d}:{os.environ['PATH']}"}
+
+
 def marker(root, name):
     return root / ".git" / f"refresh-repo-{name}"
 
@@ -391,6 +406,14 @@ check("stamp: a successful stamp consumes the verdict",
       "a marker survived the stamp")
 expect("stamp: with the verdict consumed, a third run refuses as NOT classified",
        run(r, "refresh-stamp.sh"), 1, "was NOT classified")
+
+r = project("stamp-fetch-fails", changes={".github/workflows/ci-monitor.yml": S_FILES["templates/workflows/ci-monitor.yml"]})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-stamp.sh", env=failing("git", "fetch"))
+expect("stamp: an upstream tree that cannot be fetched is exit 2 (could not run), not a refusal (Codex, #449)",
+       res, 2, "upstream tree unavailable this run", absent="the paths above are unapplied")
+check("stamp: a fetch failure keeps Phase 2's verdict for the re-run",
+      all(marker(r, n).is_file() for n in ("classified", "base", "delta")), "a marker was consumed")
 
 r = project("stamp-base", at=H_FILES)
 run(r, "refresh-delta.sh")
@@ -487,6 +510,16 @@ res = run(r, "refresh-merge.sh", ".github/workflows/qa.yml", "--write", env={"RE
 expect("merge: an overlapping hunk is a conflict, and --write refuses it", res, 1, "NOT WRITTEN")
 check("merge: a refused --write leaves the file untouched",
       "<<<<<<<" not in (r / ".github/workflows/qa.yml").read_text(), "conflict markers were written")
+r = project("merge-write-fails", at=S_FILES, changes={".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"]})
+before = (r / ".github/workflows/qa.yml").read_text()
+res = run(r, "refresh-merge.sh", ".github/workflows/qa.yml", "--write", env={"REFRESH_PIN": H, **failing("mv")})
+expect("merge: a write that fails is exit 2 and NOT WRITTEN (Codex, #449)", res, 2, "NOT WRITTEN")
+check("merge: a write that fails never also claims WRITTEN",
+      not any(line.startswith("WRITTEN:") for line in res[1].splitlines()), res[1])
+check("merge: a failed write leaves the file as it was, and no temporary file",
+      (r / ".github/workflows/qa.yml").read_text() == before
+      and not list((r / ".github/workflows").glob(".refresh-merge.*")),
+      f"files: {sorted(p.name for p in (r / '.github/workflows').iterdir())}")
 
 # ---- item 8: the caller set is computed --------------------------------------------
 r = project("callers", changes={".github/actions/ui-suite/action.yml": None,

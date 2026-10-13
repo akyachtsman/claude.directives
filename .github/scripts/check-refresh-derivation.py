@@ -521,9 +521,11 @@ def commonjs_manifest(script):
     A CommonJS .js runs only where the NEAREST package.json above it says
     `"type": "commonjs"` (or nothing): a project root declaring "type": "module"
     (Vite, Astro, SvelteKit) otherwise makes its first `require` throw. So a
-    caller that installs one must also install .github/scripts/package.json --
-    unless a template package.json between the two governs it (the UI-test kit
-    carries its own). check-ui-viewports.js's header calls the manifest NOT
+    caller that installs one must also install .github/scripts/package.json.
+    No nested manifest exempts it: derive-scripts.sh installs exactly that one
+    package.json, so a nested one would never arrive (Codex, #449; the UI-test
+    kit's own manifest ships with the kit, not through here).
+    check-ui-viewports.js's header calls the manifest NOT
     optional; this is where that becomes checked rather than remembered
     (pilots, 2026-10-13: the manifest is needed wherever CommonJS scripts are,
     the lockfile only with the cron kit)."""
@@ -533,11 +535,6 @@ def commonjs_manifest(script):
     src = Path(TEMPLATE_SCRIPTS) / rel
     if not src.is_file():
         return None
-    d = posixpath.dirname(rel)
-    while d:
-        if (Path(TEMPLATE_SCRIPTS) / d / "package.json").is_file():
-            return None
-        d = posixpath.dirname(d)
     if not js_is_commonjs(src.read_text(encoding="utf-8")):
         return None
     return (f"{script} is CommonJS, which runs only under {PACKAGE_JSON}'s "

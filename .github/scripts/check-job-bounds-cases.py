@@ -41,11 +41,15 @@ Run: python3 .github/scripts/check-job-bounds-cases.py
 #   job bounds (`check-job-bounds.py`, plus `check-job-bounds-cases.py` guarding
 #   it — an unreadable bound on a job carrying a floor must REFUSE, and the
 #   exemption for jobs carrying no floor must survive, #334)
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
 import sys
+sys.dont_write_bytecode = True
+
 import tempfile
 from pathlib import Path
 
-from cases_lib import Cases, bin_path, run, write_tree
+from cases_lib import Cases, bin_path, bytecode_case, run, write_tree
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The shipped copy, run where it lives (no .github/scripts twin). Overridable
@@ -209,7 +213,13 @@ def main():
     # workflows are broken -- and this is the run qa.yml actually performs.
     c.expect("this repo's workflows + templates pass",
              *run_guard(REPO_ROOT, ("--include-templates",)), 0)
-    return c.finish(f"{len(CASES) + 1} pinned workflow shapes read correctly.")
+    # A guard run must leave no __pycache__/ in the project it checks: downstream
+    # does not gitignore it, so `git add -A` after the gate committed it
+    # (claude.prop, 2026-10-13). The guard sets sys.dont_write_bytecode.
+    bytecode_case(c, "an installed run leaves no __pycache__ beside gh_yaml.py", GUARD,
+                  {".github/workflows/qa.yml": "name: t\non: push\njobs:\n  a:\n    runs-on: ubuntu-24.04\n"
+                   "    timeout-minutes: 10\n    steps:\n      - run: echo hi\n"}, ["{root}"])
+    return c.finish(f"{len(CASES) + 2} pinned workflow shapes read correctly.")
 
 
 if __name__ == "__main__":

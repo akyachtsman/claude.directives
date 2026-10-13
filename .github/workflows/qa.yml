@@ -82,6 +82,16 @@ jobs:
       - name: Check secret-scan pattern in sync
         run: node .github/scripts/check-secret-scan.js
 
+      # The check above proves the copies EQUAL, not that either CATCHES
+      # anything: this repo holds no secret, so the scan step prints the same
+      # clean result whether its pattern works or not. Downstream pilots found
+      # an Anthropic key, private-key headers and *.sql / *.jsonl all slipping
+      # through (2026-10-13). Each case scans a fixture with the action's own
+      # script; every catch has a must-stay-clean twin. Drive an older
+      # action.yml with SECRET_SCAN_BIN to re-prove it.
+      - name: Check the secret scan catches what it claims
+        run: python3 .github/scripts/check-secret-scan-cases.py
+
       - name: Check export boundary (EXPORTS.json)
         run: node .github/scripts/check-exports.js
 

@@ -18,14 +18,18 @@ dictating style rather than catching faults.
 Run: python3 .github/scripts/workflow-ref-guard-cases.py
 """
 
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import json
 import os
 import shutil
-import sys
 import tempfile
 from pathlib import Path
 
-from cases_lib import Cases, bin_path, run, write_tree
+from cases_lib import Cases, bin_path, bytecode_case, run, write_tree
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Overridable so a MUTANT can be pointed at, like the other guards' suites;
@@ -427,4 +431,9 @@ for case in CASES:
     label, expected, files, required = case[:4]
     diagnostic = case[4] if len(case) > 4 else None
     c.expect(label, *run_case(files, required), expected, diagnostic or None)
-sys.exit(c.finish(f"{len(CASES)} pinned YAML forms read correctly."))
+# A guard run must leave no __pycache__/ in the project it checks: downstream
+# does not gitignore it, so `git add -A` after the gate committed it
+# (claude.prop, 2026-10-13). The guard sets sys.dont_write_bytecode.
+bytecode_case(c, "an installed run leaves no __pycache__ beside gh_yaml.py", GUARD,
+              {".github/workflows/target.yml": TARGET})
+sys.exit(c.finish(f"{len(CASES) + 1} pinned YAML forms read correctly."))

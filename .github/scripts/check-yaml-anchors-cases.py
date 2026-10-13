@@ -20,11 +20,15 @@ Re-prove discrimination with a mutant (a guard, with its gh_yaml.py beside it):
 Run: python3 .github/scripts/check-yaml-anchors-cases.py
 """
 
-import os
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
 import sys
+sys.dont_write_bytecode = True
+
+import os
 import tempfile
 
-from cases_lib import Cases, bin_path, run, write_tree
+from cases_lib import Cases, bin_path, bytecode_case, run, write_tree
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The shipped copy, run where it lives (no .github/scripts twin).
@@ -72,7 +76,8 @@ def guard(tmp, files, *flags):
 
 def api(snippet):
     """Run `snippet` against the gh_yaml.py beside the guard under test."""
-    prelude = (f"import sys; sys.path.insert(0, {os.path.dirname(str(GUARD))!r}); "
+    prelude = (f"import sys; sys.dont_write_bytecode = True; "
+               f"sys.path.insert(0, {os.path.dirname(str(GUARD))!r}); "
                "import yaml, gh_yaml\n")
     return run([sys.executable, "-c", prelude + snippet])
 
@@ -187,7 +192,12 @@ def main():
     # is broken.
     c.expect("the live repo passes, templates included",
              *run([sys.executable, GUARD, ROOT, "--include-templates"]), 0, "check-yaml-anchors:")
-    return c.finish(f"{len(CASES)} pinned trees and {len(API_CASES)} API cases read correctly.")
+    # A guard run must leave no __pycache__/ in the project it checks: downstream
+    # does not gitignore it, so `git add -A` after the gate committed it
+    # (claude.prop, 2026-10-13). The guard sets sys.dont_write_bytecode.
+    bytecode_case(c, "an installed run leaves no __pycache__ beside gh_yaml.py", GUARD,
+                  {".github/workflows/qa.yml": WORKFLOW}, ["{root}"])
+    return c.finish(f"{len(CASES) + 2} pinned trees and {len(API_CASES)} API cases read correctly.")
 
 
 if __name__ == "__main__":

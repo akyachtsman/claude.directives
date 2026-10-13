@@ -17,8 +17,12 @@ Re-prove discrimination with a mutant:
     CHECK_RUN_QUOTING_BIN=/tmp/mutant.py python3 .github/scripts/check-run-quoting-cases.py
 """
 
-import os
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
 import sys
+sys.dont_write_bytecode = True
+
+import os
 import tempfile
 
 from cases_lib import Cases, bin_path, run, write_tree

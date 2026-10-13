@@ -54,6 +54,11 @@ Usage:
 Its own guard: .github/scripts/run-local-gate-cases.py.
 """
 
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import argparse
 import codecs
 import platform
@@ -62,7 +67,6 @@ import signal
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 

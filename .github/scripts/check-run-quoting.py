@@ -76,13 +76,17 @@ and composite under the repo root, or DIR, in .yml or .yaml)
 Its own guard: check-run-quoting-cases.py.
 """
 
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import glob
 import json
 import os
 import re
 import shutil
 import subprocess
-import sys
 
 import yaml
 

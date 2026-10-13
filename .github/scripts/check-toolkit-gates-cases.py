@@ -68,12 +68,28 @@ swapped in alone:
        comment and inside `$((...))`; `#` after `\\ ` and after a quote span;
        `\\'` inside `$'...'` -- with and without jq.
 
+THE STALE-COPY ADVISORY (2026-10-13). hooks.json's inline PostToolUse command
+reminds Claude that an edited CLAUDE.md, settings.json or toolkit file is not
+live in this session. It printed to stderr and exited 2, which Claude Code
+renders as a "hook blocking error" after an edit that SUCCEEDED (claude.trading
+and claude.prop pilots). It now prints JSON on stdout -- additionalContext for
+Claude, systemMessage for the user -- and exits 0. Its cases run the command
+out of the hooks.json under test (HOOKS_JSON_BIN) and pin exit 0, the message
+in both fields, and silence for any other file. MEASURED against the pre-fix
+hooks.json (HEAD 100d6b4): every case that expects a message fails (exit 2,
+empty stdout); the silent cases pass, as they should.
+
 Run: python3 .github/scripts/check-toolkit-gates-cases.py
 """
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import json
 import os
 import shutil
-import sys
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -86,6 +102,7 @@ PUSH = bin_path("PUSH_GATE_BIN", SCRIPTS / "push-gate.sh")
 WAIT = bin_path("WAIT_GATE_BIN", SCRIPTS / "wait-gate.sh")
 LIB = bin_path("GATE_LIB_BIN", SCRIPTS / "gate-lib.sh")
 PAGES = bin_path("PAGES_GATE_BIN", SCRIPTS / "pages-edit-gate.sh")
+HOOKS = bin_path("HOOKS_JSON_BIN", ROOT / "plugins/directives-toolkit/hooks/hooks.json")
 
 BLOCK, ALLOW = 2, 0
 
@@ -349,6 +366,63 @@ def pages_case(c, gate, label, rel, qa, expected, env, tag):
         c.ok(f"pages-edit-gate{tag} {verdict} on {label}")
 
 
+# -- the stale-copy advisory (hooks.json, inline PostToolUse command) ---------
+STALE = "CLAUDE.md changed"
+CONFIG = "Hook/agent configuration changed"
+# (label, tool, file_path, compact JSON?, message expected or None)
+ADVISORY_CASES = [
+    ("an edit to the root CLAUDE.md", "Edit", "/repo/CLAUDE.md", False, STALE),
+    ("a write to a nested CLAUDE.md, compact payload", "Write", "/repo/docs/CLAUDE.md", True, STALE),
+    ("an edit to .claude/settings.json", "Edit", "/repo/.claude/settings.json", False, CONFIG),
+    ("an edit to a toolkit command", "MultiEdit", "/repo/plugins/directives-toolkit/commands/x.md", False, CONFIG),
+    ("an edit to a toolkit hook script", "Edit", "/repo/plugins/directives-toolkit/scripts/push-gate.sh", True, CONFIG),
+    ("an edit to an ordinary file", "Edit", "/repo/README.md", False, None),
+    ("an edit to the CLAUDE.md template (not CLAUDE.md)", "Edit", "/repo/templates/CLAUDE-template.md", False, None),
+]
+
+
+def advisory_command():
+    """The PostToolUse inline command that is not a script call, read from HOOKS."""
+    hooks = json.loads(HOOKS.read_text(encoding="utf-8"))["hooks"]["PostToolUse"]
+    found = [h["command"] for group in hooks for h in group["hooks"]
+             if h.get("type") == "command" and STALE in h.get("command", "")]
+    return found[0] if len(found) == 1 else None
+
+
+def advisory_cases(c):
+    command = advisory_command()
+    if command is None:
+        c.fail("stale-copy advisory", f"no single PostToolUse command carrying {STALE!r} in {HOOKS}")
+        return
+    for label, tool, path, compact, message in ADVISORY_CASES:
+        payload = {"tool_name": tool, "tool_input": {"file_path": path}, "tool_response": {"filePath": path}}
+        text = json.dumps(payload, separators=(",", ":") if compact else None)
+        proc = subprocess.run(["bash", "-c", command], input=text.encode(), capture_output=True)
+        out, err = proc.stdout.decode().strip(), proc.stderr.decode().strip()
+        name = f"stale-copy advisory: {label}"
+        if proc.returncode != 0:
+            c.fail(name, f"expected exit 0 (an advisory never blocks); got {proc.returncode}\n      {err}")
+            continue
+        if message is None:
+            if out or err:
+                c.fail(name, f"expected silence; got stdout {out!r} stderr {err!r}")
+            else:
+                c.ok(f"{name} -- exit 0, silent")
+            continue
+        try:
+            doc = json.loads(out)
+            spec = doc["hookSpecificOutput"]
+            delivered = (spec["hookEventName"] == "PostToolUse" and message in spec["additionalContext"]
+                         and message in doc["systemMessage"])
+        except (ValueError, KeyError, TypeError):
+            delivered = False
+        if not delivered:
+            c.fail(name, f"expected JSON carrying {message!r} in hookSpecificOutput.additionalContext "
+                         f"and systemMessage; got stdout {out!r} stderr {err!r}")
+        else:
+            c.ok(f"{name} -- exit 0, message delivered as additionalContext + systemMessage")
+
+
 def no_jq_env(tmp):
     """PATH holding a link to every executable on the real PATH except jq."""
     bindir = Path(tmp) / "nojq-bin"
@@ -365,7 +439,7 @@ def no_jq_env(tmp):
 
 
 def main():
-    for path in (PUSH, WAIT, LIB, PAGES):
+    for path in (PUSH, WAIT, LIB, PAGES, HOOKS):
         if not path.is_file():
             print(f"CANNOT RUN: {path} does not exist")
             return 1
@@ -390,8 +464,10 @@ def main():
                 c.fail(label, f"expected a silent allow (exit 0); got {code}\n      {out}")
             else:
                 c.ok(label)
+    advisory_cases(c)
     n = len(PUSH_CASES) + len(PUSH_EXTRA_CASES) + len(WAIT_CASES) + len(PAGES_CASES) + 10
-    return c.finish(f"{2 * n + 2} gate payloads read correctly, with and without jq.")
+    return c.finish(f"{2 * n + 2} gate payloads read correctly, with and without jq, "
+                    f"and {len(ADVISORY_CASES)} stale-copy advisory payloads.")
 
 
 def check(c, push, wait, pages, env=None, tag=""):

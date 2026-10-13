@@ -79,7 +79,10 @@ are no longer stripped -- both sides are read alike, so only a NEW mention
 lists -- and the baseline is the project's own files at the stamp commit. The
 script before those fixes (ff2e2b4) fails the block-scalar, new-comment,
 custom-dropped and count cases; the one before that (bb3e993), the quoted-#
-case; the one before that (f97e46a), the installed-now case.
+case; the one before that (f97e46a), the installed-now case. Round four: a
+name the project only commented on, made live upstream, was hidden by the
+raw-text baseline; each side is now read whole AND with comments set aside,
+and 2d73710 fails the comment-goes-live case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -642,6 +645,13 @@ run(r, "refresh-delta.sh")
 refresh_installs(r, LIVE)
 expect("vars: a read the project's CUSTOM copy had dropped is listed when the template brings it (Codex, #450)",
        run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository secret TEST_AUTH_CREDENTIAL")
+
+r = project("vars-comment-goes-live", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": LIVE_S + "          # future: use ${{ vars.APP_URL }}\n"})
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+expect("vars: a name the project only MENTIONED in a comment is listed when the template makes it live (Codex, #450)",
+       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
 
 r = project("vars-installed-now", at=S_FILES)
 run(r, "refresh-delta.sh")

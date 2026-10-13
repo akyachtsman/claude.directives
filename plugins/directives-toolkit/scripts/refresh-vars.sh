@@ -62,19 +62,28 @@ if [ -z "$up" ] || ! refresh_fetch "$up" "$pin"; then
 fi
 
 # reads: stdin -> one `vars NAME` / `secrets NAME` line per read, NAME
-# upper-cased. NO comment is set aside: a `#` can open a YAML comment, sit in a
-# quoted value or a shell string, or start a line of a block scalar that
-# Actions evaluates (`payload: |` then `#${{ secrets.X }}`), and only a YAML
-# and shell parser tells them apart (Codex, #450, three rounds). Both sides of
-# the comparison are read the same way, so a mention in a comment cancels out
-# unless it is NEW -- the worst case is an over-listed owner item, never a
-# missed one.
+# upper-cased. A `#` may open a YAML comment, sit in a quoted value or shell
+# string, or lead a block-scalar line Actions evaluates, and only a YAML +
+# shell parser tells them apart (Codex, #450, four rounds). So each side is
+# read twice -- WHOLE, and with every `#` to end of line set aside (bare) --
+# and a name is new when EITHER
+#   - the incoming template names it anywhere and the project's file nowhere
+#     (catches a read after a quoted `#` or on a `#`-led block-scalar line,
+#     and a read a CUSTOM copy had dropped), or
+#   - the incoming template names it outside any `#` and the project's file
+#     only after one (catches a comment upstream turned into a live read).
+# A name commented out on both sides (cron-notify.yml's optional DB lines) is
+# neither, so an unchanged template lists nothing. Known limit: a name the
+# project only commented on that comes back live only after a quoted `#` or
+# on a `#`-led block line -- both rare forms at once.
 reads() {
   grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
     | sed -E "s/^[^vs]*//; s/\[[[:space:]]*'/ /; s/'[[:space:]]*\]\$//; s/\./ /" \
     | awk '{ print $1, toupper($2) }' \
     | grep -v '^secrets GITHUB_TOKEN$'
 }
+
+bare_reads() { sed -E 's/#.*$//' | reads; }
 
 # The baseline is what the project RAN WITH when the stamp was written: its own
 # installed files in the last commit that touched .claude/directive-sync.json
@@ -88,19 +97,26 @@ echo "installed-at-stamp baseline: $base"
 
 # Plain lists, no associative arrays: stock macOS bash is 3.2 (Codex, #450).
 templates=()
-: >"$up/old"
+: >"$up/old"; : >"$up/old_bare"
 for f in .github/workflows/*.yml .github/actions/*/action.yml; do
   [ -f "$f" ] || continue
   t=$(refresh_template_of "$f")
   git -C "$up" cat-file -e "$pin:$t" 2>/dev/null || continue
   templates+=("$t")
-  [ -n "$stamp" ] && git show "$base:$f" 2>/dev/null | reads >>"$up/old"
+  if [ -n "$stamp" ]; then
+    git show "$base:$f" 2>/dev/null | reads >>"$up/old"
+    git show "$base:$f" 2>/dev/null | bare_reads >>"$up/old_bare"
+  fi
 done
 sort -u -o "$up/old" "$up/old"
+sort -u -o "$up/old_bare" "$up/old_bare"
 # `kind NAME<TAB>template` for every read at the pin not in the baseline, then
 # one line per name with its templates joined.
 for t in ${templates[@]+"${templates[@]}"}; do
-  git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | reads | { grep -vxF -f "$up/old" || true; } | sed "s|\$|	$t|"
+  {
+    git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | reads | { grep -vxF -f "$up/old" || true; }
+    git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | bare_reads | { grep -vxF -f "$up/old_bare" || true; }
+  } | sed "s|\$|	$t|"
 done | sort -u | awk -F '\t' '
   $1 != key { if (key != "") print key "\t" list; key = $1; list = $2; next }
   { list = list ", " $2 }

@@ -69,8 +69,10 @@ form-independent scan, these ways:
      reword it and both drop out of the derivation with no error. So the
      dependencies are derived from the files that CREATE them, never from a
      hand-list here: a local `require`/`import` in the template source of a
-     script the caller names (followed transitively), and `npm install|ci` run
-     with `.github/scripts` as its directory (needs package.json). Each must be
+     script the caller names (followed transitively), `npm install|ci` run
+     with `.github/scripts` as its directory (needs package.json), and a
+     CommonJS script, which runs only under package.json's
+     `"type": "commonjs"` (needs it too; pilots, 2026-10-13). Each must be
      in the install derivation over THAT caller, or this fails. Chosen over
      moving the names out of the comment: any spot in the YAML is just as
      rewordable, while a dependency read from the `require` line and the npm
@@ -495,6 +497,53 @@ def local_deps(script):
     return {d: why for d, why in deps.items() if d.startswith(SCRIPTS + "/")}
 
 
+def js_is_commonjs(src):
+    """True when a JavaScript source is CommonJS: a live `require(`, or an
+    assignment through `module.exports` / `exports.` -- read with js_tokens, so
+    a mention in a comment or a string does not count."""
+    toks = js_tokens(src)
+    for k, (kind, val) in enumerate(toks):
+        nxt = toks[k + 1] if k + 1 < len(toks) else None
+        nxt2 = toks[k + 2] if k + 2 < len(toks) else None
+        if kind == "id" and val == "require" and nxt == ("p", "("):
+            return True
+        if kind == "id" and val == "module" and nxt == ("p", ".") and nxt2 == ("id", "exports"):
+            return True
+        if kind == "id" and val == "exports" and nxt == ("p", ".") \
+                and not (k and toks[k - 1] == ("p", ".")):
+            return True
+    return False
+
+
+def commonjs_manifest(script):
+    """The reason `script` (a .github/scripts/ path) needs PACKAGE_JSON, or None.
+
+    A CommonJS .js runs only where the NEAREST package.json above it says
+    `"type": "commonjs"` (or nothing): a project root declaring "type": "module"
+    (Vite, Astro, SvelteKit) otherwise makes its first `require` throw. So a
+    caller that installs one must also install .github/scripts/package.json --
+    unless a template package.json between the two governs it (the UI-test kit
+    carries its own). check-ui-viewports.js's header calls the manifest NOT
+    optional; this is where that becomes checked rather than remembered
+    (pilots, 2026-10-13: the manifest is needed wherever CommonJS scripts are,
+    the lockfile only with the cron kit)."""
+    if not script.endswith(".js"):
+        return None
+    rel = script[len(SCRIPTS) + 1:]
+    src = Path(TEMPLATE_SCRIPTS) / rel
+    if not src.is_file():
+        return None
+    d = posixpath.dirname(rel)
+    while d:
+        if (Path(TEMPLATE_SCRIPTS) / d / "package.json").is_file():
+            return None
+        d = posixpath.dirname(d)
+    if not js_is_commonjs(src.read_text(encoding="utf-8")):
+        return None
+    return (f"{script} is CommonJS, which runs only under {PACKAGE_JSON}'s "
+            '"type": "commonjs" when the project root says "type": "module"')
+
+
 def needs(caller, body, named):
     """{dependency: reason} for everything `caller` needs that the install must
     derive. `named` is what the derivation found in it; local loads are
@@ -513,6 +562,9 @@ def needs(caller, body, named):
         if script in seen:
             continue
         seen.add(script)
+        why_manifest = commonjs_manifest(script)
+        if why_manifest:
+            need.setdefault(PACKAGE_JSON, why_manifest)
         for dep, why in local_deps(script).items():
             need.setdefault(dep, f"loaded by {script} via `{why}`")
             todo.append(dep)

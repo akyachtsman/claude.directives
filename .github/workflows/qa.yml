@@ -329,6 +329,15 @@ jobs:
       - name: Check the derivation guard enforces what it claims
         run: python3 .github/scripts/check-refresh-derivation-cases.py
 
+      # The /refresh-repo scripts themselves (stamp, delta, drift, merge,
+      # callers, broken refs, hook install, kit defects), run against a file://
+      # fixture upstream. Two downstream pilots (2026-10-13) found a stamp that
+      # burned Phase 2's verdict on a refusal and exited 0, a lockfile demanded
+      # without the cron kit, and a drift pass reading a different revision —
+      # none of which any check ran the scripts to see. *_BIN swaps a mutant in.
+      - name: Check the /refresh-repo scripts do what the command says
+        run: python3 .github/scripts/check-refresh-scripts-cases.py
+
       # A composite can run a SIBLING by path, and both install carriers once
       # copied only action.yml — every UI job downstream died at that step
       # (#353, from #347 round 35). Not the FIRST step: `Validate report-path`

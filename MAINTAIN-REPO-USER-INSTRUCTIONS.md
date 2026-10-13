@@ -23,7 +23,7 @@ travels determines what YOU must do when it changes:
 |---|---|---|---|---|
 | `directives/*.md` | **Inherited** — fetched live by raw URL | Nothing | Next session start in each repo; mid-session via `/refresh-repo` (Phase 0 re-reads the rules) | `/env-chk` directive-freshness check |
 | `plugins/`, `.claude-plugin/marketplace.json`, `scripts/install-toolkit.sh` | **Installed** — `SessionStart` hook per session; env setup script for the first install | Nothing, for a project carrying `.claude/hooks/session-start.sh`. For a legacy project without it: **edit and save that environment's setup script** — a real change such as a `#` comment line; an unchanged save rebuilds nothing (see Environment Maintenance), or install the hook once via `/refresh-repo` so the step stops recurring | With the hook: the next **new** session. Without it: after that environment's cache rebuilds. Never mid-session either way | `/env-chk` toolkit-attached check |
-| `templates/**` | **Copied** — snapshotted into projects at bootstrap | Run `/refresh-repo` in a session of each project and approve the per-file dispositions | On approval, that session | The refresh report + `.claude/directive-sync.json` stamp |
+| `templates/**` | **Copied** — snapshotted into projects at bootstrap | Run `/refresh-repo` in a session of each project — send it yourself, as the slash command (it is typed only: no agent can start it, and "Run /refresh-repo" in plain text does not) — and approve the per-file dispositions | On approval, that session | The refresh report + `.claude/directive-sync.json` stamp |
 | `docs/**`, the two `*-USER-INSTRUCTIONS.md` files | **Referenced** — read on demand by link | Nothing | Immediately (nothing is stored downstream) | — |
 
 Corollaries worth memorizing:
@@ -43,7 +43,7 @@ Corollaries worth memorizing:
   reading of the diff.
 - **What silence actually looks like, and where `qa.yml` is NOT it.** A
   locally extended `qa.yml` is still loud: Phase 1.5 diffs every
-  `.github/workflows/*.yml` against its template and reports it `DRIFT` on every
+  `.github/workflows/*.yml` against its template and reports it `CUSTOM` on every
   refresh, and Phase 2 still classifies the upstream delta and offers the patch.
   Only the automatic verbatim overwrite is off — treat an upstream change to it
   as ordinary disposition work, not as undetectable. The genuinely silent class
@@ -156,7 +156,10 @@ Corollaries worth memorizing:
    save that environment's setup script (below), or install the hook once via
    `/refresh-repo` so this step stops recurring.
 4. **Copied touched** → in each project, run `/refresh-repo` and approve the
-   dispositions it proposes.
+   dispositions it proposes. Type it as the slash command yourself: the command
+   sets `disable-model-invocation`, so a session cannot start it, a hand-off
+   cannot queue it, and a pasted "Run /refresh-repo" in plain text does not
+   start it (pilots, 2026-10-13).
 5. **Referenced only** → done.
 6. If the change closes out a downstream finding, paste the prepared reply
    back into the session that reported it (see the loop below).
@@ -437,5 +440,6 @@ Hard-won; each cost a real debugging session:
   Phase 1.5's delta-independent integrity check (drift vs the current
   templates) and fixed by restore-from-template or `git revert` — not by
   waiting for a refresh to notice. Since 2026-08-19 that check is also the
-  whole disposition rule for workflow drop-ins: `DRIFT` is a question, answered
-  by reading the diff, never a batch overwrite.
+  whole disposition rule for workflow drop-ins: `CUSTOM` (or `DRIFT`) is a question, answered
+  by reading the diff, never a batch overwrite; only a `STALE` copy, byte-for-byte
+  what the project last took, is taken without one (2026-10-13).

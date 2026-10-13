@@ -23,7 +23,10 @@
 # package-lock.json (generated, never shipped). Files under a UI-test kit
 # directory are never compared here -- kit-dirs.sh, the derivation
 # refresh-stamp.sh uses, plus .github/scripts/ui-tests named outright --
-# because kit-defects.sh and Phase 2's per-file kit diffs own the kit.
+# because kit-defects.sh and Phase 2's per-file kit diffs own the kit. A file
+# counts as the kit's only when the kit template ships that name: a kit
+# installed AT .github/scripts shares the directory with the standard scripts,
+# which stay compared (Codex, #451).
 #
 # Per file, one of:
 #   STALE: <path>   differs from the pinned template but EQUALS the template at
@@ -80,13 +83,19 @@ else
 fi
 
 # The kit's installed location(s), from the SAME file refresh-stamp.sh runs, and
-# the default named outright, so a kit file is never read as a script.
+# the default named outright, so a kit file is never read as a script. Under a
+# kit directory, a file is the kit's only when templates/ui-tests ships its
+# name at the pin: UI_TESTS_DIR may be .github/scripts itself, and its standard
+# scripts must not vanish from the comparison with the kit (Codex, #451).
 kit_dirs=$(bash "$(dirname -- "${BASH_SOURCE[0]}")/kit-dirs.sh" 2>/dev/null) || kit_dirs=
 in_kit() {
   local k
   while IFS= read -r k; do
     [ -n "$k" ] || continue
-    case "$1" in "$k"/*) return 0 ;; esac
+    case "$1" in
+      "$k"/*) git -C "$up" cat-file -e "$pin:templates/ui-tests/${1#"$k"/}" 2>/dev/null \
+                && return 0 ;;
+    esac
   done <<KITS
 $kit_dirs
 .github/scripts/ui-tests

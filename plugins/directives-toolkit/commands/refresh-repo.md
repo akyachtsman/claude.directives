@@ -99,8 +99,9 @@ Over git transport, at the pinned head. Per file it prints one of:
   with its reason; do not re-ask. Once upstream changes that template, or the
   installed copy changes, the record stops binding and the line says so: review
   it as a fresh question (pilot claude.prop, 2026-10-13; Codex, #451). A record
-  without `local` (recorded before it existed) is shown but never honoured:
-  review that file once and re-record it with its local blob.
+  without `local` (recorded before it existed) is shown but never honoured,
+  here or by the stamp: review that file once and re-record it with its local
+  blob.
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.
@@ -131,9 +132,10 @@ whose template `templates/scripts/<name>` exists at the pinned head (including
 `package.json`). Scripts are classified like the rest, so do **not** diff them
 by hand: take a `STALE` script, and give a `CUSTOM` or `DRIFT` one the
 disposition below. A script with no template is the project's own and gets no
-line; `package-lock.json` (generated, never shipped) and everything under a
+line; `package-lock.json` (generated, never shipped) and every kit file under a
 UI-test kit directory (`.github/scripts/ui-tests/` or wherever `UI_TESTS_DIR`
-points) are not compared here; the kit is covered by *Kit defects* and Phase 2's
+points; a name `templates/ui-tests/` ships, so a kit AT `.github/scripts` leaves
+the standard scripts beside it compared) are not compared here; the kit is covered by *Kit defects* and Phase 2's
 per-file kit diffs (pilot claude.prop, 2026-10-13: five script templates in the
 delta had to be classified by hand).
 
@@ -722,9 +724,11 @@ the installed copies with the templates **at the head being stamped** (one
 depth-1 git fetch of that head) and
 refuses the stamp while one differs or a required one is missing, unless the
 session recorded why it stays. A reason binds to the **template's blob id**
-and to the **installed copy's blob** (`local`), both of which the refusal
-prints, so neither an upstream change nor a later local edit inherits the
-approval:
+and to the **installed copy's blob** (`local`; `absent` for a required file not
+installed), both of which the refusal prints, so neither an upstream change nor
+a later local edit inherits the approval. A record without `local` (written
+before it existed) binds nothing: the stamp refuses it like any other, and the
+refusal prints the `local` value to add:
 
 ```bash
 jq --arg p "<local path>" --arg b "<blob id printed with it>" --arg l "<local blob printed with it>" --arg r "<why it stays local>" \

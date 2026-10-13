@@ -124,7 +124,12 @@ refuses when a record names a local blob the file no longer has. MEASURED
 2026-10-13: the pre-change refresh-drift.sh fails the no-local and edited-since
 cases; the pre-change refresh-stamp.sh fails the "refusal prints the local blob"
 case, and the new stamp with only the local condition removed fails the
-"local blob no longer matches" case.
+"local blob no longer matches" case. Round 3: the stamp now REQUIRES `local`
+(`absent` for a required file not installed) -- a record without it refuses --
+and drift counts a file under a kit directory as the kit's only when
+templates/ui-tests ships its name. MEASURED: the 008b165 stamp fails 4 cases
+(no-local refuses, absent printed, absent covered, and the re-run that follows),
+the 008b165 drift fails the kit-at-the-scripts-root case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -513,9 +518,14 @@ expect("stamp: a refused stamp exits non-zero", res, 1, "UNAPPLIED: .github/work
 check("stamp: a refused stamp keeps Phase 2's verdict (marker, base and delta)",
       all(marker(r, n).is_file() for n in ("classified", "base", "delta")),
       f"markers after a refusal: {[n for n in ('classified', 'base', 'delta') if marker(r, n).is_file()]}")
-m = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\)", out)
+m = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
 if m:
+    # A record without `local` (the pre-#451 shape) binds nothing: still refused.
     set_kept(r, ".github/workflows/ci-monitor.yml", {"blob": m.group(1), "reason": "a local watch list"})
+    expect("stamp: a record without a local blob refuses, never inherits the approval (Codex, #451)",
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+    set_kept(r, ".github/workflows/ci-monitor.yml",
+             {"blob": m.group(1), "local": m.group(2), "reason": "a local watch list"})
 res = run(r, "refresh-stamp.sh")
 r2 = project("stamp-local-moved", changes={".github/workflows/ci-monitor.yml": S_FILES["templates/workflows/ci-monitor.yml"]})
 run(r2, "refresh-delta.sh")
@@ -578,6 +588,19 @@ run(r, "refresh-delta.sh")
 expect("stamp: absent kit lib files are refused, with the one-step decline named",
        run(r, "refresh-stamp.sh"), 1,
        f"one refresh_kept entry keyed \".github/scripts/ui-tests/tests/lib/\" with tree {LIB_TREE}")
+# A required file not installed records `local` as `absent`, which the refusal
+# prints (Codex, #451).
+r = project("absent-kept", changes=LIB_GONE, sync_extra={"refresh_kept": {
+    ".github/scripts/ui-tests/tests/lib/fixtures.js": {
+        "blob": blob_id(H, "templates/ui-tests/tests/lib/fixtures.js"), "local": "absent",
+        "reason": "fixtures stay inline"}}})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-stamp.sh")
+expect("stamp: an absent required file's refusal prints (local absent)",
+       res, 1, "tests/lib/auth.js is absent but required")
+check("stamp: the absent-file refusal names local absent", "(local absent)" in res[1], res[1])
+expect("stamp: a record with local absent covers a required file not installed",
+       res, 1, "KEPT: .github/scripts/ui-tests/tests/lib/fixtures.js -- fixtures stay inline")
 for label, key in (("as installed", ".github/scripts/ui-tests/tests/lib/"),
                    ("as shipped", "templates/ui-tests/tests/lib/")):
     r = project(f"kitdir-{label.split()[1]}", changes=LIB_GONE,
@@ -666,6 +689,20 @@ for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/")):
     run(r, "refresh-delta.sh")
     expect(f"drift: a kit directory spelled {spelling!r} still keeps its package.json out of the script loop",
            run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent=".github/scripts/package.json")
+# ...but a kit AT the scripts root does not take the standard scripts with it:
+# a script the kit template does not ship is still compared (Codex, #451).
+r = project("drift-scripts-kitroot", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("lint.py",), changes={
+    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
+    ".github/scripts/package.json": "{}\n",
+    ".github/scripts/playwright.config.js": "// config\n",
+    ".github/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint, replaced locally')\n",
+})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: with the kit at .github/scripts, a standard script is still compared",
+       res, 0, "CUSTOM: .github/scripts/lint.py")
+expect("drift: ...while the kit's own package.json stays out of the script loop",
+       res, 0, "SUMMARY:", absent=".github/scripts/package.json")
 
 # A CUSTOM file the project already decided on (claude.prop's check-contrast.js)
 # carries its refresh_kept reason, read as refresh-stamp.sh reads it: keyed by

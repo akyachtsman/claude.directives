@@ -111,12 +111,15 @@ dir_hints=" "
 check() {
   handled="$handled$1 "
   if [ "$2" = deleted ]; then b=deleted; else b=$(git -C "$up" rev-parse "$head:$2" 2>/dev/null) || b=; fi
-  # A record naming the `local` blob it approved binds only while the installed
-  # copy still has that content; one without `local` binds as before (Codex,
-  # #451). refresh-drift.sh reads it the same way.
-  lb=$(git hash-object -- "$1" 2>/dev/null) || lb=
+  # A record binds only while it ALSO names the installed copy's content: its
+  # `local` blob (`absent` for a file not installed) must equal this file's, so
+  # a later edit or a replaced file never inherits an old approval. A record
+  # without `local` (written before it existed) binds nothing and refuses; every
+  # refusal prints the value to record (Codex, #451). refresh-drift.sh reads it
+  # the same way.
+  if [ -e "$1" ]; then lb=$(git hash-object -- "$1" 2>/dev/null) || lb=; else lb=absent; fi
   kept=$(jq -r --arg p "$1" --arg b "$b" --arg l "$lb" \
-    '.refresh_kept[$p] | select(.blob == $b and ((.local // null) == null or .local == $l))
+    '.refresh_kept[$p] | select(type == "object" and .blob == $b and .local == $l and $l != "")
      | .reason // empty' \
     .claude/directive-sync.json 2>/dev/null) || kept=
   if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
@@ -124,9 +127,9 @@ check() {
     echo "KEPT: $1 -- $kept"; return
   fi
   if [ "$b" = deleted ]; then
-    echo "UNAPPLIED: $1 -- upstream deleted it (blob deleted)"; unapplied=1
+    echo "UNAPPLIED: $1 -- upstream deleted it (blob deleted) (local $lb)"; unapplied=1
   elif [ ! -e "$1" ]; then
-    echo "UNAPPLIED: $1 is absent but required -- $3 (blob $b)"; unapplied=1
+    echo "UNAPPLIED: $1 is absent but required -- $3 (blob $b) (local $lb)"; unapplied=1
   elif ! git -C "$up" cat-file blob "$b" 2>/dev/null | cmp -s - "$1"; then
     echo "UNAPPLIED: $1 differs from $2 at $head (blob $b) (local $lb)"; unapplied=1
   else

@@ -133,6 +133,9 @@ the 008b165 drift fails the kit-at-the-scripts-root case. Round 4: a reason
 must be a non-blank string in drift AND the stamp (kit_dir_kept's predicate).
 MEASURED: the 06a5267 drift fails the three no-reason cases, the 06a5267 stamp
 the blank-reason one and the re-run that follows it.
+Round 5: `local` is the blob of the bytes on disk (`git hash-object
+--no-filters`), so a CRLF rewrite under core.autocrlf is not the approved
+content. MEASURED: the dec4182 drift and stamp each fail their CRLF case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -548,6 +551,17 @@ if m2:
         (r2 / ".github/workflows/ci-monitor.yml").read_text() + "# edited after approval\n")
     expect("stamp: a record whose local blob no longer matches the file refuses (Codex, #451)",
            run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+    # The same approval, then only the line endings change, in a project with
+    # core.autocrlf on: a filtered hash would map the CRLF file back to the
+    # approved blob; the binding is to the bytes on disk (Codex, #451).
+    ci = r2 / ".github/workflows/ci-monitor.yml"
+    approved = S_FILES["templates/workflows/ci-monitor.yml"]
+    set_kept(r2, ".github/workflows/ci-monitor.yml",
+             {"blob": m2.group(1), "local": obj_id(approved), "reason": "a local watch list"})
+    ci.write_bytes(approved.replace("\n", "\r\n").encode())
+    subprocess.run(["git", "-C", str(r2), "config", "core.autocrlf", "true"], check=True)
+    expect("stamp: a CRLF rewrite under core.autocrlf no longer matches the approved local blob",
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
 expect("stamp: the re-run after recording a reason stamps without refresh-delta.sh",
        res, 0, f"stamped: {H}")
 check("stamp: a successful stamp consumes the verdict",
@@ -746,6 +760,20 @@ expect("drift: a file edited since its record was made does not inherit the appr
        res, 0, "CUSTOM: .github/scripts/lint.py (refresh_kept says \"approved content\", but this file changed since it was recorded")
 expect("drift: a record bound to an OLD template blob no longer covers it: the plain line",
        res, 0, "CUSTOM: .github/scripts/guard.py — differs", absent="decided against the old template")
+
+# A CRLF rewrite of the approved content, under core.autocrlf: drift hashes the
+# bytes on disk, so it is "changed since recorded", never the approval
+# (Codex, #451).
+r = project("drift-kept-crlf", at=S_FILES, changes={
+    ".github/scripts/check-contrast.js": CONTRAST_LOCAL.replace("\n", "\r\n"),
+}, sync_extra={"refresh_kept": {".github/scripts/check-contrast.js": {
+    "blob": blob_id(H, "templates/scripts/check-contrast.js"), "local": obj_id(CONTRAST_LOCAL),
+    "reason": "the house palette"}}})
+subprocess.run(["git", "-C", str(r), "config", "core.autocrlf", "true"], check=True)
+run(r, "refresh-delta.sh")
+expect("drift: a CRLF rewrite under core.autocrlf is changed since recorded, not the approval",
+       run(r, "refresh-drift.sh"), 0,
+       "CUSTOM: .github/scripts/check-contrast.js (refresh_kept says \"the house palette\", but this file changed")
 
 # A record binding both blobs but giving no reason is not honoured -- the stamp
 # would refuse it, so drift must not say "do not re-ask" (Codex, #451).

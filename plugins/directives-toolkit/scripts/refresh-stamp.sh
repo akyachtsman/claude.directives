@@ -118,7 +118,10 @@ check() {
   # refusal prints the value to record (Codex, #451). A reason must be a
   # non-blank string, as kit_dir_kept requires. refresh-drift.sh reads it the
   # same way.
-  if [ -e "$1" ]; then lb=$(git hash-object -- "$1" 2>/dev/null) || lb=; else lb=absent; fi
+  # --no-filters: the blob of the bytes on disk, the bytes `cmp` checks below --
+  # never after core.autocrlf or a clean filter, which can map two different
+  # files to one id (Codex, #451).
+  if [ -e "$1" ]; then lb=$(git hash-object --no-filters -- "$1" 2>/dev/null) || lb=; else lb=absent; fi
   kept=$(jq -r --arg p "$1" --arg b "$b" --arg l "$lb" \
     '.refresh_kept[$p] | select(type == "object" and .blob == $b and .local == $l and $l != "")
      | .reason // empty | select(type == "string" and test("\\S"))' \

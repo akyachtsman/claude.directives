@@ -162,7 +162,7 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     # is one without a reason (a non-blank string), which the stamp would not
     # honour either.
     b=$(git -C "$up" rev-parse "$pin:$t" 2>/dev/null) || b=
-    lb=$(git hash-object -- "$f" 2>/dev/null) || lb=
+    lb=$(git hash-object --no-filters -- "$f" 2>/dev/null) || lb=   # raw bytes, as the stamp
     rec=$(jq -r --arg p "$f" --arg b "$b" \
       '.refresh_kept[$p] | select(type == "object" and .blob == $b)
        | [(.local // ""),

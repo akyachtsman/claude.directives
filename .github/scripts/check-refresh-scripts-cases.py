@@ -118,6 +118,14 @@ feature reverted at a time:
     plus the .github/scripts/ui-tests/ case (the top-level glob alone already
     keeps the kit subtree out; the case pins that).
 
+LOCAL BINDING (Codex, #451). A refresh_kept record now also names the installed
+copy's blob (`local`); drift honours it only when both blobs match, and the stamp
+refuses when a record names a local blob the file no longer has. MEASURED
+2026-10-13: the pre-change refresh-drift.sh fails the no-local and edited-since
+cases; the pre-change refresh-stamp.sh fails the "refusal prints the local blob"
+case, and the new stamp with only the local condition removed fails the
+"local blob no longer matches" case.
+
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
 # Before any import: running the gate must leave no __pycache__/ beside the
@@ -422,6 +430,12 @@ def marker(root, name):
     return root / ".git" / f"refresh-repo-{name}"
 
 
+def obj_id(text):
+    """The blob id git gives this content -- what a record's `local` binds."""
+    return subprocess.run(["git", "hash-object", "--stdin"], input=text.encode(),
+                          capture_output=True, check=True).stdout.decode().strip()
+
+
 def set_kept(root, key, entry):
     p = root / ".claude/directive-sync.json"
     d = json.loads(p.read_text(encoding="utf-8"))
@@ -503,6 +517,18 @@ m = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\)", out)
 if m:
     set_kept(r, ".github/workflows/ci-monitor.yml", {"blob": m.group(1), "reason": "a local watch list"})
 res = run(r, "refresh-stamp.sh")
+r2 = project("stamp-local-moved", changes={".github/workflows/ci-monitor.yml": S_FILES["templates/workflows/ci-monitor.yml"]})
+run(r2, "refresh-delta.sh")
+rc2, out2 = run(r2, "refresh-stamp.sh")
+m2 = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out2)
+check("stamp: a refusal prints the installed copy's local blob to record", bool(m2), out2)
+if m2:
+    set_kept(r2, ".github/workflows/ci-monitor.yml",
+             {"blob": m2.group(1), "local": m2.group(2), "reason": "a local watch list"})
+    (r2 / ".github/workflows/ci-monitor.yml").write_text(
+        (r2 / ".github/workflows/ci-monitor.yml").read_text() + "# edited after approval\n")
+    expect("stamp: a record whose local blob no longer matches the file refuses (Codex, #451)",
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
 expect("stamp: the re-run after recording a reason stamps without refresh-delta.sh",
        res, 0, f"stamped: {H}")
 check("stamp: a successful stamp consumes the verdict",
@@ -631,25 +657,35 @@ expect("drift: a file inside a kit directory kit-dirs.sh names is not compared a
 
 # A CUSTOM file the project already decided on (claude.prop's check-contrast.js)
 # carries its refresh_kept reason, read as refresh-stamp.sh reads it: keyed by
-# the local path, bound to the template's blob at the pin.
-r = project("drift-kept", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py",), changes={
-    ".github/scripts/check-contrast.js": "require('fs'); // house palette\n",
+# the local path, bound to the template's blob at the pin AND to the installed
+# copy's own blob (`local`), so a later local edit never inherits the approval
+# (Codex, #451).
+CONTRAST_LOCAL = "require('fs'); // house palette\n"
+QA_LOCAL = DRIFTED[".github/workflows/qa.yml"]
+r = project("drift-kept", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "lint.py"), changes={
+    ".github/scripts/check-contrast.js": CONTRAST_LOCAL,
     ".github/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1, local')\n",
-    ".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"],
+    ".github/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint, edited after approval')\n",
+    ".github/workflows/qa.yml": QA_LOCAL,
 }, sync_extra={"refresh_kept": {
     ".github/scripts/check-contrast.js": {"blob": blob_id(H, "templates/scripts/check-contrast.js"),
-                                          "reason": "the house palette"},
+                                          "local": obj_id(CONTRAST_LOCAL), "reason": "the house palette"},
     ".github/scripts/guard.py": {"blob": blob_id(S, "templates/scripts/guard.py"),
                                  "reason": "decided against the old template"},
+    ".github/scripts/lint.py": {"blob": blob_id(H, "templates/scripts/lint.py"),
+                                "local": obj_id("#!/usr/bin/env python3\nprint('lint, as approved')\n"),
+                                "reason": "approved content"},
     ".github/workflows/qa.yml": {"blob": blob_id(H, "templates/workflows/qa.yml"),
                                  "reason": "a local top comment"},
 }})
 run(r, "refresh-delta.sh")
 res = run(r, "refresh-drift.sh")
-expect("drift: a CUSTOM script with a matching refresh_kept record carries its reason",
+expect("drift: a CUSTOM script whose record binds template AND local content carries its reason",
        res, 0, "CUSTOM: .github/scripts/check-contrast.js (recorded in refresh_kept: the house palette) — ")
-expect("drift: …and so does a CUSTOM workflow (the same loop)",
-       res, 0, "CUSTOM: .github/workflows/qa.yml (recorded in refresh_kept: a local top comment) — ")
+expect("drift: a record with no local blob is shown but NOT honoured (Codex, #451)",
+       res, 0, "CUSTOM: .github/workflows/qa.yml (refresh_kept says \"a local top comment\", but the record binds no local content")
+expect("drift: a file edited since its record was made does not inherit the approval (Codex, #451)",
+       res, 0, "CUSTOM: .github/scripts/lint.py (refresh_kept says \"approved content\", but this file changed since it was recorded")
 expect("drift: a record bound to an OLD template blob no longer covers it: the plain line",
        res, 0, "CUSTOM: .github/scripts/guard.py — differs", absent="decided against the old template")
 

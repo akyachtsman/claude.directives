@@ -111,8 +111,13 @@ dir_hints=" "
 check() {
   handled="$handled$1 "
   if [ "$2" = deleted ]; then b=deleted; else b=$(git -C "$up" rev-parse "$head:$2" 2>/dev/null) || b=; fi
-  kept=$(jq -r --arg p "$1" --arg b "$b" \
-    '.refresh_kept[$p] | select(.blob == $b) | .reason // empty' \
+  # A record naming the `local` blob it approved binds only while the installed
+  # copy still has that content; one without `local` binds as before (Codex,
+  # #451). refresh-drift.sh reads it the same way.
+  lb=$(git hash-object -- "$1" 2>/dev/null) || lb=
+  kept=$(jq -r --arg p "$1" --arg b "$b" --arg l "$lb" \
+    '.refresh_kept[$p] | select(.blob == $b and ((.local // null) == null or .local == $l))
+     | .reason // empty' \
     .claude/directive-sync.json 2>/dev/null) || kept=
   if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
   if [ -n "${4:-}" ] && [ "$b" != deleted ] && kept=$(kit_dir_kept "$4" "$2"); then
@@ -123,7 +128,7 @@ check() {
   elif [ ! -e "$1" ]; then
     echo "UNAPPLIED: $1 is absent but required -- $3 (blob $b)"; unapplied=1
   elif ! git -C "$up" cat-file blob "$b" 2>/dev/null | cmp -s - "$1"; then
-    echo "UNAPPLIED: $1 differs from $2 at $head (blob $b)"; unapplied=1
+    echo "UNAPPLIED: $1 differs from $2 at $head (blob $b) (local $lb)"; unapplied=1
   else
     return
   fi

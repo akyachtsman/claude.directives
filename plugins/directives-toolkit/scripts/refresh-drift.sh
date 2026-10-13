@@ -144,15 +144,29 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     stale=$((stale + 1))
   else
     # A divergence already decided: refresh-stamp.sh's refresh_kept record,
-    # read the way it reads it -- keyed by the local path, bound to the
-    # template's blob at the head -- so one that upstream has since changed
-    # is a fresh question again (claude.prop pilot, 2026-10-13).
+    # keyed by the local path, bound to the template's blob at the head -- so
+    # one that upstream has since changed is a fresh question again (claude.prop
+    # pilot, 2026-10-13). It is honoured only while it ALSO binds this file's
+    # content: its `local` blob must equal the installed copy's, or a later
+    # edit (or a replaced file) would inherit an old approval and go unreviewed
+    # (Codex, #451). A record without `local` is shown but not honoured.
     b=$(git -C "$up" rev-parse "$pin:$t" 2>/dev/null) || b=
-    kept=$(jq -r --arg p "$f" --arg b "$b" \
-      '.refresh_kept[$p] | select(type == "object" and .blob == $b) | .reason
-       | select(type == "string" and test("\\S")) | gsub("[\t\n\r]"; " ")' \
-      .claude/directive-sync.json 2>/dev/null) || kept=
-    [ -n "$kept" ] && kept=" (recorded in refresh_kept: $kept)"
+    lb=$(git hash-object -- "$f" 2>/dev/null) || lb=
+    rec=$(jq -r --arg p "$f" --arg b "$b" \
+      '.refresh_kept[$p] | select(type == "object" and .blob == $b)
+       | [(.local // ""), ((.reason // "") | gsub("[\t\n\r]"; " "))] | @tsv' \
+      .claude/directive-sync.json 2>/dev/null) || rec=
+    kept=
+    if [ -n "$rec" ]; then
+      rl=${rec%%$'\t'*} why=${rec#*$'\t'}
+      if [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
+        kept=" (recorded in refresh_kept: $why)"
+      elif [ -n "$rl" ]; then
+        kept=" (refresh_kept says \"$why\", but this file changed since it was recorded -- review it again)"
+      else
+        kept=" (refresh_kept says \"$why\", but the record binds no local content -- review it, then re-record with its local blob)"
+      fi
+    fi
     echo "CUSTOM: $f$kept — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
     custom=$((custom + 1))
   fi

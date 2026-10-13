@@ -95,9 +95,12 @@ Over git transport, at the pinned head. Per file it prints one of:
   A `CUSTOM` line reading `(recorded in refresh_kept: <reason>)` after the path
   is a divergence already decided: the project's `refresh_kept` record for that
   path binds, read as Phase 3 reads it (keyed by the local path, its `blob` the
-  template's at the pinned head). Report it with its reason; do not re-ask.
-  Once upstream changes that template the record stops binding, and the plain
-  line, a fresh question, returns (pilot claude.prop, 2026-10-13).
+  template's at the pinned head, its `local` the installed copy's). Report it
+  with its reason; do not re-ask. Once upstream changes that template, or the
+  installed copy changes, the record stops binding and the line says so: review
+  it as a fresh question (pilot claude.prop, 2026-10-13; Codex, #451). A record
+  without `local` (recorded before it existed) is shown but never honoured:
+  review that file once and re-record it with its local blob.
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.
@@ -718,12 +721,14 @@ delta-independent diff happens to find it. So before stamping, Phase 3 compares
 the installed copies with the templates **at the head being stamped** (one
 depth-1 git fetch of that head) and
 refuses the stamp while one differs or a required one is missing, unless the
-session recorded why it stays. A reason binds to the **template's blob id**,
-which the refusal prints:
+session recorded why it stays. A reason binds to the **template's blob id**
+and to the **installed copy's blob** (`local`), both of which the refusal
+prints, so neither an upstream change nor a later local edit inherits the
+approval:
 
 ```bash
-jq --arg p "<local path>" --arg b "<blob id printed with it>" --arg r "<why it stays local>" \
-  '.refresh_kept[$p] = {blob: $b, reason: $r}' .claude/directive-sync.json \
+jq --arg p "<local path>" --arg b "<blob id printed with it>" --arg l "<local blob printed with it>" --arg r "<why it stays local>" \
+  '.refresh_kept[$p] = {blob: $b, local: $l, reason: $r}' .claude/directive-sync.json \
   > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
 ```
 

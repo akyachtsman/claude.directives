@@ -647,6 +647,16 @@ cjs_case("an ESM script that DECLARES its own require (createRequire) needs no p
                                       "const require = createRequire(import.meta.url);\n"
                                       "export const p = require.resolve('x');\n"},
          "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("an ESM script with a PARAMETER named require needs no package.json (Codex, #449)",
+         {"templates/scripts/esm.js": "export function load(require) { return require('x'); }\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("…nor one with `export default` and a free __dirname-like local",
+         {"templates/scripts/esm.js": "const __dirname = new URL('.', import.meta.url).pathname;\n"
+                                      "export default __dirname;\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("a dynamic `import()` alone does not make a CommonJS script ESM",
+         {"templates/scripts/cjs.js": "const fs = require('fs');\nimport('x').then(() => {});\n"},
+         "cjs.js", "", 1, "UNNAMED: .github/scripts/package.json")
 cjs_case("a `.require` PROPERTY does not make a script CommonJS",
          {"templates/scripts/esm.js": "import m from 'm';\nexport const r = m.require('x');\n"},
          "esm.js", "", 0, "1 referenced script(s)")

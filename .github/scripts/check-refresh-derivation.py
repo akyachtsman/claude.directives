@@ -497,29 +497,48 @@ def local_deps(script):
     return {d: why for d, why in deps.items() if d.startswith(SCRIPTS + "/")}
 
 
-# Names only CommonJS defines. An ESM module that wants one declares it itself
-# (`const require = createRequire(import.meta.url)`), which is why a declared
-# name stops counting.
+# Names only CommonJS defines.
 CJS_FREE_NAMES = ("require", "__dirname", "__filename")
+# What may follow `export` in an ESM statement.
+ESM_EXPORT_NEXT = {("p", "{"), ("p", "*"), ("id", "default"), ("id", "const"), ("id", "let"),
+                   ("id", "var"), ("id", "function"), ("id", "class"), ("id", "async")}
+
+
+def js_is_esm(toks):
+    """True when the source has ES module syntax: a static `import` (not
+    `import(` or `import.meta`) or an `export` statement. Such a file is ESM
+    whatever names it uses, and under .github/scripts/package.json's
+    "type": "commonjs" it would not even parse."""
+    for k, (kind, val) in enumerate(toks):
+        if kind != "id" or (k and toks[k - 1] == ("p", ".")):
+            continue
+        nxt = toks[k + 1] if k + 1 < len(toks) else None
+        if val == "import" and nxt not in (("p", "("), ("p", ".")):
+            return True
+        if val == "export" and nxt in ESM_EXPORT_NEXT:
+            return True
+    return False
 
 
 def js_is_commonjs(src):
-    """True when a JavaScript source is CommonJS: a free use of a name only
-    CommonJS defines -- `require` in ANY form (`require(...)`,
-    `require.resolve(...)`, `require.cache`), `__dirname`, `__filename` -- or an
-    assignment through `module.exports` / `exports.`. Read with js_tokens, so a
-    mention in a comment or a string does not count, nor does a property
-    (`x.require`) or a name the file declares itself (Codex, #449: a lone
-    `require.resolve` was missed)."""
+    """True when a JavaScript source is CommonJS. ES module syntax rules first:
+    a file with a static import or an export statement is ESM, so a `require`
+    it binds itself (a parameter, a createRequire) never makes it CommonJS --
+    and that is the ONLY place a false positive costs anything, because a
+    plain script runs as well under "type": "commonjs" as without it (Codex,
+    #449). Otherwise any free use of a name only CommonJS defines counts:
+    `require` in ANY form (`require(...)`, `require.resolve(...)`,
+    `require.cache`), `__dirname`, `__filename`, or an assignment through
+    `module.exports` / `exports.`. Read with js_tokens, so a mention in a
+    comment or a string does not count, nor does a property (`x.require`)."""
     toks = js_tokens(src)
-    declared = {val for k, (kind, val) in enumerate(toks)
-                if kind == "id" and val in CJS_FREE_NAMES and k
-                and toks[k - 1] in (("id", "const"), ("id", "let"), ("id", "var"), ("id", "function"))}
+    if js_is_esm(toks):
+        return False
     for k, (kind, val) in enumerate(toks):
         nxt = toks[k + 1] if k + 1 < len(toks) else None
         nxt2 = toks[k + 2] if k + 2 < len(toks) else None
         prop = k and toks[k - 1] == ("p", ".")
-        if kind == "id" and val in CJS_FREE_NAMES and val not in declared and not prop:
+        if kind == "id" and val in CJS_FREE_NAMES and not prop:
             return True
         if kind == "id" and val == "module" and nxt == ("p", ".") and nxt2 == ("id", "exports") \
                 and not prop:

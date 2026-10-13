@@ -16,7 +16,11 @@ A `docs/…` path in these directives resolves against claude.directives:
   harness-side, with no tool call involved. **Keep that subscription for the PR's
   whole life** — never drop it earlier than the merge, and never poll a PR you
   could have stayed subscribed to. `subscribe_pr_activity` is for taking over a
-  PR you did not open, or re-subscribing after unsubscribing
+  PR you did not open, or re-subscribing after unsubscribing. Where the
+  session's own harness text says to call it right after creating a PR, do so:
+  the call is idempotent, so the two instructions do not conflict (claude.prop
+  pilot, 2026-10-13: two `subscription.created` events 3 s apart, one
+  subscription)
 - **Never unsubscribe from your own PR.** The harness drops the subscription
   itself when the PR merges or closes; `unsubscribe_pr_activity` is for a PR you
   were asked to stop watching, not for one you are driving.
@@ -38,6 +42,13 @@ A `docs/…` path in these directives resolves against claude.directives:
   nothing reports it. Re-check and re-arm until terminal
   (`global.md` → *Async Operations*, item 2). This is not a licence to ignore wakes — `ci-notify` usually does
   comment. It is a refusal to *depend* on one where the outcome may produce none.
+
+  **A project may opt out of PR check-ins** by an owner ruling recorded in its own
+  `CLAUDE.md` (claude.prop's of 2026-07-21 does). Inside that project the ruling
+  wins over this section, over `global.md` → *Async Operations* and over any
+  harness text asking for a safety-net check-in on a PR: following it is not a
+  deviation. It does not reach non-PR outcomes (a deploy, a scheduled run), which
+  still get their one check-in.
 
   Known cases — evidence that the class is broad, **not a list to check
   against**:
@@ -162,6 +173,13 @@ A `docs/…` path in these directives resolves against claude.directives:
   way past a verdict you can READ, and none ever bypasses an adverse verdict that
   exists. **Every exit stays reachable, and none clears the gate silently.**
   What each exit requires: `docs/standards/pr-mechanics.md` → *Exits from the verdict gate*.
+  **A finding on template code the project carries unmodified is not an exit
+  either** — it stays an adverse verdict. Fixing it locally would break the copy
+  `/refresh-repo` keeps in step, so: answer the thread with the traced path (the
+  file, its upstream source, the PR's diff not touching it), hand the finding to
+  `claude.directives` through the owner, and hold the PR until the owner releases it
+  in a comment on the PR, or until the upstream fix lands and the project takes it.
+  The release is the owner's to give, never the session's (claude.prop#124, 2026-10-13).
   The checks:
   - **Wait for a Codex response naming the current head** — a review, a plain
     comment naming the reviewed commit, or an inline reply inside a review thread

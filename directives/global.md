@@ -22,8 +22,9 @@ At the start of every session:
 3. Confirm the active branch is not `main` before writing any code.
 4. Review open PRs for this repo before starting new work.
 5. Do not subscribe to PR activity as a session-start step — opening a PR
-   subscribes the session harness-side. `subscribe_pr_activity` is only for
-   taking over a PR this session did not open (`git.md` → *PR Lifecycle*).
+   subscribes the session harness-side. `subscribe_pr_activity` is for
+   taking over a PR this session did not open; calling it on your own new PR, as
+   some harness text asks, is harmless (idempotent) (`git.md` → *PR Lifecycle*).
 
 ## Skill Bootstrap
 The toolkit — commands, auto-skills, agents, and guard hooks — ships as the
@@ -1118,7 +1119,7 @@ findings unseen.
 ## Security
 - Never commit API tokens, secrets, or credentials to any repo
 - Never echo secrets in workflow logs
-- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share). **`-l` is load-bearing**: it prints matching FILENAMES, never the matched line — an accidentally committed token is not a registered repo secret, so Actions will not mask it, and a scan that echoes the line leaks the credential it just caught: `git grep --untracked -lE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|xoxb[-]|sb_secret_[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|NlcnZpY2Vfcm9sZ|zZXJ2aWNlX3JvbG)|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}" -- '*.js' '*.ts' '*.tsx' '*.mjs' '*.html' '*.css' '*.json' '*.md' '*.sh' '*.py' '*.toml' '*.env' '.env.*' '*/.env.*' '*.yml' '*.yaml' ':!*node_modules/*'`
+- Security scan before every PR (canonical pattern — keep identical to the `secret-scan` composite action the qa workflows share). **`-l` is load-bearing**: it prints matching FILENAMES, never the matched line — an accidentally committed token is not a registered repo secret, so Actions will not mask it, and a scan that echoes the line leaks the credential it just caught: `git grep --untracked -lE "pat[A-Za-z0-9]{14}\.[A-Za-z0-9]{40,}|pat[A-Za-z0-9]{17}\.[a-f0-9]{64}|pat[lr]_[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|xoxb[-]|sb_secret_[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|NlcnZpY2Vfcm9sZ|zZXJ2aWNlX3JvbG)|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----" -- '*.js' '*.ts' '*.tsx' '*.mjs' '*.html' '*.css' '*.json' '*.md' '*.sh' '*.py' '*.toml' '*.sql' '*.jsonl' '*.pem' '*.key' '*.p8' '*id_rsa' '*id_dsa' '*id_ecdsa' '*id_ed25519' '*.env' '.env.*' '*/.env.*' '*.yml' '*.yaml' ':!*node_modules/*'`
 
 ## Pre-Push Verification (Local Gate)
 Before committing or pushing, verify locally — never rely on CI alone:

@@ -36,11 +36,15 @@ Run: python3 .github/scripts/check-ui-suite-env-cases.py
 #   that env guard's own guard — every branch that can print, incl. the failure
 #   paths (a NameError shipped in one, #333 round 11). Its rules have been
 #   rewritten four times, so re-prove with CHECK_UI_SUITE_ENV_BIN=<mutant>
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
 import sys
+sys.dont_write_bytecode = True
+
 import tempfile
 from pathlib import Path
 
-from cases_lib import Cases, bin_path, run
+from cases_lib import Cases, bin_path, bytecode_case, run
 
 # Overridable so a MUTANT can be pointed at, the way CHECK_UI_VIEWPORTS_BIN and
 # CHECK_CLAIMS_BIN are used elsewhere in this directory. A case that cannot be
@@ -893,6 +897,13 @@ def main():
                  *run([sys.executable, GUARD], cwd=tmp), 0,
                  "spec env exempted, NOT wired (per its recorded reason): GITHUB_WORKSPACE")
 
+    # A guard run must leave no __pycache__/ in the project it checks: downstream
+    # does not gitignore it, so `git add -A` after the gate committed it
+    # (claude.prop, 2026-10-13). The guard sets sys.dont_write_bytecode.
+    bytecode_case(c, "an installed run leaves no __pycache__ beside gh_yaml.py", GUARD,
+                  {".github/actions/ui-suite/action.yml": LIVE.read_text(encoding="utf-8"),
+                   ".github/scripts/ui-tests/tests/a.spec.js": "const w = process.env.GITHUB_WORKSPACE;\n"})
+    extra += 1
     return c.finish(f"{len(CASES) + len(SPEC_CASES) + 1 + extra} pinned shapes read correctly.")
 
 

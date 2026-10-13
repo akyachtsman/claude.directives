@@ -473,13 +473,16 @@ wrong route, a selector regression. **Backend reachability decides nothing in
 either direction**; for an app that loads a dependency from a CDN at runtime, it
 says nothing about whether the app can boot at all.
 
-Blocking is **selective**, so "the sandbox has no network" is the wrong model:
+Blocking is **selective**, so "the sandbox has no network" is the wrong model.
+What is blocked is set by each environment's egress policy, so these are dated
+measurements from particular sessions, not a list that holds everywhere:
+re-measure in yours.
 
 | target | `curl` |
 |--------|--------|
 | `esm.sh` | `000` — no connection |
 | `raw.githubusercontent.com` | `200` |
-| `cdn.playwright.dev` | `400` — a response, so reachable |
+| `cdn.playwright.dev` | `400` (a response, so reachable) in the session this table was first measured in; `CONNECT 403` (a policy denial) from `claude.prop`'s web session on 2026-10-13, as was `playwright.download.prss.microsoft.com`, so `playwright install webkit` failed there |
 
 For browser-side network failures, `global.md` → *Network Access Playbook* is the
 governing rule and this directive does not restate it.

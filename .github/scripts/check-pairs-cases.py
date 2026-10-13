@@ -22,10 +22,14 @@ Re-prove discrimination with a mutant:
 Run: python3 .github/scripts/check-pairs-cases.py
 """
 
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import importlib.util
 import os
 import shutil
-import sys
 import tempfile
 
 from cases_lib import Cases, bin_path, run

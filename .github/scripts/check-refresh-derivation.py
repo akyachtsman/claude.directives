@@ -113,13 +113,17 @@ path or a dependency loaded any other way is invisible to it.
 #   out of it; the guard reads the shipped pattern out of the command rather
 #   than copying it, PROP6 2026-09-01;
 
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import ast
 import json
 import posixpath
 import re
 import shlex
 import subprocess
-import sys
 from pathlib import Path
 
 import yaml

@@ -37,10 +37,14 @@ Run: python3 .github/scripts/check-report-path-cases.py
 #   the ui-suite report-path validator's own guard — this repo does not use the
 #   composite, so nothing else here would notice it break; three of #347's
 #   rounds found defects in it. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import atexit
 import os
 import shutil
-import sys
 import tempfile
 
 from cases_lib import Cases, bin_path, run as run_cmd

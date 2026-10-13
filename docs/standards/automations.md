@@ -371,10 +371,13 @@ information only: the receiver acts in its own repo under its own rules
 (`directives/global.md` → *One Session, One Repo*). Find the target with
 `list_sessions` (read-only, pre-approved).
 
-One session can message another directly: `create_trigger` with the target's
-`persistent_session_id`, then `fire_trigger`, then `delete_trigger`. `ListAgents`
-shows nothing (cloud sessions are not local peers) and `SendMessage` fails, so
-this is the channel. It is written down here because it was not: the procedure
+Where the sending session's toolset carries `send_message` (the
+claude-code-remote MCP server's), that is the direct channel: it posts the message
+into the target session as a user turn. Toolsets differ between sessions, so check
+yours; where it is absent, one session can still message another:
+`create_trigger` with the target's `persistent_session_id`, then `fire_trigger`,
+then `delete_trigger`. `ListAgents` shows nothing (cloud sessions are not local
+peers) and `SendMessage` fails, so without `send_message` this is the channel. It is written down here because it was not: the procedure
 ran the fleet for a day while existing only inside chat messages, and the version
 in circulation had the defect below.
 

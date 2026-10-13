@@ -41,10 +41,14 @@ Re-prove discrimination with a mutant:
 #   has its accepting complement, so none can be bought by over-tightening.
 #   Re-prove with CHECK_ACTION_SIBLINGS_BIN=<mutant>
 
+# Before any import: running the gate must leave no __pycache__/ beside the
+# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+import sys
+sys.dont_write_bytecode = True
+
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 
 from cases_lib import Cases, bin_path

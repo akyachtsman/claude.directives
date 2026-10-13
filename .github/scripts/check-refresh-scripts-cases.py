@@ -202,6 +202,7 @@ LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
           app-url: ${{ github.event.inputs.app_url || vars.APP_URL }}
           extra: ${{ secrets['New_Secret'] }}
           token: ${{ secrets.GITHUB_TOKEN }}
+      - run: echo "prefix # ${{ secrets.HASH_QUOTED }}"
 """
 SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
                        "hooks": {"SessionStart": [{"hooks": [
@@ -603,7 +604,9 @@ expect("vars: a read already present at the stamp is not flagged",
        res, 0, "OWNER PRE-MERGE", absent="TEST_AUTH_CREDENTIAL")
 expect("vars: GITHUB_TOKEN is never flagged", res, 0, "OWNER PRE-MERGE", absent="GITHUB_TOKEN")
 expect("vars: a name only a comment mentions is not a read", res, 0, "OWNER PRE-MERGE", absent="COMMENTED_ONLY")
-expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 2 new", absent="OK: no new")
+expect("vars: a read after a # inside a quoted string is still a read (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED — newly read by templates/workflows/qa-live.yml")
+expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 3 new", absent="OK: no new")
 r = project("vars-newly-installed", workflows=LIVE + ("new.yml",))
 run(r, "refresh-delta.sh")
 expect("vars: a template absent at the stamp counts its reads as new",

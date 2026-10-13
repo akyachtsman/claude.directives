@@ -63,11 +63,15 @@ if [ -z "$up" ] || ! refresh_fetch "$up" "$pin" \
 fi
 
 # reads <rev> <template>: one `vars NAME` / `secrets NAME` line per read, NAME
-# upper-cased. Nothing when the template is absent at <rev>. A `#` that opens a
-# line or follows whitespace starts a comment (YAML, and the shell inside run:).
+# upper-cased. Nothing when the template is absent at <rev>. Only a WHOLE-LINE
+# comment is set aside: a read there is never one a run needs set. A `#` later
+# in a line can sit inside a quoted value or a shell string (`echo "a # ${{
+# secrets.X }}"` reads X), and telling those apart needs a YAML and shell
+# parser, so such a line is read whole (Codex, #450): the worst case is an
+# over-listed owner item, never a missed one.
 reads() {
   git -C "$up" cat-file blob "$1:$2" 2>/dev/null \
-    | sed -E 's/(^|[[:space:]])#.*$//' \
+    | grep -vE '^[[:space:]]*#' \
     | grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
     | sed -E "s/^[^vs]*//; s/\[[[:space:]]*'/ /; s/'[[:space:]]*\]\$//; s/\./ /" \
     | awk '{ print $1, toupper($2) }' \

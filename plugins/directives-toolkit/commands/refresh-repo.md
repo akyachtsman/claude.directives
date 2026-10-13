@@ -841,8 +841,9 @@ compare the head with itself.
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-vars.sh"
 ```
 It reads every `vars.NAME` and `secrets.NAME` (`GITHUB_TOKEN` excepted) in the
-templates of the workflows and composites installed here, at the pin and at the
-stamp, and prints one line per name no stamp-era template read —
+templates (at the pin) of the workflows and composites installed here, and
+prints one line per name that none of the project's OWN installed files read
+when the stamp was written —
 `OWNER PRE-MERGE: set repository variable APP_URL — newly read by templates/workflows/qa-live.yml`
 (or `repository secret`) — or the explicit `OK: no new repository variables or secrets read` line; exit 2 when it
 could not compare. Each `OWNER PRE-MERGE` line goes, verbatim, into the

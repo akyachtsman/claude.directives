@@ -16,11 +16,12 @@
 # .github/workflows/*.yml and .github/actions/*/action.yml here whose template
 # upstream ships at the pinned head (a project's own workflow has none, and its
 # reads are the project's own). For those, `vars.NAME`, `secrets.NAME` and the
-# bracket forms are read from the template text at the PIN and at the STAMP,
-# YAML comments set aside. A name is NEW when no stamp-era version of any of
-# the templates installed at the stamp read it -- so a template this refresh
-# installs for the first time counts its reads as new unless a template the
-# project already ran read them. GITHUB_TOKEN is never listed: GitHub supplies it.
+# bracket forms are read from the template text at the PIN, and compared with
+# the project's OWN installed files as they stood when the stamp was written. A
+# name is NEW when none of those files read it -- so a template this refresh
+# installs for the first time counts all its reads, and a customised copy that
+# dropped a read does not count as reading it. GITHUB_TOKEN is never listed:
+# GitHub supplies it.
 # Names compare case-insensitively, as GitHub resolves them.
 #
 # WHAT IT CANNOT SEE. Whether the variable is SET (that needs the API above),
@@ -54,59 +55,52 @@ stamp=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null) 
 refresh_is_sha "$stamp" || stamp=
 
 up=$(mktemp -d) || up=
-if [ -z "$up" ] || ! refresh_fetch "$up" "$pin" \
-   || { [ -n "$stamp" ] && [ "$stamp" != "$pin" ] \
-        && ! git -C "$up" fetch -q --depth=1 "$REFRESH_SRC" "$stamp" 2>/dev/null; }; then
+if [ -z "$up" ] || ! refresh_fetch "$up" "$pin"; then
   [ -n "$up" ] && rm -rf "$up"
-  echo "CANNOT-VERIFY: the upstream tree at $pin${stamp:+ or the stamp $stamp} could not be fetched — new variables and secrets NOT checked"
+  echo "CANNOT-VERIFY: the upstream tree at $pin could not be fetched — new variables and secrets NOT checked"
   exit 2
 fi
 
-# reads <rev> <template>: one `vars NAME` / `secrets NAME` line per read, NAME
-# upper-cased. Nothing when the template is absent at <rev>. Only a WHOLE-LINE
-# comment is set aside: a read there is never one a run needs set. A `#` later
-# in a line can sit inside a quoted value or a shell string (`echo "a # ${{
-# secrets.X }}"` reads X), and telling those apart needs a YAML and shell
-# parser, so such a line is read whole (Codex, #450): the worst case is an
-# over-listed owner item, never a missed one.
+# reads: stdin -> one `vars NAME` / `secrets NAME` line per read, NAME
+# upper-cased. NO comment is set aside: a `#` can open a YAML comment, sit in a
+# quoted value or a shell string, or start a line of a block scalar that
+# Actions evaluates (`payload: |` then `#${{ secrets.X }}`), and only a YAML
+# and shell parser tells them apart (Codex, #450, three rounds). Both sides of
+# the comparison are read the same way, so a mention in a comment cancels out
+# unless it is NEW -- the worst case is an over-listed owner item, never a
+# missed one.
 reads() {
-  git -C "$up" cat-file blob "$1:$2" 2>/dev/null \
-    | grep -vE '^[[:space:]]*#' \
-    | grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
+  grep -oE "(^|[^[:alnum:]_.])(vars|secrets)(\.[A-Za-z_][A-Za-z0-9_]*|\[[[:space:]]*'[A-Za-z_][A-Za-z0-9_]*'[[:space:]]*\])" \
     | sed -E "s/^[^vs]*//; s/\[[[:space:]]*'/ /; s/'[[:space:]]*\]\$//; s/\./ /" \
     | awk '{ print $1, toupper($2) }' \
     | grep -v '^secrets GITHUB_TOKEN$'
 }
 
-# The baseline is what the project had installed WHEN THE STAMP WAS WRITTEN: the
-# tree of the last commit that touched .claude/directive-sync.json (this runs
-# before the stamp, so that is the previous refresh's). A template this refresh
-# installs for the first time is therefore new even if upstream shipped it at
-# the stamp, so its reads are never hidden by a baseline the project never ran
-# (Codex, #450). No such commit: HEAD. Either way it is printed.
+# The baseline is what the project RAN WITH when the stamp was written: its own
+# installed files in the last commit that touched .claude/directive-sync.json
+# (this runs before the stamp, so that is the previous refresh's) -- never the
+# upstream templates at the stamp. So a template this refresh installs for the
+# first time has no baseline, and a CUSTOM copy that dropped a read does not
+# count as reading it (Codex, #450). No such commit: HEAD. Either way printed.
 base=$(git log -1 --format=%H -- .claude/directive-sync.json 2>/dev/null) || base=
 [ -n "$base" ] || base=HEAD
 echo "installed-at-stamp baseline: $base"
 
 # Plain lists, no associative arrays: stock macOS bash is 3.2 (Codex, #450).
-templates=() before=()
+templates=()
+: >"$up/old"
 for f in .github/workflows/*.yml .github/actions/*/action.yml; do
   [ -f "$f" ] || continue
   t=$(refresh_template_of "$f")
   git -C "$up" cat-file -e "$pin:$t" 2>/dev/null || continue
   templates+=("$t")
-  git cat-file -e "$base:$f" 2>/dev/null && before+=("$t")
+  [ -n "$stamp" ] && git show "$base:$f" 2>/dev/null | reads >>"$up/old"
 done
-
-if [ -n "$stamp" ]; then
-  for t in ${before[@]+"${before[@]}"}; do reads "$stamp" "$t"; done | sort -u >"$up/old"
-else
-  : >"$up/old"
-fi
+sort -u -o "$up/old" "$up/old"
 # `kind NAME<TAB>template` for every read at the pin not in the baseline, then
 # one line per name with its templates joined.
 for t in ${templates[@]+"${templates[@]}"}; do
-  reads "$pin" "$t" | grep -vxF -f "$up/old" | sed "s|\$|	$t|"
+  git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | reads | { grep -vxF -f "$up/old" || true; } | sed "s|\$|	$t|"
 done | sort -u | awk -F '\t' '
   $1 != key { if (key != "") print key "\t" list; key = $1; list = $2; next }
   { list = list ", " $2 }

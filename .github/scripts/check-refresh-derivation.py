@@ -497,20 +497,34 @@ def local_deps(script):
     return {d: why for d, why in deps.items() if d.startswith(SCRIPTS + "/")}
 
 
+# Names only CommonJS defines. An ESM module that wants one declares it itself
+# (`const require = createRequire(import.meta.url)`), which is why a declared
+# name stops counting.
+CJS_FREE_NAMES = ("require", "__dirname", "__filename")
+
+
 def js_is_commonjs(src):
-    """True when a JavaScript source is CommonJS: a live `require(`, or an
-    assignment through `module.exports` / `exports.` -- read with js_tokens, so
-    a mention in a comment or a string does not count."""
+    """True when a JavaScript source is CommonJS: a free use of a name only
+    CommonJS defines -- `require` in ANY form (`require(...)`,
+    `require.resolve(...)`, `require.cache`), `__dirname`, `__filename` -- or an
+    assignment through `module.exports` / `exports.`. Read with js_tokens, so a
+    mention in a comment or a string does not count, nor does a property
+    (`x.require`) or a name the file declares itself (Codex, #449: a lone
+    `require.resolve` was missed)."""
     toks = js_tokens(src)
+    declared = {val for k, (kind, val) in enumerate(toks)
+                if kind == "id" and val in CJS_FREE_NAMES and k
+                and toks[k - 1] in (("id", "const"), ("id", "let"), ("id", "var"), ("id", "function"))}
     for k, (kind, val) in enumerate(toks):
         nxt = toks[k + 1] if k + 1 < len(toks) else None
         nxt2 = toks[k + 2] if k + 2 < len(toks) else None
-        if kind == "id" and val == "require" and nxt == ("p", "("):
+        prop = k and toks[k - 1] == ("p", ".")
+        if kind == "id" and val in CJS_FREE_NAMES and val not in declared and not prop:
             return True
-        if kind == "id" and val == "module" and nxt == ("p", ".") and nxt2 == ("id", "exports"):
+        if kind == "id" and val == "module" and nxt == ("p", ".") and nxt2 == ("id", "exports") \
+                and not prop:
             return True
-        if kind == "id" and val == "exports" and nxt == ("p", ".") \
-                and not (k and toks[k - 1] == ("p", ".")):
+        if kind == "id" and val == "exports" and nxt == ("p", ".") and not prop:
             return True
     return False
 

@@ -634,6 +634,22 @@ cjs_case("the same CommonJS caller naming package.json passes",
 cjs_case("an ESM script needs no package.json",
          {"templates/scripts/esm.js": "import fs from 'fs';\nexport const x = fs;\n"}, "esm.js", "",
          0, "1 referenced script(s)")
+# Codex, #449: CommonJS is any free use of a name only CommonJS defines.
+for form, src in (("a lone `require.resolve(...)`", "const p = require.resolve('playwright');\n"),
+                  ("`require.cache`", "delete require.cache[k];\n"),
+                  ("`__dirname`", "const here = __dirname;\n"),
+                  ("`__filename`", "console.log(__filename);\n")):
+    cjs_case(f"{form} makes a script CommonJS: package.json must be named",
+             {"templates/scripts/cjs.js": src}, "cjs.js", "",
+             1, "UNNAMED: .github/scripts/package.json")
+cjs_case("an ESM script that DECLARES its own require (createRequire) needs no package.json",
+         {"templates/scripts/esm.js": "import { createRequire } from 'module';\n"
+                                      "const require = createRequire(import.meta.url);\n"
+                                      "export const p = require.resolve('x');\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("a `.require` PROPERTY does not make a script CommonJS",
+         {"templates/scripts/esm.js": "import m from 'm';\nexport const r = m.require('x');\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
 cjs_case("a `require` only in a comment or a string does not make a script CommonJS",
          {"templates/scripts/esm.js": "// const x = require('x');\nconst s = \"module.exports\";\nexport default s;\n"},
          "esm.js", "", 0, "1 referenced script(s)")

@@ -92,7 +92,9 @@ reader (block scalars are data, `#`-led lines outside them are comments);
 bada2fe fails the folded-if and commented-out cases. Round seven: a read in a
 trailing comment of the project's file hid one made live upstream; the
 baseline side now drops a mid-line `#` onward (the incoming side keeps it),
-and d4b92e8 fails the trailing-comment case.
+and d4b92e8 fails the trailing-comment case. Round eight: a `${{` folded over
+two lines lost its continuation; the incoming side now follows an open span
+to its `}}`, and 4c41b1e fails the folded-expression case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -232,6 +234,10 @@ LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
         if: >
           vars.DEPLOY_ENABLED == 'true'
         run: echo gated
+      - name: folded expression
+        env:
+          ON: ${{ github.ref == 'refs/heads/main' ||
+            vars.FOLDED_FLAG }}
       - name: optional db
         env:
           # DB_URL: ${{ vars.OPTIONAL_DB }}
@@ -660,7 +666,9 @@ expect("vars: a folded `if: >` block is read whole (Codex, #450)",
        res, 0, "OWNER PRE-MERGE: set repository variable DEPLOY_ENABLED")
 expect("vars: a commented-out read (cron-notify's optional DB lines) is no read, even first time (Codex, #450)",
        res, 0, "OWNER PRE-MERGE", absent="OPTIONAL_DB")
-expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 6 new", absent="OK: no new")
+expect("vars: a ${{ }} folded over two lines is followed to its }} (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository variable FOLDED_FLAG")
+expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 7 new", absent="OK: no new")
 
 r = project("vars-custom-dropped", at=S_FILES, workflows=LIVE,
             changes={".github/workflows/qa-live.yml": LIVE_S.replace(
@@ -714,12 +722,14 @@ expect("vars: a template the project does not install is not read: the OK line, 
 r = project("vars-current", workflows=LIVE, stamp=H)
 run(r, "refresh-delta.sh")
 res = run(r, "refresh-vars.sh")
-# The one read the fixture keeps after a quoted `#` is the documented cost of a
-# baseline that drops a mid-line `#` onward: it is listed again even unchanged.
-# No shipped template has such a read (checked when this was written).
-expect("vars: an unchanged file lists only a read after a quoted # -- the documented cost",
+# The fixture's read after a quoted `#` and its `${{` folded over two lines are
+# the documented cost of a baseline kept an under-count (it drops a mid-line
+# `#` onward and follows no open span): both are listed again even unchanged.
+# No shipped template has either shape (checked when this was written).
+expect("vars: an unchanged file lists only the two documented-cost reads",
        res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED", absent="APP_URL")
-expect("vars: …and nothing else", res, 0, "SUMMARY: 1 new")
+expect("vars: …the folded one", res, 0, "OWNER PRE-MERGE: set repository variable FOLDED_FLAG")
+expect("vars: …and nothing else", res, 0, "SUMMARY: 2 new")
 r = project("vars-current-plain", stamp=H)
 run(r, "refresh-delta.sh")
 expect("vars: reads all present at the stamp print the explicit OK line",

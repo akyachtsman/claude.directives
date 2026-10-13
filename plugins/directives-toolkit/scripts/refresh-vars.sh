@@ -82,20 +82,26 @@ fi
 #   - from what is kept: every `${{ ... }}` (to the next `}}`, so a `}` inside
 #     a quoted argument is kept) and a single-line bare `if:`. Nothing else
 #     is a read: `name: future vars.X support` is inert text.
-# An expression split across lines outside a block scalar is not followed
-# (none ships).
+#   - a `${{` left open at the end of a line (YAML folds a plain scalar over
+#     lines) is followed onto the next lines until its `}}` -- on the
+#     INCOMING side only, so the baseline stays an under-count (Codex, #450).
 exprs() {
   awk -v strip="${1:-}" '
   function emit(text,   i, rest, j) {
     while ((i = index(text, "${{")) > 0) {
       rest = substr(text, i + 3); j = index(rest, "}}")
-      if (j == 0) { print rest; return }
+      if (j == 0) { print rest; if (!strip) open = 1; return }
       print substr(rest, 1, j - 1); text = substr(rest, j + 2)
     }
   }
   function ind(s) { match(s, /^ */); return RLENGTH }
   {
     line = $0
+    if (open) {
+      j = index(line, "}}")
+      if (j == 0) { print line; next }
+      print substr(line, 1, j - 1); line = substr(line, j + 2); open = 0
+    }
     if (inblk) {
       if (line ~ /^[[:space:]]*$/) next
       if (ind(line) > blkind) { if (blkif) print line; else emit(line); next }

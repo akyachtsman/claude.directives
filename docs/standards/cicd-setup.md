@@ -230,7 +230,7 @@ In the target repo on GitHub:
 |---|---|
 | `APP_URL` | Live app URL (e.g. `https://<username>.github.io/<repo>/`) |
 
-Used by `qa-live.yml` and `qa-response.yml`.
+Used by `qa-live.yml` and `qa-response.yml`, which take the live URL from this variable and nothing else: a baseURL default filled in to the kit's `playwright.config.js` is not read by their `Require APP_URL` gate, so a project that relied on one still has to set the variable (pilots claude.prop + claude.trading, 2026-10-13).
 
 ---
 
@@ -714,7 +714,7 @@ Key values to customize after copying:
 
 | Value | What to substitute |
 |---|---|
-| `REPLACE_WITH_YOUR_APP_URL` (`playwright.config.js`) | Live app URL fallback when the `APP_URL` env var is unset |
+| `REPLACE_WITH_YOUR_APP_URL` (`playwright.config.js`) | Live app URL fallback when the `APP_URL` env var is unset — read by an ad-hoc local run only; `qa-live.yml` and `qa-response.yml` never fall back to it (Step 4) |
 | `UI_TESTS_DIR` (all qa workflows) | Path to your Playwright test directory (default: `.github/scripts/ui-tests`) |
 
 Required repository secrets:

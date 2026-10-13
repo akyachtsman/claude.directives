@@ -30,7 +30,7 @@ MUTANTS. Each script is swapped by its own variable, copied into a temp
 directory beside the real siblings it sources or runs (the installed layout):
 REFRESH_STAMP_BIN, REFRESH_DELTA_BIN, REFRESH_DRIFT_BIN, REFRESH_MERGE_BIN,
 REFRESH_CALLERS_BIN, REFRESH_BROKEN_REFS_BIN, REFRESH_HOOK_INSTALL_BIN,
-KIT_DEFECTS_BIN, REFRESH_LIB_BIN.
+KIT_DEFECTS_BIN, REFRESH_VARS_BIN, REFRESH_LIB_BIN.
 
 MEASURED 2026-10-13 against the pre-fix scripts (100d6b4, with only the
 hard-coded upstream URL replaced by ${REFRESH_UPSTREAM:-...} so they could be
@@ -56,6 +56,45 @@ reverted at a time:
   merge --write ignoring conflicts -> both conflict cases;
   the callers' composite closure removed -> the caller-set case;
   kit-defects running an empty Check block -> the no-Check-block case.
+
+NEW REPOSITORY VARIABLES AND SECRETS (owner ruling, 2026-10-13: after the
+pilots merged, QA — UI Tests (live) went red on an unset APP_URL). Before
+refresh-vars.sh no step looked, so REFRESH_VARS_BIN = an empty file (the
+pre-change state) -> all 10 vars cases. Then the new script with one feature
+reverted at a time, MEASURED 2026-10-13:
+  the stamp baseline removed (every read new) -> the read-present-at-the-stamp,
+    no-OK-line-with-new-reads and all-present-at-the-stamp cases;
+  the GITHUB_TOKEN exclusion removed -> the GITHUB_TOKEN case (+ the count);
+  `secrets.` reads dropped, or the bracket form dropped -> the secrets case
+    (+ the count);
+  the OK line removed -> both OK-line cases;
+  the installed-only filter removed (every template at the pin) -> the
+    not-installed case (+ the count);
+  a template absent at the stamp skipped -> the newly-installed case;
+  the Phase 2 marker requirement removed -> the after-the-stamp case.
+Codex on #450 then found the comment stripping and the template baseline
+wrong (a `#` inside a quoted string or opening a block-scalar line hid a read;
+a CUSTOM copy that had dropped a read still counted as reading it). Comments
+are no longer stripped -- both sides are read alike, so only a NEW mention
+lists -- and the baseline is the project's own files at the stamp commit. The
+script before those fixes (ff2e2b4) fails the block-scalar, new-comment,
+custom-dropped and count cases; the one before that (bb3e993), the quoted-#
+case; the one before that (f97e46a), the installed-now case. Round four: a
+name the project only commented on, made live upstream, was hidden by the
+raw-text baseline; each side is now read whole AND with comments set aside,
+and 2d73710 fails the comment-goes-live case. Round five: inert text naming a
+variable (`name: … vars.X …`) counted as a baseline read; only what GitHub
+evaluates (`${{ }}` spans, a bare `if:`) is read now, and 921f9e7 fails the
+inert-text case. Checked against every shipped template: no read is lost.
+Round six: a folded `if: >` went unread and a first install listed a
+commented-out read. The whole/comment-free union gave way to one light YAML
+reader (block scalars are data, `#`-led lines outside them are comments);
+bada2fe fails the folded-if and commented-out cases. Round seven: a read in a
+trailing comment of the project's file hid one made live upstream; the
+baseline side now drops a mid-line `#` onward (the incoming side keeps it),
+and d4b92e8 fails the trailing-comment case. Round eight: a `${{` folded over
+two lines lost its continuation; the incoming side now follows an open span
+to its `}}`, and 4c41b1e fails the folded-expression case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -86,6 +125,7 @@ BINS = {
     "refresh-broken-refs.sh": "REFRESH_BROKEN_REFS_BIN",
     "refresh-hook-install.sh": "REFRESH_HOOK_INSTALL_BIN",
     "kit-defects.sh": "KIT_DEFECTS_BIN",
+    "refresh-vars.sh": "REFRESH_VARS_BIN",
     "refresh-lib.sh": "REFRESH_LIB_BIN",
 }
 
@@ -167,6 +207,42 @@ KIT_DEFECTS = """# UI-test kit defects
 - **Revision:** 1
 - **Bug:** no check block here.
 """
+# The live workflow reads repository variables and secrets; the release adds
+# vars.APP_URL and secrets.NEW_SECRET (the pilots' unset APP_URL, 2026-10-13),
+# and also a GITHUB_TOKEN read, a name only a COMMENT mentions, a read after a
+# quoted `#` and a `#`-led block-scalar line -- each NEW at the head.
+LIVE_S = """name: QA Live
+jobs:
+  live:
+    steps:
+      - uses: ./.github/actions/ui-suite
+        with:
+          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          ready: ${{ vars.TEST_AUTH_READY_SELECTOR }}
+"""
+LIVE_H = LIVE_S + """          # set vars.COMMENTED_ONLY if you like
+          app-url: ${{ github.event.inputs.app_url || vars.APP_URL }}
+          extra: ${{ secrets['New_Secret'] }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: echo "prefix # ${{ secrets.HASH_QUOTED }}"
+      - uses: ./.github/actions/notify
+        if: vars.GATE == 'on'
+        with:
+          payload: |
+            #${{ secrets.BLOCK_HASH }}
+      - name: gated
+        if: >
+          vars.DEPLOY_ENABLED == 'true'
+        run: echo gated
+      - name: folded expression
+        env:
+          ON: ${{ github.ref == 'refs/heads/main' ||
+            vars.FOLDED_FLAG }}
+      - name: optional db
+        env:
+          # DB_URL: ${{ vars.OPTIONAL_DB }}
+          X: "1"
+"""
 SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
                        "hooks": {"SessionStart": [{"hooks": [
                            {"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh"}]}]}},
@@ -175,6 +251,7 @@ S_FILES = {
     "templates/workflows/qa.yml": QA_S,
     "templates/workflows/ci-monitor.yml": "name: CI Monitor\n# v1\n",
     "templates/workflows/cron-notify.yml": CRON,
+    "templates/workflows/qa-live.yml": LIVE_S,
     "templates/actions/ui-suite/action.yml": ACTION,
     "templates/actions/ui-suite/validate-report-path.py": "print('ok')\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v1\n",
@@ -198,7 +275,8 @@ H_FILES = {
     **S_FILES,
     "templates/workflows/qa.yml": QA_H,
     "templates/workflows/ci-monitor.yml": "name: CI Monitor\n# v2\n",
-    "templates/workflows/new.yml": "name: New\n",
+    "templates/workflows/qa-live.yml": LIVE_H,
+    "templates/workflows/new.yml": "name: New\n# read: ${{ vars.FROM_NEW }}\nenv:\n  X: ${{ vars.FROM_NEW }}\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v2\n",
 }
@@ -551,6 +629,114 @@ expect("kit-defects: the fixed copy reads CLEAR",
 r = project("kd-none", changes={p: None for p in installed(H_FILES) if "/ui-tests/" in p})
 expect("kit-defects: no kit is said, not silent",
        run(r, "kit-defects.sh"), 0, "OK: no UI-test kit")
+
+# ---- new repository variables and secrets: an OWNER PRE-MERGE item -------------
+# Each project stands as it was when the stamp was written (S's files,
+# committed with the stamp), and the refresh's installs land UNCOMMITTED on
+# top, as they do in Phase 3. The baseline is the project's own files at the
+# stamp commit, never the upstream templates (Codex, #450).
+LIVE = INSTALLED_WORKFLOWS + ("qa-live.yml",)
+
+
+def refresh_installs(root, workflows):
+    for path, (text, _) in installed(H_FILES, workflows=workflows).items():
+        if path.startswith(".github/workflows/"):
+            (root / path).write_text(text)
+
+
+r = project("vars-new", at=S_FILES, workflows=LIVE)
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+res = run(r, "refresh-vars.sh")
+expect("vars: a release that adds a vars.APP_URL read names the variable and the file",
+       res, 0, "OWNER PRE-MERGE: set repository variable APP_URL — newly read by templates/workflows/qa-live.yml")
+expect("vars: a new secrets read is named the same way (the bracket form too)",
+       res, 0, "OWNER PRE-MERGE: set repository secret NEW_SECRET — newly read by templates/workflows/qa-live.yml")
+expect("vars: a read the project already ran with is not flagged",
+       res, 0, "OWNER PRE-MERGE", absent="TEST_AUTH_CREDENTIAL")
+expect("vars: GITHUB_TOKEN is never flagged", res, 0, "OWNER PRE-MERGE", absent="GITHUB_TOKEN")
+expect("vars: a read after a # inside a quoted string is still a read (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED")
+expect("vars: a #-led line of a block scalar is still a read (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository secret BLOCK_HASH")
+expect("vars: a name in plain text (no ${{ }}, no if:) is not a read",
+       res, 0, "OWNER PRE-MERGE", absent="COMMENTED_ONLY")
+expect("vars: a bare if: expression is a read", res, 0, "OWNER PRE-MERGE: set repository variable GATE")
+expect("vars: a folded `if: >` block is read whole (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository variable DEPLOY_ENABLED")
+expect("vars: a commented-out read (cron-notify's optional DB lines) is no read, even first time (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE", absent="OPTIONAL_DB")
+expect("vars: a ${{ }} folded over two lines is followed to its }} (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository variable FOLDED_FLAG")
+expect("vars: with new reads there is no OK line", res, 0, "SUMMARY: 7 new", absent="OK: no new")
+
+r = project("vars-custom-dropped", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": LIVE_S.replace(
+                "          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}\n", "")})
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+expect("vars: a read the project's CUSTOM copy had dropped is listed when the template brings it (Codex, #450)",
+       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository secret TEST_AUTH_CREDENTIAL")
+
+r = project("vars-comment-goes-live", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": LIVE_S + "          # future: use ${{ vars.APP_URL }}\n"})
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+expect("vars: a name the project only MENTIONED in a comment is listed when the template makes it live (Codex, #450)",
+       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
+
+r = project("vars-trailing-comment", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": LIVE_S.replace("name: QA Live", "name: QA Live # future: ${{ vars.APP_URL }}")})
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+expect("vars: a read only in a trailing comment of the project's file is no baseline read (Codex, #450)",
+       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
+
+r = project("vars-inert-text", at=S_FILES, workflows=LIVE,
+            changes={".github/workflows/qa-live.yml": LIVE_S.replace("name: QA Live", "name: QA Live (vars.APP_URL later)")
+                     + "      - run: echo 'configure vars.APP_URL later'\n"})
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+expect("vars: inert text naming a variable is no baseline read: the live one is listed (Codex, #450)",
+       run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
+
+r = project("vars-installed-now", at=S_FILES)
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE)
+res = run(r, "refresh-vars.sh")
+expect("vars: a template installed by THIS refresh lists even its stamp-era reads (Codex, #450)",
+       res, 0, "OWNER PRE-MERGE: set repository secret TEST_AUTH_CREDENTIAL — newly read by templates/workflows/qa-live.yml")
+expect("vars: …and its new ones", res, 0, "OWNER PRE-MERGE: set repository variable APP_URL")
+
+r = project("vars-newly-installed", at=S_FILES, workflows=LIVE)
+run(r, "refresh-delta.sh")
+refresh_installs(r, LIVE + ("new.yml",))
+expect("vars: a template absent at the stamp counts its reads as new",
+       run(r, "refresh-vars.sh"), 0,
+       "OWNER PRE-MERGE: set repository variable FROM_NEW — newly read by templates/workflows/new.yml")
+
+r = project("vars-none")
+run(r, "refresh-delta.sh")
+expect("vars: a template the project does not install is not read: the OK line, never silence",
+       run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="APP_URL")
+r = project("vars-current", workflows=LIVE, stamp=H)
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-vars.sh")
+# The fixture's read after a quoted `#` and its `${{` folded over two lines are
+# the documented cost of a baseline kept an under-count (it drops a mid-line
+# `#` onward and follows no open span): both are listed again even unchanged.
+# No shipped template has either shape (checked when this was written).
+expect("vars: an unchanged file lists only the two documented-cost reads",
+       res, 0, "OWNER PRE-MERGE: set repository secret HASH_QUOTED", absent="APP_URL")
+expect("vars: …the folded one", res, 0, "OWNER PRE-MERGE: set repository variable FOLDED_FLAG")
+expect("vars: …and nothing else", res, 0, "SUMMARY: 2 new")
+r = project("vars-current-plain", stamp=H)
+run(r, "refresh-delta.sh")
+expect("vars: reads all present at the stamp print the explicit OK line",
+       run(r, "refresh-vars.sh"), 0, "OK: no new repository variables or secrets read", absent="OWNER PRE-MERGE")
+run(r, "refresh-stamp.sh")
+expect("vars: after the stamp consumed Phase 2's marker it refuses, never a false OK",
+       run(r, "refresh-vars.sh"), 2, "no Phase 2 marker", absent="OK: no new")
 
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(CASES.finish(f"{CASES.passed} refresh-script behaviours hold against a fixture upstream."))

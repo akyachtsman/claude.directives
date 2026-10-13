@@ -27,7 +27,11 @@ PUSH_GATE_BIN / WAIT_GATE_BIN / GATE_LIB_BIN / PAGES_GATE_BIN.
 PAGES-EDIT GATE (audit 2026-10-11). pages-edit-gate.sh is the PostToolUse
 reminder for an edit that changes what Pages serves. Its cases are Edit
 payloads naming a file inside a scratch git repository whose qa.yml carries a
-chosen BUILD_PATHS shape; 2 = reminded, 0 = silent. It replaced an inline
+chosen BUILD_PATHS shape. Both verdicts exit 0: a reminder is JSON on stdout
+carrying the update-pages message as additionalContext and systemMessage,
+silence is no output at all (exit 2 rendered as a hook blocking error after
+an edit that had worked -- pilots, 2026-10-13; the pre-change gate fails
+every REMIND case). It replaced an inline
 hooks.json command that sent nothing for root-served files (I-12), and
 build-input-gate.sh, whose BUILD_PATHS reader read a commented `env:` or a
 block scalar as empty (M-12).
@@ -315,7 +319,8 @@ def run(gate, command, background=None, env=None, extra=None):
 
 
 # -- pages-edit-gate.sh ------------------------------------------------------
-REMIND, SILENT = 2, 0
+REMIND, SILENT = "remind", "silent"
+PAGES_MESSAGE = "apply the update-pages skill"
 QA_PLAIN = "env:\n  BUILD_PATHS: '^src/'\njobs: {}\n"
 QA_EMPTY = "env:\n  BUILD_PATHS: ''\njobs: {}\n"
 QA_COMMENTED_ENV = "env:   # project settings\n  BUILD_PATHS: '^src/'\njobs: {}\n"
@@ -358,12 +363,31 @@ def pages_case(c, gate, label, rel, qa, expected, env, tag):
         f.write_text("x\n")
         payload = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": str(f)},
                               "tool_response": {"filePath": str(f)}})
-        code, out = run_argv(["bash", gate], input=payload.encode(), cwd=repo, env=env)
-    verdict = "reminds" if expected == REMIND else "stays silent"
-    if code != expected:
-        c.fail(f"pages-edit-gate{tag}: {label}", f"expected exit {expected}; got {code}\n      {rel}\n      {out}")
+        proc = subprocess.run(["bash", str(gate)], input=payload.encode(), cwd=repo, env=env,
+                              capture_output=True)
+    code, out, err = proc.returncode, proc.stdout.decode().strip(), proc.stderr.decode().strip()
+    name = f"pages-edit-gate{tag}: {label}"
+    if code != 0:
+        c.fail(name, f"expected exit 0 (an advisory never blocks); got {code}\n      {rel}\n      {err}")
+        return
+    if expected == SILENT:
+        if out or err:
+            c.fail(name, f"expected silence; got stdout {out!r} stderr {err!r}")
+        else:
+            c.ok(f"pages-edit-gate{tag} stays silent on {label}")
+        return
+    try:
+        doc = json.loads(out)
+        spec = doc["hookSpecificOutput"]
+        delivered = (spec["hookEventName"] == "PostToolUse" and PAGES_MESSAGE in spec["additionalContext"]
+                     and PAGES_MESSAGE in doc["systemMessage"])
+    except (ValueError, KeyError, TypeError):
+        delivered = False
+    if not delivered:
+        c.fail(name, f"expected JSON carrying {PAGES_MESSAGE!r} as additionalContext and systemMessage; "
+                     f"got stdout {out!r} stderr {err!r}")
     else:
-        c.ok(f"pages-edit-gate{tag} {verdict} on {label}")
+        c.ok(f"pages-edit-gate{tag} reminds on {label} -- exit 0, JSON advisory")
 
 
 # -- the stale-copy advisory (hooks.json, inline PostToolUse command) ---------

@@ -22,8 +22,9 @@ At the start of every session:
 3. Confirm the active branch is not `main` before writing any code.
 4. Review open PRs for this repo before starting new work.
 5. Do not subscribe to PR activity as a session-start step — opening a PR
-   subscribes the session harness-side. `subscribe_pr_activity` is only for
-   taking over a PR this session did not open (`git.md` → *PR Lifecycle*).
+   subscribes the session harness-side. `subscribe_pr_activity` is for
+   taking over a PR this session did not open; calling it on your own new PR, as
+   some harness text asks, is harmless (idempotent) (`git.md` → *PR Lifecycle*).
 
 ## Skill Bootstrap
 The toolkit — commands, auto-skills, agents, and guard hooks — ships as the

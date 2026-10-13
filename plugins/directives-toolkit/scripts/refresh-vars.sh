@@ -145,7 +145,7 @@ reads() {
 # count as reading it (Codex, #450). No such commit: HEAD. Either way printed.
 base=$(git log -1 --format=%H -- .claude/directive-sync.json 2>/dev/null) || base=
 [ -n "$base" ] || base=HEAD
-echo "installed-at-stamp baseline: $base"
+echo "baseline: project commit $base (this project's installed files when the stamp was written; not an upstream SHA)"
 
 # Plain lists, no associative arrays: stock macOS bash is 3.2 (Codex, #450).
 templates=()

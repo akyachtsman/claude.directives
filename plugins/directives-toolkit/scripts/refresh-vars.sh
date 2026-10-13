@@ -85,6 +85,12 @@ fi
 #   - a `${{` left open at the end of a line (YAML folds a plain scalar over
 #     lines) is followed onto the next lines until its `}}` -- on the
 #     INCOMING side only, so the baseline stays an under-count (Codex, #450).
+# KNOWN LIMITS (owner ruling, 2026-10-13: accepted, not parsed): a quoted
+# (`"` / `'`) scalar left open across lines -- e.g. a multi-line quoted `if:`
+# whose read sits on a continuation line -- and a literal `}}` inside an
+# expression's string argument (`format('{{x}}', vars.X)`), which ends the span
+# early. No shipped template uses either form; covering them means a real YAML
+# and expression parser, not more shapes in this reader (Codex, #450, round 9).
 exprs() {
   awk -v strip="${1:-}" '
   function emit(text,   i, rest, j) {

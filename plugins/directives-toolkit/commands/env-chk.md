@@ -71,7 +71,10 @@ verdict. Read-only — do NOT modify files. Execute in order:
    repo or walk the delta commit by commit to classify — the alarm is a
    diagnostic and must cost less than what it warns about.
    - `directives/` → no action; rules are fetched live (re-read them now if mid-session)
-   - `templates/` → installed copies may be stale → run `/refresh-repo`
+   - `templates/` → installed copies may be stale → run `/refresh-repo`, which
+     the OWNER must send as the slash command itself: it is typed only
+     (`disable-model-invocation`), so this session cannot start it, and "Run
+     /refresh-repo" sent as plain text does not start it either. Say so.
    - `plugins/` → installed toolkit is behind; `/refresh-repo` can't fix it.
      Whether the project self-heals depends on the hook being RUNNABLE, not
      merely present: on the web, executable, and registered in the
@@ -89,7 +92,8 @@ verdict. Read-only — do NOT modify files. Execute in order:
      a local session to run `scripts/install-toolkit.sh` itself. Self-updating →
      say so and prescribe nothing. Otherwise → name which condition failed (absent,
      unregistered or non-executable), offer `/refresh-repo` to install or repair
-     the hook, or force the env cache rebuild (see
+     the hook (the owner sends it as the slash command; it is typed only, as
+     above), or force the env cache rebuild (see
      `NEW-REPO-USER-INSTRUCTIONS.md` → *Step 0 — One-time: turn the toolkit on (you may already be done)*,
      "Force a toolkit update") or wait for the ~weekly expiry.
    - `docs/` only → informational

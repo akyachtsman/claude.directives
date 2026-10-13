@@ -80,6 +80,13 @@ refresh-repo.md's block, whose ${CLAUDE_PLUGIN_ROOT} is substituted only when
 (origin/main 1328c41) via CHECK_REFRESH_DERIVATION_BIN: the seven new-repo
 cases fail (pointer-only, prose-only, inline copy, missing file, non-plugin-root
 path, undelimited loop, indented fence) plus the one-copy success needle.
+
+Check 6 learned the CommonJS manifest after the /refresh-repo pilots
+(2026-10-13): a caller naming a CommonJS script must name
+.github/scripts/package.json, whose `"type": "commonjs"` it runs under; the
+lockfile stays the cron kit's alone (refresh-stamp.sh). MEASURED 2026-10-13
+against the pre-change guard (100d6b4) via CHECK_REFRESH_DERIVATION_BIN: exactly
+the three CommonJS refusals fail; their accepting complements pass on both.
 """
 
 # ── HISTORY MOVED FROM CLAUDE.md (2026-09-23) ────────────────────
@@ -547,7 +554,8 @@ case("`require('./lib')` with only lib/index.json names lib/index.json",
      expect_exit=1, needle="UNNAMED: .github/scripts/lib/index.json")
 
 # Codex, #411 round 6: JS is LEXED -- a require in a comment or a string is not a load.
-for label, src in (("a // comment", "// require('./legacy')\nmodule.exports = 1;\n"),
+# (ESM, so no CommonJS manifest is needed either: the case is about the require.)
+for label, src in (("a // comment", "// require('./legacy')\nexport default 1;\n"),
                    ("a /* block */ comment", "/* const old = require('./legacy'); */\n"),
                    ("a string literal", "const msg = \"require('./legacy')\";\n")):
     case(f"a require inside {label} is not a dependency",
@@ -567,7 +575,7 @@ case("a LIVE ES import is still a dependency after lexing",
 case("the same caller naming lib/index.js passes (no phantom lib.js asked for)",
      command_text=command_md(),
      callers={**LIB_DIR, "templates/workflows/j.yml": JS_CALLER.format(
-         comment="      # loads .github/scripts/lib/index.js\n")},
+         comment="      # loads .github/scripts/lib/index.js; CommonJS, so .github/scripts/package.json\n")},
      expect_exit=0, needle="  .github/scripts/lib/index.js")
 
 # Codex, #411: Python imports are read with `ast`, so every form counts.
@@ -595,6 +603,76 @@ py_case("`from pkg import submodule` must name the submodule",
 py_case("a template .py that does not parse is refused, not read as import-free",
         "from nested.helper import (\n", HELPER, "",
         1, "does not parse as Python")
+
+# Pilots, 2026-10-13: the manifest is needed wherever a CommonJS script runs
+# (its "type": "commonjs" outranks a root "type": "module"), the lockfile only
+# with the cron kit. So a caller naming a CommonJS script must name the
+# manifest too -- read from the script's own source, not a list.
+CJS_CALLER = ("jobs:\n  t:\n    steps:\n"
+              "      - run: node .github/scripts/{name}\n{comment}")
+
+
+def cjs_case(name, files, script, comment, expect_exit, needle):
+    case(name, command_text=command_md(),
+         callers={**files, "templates/workflows/c.yml": CJS_CALLER.format(name=script, comment=comment)},
+         expect_exit=expect_exit, needle=needle)
+
+
+cjs_case("a caller naming a CommonJS (`require`) script but not package.json is refused",
+         {"templates/scripts/cjs.js": "const fs = require('fs');\n"}, "cjs.js", "",
+         1, "UNNAMED: .github/scripts/package.json")
+cjs_case("…the reason names the CommonJS script",
+         {"templates/scripts/cjs.js": "const fs = require('fs');\n"}, "cjs.js", "",
+         1, ".github/scripts/cjs.js is CommonJS")
+cjs_case("a `module.exports` script is CommonJS too",
+         {"templates/scripts/cjs.js": "module.exports = { run() {} };\n"}, "cjs.js", "",
+         1, "UNNAMED: .github/scripts/package.json")
+cjs_case("the same CommonJS caller naming package.json passes",
+         {"templates/scripts/cjs.js": "const fs = require('fs');\n"}, "cjs.js",
+         "      # runs under .github/scripts/package.json (\"type\": \"commonjs\")\n",
+         0, "  .github/scripts/package.json")
+cjs_case("an ESM script needs no package.json",
+         {"templates/scripts/esm.js": "import fs from 'fs';\nexport const x = fs;\n"}, "esm.js", "",
+         0, "1 referenced script(s)")
+# Codex, #449: CommonJS is any free use of a name only CommonJS defines.
+for form, src in (("a lone `require.resolve(...)`", "const p = require.resolve('playwright');\n"),
+                  ("`require.cache`", "delete require.cache[k];\n"),
+                  ("`__dirname`", "const here = __dirname;\n"),
+                  ("`__filename`", "console.log(__filename);\n")):
+    cjs_case(f"{form} makes a script CommonJS: package.json must be named",
+             {"templates/scripts/cjs.js": src}, "cjs.js", "",
+             1, "UNNAMED: .github/scripts/package.json")
+cjs_case("an ESM script that DECLARES its own require (createRequire) needs no package.json",
+         {"templates/scripts/esm.js": "import { createRequire } from 'module';\n"
+                                      "const require = createRequire(import.meta.url);\n"
+                                      "export const p = require.resolve('x');\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("an ESM script with a PARAMETER named require needs no package.json (Codex, #449)",
+         {"templates/scripts/esm.js": "export function load(require) { return require('x'); }\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("…nor one with `export default` and a free __dirname-like local",
+         {"templates/scripts/esm.js": "const __dirname = new URL('.', import.meta.url).pathname;\n"
+                                      "export default __dirname;\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("a dynamic `import()` alone does not make a CommonJS script ESM",
+         {"templates/scripts/cjs.js": "const fs = require('fs');\nimport('x').then(() => {});\n"},
+         "cjs.js", "", 1, "UNNAMED: .github/scripts/package.json")
+cjs_case("a `.require` PROPERTY does not make a script CommonJS",
+         {"templates/scripts/esm.js": "import m from 'm';\nexport const r = m.require('x');\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+cjs_case("a `require` only in a comment or a string does not make a script CommonJS",
+         {"templates/scripts/esm.js": "// const x = require('x');\nconst s = \"module.exports\";\nexport default s;\n"},
+         "esm.js", "", 0, "1 referenced script(s)")
+# A nested manifest does NOT exempt it: derive-scripts.sh installs exactly the
+# one .github/scripts/package.json, so the nested one would never arrive and a
+# root "type": "module" would break the first require (Codex, #449).
+cjs_case("a CommonJS script under a directory with its OWN package.json still needs the root one",
+         {"templates/scripts/kit/x.js": "require('fs');\n",
+          "templates/scripts/kit/package.json": "{}\n"}, "kit/x.js", "",
+         1, "UNNAMED: .github/scripts/package.json")
+cjs_case("a Python script needs no package.json",
+         {"templates/scripts/p.py": "import os\n"}, "p.py", "",
+         0, "1 referenced script(s)")
 
 case("npm run in ANOTHER directory needs no .github/scripts/package.json",
      command_text=command_md(),

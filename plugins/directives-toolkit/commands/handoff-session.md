@@ -88,6 +88,12 @@ Framing rules for UNRESOLVED items — the part that makes a handoff usable:
 - **Carry the numbers**: measurements, breakpoints, IDs — whatever the next
   session would otherwise burn a round-trip re-deriving.
 - **A claim about an UPSTREAM file names the SHA it was verified at**, re-resolved from the upstream tip as the item is written: `global.md` → *One Session, One Repo*.
+- **A next step that is a typed-only command is the OWNER's to send.** A
+  command with `disable-model-invocation: true` (`/refresh-repo`, `/kickoff`)
+  cannot be started by the receiving session, and a pasted line reading "Run
+  /refresh-repo" is plain text that starts nothing. Say it in the chat reply,
+  outside the block: the owner sends `/refresh-repo` as the slash command
+  itself (pilots, 2026-10-13).
 
 Self-check every line against §0. If it's already in CLAUDE.md, the README, a
 workflow file, **a PR body, a commit message, an issue thread, the diff**, or an

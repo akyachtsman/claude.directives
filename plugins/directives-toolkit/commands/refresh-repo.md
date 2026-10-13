@@ -12,9 +12,20 @@ upstream paths, and the project's *installed copies* of upstream templates.
 In `claude.directives` itself, run only Phase 0 — the templates ARE the source,
 and CI validates references.
 
+**Typed only.** This command sets `disable-model-invocation: true`, so no agent
+can start it, and a message reading "Run /refresh-repo" in plain text does not
+start it either (pilots, 2026-10-13). The owner sends `/refresh-repo` as the
+slash command itself. Anything that recommends a refresh — `/env-chk`, a
+staleness note, a hand-off — says exactly that.
+
 The self-contained mechanisms live in this plugin's `scripts/` and each block
 below runs one; the reasons for each guard are in that file's comments. Run
-every one from the project root.
+every one from the project root. Each prints at least one line whatever the
+result, so no output means it did not run. When this refresh runs one of the
+project's own Python guards locally (`workflow-ref-guard.py`,
+`check-ui-suite-env.py`, …), run it as `PYTHONDONTWRITEBYTECODE=1 python3 …`
+in the same Bash call: otherwise the run leaves `__pycache__/` beside the
+scripts, untracked files that ride into the refresh PR.
 
 ## Phase 0 — Re-read the rules (context refresh)
 
@@ -36,6 +47,11 @@ against the upstream tree:
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-broken-refs.sh"
 ```
+It ends in exactly one summary line: `OK: N upstream reference(s) checked`
+(exit 0; N may be 0, which is a project with no upstream links, said out loud),
+`BROKEN: M of N …` after the `BROKEN:` lines (exit 1), or `CANNOT CHECK`
+(exit 2).
+
 **Transport is git, never the API.** A web session's proxy refuses
 `api.github.com` for every repository the session was not opened on — from a
 downstream project, that includes claude.directives itself (verified 2026-10-08:
@@ -54,13 +70,47 @@ propose the fix; deletions get "content was folded — check upstream docs/READM
 
 Phase 2 only examines files UPSTREAM changed since the stamp — a locally
 corrupted copy of an *unchanged* template is invisible to it forever. This pass
-compares every installed verbatim drop-in against the CURRENT upstream template,
-regardless of delta:
+compares every installed verbatim drop-in against the upstream template,
+regardless of delta.
+
+**Pin first: run Phase 2's `refresh-delta.sh` before this pass** (its listing is
+dispositioned in Phase 2; run it once, here). It leaves the head it classified in
+a marker that every later script reads — this pass, the hook install, the
+derivation, *Kit defects* and the stamp — so the whole refresh compares against
+ONE revision. Phase 1.5 once fetched `main` while Phases 2–3 pinned the
+classified SHA, so a merge upstream mid-refresh mixed two heads (pilots,
+2026-10-13). Without the marker the scripts fall back to `main` as of now and
+say so on their `pinned:` line.
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
 ```
-(raw.githubusercontent.com is CDN-served and works from remote sessions.)
+Over git transport, at the pinned head. Per file it prints one of:
+- **`STALE`** — differs from the pinned template but EQUALS the template at the
+  project's stamp (`.claude/directive-sync.json` → `upstream.sha`): nothing
+  local, only upstream moved. Take the template; no per-file review needed.
+- **`CUSTOM`** — differs from the template at the stamp too: a deliberate local
+  edit (or tampering). It gets the diff treatment below, through the 3-way merge
+  `refresh-merge.sh` runs, so the local hunks stand apart from upstream's.
+- **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
+  its fetch failed, or no such template at the stamp), so stale cannot be told
+  from custom: treat it as `CUSTOM` and read the diff.
+- **`MODE`** — the executable bit differs from the template's git mode
+  (`100755` / `100644`). Informational, never `DRIFT` on its own; restore the
+  bit unless the project records why it differs.
+- `NO-TEMPLATE`, `CANNOT-VERIFY`, `RETIRED` — below — then one `SUMMARY` line.
+
+**The 3-way merge for a `CUSTOM` file** (base = the template at the stamp,
+ours = the installed file, theirs = the pinned template), so every upstream
+hunk that does not touch a local one applies and only true overlaps conflict:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-merge.sh" .github/workflows/qa.yml   # prints LOCAL HUNKS, then MERGED: <scratch file> (N conflict(s))
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-merge.sh" .github/workflows/qa.yml --write   # writes it, only at 0 conflicts
+```
+It also takes a kit file (Phase 2's per-file kit diffs). Show the LOCAL HUNKS
+and the merged diff when asking; `--write` only after the disposition below
+says keep-and-update. Conflicts are resolved by a person, never written.
 
 `RETIRED` names a file whose template upstream deleted (today only
 `keepalive.yml`): it is a removal finding, never a project-specific file to
@@ -71,11 +121,13 @@ keep. Delete it, with any secret the line names, in this refresh's PR.
 step — so a locally corrupted sibling next to an unmodified `action.yml` is
 exactly the invisible-drift case this pass exists for.
 
-**`DRIFT` is a question, not a verdict — and it is what makes a curated
-exception list unnecessary.** An allow-list of files *permitted* to differ is
+**`CUSTOM` and `DRIFT` are questions, not verdicts — and they are what make a
+curated exception list unnecessary.** An allow-list of files *permitted* to differ is
 correct the day it is written, silently wrong after the next local improvement,
 and nothing detects the gap. So there is no list: a diff is self-maintaining,
-and every `DRIFT` file is resolved by looking at it. (The incidents behind this
+and every `CUSTOM` or `DRIFT` file is resolved by looking at it. `STALE` is the
+one class the stamp answers mechanically: the project's copy is byte-for-byte
+what it last took. (The incidents behind this
 and the other Phase 1.5 rules are in claude.directives' internal history, which a
 downstream checkout does not carry: the *Refresh-repo history* section of
 https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-history.md.)
@@ -121,7 +173,10 @@ truncated hook written to the final path would pass the `[ ! -f ]` test as
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-hook-install.sh"
 ```
-Install the settings row in the same pass (through *Settings writes* below), so
+It prints one line whatever it finds — `INSTALLED`, `COULD-NOT-INSTALL`, or
+`OK: hook state: …` (present and executable, present and NOT executable, or not
+applicable without `.claude/settings.json`) — and takes the template from the
+pinned head. Install the settings row in the same pass (through *Settings writes* below), so
 the registration and its target always land together.
 
 `session-start.sh` is also in the drift loop, not only in Phase 2: a locally
@@ -129,9 +184,10 @@ truncated hook whose template never moved would otherwise stay broken through
 every refresh. Restore it from the template rather than hand-editing, and re-run
 `bash -n` on it.
 
-Disposition each DRIFT by READING THE DIFF, with no blind default in either
-direction: "restore" without looking deletes improvements, and "keep" without
-looking preserves tampering.
+Disposition each `CUSTOM` and `DRIFT` file by READING THE DIFF, with no blind
+default in either direction: "restore" without looking deletes improvements, and
+"keep" without looking preserves tampering. A `STALE` file skips this: take the
+template (a batch overwrite is fine), since there is no local edit to lose.
 1. **The diff is only a `workflow_run` watch list in a file whose list is
    MEANT to vary per project** — `ci-monitor.yml`, `ci-notify.yml`,
    `qa-live.yml`, `pages-monitor.yml` — or the project's CLAUDE.md records the
@@ -233,7 +289,21 @@ and 1.6 MB, and `--deepen 100` reached 200 commits.
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-delta.sh"
 ```
-(First run with no stamp: skip the delta and apply the per-file policy directly.)
+(Run once per refresh, at the start of Phase 1.5 — *Pin first* — and disposition
+its listing here. First run with no stamp: it says so, and the per-file policy
+applies directly.) It prints `pinned: <sha>`, then the listing or an `OK:` line
+saying there is nothing to list; exit 1 when the listing was unavailable, 2 when
+the head was. Its markers survive a refused stamp and are consumed only by a
+successful one, so recording a `refresh_kept` reason never needs it re-run —
+re-run it only when upstream may have moved.
+
+**Ask first: does this project have a scheduled task?** Put the question to the
+owner before dispositioning anything, because one answer gates four files —
+`cron-notify.yml`, `notify-task.js`, `notify-email.js` and
+`package-lock.json` — and with them whether `npm install` runs in
+`.github/scripts` at all (pilots, 2026-10-13: asked late, it reopened finished
+dispositions). The rules that act on the answer are *Workflow refresh rules*
+below: the absent scheduled workflow and its converse, the present starter.
 
 Then disposition each changed file — classify, don't blindly apply:
 | Class | Disposition |
@@ -247,7 +317,7 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops) and files absent locally. ⚠️ Four files carry their own rules — `pages-retry.yml`, `pages-deploy.yml`, the Actions-source watchers and `keepalive.yml`: read *Workflow refresh rules* below the table before installing any workflow |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `CUSTOM` or `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops), `STALE` files (unchanged since the stamp) and files absent locally. ⚠️ Four files carry their own rules — `pages-retry.yml`, `pages-deploy.yml`, the Actions-source watchers and `keepalive.yml`: read *Workflow refresh rules* below the table before installing any workflow |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
 | `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
@@ -270,6 +340,14 @@ names by path is not optional, and skipping it ships a broken reference.
   named by `test.md`). Deriving a path is not installing it: the derivation
   below and this exception must name the same set.
 
+**Pins land together.** Some installed files pin each other's exact shape, and
+taking one without the other turns the project's own CI red:
+`check-ui-suite-env.py` pins the `ui-suite` composite's steps — its upload
+step's action, path list and `if:` among them — so a newer script beside an
+older composite (or the reverse) fails `static-checks`. Install a guard script
+and the file it pins in ONE refresh, never one now and the other later; a
+`refresh_kept` reason on either keeps both (pilots, 2026-10-13).
+
 ### Workflow refresh rules
 
 The `templates/workflows/<wf>.yml` row above defers here.
@@ -288,7 +366,7 @@ The `templates/workflows/<wf>.yml` row above defers here.
   batch-install it on a branch-source project**, where the push already deploys
   and it would be a second, competing deploy on every push. On an Actions-source
   project it IS the deploy, and its filled-in `BUILD_CMD`/`SITE_DIR` make a local
-  copy `DRIFT` by design, so keep those two values when taking a template change
+  copy `CUSTOM` by design, so keep those two values when taking a template change
   (the same holds for `qa.yml`'s `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` in a
   project with a build: resetting them to the shipped empties would skip or
   mis-serve its UI suite). Make sure `.github/workflow-ref-required.json` lists
@@ -297,13 +375,13 @@ The `templates/workflows/<wf>.yml` row above defers here.
   edit, since without it a refresh that drops either trigger passes the guard.
 - **The Actions-source watchers.** On Actions-source, `qa-live.yml` and
   `pages-monitor.yml` carry the deploy's `name:` added beside the template's arms
-  (W2), so they are `DRIFT` by design: take a template change around that name,
+  (W2), so they are `CUSTOM` by design: take a template change around that name,
   never drop it (`.github/workflow-ref-required.json` refuses the drop when it
   lists them).
 - ⚠️ **NEVER `keepalive.yml`, absent or present.** Its template was deleted
   (`cicd-setup.md` → *9f — Scheduled-job notifications* has the reason); an
   installed copy is a finding to delete, not a file to refresh.
-- **Every `DRIFT` file:** show the diff and decide singly — local drift is as
+- **Every `CUSTOM` or `DRIFT` file:** show the diff (the 3-way merge for `CUSTOM`) and decide singly — local drift is as
   often an improvement this repo has not yet absorbed as it is corruption, and
   only the diff distinguishes them; keep local only when the diff leaves it
   genuinely unclear (Phase 1.5's disposition rule, which this row defers to).
@@ -342,26 +420,37 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/notify-starter.sh"
   formatting, line endings or comments is not: treat it as `STARTER`. Unsure →
   treat it as `STARTER` and ask.
 - **`STARTER`** (either form) → never refresh it silently and never delete it unasked. Report
-  it and ask the owner whether the project has a scheduled task. **No** →
+  it and ask the owner whether the project has a scheduled task — the
+  question *Ask first* (top of Phase 2) already put, if it was asked. **No** →
   remove `cron-notify.yml` and the starter `notify-task.js` in the same refresh
-  PR. Its three companions under `.github/scripts/` may be project-owned by now,
-  so each is removed only when BOTH hold, and otherwise kept and named to the
-  owner:
-  - **unchanged:** `notify-email.js` and `package.json` match a shipped version
-    (run `notify-starter.sh` with that path as its argument); `package-lock.json` goes
-    only with `package.json`.
-  - **no other consumer:** nothing else in the repository reads it. A workflow
-    can use `package.json` without naming it (an `npm` step whose
-    `working-directory` is `.github/scripts`, or `npm --prefix .github/scripts
-    ci`), a `Makefile` or a root script can call it, and a script can `require`
-    a sibling. So search every tracked file, not just `.github/`, and read
-    every hit:
-    `git grep -nE "notify-email|\.github/scripts|\bnpm\b|package(-lock)?\.json" -- . ':!.github/workflows/cron-notify.yml' ':!.github/scripts/notify-task.js' ':!.github/scripts/notify-email.js' ':!*package-lock.json'`.
-    The bare file names are matched on purpose, so a path built in code
-    (`path.join(__dirname, 'package.json')`) is found too. A hit is a
-    consumer until shown otherwise. Only one that plainly points
-    elsewhere (an `npm` step in `.github/scripts/ui-tests`, a path to another
-    script) is cleared.
+  PR. Of what is left under `.github/scripts/`:
+  - **`package.json` stays, always.** It is not the kit's: the qa workflows and
+    the `ui-suite` composite name it for its `"type": "commonjs"`, without which
+    every CommonJS script there dies under a root `"type": "module"`, and Phase 3
+    compares it with the template — which still declares the kit's dependency,
+    inert until someone runs `npm install` there. Never delete or edit it here.
+  - **`notify-email.js`** is removed only when BOTH hold, and otherwise kept and
+    named to the owner: it is **unchanged** (run `notify-starter.sh` with that
+    path as its argument), and it has **no other consumer** — nothing else in
+    the repository names it or the task. Key the search to those files, not
+    to `.github/scripts` or `npm`, which every script call and the kit match
+    (a normal project returned ~100 hits, and "a hit is a consumer" then made
+    removal impossible; pilots, 2026-10-13). Search every tracked file, read
+    every hit, and treat each as a consumer until shown otherwise:
+    `git grep -nE "notify-(email|task)|nodemailer" -- . ':!.github/workflows/cron-notify.yml' ':!.github/scripts/notify-task.js' ':!.github/scripts/notify-email.js' ':!.github/scripts/package.json' ':!*package-lock.json'`.
+    The bare names are matched on purpose, so a path built in code
+    (`path.join(__dirname, 'notify-email.js')`) is found too. A comment that
+    only mentions one is cleared on reading: `check-contrast.js` and
+    `check-ui-viewports.js` each name `notify-email.js` as a CommonJS example
+    (measured on a scratch project: 2 hits, both such comments, where the old
+    pattern returned 65).
+  - **`package-lock.json` (and the node deps it pins) goes when nothing else
+    installs there** — once `notify-email.js` is gone or has no consumer left,
+    and no step outside `cron-notify.yml` runs `npm` in `.github/scripts`:
+    `git grep -nE "scripts/package-lock\.json|--prefix[= ]+(\./)?\.github/scripts([^/]|$)|working-directory:[[:space:]]*(\./)?\.github/scripts[[:space:]]*$|cd[[:space:]]+(\./)?\.github/scripts([[:space:];&]|$)" -- . ':!.github/workflows/cron-notify.yml'`
+    — read each hit (a `working-directory` hit is a consumer only if that step
+    runs `npm`). Phase 3 stops requiring the lockfile once the kit's three
+    files are gone.
 
   **Yes** → keep it and replace the starter body
   (`docs/standards/cicd-setup.md` Step 9f).
@@ -407,22 +496,20 @@ Such a project checks that directory by hand; the set is not widened per spellin
 
 1. Fetch the list — `docs/standards/kit-defects.md`, kept OUTSIDE the kit so the
    row above never copies it downstream — from UPSTREAM (not a local copy, which
-   is only as new as the last sync). Every Bash call starts a fresh shell, so
-   Phase 2's `$head` is NOT set here — re-derive the SHA in the same call that fetches:
+   is only as new as the last sync), at the pinned head, and
+2. run each entry's **Check** from each kit directory found above. One script
+   does both: it pulls each entry's fenced **Check** block out of the fetched
+   list (the command once said "run its Check" with nothing to extract it, so
+   each session improvised one; pilots, 2026-10-13), runs it in every kit
+   directory `kit-dirs.sh` names, and prints one verdict line per entry per
+   directory, then a `SUMMARY`:
    ```bash
-   kd_head=$(cat "$(git rev-parse --git-path refresh-repo-classified)" 2>/dev/null)   # Phase 2's SHA, if its marker is still there
-   [ -n "$kd_head" ] || kd_head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
-   kd=$(mktemp)
-   if printf '%s' "$kd_head" | grep -qE '^[0-9a-f]{40}$' \
-      && curl -fsS "https://raw.githubusercontent.com/akyachtsman/claude.directives/$kd_head/docs/standards/kit-defects.md" -o "$kd"; then
-     echo "kit defects list at $kd_head: $kd"
-   else
-     echo "kit defects NOT checked (no upstream SHA, or the fetch failed)"
-   fi
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/kit-defects.sh"
    ```
-   *NOT checked* is reported as such, never as none found.
-2. For each entry, run its **Check** from each kit directory found above. `CLEAR`
-   → nothing. `UNDECIDED` → read the code the entry names and record a verdict.
+   *NOT checked* (no upstream SHA, or the fetch failed; exit 2) is reported as
+   such, never as none found. `CLEAR` → nothing. `UNDECIDED` — the check could
+   not read this copy's shape, printed no verdict, or the entry has no Check
+   block — → read the code the entry names and record a verdict.
 3. `AFFECTED` → apply that entry's **Minimal fix** — that hunk only, never the
    surrounding upstream rewrite, which stays per-file diff work — **unless the
    project states why the defect does not apply here**. Record that reason as one
@@ -466,13 +553,26 @@ delivered. Widen the derivation; never hand-list the file.
 
 So: **changed callers ∪ callers co-installed unchanged by the rules above.**
 
+`refresh-callers.sh` computes that union: every installed workflow and
+composite that upstream ships a template for, every composite those reach by
+`uses:` in the UPSTREAM text, and every directive. A caller this refresh newly
+installs (a workflow absent locally that the rules above let in) is the one
+input it cannot know: name each as an argument, upstream path form
+(`templates/workflows/qa-live.yml`); it lists the delta's absent callers on
+stderr as a reminder. It refuses — exit 2, nothing on stdout — when the set
+cannot be computed or an argument is not shipped, so a partial set never
+reaches the loop:
+
 ```bash
 repo="akyachtsman/claude.directives"
-head="…the SHA Phase 2 classified…"   # NOT main — that ref moves under you
+# The SHA Phase 2 classified, NOT main: that ref moves under you.
+head=$(cat "$(git rev-parse --git-path refresh-repo-classified)" 2>/dev/null)
+printf '%s' "$head" | grep -qE '^[0-9a-f]{40}$' \
+  || { echo "no Phase 2 SHA — run refresh-delta.sh first; derivation NOT run" >&2; exit 1; }
 raw="https://raw.githubusercontent.com/$repo/$head"
-callers="…EVERY templates/workflows/*.yml, templates/actions/*/action.yml
-         and directives/*.md path this refresh INSTALLS — the changed ones
-         AND the ones co-installed unchanged by the rules above…"
+# Append each newly installed caller as an argument, e.g. templates/workflows/qa-live.yml
+callers=$(REFRESH_PIN="$head" bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-callers.sh") \
+  || { echo "CALLER SET FAILED — derivation INVALID, do not use it" >&2; exit 1; }
 
 buf=$(mktemp)
 for c in $callers; do
@@ -504,16 +604,23 @@ https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-hi
   two-stage filter, grabbing the whole token and *then* requiring a `.js`/`.py`
   ending, is what keeps `.github/scripts/package-lock.json` out, since an
   unterminated `\.(js|py)` matches the `.js` inside `.json`. The one other file
-  admitted is **exactly** `.github/scripts/package.json`, anchored at both ends:
-  `cron-notify.yml`'s `npm install` reads it, so it installs with that caller
-  like a script (#398). `ui-tests/package.json` belongs to the kit row, and the
-  lockfile is generated by the project, so both stay out. **Generating it is
-  this refresh's job, though:** whenever it installs or changes
-  `.github/scripts/package.json`, run `npm install` in `.github/scripts/` and
-  commit the resulting `package-lock.json` in the same change.
-  `cron-notify.yml`'s `setup-node` cache names that lockfile, so without it the
-  job fails before its own install step (Codex, #409). Phase 3 refuses the stamp
-  while it is missing. A trailing period is
+  admitted is **exactly** `.github/scripts/package.json`, anchored at both ends.
+  It has TWO jobs, and they install differently (pilots, 2026-10-13). Its
+  `"type": "commonjs"` is what every CommonJS script there runs under when the
+  project root says `"type": "module"`, so every caller of one names it — the
+  qa workflows, the `ui-suite` composite, `test.md` — and it installs with
+  them, cron kit or not (`check-refresh-derivation.py` fails CI when a caller
+  of a CommonJS script stops naming it). Its dependency is the scheduled-task
+  kit's alone: `cron-notify.yml`'s `npm install` reads it (#398).
+  `ui-tests/package.json` belongs to the kit row, and the lockfile is generated
+  by the project, so both stay out. **The lockfile follows the cron kit, not the
+  manifest:** only when `cron-notify.yml`, `notify-task.js` or `notify-email.js`
+  is installed, run `npm install` in `.github/scripts/` and commit the resulting
+  `package-lock.json` in the same change — `cron-notify.yml`'s `setup-node`
+  cache names it, so without it the job fails before its own install step
+  (Codex, #409), and Phase 3 refuses the stamp while it is missing. Without the
+  kit, nothing runs `npm` there: install the manifest and nothing else, as its
+  own `description` says. A trailing period is
   stripped first (`sed -E 's/[.]+$//'`): a directive that names a script at
   the end of a sentence still names it. When the install and Phase 3 each
   carried a copy, only Phase 3's stripped it, so the install derived LESS than
@@ -602,6 +709,26 @@ path is asked about again; while it does not, a deliberate local version is
 asked about once, not on every refresh. A reason for a path upstream deleted
 binds to `deleted`.
 
+**A whole kit subdirectory in one step** (owner ruling, 2026-10-13: kit files
+stay required, declining them is one step). A project that keeps the kit's
+helpers inline in its spec would otherwise record one entry per
+`tests/lib/` file. Instead, key ONE entry by the directory, with a trailing `/`,
+and bind it to the directory's git **tree** id at the head, which the refusal
+prints beside the first file it refuses there:
+
+```bash
+jq --arg p "<kit dir>/tests/lib/" --arg t "<tree id printed>" --arg r "<why the project does without it>" \
+  '.refresh_kept[$p] = {tree: $t, reason: $r}' .claude/directive-sync.json \
+  > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
+```
+
+It covers every file the template ships under that directory, present or
+absent, in that kit; keyed as shipped (`templates/ui-tests/tests/lib/`) it
+covers every kit the project has. The tree id changes when any file under it
+does, so the question comes back exactly as a file's does. Never the kit root:
+declining the whole kit in one line is the wholesale skip the kit row forbids,
+so `refresh-stamp.sh` honours a directory entry only BELOW the kit root.
+
 What is compared, delta or not:
 - **every path the delta lists** that has an installed location. A kit file maps
   to each kit directory the workflows name in `UI_TESTS_DIR` (the default
@@ -634,8 +761,11 @@ What is compared, delta or not:
     alone: a check wider than the install refuses a stamp the install can never
     satisfy (owner ruling, 2026-10-06). `notify-task.js` is the project's own
     task, so it will legitimately differ here; record it with a `refresh_kept`
-    reason. When `package.json` is among them, `package-lock.json` beside it
-    must EXIST; it is generated by `npm install`, so it is never compared.
+    reason. `package-lock.json` must EXIST only where the scheduled-task kit
+    is installed (`cron-notify.yml`, `notify-task.js` or `notify-email.js`
+    present); it is generated by `npm install`, so it is never compared.
+    `package.json` alone never requires it: the manifest is there for its
+    `"type": "commonjs"`, which no `npm install` reads.
 
   - **every installed kit, as its whole upstream directory**: each kit
     directory found as above gets every file `templates/ui-tests/` ships except
@@ -699,8 +829,8 @@ composite, kit file) is stale or missing, and no settings entry is missing,
 each unless a recorded reason covers it. It does **not** mean the project
 matches upstream. A workflow, or any file outside the dependency set, whose
 template did not change in the delta is compared only by Phase 1.5, which
-reports `DRIFT` without holding the stamp. So "nothing named" is not "no
-divergence"; read Phase 1.5's report beside this one.
+reports `STALE`, `CUSTOM` or `DRIFT` without holding the stamp. So "nothing
+named" is not "no divergence"; read Phase 1.5's report beside this one.
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-stamp.sh"
@@ -712,6 +842,16 @@ checks every path above, and stamps only on a clean result, printing one line
 per finding. It lives in a file because a command's arguments are substituted
 into its text on load, and its functions take positional parameters. A project
 with no `.claude/directive-sync.json` yet gets one, starting as `{}`.
+
+**Its exit status is the verdict:** 0 stamped (`stamped: <sha>`); 1 REFUSED — a
+finding above, or a delta not classified for this head; 2 could not run (the
+head was unreachable, or the write failed). It once exited 0 on a refusal, so
+only its last line told a caller the stamp had not moved (pilots, 2026-10-13).
+**A refusal keeps Phase 2's verdict:** its markers are consumed only by a
+written stamp, so after recording a `refresh_kept` or `refresh_declined`
+reason, re-run THIS script alone — `refresh-delta.sh` need not run again unless
+upstream moved, which the stamp detects and refuses on. A stamp that changed
+since Phase 2 listed the delta (a pull, a merge) refuses the same way.
 
 **Stamp only a VERIFIED head SHA.** Phases 2 and 3 need nothing from
 `api.github.com` — both run over git transport, which is what lets the stamp

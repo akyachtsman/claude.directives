@@ -514,7 +514,9 @@ Two things that repeatedly get this wrong, both measured on this PR:
   It tries each rung — the browser already present, a plain `playwright install`,
   then `install --with-deps` — and **launches after every one**. Exit 0 means it
   starts here and there is no ceiling for that browser; exit 1 quotes the launch
-  error, which is the evidence the record needs.
+  error, which is the evidence the record needs. It is CommonJS, so it runs only
+  beside .github/scripts/package.json, whose `"type": "commonjs"` outranks a root
+  `"type": "module"`; the two install together.
 
   The ladder is a script and not a paragraph because four attempts to state it as
   prose produced four defects, each introduced by the fix for the one before

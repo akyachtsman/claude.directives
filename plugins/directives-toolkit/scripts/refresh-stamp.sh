@@ -20,44 +20,94 @@
 # $classified set in Phase 2's block are all empty here — the guard would take
 # the "upstream head unavailable" branch every time and the stamp could NEVER
 # advance. Phase 2 leaves its verdict in a file for exactly this reason.
+#
+# EXIT STATUS. 0 stamped; 1 REFUSED (a finding above the last line, or the
+# delta was not classified for this head); 2 could not run (upstream
+# unreachable, or the write failed). It once exited 0 either way, so a caller
+# had to parse the last line to learn the stamp had not moved (pilots,
+# 2026-10-13).
+#
+# THE VERDICT SURVIVES A REFUSAL. Phase 2's markers are read here and removed
+# only once the stamp is WRITTEN. This file once deleted them on entry, so a
+# refused run -- the usual first one, before a refresh_kept reason is
+# recorded -- burned the verdict, and the re-run said "NOT classified" until
+# refresh-delta.sh ran again (pilots, 2026-10-13). Keeping them is safe because
+# each is bound: to the head it classified (an upstream that moved refuses)
+# and to the stamp it was listed from (a stamp changed since, by a pull or a
+# merge, refuses too).
+# shellcheck source=refresh-lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/refresh-lib.sh" \
+  || { echo "refresh-lib.sh not loadable — stamp unchanged"; exit 2; }
 # A project's first refresh may have no sync file yet (/new-repo writes one only
-# for some projects): start it empty, or the stamp below could never be written
-# and Phase 2's verdict, consumed just below, would be lost with it.
+# for some projects): start it empty, or the stamp below could never be written.
 [ -f .claude/directive-sync.json ] || { mkdir -p .claude && printf '{}\n' > .claude/directive-sync.json; }
 last=$(jq -r '.upstream.sha // empty' .claude/directive-sync.json 2>/dev/null)
-head=$(git ls-remote https://github.com/akyachtsman/claude.directives.git refs/heads/main | cut -f1)
-marker=$(git rev-parse --git-path refresh-repo-classified)
+head=$(refresh_head)
+marker=$(refresh_marker classified)
 classified_head=$(cat "$marker" 2>/dev/null) || classified_head=
-rm -f "$marker"
-delta_file=$(git rev-parse --git-path refresh-repo-delta)
+base_file=$(refresh_marker base)
+classified_base=$(cat "$base_file" 2>/dev/null) || classified_base=
+delta_file=$(refresh_marker delta)
 delta_list=$(cat "$delta_file" 2>/dev/null) || delta_list=
-rm -f "$delta_file"
-# The verdict is only valid for the SHA it was made against. If upstream moved
-# between the two Bash calls, or a stale marker survived an interrupted run,
-# this mismatch makes Phase 3 refuse rather than stamp a delta nobody read.
+# The verdict is only valid for the SHA it was made against, and from the stamp
+# it was listed from. If upstream moved between the two Bash calls, a stale
+# marker survived an interrupted run, or the stamp changed underneath it, this
+# mismatch makes Phase 3 refuse rather than stamp a delta nobody read.
 classified=no
-[ -n "$classified_head" ] && [ "$classified_head" = "$head" ] && classified=yes
+[ -n "$classified_head" ] && [ "$classified_head" = "$head" ] \
+  && [ "$classified_base" = "$last" ] && classified=yes
 
 # APPLIED, not just read (see above). One depth-1 fetch of $head serves every
 # comparison and the upstream listing; a fetch that fails refuses the stamp.
 # No `grep -q` fed by a pipe (the SIGPIPE hazard in Phase 1); `; true` keeps a
 # no-match from ending the block under errexit.
-unapplied=0; handled=" "; tree=no; kit_missing="
+unapplied=0; fetch_failed=0; handled=" "; tree=no; kit_missing="
 "
 up=
 if [ "$classified" = yes ]; then
   up=$(mktemp -d) || up=
   if [ -n "$up" ] && git init -q --bare "$up" \
-     && git -C "$up" fetch -q --depth=1 https://github.com/akyachtsman/claude.directives.git "$head" \
+     && git -C "$up" fetch -q --depth=1 "$REFRESH_SRC" "$head" \
      && shipped=$(git -C "$up" ls-tree -r --name-only "$head" -- templates directives); then
     tree=yes
   else
     echo "CANNOT VERIFY: the upstream tree at $head could not be fetched -- nothing compared"
-    unapplied=1
+    unapplied=1 fetch_failed=1
   fi
 fi
 
-# check <local> <template> <why it is required>: compare one installed copy, honouring a blob-bound reason.
+# kit_dir_kept <kit dir> <kit template path>: print the reason of a refresh_kept
+# entry that declines a whole kit SUBDIRECTORY holding this file, if one binds.
+# Owner ruling 2026-10-13: kit files stay required, but declining a directory is
+# one step -- a project that keeps the helpers inline in its spec wrote one
+# entry per tests/lib/ file. The entry is keyed by the directory with a
+# trailing `/`, either as installed (`<kit dir>/tests/lib/`, that kit only) or
+# as shipped (`templates/ui-tests/tests/lib/`, every kit), and binds to the
+# directory's git TREE id at the head, the directory's counterpart of a file's
+# blob: any change under it re-asks. The kit ROOT is never a key: declining the
+# whole kit in one line is the wholesale skip the per-file row exists to stop.
+kit_dir_kept() {
+  local rel d tr why
+  rel=${2#templates/ui-tests/}
+  d=$(dirname -- "$rel")
+  while [ "$d" != . ] && [ "$d" != / ]; do
+    tr=$(git -C "$up" rev-parse "$head:templates/ui-tests/$d" 2>/dev/null) || tr=
+    if [ -n "$tr" ]; then
+      why=$(jq -r --arg lk "$1/$d/" --arg tk "templates/ui-tests/$d/" --arg t "$tr" \
+        '[.refresh_kept[$lk], .refresh_kept[$tk]] | map(select(type == "object" and .tree == $t))
+         | .[0].reason // empty | select(type == "string" and test("\\S"))' \
+        .claude/directive-sync.json 2>/dev/null) || why=
+      if [ -n "$why" ]; then printf '(directory %s/) %s\n' "$d" "$why"; return 0; fi
+    fi
+    d=$(dirname -- "$d")
+  done
+  return 1
+}
+
+# check <local> <template> <why it is required> [<kit dir>]: compare one
+# installed copy, honouring a blob-bound reason -- or, for a kit file (the
+# fourth argument names its kit), a tree-bound one on a directory above it.
+dir_hints=" "
 check() {
   handled="$handled$1 "
   if [ "$2" = deleted ]; then b=deleted; else b=$(git -C "$up" rev-parse "$head:$2" 2>/dev/null) || b=; fi
@@ -65,12 +115,28 @@ check() {
     '.refresh_kept[$p] | select(.blob == $b) | .reason // empty' \
     .claude/directive-sync.json 2>/dev/null) || kept=
   if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
+  if [ -n "${4:-}" ] && [ "$b" != deleted ] && kept=$(kit_dir_kept "$4" "$2"); then
+    echo "KEPT: $1 -- $kept"; return
+  fi
   if [ "$b" = deleted ]; then
     echo "UNAPPLIED: $1 -- upstream deleted it (blob deleted)"; unapplied=1
   elif [ ! -e "$1" ]; then
     echo "UNAPPLIED: $1 is absent but required -- $3 (blob $b)"; unapplied=1
   elif ! git -C "$up" cat-file blob "$b" 2>/dev/null | cmp -s - "$1"; then
     echo "UNAPPLIED: $1 differs from $2 at $head (blob $b)"; unapplied=1
+  else
+    return
+  fi
+  # A kit file below the kit root: name the one-step decline for its directory,
+  # once per directory.
+  if [ -n "${4:-}" ] && [ "$b" != deleted ]; then
+    local d tr
+    d=$(dirname -- "${2#templates/ui-tests/}")
+    case "$dir_hints" in *" $4/$d/ "*) return ;; esac
+    if [ "$d" != . ] && tr=$(git -C "$up" rev-parse "$head:templates/ui-tests/$d" 2>/dev/null); then
+      dir_hints="$dir_hints$4/$d/ "
+      echo "  (to decline all of $4/$d/ at once: one refresh_kept entry keyed \"$4/$d/\" with tree $tr)"
+    fi
   fi
 }
 
@@ -96,7 +162,7 @@ $k
           fi
           p="$k/${t#templates/ui-tests/}"
           [ "$st" = D ] && { [ -e "$p" ] && check "$p" deleted; continue; }
-          check "$p" "$t" "the kit is installed"
+          check "$p" "$t" "the kit is installed" "$k"
         done <<KITS
 $kit_dirs
 KITS
@@ -184,10 +250,10 @@ $(printf '%s\n' "$files" | sed "s|^templates/actions/|.github/actions/|")"
     case "$handled" in *" $p "*) continue ;; esac   # already checked from the delta
     # A path under a kit directory is a KIT file, whose template is
     # templates/ui-tests/, not templates/scripts/ (Codex, #397).
-    t=
+    t= pk=
     while IFS= read -r k; do
       [ -n "$k" ] || continue
-      case "$p" in "$k"/*) t="templates/ui-tests/${p#"$k"/}" ;; esac
+      case "$p" in "$k"/*) t="templates/ui-tests/${p#"$k"/}" pk=$k ;; esac
     done <<KITS
 ${kit_dirs:-.github/scripts/ui-tests}
 KITS
@@ -197,16 +263,24 @@ KITS
       *) continue ;;
     esac
     grep -qxF "$t" <<<"$shipped" || continue   # not shipped upstream: the project's own
-    check "$p" "$t" "an installed composite or kit ships it, or something installed or a directive names it"
+    check "$p" "$t" "an installed composite or kit ships it, or something installed or a directive names it" "$pk"
   done <<DEPS
 $(printf '%s\n' "$deps" | sort -u)
 DEPS
-  # The lockfile that package.json needs. It is generated, never shipped, so
-  # it is checked for PRESENCE, not compared: cron-notify.yml's setup-node cache
-  # names it, and without it the job fails before its own install (Codex, #409).
-  if printf '%s\n' "$deps" | grep -qxF .github/scripts/package.json \
-     && [ ! -f .github/scripts/package-lock.json ]; then
-    echo "UNAPPLIED: .github/scripts/package-lock.json is absent but required -- run npm install in .github/scripts and commit it"
+  # The lockfile. It is generated, never shipped, so it is checked for
+  # PRESENCE, not compared -- and only where the scheduled-task kit is
+  # installed (pilots, 2026-10-13). package.json alone does not need it: the qa
+  # workflows and the ui-suite composite name package.json for its
+  # "type": "commonjs", which every CommonJS script there needs, and nothing of
+  # theirs runs `npm install` in .github/scripts. The kit does: cron-notify.yml
+  # installs nodemailer there and its setup-node cache names the lockfile, so
+  # without it the job fails before its own install (Codex, #409).
+  cron_kit=
+  for f in .github/workflows/cron-notify.yml .github/scripts/notify-task.js .github/scripts/notify-email.js; do
+    [ -f "$f" ] && cron_kit="$cron_kit $f"
+  done
+  if [ -n "$cron_kit" ] && [ ! -f .github/scripts/package-lock.json ]; then
+    echo "UNAPPLIED: .github/scripts/package-lock.json is absent but required by the scheduled-task kit (${cron_kit# }) -- run npm install in .github/scripts and commit it"
     unapplied=1
   fi
 
@@ -280,16 +354,27 @@ fi
 
 if [ -z "$head" ]; then
   echo "upstream head unavailable this run — stamp unchanged, re-run /refresh-repo later"
+  exit 2
 elif [ "$classified" != "yes" ]; then
   echo "delta from $last to $head was NOT classified for THIS head — stamp"
-  echo "left at $last on purpose, so the next run re-examines it. Classify by hand"
+  echo "left at $last on purpose, so the next run re-examines it. Re-run"
+  echo "refresh-delta.sh (Phase 2) to classify this head, or classify by hand"
   echo "via MAINTAIN-REPO-USER-INSTRUCTIONS.md → Propagation Matrix to clear it."
+  exit 1
+elif [ "$fetch_failed" = 1 ]; then
+  # Could not run, not a refusal: nothing was compared, so there is nothing to
+  # apply or decline (Codex, #449). Phase 2's verdict is kept for the re-run.
+  echo "upstream tree unavailable this run — stamp left at $last, nothing compared;"
+  echo "re-run this script later (Phase 2's verdict is kept)"
+  exit 2
 elif [ "$unapplied" = 1 ]; then
   echo "stamp left at $last: the paths above are unapplied -- they differ from the"
   echo "template at $head, or are required and absent. Apply each one, or record why"
-  echo "it stays (refresh_kept for a file, refresh_declined for a settings entry,"
-  echo "above), then re-run /refresh-repo. Stamping now would hide them from every"
-  echo "later delta."
+  echo "it stays (refresh_kept for a file or a kit subdirectory, refresh_declined for"
+  echo "a settings entry, above), then re-run this script -- Phase 2's verdict is"
+  echo "kept, so refresh-delta.sh need not run again. Stamping now would hide them"
+  echo "from every later delta."
+  exit 1
 else
   # mktemp in the DESTINATION dir: a fixed /tmp name races a second session, and
   # a cross-filesystem mv degrades from an atomic rename to a copy — which is the
@@ -300,9 +385,13 @@ else
           '.upstream = {sha: $sha, synced: $d}' .claude/directive-sync.json > "$tmp" \
      && [ -s "$tmp" ] \
      && mv "$tmp" .claude/directive-sync.json; then
+    # Consumed only now: the verdict has done its job.
+    rm -f "$marker" "$base_file" "$delta_file"
     echo "stamped: $head"
   else
     [ -n "$tmp" ] && rm -f "$tmp"
     echo "COULD-NOT-STAMP: .claude/directive-sync.json left unchanged; report it"
+    exit 2
   fi
 fi
+exit 0

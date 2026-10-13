@@ -92,6 +92,12 @@ Over git transport, at the pinned head. Per file it prints one of:
 - **`CUSTOM`** — differs from the template at the stamp too: a deliberate local
   edit (or tampering). It gets the diff treatment below, through the 3-way merge
   `refresh-merge.sh` runs, so the local hunks stand apart from upstream's.
+  A `CUSTOM` line reading `(recorded in refresh_kept: <reason>)` after the path
+  is a divergence already decided: the project's `refresh_kept` record for that
+  path binds, read as Phase 3 reads it (keyed by the local path, its `blob` the
+  template's at the pinned head). Report it with its reason; do not re-ask.
+  Once upstream changes that template the record stops binding, and the plain
+  line, a fresh question, returns (pilot claude.prop, 2026-10-13).
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.
@@ -115,6 +121,18 @@ says keep-and-update. Conflicts are resolved by a person, never written.
 `RETIRED` names a file whose template upstream deleted (today only
 `keepalive.yml`): it is a removal finding, never a project-specific file to
 keep. Delete it, with any secret the line names, in this refresh's PR.
+
+**Which files.** Every installed workflow, every file of every installed
+composite, the `SessionStart` hook, and every installed `.github/scripts/<name>`
+whose template `templates/scripts/<name>` exists at the pinned head (including
+`package.json`). Scripts are classified like the rest, so do **not** diff them
+by hand: take a `STALE` script, and give a `CUSTOM` or `DRIFT` one the
+disposition below. A script with no template is the project's own and gets no
+line; `package-lock.json` (generated, never shipped) and everything under a
+UI-test kit directory (`.github/scripts/ui-tests/` or wherever `UI_TESTS_DIR`
+points) are not compared here; the kit is covered by *Kit defects* and Phase 2's
+per-file kit diffs (pilot claude.prop, 2026-10-13: five script templates in the
+delta had to be classified by hand).
 
 `.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
 `ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
@@ -326,7 +344,7 @@ project** — map each to its installed location before dispositioning:
 | `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `CUSTOM` or `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops), `STALE` files (unchanged since the stamp) and files absent locally. ⚠️ Four files carry their own rules — `pages-retry.yml`, `pages-deploy.yml`, the Actions-source watchers and `keepalive.yml`: read *Workflow refresh rules* below the table before installing any workflow |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
-| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
+| `templates/scripts/*` | `.github/scripts/*` | Phase 1.5 has already classified each installed one: take a `STALE` script; diff and confirm a `CUSTOM` or `DRIFT` one — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge, through *Settings writes* (Phase 1.5). Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |

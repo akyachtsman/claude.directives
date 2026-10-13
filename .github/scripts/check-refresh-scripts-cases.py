@@ -96,6 +96,28 @@ and d4b92e8 fails the trailing-comment case. Round eight: a `${{` folded over
 two lines lost its continuation; the incoming side now follows an open span
 to its `}}`, and 4c41b1e fails the folded-expression case.
 
+DRIFT OVER .github/scripts/* (owner-approved 2026-10-13, the claude.prop
+pilot: five script templates in the delta were classified by hand, because
+refresh-drift.sh compared only workflows, composites and the hook; and its
+deliberately kept check-contrast.js came back as a fresh CUSTOM question every
+refresh, so a CUSTOM line now names a refresh_kept reason that binds). MEASURED
+2026-10-13: REFRESH_DRIFT_BIN = refresh-drift.sh at 569a0ae (the pre-change
+script) -> eight cases: the STALE script, the CUSTOM script (plain, no
+record), the script MODE line, the SUMMARY that counts the scripts (it said 5
+compared, 2 match where 10 and 5 hold), and the three refresh_kept cases (a
+matching record annotates a CUSTOM script and a CUSTOM workflow; one bound to
+an old template blob does not). The binding itself: the new script with
+`.blob == $b` dropped from the record select -> the old-blob case alone.
+The not-listed cases hold against the pre-change script trivially
+(it listed no script), so they were measured against the new script with one
+feature reverted at a time:
+  the silent skip removed (a no-template script prints NO-TEMPLATE) -> the
+    project-own and package-lock.json cases;
+  the kit exclusion removed -> the kit-at-.github/scripts case;
+  both removed AND the loop widened to .github/scripts/*/*(/*) -> those three
+    plus the .github/scripts/ui-tests/ case (the top-level glob alone already
+    keeps the kit subtree out; the case pins that).
+
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
 # Before any import: running the gate must leave no __pycache__/ beside the
@@ -260,6 +282,8 @@ S_FILES = {
     "templates/scripts/package.json": '{"type": "commonjs"}\n',
     "templates/scripts/notify-task.js": "require('./notify-email.js');\n",
     "templates/scripts/notify-email.js": "module.exports = {};\n",
+    "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1')\n",
+    "templates/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint')\n",
     "templates/ui-tests/tests/app.spec.js": "// spec\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v1\n",
     "templates/ui-tests/tests/lib/auth.js": "// auth\n",
@@ -279,8 +303,10 @@ H_FILES = {
     "templates/workflows/new.yml": "name: New\n# read: ${{ vars.FROM_NEW }}\nenv:\n  X: ${{ vars.FROM_NEW }}\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v2\n",
+    "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v2')\n",
 }
-EXEC = {"templates/claude-hooks/session-start.sh"}
+EXEC = {"templates/claude-hooks/session-start.sh",
+        "templates/scripts/guard.py", "templates/scripts/lint.py"}
 
 UP = WORK / "upstream"
 UP.mkdir()
@@ -562,6 +588,70 @@ expect("drift: a copy that differs from the stamp-era template too is CUSTOM",
 expect("drift: a lost executable bit is a MODE line, not DRIFT",
        res, 0, "MODE: .claude/hooks/session-start.sh is 100644, the template is 100755")
 expect("drift: the summary counts each class", res, 0, "2 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
+
+# .github/scripts/* (claude.prop pilot, 2026-10-13: five script templates in
+# the delta were classified by hand). Same classes, same SUMMARY.
+r = project("drift-scripts", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "lint.py"), changes={
+    ".github/scripts/check-contrast.js": "require('fs'); // local\n",         # CUSTOM
+    ".github/scripts/lint.py": (S_FILES["templates/scripts/lint.py"], False),  # match + MODE
+    ".github/scripts/mine.py": "print('the project own')\n",                 # no template
+    ".github/scripts/package-lock.json": "{}\n",                               # never shipped
+    ".github/scripts/ui-tests/tests/app.spec.js": "// a local kit edit\n",     # the kit's
+})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: an installed script equal to the stamp-era template, changed upstream, is STALE",
+       res, 0, "STALE: .github/scripts/guard.py")
+expect("drift: a locally edited script is CUSTOM",
+       res, 0, "CUSTOM: .github/scripts/check-contrast.js")
+expect("drift: a CUSTOM script with no refresh_kept record is the plain line",
+       res, 0, "CUSTOM: .github/scripts/check-contrast.js — differs", absent="recorded in refresh_kept")
+expect("drift: a script whose exec bit differs from the template's is a MODE line",
+       res, 0, "MODE: .github/scripts/lint.py is 100644, the template is 100755")
+expect("drift: the scripts are counted -- unchanged ones as match -- in the same SUMMARY",
+       res, 0, f"SUMMARY: 10 installed file(s) compared at {H} — 5 match, 4 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
+expect("drift: an unchanged script gets no line of its own",
+       res, 0, "SUMMARY:", absent="check-ui-viewports.js")
+expect("drift: a project-own script with no template is not listed (not even NO-TEMPLATE)",
+       res, 0, "SUMMARY:", absent="mine.py")
+expect("drift: package-lock.json (never shipped) is not listed",
+       res, 0, "SUMMARY:", absent="package-lock.json")
+expect("drift: nothing under .github/scripts/ui-tests/ is listed by this loop (the kit is kit-defects.sh's)",
+       res, 0, "SUMMARY:", absent=".github/scripts/ui-tests")
+# A kit installed AT .github/scripts (UI_TESTS_DIR, read by kit-dirs.sh): its
+# package.json is a kit file, never compared with templates/scripts/package.json.
+r = project("drift-scripts-kitdir", at=S_FILES, changes={
+    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
+    ".github/scripts/package.json": "{}\n",
+    ".github/scripts/playwright.config.js": "// config\n",
+})
+run(r, "refresh-delta.sh")
+expect("drift: a file inside a kit directory kit-dirs.sh names is not compared as a script",
+       run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent=".github/scripts/package.json")
+
+# A CUSTOM file the project already decided on (claude.prop's check-contrast.js)
+# carries its refresh_kept reason, read as refresh-stamp.sh reads it: keyed by
+# the local path, bound to the template's blob at the pin.
+r = project("drift-kept", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py",), changes={
+    ".github/scripts/check-contrast.js": "require('fs'); // house palette\n",
+    ".github/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1, local')\n",
+    ".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"],
+}, sync_extra={"refresh_kept": {
+    ".github/scripts/check-contrast.js": {"blob": blob_id(H, "templates/scripts/check-contrast.js"),
+                                          "reason": "the house palette"},
+    ".github/scripts/guard.py": {"blob": blob_id(S, "templates/scripts/guard.py"),
+                                 "reason": "decided against the old template"},
+    ".github/workflows/qa.yml": {"blob": blob_id(H, "templates/workflows/qa.yml"),
+                                 "reason": "a local top comment"},
+}})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: a CUSTOM script with a matching refresh_kept record carries its reason",
+       res, 0, "CUSTOM: .github/scripts/check-contrast.js (recorded in refresh_kept: the house palette) — ")
+expect("drift: …and so does a CUSTOM workflow (the same loop)",
+       res, 0, "CUSTOM: .github/workflows/qa.yml (recorded in refresh_kept: a local top comment) — ")
+expect("drift: a record bound to an OLD template blob no longer covers it: the plain line",
+       res, 0, "CUSTOM: .github/scripts/guard.py — differs", absent="decided against the old template")
 
 r = project("drift-pin", at=S_FILES, stamp=S)
 marker(r, "classified").write_text(S)

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # refresh-drift.sh — /refresh-repo Phase 1.5: compare every installed verbatim
-# drop-in with the upstream template, whatever the delta. Run from the project
+# drop-in (workflows, composites, the hook, and .github/scripts/* -- see WHICH
+# FILES) with the upstream template, whatever the delta. Run from the project
 # root:  bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
 # How to disposition each line is commands/refresh-repo.md → Phase 1.5.
 #
@@ -11,6 +12,19 @@
 # 2026-10-13). Over git transport, which also carries the file MODE a raw URL
 # cannot.
 #
+# WHICH FILES. Every installed workflow, composite file and the SessionStart
+# hook, and -- since the claude.prop pilot (2026-10-13), where five script
+# templates in the delta had to be classified by hand -- every installed
+# .github/scripts/<name> whose template templates/scripts/<name> exists at the
+# pin (package.json included: it is shipped, and refresh-stamp.sh compares it
+# too). Top level only: the template directory is flat. A script with no
+# template at the pin is the project's own and is skipped SILENTLY (a project
+# keeps many; a NO-TEMPLATE line each would bury the verdicts), so is
+# package-lock.json (generated, never shipped). Files under a UI-test kit
+# directory are never compared here -- kit-dirs.sh, the derivation
+# refresh-stamp.sh uses, plus .github/scripts/ui-tests named outright --
+# because kit-defects.sh and Phase 2's per-file kit diffs own the kit.
+#
 # Per file, one of:
 #   STALE: <path>   differs from the pinned template but EQUALS the template at
 #                   the project's stamp (.claude/directive-sync.json ->
@@ -19,6 +33,11 @@
 #   CUSTOM: <path>  differs from the template at the stamp too: a local edit.
 #                   Diff it; refresh-merge.sh does the 3-way merge (base = the
 #                   stamp-era template) so the local hunks stand apart.
+#                   "(recorded in refresh_kept: <reason>)" follows the path
+#                   when .claude/directive-sync.json -> refresh_kept holds a
+#                   record for it that refresh-stamp.sh would honour: keyed by
+#                   the local path, its blob the template's at the pin. One
+#                   bound to an older template blob is not shown.
 #   DRIFT: <path>   differs, and the stamp-era template is unavailable (no
 #                   stamp, its fetch failed, or no template at the stamp) so
 #                   stale cannot be told from custom: read the diff.
@@ -60,10 +79,30 @@ else
   why_no_base="the tree at the stamp $stamp could not be fetched"
 fi
 
+# The kit's installed location(s), from the SAME file refresh-stamp.sh runs, and
+# the default named outright, so a kit file is never read as a script.
+kit_dirs=$(bash "$(dirname -- "${BASH_SOURCE[0]}")/kit-dirs.sh" 2>/dev/null) || kit_dirs=
+in_kit() {
+  local k
+  while IFS= read -r k; do
+    [ -n "$k" ] || continue
+    case "$1" in "$k"/*) return 0 ;; esac
+  done <<KITS
+$kit_dirs
+.github/scripts/ui-tests
+KITS
+  return 1
+}
+
 n=0 same=0 stale=0 custom=0 drift=0 modes=0
 for f in .github/workflows/*.yml .github/actions/*/* \
-         .claude/hooks/session-start.sh; do
+         .claude/hooks/session-start.sh .github/scripts/*; do
   [ -f "$f" ] || continue
+  script=
+  case "$f" in
+    .github/scripts/*) in_kit "$f" && continue
+                       script=1 ;;
+  esac
   # A template upstream DELETED is absent from the tree too, which would read
   # as a project-specific file and be kept. An installed copy is a removal
   # finding instead, so retired names are matched first (Codex, #444).
@@ -77,6 +116,7 @@ for f in .github/workflows/*.yml .github/actions/*/* \
   # the fetch itself was checked above, so this is never a network failure.
   tmode=$(git -C "$up" ls-tree "$pin" -- "$t" 2>/dev/null | cut -d' ' -f1)
   if [ -z "$tmode" ]; then
+    [ -n "$script" ] && continue   # the project's own script: silent (header)
     echo "NO-TEMPLATE: $f (project-specific — skip)"
     continue
   fi
@@ -103,7 +143,17 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     echo "STALE: $f — equals the template at the stamp; only upstream moved, take the template"
     stale=$((stale + 1))
   else
-    echo "CUSTOM: $f — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
+    # A divergence already decided: refresh-stamp.sh's refresh_kept record,
+    # read the way it reads it -- keyed by the local path, bound to the
+    # template's blob at the head -- so one that upstream has since changed
+    # is a fresh question again (claude.prop pilot, 2026-10-13).
+    b=$(git -C "$up" rev-parse "$pin:$t" 2>/dev/null) || b=
+    kept=$(jq -r --arg p "$f" --arg b "$b" \
+      '.refresh_kept[$p] | select(type == "object" and .blob == $b) | .reason
+       | select(type == "string" and test("\\S")) | gsub("[\t\n\r]"; " ")' \
+      .claude/directive-sync.json 2>/dev/null) || kept=
+    [ -n "$kept" ] && kept=" (recorded in refresh_kept: $kept)"
+    echo "CUSTOM: $f$kept — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
     custom=$((custom + 1))
   fi
 done

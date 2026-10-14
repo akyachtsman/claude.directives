@@ -29,14 +29,18 @@ if [ -z "$f" ] || [ ! -f "$f" ]; then
 fi
 f=${f#./}
 t=$(refresh_template_of "$f")
-# A kit file maps through the kit directory the workflows name.
+# A kit file maps through the kit directory the workflows name -- decided once
+# the tree is fetched below: the kit's only when templates/ui-tests ships the
+# name, so a kit at the root or at .github/scripts never captures the other
+# templates installed beside it (Codex, #451).
+kt=
 while IFS= read -r k; do
   [ -n "$k" ] || continue
-  case "$f" in "$k"/*) t="templates/ui-tests/${f#"$k"/}" ;; esac
+  rel=$(refresh_kit_rel "$f" "$k") && kt="templates/ui-tests/$rel"
 done <<KITS
 $(bash "$(dirname -- "${BASH_SOURCE[0]}")/kit-dirs.sh")
 KITS
-if [ -z "$t" ]; then
+if [ -z "$t" ] && [ -z "$kt" ]; then
   echo "CANNOT MERGE: $f is not an installed copy of an upstream template"
   exit 2
 fi
@@ -55,6 +59,9 @@ if ! refresh_fetch "$up" "$pin" "$stamp"; then
   echo "CANNOT MERGE: the upstream trees at $pin and $stamp could not be fetched"
   rm -rf "$work"
   exit 2
+fi
+if [ -n "$kt" ] && { [ -z "$t" ] || git -C "$up" cat-file -e "$pin:$kt" 2>/dev/null; }; then
+  t=$kt
 fi
 if ! git -C "$up" cat-file blob "$pin:$t" >"$work/theirs" 2>/dev/null; then
   echo "CANNOT MERGE: $t is not shipped at $pin (deleted upstream?) — a removal finding, not a merge"

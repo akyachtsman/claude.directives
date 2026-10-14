@@ -172,7 +172,7 @@ $k
 " ;; esac
             continue
           fi
-          p="$k/${t#templates/ui-tests/}"
+          p=$(refresh_kit_join "$k" "${t#templates/ui-tests/}")
           [ "$st" = D ] && { [ -e "$p" ] && check "$p" deleted; continue; }
           check "$p" "$t" "the kit is installed" "$k"
         done <<KITS
@@ -235,7 +235,7 @@ $k
     # character such as `&` or `|` is sed syntax there (Codex, #404).
     while IFS= read -r f; do
       [ -n "$f" ] && deps="$deps
-$k/${f#templates/ui-tests/}"
+$(refresh_kit_join "$k" "${f#templates/ui-tests/}")"
     done <<FILES
 $kit_files
 FILES
@@ -262,10 +262,14 @@ $(printf '%s\n' "$files" | sed "s|^templates/actions/|.github/actions/|")"
     case "$handled" in *" $p "*) continue ;; esac   # already checked from the delta
     # A path under a kit directory is a KIT file, whose template is
     # templates/ui-tests/, not templates/scripts/ (Codex, #397).
+    # Under a kit, but the kit's only when templates/ui-tests ships the name
+    # (refresh-lib.sh -> refresh_kit_rel; Codex, #451).
     t= pk=
     while IFS= read -r k; do
       [ -n "$k" ] || continue
-      case "$p" in "$k"/*) t="templates/ui-tests/${p#"$k"/}" pk=$k ;; esac
+      rel=$(refresh_kit_rel "$p" "$k") \
+        && git -C "$up" cat-file -e "$head:templates/ui-tests/$rel" 2>/dev/null \
+        && { t="templates/ui-tests/$rel" pk=$k; }
     done <<KITS
 ${kit_dirs:-.github/scripts/ui-tests}
 KITS

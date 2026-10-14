@@ -89,13 +89,11 @@ fi
 # scripts must not vanish from the comparison with the kit (Codex, #451).
 kit_dirs=$(bash "$(dirname -- "${BASH_SOURCE[0]}")/kit-dirs.sh" 2>/dev/null) || kit_dirs=
 in_kit() {
-  local k
+  local k rel
   while IFS= read -r k; do
     [ -n "$k" ] || continue
-    case "$1" in
-      "$k"/*) git -C "$up" cat-file -e "$pin:templates/ui-tests/${1#"$k"/}" 2>/dev/null \
-                && return 0 ;;
-    esac
+    rel=$(refresh_kit_rel "$1" "$k") \
+      && git -C "$up" cat-file -e "$pin:templates/ui-tests/$rel" 2>/dev/null && return 0
   done <<KITS
 $kit_dirs
 .github/scripts/ui-tests

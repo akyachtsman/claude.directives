@@ -136,6 +136,12 @@ the blank-reason one and the re-run that follows it.
 Round 5: `local` is the blob of the bytes on disk (`git hash-object
 --no-filters`), so a CRLF rewrite under core.autocrlf is not the approved
 content. MEASURED: the dec4182 drift and stamp each fail their CRLF case.
+Round 6: a kit at the project root (kit-dirs.sh prints `.`) defeats a
+`"$k"/*` prefix test, so drift, merge and the stamp map kit paths through
+refresh-lib.sh's refresh_kit_rel / refresh_kit_join, and each takes a path as
+the kit's only when templates/ui-tests ships its name. MEASURED: the 954ae12
+refresh-merge.sh fails the root-kit kit-file case, the 954ae12 stamp the
+root-kit refusal case (it printed ./playwright.config.js).
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -826,6 +832,35 @@ check("merge: a failed write leaves the file as it was, and no temporary file",
       (r / ".github/workflows/qa.yml").read_text() == before
       and not list((r / ".github/workflows").glob(".refresh-merge.*")),
       f"files: {sorted(p.name for p in (r / '.github/workflows').iterdir())}")
+
+# A kit at the project root (UI_TESTS_DIR folds to `.`, e.g. `x/..`): its files
+# map through refresh_kit_rel, and only names templates/ui-tests ships are the
+# kit's, so a workflow beside it keeps its own template (Codex, #451).
+r = project("merge-rootkit", at=S_FILES, changes={
+    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: x/..\n",
+    "playwright.config.js": "// config\n// local\n",
+    ".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"],
+})
+expect("merge: a file of a kit at the project root merges against templates/ui-tests",
+       run(r, "refresh-merge.sh", "./playwright.config.js", env={"REFRESH_PIN": H}), 0,
+       "LOCAL HUNKS (templates/ui-tests/playwright.config.js at the stamp")
+expect("merge: ...and a workflow beside a root kit still merges against its own template",
+       run(r, "refresh-merge.sh", ".github/workflows/qa.yml", env={"REFRESH_PIN": H}), 0,
+       "LOCAL HUNKS (templates/workflows/qa.yml at the stamp")
+ROOT_KIT = {rel[len("templates/ui-tests/"):]: text for rel, text in H_FILES.items()
+            if rel.startswith("templates/ui-tests/") and not rel.endswith("package-lock.json")}
+r = project("stamp-rootkit", changes={
+    ".github/workflows/ci-monitor.yml": H_FILES["templates/workflows/ci-monitor.yml"].replace(
+        "name: CI Monitor\n", "name: CI Monitor\nenv:\n  UI_TESTS_DIR: x/..\n", 1),
+    **ROOT_KIT,
+    "playwright.config.js": "// config, edited\n",
+    **{".github/scripts/ui-tests/" + k: None for k in ROOT_KIT},
+})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-stamp.sh")
+expect("stamp: a kit at the project root is checked at its root paths, never as ./x",
+       res, 1, "UNAPPLIED: playwright.config.js differs from templates/ui-tests/playwright.config.js",
+       absent="./playwright")
 
 # ---- item 8: the caller set is computed --------------------------------------------
 r = project("callers", changes={".github/actions/ui-suite/action.yml": None,

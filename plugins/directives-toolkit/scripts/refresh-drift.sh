@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # refresh-drift.sh — /refresh-repo Phase 1.5: compare every installed verbatim
-# drop-in with the upstream template, whatever the delta. Run from the project
+# drop-in (workflows, composites, the hook, and .github/scripts/* -- see WHICH
+# FILES) with the upstream template, whatever the delta. Run from the project
 # root:  bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
 # How to disposition each line is commands/refresh-repo.md → Phase 1.5.
 #
@@ -11,6 +12,22 @@
 # 2026-10-13). Over git transport, which also carries the file MODE a raw URL
 # cannot.
 #
+# WHICH FILES. Every installed workflow, composite file and the SessionStart
+# hook, and -- since the claude.prop pilot (2026-10-13), where five script
+# templates in the delta had to be classified by hand -- every installed
+# .github/scripts/<name> whose template templates/scripts/<name> exists at the
+# pin (package.json included: it is shipped, and refresh-stamp.sh compares it
+# too). Top level only: the template directory is flat. A script with no
+# template at the pin is the project's own and is skipped SILENTLY (a project
+# keeps many; a NO-TEMPLATE line each would bury the verdicts), so is
+# package-lock.json (generated, never shipped). Files under a UI-test kit
+# directory are never compared here -- kit-dirs.sh, the derivation
+# refresh-stamp.sh uses, plus .github/scripts/ui-tests named outright --
+# because kit-defects.sh and Phase 2's per-file kit diffs own the kit. A file
+# counts as the kit's only when the kit template ships that name: a kit
+# installed AT .github/scripts shares the directory with the standard scripts,
+# which stay compared (Codex, #451).
+#
 # Per file, one of:
 #   STALE: <path>   differs from the pinned template but EQUALS the template at
 #                   the project's stamp (.claude/directive-sync.json ->
@@ -19,6 +36,11 @@
 #   CUSTOM: <path>  differs from the template at the stamp too: a local edit.
 #                   Diff it; refresh-merge.sh does the 3-way merge (base = the
 #                   stamp-era template) so the local hunks stand apart.
+#                   "(recorded in refresh_kept: <reason>)" follows the path
+#                   when .claude/directive-sync.json -> refresh_kept holds a
+#                   record for it that refresh-stamp.sh would honour: keyed by
+#                   the local path, its blob the template's at the pin. One
+#                   bound to an older template blob is not shown.
 #   DRIFT: <path>   differs, and the stamp-era template is unavailable (no
 #                   stamp, its fetch failed, or no template at the stamp) so
 #                   stale cannot be told from custom: read the diff.
@@ -60,10 +82,34 @@ else
   why_no_base="the tree at the stamp $stamp could not be fetched"
 fi
 
+# The kit's installed location(s), from the SAME file refresh-stamp.sh runs, and
+# the default named outright, so a kit file is never read as a script. Under a
+# kit directory, a file is the kit's only when templates/ui-tests ships its
+# name at the pin: UI_TESTS_DIR may be .github/scripts itself, and its standard
+# scripts must not vanish from the comparison with the kit (Codex, #451).
+kit_dirs=$(bash "$(dirname -- "${BASH_SOURCE[0]}")/kit-dirs.sh" 2>/dev/null) || kit_dirs=
+in_kit() {
+  local k rel
+  while IFS= read -r k; do
+    [ -n "$k" ] || continue
+    rel=$(refresh_kit_rel "$1" "$k") \
+      && git -C "$up" cat-file -e "$pin:templates/ui-tests/$rel" 2>/dev/null && return 0
+  done <<KITS
+$kit_dirs
+.github/scripts/ui-tests
+KITS
+  return 1
+}
+
 n=0 same=0 stale=0 custom=0 drift=0 modes=0
 for f in .github/workflows/*.yml .github/actions/*/* \
-         .claude/hooks/session-start.sh; do
+         .claude/hooks/session-start.sh .github/scripts/*; do
   [ -f "$f" ] || continue
+  script=
+  case "$f" in
+    .github/scripts/*) in_kit "$f" && continue
+                       script=1 ;;
+  esac
   # A template upstream DELETED is absent from the tree too, which would read
   # as a project-specific file and be kept. An installed copy is a removal
   # finding instead, so retired names are matched first (Codex, #444).
@@ -77,6 +123,7 @@ for f in .github/workflows/*.yml .github/actions/*/* \
   # the fetch itself was checked above, so this is never a network failure.
   tmode=$(git -C "$up" ls-tree "$pin" -- "$t" 2>/dev/null | cut -d' ' -f1)
   if [ -z "$tmode" ]; then
+    [ -n "$script" ] && continue   # the project's own script: silent (header)
     echo "NO-TEMPLATE: $f (project-specific — skip)"
     continue
   fi
@@ -103,7 +150,37 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     echo "STALE: $f — equals the template at the stamp; only upstream moved, take the template"
     stale=$((stale + 1))
   else
-    echo "CUSTOM: $f — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
+    # A divergence already decided: refresh-stamp.sh's refresh_kept record,
+    # keyed by the local path, bound to the template's blob at the head -- so
+    # one that upstream has since changed is a fresh question again (claude.prop
+    # pilot, 2026-10-13). It is honoured only while it ALSO binds this file's
+    # content: its `local` blob must equal the installed copy's, or a later
+    # edit (or a replaced file) would inherit an old approval and go unreviewed
+    # (Codex, #451). A record without `local` is shown but not honoured, and so
+    # is one without a reason (a non-blank string), which the stamp would not
+    # honour either.
+    b=$(git -C "$up" rev-parse "$pin:$t" 2>/dev/null) || b=
+    lb=$(git hash-object --no-filters -- "$f" 2>/dev/null) || lb=   # raw bytes, as the stamp
+    rec=$(jq -r --arg p "$f" --arg b "$b" \
+      '.refresh_kept[$p] | select(type == "object" and .blob == $b)
+       | [(.local // ""),
+          (.reason // "" | if type == "string" and test("\\S") then gsub("[\t\n\r]"; " ") else "" end)]
+       | @tsv' \
+      .claude/directive-sync.json 2>/dev/null) || rec=
+    kept=
+    if [ -n "$rec" ]; then
+      rl=${rec%%$'\t'*} why=${rec#*$'\t'}
+      if [ -z "$why" ]; then
+        kept=" (refresh_kept has a record but no reason -- review it, then re-record it with one)"
+      elif [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
+        kept=" (recorded in refresh_kept: $why)"
+      elif [ -n "$rl" ]; then
+        kept=" (refresh_kept says \"$why\", but this file changed since it was recorded -- review it again)"
+      else
+        kept=" (refresh_kept says \"$why\", but the record binds no local content -- review it, then re-record with its local blob)"
+      fi
+    fi
+    echo "CUSTOM: $f$kept — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
     custom=$((custom + 1))
   fi
 done

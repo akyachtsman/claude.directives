@@ -1108,7 +1108,12 @@ findings unseen.
 - All code changes go through a `claude/<name>` branch and a PR to `main`
 - Use a **fresh** `claude/<name>` branch per change, cut from updated `main`
   after each squash-merge — recycling branches tangles lineage and can attach
-  the wrong diff to a PR
+  the wrong diff to a PR. Update with `git fetch --prune origin`: the merge
+  deletes the remote branch, and the stale `origin/<branch>` ref left behind
+  still points at the pre-squash commit, so the harness stop hook reports
+  "unpushed commits" that `git rev-list HEAD --not --remotes` shows are not
+  there. `--prune` removes only refs whose remote branch is gone, never a live
+  one (claude.prop pilots, 2026-10-13, twice)
 - PR activity arrives on its own — opening a PR subscribes the session
   harness-side; leave it alone — the harness drops it at merge
   (`git.md` → *PR Lifecycle*)

@@ -111,19 +111,31 @@ dir_hints=" "
 check() {
   handled="$handled$1 "
   if [ "$2" = deleted ]; then b=deleted; else b=$(git -C "$up" rev-parse "$head:$2" 2>/dev/null) || b=; fi
-  kept=$(jq -r --arg p "$1" --arg b "$b" \
-    '.refresh_kept[$p] | select(.blob == $b) | .reason // empty' \
+  # A record binds only while it ALSO names the installed copy's content: its
+  # `local` blob (`absent` for a file not installed) must equal this file's, so
+  # a later edit or a replaced file never inherits an old approval. A record
+  # without `local` (written before it existed) binds nothing and refuses; every
+  # refusal prints the value to record (Codex, #451). A reason must be a
+  # non-blank string, as kit_dir_kept requires. refresh-drift.sh reads it the
+  # same way.
+  # --no-filters: the blob of the bytes on disk, the bytes `cmp` checks below --
+  # never after core.autocrlf or a clean filter, which can map two different
+  # files to one id (Codex, #451).
+  if [ -e "$1" ]; then lb=$(git hash-object --no-filters -- "$1" 2>/dev/null) || lb=; else lb=absent; fi
+  kept=$(jq -r --arg p "$1" --arg b "$b" --arg l "$lb" \
+    '.refresh_kept[$p] | select(type == "object" and .blob == $b and .local == $l and $l != "")
+     | .reason // empty | select(type == "string" and test("\\S"))' \
     .claude/directive-sync.json 2>/dev/null) || kept=
   if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
   if [ -n "${4:-}" ] && [ "$b" != deleted ] && kept=$(kit_dir_kept "$4" "$2"); then
     echo "KEPT: $1 -- $kept"; return
   fi
   if [ "$b" = deleted ]; then
-    echo "UNAPPLIED: $1 -- upstream deleted it (blob deleted)"; unapplied=1
+    echo "UNAPPLIED: $1 -- upstream deleted it (blob deleted) (local $lb)"; unapplied=1
   elif [ ! -e "$1" ]; then
-    echo "UNAPPLIED: $1 is absent but required -- $3 (blob $b)"; unapplied=1
+    echo "UNAPPLIED: $1 is absent but required -- $3 (blob $b) (local $lb)"; unapplied=1
   elif ! git -C "$up" cat-file blob "$b" 2>/dev/null | cmp -s - "$1"; then
-    echo "UNAPPLIED: $1 differs from $2 at $head (blob $b)"; unapplied=1
+    echo "UNAPPLIED: $1 differs from $2 at $head (blob $b) (local $lb)"; unapplied=1
   else
     return
   fi
@@ -160,7 +172,7 @@ $k
 " ;; esac
             continue
           fi
-          p="$k/${t#templates/ui-tests/}"
+          p=$(refresh_kit_join "$k" "${t#templates/ui-tests/}")
           [ "$st" = D ] && { [ -e "$p" ] && check "$p" deleted; continue; }
           check "$p" "$t" "the kit is installed" "$k"
         done <<KITS
@@ -223,7 +235,7 @@ $k
     # character such as `&` or `|` is sed syntax there (Codex, #404).
     while IFS= read -r f; do
       [ -n "$f" ] && deps="$deps
-$k/${f#templates/ui-tests/}"
+$(refresh_kit_join "$k" "${f#templates/ui-tests/}")"
     done <<FILES
 $kit_files
 FILES
@@ -250,10 +262,14 @@ $(printf '%s\n' "$files" | sed "s|^templates/actions/|.github/actions/|")"
     case "$handled" in *" $p "*) continue ;; esac   # already checked from the delta
     # A path under a kit directory is a KIT file, whose template is
     # templates/ui-tests/, not templates/scripts/ (Codex, #397).
+    # Under a kit, but the kit's only when templates/ui-tests ships the name
+    # (refresh-lib.sh -> refresh_kit_rel; Codex, #451).
     t= pk=
     while IFS= read -r k; do
       [ -n "$k" ] || continue
-      case "$p" in "$k"/*) t="templates/ui-tests/${p#"$k"/}" pk=$k ;; esac
+      rel=$(refresh_kit_rel "$p" "$k") \
+        && git -C "$up" cat-file -e "$head:templates/ui-tests/$rel" 2>/dev/null \
+        && { t="templates/ui-tests/$rel" pk=$k; }
     done <<KITS
 ${kit_dirs:-.github/scripts/ui-tests}
 KITS

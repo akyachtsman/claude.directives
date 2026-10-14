@@ -67,6 +67,27 @@ refresh_template_of() {
   esac
 }
 
+# refresh_kit_rel <path> <kit dir>: print <path> relative to the kit and
+# succeed when it lies under it. A kit at the project root (kit-dirs.sh prints
+# `.`) holds every relative path, so the `"$k"/*` prefix test cannot be used
+# for it (Codex, #451). A caller still maps a path to the kit only when
+# templates/ui-tests ships that name: a kit sharing a directory (the root, or
+# .github/scripts) must not capture the other templates installed there.
+refresh_kit_rel() {
+  if [ "$2" = . ]; then
+    case "$1" in /*|..|../*) return 1 ;; esac
+    printf '%s\n' "${1#./}"; return 0
+  fi
+  case "$1" in "$2"/*) printf '%s\n' "${1#"$2"/}"; return 0 ;; esac
+  return 1
+}
+
+# refresh_kit_join <kit dir> <relative path>: the installed path of a kit
+# file -- `package.json`, not `./package.json`, for a kit at the root.
+refresh_kit_join() {
+  if [ "$1" = . ]; then printf '%s\n' "$2"; else printf '%s/%s\n' "$1" "$2"; fi
+}
+
 # refresh_local_mode <path>: 100755 or 100644 -- the mode git records for a
 # tracked file (what a CI checkout gets), else the working tree's exec bit.
 refresh_local_mode() {

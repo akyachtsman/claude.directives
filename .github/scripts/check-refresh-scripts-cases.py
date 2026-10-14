@@ -96,6 +96,53 @@ and d4b92e8 fails the trailing-comment case. Round eight: a `${{` folded over
 two lines lost its continuation; the incoming side now follows an open span
 to its `}}`, and 4c41b1e fails the folded-expression case.
 
+DRIFT OVER .github/scripts/* (owner-approved 2026-10-13, the claude.prop
+pilot: five script templates in the delta were classified by hand, because
+refresh-drift.sh compared only workflows, composites and the hook; and its
+deliberately kept check-contrast.js came back as a fresh CUSTOM question every
+refresh, so a CUSTOM line now names a refresh_kept reason that binds). MEASURED
+2026-10-13: REFRESH_DRIFT_BIN = refresh-drift.sh at 569a0ae (the pre-change
+script) -> eight cases: the STALE script, the CUSTOM script (plain, no
+record), the script MODE line, the SUMMARY that counts the scripts (it said 5
+compared, 2 match where 10 and 5 hold), and the three refresh_kept cases (a
+matching record annotates a CUSTOM script and a CUSTOM workflow; one bound to
+an old template blob does not). The binding itself: the new script with
+`.blob == $b` dropped from the record select -> the old-blob case alone.
+The not-listed cases hold against the pre-change script trivially
+(it listed no script), so they were measured against the new script with one
+feature reverted at a time:
+  the silent skip removed (a no-template script prints NO-TEMPLATE) -> the
+    project-own and package-lock.json cases;
+  the kit exclusion removed -> the kit-at-.github/scripts case;
+  both removed AND the loop widened to .github/scripts/*/*(/*) -> those three
+    plus the .github/scripts/ui-tests/ case (the top-level glob alone already
+    keeps the kit subtree out; the case pins that).
+
+LOCAL BINDING (Codex, #451). A refresh_kept record now also names the installed
+copy's blob (`local`); drift honours it only when both blobs match, and the stamp
+refuses when a record names a local blob the file no longer has. MEASURED
+2026-10-13: the pre-change refresh-drift.sh fails the no-local and edited-since
+cases; the pre-change refresh-stamp.sh fails the "refusal prints the local blob"
+case, and the new stamp with only the local condition removed fails the
+"local blob no longer matches" case. Round 3: the stamp now REQUIRES `local`
+(`absent` for a required file not installed) -- a record without it refuses --
+and drift counts a file under a kit directory as the kit's only when
+templates/ui-tests ships its name. MEASURED: the 008b165 stamp fails 4 cases
+(no-local refuses, absent printed, absent covered, and the re-run that follows),
+the 008b165 drift fails the kit-at-the-scripts-root case. Round 4: a reason
+must be a non-blank string in drift AND the stamp (kit_dir_kept's predicate).
+MEASURED: the 06a5267 drift fails the three no-reason cases, the 06a5267 stamp
+the blank-reason one and the re-run that follows it.
+Round 5: `local` is the blob of the bytes on disk (`git hash-object
+--no-filters`), so a CRLF rewrite under core.autocrlf is not the approved
+content. MEASURED: the dec4182 drift and stamp each fail their CRLF case.
+Round 6: a kit at the project root (kit-dirs.sh prints `.`) defeats a
+`"$k"/*` prefix test, so drift, merge and the stamp map kit paths through
+refresh-lib.sh's refresh_kit_rel / refresh_kit_join, and each takes a path as
+the kit's only when templates/ui-tests ships its name. MEASURED: the 954ae12
+refresh-merge.sh fails the root-kit kit-file case, the 954ae12 stamp the
+root-kit refusal case (it printed ./playwright.config.js).
+
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
 # Before any import: running the gate must leave no __pycache__/ beside the
@@ -260,6 +307,8 @@ S_FILES = {
     "templates/scripts/package.json": '{"type": "commonjs"}\n',
     "templates/scripts/notify-task.js": "require('./notify-email.js');\n",
     "templates/scripts/notify-email.js": "module.exports = {};\n",
+    "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1')\n",
+    "templates/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint')\n",
     "templates/ui-tests/tests/app.spec.js": "// spec\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v1\n",
     "templates/ui-tests/tests/lib/auth.js": "// auth\n",
@@ -279,8 +328,10 @@ H_FILES = {
     "templates/workflows/new.yml": "name: New\n# read: ${{ vars.FROM_NEW }}\nenv:\n  X: ${{ vars.FROM_NEW }}\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v2\n",
+    "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v2')\n",
 }
-EXEC = {"templates/claude-hooks/session-start.sh"}
+EXEC = {"templates/claude-hooks/session-start.sh",
+        "templates/scripts/guard.py", "templates/scripts/lint.py"}
 
 UP = WORK / "upstream"
 UP.mkdir()
@@ -396,6 +447,12 @@ def marker(root, name):
     return root / ".git" / f"refresh-repo-{name}"
 
 
+def obj_id(text):
+    """The blob id git gives this content -- what a record's `local` binds."""
+    return subprocess.run(["git", "hash-object", "--stdin"], input=text.encode(),
+                          capture_output=True, check=True).stdout.decode().strip()
+
+
 def set_kept(root, key, entry):
     p = root / ".claude/directive-sync.json"
     d = json.loads(p.read_text(encoding="utf-8"))
@@ -473,10 +530,44 @@ expect("stamp: a refused stamp exits non-zero", res, 1, "UNAPPLIED: .github/work
 check("stamp: a refused stamp keeps Phase 2's verdict (marker, base and delta)",
       all(marker(r, n).is_file() for n in ("classified", "base", "delta")),
       f"markers after a refusal: {[n for n in ('classified', 'base', 'delta') if marker(r, n).is_file()]}")
-m = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\)", out)
+m = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
 if m:
+    # A record without `local` (the pre-#451 shape) binds nothing: still refused.
     set_kept(r, ".github/workflows/ci-monitor.yml", {"blob": m.group(1), "reason": "a local watch list"})
+    expect("stamp: a record without a local blob refuses, never inherits the approval (Codex, #451)",
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+    # Both blobs bound but a blank reason: drift shows it as needing a reason,
+    # so the stamp must not honour it either (Codex, #451).
+    set_kept(r, ".github/workflows/ci-monitor.yml",
+             {"blob": m.group(1), "local": m.group(2), "reason": "  \n"})
+    expect("stamp: a record with a blank reason refuses, as drift reports it",
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+    set_kept(r, ".github/workflows/ci-monitor.yml",
+             {"blob": m.group(1), "local": m.group(2), "reason": "a local watch list"})
 res = run(r, "refresh-stamp.sh")
+r2 = project("stamp-local-moved", changes={".github/workflows/ci-monitor.yml": S_FILES["templates/workflows/ci-monitor.yml"]})
+run(r2, "refresh-delta.sh")
+rc2, out2 = run(r2, "refresh-stamp.sh")
+m2 = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out2)
+check("stamp: a refusal prints the installed copy's local blob to record", bool(m2), out2)
+if m2:
+    set_kept(r2, ".github/workflows/ci-monitor.yml",
+             {"blob": m2.group(1), "local": m2.group(2), "reason": "a local watch list"})
+    (r2 / ".github/workflows/ci-monitor.yml").write_text(
+        (r2 / ".github/workflows/ci-monitor.yml").read_text() + "# edited after approval\n")
+    expect("stamp: a record whose local blob no longer matches the file refuses (Codex, #451)",
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+    # The same approval, then only the line endings change, in a project with
+    # core.autocrlf on: a filtered hash would map the CRLF file back to the
+    # approved blob; the binding is to the bytes on disk (Codex, #451).
+    ci = r2 / ".github/workflows/ci-monitor.yml"
+    approved = S_FILES["templates/workflows/ci-monitor.yml"]
+    set_kept(r2, ".github/workflows/ci-monitor.yml",
+             {"blob": m2.group(1), "local": obj_id(approved), "reason": "a local watch list"})
+    ci.write_bytes(approved.replace("\n", "\r\n").encode())
+    subprocess.run(["git", "-C", str(r2), "config", "core.autocrlf", "true"], check=True)
+    expect("stamp: a CRLF rewrite under core.autocrlf no longer matches the approved local blob",
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
 expect("stamp: the re-run after recording a reason stamps without refresh-delta.sh",
        res, 0, f"stamped: {H}")
 check("stamp: a successful stamp consumes the verdict",
@@ -526,6 +617,19 @@ run(r, "refresh-delta.sh")
 expect("stamp: absent kit lib files are refused, with the one-step decline named",
        run(r, "refresh-stamp.sh"), 1,
        f"one refresh_kept entry keyed \".github/scripts/ui-tests/tests/lib/\" with tree {LIB_TREE}")
+# A required file not installed records `local` as `absent`, which the refusal
+# prints (Codex, #451).
+r = project("absent-kept", changes=LIB_GONE, sync_extra={"refresh_kept": {
+    ".github/scripts/ui-tests/tests/lib/fixtures.js": {
+        "blob": blob_id(H, "templates/ui-tests/tests/lib/fixtures.js"), "local": "absent",
+        "reason": "fixtures stay inline"}}})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-stamp.sh")
+expect("stamp: an absent required file's refusal prints (local absent)",
+       res, 1, "tests/lib/auth.js is absent but required")
+check("stamp: the absent-file refusal names local absent", "(local absent)" in res[1], res[1])
+expect("stamp: a record with local absent covers a required file not installed",
+       res, 1, "KEPT: .github/scripts/ui-tests/tests/lib/fixtures.js -- fixtures stay inline")
 for label, key in (("as installed", ".github/scripts/ui-tests/tests/lib/"),
                    ("as shipped", "templates/ui-tests/tests/lib/")):
     r = project(f"kitdir-{label.split()[1]}", changes=LIB_GONE,
@@ -563,6 +667,136 @@ expect("drift: a lost executable bit is a MODE line, not DRIFT",
        res, 0, "MODE: .claude/hooks/session-start.sh is 100644, the template is 100755")
 expect("drift: the summary counts each class", res, 0, "2 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
 
+# .github/scripts/* (claude.prop pilot, 2026-10-13: five script templates in
+# the delta were classified by hand). Same classes, same SUMMARY.
+r = project("drift-scripts", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "lint.py"), changes={
+    ".github/scripts/check-contrast.js": "require('fs'); // local\n",         # CUSTOM
+    ".github/scripts/lint.py": (S_FILES["templates/scripts/lint.py"], False),  # match + MODE
+    ".github/scripts/mine.py": "print('the project own')\n",                 # no template
+    ".github/scripts/package-lock.json": "{}\n",                               # never shipped
+    ".github/scripts/ui-tests/tests/app.spec.js": "// a local kit edit\n",     # the kit's
+})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: an installed script equal to the stamp-era template, changed upstream, is STALE",
+       res, 0, "STALE: .github/scripts/guard.py")
+expect("drift: a locally edited script is CUSTOM",
+       res, 0, "CUSTOM: .github/scripts/check-contrast.js")
+expect("drift: a CUSTOM script with no refresh_kept record is the plain line",
+       res, 0, "CUSTOM: .github/scripts/check-contrast.js — differs", absent="recorded in refresh_kept")
+expect("drift: a script whose exec bit differs from the template's is a MODE line",
+       res, 0, "MODE: .github/scripts/lint.py is 100644, the template is 100755")
+expect("drift: the scripts are counted -- unchanged ones as match -- in the same SUMMARY",
+       res, 0, f"SUMMARY: 10 installed file(s) compared at {H} — 5 match, 4 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
+expect("drift: an unchanged script gets no line of its own",
+       res, 0, "SUMMARY:", absent="check-ui-viewports.js")
+expect("drift: a project-own script with no template is not listed (not even NO-TEMPLATE)",
+       res, 0, "SUMMARY:", absent="mine.py")
+expect("drift: package-lock.json (never shipped) is not listed",
+       res, 0, "SUMMARY:", absent="package-lock.json")
+expect("drift: nothing under .github/scripts/ui-tests/ is listed by this loop (the kit is kit-defects.sh's)",
+       res, 0, "SUMMARY:", absent=".github/scripts/ui-tests")
+# A kit installed AT .github/scripts (UI_TESTS_DIR, read by kit-dirs.sh): its
+# package.json is a kit file, never compared with templates/scripts/package.json.
+r = project("drift-scripts-kitdir", at=S_FILES, changes={
+    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
+    ".github/scripts/package.json": "{}\n",
+    ".github/scripts/playwright.config.js": "// config\n",
+})
+run(r, "refresh-delta.sh")
+expect("drift: a file inside a kit directory kit-dirs.sh names is not compared as a script",
+       run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent=".github/scripts/package.json")
+# The same kit spelled with a leading `./` (a valid equivalent path): kit-dirs.sh
+# drops it, so the prefix match still holds and package.json stays a kit file
+# (Codex, #451).
+for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/", ".github/scripts/.",
+                              ".github//scripts", ".github/x/../scripts")):
+    r = project(f"drift-scripts-kitdir-dot{i}", at=S_FILES, changes={
+        ".github/workflows/ci-monitor.yml": f"name: CI Monitor\nenv:\n  UI_TESTS_DIR: {spelling}\n",
+        ".github/scripts/package.json": "{}\n",
+        ".github/scripts/playwright.config.js": "// config\n",
+    })
+    run(r, "refresh-delta.sh")
+    expect(f"drift: a kit directory spelled {spelling!r} still keeps its package.json out of the script loop",
+           run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent=".github/scripts/package.json")
+# ...but a kit AT the scripts root does not take the standard scripts with it:
+# a script the kit template does not ship is still compared (Codex, #451).
+r = project("drift-scripts-kitroot", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("lint.py",), changes={
+    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
+    ".github/scripts/package.json": "{}\n",
+    ".github/scripts/playwright.config.js": "// config\n",
+    ".github/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint, replaced locally')\n",
+})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: with the kit at .github/scripts, a standard script is still compared",
+       res, 0, "CUSTOM: .github/scripts/lint.py")
+expect("drift: ...while the kit's own package.json stays out of the script loop",
+       res, 0, "SUMMARY:", absent=".github/scripts/package.json")
+
+# A CUSTOM file the project already decided on (claude.prop's check-contrast.js)
+# carries its refresh_kept reason, read as refresh-stamp.sh reads it: keyed by
+# the local path, bound to the template's blob at the pin AND to the installed
+# copy's own blob (`local`), so a later local edit never inherits the approval
+# (Codex, #451).
+CONTRAST_LOCAL = "require('fs'); // house palette\n"
+QA_LOCAL = DRIFTED[".github/workflows/qa.yml"]
+r = project("drift-kept", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "lint.py"), changes={
+    ".github/scripts/check-contrast.js": CONTRAST_LOCAL,
+    ".github/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v1, local')\n",
+    ".github/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint, edited after approval')\n",
+    ".github/workflows/qa.yml": QA_LOCAL,
+}, sync_extra={"refresh_kept": {
+    ".github/scripts/check-contrast.js": {"blob": blob_id(H, "templates/scripts/check-contrast.js"),
+                                          "local": obj_id(CONTRAST_LOCAL), "reason": "the house palette"},
+    ".github/scripts/guard.py": {"blob": blob_id(S, "templates/scripts/guard.py"),
+                                 "reason": "decided against the old template"},
+    ".github/scripts/lint.py": {"blob": blob_id(H, "templates/scripts/lint.py"),
+                                "local": obj_id("#!/usr/bin/env python3\nprint('lint, as approved')\n"),
+                                "reason": "approved content"},
+    ".github/workflows/qa.yml": {"blob": blob_id(H, "templates/workflows/qa.yml"),
+                                 "reason": "a local top comment"},
+}})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: a CUSTOM script whose record binds template AND local content carries its reason",
+       res, 0, "CUSTOM: .github/scripts/check-contrast.js (recorded in refresh_kept: the house palette) — ")
+expect("drift: a record with no local blob is shown but NOT honoured (Codex, #451)",
+       res, 0, "CUSTOM: .github/workflows/qa.yml (refresh_kept says \"a local top comment\", but the record binds no local content")
+expect("drift: a file edited since its record was made does not inherit the approval (Codex, #451)",
+       res, 0, "CUSTOM: .github/scripts/lint.py (refresh_kept says \"approved content\", but this file changed since it was recorded")
+expect("drift: a record bound to an OLD template blob no longer covers it: the plain line",
+       res, 0, "CUSTOM: .github/scripts/guard.py — differs", absent="decided against the old template")
+
+# A CRLF rewrite of the approved content, under core.autocrlf: drift hashes the
+# bytes on disk, so it is "changed since recorded", never the approval
+# (Codex, #451).
+r = project("drift-kept-crlf", at=S_FILES, changes={
+    ".github/scripts/check-contrast.js": CONTRAST_LOCAL.replace("\n", "\r\n"),
+}, sync_extra={"refresh_kept": {".github/scripts/check-contrast.js": {
+    "blob": blob_id(H, "templates/scripts/check-contrast.js"), "local": obj_id(CONTRAST_LOCAL),
+    "reason": "the house palette"}}})
+subprocess.run(["git", "-C", str(r), "config", "core.autocrlf", "true"], check=True)
+run(r, "refresh-delta.sh")
+expect("drift: a CRLF rewrite under core.autocrlf is changed since recorded, not the approval",
+       run(r, "refresh-drift.sh"), 0,
+       "CUSTOM: .github/scripts/check-contrast.js (refresh_kept says \"the house palette\", but this file changed")
+
+# A record binding both blobs but giving no reason is not honoured -- the stamp
+# would refuse it, so drift must not say "do not re-ask" (Codex, #451).
+for i, why in enumerate(("", "  \n", None)):
+    rec = {"blob": blob_id(H, "templates/scripts/check-contrast.js"), "local": obj_id(CONTRAST_LOCAL)}
+    if why is not None:
+        rec["reason"] = why
+    r = project(f"drift-kept-noreason{i}", at=S_FILES, changes={
+        ".github/scripts/check-contrast.js": CONTRAST_LOCAL,
+    }, sync_extra={"refresh_kept": {".github/scripts/check-contrast.js": rec}})
+    run(r, "refresh-delta.sh")
+    expect(f"drift: a record with reason {why!r} is shown as needing a reason, never as recorded",
+           run(r, "refresh-drift.sh"), 0,
+           "CUSTOM: .github/scripts/check-contrast.js (refresh_kept has a record but no reason",
+           absent="recorded in refresh_kept")
+
 r = project("drift-pin", at=S_FILES, stamp=S)
 marker(r, "classified").write_text(S)
 expect("drift: it reads Phase 2's pin, not main (a copy current AT the pin is not drift)",
@@ -598,6 +832,35 @@ check("merge: a failed write leaves the file as it was, and no temporary file",
       (r / ".github/workflows/qa.yml").read_text() == before
       and not list((r / ".github/workflows").glob(".refresh-merge.*")),
       f"files: {sorted(p.name for p in (r / '.github/workflows').iterdir())}")
+
+# A kit at the project root (UI_TESTS_DIR folds to `.`, e.g. `x/..`): its files
+# map through refresh_kit_rel, and only names templates/ui-tests ships are the
+# kit's, so a workflow beside it keeps its own template (Codex, #451).
+r = project("merge-rootkit", at=S_FILES, changes={
+    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: x/..\n",
+    "playwright.config.js": "// config\n// local\n",
+    ".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"],
+})
+expect("merge: a file of a kit at the project root merges against templates/ui-tests",
+       run(r, "refresh-merge.sh", "./playwright.config.js", env={"REFRESH_PIN": H}), 0,
+       "LOCAL HUNKS (templates/ui-tests/playwright.config.js at the stamp")
+expect("merge: ...and a workflow beside a root kit still merges against its own template",
+       run(r, "refresh-merge.sh", ".github/workflows/qa.yml", env={"REFRESH_PIN": H}), 0,
+       "LOCAL HUNKS (templates/workflows/qa.yml at the stamp")
+ROOT_KIT = {rel[len("templates/ui-tests/"):]: text for rel, text in H_FILES.items()
+            if rel.startswith("templates/ui-tests/") and not rel.endswith("package-lock.json")}
+r = project("stamp-rootkit", changes={
+    ".github/workflows/ci-monitor.yml": H_FILES["templates/workflows/ci-monitor.yml"].replace(
+        "name: CI Monitor\n", "name: CI Monitor\nenv:\n  UI_TESTS_DIR: x/..\n", 1),
+    **ROOT_KIT,
+    "playwright.config.js": "// config, edited\n",
+    **{".github/scripts/ui-tests/" + k: None for k in ROOT_KIT},
+})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-stamp.sh")
+expect("stamp: a kit at the project root is checked at its root paths, never as ./x",
+       res, 1, "UNAPPLIED: playwright.config.js differs from templates/ui-tests/playwright.config.js",
+       absent="./playwright")
 
 # ---- item 8: the caller set is computed --------------------------------------------
 r = project("callers", changes={".github/actions/ui-suite/action.yml": None,

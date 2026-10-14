@@ -92,6 +92,16 @@ Over git transport, at the pinned head. Per file it prints one of:
 - **`CUSTOM`** — differs from the template at the stamp too: a deliberate local
   edit (or tampering). It gets the diff treatment below, through the 3-way merge
   `refresh-merge.sh` runs, so the local hunks stand apart from upstream's.
+  A `CUSTOM` line reading `(recorded in refresh_kept: <reason>)` after the path
+  is a divergence already decided: the project's `refresh_kept` record for that
+  path binds, read as Phase 3 reads it (keyed by the local path, its `blob` the
+  template's at the pinned head, its `local` the installed copy's). Report it
+  with its reason; do not re-ask. Once upstream changes that template, or the
+  installed copy changes, the record stops binding and the line says so: review
+  it as a fresh question (pilot claude.prop, 2026-10-13; Codex, #451). A record
+  without `local` (recorded before it existed), or without a reason (a
+  non-blank string), is shown but never honoured, here or by the stamp: review
+  that file once and re-record it with its local blob and a reason.
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.
@@ -115,6 +125,19 @@ says keep-and-update. Conflicts are resolved by a person, never written.
 `RETIRED` names a file whose template upstream deleted (today only
 `keepalive.yml`): it is a removal finding, never a project-specific file to
 keep. Delete it, with any secret the line names, in this refresh's PR.
+
+**Which files.** Every installed workflow, every file of every installed
+composite, the `SessionStart` hook, and every installed `.github/scripts/<name>`
+whose template `templates/scripts/<name>` exists at the pinned head (including
+`package.json`). Scripts are classified like the rest, so do **not** diff them
+by hand: take a `STALE` script, and give a `CUSTOM` or `DRIFT` one the
+disposition below. A script with no template is the project's own and gets no
+line; `package-lock.json` (generated, never shipped) and every kit file under a
+UI-test kit directory (`.github/scripts/ui-tests/` or wherever `UI_TESTS_DIR`
+points; a name `templates/ui-tests/` ships, so a kit AT `.github/scripts` leaves
+the standard scripts beside it compared) are not compared here; the kit is covered by *Kit defects* and Phase 2's
+per-file kit diffs (pilot claude.prop, 2026-10-13: five script templates in the
+delta had to be classified by hand).
 
 `.github/actions/*/*`, **not** `*/action.yml`: a composite runs its siblings —
 `ui-suite` invokes `$GITHUB_ACTION_PATH/validate-report-path.py` as its first
@@ -304,6 +327,16 @@ owner before dispositioning anything, because one answer gates four files —
 `.github/scripts` at all (pilots, 2026-10-13: asked late, it reopened finished
 dispositions). The rules that act on the answer are *Workflow refresh rules*
 below: the absent scheduled workflow and its converse, the present starter.
+**Skip the question** when the project has none of `cron-notify.yml`,
+`notify-task.js` and `notify-email.js` (owner ruling, 2026-10-13). Print
+`no scheduled-task files installed -- question skipped` and carry that line
+into the report. Skipping is itself the disposition: the absent
+`cron-notify.yml` and its companions stay absent under the rule below, because
+installing them starts recurring work this project never set up. A project that
+wants a scheduled task adds it as new work, not through a refresh. Keep asking
+when any of the three is present. Likewise use an answer the owner has
+already recorded (in the project's `CLAUDE.md`, say) rather than asking again
+(claude.prop pilot, 2026-10-13).
 
 Then disposition each changed file — classify, don't blindly apply:
 | Class | Disposition |
@@ -320,7 +353,7 @@ project** — map each to its installed location before dispositioning:
 | `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `CUSTOM` or `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops), `STALE` files (unchanged since the stamp) and files absent locally. ⚠️ Four files carry their own rules — `pages-retry.yml`, `pages-deploy.yml`, the Actions-source watchers and `keepalive.yml`: read *Workflow refresh rules* below the table before installing any workflow |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
-| `templates/scripts/*` | `.github/scripts/*` | Diff and confirm — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
+| `templates/scripts/*` | `.github/scripts/*` | Phase 1.5 has already classified each installed one: take a `STALE` script; diff and confirm a `CUSTOM` or `DRIFT` one — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge, through *Settings writes* (Phase 1.5). Install it WITH the hook row below, never alone |
 | `templates/claude-hooks/session-start.sh` | `.claude/hooks/session-start.sh` | Verbatim drop-in, `chmod +x` — and re-apply `chmod +x` on every refresh, since a lost executable bit is invisible to a content diff and a non-executable hook silently never runs. Install it WHENEVER the settings row above is installed, **including when the local path does not yet exist** — this row is exempt from the skip rule below. A registered `SessionStart` hook whose script is missing is a startup error in every subsequent session |
 | `templates/CLAUDE-template.md` | `CLAUDE.md` (written once at bootstrap) | Never overwrite — project-owned; delta is informational only |
@@ -394,7 +427,10 @@ for most workflows restores coverage. For a workflow carrying a **`schedule:`**
 trigger it does not: installing it **creates recurring work**, and there is no
 dormant option because `schedule:` fires. So: **an absent SCHEDULED workflow is
 skipped unless the project has a task for it** (`cron-notify.yml` with a
-bootstrap-stub `notify-task.js` is the worked case). Before declining, confirm it
+bootstrap-stub `notify-task.js` is the worked case). The *Ask first* answer
+decides it, and when that question was skipped because none of the
+scheduled-task files is installed, the workflow stays skipped: nothing here
+says the project has a task. Before declining, confirm it
 is not load-bearing: no `workflow_run` names it, and `workflow-ref-guard` reports
 all required watchers intact without it. Same principle as the carve-outs for
 `pages-retry.yml` and its mirror `pages-deploy.yml` (absent by design on an
@@ -487,7 +523,7 @@ printf '%s\n' "$kit_dirs" | while IFS= read -r d; do   # one path per LINE: a pa
 done
 ```
 `kit-dirs.sh` (in this plugin's `scripts/`) reads the YAML scalar, not the rest
-of the line, and drops a trailing `/`. The accepted value forms are a CLOSED set (#375): unquoted (ending at ` #`),
+of the line, and normalises the path lexically (empty and `.` segments dropped, `x/..` folded), so every equivalent spelling names one kit. The accepted value forms are a CLOSED set (#375): unquoted (ending at ` #`),
 single-quoted with `''`, and double-quoted with `\"` and `\\` only. Anything else —
 another double-quoted escape such as `\x20`, a block or flow scalar, an anchor, a
 `${{ }}` expression — is not decoded, so the literal text is taken as the path and
@@ -694,12 +730,16 @@ delta-independent diff happens to find it. So before stamping, Phase 3 compares
 the installed copies with the templates **at the head being stamped** (one
 depth-1 git fetch of that head) and
 refuses the stamp while one differs or a required one is missing, unless the
-session recorded why it stays. A reason binds to the **template's blob id**,
-which the refusal prints:
+session recorded why it stays. A reason binds to the **template's blob id**
+and to the **installed copy's blob** (`local`; `absent` for a required file not
+installed), both of which the refusal prints, so neither an upstream change nor
+a later local edit inherits the approval. A record without `local` (written
+before it existed) binds nothing: the stamp refuses it like any other, and the
+refusal prints the `local` value to add:
 
 ```bash
-jq --arg p "<local path>" --arg b "<blob id printed with it>" --arg r "<why it stays local>" \
-  '.refresh_kept[$p] = {blob: $b, reason: $r}' .claude/directive-sync.json \
+jq --arg p "<local path>" --arg b "<blob id printed with it>" --arg l "<local blob printed with it>" --arg r "<why it stays local>" \
+  '.refresh_kept[$p] = {blob: $b, local: $l, reason: $r}' .claude/directive-sync.json \
   > .claude/directive-sync.tmp && mv .claude/directive-sync.tmp .claude/directive-sync.json
 ```
 

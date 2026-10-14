@@ -142,12 +142,17 @@ refresh-lib.sh's refresh_kit_rel / refresh_kit_join, and each takes a path as
 the kit's only when templates/ui-tests ships its name. MEASURED: the 954ae12
 refresh-merge.sh fails the root-kit kit-file case, the 954ae12 stamp the
 root-kit refusal case (it printed ./playwright.config.js).
+NO-DELTA STAMP (owner ruling, 2026-10-14, claude.prop pilot). At a head
+already stamped the stamp leaves .claude/directive-sync.json byte-identical:
+`synced` is the date the sha last changed. MEASURED: the daf57e6 stamp fails
+the "unchanged" line and the byte-identical case.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
 # Before any import: running the gate must leave no __pycache__/ beside the
 # local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
 import sys
+from datetime import datetime, timezone
 sys.dont_write_bytecode = True
 
 import json
@@ -573,6 +578,23 @@ expect("stamp: the re-run after recording a reason stamps without refresh-delta.
 check("stamp: a successful stamp consumes the verdict",
       not any(marker(r, n).exists() for n in ("classified", "base", "delta")),
       "a marker survived the stamp")
+check("stamp: a stamp that moves the sha writes it with today's date as synced",
+      json.loads((r / ".claude/directive-sync.json").read_text())["upstream"]
+      == {"sha": H, "synced": datetime.now(timezone.utc).strftime("%Y-%m-%d")},
+      (r / ".claude/directive-sync.json").read_text())
+# A no-delta run at a head already stamped leaves the file BYTE-IDENTICAL: a
+# rewrite only moved `synced` to today, a one-line diff for the stop hook to
+# flag (owner ruling, 2026-10-14, claude.prop pilot).
+r = project("stamp-unchanged", stamp=H)
+before = (r / ".claude/directive-sync.json").read_bytes()
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-stamp.sh")
+expect("stamp: at a head already stamped it says so and exits 0",
+       res, 0, f"stamped: {H} (unchanged; file not rewritten)")
+check("stamp: ...and leaves .claude/directive-sync.json byte-identical",
+      (r / ".claude/directive-sync.json").read_bytes() == before, (r / ".claude/directive-sync.json").read_text())
+check("stamp: ...and still consumes the verdict",
+      not any(marker(r, n).exists() for n in ("classified", "base", "delta")), "a marker survived")
 expect("stamp: with the verdict consumed, a third run refuses as NOT classified",
        run(r, "refresh-stamp.sh"), 1, "was NOT classified")
 

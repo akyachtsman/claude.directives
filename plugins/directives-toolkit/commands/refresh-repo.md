@@ -516,7 +516,7 @@ printf '%s\n' "$kit_dirs" | while IFS= read -r d; do   # one path per LINE: a pa
 done
 ```
 `kit-dirs.sh` (in this plugin's `scripts/`) reads the YAML scalar, not the rest
-of the line, and drops a trailing `/` and a leading `./`. The accepted value forms are a CLOSED set (#375): unquoted (ending at ` #`),
+of the line, and normalises the path lexically (empty and `.` segments dropped, `x/..` folded), so every equivalent spelling names one kit. The accepted value forms are a CLOSED set (#375): unquoted (ending at ` #`),
 single-quoted with `''`, and double-quoted with `\"` and `\\` only. Anything else —
 another double-quoted escape such as `\x20`, a block or flow scalar, an anchor, a
 `${{ }}` expression — is not decoded, so the literal text is taken as the path and

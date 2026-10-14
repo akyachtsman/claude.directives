@@ -703,7 +703,8 @@ expect("drift: a file inside a kit directory kit-dirs.sh names is not compared a
 # The same kit spelled with a leading `./` (a valid equivalent path): kit-dirs.sh
 # drops it, so the prefix match still holds and package.json stays a kit file
 # (Codex, #451).
-for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/")):
+for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/", ".github/scripts/.",
+                              ".github//scripts", ".github/x/../scripts")):
     r = project(f"drift-scripts-kitdir-dot{i}", at=S_FILES, changes={
         ".github/workflows/ci-monitor.yml": f"name: CI Monitor\nenv:\n  UI_TESTS_DIR: {spelling}\n",
         ".github/scripts/package.json": "{}\n",

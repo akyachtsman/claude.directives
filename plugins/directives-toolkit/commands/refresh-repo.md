@@ -328,9 +328,13 @@ owner before dispositioning anything, because one answer gates four files —
 dispositions). The rules that act on the answer are *Workflow refresh rules*
 below: the absent scheduled workflow and its converse, the present starter.
 **Skip the question** when the project has none of `cron-notify.yml`,
-`notify-task.js` and `notify-email.js`: the answer gates nothing. Print
+`notify-task.js` and `notify-email.js` (owner ruling, 2026-10-13). Print
 `no scheduled-task files installed -- question skipped` and carry that line
-into the report. Keep asking when any of the three is present. Likewise use an answer the owner has
+into the report. Skipping is itself the disposition: the absent
+`cron-notify.yml` and its companions stay absent under the rule below, because
+installing them starts recurring work this project never set up. A project that
+wants a scheduled task adds it as new work, not through a refresh. Keep asking
+when any of the three is present. Likewise use an answer the owner has
 already recorded (in the project's `CLAUDE.md`, say) rather than asking again
 (claude.prop pilot, 2026-10-13).
 
@@ -423,7 +427,10 @@ for most workflows restores coverage. For a workflow carrying a **`schedule:`**
 trigger it does not: installing it **creates recurring work**, and there is no
 dormant option because `schedule:` fires. So: **an absent SCHEDULED workflow is
 skipped unless the project has a task for it** (`cron-notify.yml` with a
-bootstrap-stub `notify-task.js` is the worked case). Before declining, confirm it
+bootstrap-stub `notify-task.js` is the worked case). The *Ask first* answer
+decides it, and when that question was skipped because none of the
+scheduled-task files is installed, the workflow stays skipped: nothing here
+says the project has a task. Before declining, confirm it
 is not load-bearing: no `workflow_run` names it, and `workflow-ref-guard` reports
 all required watchers intact without it. Same principle as the carve-outs for
 `pages-retry.yml` and its mirror `pages-deploy.yml` (absent by design on an

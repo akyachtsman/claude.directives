@@ -391,6 +391,13 @@ elif [ "$unapplied" = 1 ]; then
   echo "kept, so refresh-delta.sh need not run again. Stamping now would hide them"
   echo "from every later delta."
   exit 1
+elif [ "$last" = "$head" ]; then
+  # Already stamped at this head: leave the file byte-identical. Rewriting it
+  # only moved `synced` to today, so a refresh that changed nothing left a
+  # one-line diff for the stop hook to flag (owner ruling, 2026-10-14, claude.prop
+  # pilot). `synced` is the date the sha last CHANGED, not the last check.
+  rm -f "$marker" "$base_file" "$delta_file"
+  echo "stamped: $head (unchanged; file not rewritten)"
 else
   # mktemp in the DESTINATION dir: a fixed /tmp name races a second session, and
   # a cross-filesystem mv degrades from an atomic rename to a copy — which is the

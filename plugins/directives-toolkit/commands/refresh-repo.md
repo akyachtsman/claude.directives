@@ -913,7 +913,9 @@ per finding. It lives in a file because a command's arguments are substituted
 into its text on load, and its functions take positional parameters. A project
 with no `.claude/directive-sync.json` yet gets one, starting as `{}`.
 
-**Its exit status is the verdict:** 0 stamped (`stamped: <sha>`); 1 REFUSED — a
+**Its exit status is the verdict:** 0 stamped (`stamped: <sha>`, or
+`stamped: <sha> (unchanged; file not rewritten)` when the stamp was already at
+that head); 1 REFUSED — a
 finding above, or a delta not classified for this head; 2 could not run (the
 head was unreachable, or the write failed). It once exited 0 on a refusal, so
 only its last line told a caller the stamp had not moved (pilots, 2026-10-13).
@@ -922,6 +924,11 @@ written stamp, so after recording a `refresh_kept` or `refresh_declined`
 reason, re-run THIS script alone — `refresh-delta.sh` need not run again unless
 upstream moved, which the stamp detects and refuses on. A stamp that changed
 since Phase 2 listed the delta (a pull, a merge) refuses the same way.
+**`synced` is the date the sha last CHANGED**, not the date of the last check:
+a run at the head already stamped leaves `.claude/directive-sync.json`
+byte-identical, so a refresh that changes nothing leaves no diff to commit
+(owner ruling, 2026-10-14). Do not read `synced` as freshness; the sha is what
+`/env-chk` compares.
 
 **Stamp only a VERIFIED head SHA.** Phases 2 and 3 need nothing from
 `api.github.com` — both run over git transport, which is what lets the stamp

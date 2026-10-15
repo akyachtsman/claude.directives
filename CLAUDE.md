@@ -184,7 +184,7 @@ re-proved against a mutant names its `*_BIN` variable in its header.
 Not in that job, so run them by hand when they apply:
 ```
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
-npx html-validate@10.17.0 docs/site/logical-map.html         # when the map changed (CI runs it every time, same pin)
+npm_config_legacy_peer_deps=true npx html-validate@10.17.0 docs/site/logical-map.html   # when the map changed (CI runs it every time, same pin and env)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js

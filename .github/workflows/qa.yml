@@ -498,6 +498,12 @@ jobs:
       # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
       # here on every run (locally it's only needed when a map changed).
       - name: Validate map HTML
+        # legacy-peer-deps: html-validate declares optional peers (vitest, jest,
+        # jsdom ...). From vitest 5.0.5 (2026-10-15) npm 10's peer-set resolution
+        # crashes on them ("Cannot read properties of null (reading 'edgesOut')")
+        # before html-validate runs. It needs none of them to validate a file.
+        env:
+          npm_config_legacy_peer_deps: 'true'
         run: npx --yes html-validate@10.17.0 docs/site/logical-map.html   # pinned: a new release could turn this red with no change here. 10.x was chosen while this job ran Node 20 (11.x needs >=22.22); the job is on 22 now, so a move to 11.x is its own change
 
       - name: Repo map UI checks

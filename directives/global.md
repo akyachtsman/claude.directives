@@ -1029,7 +1029,8 @@ before reporting "no access":
    `/opt/pw-browsers/chromium`: that symlink names one fixed build (1194,
    Chromium 141, measured 2026-10-08) beside newer ones, whatever version the
    project's Playwright expects. When the launch fails, run the ladder
-   (`test.md` → *Sandboxed local runs*). Known gateway quirk: some hosts reset
+   (`test.md` → *Sandboxed local runs*), which also covers the one exception: a
+   git-excluded local wrapper when only the preinstalled build launches. Known gateway quirk: some hosts reset
    BROWSER-originated connections even when allowlisted —
    ERR_CONNECTION_RESET while curl succeeds means use curl for
    content, and for UI verification serve the project locally

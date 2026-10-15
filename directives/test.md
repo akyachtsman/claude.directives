@@ -555,6 +555,17 @@ Two things that repeatedly get this wrong, both measured on this PR:
   system packages *before* downloading, so without privileges it aborts having
   fetched nothing; a ladder that tried it first would then record a ceiling it
   had manufactured. That is why the plain install comes first.
+- **When the ladder cannot fetch your build but the preinstalled one launches.**
+  If the ladder's install rungs fail (the CDN unreachable, say) and the only
+  browser that starts here is the sandbox's preinstalled one, a LOCAL-ONLY
+  wrapper config that points `launchOptions.executablePath` at it is the
+  exception to `global.md`'s rule against pinning that path. Keep the wrapper out
+  of git (`.git/info/exclude`), so CI and the UI-suite env guard never see it,
+  and report every result from it as run on that build (name the Chromium
+  version), not on the one your Playwright expects. Record the ceiling as the
+  ladder printed it, as above. Measured in `claude.trading` (2026-10-13 and
+  2026-10-15): the ladder could not download its build and only the
+  preinstalled one launched.
 
 Before blaming the code, **falsify any bound you just added** — a timeout or limit
 introduced in the same change is the likeliest culprit and the cheapest to

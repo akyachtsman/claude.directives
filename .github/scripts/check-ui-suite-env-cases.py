@@ -835,6 +835,39 @@ def main():
             else:
                 c.expect(label, code, out, expected, needle)
 
+    # DISCOVERY IN A GIT WORK TREE (claude.trading, 2026-10-15): the kit is listed
+    # with `git ls-files --cached --others --exclude-standard`, so a file the
+    # project ignores or excludes (a local-only wrapper config that never reaches
+    # CI) is not scanned, while an UNSTAGED new spec still is.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        action = root / ".github/actions/ui-suite/action.yml"
+        action.parent.mkdir(parents=True)
+        action.write_text(LIVE.read_text(encoding="utf-8"), encoding="utf-8")
+        kit = root / ".github/scripts/ui-tests"
+        (kit / "tests").mkdir(parents=True)
+        (kit / "tests/app.spec.js").write_text("const w = process.env.GITHUB_WORKSPACE;\n", encoding="utf-8")
+        for args in (["init", "-q"], ["add", "-A"],
+                     ["-c", "user.email=c@x", "-c", "user.name=c", "commit", "-qm", "kit"]):
+            run(["git", *args], cwd=tmp)
+        (kit / "pw.local.config.mjs").write_text("const p = process.env.PW_CHROMIUM;\n", encoding="utf-8")
+        (root / ".git/info/exclude").write_text(".github/scripts/ui-tests/pw.local.config.mjs\n",
+                                                encoding="utf-8")
+        (kit / "ignored.local.js").write_text("const q = process.env.IGNORED_LOCAL;\n", encoding="utf-8")
+        (root / ".gitignore").write_text(".github/scripts/ui-tests/ignored.local.js\n", encoding="utf-8")
+        code, out = run([sys.executable, GUARD], cwd=tmp)
+        extra += 2
+        c.expect("a kit file in .git/info/exclude is not scanned — accepted",
+                 code, out, 0, "spec env exempted, NOT wired (per its recorded reason): GITHUB_WORKSPACE")
+        if "PW_CHROMIUM" in out or "IGNORED_LOCAL" in out:
+            c.fail("a gitignored kit file is not scanned either", f"an ignored file was scanned.\n      {out}")
+        else:
+            c.expect("a gitignored kit file is not scanned either", code, out, 0, "GITHUB_WORKSPACE")
+        (kit / "tests/new.spec.js").write_text("const n = process.env.NEW_UNSTAGED;\n", encoding="utf-8")
+        extra += 1
+        c.expect("an UNSTAGED new spec in a git tree is still discovered — refused",
+                 *run([sys.executable, GUARD], cwd=tmp), 1, "NEW_UNSTAGED is read by")
+
     # PROJECT EXEMPTIONS (PROP6): a project extends ENV_EXEMPT in its own file,
     # never by editing the guard, and every entry must carry a reason. Each
     # refusal has its accepting complement, so neither is bought by the other.

@@ -71,6 +71,7 @@ jobs:
           WF_ID: ${{ github.event.workflow_run.workflow_id }}
           ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           SHA: ${{ github.event.workflow_run.head_sha }}
+          CREATED: ${{ github.event.workflow_run.created_at }}
         run: |
           set -euo pipefail
           echo "Pages deploy run ${RUN_ID} (commit ${SHA:0:7}) failed on attempt ${ATTEMPT}."
@@ -119,6 +120,10 @@ jobs:
           # run may have succeeded, and re-running this one would overwrite it. A cancel
           # by Pages' own concurrency group needs no special case: it happens only when
           # a still newer run was queued, and that run counts.
+          # Every page, not the first 100 (Codex, #458): the list is filtered on the
+          # server to runs created at or after this one, so the pages walked are the
+          # few newer runs, never the workflow's whole history, and each page's count
+          # is summed.
           # Keyed on the workflow ID, NEVER a name: the runs API reports this workflow
           # as "pages build and deployment" (prose, spaces) while the trigger above
           # needs the slug "pages-build-deployment", so a name filter matches nothing,
@@ -138,10 +143,11 @@ jobs:
           # narrow.
           superseded() {
             local counting
-            counting=$(gh api "repos/${REPO}/actions/workflows/${WF_ID}/runs?per_page=100" \
+            counting=$(gh api --paginate \
+              "repos/${REPO}/actions/workflows/${WF_ID}/runs?per_page=100&created=%3E%3D${CREATED}" \
               --jq "[.workflow_runs[] | select(.id > ${RUN_ID})
                      | select(.status != \"completed\" or .conclusion == \"success\" or .conclusion == \"failure\")]
-                    | length" 2>/dev/null) || return 1
+                    | length" 2>/dev/null | awk '{ s += $1 } END { print s + 0 }') || return 1
             case "$counting" in ''|*[!0-9]*) return 1 ;; esac
             [ "$counting" -gt 0 ]
           }

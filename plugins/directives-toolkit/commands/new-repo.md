@@ -288,8 +288,10 @@ Execute in order:
    (`cicd-setup.md` Step 5).
 
 8. **Pre-push verification.** Run the local gate before pushing:
-   - `npx html-validate` on each HTML entry point that exists — none yet at
-     bootstrap (step 4), so this runs from the first build onward
+   - `npm_config_legacy_peer_deps=true npx html-validate` on each HTML entry
+     point that exists — none yet at bootstrap (step 4), so this runs from the
+     first build onward (the env var: since vitest 5.0.5, npm 10 crashes
+     resolving html-validate's optional peers without it)
    - syntax-check the Playwright scripts (`node --check` on each `.js`)
    - validate every workflow's and action's YAML as GitHub reads it
      (`python3 .github/scripts/check-yaml-anchors.py`, installed in step 5)

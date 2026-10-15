@@ -21,8 +21,9 @@ Run in order:
 1. **Pre-flight (local gate).** Before pushing, run the repo's configured
    validation gates — whatever THIS project wires into CI (in `claude.directives`
    itself that's its local gate, `python3 .github/scripts/run-local-gate.py`,
-   which runs `qa.yml`'s whole validate job; a project will have its own) — plus `npx html-validate <changed .html>` for
-   any HTML touched. Fix failures before pushing.
+   which runs `qa.yml`'s whole validate job; a project will have its own) — plus `npm_config_legacy_peer_deps=true npx html-validate <changed .html>`
+   for any HTML touched (the env var: since vitest 5.0.5, npm 10 crashes
+   resolving html-validate's optional peers without it). Fix failures before pushing.
 
 2. **Commit, push, merge — then capture the MERGE commit's SHA.** Commit to the
    working branch and ship it through the PR flow (`git.md` → *PR Lifecycle*);

@@ -106,7 +106,8 @@ Over git transport, at the pinned head. Per file it prints one of:
   paths in the delta and the files they need, so a `CUSTOM` file outside both
   (a project's `qa.yml`, say) never appears in its refusals. Take its local
   blob from `git hash-object --no-filters -- <path>`, the same bytes drift and
-  the stamp hash (claude.trading, 2026-10-15).
+  the stamp hash (claude.trading, 2026-10-15). The line quotes the reason cut
+  to 60 characters; the full text is in the record.
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.
@@ -114,6 +115,13 @@ Over git transport, at the pinned head. Per file it prints one of:
   (`100755` / `100644`). Informational, never `DRIFT` on its own; restore the
   bit unless the project records why it differs.
 - `NO-TEMPLATE`, `CANNOT-VERIFY`, `RETIRED` — below — then one `SUMMARY` line.
+- **`RE-RECORD`** — after `SUMMARY`, only when there are any: the count and
+  paths of every `refresh_kept` file record whose `local` blob is missing or is
+  no longer the file's, **kit files included** (the `CUSTOM` lines reach only
+  files this phase compares, so a kit record otherwise first surfaces as a
+  stamp refusal; claude.prop pilot, 2026-10-15). Each one whose file still
+  differs from its template is a stamp refusal to come: review it and
+  re-record it with its local blob, or drop it.
 
 **The 3-way merge for a `CUSTOM` file** (base = the template at the stamp,
 ours = the installed file, theirs = the pinned template), so every upstream

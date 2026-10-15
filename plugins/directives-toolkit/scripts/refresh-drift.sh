@@ -197,20 +197,28 @@ echo "SUMMARY: $n installed file(s) compared at $pin — $same match, $stale STA
 # loop compares, so a kit record first surfaced as a stamp refusal (claude.prop
 # pilot, 2026-10-15). Said once, up front, with the paths. Directory records
 # (keys ending in `/`) bind a tree, not a local blob, and are not counted.
+# Each key is read RAW (jq -j, one value per call), never through @tsv: @tsv
+# escapes a backslash and `read -r` keeps the escape, so a key holding one
+# hashed a path that does not exist and could never clear (Codex, #457).
 stale_recs=
 nrec=0
-while IFS=$'\t' read -r k l; do
+recs=$(jq -c '[.refresh_kept | if type == "object" then to_entries[] else empty end
+               | select((.key | endswith("/") | not) and (.value | type == "object"))
+               | {k: .key, l: (.value.local // "" | tostring)}]' \
+  .claude/directive-sync.json 2>/dev/null) || recs='[]'
+nk=$(printf '%s' "$recs" | jq 'length' 2>/dev/null) || nk=0
+i=0
+while [ "$i" -lt "${nk:-0}" ]; do
+  k=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].k')
+  l=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].l')
+  i=$((i + 1))
   [ -n "$k" ] || continue
   if [ -e "$k" ]; then cur=$(git hash-object --no-filters -- "$k" 2>/dev/null) || cur=; else cur=absent; fi
   if [ -z "$l" ] || [ "$l" != "$cur" ]; then
     stale_recs="$stale_recs${stale_recs:+, }$k"
     nrec=$((nrec + 1))
   fi
-done <<RECS
-$(jq -r '.refresh_kept | if type == "object" then to_entries[] else empty end
-         | select((.key | endswith("/") | not) and (.value | type == "object"))
-         | [.key, (.value.local // "" | tostring)] | @tsv' .claude/directive-sync.json 2>/dev/null)
-RECS
+done
 if [ "$nrec" -gt 0 ]; then
   echo "RE-RECORD: $nrec refresh_kept file record(s) bind no current local content, kit files included -- the stamp refuses each whose file still differs from its template until it is re-recorded with its local blob (or dropped): $stale_recs"
 fi

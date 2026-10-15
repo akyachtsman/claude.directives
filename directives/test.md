@@ -568,6 +568,12 @@ Two things that repeatedly get this wrong, both measured on this PR:
   ladder printed it, as above. Measured in `claude.trading` (2026-10-13 and
   2026-10-15): the ladder could not download its build and only the
   preinstalled one launched.
+  The wrapper EXTENDS the kit's config, never replaces it. The kit's
+  `playwright.config.js` is an ES module (`export default defineConfig(...)`),
+  so import it and spread its `use`:
+  `import base from './playwright.config.js'; export default { ...base, use: { ...base.use, launchOptions: { ...base.use?.launchOptions, executablePath: '<path>' } } };`.
+  A fresh config, or a `use` without `...base.use`, silently drops `baseURL`
+  and every other shared setting (claude.prop, 2026-10-15).
 
 Before blaming the code, **falsify any bound you just added** — a timeout or limit
 introduced in the same change is the likeliest culprit and the cheapest to

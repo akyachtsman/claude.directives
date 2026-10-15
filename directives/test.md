@@ -311,6 +311,31 @@ higher.)
   not sideways, so `scrollWidth` proves a width cap only where content
   genuinely overflows horizontally. A cap asserted against short content
   passes vacuously.
+- **A satisfied constraint does not say what paid for it.** `scrollWidth <=
+  clientWidth` is green when a flex child shrank, truncated or collapsed to
+  zero to make it fit. So assert the SACRIFICE ORDER alongside the constraint:
+  each protected element keeps its natural size (an icon its intrinsic width,
+  a touch target its minimum), and a shrinkable text child is not ellipsised
+  (`scrollWidth > clientWidth` on a visible label fails it). Measured in
+  `claude.insurance` (2026-10-15): one app bar rendered its brand logo, which
+  was also the link home, at 0px across one band and an ellipsised wordmark
+  ("Ha…") across another, with every overflow assertion passing throughout.
+- **To measure an intrinsic need, neutralise the absorber first.** On a flex
+  container whose children can shrink, the container's `scrollWidth` reports
+  what the layout SETTLED FOR, not what it wanted. Set `flex: none; overflow:
+  visible` on the children, read, then restore. Measured in `claude.insurance`
+  (2026-10-15): a nav breakpoint taken from the un-neutralised reading was
+  1045px, but one child was already squeezed to 55px of its natural 83px; with
+  the absorbers neutralised the bar needed 1130px, and two PRs had been built
+  on the 85px-low number.
+- **Sweep a band densely; a defect between two samples is invisible.** When
+  asserting a layout across a range of widths (a responsive fix, a new
+  breakpoint), sample every ~8px across the band PLUS 1px either side of every
+  media-query boundary, since that is where the layout changes state. A few
+  representative widths only prove those widths. Measured in `claude.insurance`
+  (2026-10-15): two of three defect bands lay entirely between two clean
+  samples. This is the method for that assertion, not a standing CI gate: keep
+  the dense sweep to the band being changed.
 - **Interactions have transitional states, and they are testable.** A dialog
   that hides itself mid-flow, a button disabled during an await, a screen that
   flashes between two paints — assert the state DURING the transition (element

@@ -251,6 +251,9 @@ COMMENT form names the head and the monitor clears the label itself — observed
   *"Codex Review: Didn't find any major issues"* at `ecf9a05` and again at
   `b64ff09` — and the second cleared `codex-flagged` automatically, exactly as the
   monitor intends. `claude.trading` separately observed the reaction-only form.
+  Since 2026-10-15 that comment opens with a hidden `<!-- codex-review-receipt:v1 -->`
+  line before the verdict; the monitor skips leading HTML comments, and a monitor
+  older than that fix never clears on it (#457).
   Which of the three forms (comment, inline reply, reaction) you get is not
   predictable from here.
 

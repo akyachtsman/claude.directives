@@ -323,7 +323,9 @@ higher.)
 - **To measure an intrinsic need, neutralise the absorber first.** On a flex
   container whose children can shrink, the container's `scrollWidth` reports
   what the layout SETTLED FOR, not what it wanted. Set `flex: none; overflow:
-  visible` on the children, read, then restore. Measured in `claude.insurance`
+  visible` on the children (and `flex-wrap: nowrap` on the container, or freed
+  children move to a second line and the reading is one line's width), read,
+  then restore. Measured in `claude.insurance`
   (2026-10-15): a nav breakpoint taken from the un-neutralised reading was
   1045px, but one child was already squeezed to 55px of its natural 83px; with
   the absorbers neutralised the bar needed 1130px, and two PRs had been built

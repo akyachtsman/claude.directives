@@ -209,7 +209,9 @@ recs=$(jq -c '[.refresh_kept | if type == "object" then to_entries[] else empty 
 nk=$(printf '%s' "$recs" | jq 'length' 2>/dev/null) || nk=0
 i=0
 while [ "$i" -lt "${nk:-0}" ]; do
-  k=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].k')
+  # A trailing `.` sentinel, stripped after: command substitution drops trailing
+  # newlines, and a path may end in one (Codex, #457).
+  k=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].k + "."'); k=${k%.}
   l=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].l')
   i=$((i + 1))
   [ -n "$k" ] || continue

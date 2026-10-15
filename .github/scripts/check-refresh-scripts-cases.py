@@ -153,6 +153,9 @@ MEASURED: the f680dd3 drift fails the cut-reason case and the four RE-RECORD
 cases. Round 2 (Codex, #457): each key is read raw, never through @tsv, which
 escapes a backslash. MEASURED: the 9e57ed6 drift fails the backslash case and
 the count case (it counts the bound backslash record: 3, not 2).
+Round 3 (Codex, #457): a key ending in a newline survives command substitution
+(a sentinel). MEASURED: the 7258283 drift fails the newline case and the two
+cases that assert the count (3, not 2).
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -834,9 +837,11 @@ for i, why in enumerate(("", "  \n", None)):
 # are not counted.
 LONG = "x" * 100
 ODD_PATH, ODD_TEXT = "ui\\tests/kept.js", "// kept under a backslash\n"
+NL_PATH = "nl-kept\n"
 r = project("drift-rerecord", at=S_FILES, changes={
     ".github/scripts/check-contrast.js": CONTRAST_LOCAL,
     ODD_PATH: ODD_TEXT,
+    NL_PATH: ODD_TEXT,
 }, sync_extra={"refresh_kept": {
     ".github/scripts/check-contrast.js": {"blob": blob_id(H, "templates/scripts/check-contrast.js"),
                                           "reason": LONG},
@@ -847,6 +852,7 @@ r = project("drift-rerecord", at=S_FILES, changes={
         "local": obj_id(S_FILES["templates/ui-tests/tests/app.spec.js"]), "reason": "bound"},
     ".github/scripts/ui-tests/tests/lib/": {"tree": LIB_TREE, "reason": "helpers inline"},
     ODD_PATH: {"blob": "0" * 40, "local": obj_id(ODD_TEXT), "reason": "bound, under a backslash"},
+    NL_PATH: {"blob": "0" * 40, "local": obj_id(ODD_TEXT), "reason": "bound, name ends in a newline"},
 }})
 run(r, "refresh-delta.sh")
 res = run(r, "refresh-drift.sh")
@@ -860,6 +866,8 @@ expect("drift: a record whose local blob matches, and a directory record, are no
        res, 0, "RE-RECORD:", absent="app.spec.js")
 expect("drift: a key holding a backslash is hashed at its real path, so a matching record is not counted (Codex, #457)",
        res, 0, "RE-RECORD: 2 ", absent="kept.js")
+expect("drift: a key ending in a newline is hashed at its real path, so a matching record is not counted (Codex, #457)",
+       res, 0, "RE-RECORD: 2 ", absent="nl-kept")
 expect("drift: the three stale records of the drift-kept project are named up front",
        DRIFT_KEPT, 0, "RE-RECORD: 3 refresh_kept file record(s)")
 

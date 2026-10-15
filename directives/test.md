@@ -323,23 +323,23 @@ higher.)
 - **To measure an intrinsic need, neutralise the absorber first.** On a flex
   container whose children can shrink, the container's `scrollWidth` reports
   what the layout SETTLED FOR, not what it wanted. Set `flex: none; overflow:
-  visible` on the children (and `flex-wrap: nowrap` on the container, or freed
-  children move to a second line and the reading is one line's width), read,
-  then restore. Measured in `claude.insurance`
+  visible` on the children and `flex-wrap: nowrap; width: max-content` on the
+  container, read, then restore: freed children otherwise wrap to a second
+  line (the reading is one line's width), and a container wider than its
+  content reports its own width, not the content's. Measured in `claude.insurance`
   (2026-10-15): a nav breakpoint taken from the un-neutralised reading was
   1045px, but one child was already squeezed to 55px of its natural 83px; with
   the absorbers neutralised the bar needed 1130px, and two PRs had been built
   on the 85px-low number.
-- **Sweep a band densely; a defect between two samples is invisible.** When
-  asserting a layout across a range of widths (a responsive fix, a new
-  breakpoint), sample every ~8px across the band PLUS every media-query
-  boundary itself and 1px either side of it, since that is where the layout
-  changes state (range queries are inclusive, so `max-width: 768px` and
-  `min-width: 768px` both match at exactly 768). A few
-  representative widths only prove those widths. Measured in `claude.insurance`
+- **Sweep a band at every width; a defect between two samples is invisible.**
+  When asserting a layout across a range of widths (a responsive fix, a new
+  breakpoint), resize one page through EVERY integer width in the band, its
+  media-query boundaries included (range queries are inclusive, so
+  `max-width: 768px` and `min-width: 768px` both match at exactly 768). Any
+  coarser step leaves gaps a defect can sit in. Measured in `claude.insurance`
   (2026-10-15): two of three defect bands lay entirely between two clean
   samples. This is the method for that assertion, not a standing CI gate: keep
-  the dense sweep to the band being changed.
+  the sweep to the band being changed.
 - **Interactions have transitional states, and they are testable.** A dialog
   that hides itself mid-flow, a button disabled during an await, a screen that
   flashes between two paints — assert the state DURING the transition (element

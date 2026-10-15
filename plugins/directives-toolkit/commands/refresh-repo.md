@@ -101,7 +101,12 @@ Over git transport, at the pinned head. Per file it prints one of:
   it as a fresh question (pilot claude.prop, 2026-10-13; Codex, #451). A record
   without `local` (recorded before it existed), or without a reason (a
   non-blank string), is shown but never honoured, here or by the stamp: review
-  that file once and re-record it with its local blob and a reason.
+  that file once and re-record it with its local blob and a reason. Only this
+  line asks for that when the template is unchanged: Phase 3's stamp checks the
+  paths in the delta and the files they need, so a `CUSTOM` file outside both
+  (a project's `qa.yml`, say) never appears in its refusals. Take its local
+  blob from `git hash-object --no-filters -- <path>`, the same bytes drift and
+  the stamp hash (claude.trading, 2026-10-15).
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.

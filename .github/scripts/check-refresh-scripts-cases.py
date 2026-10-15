@@ -156,6 +156,12 @@ the count case (it counts the bound backslash record: 3, not 2).
 Round 3 (Codex, #457): a key ending in a newline survives command substitution
 (a sentinel). MEASURED: the 7258283 drift fails the newline case and the two
 cases that assert the count (3, not 2).
+Round 4 (claude.prop pilot, 2026-10-15): the line of a record that BINDS --
+drift's CUSTOM, the stamp's KEPT, file and kit-directory forms -- is cut to 60
+characters too; and refresh-vars.sh baselines at the commit that WROTE the
+stamp, not the last one touching the sync file. MEASURED against bde28c9: the
+drift fails the binding-cut case, the stamp both KEPT cases, refresh-vars.sh
+the baseline case and the read it hides.
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -669,6 +675,21 @@ for label, key in (("as installed", ".github/scripts/ui-tests/tests/lib/"),
     run(r, "refresh-delta.sh")
     expect(f"stamp: ONE kit-directory entry keyed {label} covers every file under it",
            run(r, "refresh-stamp.sh"), 0, "(directory tests/lib/) helpers stay inline")
+# KEPT lines quote the reason cut to 60 characters, as drift does: a
+# deliberate divergence printed ~900 characters on every refresh (claude.prop
+# pilot, 2026-10-15). Both forms: a file record and a kit-directory record.
+r = project("kept-long", changes=LIB_GONE, sync_extra={"refresh_kept": {
+    ".github/scripts/ui-tests/tests/lib/fixtures.js": {
+        "blob": blob_id(H, "templates/ui-tests/tests/lib/fixtures.js"), "local": "absent",
+        "reason": "f" * 100}}})
+run(r, "refresh-delta.sh")
+expect("stamp: a file record's KEPT line quotes its reason cut to 60 characters (claude.prop pilot, 2026-10-15)",
+       run(r, "refresh-stamp.sh"), 1, f"KEPT: .github/scripts/ui-tests/tests/lib/fixtures.js -- {'f' * 60}...", absent="f" * 61)
+r = project("kitdir-long", changes=LIB_GONE,
+            sync_extra={"refresh_kept": {".github/scripts/ui-tests/tests/lib/": {"tree": LIB_TREE, "reason": "d" * 100}}})
+run(r, "refresh-delta.sh")
+expect("stamp: a kit-directory record's KEPT line is cut the same way",
+       run(r, "refresh-stamp.sh"), 0, f"(directory tests/lib/) {'d' * 60}...", absent="d" * 61)
 r = project("kitdir-stale-tree", changes=LIB_GONE,
             sync_extra={"refresh_kept": {".github/scripts/ui-tests/tests/lib/": {
                 "tree": tree_id(S, "templates/ui-tests/tests/lib"), "reason": "old"}}})
@@ -799,6 +820,17 @@ expect("drift: a file edited since its record was made does not inherit the appr
        res, 0, "CUSTOM: .github/scripts/lint.py (refresh_kept says \"approved content\", but this file changed since it was recorded")
 expect("drift: a record bound to an OLD template blob no longer covers it: the plain line",
        res, 0, "CUSTOM: .github/scripts/guard.py — differs", absent="decided against the old template")
+
+# A record that BINDS quotes its reason cut to 60 characters too: claude.prop's
+# ~900-character qa.yml reason printed in full on every refresh (pilot,
+# 2026-10-15).
+r = project("drift-kept-long", at=S_FILES, changes={".github/scripts/check-contrast.js": CONTRAST_LOCAL},
+            sync_extra={"refresh_kept": {".github/scripts/check-contrast.js": {
+                "blob": blob_id(H, "templates/scripts/check-contrast.js"), "local": obj_id(CONTRAST_LOCAL),
+                "reason": "p" * 100}}})
+run(r, "refresh-delta.sh")
+expect("drift: a binding record's CUSTOM line quotes its reason cut to 60 characters (claude.prop pilot, 2026-10-15)",
+       run(r, "refresh-drift.sh"), 0, f"(recorded in refresh_kept: {'p' * 60}...)", absent="p" * 61)
 
 # A CRLF rewrite of the approved content, under core.autocrlf: drift hashes the
 # bytes on disk, so it is "changed since recorded", never the approval
@@ -1036,6 +1068,24 @@ run(r, "refresh-delta.sh")
 refresh_installs(r, LIVE)
 expect("vars: inert text naming a variable is no baseline read: the live one is listed (Codex, #450)",
        run(r, "refresh-vars.sh"), 0, "OWNER PRE-MERGE: set repository variable APP_URL")
+
+# The baseline is the commit that WROTE the stamp, not the last one touching
+# the sync file: a refresh_kept re-record after a local edit that added a read
+# must not make that read count as run with at the stamp (claude.prop pilot,
+# 2026-10-15). Here commit 2 takes qa-live.yml to the head's (APP_URL) and
+# commit 3 only re-records; the read is still new against the stamp's files.
+r = project("vars-rerecord", at=S_FILES, workflows=LIVE)
+stamp_commit = git(r, "rev-parse", "HEAD")
+refresh_installs(r, LIVE)
+git(r, "commit", "-qam", "local edit: qa-live reads APP_URL")
+set_kept(r, ".github/scripts/check-contrast.js", {"blob": "0" * 40, "local": "0" * 40, "reason": "re-recorded"})
+git(r, "commit", "-qam", "re-record refresh_kept")
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-vars.sh")
+expect("vars: the baseline is the commit that wrote the stamp, not a later re-record (claude.prop pilot, 2026-10-15)",
+       res, 0, f"baseline: project commit {stamp_commit}")
+expect("vars: ...so a read added after the stamp is still listed",
+       res, 0, "OWNER PRE-MERGE: set repository variable APP_URL")
 
 r = project("vars-installed-now", at=S_FILES)
 run(r, "refresh-delta.sh")

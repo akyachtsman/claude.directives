@@ -95,7 +95,8 @@ kit_dir_kept() {
     if [ -n "$tr" ]; then
       why=$(jq -r --arg lk "$1/$d/" --arg tk "templates/ui-tests/$d/" --arg t "$tr" \
         '[.refresh_kept[$lk], .refresh_kept[$tk]] | map(select(type == "object" and .tree == $t))
-         | .[0].reason // empty | select(type == "string" and test("\\S"))' \
+         | .[0].reason // empty | select(type == "string" and test("\\S"))
+         | if length > 60 then .[0:60] + "..." else . end' \
         .claude/directive-sync.json 2>/dev/null) || why=
       if [ -n "$why" ]; then printf '(directory %s/) %s\n' "$d" "$why"; return 0; fi
     fi
@@ -117,14 +118,17 @@ check() {
   # without `local` (written before it existed) binds nothing and refuses; every
   # refusal prints the value to record (Codex, #451). A reason must be a
   # non-blank string, as kit_dir_kept requires. refresh-drift.sh reads it the
-  # same way.
+  # same way. Both KEPT forms quote it cut to 60 characters, as drift does: a
+  # deliberate divergence otherwise printed ~900 characters on every refresh
+  # (claude.prop pilot, 2026-10-15). The full text stays in the record.
   # --no-filters: the blob of the bytes on disk, the bytes `cmp` checks below --
   # never after core.autocrlf or a clean filter, which can map two different
   # files to one id (Codex, #451).
   if [ -e "$1" ]; then lb=$(git hash-object --no-filters -- "$1" 2>/dev/null) || lb=; else lb=absent; fi
   kept=$(jq -r --arg p "$1" --arg b "$b" --arg l "$lb" \
     '.refresh_kept[$p] | select(type == "object" and .blob == $b and .local == $l and $l != "")
-     | .reason // empty | select(type == "string" and test("\\S"))' \
+     | .reason // empty | select(type == "string" and test("\\S"))
+     | if length > 60 then .[0:60] + "..." else . end' \
     .claude/directive-sync.json 2>/dev/null) || kept=
   if [ -n "$kept" ]; then echo "KEPT: $1 -- $kept"; return; fi
   if [ -n "${4:-}" ] && [ "$b" != deleted ] && kept=$(kit_dir_kept "$4" "$2"); then

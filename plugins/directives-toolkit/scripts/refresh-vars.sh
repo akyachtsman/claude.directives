@@ -138,12 +138,26 @@ reads() {
 }
 
 # The baseline is what the project RAN WITH when the stamp was written: its own
-# installed files in the last commit that touched .claude/directive-sync.json
-# (this runs before the stamp, so that is the previous refresh's) -- never the
-# upstream templates at the stamp. So a template this refresh installs for the
-# first time has no baseline, and a CUSTOM copy that dropped a read does not
-# count as reading it (Codex, #450). No such commit: HEAD. Either way printed.
-base=$(git log -1 --format=%H -- .claude/directive-sync.json 2>/dev/null) || base=
+# installed files in the commit that WROTE the current stamp (this runs before
+# the stamp, so that is the previous refresh's) -- never the upstream templates
+# at the stamp. So a template this refresh installs for the first time has no
+# baseline, and a CUSTOM copy that dropped a read does not count as reading it
+# (Codex, #450). That commit is the oldest of the newest unbroken run of commits
+# whose .claude/directive-sync.json carries this upstream.sha, read from each
+# commit's JSON: the last commit that merely TOUCHED the file is a refresh_kept
+# re-record as often as a stamp, and baselining there counted a workflow read
+# added in between as already run with (claude.prop pilot, 2026-10-15). No such
+# commit: the last one touching the file, then HEAD. Either way printed.
+base=
+if [ -n "$stamp" ]; then
+  for c in $(git log --format=%H -- .claude/directive-sync.json 2>/dev/null); do
+    s=$(git show "$c:.claude/directive-sync.json" 2>/dev/null \
+      | jq -r '.upstream.sha // empty' 2>/dev/null) || s=
+    [ "$s" = "$stamp" ] || break
+    base=$c
+  done
+fi
+[ -n "$base" ] || base=$(git log -1 --format=%H -- .claude/directive-sync.json 2>/dev/null) || base=
 [ -n "$base" ] || base=HEAD
 echo "baseline: project commit $base (this project's installed files when the stamp was written; not an upstream SHA)"
 

@@ -330,8 +330,10 @@ higher.)
   on the 85px-low number.
 - **Sweep a band densely; a defect between two samples is invisible.** When
   asserting a layout across a range of widths (a responsive fix, a new
-  breakpoint), sample every ~8px across the band PLUS 1px either side of every
-  media-query boundary, since that is where the layout changes state. A few
+  breakpoint), sample every ~8px across the band PLUS every media-query
+  boundary itself and 1px either side of it, since that is where the layout
+  changes state (range queries are inclusive, so `max-width: 768px` and
+  `min-width: 768px` both match at exactly 768). A few
   representative widths only prove those widths. Measured in `claude.insurance`
   (2026-10-15): two of three defect bands lay entirely between two clean
   samples. This is the method for that assertion, not a standing CI gate: keep

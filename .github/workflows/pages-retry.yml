@@ -122,6 +122,11 @@ jobs:
           # `queue: single`), so the newer deploy's retry could be the one dropped,
           # the older one would then stop here, and nothing would retry at all. This
           # check alone stops the stale overwrite.
+          # KNOWN LIMIT (owner ruling, 2026-10-15): the check and the re-run request
+          # are two API calls, so a newer deploy created in the instant between them
+          # is missed and this re-run still goes ahead. Closing it would mean polling
+          # the re-run and cancelling it, judged not worth its code for a gap that
+          # narrow.
           superseded() {
             local newest
             newest=$(gh api "repos/${REPO}/actions/workflows/${WF_ID}/runs?per_page=1" \

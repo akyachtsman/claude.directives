@@ -100,10 +100,11 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
 # project, never only with the cron kit. An existing manifest is left alone —
 # Step 9f extends it — but it must not declare "type": "module".
 # It makes EVERY .js here CommonJS, the project's own included: an ES-module
-# .js of yours dies with "Cannot use import statement outside a module" the
-# moment this lands, and `node --check` does not catch it. Rename such a file
-# to .mjs, and run your own guards once after installing the manifest
-# (claude.insurance, 2026-10-15).
+# .js of yours that ran before (with no manifest, Node detects ES syntax) dies
+# with "Cannot use import statement outside a module" the moment this lands.
+# Rename such a file to .mjs, and run `node --check` on each script and your
+# own guards once after installing the manifest; both fail on it from then on
+# (claude.insurance, 2026-10-15; node --check measured on Node 22).
 if [ ! -f .github/scripts/package.json ]; then
   curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/package.json \
     -o .github/scripts/package.json

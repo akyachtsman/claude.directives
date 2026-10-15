@@ -146,6 +146,16 @@ NO-DELTA STAMP (owner ruling, 2026-10-14, claude.prop pilot). At a head
 already stamped the stamp leaves .claude/directive-sync.json byte-identical:
 `synced` is the date the sha last changed. MEASURED: the daf57e6 stamp fails
 the "unchanged" line and the byte-identical case.
+RE-RECORD (claude.prop pilot, 2026-10-15). Drift's warning lines quote a
+refresh_kept reason cut to 60 characters, and one RE-RECORD line after SUMMARY
+names every file record, kit files included, whose `local` is missing or stale.
+MEASURED: the f680dd3 drift fails the cut-reason case and the four RE-RECORD
+cases. Round 2 (Codex, #457): each key is read raw, never through @tsv, which
+escapes a backslash. MEASURED: the 9e57ed6 drift fails the backslash case and
+the count case (it counts the bound backslash record: 3, not 2).
+Round 3 (Codex, #457): a key ending in a newline survives command substitution
+(a sentinel). MEASURED: the 7258283 drift fails the newline case and the two
+cases that assert the count (3, not 2).
 
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
@@ -780,7 +790,7 @@ r = project("drift-kept", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("guard.py", "
                                  "reason": "a local top comment"},
 }})
 run(r, "refresh-delta.sh")
-res = run(r, "refresh-drift.sh")
+res = DRIFT_KEPT = run(r, "refresh-drift.sh")
 expect("drift: a CUSTOM script whose record binds template AND local content carries its reason",
        res, 0, "CUSTOM: .github/scripts/check-contrast.js (recorded in refresh_kept: the house palette) — ")
 expect("drift: a record with no local blob is shown but NOT honoured (Codex, #451)",
@@ -819,10 +829,52 @@ for i, why in enumerate(("", "  \n", None)):
            "CUSTOM: .github/scripts/check-contrast.js (refresh_kept has a record but no reason",
            absent="recorded in refresh_kept")
 
+# claude.prop pilot, 2026-10-15: a warning line quoted a ~800-character reason
+# whole, and drift never mentioned the kit's records -- they first surfaced as
+# stamp refusals. The warning quotes 60 characters; one RE-RECORD line after
+# SUMMARY counts and names every FILE record whose `local` is missing or stale,
+# kit files included; a record whose `local` matches, and a directory record,
+# are not counted.
+LONG = "x" * 100
+ODD_PATH, ODD_TEXT = "ui\\tests/kept.js", "// kept under a backslash\n"
+NL_PATH = "nl-kept\n"
+r = project("drift-rerecord", at=S_FILES, changes={
+    ".github/scripts/check-contrast.js": CONTRAST_LOCAL,
+    ODD_PATH: ODD_TEXT,
+    NL_PATH: ODD_TEXT,
+}, sync_extra={"refresh_kept": {
+    ".github/scripts/check-contrast.js": {"blob": blob_id(H, "templates/scripts/check-contrast.js"),
+                                          "reason": LONG},
+    ".github/scripts/ui-tests/playwright.config.js": {
+        "blob": blob_id(H, "templates/ui-tests/playwright.config.js"), "reason": "local config"},
+    ".github/scripts/ui-tests/tests/app.spec.js": {
+        "blob": blob_id(H, "templates/ui-tests/tests/app.spec.js"),
+        "local": obj_id(S_FILES["templates/ui-tests/tests/app.spec.js"]), "reason": "bound"},
+    ".github/scripts/ui-tests/tests/lib/": {"tree": LIB_TREE, "reason": "helpers inline"},
+    ODD_PATH: {"blob": "0" * 40, "local": obj_id(ODD_TEXT), "reason": "bound, under a backslash"},
+    NL_PATH: {"blob": "0" * 40, "local": obj_id(ODD_TEXT), "reason": "bound, name ends in a newline"},
+}})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: a warning line quotes the reason cut to 60 characters (claude.prop pilot, 2026-10-15)",
+       res, 0, f'refresh_kept says "{"x" * 60}...", but the record binds no local content', absent="x" * 61)
+expect("drift: RE-RECORD counts and names every file record lacking a current local blob, kit files included",
+       res, 0, "(or dropped): .github/scripts/check-contrast.js, .github/scripts/ui-tests/playwright.config.js")
+expect("drift: ...and says how many",
+       res, 0, "RE-RECORD: 2 refresh_kept file record(s) bind no current local content")
+expect("drift: a record whose local blob matches, and a directory record, are not counted",
+       res, 0, "RE-RECORD:", absent="app.spec.js")
+expect("drift: a key holding a backslash is hashed at its real path, so a matching record is not counted (Codex, #457)",
+       res, 0, "RE-RECORD: 2 ", absent="kept.js")
+expect("drift: a key ending in a newline is hashed at its real path, so a matching record is not counted (Codex, #457)",
+       res, 0, "RE-RECORD: 2 ", absent="nl-kept")
+expect("drift: the three stale records of the drift-kept project are named up front",
+       DRIFT_KEPT, 0, "RE-RECORD: 3 refresh_kept file record(s)")
+
 r = project("drift-pin", at=S_FILES, stamp=S)
 marker(r, "classified").write_text(S)
 expect("drift: it reads Phase 2's pin, not main (a copy current AT the pin is not drift)",
-       run(r, "refresh-drift.sh"), 0, "0 STALE, 0 CUSTOM, 0 DRIFT")
+       run(r, "refresh-drift.sh"), 0, "0 STALE, 0 CUSTOM, 0 DRIFT", absent="RE-RECORD")
 r = project("drift-nostamp", at=S_FILES, stamp=None)
 expect("drift: with no stamp, stale cannot be told from custom: DRIFT, with the reason",
        run(r, "refresh-drift.sh"), 0, "DRIFT: .github/workflows/ci-monitor.yml (no stamp")

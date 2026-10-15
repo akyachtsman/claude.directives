@@ -47,8 +47,10 @@
 #   MODE: <path>    the executable bit differs from the template's git mode
 #                   (100755 vs 100644). Informational, never DRIFT on its own.
 #   NO-TEMPLATE / CANNOT-VERIFY / RETIRED, as before.
-# then one SUMMARY line with the counts. Exit 0 when files were compared (the
-# lines are questions, not failures), 2 when nothing could be.
+# then one SUMMARY line with the counts, and -- only when there are any -- one
+# RE-RECORD line naming every refresh_kept file record (kit files included)
+# whose `local` blob is missing or is not the file's now. Exit 0 when files
+# were compared (the lines are questions, not failures), 2 when nothing could be.
 # shellcheck source=refresh-lib.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/refresh-lib.sh" \
   || { echo "CANNOT-VERIFY: refresh-lib.sh not loadable — nothing compared, not DRIFT"; exit 2; }
@@ -163,21 +165,25 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     lb=$(git hash-object --no-filters -- "$f" 2>/dev/null) || lb=   # raw bytes, as the stamp
     rec=$(jq -r --arg p "$f" --arg b "$b" \
       '.refresh_kept[$p] | select(type == "object" and .blob == $b)
-       | [(.local // ""),
-          (.reason // "" | if type == "string" and test("\\S") then gsub("[\t\n\r]"; " ") else "" end)]
+       | (.reason // "" | if type == "string" and test("\\S") then gsub("[\t\n\r]"; " ") else "" end) as $r
+       | [(.local // ""), $r, (if ($r | length) > 60 then $r[0:60] + "..." else $r end)]
        | @tsv' \
       .claude/directive-sync.json 2>/dev/null) || rec=
     kept=
     if [ -n "$rec" ]; then
-      rl=${rec%%$'\t'*} why=${rec#*$'\t'}
+      # The warning lines quote the reason cut to 60 characters (in jq, so never
+      # mid-character): one of claude.prop's ran ~800 and buried the verdict
+      # (pilot, 2026-10-15). The full text is the record's, one jq away.
+      rl=${rec%%$'\t'*} rest=${rec#*$'\t'}
+      why=${rest%%$'\t'*} short=${rest#*$'\t'}
       if [ -z "$why" ]; then
         kept=" (refresh_kept has a record but no reason -- review it, then re-record it with one)"
       elif [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
         kept=" (recorded in refresh_kept: $why)"
       elif [ -n "$rl" ]; then
-        kept=" (refresh_kept says \"$why\", but this file changed since it was recorded -- review it again)"
+        kept=" (refresh_kept says \"$short\", but this file changed since it was recorded -- review it again)"
       else
-        kept=" (refresh_kept says \"$why\", but the record binds no local content -- review it, then re-record with its local blob)"
+        kept=" (refresh_kept says \"$short\", but the record binds no local content -- review it, then re-record with its local blob)"
       fi
     fi
     echo "CUSTOM: $f$kept — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
@@ -186,4 +192,36 @@ for f in .github/workflows/*.yml .github/actions/*/* \
 done
 rm -rf "$up"
 echo "SUMMARY: $n installed file(s) compared at $pin — $same match, $stale STALE, $custom CUSTOM, $drift DRIFT, $modes MODE"
+# Every refresh_kept FILE record whose `local` blob is missing or no longer the
+# file's, kit files included: the CUSTOM lines above reach only the files this
+# loop compares, so a kit record first surfaced as a stamp refusal (claude.prop
+# pilot, 2026-10-15). Said once, up front, with the paths. Directory records
+# (keys ending in `/`) bind a tree, not a local blob, and are not counted.
+# Each key is read RAW (jq -j, one value per call), never through @tsv: @tsv
+# escapes a backslash and `read -r` keeps the escape, so a key holding one
+# hashed a path that does not exist and could never clear (Codex, #457).
+stale_recs=
+nrec=0
+recs=$(jq -c '[.refresh_kept | if type == "object" then to_entries[] else empty end
+               | select((.key | endswith("/") | not) and (.value | type == "object"))
+               | {k: .key, l: (.value.local // "" | tostring)}]' \
+  .claude/directive-sync.json 2>/dev/null) || recs='[]'
+nk=$(printf '%s' "$recs" | jq 'length' 2>/dev/null) || nk=0
+i=0
+while [ "$i" -lt "${nk:-0}" ]; do
+  # A trailing `.` sentinel, stripped after: command substitution drops trailing
+  # newlines, and a path may end in one (Codex, #457).
+  k=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].k + "."'); k=${k%.}
+  l=$(printf '%s' "$recs" | jq -j --argjson i "$i" '.[$i].l')
+  i=$((i + 1))
+  [ -n "$k" ] || continue
+  if [ -e "$k" ]; then cur=$(git hash-object --no-filters -- "$k" 2>/dev/null) || cur=; else cur=absent; fi
+  if [ -z "$l" ] || [ "$l" != "$cur" ]; then
+    stale_recs="$stale_recs${stale_recs:+, }$k"
+    nrec=$((nrec + 1))
+  fi
+done
+if [ "$nrec" -gt 0 ]; then
+  echo "RE-RECORD: $nrec refresh_kept file record(s) bind no current local content, kit files included -- the stamp refuses each whose file still differs from its template until it is re-recorded with its local blob (or dropped): $stale_recs"
+fi
 exit 0

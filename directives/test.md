@@ -560,7 +560,9 @@ Two things that repeatedly get this wrong, both measured on this PR:
   browser that starts here is the sandbox's preinstalled one, a LOCAL-ONLY
   wrapper config that points `launchOptions.executablePath` at it is the
   exception to `global.md`'s rule against pinning that path. Keep the wrapper out
-  of git (`.git/info/exclude`), so CI and the UI-suite env guard never see it,
+  of git by listing it in the exclude file `git rev-parse --git-path info/exclude`
+  prints (`.git/info/exclude` in a plain clone; in a linked worktree `.git` is a
+  file), so CI and the UI-suite env guard never see it,
   and report every result from it as run on that build (name the Chromium
   version), not on the one your Playwright expects. Record the ceiling as the
   ladder printed it, as above. Measured in `claude.trading` (2026-10-13 and

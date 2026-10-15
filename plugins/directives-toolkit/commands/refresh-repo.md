@@ -106,8 +106,9 @@ Over git transport, at the pinned head. Per file it prints one of:
   paths in the delta and the files they need, so a `CUSTOM` file outside both
   (a project's `qa.yml`, say) never appears in its refusals. Take its local
   blob from `git hash-object --no-filters -- <path>`, the same bytes drift and
-  the stamp hash (claude.trading, 2026-10-15). The line quotes the reason cut
-  to 60 characters; the full text is in the record.
+  the stamp hash (claude.trading, 2026-10-15). Every `CUSTOM` line, and every
+  `KEPT` line of Phase 3's stamp, quotes the reason cut to 60 characters; the
+  full text is in the record.
 - **`DRIFT`** — differs, and the stamp-era template is unavailable (no stamp,
   its fetch failed, or no such template at the stamp), so stale cannot be told
   from custom: treat it as `CUSTOM` and read the diff.

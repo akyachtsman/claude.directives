@@ -171,15 +171,17 @@ for f in .github/workflows/*.yml .github/actions/*/* \
       .claude/directive-sync.json 2>/dev/null) || rec=
     kept=
     if [ -n "$rec" ]; then
-      # The warning lines quote the reason cut to 60 characters (in jq, so never
-      # mid-character): one of claude.prop's ran ~800 and buried the verdict
-      # (pilot, 2026-10-15). The full text is the record's, one jq away.
+      # Every line quotes the reason cut to 60 characters (in jq, so never
+      # mid-character): one of claude.prop's ran ~800 and buried the verdict,
+      # first on the warning lines, then, on every refresh, on the line of a
+      # record that binds (pilot, 2026-10-15). The full text is the record's,
+      # one jq away. refresh-stamp.sh's KEPT lines cut the same way.
       rl=${rec%%$'\t'*} rest=${rec#*$'\t'}
       why=${rest%%$'\t'*} short=${rest#*$'\t'}
       if [ -z "$why" ]; then
         kept=" (refresh_kept has a record but no reason -- review it, then re-record it with one)"
       elif [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
-        kept=" (recorded in refresh_kept: $why)"
+        kept=" (recorded in refresh_kept: $short)"
       elif [ -n "$rl" ]; then
         kept=" (refresh_kept says \"$short\", but this file changed since it was recorded -- review it again)"
       else

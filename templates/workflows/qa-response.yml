@@ -80,9 +80,8 @@ jobs:
   ui-tests:
     needs: static-checks
     runs-on: ubuntu-latest
-    # 120 is the fleet FLOOR for a ui-suite caller — UI_SUITE_FLOOR in check-job-bounds.py,
-    # which enforces it. Set HIGHER if your suite needs it, never lower, and raise it BEFORE
-    # adding projects. Why 120 (measurements, arithmetic, what it does NOT cover): the
+    # 120 is the fleet FLOOR for a ui-suite caller. Set HIGHER if your suite
+    # needs it, never lower, and raise it BEFORE adding projects. Why 120 (measurements, arithmetic, what it does NOT cover): the
     # CALLER BOUND section of .github/actions/ui-suite/action.yml's header.
     timeout-minutes: 120
 

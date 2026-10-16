@@ -77,7 +77,7 @@ Its own guard: check-run-quoting-cases.py.
 """
 
 # Before any import: running the gate must leave no __pycache__/ beside the
-# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+# local modules it imports (cases_lib.py and/or gh_yaml.py).
 import sys
 sys.dont_write_bytecode = True
 
@@ -91,9 +91,8 @@ import subprocess
 import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# The shared YAML 1.2 reader (templates/scripts/gh_yaml.py): a value is read
+# The shared YAML 1.2 reader (.github/scripts/gh_yaml.py): a value is read
 # as GitHub reads it, not by PyYAML's 1.1 (audit 2026-10-11, I-24).
-sys.path.insert(0, os.path.join(ROOT, "templates", "scripts"))
 import gh_yaml  # noqa: E402
 # Both extensions: GitHub accepts .yml and .yaml for workflows and for action
 # metadata, and a file this list misses is a file the OK line never saw (Codex,

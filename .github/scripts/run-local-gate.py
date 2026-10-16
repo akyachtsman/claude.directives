@@ -55,7 +55,7 @@ Its own guard: .github/scripts/run-local-gate-cases.py.
 """
 
 # Before any import: running the gate must leave no __pycache__/ beside the
-# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+# local modules it imports (cases_lib.py and/or gh_yaml.py).
 import sys
 sys.dont_write_bytecode = True
 
@@ -91,17 +91,16 @@ def env_value(value):
 
 def load(path, allow_anchors=True):
     """The workflow as GitHub reads it: YAML 1.2's core schema, from the shared
-    templates/scripts/gh_yaml.py (`yes`/`on` stay strings, `070` is 70, `080`
+    .github/scripts/gh_yaml.py (`yes`/`on` stay strings, `070` is 70, `080`
     is 80; PyYAML's own 1.1 reading made `070` a 56-minute bound and crashed
     on `080`, audit 2026-10-11 I-4). A merge key is refused everywhere, and a
     composite's action.yml is read with allow_anchors=False, as GitHub's runner
     reads it (2026-10-12)."""
-    sys.path.insert(0, os.path.join(ROOT, "templates", "scripts"))
     try:
         import yaml
         import gh_yaml
     except ImportError as e:
-        raise CannotRun(f"the workflow cannot be read: {e} (PyYAML, and templates/scripts/gh_yaml.py)")
+        raise CannotRun(f"the workflow cannot be read: {e} (PyYAML, and .github/scripts/gh_yaml.py)")
     try:
         with open(path, encoding="utf-8") as handle:
             return gh_yaml.load(handle, allow_anchors=allow_anchors)

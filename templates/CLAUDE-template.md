@@ -38,7 +38,6 @@ This project's look is its own — established at kickoff via `/design-intake`
 | Purpose | Command |
 |---|---|
 | Validate HTML | `npm_config_legacy_peer_deps=true npx html-validate index.html` (the env var stops npm 10 crashing on html-validate's optional peers since vitest 5.0.5; with a `Build:`: run the build, then validate the generated HTML under `SITE_DIR`, never the source root) |
-| Validate workflow YAML | `python3 .github/scripts/check-yaml-anchors.py` (every workflow and `.github/actions/**/action.yml`, read as GitHub reads them) |
 
 ## Project-Specific Security Constraints
 - [List any accepted security trade-offs, e.g. client-side token usage]

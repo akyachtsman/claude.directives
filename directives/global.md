@@ -1200,17 +1200,15 @@ client-side Supabase + RLS.
   must act on the **build output**, and whatever decides whether to run must
   count **build inputs** as changes. Applied to today's workflows, in the same
   change:
-  - **PR QA (`qa.yml`)** runs the same build, serves the build's output
-    directory instead of the repo root, and counts the build inputs (sources,
-    build config) as UI changes alongside `UI_PATHS`. Otherwise a TypeScript- or Tailwind-only PR
-    skips the UI suite, or tests the unbuilt tree. The template does all three
-    once its `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` are set, the first two
-    to the same values as `pages-deploy.yml`.
+  - **PR QA (`qa.yml`)** runs the same build and serves the build's output
+    directory instead of the repo root, on every PR, so it never tests the
+    unbuilt tree. The template does both once its `BUILD_CMD` and `SITE_DIR`
+    are set to the same values as `pages-deploy.yml`; its `BUILD_PATHS` lists
+    the build inputs for the toolkit's Pages edit reminder.
   - **Live QA:** add the deploy workflow's exact `name:`
     ("Pages Deploy" for `pages-deploy.yml`) to `qa-live.yml`'s
-    `workflow_run.workflows`, and list it under `qa-live.yml` in
-    `.github/workflow-ref-required.json` so a later template refresh cannot
-    drop it silently.
+    `workflow_run.workflows`, and keep it through every template refresh: a
+    dropped name fails nothing, the live gate just stops firing.
 
   The first project that opts in checks every workflow it ships against the
   rule above and reports any gap upstream. The deploy is
@@ -1267,8 +1265,7 @@ that a visibility flip can still run it (`docs/standards/automations.md` →
 *Watcher Rules*, W2).
 - **ADD, never replace.** `qa-live.yml` keeps `pages-build-deployment`, with
   your deploy workflow's name (`Pages Deploy` for `pages-deploy.yml`) added
-  alongside, listed under its file in `.github/workflow-ref-required.json` so a
-  refresh that drops it fails the build. The old arm is what runs when a
+  alongside, and kept through every template refresh. The old arm is what runs when a
   visibility flip fires the **legacy managed build** even while Actions-source
   is configured (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
 - **A transiently failed deploy is re-run by hand or by the session.**

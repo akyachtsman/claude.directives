@@ -77,7 +77,7 @@ const GROUPS = {
   'self:ci': {
     label: "This repo's CI & checks",
     blurb: 'qa.yml and its validation scripts — everything below is proven here before it ships.',
-    files: [...listDir('.github/workflows'), ...listDir('.github/scripts'), '.github/workflow-ref-required.json'],
+    files: [...listDir('.github/workflows'), ...listDir('.github/scripts')],
   },
   // Everything else this repo TRACKS: derived as the complement of the export
   // set and the CI group, so a new root or docs file joins it without anyone
@@ -124,9 +124,6 @@ const PLACE = {
     'templates/workflows/qa-live.yml', 'templates/ui-tests/', 'templates/actions/secret-scan/', 'templates/actions/ui-suite/',
     'templates/scripts/check-contrast.js', 'docs/standards/contrast-guardrail.md', 'templates/scripts/check-ui-viewports.js',
     'docs/standards/viewport-classes-history.md',
-    'templates/scripts/check-job-bounds.py', 'templates/scripts/workflow-ref-guard.py',
-    'templates/scripts/check-py-warnings.py', 'templates/scripts/check-ui-suite-env.py',
-    'templates/scripts/check-yaml-anchors.py', 'templates/scripts/gh_yaml.py',
     'docs/standards/pr-mechanics.md', 'docs/standards/code-review-standard.md',
     'docs/standards/ci-triage.md', 'docs/standards/cicd-setup.md'],
   ship: [`${P}/skills/update-pages/`, 'docs/standards/hosting-mechanics.md',
@@ -396,13 +393,7 @@ const FLOW = [
   ['/new-repo', '/refresh-repo', 'det', 'derives the scripts to copy with', 'a', 'Deriving the referenced-script set'],
   ['/new-repo', 'check-ui-viewports.js', 'cop', 'copies', 'a', 'The scripts that serve the kit'],
   ['/new-repo', 'browser-ladder.js', 'cop', 'copies', 'a', 'The scripts that serve the kit'],
-  ['cicd-setup.md', 'check-contrast.js', 'cop', 'copies', 'a', 'runs these six scripts by path'],
-  ['cicd-setup.md', 'workflow-ref-guard.py', 'cop', 'copies', 'a', 'runs these six scripts by path'],
-  ['cicd-setup.md', 'check-job-bounds.py', 'cop', 'copies', 'a', 'runs these six scripts by path'],
-  ['cicd-setup.md', 'check-py-warnings.py', 'cop', 'copies', 'a', 'runs these six scripts by path'],
-  ['cicd-setup.md', 'check-ui-suite-env.py', 'cop', 'copies', 'a', 'runs these six scripts by path'],
-  ['cicd-setup.md', 'check-yaml-anchors.py', 'cop', 'copies', 'a', 'runs these six scripts by path'],
-  ['cicd-setup.md', 'gh_yaml.py', 'cop', 'copies', 'a', 'this sibling, which reads YAML the way GitHub does'],
+  ['cicd-setup.md', 'check-contrast.js', 'cop', 'copies', 'a', 'runs this script by path'],
   ['/new-repo', 'secret-scan', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
   ['/new-repo', 'ui-suite', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
   ['/new-repo', 'ui-tests/', 'cop', 'copies the kit', 'a', 'Install the Playwright kit'],

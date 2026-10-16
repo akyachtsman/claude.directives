@@ -65,8 +65,8 @@ export default defineConfig({
     // `globalTimeout` (run-level, also defaulting to 0) is deliberately NOT set
     // here. The aggregate bound for this suite is the CALLING JOB's
     // timeout-minutes — the ui-suite composite cannot carry per-step timeouts,
-    // so the job already owns that role, and check-job-bounds.py enforces its
-    // floor. A template-level globalTimeout would have to be sized for the
+    // so the job already owns that role, and its floor is kept by hand. A
+    // template-level globalTimeout would have to be sized for the
     // slowest repo in the fleet (the same problem the job floor already solves),
     // and it ABORTS THE RUN rather than failing a test — which is strictly less
     // diagnosable than the per-test timeouts above, and the opposite of what the

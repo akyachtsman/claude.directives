@@ -166,7 +166,7 @@ the baseline case and the read it hides.
 Run: python3 .github/scripts/check-refresh-scripts-cases.py
 """
 # Before any import: running the gate must leave no __pycache__/ beside the
-# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+# local modules it imports (cases_lib.py and/or gh_yaml.py).
 import sys
 from datetime import datetime, timezone
 sys.dont_write_bytecode = True
@@ -910,6 +910,17 @@ run(r, "refresh-delta.sh")
 expect("drift: a retired watcher still installed is RETIRED, not NO-TEMPLATE (#460)",
        run(r, "refresh-drift.sh"), 0, "RETIRED: .github/workflows/pages-retry.yml — upstream deleted this watcher",
        absent="NO-TEMPLATE: .github/workflows/pages-retry.yml")
+# A retired guard script would otherwise read as the project's own script and be
+# kept in silence; a retired JSON input is outside every other glob (#460 step 2).
+r = project("drift-retired-guard", at=S_FILES, changes={
+    ".github/scripts/check-job-bounds.py": "print('old guard')\n",
+    ".github/workflow-ref-required.json": "{}\n"})
+run(r, "refresh-delta.sh")
+res = run(r, "refresh-drift.sh")
+expect("drift: a retired guard script still installed is RETIRED, not silently kept (#460)",
+       res, 0, "RETIRED: .github/scripts/check-job-bounds.py — upstream deleted this guard")
+expect("drift: a retired guard input file is RETIRED too (#460)",
+       res, 0, "RETIRED: .github/workflow-ref-required.json — upstream deleted this guard")
 
 r = project("drift-pin", at=S_FILES, stamp=S)
 marker(r, "classified").write_text(S)

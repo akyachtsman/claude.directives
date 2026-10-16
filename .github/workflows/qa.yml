@@ -106,43 +106,6 @@ jobs:
       # over-reaches — see the header of check-claims.js before trusting a green.
       - name: Check canonical claims reached their consumers
         run: node .github/scripts/check-claims.js
-      # A compile warning in a GUARD is a scheduled outage, not a lint nit: the
-      # same defect is invisible on 3.11, shown on 3.12, and fatal on 3.15, at
-      # which point the guard stops running and stops checking. Script header
-      # carries the full reasoning.
-      - name: Check the Python guards compile without warnings
-        run: python3 templates/scripts/check-py-warnings.py
-
-      - name: Workflow cross-reference guard
-        run: python3 templates/scripts/workflow-ref-guard.py
-
-      # The guard's value is being trusted when it is QUIET, so a parser regression
-      # in it is silent by construction: zero references found, success printed, the
-      # dangling watcher through. These cases pin both directions — every valid form
-      # it must read, and every dangling name it must still catch.
-      - name: Check the cross-reference guard reads YAML correctly
-        run: python3 .github/scripts/workflow-ref-guard-cases.py
-
-      # Presence, sanity ceiling, and a floor for browser jobs — all three,
-      # because #238's defect DECLARED a bound on every broken job; the value
-      # was the fault, and a presence check reports health on exactly that.
-      - name: Check every job carries a usable bound
-        # --include-templates is THIS repo's flag and only this repo's: it adds
-        # templates/workflows to the scan, where #238's defect lived while the
-        # live workflows were fine. It replaced four attempts to DETECT which
-        # repo was running, each forged by a legitimate downstream layout. Do
-        # not remove it — a downstream copy simply omits it.
-        run: python3 templates/scripts/check-job-bounds.py --include-templates
-
-      # Same doctrine as the viewport gate's own guard below: this check is
-      # trusted when it is QUIET, and #334 is what that costs — an expression
-      # -bounded ui-suite caller skipped the 120-minute floor and the pass line
-      # asserted the floor anyway. The refusal cases hand the guard a bound it
-      # can SEE and cannot READ, and each is paired with a twin that must NOT
-      # fail, because the exemption for jobs carrying no floor is deliberate.
-      - name: Check the job-bounds guard itself reads workflows correctly
-        run: python3 .github/scripts/check-job-bounds-cases.py
-
       # The toolkit's PreToolUse gates had no case suite; the 2026-10-06 audit
       # found three false allows inside the shapes they claim to catch.
       - name: Check the toolkit's push and wait gates block what they claim
@@ -176,21 +139,6 @@ jobs:
             node --check "$f" || exit 1
             echo "OK: $f"
           done
-
-      # Every workflow and action file, parsed as GitHub parses it. It replaced
-      # an inline yaml.safe_load over the same files, which accepted what GitHub
-      # refuses: an anchor or alias in an action.yml ("Anchors are not currently
-      # supported") and a merge key (`<<`) anywhere, so such a file passed here
-      # and failed in every project that copied it (2026-10-12).
-      # --include-templates as in the job-bounds step above: this repo's flag.
-      - name: Check workflow and action YAML parses as GitHub parses it
-        run: python3 templates/scripts/check-yaml-anchors.py --include-templates
-
-      # Nothing here uses either construct, so the guard above prints the same
-      # OK whether its rules work or do nothing. Drive a mutated copy (with its
-      # gh_yaml.py beside it) with CHECK_YAML_ANCHORS_BIN to re-prove it.
-      - name: Check the YAML anchor guard enforces what it claims
-        run: python3 .github/scripts/check-yaml-anchors-cases.py
 
       # The SessionStart hook runs at the start of every web session in this repo
       # and in every project scaffolded from the template. A syntax error there
@@ -239,31 +187,11 @@ jobs:
       - name: Check the shipped Playwright config declares three viewport classes
         run: node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests
 
-      # Same reasoning as "Check the cross-reference guard reads YAML correctly"
-      # above: this gate's value is being trusted when it is QUIET, so a regression
+      # This gate's value is being trusted when it is QUIET, so a regression
       # in it is silent by construction. Three static readers already failed here
       # with twelve findings and every failure mode was silent (#282).
       - name: Check the viewport gate itself reads configs correctly
         run: node .github/scripts/check-ui-viewports-cases.js
-
-      # The viewport gate IMPORTS the config, so it evaluates whatever that config
-      # computes from process.env. Give it a thinner environment than the step
-      # that runs the suite and the two read different configs — a selection key
-      # conditional on TEST_AUTH_CREDENTIAL is invisible to one and active in the
-      # other (Codex reproduced it on #333). The composite now copies the run
-      # step's env onto the check step; this keeps that copy honest, since a
-      # comment saying "add it here too" is not a mechanism.
-      # The guard ships to projects (PROP6), so its defaults are a project's paths;
-      # this repo points it at the templates it ships.
-      - name: Check the ui-suite composite gives both steps the same environment
-        run: python3 templates/scripts/check-ui-suite-env.py templates/actions/ui-suite/action.yml --kit-dir templates/ui-tests
-
-      # Same doctrine as the viewport gate's own guard above. This one was
-      # hand-verified for three rounds and a previously-working branch broke
-      # unnoticed (#333 round 11) — a guard whose failure path nobody exercises
-      # is a guard that reports a traceback instead of its finding.
-      - name: Check the composite env guard itself reports correctly
-        run: python3 .github/scripts/check-ui-suite-env-cases.py
 
       # The report-path validator is the only thing between the ui-suite's
       # `report-path` input and three consumers, one of which is an artifact

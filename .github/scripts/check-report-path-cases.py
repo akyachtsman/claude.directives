@@ -38,7 +38,7 @@ Run: python3 .github/scripts/check-report-path-cases.py
 #   composite, so nothing else here would notice it break; three of #347's
 #   rounds found defects in it. Re-prove with CHECK_REPORT_PATH_BIN=<mutant>
 # Before any import: running the gate must leave no __pycache__/ beside the
-# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+# local modules it imports (cases_lib.py and/or gh_yaml.py).
 import sys
 sys.dont_write_bytecode = True
 

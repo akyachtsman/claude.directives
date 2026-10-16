@@ -100,7 +100,7 @@ the three CommonJS refusals fail; their accepting complements pass on both.
 #   failure)
 
 # Before any import: running the gate must leave no __pycache__/ beside the
-# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+# local modules it imports (cases_lib.py and/or gh_yaml.py).
 import sys
 sys.dont_write_bytecode = True
 

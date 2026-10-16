@@ -105,7 +105,7 @@ is added by the pass that finds it.
 ## GitHub
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
-| Where GitHub accepts YAML anchors, aliases and merge keys | `templates/scripts/gh_yaml.py`, the *ANCHORS, ALIASES AND MERGE KEYS* paragraph of its header | 2026-10-12 | github/docs `content/actions/reference/workflows-and-actions/reusing-workflow-configurations.md` (anchors, workflows only) and `metadata-syntax.md` (no anchors); actions/runner `src/Runner.Worker/ActionManifestManagerWrapper.cs` and the manifest's `YamlObjectReader` (`allowAnchors` off); actions/languageservices `workflow-parser/src/workflows/yaml-object-reader.ts` (aliases resolved, `<<` never merged). Anchors become usable when the runner reads manifests with them on: then lift the action-file refusal in `check-yaml-anchors.py` and `run-local-gate.py` |
+| Where GitHub accepts YAML anchors, aliases and merge keys | `.github/scripts/gh_yaml.py`, the *ANCHORS, ALIASES AND MERGE KEYS* paragraph of its header | 2026-10-12 | github/docs `content/actions/reference/workflows-and-actions/reusing-workflow-configurations.md` (anchors, workflows only) and `metadata-syntax.md` (no anchors); actions/runner `src/Runner.Worker/ActionManifestManagerWrapper.cs` and the manifest's `YamlObjectReader` (`allowAnchors` off); actions/languageservices `workflow-parser/src/workflows/yaml-object-reader.ts` (aliases resolved, `<<` never merged). Anchors become usable when the runner reads manifests with them on: then lift the action-file refusal in `run-local-gate.py` |
 | The Ubuntu release `ubuntu-latest` resolves to | `.github/scripts/run-local-gate.py` → `UBUNTU_LATEST`; `templates/actions/ui-suite/action.yml`, the `Install Playwright browsers` step | 2026-10-12 | The label table in the README of `actions/runner-images` (raw.githubusercontent.com/actions/runner-images/main/README.md) and its Announcement issues: #14748 moves the label to 26.04 runner by runner from 2026-10-19, done by 2026-11-19 |
 | API quotas and which calls are REST vs GraphQL | `git.md` → *GitHub API Quota Economy* | 2026-10-11 | `GET /rate_limit`; GitHub REST and GraphQL docs |
 | What the session proxy lets through (`api.github.com`, git) | `plugins/directives-toolkit/commands/env-chk.md` | 2026-10-11 | A read-only curl and `git ls-remote` from this session |
@@ -166,5 +166,5 @@ is added by the pass that finds it.
 | Topic | Source | Last checked | Check |
 |---|---|---|---|
 | Auto-skill eval baseline | `docs/internal/skill-eval-notes.md` | 2026-09-29 | ⏳ The next time an auto-skill description changes and the eval is run |
-| What sizes the 120-minute UI-suite timeout floor | `templates/scripts/check-job-bounds.py` (header, rule 3) | never verified; first entered 2026-09-24 (reported 2026-10-12) | ⏳ The next slow-end fleet UI run's timings |
+| What sizes the 120-minute UI-suite timeout floor | `templates/actions/ui-suite/action.yml` (header, CALLER BOUND) | never verified; first entered 2026-09-24 (reported 2026-10-12) | ⏳ The next slow-end fleet UI run's timings |
 | Fleet auth-scenario and request timings | `test.md` → *Playwright* | 2026-08-25 | ⏳ The next session in those repos |

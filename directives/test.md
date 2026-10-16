@@ -29,8 +29,7 @@ Agents arrive via the `directives-toolkit` plugin (see `global.md` → *Skill Bo
 - `ui-tester` — Playwright browser testing agent
 - `supabase` — data/backend specialist (per `data.md`)
 
-The full pipeline orchestrator is the `/qa-pipeline` **command**, not an agent:
-it runs in the main session because a subagent cannot spawn subagents.
+No command orchestrates them: the session runs them itself, per *QA before merge* below.
 
 Code review and security review are **not** toolkit agents — they come from
 Anthropic-official sources (owner ruling, 2026-10-07), enabled in each project's
@@ -52,9 +51,37 @@ preferred over one this toolkit would have to keep current itself.
 
 The test-verifier report format lives inline in its agent definition inside the
 plugin; code/security review findings are written to `.agent-reports/` by the
-official reviewers per `/qa-pipeline`'s adapter instructions. Workflow and
+official reviewers (*QA before merge*). Workflow and
 Playwright-kit installation is `docs/standards/cicd-setup.md`'s job — don't
 re-derive it from the tree.
+
+## QA before merge (owner ruling, 2026-10-16)
+Before a PR leaves draft, the **main session** launches the QA agents itself, one
+level down (a subagent cannot spawn subagents), choosing each call's `model` per
+`global.md` → *Subagent Model Selection*. Pass each one the branch, the changed
+files (`git diff --name-only origin/main...HEAD`), the app URL, `.agent-reports/`
+and the PR number. Every report goes under `.agent-reports/`.
+1. **`test-verifier`** — tests, lint, syntax, secrets. Wait for it.
+2. **`ui-tester`, at most 3 rounds.** Pass `round: <N> of 3` and, from round 2,
+   the previous `.agent-reports/ui-test-report.md`. On a fail with a targeted
+   fix, apply the minimum fix yourself, run `/commit-chk`, commit, push, and confirm the
+   deploy serves that commit before the next round. After 3 rounds without a
+   pass, or on an escalation, stop the loop, tell the owner, and still go on to
+   step 3 so the picture is complete. A report whose
+   *Occlusion & Transition Evidence* section is empty did not run that phase:
+   count it as a skipped phase, never a pass.
+3. **Reviews, in parallel:** `pr-review-toolkit:code-reviewer` and
+   `pr-review-toolkit:pr-test-analyzer` (if the plugin is missing, the built-in
+   `/code-review` replaces the first and the second is skipped); plus
+   `/security-review` when the change touches auth, sessions or credentials,
+   tokens or secrets, GitHub Actions secrets or environment variables, HTML
+   built from user or API strings, external calls, dependencies, or
+   infrastructure, hosting and CORS config.
+4. **`pr-readiness-reviewer`**, last, after the reviews are collected.
+
+Batch it: run the sequence once over a batch of finished tasks, not per task.
+⛔ Nothing else writes the checkout while the agents read it; other work goes
+into an isolated worktree and lands after.
 
 ## Session start — required actions
 
@@ -631,11 +658,10 @@ claiming the failure pre-existed the change needs a run on the parent commit.
 - Workflow YAML is validated on every CI run — keep it parseable
 
 ## Circuit breakers (autonomous fix loops)
-When fixing failures without a human in the loop (the `/qa-pipeline` ui-tester
-loop, CI triage), stop before thrashing:
+When fixing failures without a human in the loop (CI triage, or the ui-tester
+loop in *QA before merge*), stop before thrashing:
 - **Cap attempts** — at most 3 fix attempts on the same failure, then escalate
-  (the `global.md` 3-failures gate; `/qa-pipeline` already enforces this for the
-  ui-tester loop).
+  (the `global.md` 3-failures gate; the ui-tester loop's 3 rounds are this cap).
 - **Watch the diff** — if a "fix" balloons or starts touching files unrelated to
   the failure, stop: that signals the diagnosis is wrong. Re-diagnose from the
   evidence rather than piling on more changes.

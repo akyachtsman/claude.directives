@@ -31,7 +31,7 @@ menu stays accurate as the toolkit changes:
 End with: "Every command runs when you type it. Commands marked (typed only)
 run ONLY then; Claude may also start any other one itself when a step or a
 directive calls for it — `/kickoff` runs `/new-repo`, `/sdd-loop` runs
-`/qa-pipeline`, and `/learn` fires when a session surfaces a durable lesson.
+the QA agents, and `/learn` fires when a session surfaces a durable lesson.
 Auto-skills fire on description match. Phases mirror
 `docs/guides/dev-pipeline.md`."
 

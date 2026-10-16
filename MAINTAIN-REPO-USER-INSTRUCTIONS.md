@@ -342,7 +342,7 @@ CI-validated by `check-exports.js` so they can't rot:
   permanent in its entirety is named once in `swap.permanent_domains`, and
   `check-exports.js` expands it over the records: never mark one of its records
   `"swap": "permanent"` (the check fails on such a record, and on an unknown domain name).
-  **Orchestrators** (`"swap": "orchestrator"`: `sdd-loop` for development, `/qa-pipeline` for testing)
+  **Orchestrators** (`"swap": "orchestrator"`: `sdd-loop` for development)
   are permanent AND define the interfaces components must fit — **a new
   component does not exist until its orchestrator sequences it**. A record
   with no `swap` is swappable.

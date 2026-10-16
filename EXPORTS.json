@@ -104,7 +104,6 @@
     "templates/styles/": { "domain": "design", "compartment": "contract", "class": "artifact" },
     "templates/scripts/check-contrast.js": { "domain": "design", "compartment": "guards", "class": "mechanical" },
     "directives/test.md": { "domain": "test", "compartment": "core", "class": "standard", "swap": "permanent" },
-    "plugins/directives-toolkit/commands/qa-pipeline.md": { "domain": "test", "compartment": "core", "class": "orchestrator", "swap": "orchestrator" },
     "templates/workflows/qa.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/workflows/qa-response.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/actions/ui-suite/": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
@@ -152,7 +151,6 @@
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
         "directives/test.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "directives/git.md",
         "plugins/directives-toolkit/commands/sdd-loop.md",
         "templates/CLAUDE-template.md",
@@ -166,7 +164,6 @@
       "serves": "test.review",
       "sockets": [
         "directives/test.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "directives/git.md",
         "plugins/directives-toolkit/commands/sdd-loop.md",
         "plugins/directives-toolkit/commands/audit-repo.md"
@@ -178,8 +175,7 @@
       "sockets": [
         "scripts/install-toolkit.sh",
         "templates/claude-settings.json",
-        "directives/test.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md"
+        "directives/test.md"
       ]
     },
     "security-review-builtin": {
@@ -187,7 +183,6 @@
       "serves": "global.security",
       "sockets": [
         "directives/test.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "templates/CLAUDE-template.md",
         "templates/pr-checklist.md",
         "plugins/directives-toolkit/agents/test-verifier.md",
@@ -211,10 +206,18 @@
         "docs/standards/session-mechanics.md",
         "directives/test.md",
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md",
         "plugins/directives-toolkit/skills/update-pages/SKILL.md",
         "directives/global.md",
         "templates/claude-settings.json"
+      ]
+    },
+    "agent-tool": {
+      "vendor": "Anthropic (Claude Code built-in tool)",
+      "serves": "test.verify",
+      "names": ["Agent"],
+      "sockets": [
+        "directives/test.md",
+        "plugins/directives-toolkit/commands/sdd-loop.md"
       ]
     },
     "github-conversation-resolution": {
@@ -563,7 +566,7 @@
       "names": [
         "Workflow"
       ],
-      "rationale": "The workflow-authoring skill and the Workflow tool it writes scripts for: a script that orchestrates many subagents in the background (code.claude.com/docs/en/workflows). Its shape fits qa-pipeline, a fixed multi-agent sequence, and it runs from the top level, which matters because sub-agent nesting is off in this cloud environment (TIME-SENSITIVE.md, Models & sub-agents). Rejected for its opt-in cost, not its fit: Claude may start a workflow only when the user opts in. The skill's own description says it is for a workflow the user already opted into and does not itself authorize running one; the docs make the opt-in the user's own typed request or ultracode, and in manual permission mode the launch also asks for approval on every run. /sdd-loop runs the pipeline itself after every task, unattended, so the pipeline cannot depend on a per-run opt-in. Resolution (owner-approved, 2026-10-11 audit, I-25): qa-pipeline becomes a top-level toolkit command instead. Re-judge if a plugin-shipped workflow can be started by a command without the user's per-run opt-in.",
+      "rationale": "The workflow-authoring skill and the Workflow tool it writes scripts for: a script that orchestrates many subagents in the background (code.claude.com/docs/en/workflows). Its shape fits qa-pipeline, a fixed multi-agent sequence, and it runs from the top level, which matters because sub-agent nesting is off in this cloud environment (TIME-SENSITIVE.md, Models & sub-agents). Rejected for its opt-in cost, not its fit: Claude may start a workflow only when the user opts in. The skill's own description says it is for a workflow the user already opted into and does not itself authorize running one; the docs make the opt-in the user's own typed request or ultracode, and in manual permission mode the launch also asks for approval on every run. /sdd-loop runs the pipeline itself after every task, unattended, so the pipeline cannot depend on a per-run opt-in. Resolution (owner-approved, 2026-10-11 audit, I-25): qa-pipeline became a top-level toolkit command instead; 2026-10-16 (owner ruling, #460 step 3) that command was retired too, and the session launches the QA agents itself per directives/test.md -> QA before merge, which needs no opt-in. Re-judge if a plugin-shipped workflow can be started without the user's per-run opt-in.",
       "stays": "plugins/directives-toolkit/commands/sdd-loop.md"
     },
     "math-proof": {
@@ -630,8 +633,8 @@
     "engineering": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "knowledge-work-plugins engineering (Cowork-first): /standup, /review (a code-review skill also named code-review), /debug, /architecture, /incident, /deploy-checklist, plus ten MCP connectors (Slack, PagerDuty, Datadog, ...). Its review lane is already delegated to pr-review-toolkit and the built-in /code-review and /security-review through qa-pipeline; /debug and /architecture overlap /diagnose; /deploy-checklist overlaps /commit-chk and update-pages. Its code-review skill name would shadow the built-in /code-review the directives name.",
-      "stays": "plugins/directives-toolkit/commands/qa-pipeline.md"
+      "rationale": "knowledge-work-plugins engineering (Cowork-first): /standup, /review (a code-review skill also named code-review), /debug, /architecture, /incident, /deploy-checklist, plus ten MCP connectors (Slack, PagerDuty, Datadog, ...). Its review lane is already delegated to pr-review-toolkit and the built-in /code-review and /security-review through directives/test.md -> QA before merge; /debug and /architecture overlap /diagnose; /deploy-checklist overlaps /commit-chk and update-pages. Its code-review skill name would shadow the built-in /code-review the directives name.",
+      "stays": "directives/test.md"
     },
     "plugin-management": {
       "vendor": "Anthropic",

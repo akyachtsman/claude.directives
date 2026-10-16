@@ -1,6 +1,6 @@
 ---
 name: ui-tester
-description: "Use this agent when the deployed (or locally served) app needs exploratory browser testing with Playwright. Typical triggers include step 2 of /qa-pipeline (one round of its bounded fix loop, with the round number passed in), a UI change that needs proof it renders and works, and a login or navigation failure that needs diagnosing. It discovers auth, exercises interactive elements, captures API calls and reports anomalies; it runs after test-verifier. See \"When to invoke\" in the agent body."
+description: "Use this agent when the deployed (or locally served) app needs exploratory browser testing with Playwright. Typical triggers include step 2 of test.md's QA before merge (one round of its bounded fix loop, with the round number passed in), a UI change that needs proof it renders and works, and a login or navigation failure that needs diagnosing. It discovers auth, exercises interactive elements, captures API calls and reports anomalies; it runs after test-verifier. See \"When to invoke\" in the agent body."
 tools: Read, Glob, Grep, Bash, Write, Edit
 model: inherit
 color: cyan
@@ -12,7 +12,7 @@ exception: they come from the environment, never from a file in the repo.
 
 ## When to invoke
 
-- **A `/qa-pipeline` round.** The caller passes `round: <N> of 3` and, from round 2, the previous report; return the Feedback Loop result.
+- **A QA round** (`test.md` → *QA before merge*, step 2). The caller passes `round: <N> of 3` and, from round 2, the previous report; return the Feedback Loop result.
 - **Rendered proof of a UI change.** Static checks cannot show that a page renders and its controls work; this agent drives the real page.
 - **Diagnosing an auth or navigation failure** from the structured errors and the auth-diagnostics attachment.
 
@@ -42,7 +42,7 @@ Performs autonomous exploratory browser testing against the deployed app. Discov
    - **CI-build opt-in** (`Build:` records one): run the build first, exactly as CI does: `bash -eo pipefail -c "$BUILD_CMD"` on Node 22 (CI pins it for the build and the kit alike: check `node --version` first, and on another major switch to 22 if you can, else report the mismatch rather than a result), with `BUILD_CMD` from the top-level `env:` of `.github/workflows/qa.yml`, from the repo root. Then resolve the output directory as `qa.yml` does: `src="${SITE_DIR%/}"; [ -n "$src" ] || src=.` (`SITE_DIR` from the same env), prefixing `./` only when `$src` starts with `-` so it stays a path, not an option. Serve it: `<test dir>/node_modules/.bin/http-server "$src" -p 8080 --silent &`. Never serve the repo root there; that is the unbuilt source, and a green run against it proves nothing about the deployed site. Each of these is the finding: report it and stop, rather than falling back to the root. A failed build; a missing `"$src/index.html"`; a `Build:` with an empty `BUILD_CMD`; a `$src` that resolves outside the repository (`realpath -e`); or any symlink in the output outside a `.git`, `.github` or `node_modules` directory (the deploy drops those, and `qa.yml` skips them; scan the resolved directory, as `qa.yml` does, so a `SITE_DIR` that is itself an in-repo link is not counted: `(cd "$(realpath -e -- "$src")" && find . \( -name .git -o -name .github -o -name node_modules \) -prune -o -type l -print)`, scanned from inside so those names are excluded only below the root). `qa.yml` and `pages-deploy.yml` refuse the last two
 6. Run the full spec — capture all results even if some phases fail
 7. Write findings to `.agent-reports/ui-test-report.md` after every run
-8. Escalate after 3 unsuccessful fix cycles for the same issue. A one-shot run cannot count them, so the caller (`/qa-pipeline`) passes `round: <N> of 3` and, from round 2, the previous round's report: compare against it, and on round 3 with the same failure and no improvement set `Escalate: yes`. A run given no round is round 1
+8. Escalate after 3 unsuccessful fix cycles for the same issue. A one-shot run cannot count them, so the calling session passes `round: <N> of 3` and, from round 2, the previous round's report: compare against it, and on round 3 with the same failure and no improvement set `Escalate: yes`. A run given no round is round 1
 9. After the first successful run, add the project-specific scenarios: see *Project-Specific Scenarios* below.
 
 ### Phase 1 — Page Load & Auth Discovery
@@ -295,7 +295,7 @@ Pass: X / Fail: Y / Findings: Z
 forced past their limit with rendered vs scroll extents; transitional states
 asserted mid-operation; screenshot paths under .agent-reports/screenshots/
 with a note that they were LOOKED at. Empty section = Phase 6 did not run —
-/qa-pipeline must treat that as a skipped phase, not a pass.>
+the caller must treat that as a skipped phase, not a pass.>
 
 ## Persistence Matrix
 <operations down, checkpoints across (Save / reopen / away-and-back / reload /

@@ -115,7 +115,7 @@ const PLACE = {
     'docs/standards/session-mechanics.md', `${P}/commands/env-chk.md`, `${P}/skills/scope-chk/`],
   build: [`${P}/commands/diagnose.md`, `${P}/commands/sdd-loop.md`,
     `${P}/commands/design-intake.md`, 'docs/guides/design-tooling.md', 'templates/styles/',
-    `${P}/commands/qa-pipeline.md`, `${P}/agents/test-verifier.md`, `${P}/agents/ui-tester.md`,
+    `${P}/agents/test-verifier.md`, `${P}/agents/ui-tester.md`,
     'templates/scripts/browser-ladder.js', `${P}/agents/supabase.md`,
     'templates/project-test-plan-template.md', 'templates/implementation-summary-template.md',
     `${P}/skills/doc-comp/`],
@@ -185,8 +185,6 @@ const ALIASES = {
   [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'pages-edit-gate.sh', 'refresh-stamp.sh', 'derive-scripts.sh', 'kit-dirs.sh', 'session-start-registered.sh', `${P}/scripts`],
   [`${P}/evals/`]: [`${P}/evals`],
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
-  // Was an agent until 2026-10-11 (audit I-19); prose still names it bare.
-  [`${P}/commands/qa-pipeline.md`]: [/(?<![\w/.:-])qa-pipeline(?![\w-])/],
   'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
   'templates/ui-tests/': ['templates/ui-tests', '.github/scripts/ui-tests'],
   // A bare `package.json` is ambiguous (the kit ships one too), so only the
@@ -437,7 +435,8 @@ const FLOW = [
   ['design.md', 'styles/', 'gov', 'tokens contract'],
   ['design.md', 'check-contrast.js', 'gov', 'contrast guardrail'],
   ['design.md', 'contrast-guardrail.md', 'det', 'guardrail limits in'],
-  ['test.md', '/qa-pipeline', 'gov', 'QA runs through'],
+  ['test.md', 'test-verifier', 'gov', 'QA step 1'],
+  ['test.md', 'ui-tester', 'gov', 'QA step 2'],
   ['test.md', 'ui-tests/', 'gov', 'the UI test kit'],
   ['test.md', 'project-test-plan-template.md', 'det', 'test plan structure in'],
   ['test.md', 'implementation-summary-template.md', 'gov', 'requires'],
@@ -461,11 +460,10 @@ const FLOW = [
   ['design-tooling.md', '/design-intake', 'exp', 'tools for'],
   ['/design-intake', '/sdd-loop', 'seq', 'hands off to', 'a', 'Next: `/sdd-loop`'],
   ['/design-intake', 'styles/', 'pro', 'writes the project\'s tokens.css', 'a', 'Writes:'],
-  ['/sdd-loop', '/qa-pipeline', 'run', 'runs', 'a', 'Batch verification'],
+  ['/sdd-loop', 'test-verifier', 'run', 'runs', 'a', 'Batch verification'],
+  ['/sdd-loop', 'ui-tester', 'run', 'runs', 'a', 'Batch verification'],
+  ['/sdd-loop', 'pr-readiness-reviewer', 'run', 'ends with', 'a', 'Batch verification'],
   ['/sdd-loop', '/commit-chk', 'seq', 'before pushing', 'a', 'Pre-Push gate'],
-  ['/qa-pipeline', 'test-verifier', 'run', 'runs', 'a', '1. **test-verifier**'],
-  ['/qa-pipeline', 'ui-tester', 'run', 'runs', 'a', '2. **ui-tester'],
-  ['/qa-pipeline', 'pr-readiness-reviewer', 'run', 'ends with', 'a', '5. **pr-readiness-reviewer**'],
   ['ui-tester', 'ui-tests/', 'run', 'drives', 'a', 'Runnable source of truth'],
   // pr & review
   // The workflows run the kit: the arrow starts at the actor (Codex audit, #393).
@@ -1081,7 +1079,7 @@ ${kindCss}
     <button type="button" id="t_self" aria-pressed="false" title="Hide this repo's own CI and docs">exports only</button>
     <button type="button" id="t_vendor" aria-pressed="false" title="Hide the vendor column and its links">hide vendors</button>
   </span>
-  <input id="search" type="search" aria-label="Find a file" placeholder="find a file… (e.g. qa-pipeline)">
+  <input id="search" type="search" aria-label="Find a file" placeholder="find a file… (e.g. sdd-loop)">
 </header>
 <div id="wrap">
   <div id="viewport" style="width:${W}px;height:${H}px">

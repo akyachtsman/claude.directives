@@ -39,8 +39,8 @@
 <body>
 <div class="wrap">
   <h1>directives-toolkit — commands</h1>
-  <p class="sub">The 14 slash commands in the directives-toolkit plugin, grouped by development-pipeline phase, each described by its own command file.</p>
-  <p class="how">Type <code>/&lt;name&gt;</code> to run a command. 2 of 14 are marked <b>typed only</b>; Claude may start any other one itself when a step or a directive calls for it. For the always-current menu read live from the installed plugin, run <code>/my-list</code>. Auto-skills (doc-comp, scope-chk, update-pages) fire on their own and are not listed here.</p>
+  <p class="sub">The 13 slash commands in the directives-toolkit plugin, grouped by development-pipeline phase, each described by its own command file.</p>
+  <p class="how">Type <code>/&lt;name&gt;</code> to run a command. 2 of 13 are marked <b>typed only</b>; Claude may start any other one itself when a step or a directive calls for it. For the always-current menu read live from the installed plugin, run <code>/my-list</code>. Auto-skills (doc-comp, scope-chk, update-pages) fire on their own and are not listed here.</p>
 
   <section>
     <h2>Think</h2>
@@ -99,11 +99,6 @@
       <div class="cmd">
         <div class="name">/commit-chk</div>
         <div class="what">Run the pre-push verification manually — tests, lint, CI status.</div>
-      </div>
-      <div class="cmd">
-        <div class="name">/qa-pipeline <span class="arg">[PR number]</span></div>
-        <div class="what">Run the QA pipeline over a batch from the main session — test-verifier, ui-tester with a bounded fix loop, code + coverage review, security review, readiness gate.</div>
-        <div class="when"><b>After</b> — <code>/sdd-loop</code></div>
       </div>
     </div>
   </section>

@@ -608,8 +608,8 @@ toolkit's reviewers and verifiers carry `model: sonnet` as that fallback; its
 agents that write code or data carry `model: inherit`, so an omitted call runs
 the session's model. ⚠️ Leaving `model` out on an agent type whose frontmatter
 names a model runs THAT model, not the session's — so build work goes to an
-agent type whose `model:` is `inherit` (e.g. not test-verifier). The `/qa-pipeline` command applies this
-rule to every agent it spawns.
+agent type whose `model:` is `inherit` (e.g. not test-verifier). The QA
+agents in `test.md` → *QA before merge* follow this rule.
 ⚠️ **A fork always runs the session's model** — the Agent tool ignores `model`
 for it — so haiku-tier work goes to a named agent type, never a fork.
 

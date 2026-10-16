@@ -1,6 +1,6 @@
 ---
 name: pr-readiness-reviewer
-description: "Use this agent when a branch needs its final readiness ruling before a pull request is opened or merged. Typical triggers include the last step of /qa-pipeline, a session about to mark a draft PR ready, and an owner asking whether a branch can merge. It confirms tests, lint/build, required reports and CI readiness, and changes nothing. See \"When to invoke\" in the agent body."
+description: "Use this agent when a branch needs its final readiness ruling before a pull request is opened or merged. Typical triggers include the last step of test.md's QA before merge, a session about to mark a draft PR ready, and an owner asking whether a branch can merge. It confirms tests, lint/build, required reports and CI readiness, and changes nothing. See \"When to invoke\" in the agent body."
 tools: Read, Glob, Grep, Bash, mcp__github__pull_request_read
 model: sonnet
 color: blue
@@ -12,7 +12,7 @@ exception: they come from the environment, never from a file in the repo.
 
 ## When to invoke
 
-- **Final pipeline gate.** `/qa-pipeline` step 5, after the reviews are collected: pass the PR number so Codex's verdict can be read.
+- **Final QA gate** (`test.md` → *QA before merge*, step 4), after the reviews are collected: pass the PR number so Codex's verdict can be read.
 - **Before marking ready or merging.** A session about to mark a draft PR ready, or to merge on green, wants an independent check that the evidence is complete.
 - **Not for** reviewing code quality or running tests itself: those are the reviewers' and test-verifier's jobs; this agent reads their reports.
 

@@ -231,7 +231,10 @@ found it by hand. So for any change that creates, edits or deletes saved data:
   full the change is *pending verification*, never done.
 - **Auth-gated or backend-backed screens** are not exempt because a local run
   cannot reach the backend: run the grid against the deployed app (`qa-live`
-  or a session's own browser on the deployed URL) and report it after deploy.
+  or a session's own browser on the deployed URL) after the merge deploys it,
+  and post it on the merged PR. Before merge the PR body lists the grid marked
+  *pending live verification* (`git.md` → *Before merging*); the change is not
+  done until the posted grid is full.
 
 ## Assert the outcome, not the mechanism (owner ruling, 2026-08-01)
 The gate above says *render it*. This one says *what to assert once you have*. A

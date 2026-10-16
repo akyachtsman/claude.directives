@@ -165,6 +165,10 @@ DOM-level queries pass while the pixels are wrong (`test.md` → *Layered UI: re
   assertions catch what they name; a screenshot catches what nobody thought
   to name. Save them under `.agent-reports/screenshots/`.
 
+### Phase 7 — Persistence Matrix (any change that saves data)
+
+Run `test.md` → *Persistence matrix (changes that save data)* in full: every sibling operation on the changed object (add, edit/rename, move, delete), each checked at all six checkpoints (after Save; reopen without reload; navigate away and back; full reload; fresh browser context; every other screen showing the same data). For an owner-reported bug, first write the owner's steps as a test and show it FAIL. Report the grid; a missing cell is a FAIL of this phase, never a skip.
+
 ### Default Navigation & Control Scenarios (always run)
 
 Beyond S1–S4, emit these two generic scenarios on **every** app — they catch
@@ -278,6 +282,7 @@ Pass: X / Fail: Y / Findings: Z
 | Interaction sweep | PASS/FAIL | N interactions, M anomalies |
 | Responsive layout | PASS/FAIL | |
 | Occlusion & transitions | PASS/FAIL | N layers hit-tested, M caps proven binding, K transitions asserted |
+| Persistence matrix | PASS/FAIL/N/A | operations x 6 checkpoints; N/A only when nothing is saved |
 
 ## Elements Discovered
 <table of label, tag, type, interaction result>
@@ -291,6 +296,11 @@ forced past their limit with rendered vs scroll extents; transitional states
 asserted mid-operation; screenshot paths under .agent-reports/screenshots/
 with a note that they were LOOKED at. Empty section = Phase 6 did not run —
 /qa-pipeline must treat that as a skipped phase, not a pass.>
+
+## Persistence Matrix
+<operations down, checkpoints across (Save / reopen / away-and-back / reload /
+fresh context / other screens), PASS/FAIL per cell, screenshot paths for the
+reopen and reload checkpoints. A blank cell is a FAIL.>
 
 ## Auth Diagnostics
 <auth-diagnostics JSON if auth failed>

@@ -201,6 +201,38 @@ value, the now-visible control), not merely that the screen loads.
   checks are green" / "it will run in CI" is not verification. If the gate hasn't
   passed yet, report status as *pending visual verification*, not done.
 
+## Persistence matrix (changes that save data) (owner ruling, 2026-10-16)
+The rendered gate above checks the screen right after the action. That is not
+enough for anything a user SAVES: the classic bug is a value that looks right
+after Save, is wrong when the panel is reopened, and is right again only after a
+full refresh (a stale in-memory copy). Measured in a downstream app, 2026-10-16:
+deleting a field passed its test, adding one failed at the reopen, and the owner
+found it by hand. So for any change that creates, edits or deletes saved data:
+
+- **Every sibling operation, not just the one touched or reported.** If the
+  object can be added, edited/renamed, moved/reordered and deleted, test all of
+  them. A fix to delete is a reason to test add.
+- **Every checkpoint, the same expected value at each:**
+  1. right after Save;
+  2. close and reopen the same panel or dialog, with no page reload;
+  3. navigate elsewhere in the app and back, with no reload;
+  4. full page reload;
+  5. a fresh browser context (new `context`, so no in-memory or local cache);
+  6. every OTHER screen that shows the same data (a list, a preview, a
+     downstream page). Name them before testing.
+  A value that differs between checkpoints is a stale-state bug, even when the
+  last checkpoint is right.
+- **An owner-reported bug starts as a failing test.** Write the owner's exact
+  steps as a Playwright test, run it, and see it FAIL before touching the code.
+  Fix, then see it pass. The test stays in the suite as the regression guard.
+- **Report it as a grid**: operations down, checkpoints across, PASS/FAIL in
+  each cell, with screenshots of checkpoints 2 and 4 (where stale state shows).
+  The grid goes in the PR body. A missing cell is not a pass; until the grid is
+  full the change is *pending verification*, never done.
+- **Auth-gated or backend-backed screens** are not exempt because a local run
+  cannot reach the backend: run the grid against the deployed app (`qa-live`
+  or a session's own browser on the deployed URL) and report it after deploy.
+
 ## Assert the outcome, not the mechanism (owner ruling, 2026-08-01)
 The gate above says *render it*. This one says *what to assert once you have*. A
 test written from the implementation confirms the implementation.

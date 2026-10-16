@@ -360,6 +360,11 @@ A `docs/…` path in these directives resolves against claude.directives:
   touch workflows is a stop-and-diagnose, not a merge-and-see. Modifying a
   workflow's TRIGGER conditions remains stop-and-ask before making the change
   (`global.md` → Escalation Rules) — a change-authority gate, not a merge gate.
+- **A PR that changes rendered UI or saved data is not mergeable without its
+  verification in the PR body** (owner ruling, 2026-10-16): the rendered check
+  for a visual change (`test.md` → *Rendered-verification gate (visual changes)*), and for saved data the full grid (`test.md` → *Persistence matrix (changes that save data)*).
+  Green CI and a clean Codex verdict do not stand in for it: the standard suite
+  passes while a specific save-then-reopen flow is broken.
 - Never force-push to `main`
 
 ### Superseded PRs

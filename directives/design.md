@@ -3,386 +3,95 @@
 This is the exported design directive for all projects. Import it via:
 https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/design.md
 
-There is **no company-wide look.** Each project owns its own visual identity.
-The only consistency that matters is **page-to-page within a single project** —
-carried by that project's own design tokens and components, established once at
-kickoff and reused everywhere. Across projects, nothing has to match.
+There is **no company-wide look, and no cross-project interaction or copy
+standard** (owner ruling, 2026-10-16). Each project owns its visual identity,
+its interaction patterns (tables, lists, cards) and its tone and copy. The only
+consistency that matters is **page-to-page within a single project**, carried by
+that project's own tokens and components.
 
 ## Establishing your project's look
-At project kickoff, run **`/design-intake`** (the `/kickoff` flow calls it for
-you). It takes a starting point and turns it into your project's reusable design
-contract:
+At kickoff, run **`/design-intake`** (`/kickoff` calls it). It turns a starting
+point into the project's design contract:
+1. **Import a look:** an image or screenshot (default, read by the
+   `frontend-design` skill), Stitch HTML via Stitch's remote MCP, or Figma
+   variables via a Figma MCP (owner ruling, 2026-10-12).
+2. **Distill** it into the contract below plus one approved **reference page**.
+3. **Build** the remaining pages against that contract, so every page matches
+   page one.
 
-1. **Import a look** — fastest first:
-   - **An image** (default, browser-only): attach a screenshot/mockup from Google
-     Stitch, Figma, or anywhere — the `frontend-design` skill reads it.
-   - **Stitch HTML** — pull real markup via Stitch's remote MCP, or paste a download.
-   - **Figma** — read variables/styles via a Figma MCP (owner ruling,
-     2026-10-12; for plain HTML, use a descriptive MCP and let Claude author the
-     markup).
-2. **Distill** the import into the project's contract (below) + one approved
-   **reference page** (the look-gate).
-3. **Build** the remaining pages against that contract via `/sdd-loop` — so every
-   page matches page one.
-
-See `docs/guides/design-tooling.md` for generator setup.
+Generator setup: `docs/guides/design-tooling.md`. `frontend-design` and Stitch
+are current practice, not a ruling; propose another generator to the owner if
+it fits better.
 
 ## Tokens & components (the per-project consistency contract)
-Two files, committed in the project repo, are the single source of truth for its
-look:
-- **`styles/tokens.css`** — the brand primitives as CSS custom properties:
-  `--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`. Every rule
-  references `var(--…)`, never a hardcoded value. Change a token → the whole
-  project re-themes.
-- **`styles/components.css`** — the reusable elements (button, card, input,
-  checkbox, header) built once and used on every page.
+Two committed files are the single source of truth for a project's look:
+- **`styles/tokens.css`**: brand primitives as CSS custom properties
+  (`--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`). Every rule
+  uses `var(--…)`, never a hardcoded value.
+- **`styles/components.css`**: reusable elements (button, card, input,
+  checkbox, header), built once and used on every page.
 
-Generators (`frontend-design`, Stitch) are always instructed to **use this
-project's `tokens.css`/`components.css`**, never invent a parallel system.
-Naming `frontend-design` and Stitch, here and in the import options above, is
-**current practice, not a stamped ruling** (owner, 2026-10-07 for Stitch,
-2026-10-08 for `frontend-design`): sessions follow it, but may propose another
-generator to the owner. The rule binding every generator is the one
-above: use this project's contract.
-Starter versions ship in `templates/styles/` for `/new-repo` to scaffold.
+Every generator is told to **use this project's `tokens.css` and
+`components.css`**, never to invent a parallel system. Starter versions ship in
+`templates/styles/` for `/new-repo`.
 
 ## Stack
-Plain HTML + CSS + vanilla JS on GitHub Pages, no build by default (a CI build
-is a per-project opt-in with the owner's sign-off) — set by
-`global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21; build rule
-2026-10-06), which owns it.
-
-**Tokens are plain CSS custom properties; components are plain CSS.** Current
-practice in every project, and **not a stamped ruling** — it has never been
-compared against a utility-class system (which, needing a build, would come
-through the CI-build opt-in). The Hosting ruling settles something narrower: no
-React, no build by default, no local server, no new platform. That is why
-frameworked generators are rejected
-(`docs/guides/dev-pipeline.md` → *Deliberate rejects (simplicity discipline)*;
-the Figma bullet in step 1 of `/design-intake`), but it does not decide the token mechanism. Take an alternative to
-the owner rather than adopting one — and do not cite this line as authority for
-refusing one. The CI-build opt-in alone lets a utility library such as
-Tailwind compile on top of `tokens.css` and `components.css`; replacing those
-files with it is a further owner decision.
-
-File layout:
-```
-styles/
-  tokens.css       ← brand primitives (this project's look)
-  components.css    ← reusable components
-  base.css          ← reset + typography (optional)
-  layout.css        ← page structure (optional)
-```
+Plain HTML, CSS and vanilla JS on GitHub Pages, no build by default. This is set
+by `global.md` → *Hosting & Deployment* (owner ruling, 2026-08-21; build rule
+2026-10-06), which owns it. Tokens and components are plain CSS; a utility
+library such as Tailwind needs the CI-build opt-in, and replacing `tokens.css`
+and `components.css` with one is a further owner decision.
 
 ## Script loading
 **Inline scripts run after their DOM.** An inline `<script>` that binds event
-listeners must not execute before the elements it targets are parsed: place it at
-the very end of `<body>`, or wrap the bindings in a function run on
-`DOMContentLoaded` (with a `document.readyState` fast-path). Binding a listener
-to a not-yet-parsed element throws — and silently kills the rest of the script,
-so **every handler after the throw never attaches** while the page still "looks"
-rendered. Never bind to an element defined later in the document than the script.
-(`test.md`'s console-error gate exists to catch exactly this.)
+listeners goes at the very end of `<body>`, or wraps its bindings in a
+`DOMContentLoaded` handler (with a `document.readyState` fast-path). Binding to
+a not-yet-parsed element throws and silently kills every handler after it,
+while the page still looks rendered. (`test.md`'s console-error gate catches
+this.)
 
 ## Cross-platform & responsive
-Every project's UI must work across the platforms it ships to — laptop/desktop,
-tablet (iPad), and phone (iPhone/Android). Design responsive-first:
-- **Fluid layout:** adapt from phone to desktop widths — no fixed desktop-only
-  canvas. Content reflows; nothing is clipped or scrolls horizontally at phone
-  width. Use responsive units and breakpoints, not hardcoded pixel layouts.
-- **Touch *and* pointer:** every action works by tap, click, and keyboard.
-  **No hover-only states** — pair every `:hover` with a tap/focus equivalent.
+Every UI works on desktop, tablet and phone. Design responsive-first:
+- **Fluid layout:** content reflows from phone to desktop; nothing clips or
+  scrolls horizontally at phone width.
+- **Touch and pointer:** every action works by tap, click and keyboard. **No
+  hover-only states**; pair every `:hover` with a tap or focus equivalent.
 - Targets: tap/click min **44×44px**; checkboxes min **24×24px**; min **8px**
-  gap between adjacent targets.
-- Inputs: min **48px** height; font on inputs **never below 16px** (prevents iOS
-  zoom on focus).
+  between adjacent targets.
+- Inputs: min **48px** high; input font **never below 16px** (prevents iOS zoom
+  on focus).
 
 ## Accessibility
-Non-negotiable, independent of the chosen look. A per-project contrast guardrail
-(`templates/scripts/check-contrast.js`, run in CI against `styles/tokens.css` or
-`css/tokens.css` — any other path is named with `--tokens <file>`)
-checks part of this — see the limits below before treating a green as proof:
-- **WCAG AA contrast:** normal text ≥ 4.5:1, large/icon ≥ 3.0:1
-- Visible keyboard focus: pair `:hover` with `:focus-visible`
-- Honor `prefers-reduced-motion`
-- Use `textContent` for DOM text from any backend/user input — never `innerHTML`;
-  re-audit sinks when a value becomes user-editable (both per `global.md`)
+Non-negotiable, whatever the look:
+- **WCAG AA contrast:** normal text ≥ 4.5:1, large text and icons ≥ 3.0:1. Large
+  means ≥ 18.66px bold or ≥ 24px; anything smaller needs 4.5.
+- Visible keyboard focus: pair `:hover` with `:focus-visible`.
+- Honor `prefers-reduced-motion`.
+- Status is never conveyed by colour alone.
+- Use `textContent` for DOM text from any backend or user input, never
+  `innerHTML` (per `global.md`).
 
-**The contrast guardrail is a floor, not a coverage report — read its pair list
-against your own token roles.** It measures a hand-written list of token pairs,
-which encodes the roles those tokens are *assumed* to play. Where your project
-gives a token a different role the green means nothing and looks exactly like a
-real pass. Measured downstream: a `--color-danger` used as a hover *background*
-under a hard-coded `#fff` scored 17.30 and 18.50 "OK" while the delete control
-rendered white-on-white; a `--color-accent` checked at the 3.0 large-text floor
-certified 3.54 "OK" for 12-13px labels that all fail AA. Pairs the list does not
-name are never measured at all — a chip at 4.32:1, 11px bold, shipped visible on
-a dashboard. So, per project: (1) read the pair list in `check-contrast.js` and
-confirm each token really plays the role assumed; (2) remember WCAG's large-text
-floor is 3.0 only at ≥18.66px bold or ≥24px — anything smaller needs 4.5, so
-check accent-coloured small text by hand; (3) as a second pass, derive pairs from
-your `styles/components.css` — every rule declaring both a `color:` and a
-`background:` from tokens — which catches combinations no hand-written list
-names. That derivation is also incomplete: it cannot see text that sets a colour
-and inherits its background. Only resolving each element's effective background
-through the cascade would be complete, and no tool here does that.
-
-**One declaration per measured token, in `#hex`.** The guardrail reads
-declarations, not the cascade, so a token declared twice left it measuring
-whichever came last — and saying nothing about the other. Appending one line to
-the starter palette (`:root { --color-accent: rgb(255 255 255); }`) produced
-`OK — 9/9 assumed pairs meet WCAG AA`, exit 0, on a `.btn` rendering white on
-white: CSS applied the `rgb()`, the gate measured the superseded hex. It now
-refuses that file instead of picking a value, for both shapes — a non-hex
-override, and a second, different hex under a `[data-theme]` block or a
-`prefers-color-scheme` query. So a themed project gives **each theme its own
-tokens file** holding that theme's resolved values and lists every one — as
-repeated `--tokens <file>` on the `qa.yml` run line, `CHECK_CONTRAST_TOKENS`, or
-`CANDIDATES` at the top of the script — every listed file is measured, one
-palette per run, and each theme file must carry a **complete** palette rather
-than an override fragment. A listed file that does not exist is a **hard
-failure**, not a skip: filtering the list through "does it exist" measured the
-surviving theme and printed green, while the renamed one was never opened.
-(Unconfigured, the script checks whichever default — `styles/tokens.css`,
-`css/tokens.css` — exists; with neither, it is the bootstrap notice in a fresh
-repo and still a hard failure in a repo that has CSS elsewhere.)
-Tokens no pair reads are unaffected.
-
-**Where measured tokens must live.** Every token a contrast pair reads must be
-declared in a **`:root` rule at the top level of the file** — not inside a media
-query, a cascade layer, a `[data-theme]` block, or any other selector. A measured
-token found anywhere else is a **hard failure**.
-
-That is narrower than CSS allows, and deliberately so. Whether a declaration
-applies depends on the selector, the media condition and the cascade, and this
-gate resolves none of them: nine review rounds produced a scanner that read
-`@media print { :root { … } }`, `.e:not-a-real-pseudo { … }` and
-`unknown: !important { … }` as live palettes and printed `OK — 9/9` on pages that
-render none of them. Rather than keep guessing which contexts apply, it reads one
-and refuses the rest. Tokens **no pair measures** are unaffected and may live
-anywhere.
-
-**What the guardrail accepts.** It reads the file with a small CSS scanner rather
-than a regex, so a comment inside a value, a `url()` containing a `;` or a `/*`,
-a `!important` flag, a string spanning an escaped newline, and any selector or
-at-rule that does not hold a measured token are all read the way CSS reads them.
-What it **refuses outright**, because a partial read of a palette is worse than
-none:
-
-- **a measured token outside a top-level `:root`** — see above;
-- **any at-rule this gate cannot vouch for.** The membership question is *can
-  this at-rule change what a top-level `:root` palette means?* — `@media`,
-  `@supports`, `@layer`, `@container`, `@scope`, `@font-face`, `@keyframes` and
-  `@charset` cannot, and are allowed. Everything else is refused, including
-  `@import`/`@use`/`@forward` (they name a stylesheet this check never reads, so
-  a theme override living there is invisible) and a default `@namespace` (it
-  re-points the implied universal selector, so `:root` stops matching the
-  document root and the whole palette is inert). A **new** at-rule is refused
-  until someone checks it against that question — the list will lag CSS, and a
-  loud refusal is the survivable direction;
-- **an `@property` registration of a *measured* token.** Registering
-  `--color-accent` with `inherits: false` and an initial value leaves the root
-  declaration intact and measurable while every descendant renders the initial
-  value instead. Registering an unmeasured property is fine;
-- **a backslash escape outside a string.** CSS would read `--color-\61 ccent` as
-  `--color-accent`; this refuses it instead of decoding it, so **spell
-  identifiers plainly**;
-- an HTML comment delimiter (`<!--` / `-->`);
-- **a custom property whose value is a `{ }` block** — `--x: { … }` is legal CSS
-  and this cannot resolve one;
-- **a custom-property name outside `[A-Za-z0-9_-]`.** CSS treats every code point
-  at U+0080 and up as an identifier character, so `--color-bg` followed by a
-  non-breaking space is a *different property*. This gate measures names by
-  comparing them literally, so one it cannot compare is refused rather than
-  skipped — **spell token names in plain ASCII**;
-- **a non-UTF-8 `@charset`.** This gate decodes every file as UTF-8 whatever the
-  preamble says, so it would read different characters than the browser does.
-  **A UTF-8 BOM outranks it:** the BOM is itself the encoding signature, so text
-  following one is not an encoding declaration at all and the file is accepted;
-- an unterminated string or comment, or an unbalanced bracket of any kind —
-  including a closing `}`, `)` or `]` with nothing open.
-
-Keep `styles/tokens.css` self-contained.
+The per-project contrast guardrail (`templates/scripts/check-contrast.js`, run in
+CI against `styles/tokens.css`) is **a floor, not a coverage report**: it measures
+a hand-written list of token pairs, so a token used in a different role passes
+while rendering wrong. Read its pair list against your own token roles. A themed
+project gives **each theme its own complete tokens file** and lists every one.
+Its limits and every file shape it refuses: `docs/standards/contrast-guardrail.md`.
 
 ## Motion
-- Keep transitions short and calm (≈0.15s ease is a good default)
-- **Never** bounce, spin, flash, or use heavy keyframes that fight readability
-- Always honor `prefers-reduced-motion`
-
-## Tables & sorting
-Any table/grid of rows sorts the **same way in every project** — same
-interaction, same rules — so a user never relearns it:
-- **The column header IS the sort control.** Clicking (or Enter/Space on) a
-  header sorts the rows by that column. No separate sort pills or menus.
-- **Toggle direction:** the first activation of a column sorts **ascending**;
-  re-activating the active column flips to **descending**. Exactly one column is
-  active at a time.
-- **Type-aware:** numeric columns compare as numbers, text as case-insensitive
-  `localeCompare`. Keep the sortable value in `data-sort` on each cell, separate
-  from the display text — so `$42,000` sorts by `42000` and `Jun 4` by an ISO date.
-- **No-data sinks last:** empty / `—` cells always sort to the bottom in *both*
-  directions (pairs with the `—` = no-data rule under Number & Data Formatting).
-- **State is visible + accessible:** set `aria-sort` on the active `<th>` and show
-  a direction arrow (`↑`/`↓`); headers are keyboard-operable, 44px tap targets,
-  `:focus-visible` outlined.
-
-Reference implementation — wire `makeSortable(table)` once per table; the markup
-carries the raw value in `data-sort` and the column type in `data-type`:
-```html
-<th data-type="number" tabindex="0" aria-sort="none">Value</th>   <!-- header = control -->
-<td data-sort="42000">$42,000</td>                                 <!-- data-sort = raw, text = display -->
-```
-```js
-function makeSortable(table){
-  const heads = [...table.tHead.rows[0].cells], body = table.tBodies[0];
-  const blank = v => v === '' || v === '—' || v == null;
-  const go = th => {
-    const i = th.cellIndex, num = th.dataset.type === 'number';
-    const dir = th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending';
-    const s = dir === 'ascending' ? 1 : -1;
-    heads.forEach(h => h.setAttribute('aria-sort', 'none'));
-    th.setAttribute('aria-sort', dir);
-    const val = tr => { const c = tr.cells[i]; return c.dataset.sort ?? c.textContent.trim(); };
-    [...body.rows].sort((a, b) => {
-      const x = val(a), y = val(b);
-      if (blank(x) && blank(y)) return 0;   // no-data always last,
-      if (blank(x)) return 1;               // regardless of direction
-      if (blank(y)) return -1;
-      return (num ? x - y : ('' + x).localeCompare(y, undefined, {sensitivity:'base', numeric:true})) * s;
-    }).forEach(tr => body.appendChild(tr));
-  };
-  heads.forEach(th => {
-    th.onclick = () => go(th);
-    th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(th); } };
-  });
-}
-```
-
-## List & summary surfaces
-For a short, triage-style list of items (tasks, alerts, posts, entries) a user
-scans at a glance, use **one** consistent card pattern across the project. Use it
-for **≤ ~10 rows** with a title + context per item; reach for **Tables & sorting**
-instead when the data is tabular or needs comparison/sorting.
-
-**Anatomy** — a titled card holds hairline-divided rows; each row is the control:
-- **Card** — `--surface`, `1px solid --border`, radius from `--radius-*`, `--shadow`;
-  a small header (weight 700, `--muted`), optional count.
-- **Row = a full-width `<button>`** (`font: inherit`, left-aligned), **44px** min tap
-  target, with a `1px --border` **top divider between rows** (first row none) — the
-  framed-card + hairline look is the defining trait.
-- **Leading indicator** in a **fixed-width column** so every title left-aligns: a
-  status **pill** or a line **icon** (`stroke: currentColor`, so it follows the
-  theme). **One indicator style per card** (all pills or all icons). **No emoji.**
-- **Title** — single line, weight 500, **ellipsis on overflow (never wraps)**.
-- **Subline** — `--muted`, the context ("Open · Maria · 8:20").
-
-**Rules**
-- **Status is conveyed by the pill's text, never colour alone** (WCAG + screen
-  readers): colour reinforces, the label carries the meaning. Map each status to a
-  semantic token consistently — the palette is **per-project**.
-- **Tokens, not literals** — every value reads `var(--…)`.
-- **States:** hover / `:focus-visible` → `--primary-bg`; a selected or deep-linked
-  row keeps `--primary-bg`; **empty** → one centred muted line (per Editorial →
-  Empty states).
-- **Deep-link + arrive-flash:** clicking a row opens its source and flashes the exact
-  target row — scroll into view, pulse `--primary-bg` + a `2px --primary` outline
-  (~2.4s), and move focus to it. **Honor `prefers-reduced-motion`** — highlight and
-  focus without the pulse.
-- A header action (e.g. "+ New") must `stopPropagation()` so it can't fire the row.
-
-Reference implementation — `makeSummaryList(card)` + `flashRow(row)`; the markup
-carries the item id in `data-id`:
-```html
-<button class="summary-row" data-id="…">
-  <span class="row-lead"><span class="pill pill--alert">Alert</span></span>
-  <span class="row-main">
-    <span class="row-title">One-line title, ellipsis on overflow</span>
-    <span class="row-sub">Context · author · time</span>
-  </span>
-</button>
-```
-```js
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-function flashRow(row){                      // the "arrived from a deep-link" affordance
-  row.scrollIntoView({block:'center', behavior: reduce ? 'auto' : 'smooth'});
-  row.classList.remove('flash'); void row.offsetWidth;   // restart the animation
-  row.classList.add('flash'); row.focus({preventScroll:true});
-  setTimeout(() => row.classList.remove('flash'), reduce ? 1200 : 2400);
-}
-function makeSummaryList(card){
-  const rows = [...card.querySelectorAll('.summary-row')];
-  rows.forEach(row => row.addEventListener('click', () => {
-    rows.forEach(r => r.classList.toggle('selected', r === row));
-    // real app: open row.dataset.id's source screen, then flashRow(target).
-  }));
-}
-```
+Short, calm transitions (≈0.15s ease). No bounce, spin, flash or heavy
+keyframes. Always honor `prefers-reduced-motion`.
 
 ## Charts & data display (owner ruling, 2026-09-24)
-There is **no chart standard written here.** Use the native **`dataviz`** skill
-— a Claude Code built-in, so there is nothing to install or enable —
-it is the authority for chart-type choice, categorical/sequential palettes that
-survive both themes, stat tiles, legends, axes and tooltips. Load it before
-writing the first line of chart code, in any medium (HTML/React artifact, inline
-SVG, matplotlib/plotly/d3/Recharts).
-- The project's `tokens.css` still wins on brand: swap `dataviz`'s placeholder
-  palette for this project's `--color-*` tokens rather than shipping its defaults.
-- Accessibility above is not waived by it — contrast ratios and
-  never-colour-alone apply to series colours and legends too.
+Use the native **`dataviz`** skill (built in, nothing to install) for chart type,
+palettes, legends, axes and tooltips. Swap its placeholder palette for this
+project's `--color-*` tokens. The accessibility rules above apply to series
+colours and legends too.
 
 ## Diagrams & connectors (owner ruling, 2026-09-24)
-For any node-and-edge surface (relationship maps, flow/architecture diagrams, org
-charts — SVG or canvas). The invariant: **every connector stays individually
-traceable to exactly one source→target pair**, at any zoom.
-
-**Rules**
-- **No collinear overlap between different relationships.** Two edges from
-  *different* sources must never lie on the same line — they read as one.
-  Same-orientation runs sharing a corridor each get their **own lane** (a fixed
-  per-edge offset within the corridor).
-- **A bus is one relationship.** A single source fanning to several targets may
-  share a trunk — that trunk *is* the relationship, drawn once. Never let two
-  different relationships merge into something that reads as a bus.
-- **Route around boxes, never behind them.** An edge passing under a node is
-  untraceable; add a bend instead.
-- **Crossings break with a gap, never an arc.** Where perpendicular edges cross,
-  interrupt the lower edge with a small gap. Arcs/hop-loops read as nodes at
-  small sizes.
-- If edges carry labels, each label sits on its own edge's lane — never in a
-  shared corridor where it could attach to a neighbour.
-
-**Native authority.** The `artifact-diagramming` skill covers this ground and
-should be read before drawing one — it owns when a diagram earns its place and
-the inline-SVG mechanics that keep it legible in both themes. The rules above are
-the blocking criteria this directive adds on top; where the skill is silent, it
-decides.
-
-**Verify geometrically, not visually, before shipping.** A glance misses
-collinear overlaps. From the edge geometry itself (path data / computed
-polylines), assert: no two segments from different edges overlap collinearly, and
-no segment intersects a node's rect. Then confirm against the **served** build,
-not the local file — hash-nav and CDN caching can serve a stale build that hides
-the change (cache-bust with `?v=` or incognito).
-
-## Editorial Preferences
-Look-independent copy and formatting rules — apply to every project.
-
-### Tone & Voice
-Professional but approachable. No jargon. Short sentences. Prefer active voice.
-Avoid "please" and "simply". Write for someone busy and competent.
-
-### UI Copy Rules
-- Buttons: verb-first ("Save Changes", "Export Report" — not "Click to Save")
-- Error messages: what happened + what to do ("No data found — try a wider date range")
-- Empty states: explain why, then the next action ("No tasks yet — add one above")
-- Section headers: noun phrases, no verbs ("Team Activity", not "View Team Activity")
-- Tooltips: one sentence max, no period
-- Confirmation dialogs: state the consequence ("This will permanently delete 3 tasks.")
-
-### Number & Data Formatting
-- Percentages: whole numbers (53%, not 53.2%)
-- Large numbers: K/M suffix above 999 (1.2K, 2.4M)
-- Dates: "Jun 4" — not "06/04", not "June 4th", not "2026-06-04"
-- Date ranges: "May 4 – Jun 4" (en-dash, spaces both sides)
-- Zero vs no-data: "0" = measured zero · "—" = not measured / no data
-- Rates: always pair with context ("8% — last 7 days with data")
+For any node-and-edge surface, **every connector stays individually traceable to
+exactly one source→target pair**, at any zoom. The native `artifact-diagramming`
+skill owns the rest (when a diagram earns its place, routing, legibility in both
+themes); read it before drawing one. Verify from the edge geometry, not by eye:
+no two edges from different sources overlap collinearly, and no edge crosses a
+node.

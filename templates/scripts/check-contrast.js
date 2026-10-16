@@ -220,8 +220,8 @@ const pairs = [
   // pointer touches the control.
   ['--color-on-accent', '--color-accent-hover', AA, 'on-accent / accent-hover (button hover)'],
   ['--color-accent', '--color-surface', AA_LARGE, 'accent / surface (large)'],
-  // design.md's error-message copy rule creates --color-danger; it carries meaning,
-  // so it needs the same AA floor as any other body text.
+  // --color-danger carries meaning (error and destructive text), so it needs the
+  // same AA floor as any other body text.
   ['--color-danger', '--color-surface', AA, 'danger / surface'],
   ['--color-danger', '--color-bg', AA, 'danger / bg'],
 ];

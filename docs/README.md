@@ -20,6 +20,7 @@ Referenced by the exported directives and the qa agents.
 | `standards/automations.md` | The agent-session automation standard — email, the watcher rules, CI/Codex/Pages monitors, the Pages auto-retry, the CI-success wake, in-session subscription, cross-session messaging, and the new-session activation checklist |
 | `standards/cicd-setup.md` | Canonical CI/CD install procedure — workflow templates to copy, monitors, secrets/variables, verification checklist |
 | `standards/ci-triage.md` | **Project** CI triage — expected vs real Playwright failures, two-tier CI, when to trigger `qa-live.yml` (this repo's own self-test triage lives in `internal/repo-monitors.md`) |
+| `standards/contrast-guardrail.md` | The limits of the per-project contrast guardrail and every tokens-file shape it refuses — the reference behind `design.md` → *Accessibility*; read on demand |
 | `standards/code-review-standard.md` | Blocking vs non-blocking review criteria and output format |
 | `standards/pr-mechanics.md` | The mechanism and evidence behind `git.md` → *PR Lifecycle* — missed wakes, verdict-gate exits, reading reactions, the reaction ladder, Codex delivery forms, review metering and triggers; read on demand (#299) |
 | `standards/kit-defects.md` | UI-test kit defects that shipped downstream — one entry per bug, each with a mechanical check and the minimal fix; `/refresh-repo` reads it from the upstream head before every kit diff, so it lives here rather than inside the kit a refresh copies (#327) |

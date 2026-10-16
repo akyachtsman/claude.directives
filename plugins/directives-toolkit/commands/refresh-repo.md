@@ -136,9 +136,11 @@ It also takes a kit file (Phase 2's per-file kit diffs). Show the LOCAL HUNKS
 and the merged diff when asking; `--write` only after the disposition below
 says keep-and-update. Conflicts are resolved by a person, never written.
 
-`RETIRED` names a file whose template upstream deleted (today only
-`keepalive.yml`): it is a removal finding, never a project-specific file to
-keep. Delete it, with any secret the line names, in this refresh's PR.
+`RETIRED` names a file whose template upstream deleted (`keepalive.yml`, and
+the watcher workflows `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`,
+`pages-monitor.yml` and `pages-retry.yml`): it is a removal finding, never a
+project-specific file to keep. Delete it, with any secret the line names and
+its entry in `.github/workflow-ref-required.json`, in this refresh's PR.
 
 **Which files.** Every installed workflow, every file of every installed
 composite, the `SessionStart` hook, and every installed `.github/scripts/<name>`
@@ -225,22 +227,11 @@ Disposition each `CUSTOM` and `DRIFT` file by READING THE DIFF, with no blind
 default in either direction: "restore" without looking deletes improvements, and
 "keep" without looking preserves tampering. A `STALE` file skips this: take the
 template (a batch overwrite is fine), since there is no local edit to lose.
-1. **The diff is only a `workflow_run` watch list in a file whose list is
-   MEANT to vary per project** — `ci-monitor.yml`, `ci-notify.yml`,
-   `qa-live.yml`, `pages-monitor.yml` — or the project's CLAUDE.md records the
+1. **The diff is only `qa-live.yml`'s `workflow_run` watch list, which is
+   MEANT to vary per project** — or the project's CLAUDE.md records the
    change. A legitimate adaptation: keep it, and report it, so an adaptation
    nobody upstream knows about becomes a Downstream-Finding Loop item rather
    than a permanent local secret.
-   **`pages-retry.yml` is NOT in that set.** Its list encodes an invariant, not
-   a preference: the template retries the managed branch-source deploy only,
-   because re-running a project-owned deploy replays that workflow's whole
-   build. A watch-list diff there is therefore never auto-kept — it needs the
-   project's CLAUDE.md to record why its deploy is safe to replay (idempotent,
-   no build or test steps) **and a revisit trigger** naming the condition that
-   ends the exception, so the customization cannot outlive its justification.
-   ⚠️ When that trigger fires, the watcher
-   is **deleted, not narrowed** — narrowing leaves a file that passes every
-   check and watches a name that can no longer fire (W3).
 2. **Anything else** — show the full diff and ask. An unexplained workflow drift
    can be an accidental session edit or tampering (git.md requires eyes-on-the-
    diff for every workflow PR precisely so this class stays rare), and it can
@@ -364,7 +355,7 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `CUSTOM` or `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops), `STALE` files (unchanged since the stamp) and files absent locally. ⚠️ Four files carry their own rules — `pages-retry.yml`, `pages-deploy.yml`, the Actions-source watchers and `keepalive.yml`: read *Workflow refresh rules* below the table before installing any workflow |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `CUSTOM` or `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops), `STALE` files (unchanged since the stamp) and files absent locally. ⚠️ Some files carry their own rules — `pages-deploy.yml`, `qa-live.yml` on Actions-source, and the retired workflows: read *Workflow refresh rules* below the table before installing any workflow |
 | `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
 | `templates/scripts/*` | `.github/scripts/*` | Phase 1.5 has already classified each installed one: take a `STALE` script; diff and confirm a `CUSTOM` or `DRIFT` one — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
@@ -398,18 +389,7 @@ and the file it pins in ONE refresh, never one now and the other later; a
 ### Workflow refresh rules
 
 The `templates/workflows/<wf>.yml` row above defers here.
-- ⚠️ **`pages-retry.yml`: its ABSENCE can be deliberate — never batch-install
-  it.** An Actions-source project is required to delete it
-  (`automations.md` → *Watcher Rules* W3), so "absent locally" is the intended
-  end state, not a gap; re-installing it re-arms a retry of a rogue unfiltered
-  deploy on a visibility flip. Decide it in both branches rather than as a
-  single condition: **branch-source** → install it and restore its `REQUIRED`
-  entry in the same edit; **Actions-source** → leave it absent, **unless** the
-  project has taken W3's idempotent exception, in which case it carries a
-  repointed copy whose `REQUIRED` entry names the project's own deploy — never
-  overwrite that with the template or drop that entry. Without this rule, the
-  first refresh that touches the retry template undoes the deletion silently.
-- ⚠️ **`pages-deploy.yml` is the mirror case, ACTIONS-SOURCE ONLY: never
+- ⚠️ **`pages-deploy.yml` is ACTIONS-SOURCE ONLY: never
   batch-install it on a branch-source project**, where the push already deploys
   and it would be a second, competing deploy on every push. On an Actions-source
   project it IS the deploy, and its filled-in `BUILD_CMD`/`SITE_DIR` make a local
@@ -417,17 +397,16 @@ The `templates/workflows/<wf>.yml` row above defers here.
   (the same holds for `qa.yml`'s `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` in a
   project with a build: resetting them to the shipped empties would skip or
   mis-serve its UI suite). Make sure `.github/workflow-ref-required.json` lists
-  both of its watchers (`"qa-live.yml": ["Pages Deploy"]`,
-  `"pages-monitor.yml": ["Pages Deploy"]`) — add a missing entry in the same
-  edit, since without it a refresh that drops either trigger passes the guard.
-- **The Actions-source watchers.** On Actions-source, `qa-live.yml` and
-  `pages-monitor.yml` carry the deploy's `name:` added beside the template's arms
-  (W2), so they are `CUSTOM` by design: take a template change around that name,
-  never drop it (`.github/workflow-ref-required.json` refuses the drop when it
-  lists them).
-- ⚠️ **NEVER `keepalive.yml`, absent or present.** Its template was deleted
-  (`cicd-setup.md` → *9f — Scheduled-job notifications* has the reason); an
-  installed copy is a finding to delete, not a file to refresh.
+  its watcher (`"qa-live.yml": ["Pages Deploy"]`) — add a missing entry in the
+  same edit, since without it a refresh that drops the trigger passes the guard.
+- **`qa-live.yml` on Actions-source** carries the deploy's `name:` added beside
+  the template's arms (W2), so it is `CUSTOM` by design: take a template change
+  around that name, never drop it.
+- ⚠️ **NEVER a retired workflow, absent or present:** `keepalive.yml`
+  (`cicd-setup.md` → *9f — Scheduled-job notifications* has the reason) and the
+  watchers `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`,
+  `pages-monitor.yml` and `pages-retry.yml`. An installed copy is a finding to
+  delete (Phase 1.5 prints it `RETIRED`), not a file to refresh.
 - **Every `CUSTOM` or `DRIFT` file:** show the diff (the 3-way merge for `CUSTOM`) and decide singly — local drift is as
   often an improvement this repo has not yet absorbed as it is corruption, and
   only the diff distinguishes them; keep local only when the diff leaves it
@@ -446,9 +425,8 @@ decides it, and when that question was skipped because none of the
 scheduled-task files is installed, the workflow stays skipped: nothing here
 says the project has a task. Before declining, confirm it
 is not load-bearing: no `workflow_run` names it, and `workflow-ref-guard` reports
-all required watchers intact without it. Same principle as the carve-outs for
-`pages-retry.yml` and its mirror `pages-deploy.yml` (absent by design on an
-Actions-source and a branch-source project respectively): **"absent locally" is
+all required watchers intact without it. Same principle as the carve-out for
+`pages-deploy.yml` (absent by design on a branch-source project): **"absent locally" is
 not a fact about the project's intent.** Ask
 what installing it *starts*, not only what it restores.
 
@@ -698,8 +676,7 @@ https://github.com/akyachtsman/claude.directives/blob/main/docs/internal/gate-hi
   `refs` would come back **non-empty from the callers that did fetch** — a
   partial set that passes any emptiness check.
 - **An empty result is not automatically wrong.** If the only changed caller
-  invokes no script — `pages-monitor.yml` and `secret-scan/action.yml` are both
-  like this today — the correct derivation *is* empty, and asserting non-empty
+  invokes no script — `secret-scan/action.yml` is like this today — the correct derivation *is* empty, and asserting non-empty
   fails closed on a legitimate delta. **Emptiness is only suspicious when a
   fetch failed**, which is why the check belongs on the fetch, not the result.
 - **Pin the fetch to the SHA Phase 2 classified, never `main`.** `main` can
@@ -873,8 +850,8 @@ What is compared, delta or not:
 An absent path is required where the skip rule makes it so: a dependency above,
 a file of an installed composite, the hook once `.claude/settings.json` exists,
 a file of an installed kit. Any other absent path is reported, not compared:
-an absent workflow can be deliberate (`pages-retry.yml`, `pages-deploy.yml`, a
-scheduled workflow with no task), and a path upstream does not ship is the project's own. A path
+an absent workflow can be deliberate (`pages-deploy.yml`, a scheduled workflow
+with no task), and a path upstream does not ship is the project's own. A path
 the upstream deleted counts as unapplied while a local copy remains.
 
 **What a clean run proves, and what it does not.** A stamp that goes through

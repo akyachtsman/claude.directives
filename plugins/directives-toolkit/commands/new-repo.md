@@ -61,36 +61,13 @@ Execute in order:
 
 5. **Install CI/CD workflows.** Every project gets the **full standard set** —
    copy these workflow files from `claude.directives/templates/workflows/`
-   — **eight for either Pages source, differing in one file**:
-   `pages-retry.yml` is BRANCH-SOURCE ONLY and must not be installed on an
-   Actions-source project (see its bullet below; installing it there arms a
-   retry of a rogue unfiltered deploy). Omit its `REQUIRED` entry in the same
-   edit. `pages-deploy.yml` is ACTIONS-SOURCE ONLY, the converse: it is that
-   project's deploy, with the retry built in. These are the two files in the
-   set whose installation is conditional — check the project's Pages source
-   before copying into `.github/workflows/`:
+   — **three on branch-source, four on Actions-source**: `pages-deploy.yml` is
+   ACTIONS-SOURCE ONLY, so check the project's Pages source before copying into
+   `.github/workflows/`. No watcher workflow is installed: CI results and Codex
+   verdicts reach the session as PR events on its subscription (`git.md` → *PR Lifecycle*),
+   which a run may end without delivering, so arm the check-in alongside the event wake, never instead of it, and drop it when THAT outcome is terminal.
    - `qa.yml` — static checks + local Playwright tests
    - `qa-live.yml` — live Playwright tests against GitHub Pages
-   - `ci-monitor.yml` — event-driven CI failure tracker
-   - `ci-notify.yml` — comments CI success on the open PR so a watching web
-     session wakes on green via the comment webhook (no scheduling-tool
-     polling, no permission prompts). Partial by design: it needs one lookup to
-     resolve exactly one open PR and exits silently otherwise — and even a
-     unique match is not proof of coverage, so arm a check-in whenever the
-     run's SHA is not the PR's head
-   - `codex-monitor.yml` — Codex PR review monitor
-   - `pages-monitor.yml` — zero-model Pages deploy monitor (verify + notify on
-     every branch-source `page_build`)
-   - `pages-retry.yml` — auto-re-runs the managed Pages deploy on a transient
-     failure (bounded to `run_attempt < 4`); pairs with `pages-monitor.yml`.
-     **BRANCH-SOURCE ONLY — do NOT install it on an Actions-source project, and
-     delete it if the project switches later.** It watches
-     `pages-build-deployment`, which a **visibility flip** fires even under
-     Actions-source, publishing the unfiltered tree — so a retry left installed
-     will re-run that rogue deploy (`global.md` → *Hosting & Deployment*).
-     Skipping it also means dropping its `REQUIRED` entry in the workflow-ref
-     guard, in the same edit. It only arms once it's on the
-     default branch, so it covers the *next* deploy, not the one that adds it
    - `pages-deploy.yml` — **ACTIONS-SOURCE ONLY.** Builds (only for a project
      with the CI-build opt-in), drops the `.github/pages-deny.txt` paths,
      publishes, retries GitHub's transient publish failure, then asserts the
@@ -99,9 +76,8 @@ Execute in order:
      deploys, so it would be a second, competing deploy: it is not installed
      there. Installed here, before
      the first page exists, it is a deliberate no-op until `index.html`
-     arrives (no build, no Pages deployment ever: the Publish job is skipped,
-     `pages-monitor.yml` reports nothing published, and `qa-live.yml` skips
-     its suite)
+     arrives (no build, no Pages deployment ever: the Publish job is skipped
+     and `qa-live.yml` skips its suite)
    - `qa-response.yml` — `repository_dispatch` QA trigger for sessions/automations
    - **Not `cron-notify.yml`** (the scheduled job). It is installed only when
      the project has a scheduled task (`global.md` → *Repo Structure
@@ -110,20 +86,13 @@ Execute in order:
      `docs/standards/cicd-setup.md` Step 9f.
 
    Drop-in for a **branch-source** Pages project — copy verbatim, no edits.
-   `ci-monitor.yml` and `ci-notify.yml` ship watching all three QA workflows,
-   which all resolve because this step installs the full set.
 
-   ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, two files need the
-   exact `name:` of the project's own deploy workflow added before they do
-   anything ("Pages Deploy" for `pages-deploy.yml`): **`qa-live.yml`** (add it to `workflow_run.workflows`) and
-   **`pages-monitor.yml`** (add a `workflow_run` trigger — its header has the
-   snippet). `pages-retry.yml` must NOT get it — and on an **Actions-source**
-   project is not installed **by default** (above), the one exception being W3's:
-   a genuinely idempotent deploy may repoint it, with the reasoning **and a
-   revisit trigger** recorded in the project's `CLAUDE.md` and its `REQUIRED`
-   entry **updated** to that deploy's name rather than dropped. Omitting this step leaves the
-   live QA gate and the deploy monitor silently inert, which reads as healthy.
-   Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W3).
+   ⚠️ **If Settings → Pages → Source is "GitHub Actions"**, **`qa-live.yml`**
+   needs the exact `name:` of the project's own deploy workflow ("Pages Deploy"
+   for `pages-deploy.yml`) added to `workflow_run.workflows` — added, never
+   replacing `pages-build-deployment`. Omitting this step leaves the live QA
+   gate silently inert, which reads as healthy.
+   Rules and reasoning: `docs/standards/automations.md` → *Watcher Rules* (W1–W2).
 
    **Scripts the installed files name by path — DERIVE the set, never hand-list
    it** (a hand list falls behind: #321, #353, #355). Every file this bootstrap
@@ -161,13 +130,10 @@ Execute in order:
    (`check-ui-suite-env.py`); `check-job-bounds.py` needs none — it is what keeps
    the ui-suite callers' 120-minute bound from drifting back to a value that
    cancels healthy runs; `.github/workflow-ref-required.json` lists every
-   watcher the project must not lose, in both branches of W3: **branch-source**
-   → write it at bootstrap as `{ "pages-retry.yml": ["pages-build-deployment"] }`;
-   **Actions-source** → no retry entry, **or**, under W3's exception, the entry
-   naming the repointed deploy (rules: `docs/standards/automations.md` → *Watcher Rules*),
-   plus the two deploy watchers, so a refresh that drops either trigger fails
-   the build: with `pages-deploy.yml`, `"qa-live.yml": ["Pages Deploy"]` and
-   `"pages-monitor.yml": ["Pages Deploy"]`; and
+   watcher the project must not lose: **branch-source** → `{}`;
+   **Actions-source** → the deploy watcher, so a refresh that drops the trigger
+   fails the build: with `pages-deploy.yml`, `{ "qa-live.yml": ["Pages Deploy"] }`
+   (`docs/standards/cicd-setup.md` → 9c-bis); and
    `check-contrast.js`, the WCAG guardrail `qa.yml` runs against the design
    tokens, reads `styles/tokens.css` or `css/tokens.css` by default — elsewhere,
    append `--tokens <file>` (repeat it per theme file).

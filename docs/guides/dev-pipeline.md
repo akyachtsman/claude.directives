@@ -33,9 +33,9 @@ importing only *methods* that fit the constraint below:
 | 1–2 | **Plan** | `/sdd-loop specify` → `/sdd-loop plan` (`/kickoff`) | exists — gated | `spec.md → plan.md` |
 | — | **Plan-gate** | folded into `/sdd-loop plan` (consistency check + self-review) | exists | `plan.md` → `## Consistency` |
 | 5 | **Build** | `/design-intake` (look-gate) · `/sdd-loop` implement | exists — gated | `design.md` + built pages |
-| 6 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, `codex-monitor`; `/audit-repo` (drift) | **delegated** | `.agent-reports/` review reports |
+| 6 | **Review** | `pr-review-toolkit`, `/code-review`, `/security-review`, Codex; `/audit-repo` (drift) | **delegated** | `.agent-reports/` review reports |
 | 7 | **Test** | `/qa-pipeline`, `test-verifier`, `ui-tester`, `/commit-chk` | exists — gated | `.agent-reports/` test reports |
-| 8 | **Ship** | `push-gate` hook, `update-pages`, `ci/pages-monitor` (liveness folded into `/env-chk`) | exists — gated | none — the PR and the reported live check |
+| 8 | **Ship** | `push-gate` hook, `update-pages`, `qa-live.yml` (live check) | exists — gated | none — the PR and the reported live check |
 | 9 | **Reflect** | `/learn` (alongside `/handoff-session`) | exists | `learnings.jsonl` |
 | — | **Cross-cutting** | `/env-chk`, `scope-chk` (preflight); `/refresh-repo` (re-sync); `/my-list`, `/do-repo`, `doc-comp` (utilities) | exists | — |
 
@@ -105,11 +105,11 @@ records an approved CI build opt-in (`global.md` → *Hosting & Deployment*); th
 implement against that build. Non-UI work skips the design-intake half and goes
 straight to implement.
 
-### 6 · Review — official plugins + monitors *(delegated — do not rebuild)*
+### 6 · Review — official plugins + Codex *(delegated — do not rebuild)*
 This is already gstack's multi-lens + Codex second opinion, inherited:
 `pr-review-toolkit` (code-reviewer, silent-failure-hunter, type-design-analyzer,
 pr-test-analyzer), the built-in `/code-review` and `/security-review`, and
-`codex-monitor.yml`. `/audit-repo` covers directive↔code drift only. **Method to
+Codex's review. `/audit-repo` covers directive↔code drift only. **Method to
 import:** superpowers `receiving-code-review` **anti-sycophancy** rule (no
 "You're absolutely right!", restate the requirement, push back with technical
 reasoning) — added as a review-handling directive.
@@ -123,12 +123,12 @@ two-tier CI (`qa.yml` static = free, `qa-live.yml`/Playwright = gated) already
 mirrors gstack's tiered testing; the `claude -p` cost-capped eval harness is
 **rejected** (CLI/API-billed).
 
-### 8 · Ship — `push-gate` + `update-pages` + `pages-monitor` *(exists — gated)*
+### 8 · Ship — `push-gate` + `update-pages` + `qa-live.yml` *(exists — gated)*
 **Method imported:** gstack **Review Readiness staleness gate** —
 `pr-readiness-reviewer`'s evidence-currency check marks the PR Not Ready unless
 the `.agent-reports/` test and review reports and the CI results cover the
 current HEAD.
-Our `push-gate` hook + PR lifecycle + `pages-monitor` already cover gstack's
+Our `push-gate` hook + PR lifecycle + `qa-live.yml` already cover gstack's
 land-and-deploy + canary.
 
 ### 9 · Reflect — `/learn` *(alongside `/handoff-session`)*
@@ -167,7 +167,7 @@ Every command and skill carries:
 |------------|----------|
 | Code review (multi-lens) | `pr-review-toolkit` (official) + `/code-review` |
 | Security review | `/security-review` + `security-guidance` (official) |
-| Second-opinion review | `codex-monitor.yml` (Codex) |
+| Second-opinion review | Codex (verdict per `git.md` → *PR Lifecycle*) |
 | GitHub ops | GitHub MCP |
 | Backend / data | Supabase MCP + `supabase` agent (per `data.md`) |
 | Browser UI testing | Playwright (kit in `templates/ui-tests/`) / `ui-tester` |
@@ -206,37 +206,15 @@ What `/new-repo` scaffolds in **every** project:
   `styles/` (`tokens.css` + `components.css`, set by `/design-intake`);
   `index.html` is not scaffolded — the first build writes it
 - the `directives-toolkit` plugin (so `env-chk`, the `push-gate` hook, `my-list`, … resolve)
-- the standard workflows — **seven unconditionally**: `qa.yml`, `qa-live.yml`,
-  `ci-notify.yml`, `ci-monitor.yml`, `codex-monitor.yml`, `pages-monitor.yml`,
+- the standard workflows — **three unconditionally**: `qa.yml`, `qa-live.yml`,
   `qa-response.yml` (`keepalive.yml` is NOT installed — `cicd-setup.md` Step 9f;
   `cron-notify.yml` is added only when the project has a scheduled task, owner
   ruling 2026-10-10)
-- **plus one of two source-conditional files**, so every project has a baseline of eight
-  (nine once `cron-notify.yml` is added with a scheduled task):
-  `pages-retry.yml` and its converse `pages-deploy.yml`. State `pages-retry.yml`
-  in both branches, never as "branch-source only" — the exception lives in the
-  half a one-sided sentence drops:
-  - **branch-source** → install it, with its `REQUIRED` entry.
-  - **Actions-source** → **delete it** and drop the `REQUIRED` entry; **or**
-    repoint it at your own deploy under W3's idempotent exception (no build, no
-    compile, no tests), recording the reasoning **and a revisit trigger** in
-    `CLAUDE.md` and **updating** the `REQUIRED` entry to that deploy's name
-    rather than dropping it (`automations.md` → *Watcher Rules* W3).
-
-  `pages-deploy.yml` is the mirror: **Actions-source** → install it (it IS the
-  deploy: filter, publish, retry, assert), add its `Pages Deploy` watchers to
-  `qa-live.yml` and `pages-monitor.yml` and list both in the `REQUIRED` file;
-  **branch-source** → do not install it (`cicd-setup.md` → *9d-bis — Pages Deploy (Actions-source only)*).
-
-  This pair is the single exception to "no opt-in modules" above, and it is not a
-  preference:
-  the file watches `pages-build-deployment`, which a **repo visibility flip
-  fires even under Actions-source**, publishing the unfiltered tree — so
-  installing it on an Actions-source project arms a **retry of a rogue
-  unfiltered deploy** (`directives/global.md` → *Hosting & Deployment*;
-  `automations.md` → *Watcher Rules* W3). Consistency loses to a security
-  hazard, and the condition is a fact about the project's Pages source rather
-  than a toggle anyone chooses. Omit its `REQUIRED` entry in the same edit
+- **plus `pages-deploy.yml` on an Actions-source project only** (it IS the
+  deploy: filter, publish, retry, assert): add its `Pages Deploy` watcher to
+  `qa-live.yml` and list it in the `REQUIRED` file; **branch-source** → do not install it (`cicd-setup.md` → *9d-bis — Pages Deploy (Actions-source only)*).
+  This is the single exception to "no opt-in modules" above, and the condition
+  is a fact about the project's Pages source rather than a toggle anyone chooses
 - the Playwright kit (`.github/scripts/ui-tests/`) and the guardrail scripts
   (`.github/scripts/`: `check-contrast.js` and the rest `qa.yml` names); the
   scheduled-job scripts (`notify-email.js`, `notify-task.js`, `package.json`)

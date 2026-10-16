@@ -50,13 +50,9 @@ enforces the scan is the honest state, not an oversight; #363 carries what would
 
 *Supports:* `directives/global.md` → *Async Operations*, item 1 — event wakes are primary, not sole; arm the check-in alongside them.
 
-What `ci-monitor.yml` does and does not cover: it may still surface a cancelled
-run as a `ci-failure` issue, but coverage depends on its watch list and on
-whether anyone dispatches its manual scan — read that file rather than trusting
-a summary. **None of it reaches the session waiting on the PR**, which is the
-only part that bears on this rule. The seven ways a dispatched run emits no wake
-are in `git.md` → *PR Lifecycle*, with their evidence in `docs/standards/pr-mechanics.md` →
-*Wakes that never arrive*.
+A cancelled run emits no PR wake — the `check_suite.completed` event excludes
+cancelled suites — and an event that does fire can be lost before it reaches the
+session. The cases and their evidence are in `docs/standards/pr-mechanics.md` → *Wakes that never arrive*.
 
 ## The in-flight test
 
@@ -64,8 +60,7 @@ are in `git.md` → *PR Lifecycle*, with their evidence in `docs/standards/pr-me
 
 "Does this outcome emit a wake?" is only knowable once the run is terminal, and
 the decision to arm has to be made before that — a test that needs the answer it
-is deciding about. `ci-notify` fires only on `conclusion == 'success'` and only
-for workflows it watches by name, and any run can be cancelled — a superseding
+is deciding about. Any run can be cancelled — a superseding
 push, a manual cancel, a runner loss — which → *Wake coverage* establishes emits
 no PR wake. "I expect this one to pass" fails as a test because an anticipated
 success that gets cancelled is the case that strands the session, and it is

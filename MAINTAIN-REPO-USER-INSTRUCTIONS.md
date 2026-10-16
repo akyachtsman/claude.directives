@@ -199,7 +199,7 @@ unprotected no matter what the hook reports.
    than protecting it.
 6. Leave **Require status checks** unchecked. It pins a check by NAME, so a
    renamed workflow silently blocks every merge; sessions already verify CI
-   green before merging and `ci-monitor` catches failures independently.
+   green before merging.
 
 **Why conversation resolution is on that list (owner ruling, 2026-08-26).** It
 moves `git.md`'s *no unresolved review threads* gate server-side, where no session
@@ -223,8 +223,7 @@ direct push, that is a deliberate decision requiring a narrow identity that is
 not you; work it out then, and never reach for a bypass merely to keep a
 workflow green.
 
-Nothing else in the standard set pushes: the monitors only open issues, comment
-and label, and `pages-retry` re-runs a deploy rather than pushing.
+Nothing else in the standard set pushes.
 
 **Verify it took**, rather than trusting the form. A ruleset fails in two
 directions and the settings page shows neither: it can be inactive or aimed at
@@ -276,9 +275,9 @@ target session and tells you first (owner ruling, 2026-10-06):
 3. **Implement + self-apply** — the fix lands under `directives/`, `templates/`,
    or `plugins/`, AND is applied to this repo itself in the same PR when it
    applies here (`CLAUDE.md` → Self-application).
-4. **Merge on green** — normal PR flow; `git.md` gates; ci-notify wakes the
-   session to merge **when the run emits a wake at all** (see *ci-notify
-   bootstrap gap* and the scheduling bullet below); otherwise arm a check-in.
+4. **Merge on green** — normal PR flow; `git.md` gates; the PR subscription wakes
+   the session to merge **when the run emits a wake at all** (see the scheduling
+   bullet below); otherwise arm a check-in.
 5. **Propagate** — run HUMAN STEPS above for the modes the PR touched.
 6. **Close the loop** — the prepared reply goes back to the reporting session,
    pasted by you or sent directly with a heads-up, so it can proceed with
@@ -343,7 +342,7 @@ CI-validated by `check-exports.js` so they can't rot:
 
 - **Domain and compartment** — `domains.names` lists the domains; a record
   naming any other fails. The **compartment** is the swappable unit (e.g.
-  `test.ui-kit`, `git.monitors`): replace its file set honoring its interface
+  `test.ui-kit`, `git.automation`): replace its file set honoring its interface
   and nothing outside it moves. The records naming a compartment ARE the
   shopping list for a swap, across all delivery modes at once.
 - **Durability class** — what kind of thing the file is (`classes` defines
@@ -377,12 +376,8 @@ Standing rules:
 ## Known Gotchas
 
 Hard-won; each cost a real debugging session:
-- **ci-notify bootstrap gap** — `workflow_run` reads the default branch, so
-  ci-notify can never wake the PR that installs it. Verify on the FIRST
-  post-install PR; don't call it a dud.
 - **Workflow watch lists** — every rule about which names a `workflow_run`
-  watcher may carry, how the two Pages sources differ, and why retry is
-  source-specific lives in ONE place: `docs/standards/automations.md` → *Watcher Rules* (W1–W3). Stated here once as a
+  watcher may carry and how the two Pages sources differ lives in ONE place: `docs/standards/automations.md` → *Watcher Rules* (W1–W2). Stated here once as a
   pointer on purpose; this ruleset was previously restated in five files and
   every correction landed in four of them.
 - **A name resolving is not a trigger firing.** The tree can prove the first and
@@ -394,7 +389,7 @@ Hard-won; each cost a real debugging session:
 - **Scheduling tools are pre-approved via committed settings** (`global.md` → *Scheduling Tools Never Prompt*, 2026-08-18): the allowlist in
   `.claude/settings.json` (the six scheduling tools plus the read-only tools that
   ruling admits) loads at session start; a one-time prompt in an
-  already-running session is accepted. ci-notify's wake is not a no-scheduling
+  already-running session is accepted. A PR event wake is not a no-scheduling
   guarantee — when a run emits none and a check-in is the only observer: `git.md` → *PR Lifecycle*.
 - **The managed Pages workflow's real name is the slug** `pages-build-deployment`,
   not the UI prose title.
@@ -406,7 +401,7 @@ Hard-won; each cost a real debugging session:
   (`global.md` → *Repository Scope*), and a failed fetch is "cannot verify",
   never "broken".
 - **The GitHub App token's hourly quota is shared and exhaustible** — distinct
-  from the bullet above: every session and monitor draws authenticated REST
+  from the bullet above: every session draws authenticated REST
   calls from ONE identity (the error names it: `API rate limit already
   exceeded for user ID 108373010`), so an API-heavy day throttles *write*
   calls at the worst moment — un-draft/merge got struck four times on

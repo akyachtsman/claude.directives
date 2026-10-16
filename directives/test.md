@@ -41,8 +41,8 @@ preferred over one this toolkit would have to keep current itself.
   `pr-review-toolkit:pr-test-analyzer`
 - Security review → the built-in `/security-review` skill on demand, plus the
   official `security-guidance` plugin's automatic hooks (edit/turn/commit-time)
-- Quick CI status checks are done inline via `mcp__github__actions_list`; the
-  always-on monitor remains `ci-monitor.yml`
+- Quick CI status checks are done inline via `mcp__github__actions_list`; a
+  failed run on a PR arrives as a native PR wake
 
 ### templates/ — fill-in artifacts
 - `templates/CLAUDE-template.md` — project CLAUDE.md scaffold (used by `/new-repo`)
@@ -65,8 +65,7 @@ Execute these before any task work:
 3. Read the last run's status ONCE via `mcp__github__actions_list` to catch up on
    failures since the last session — a single catch-up read, never a poll loop
    (`git.md` → *GitHub API Quota Economy*)
-4. Confirm `ci-monitor.yml`, `codex-monitor.yml` and `pages-monitor.yml` (every project
-   is on Pages — `global.md` → *Hosting & Deployment*) are present in `.github/workflows/` — add any missing from `templates/workflows/`
+4. Confirm `qa.yml`, `qa-live.yml` and `qa-response.yml` are present in `.github/workflows/` — add any missing from `templates/workflows/`
 
 ## Playwright (owner ruling, 2026-09-24)
 - Always use `page.goto('./')`, never `page.goto('/')`

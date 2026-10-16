@@ -9,11 +9,7 @@ reason named. Each refusal has an accepting complement, so a fix cannot be
 bought by refusing everything.
 
 Every pair on the check's own list is drifted in turn: a pair dropped from the
-list (or a comparison that skips one) fails the case named after it. The
-ADAPTED pairs (equal apart from their watch list and comments) are drifted in
-turn as well, each in a job key and in a `run:` script line, against the
-complements that must stay accepted: a changed watch list, a reworded YAML
-comment, a reworded shell comment.
+list (or a comparison that skips one) fails the case named after it.
 
 Re-prove discrimination with a mutant:
 
@@ -45,17 +41,14 @@ _spec = importlib.util.spec_from_file_location("check_pairs", REAL)
 _real = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_real)
 PAIRS = _real.PAIRS
-ADAPTED = _real.ADAPTED
-MONITOR = next(p for p in ADAPTED if p[0].endswith("ci-monitor.yml"))
 HOOK = next(p for p in PAIRS if p[2])
 PLAIN = next(p for p in PAIRS if not p[2])
 
 
 def fixture(tmp):
-    """A tree holding every pair and adapted-pair file exactly as this repo has it, modes included."""
+    """A tree holding every pair file exactly as this repo has it, modes included."""
     root = tempfile.mkdtemp(dir=tmp)
     files = [rel for live, template, _ in PAIRS for rel in (live, template)]
-    files += [rel for pair in ADAPTED for rel in pair]
     for rel in files:
         dest = os.path.join(root, rel)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -91,73 +84,7 @@ def cases():
     for live, template, _ in PAIRS:
         out.append((f"{template} drifted from {live} — refused",
                     lambda r, t=template: append(r, t), 1, f"{live} <-> {template}: contents differ"))
-    # Every adapted pair, drifted in turn where the parse keeps it: a job key,
-    # and a line of the `run:` script. Each needle names the pair.
-    for live, template in ADAPTED:
-        out += [
-            (f"{template}: a job key drifted from {live} — refused",
-             lambda r, t=template: replace(r, t, "runs-on: ubuntu-latest", "runs-on: ubuntu-22.04"),
-             1, f"{live} <-> {template}: differ beyond their watch list"),
-            (f"{template}: a run-script line drifted from {live} — refused",
-             lambda r, t=template: replace(r, t, "set -euo pipefail\n", "set -euo pipefail\n          echo drift\n"),
-             1, f"{live} <-> {template}: differ beyond their watch list"),
-            (f"{template}: a reworded YAML comment — accepted",
-             lambda r, t=template: append(r, t, "# a comment only this copy has\n"),
-             0, "equal apart from their watch list"),
-            (f"{template}: a renamed watched workflow — accepted",
-             lambda r, t=template: replace(r, t, "      - 'QA — Static + UI Tests'\n", "      - 'QA — Renamed'\n"),
-             0, "equal apart from their watch list"),
-            (f"{template}: an emptied watch list — refused",
-             lambda r, t=template: replace(r, t, "    workflows:\n      - 'QA — Static + UI Tests'\n      - 'QA — UI Tests (live)'\n      - 'QA — Event-Driven Response'\n", "    workflows: []\n"),
-             1, f"{live} <-> {template}: on.workflow_run.workflows is not a non-empty list"),
-            (f"{template}: no on.workflow_run.workflows — refused",
-             lambda r, t=template: replace(r, t, "    workflows:\n", "    branches:\n"),
-             1, f"{live} <-> {template}: has no on.workflow_run.workflows"),
-            (f"{template} missing — refused",
-             lambda r, t=template: os.remove(os.path.join(r, t)), 1, f"missing {template}"),
-        ]
     out += [
-        # The diff names the moved line, so the log shows what drifted.
-        ("an adapted refusal prints the drifted line",
-         lambda r: replace(r, MONITOR[1], "set -euo pipefail\n", "set -euo pipefail\n          echo drift\n"),
-         1, "echo drift"),
-        # A shell comment inside `run:` survives the YAML parse as text; the
-        # copies word theirs differently, so it must be set aside too.
-        ("a reworded shell comment inside run: — accepted",
-         lambda r: replace(r, MONITOR[1], "# THE RECORD OF WHY.", "# THE RECORD, REWORDED."),
-         0, "equal apart from their watch list"),
-        # Python calls False == 0; GitHub does not, and requires a boolean here.
-        ("required: false turned to 0 — refused (no type coercion)",
-         lambda r: replace(r, MONITOR[1], "required: false", "required: 0"),
-         1, "differ beyond their watch list"),
-        # YAML 1.1 (PyYAML) reads `no` as false; YAML 1.2 (GitHub) reads a string.
-        ("required: false turned to no — refused (no YAML 1.1 resolution)",
-         lambda r: replace(r, MONITOR[1], "required: false", "required: no"),
-         1, "differ beyond their watch list"),
-        # An explicit tag keeps the text and changes what GitHub reads.
-        ("required: false turned to !!str false — refused (explicit tag)",
-         lambda r: replace(r, MONITOR[1], "required: false", "required: !!str false"),
-         1, "differ beyond their watch list"),
-        # The composer resolves plain `on` to bool too; only an event knows the
-        # tag was WRITTEN. GitHub (YAML 1.2) needs the string key `on`.
-        ("on: turned to !!bool on: — refused (an explicit tag on a key)",
-         lambda r: replace(r, MONITOR[1], "\non:\n", "\n!!bool on:\n"),
-         1, "has no on.workflow_run.workflows"),
-        ("required: false turned to 'false' — refused (a string is not a boolean)",
-         lambda r: replace(r, MONITOR[1], "required: false", "required: 'false'"),
-         1, "differ beyond their watch list"),
-        # A `#` line INSIDE a multi-line quoted string is data, not a comment:
-        # ci-monitor's msgs="..." holds one such string (Codex, #430).
-        ("a # line inside a quoted string — refused (data, not a comment)",
-         lambda r: replace(r, MONITOR[1], 'msgs="$msgs\n', 'msgs="$msgs\n              # Canceling since a higher priority waiting request\n'),
-         1, "differ beyond their watch list"),
-        ("a template that is not valid YAML — refused, not a traceback",
-         lambda r: append(r, MONITOR[1], "  : [unbalanced\n"),
-         1, "does not parse as YAML"),
-        # The same line, de-commented, is code: refused.
-        ("a shell comment turned into code — refused",
-         lambda r: replace(r, MONITOR[1], "# THE RECORD OF WHY.", "echo THE RECORD OF WHY."),
-         1, "differ beyond their watch list"),
         # The diff is printed, so the line that moved is visible in the log.
         ("a refusal prints the drifted line",
          lambda r: append(r, PLAIN[1], "# the drifted line\n"), 1, "+# the drifted line"),
@@ -199,15 +126,10 @@ def main():
             root = fixture(tmp)
             mutate(root)
             c.expect(label, *run([sys.executable, GUARD, root]), expected, needle)
-    # No shell parser: the adapted pairs are NOT checked, and that must fail.
-    env = dict(os.environ, SHFMT="/nonexistent/shfmt", PATH="/usr/bin:/bin")
-    with tempfile.TemporaryDirectory() as tmp:
-        c.expect("no shfmt — the adapted pairs fail as NOT checked",
-                 *run([sys.executable, GUARD, fixture(tmp)], env=env), 1, "the adapted pairs cannot be compared")
     # And the live repo. A suite that only ever sees fixtures can be green while
     # the real pairs have drifted.
     c.expect("the live repo passes", *run([sys.executable, GUARD, ROOT]), 0)
-    return c.finish(f"{len(all_cases) + 2} pinned trees read correctly.")
+    return c.finish(f"{len(all_cases) + 1} pinned trees read correctly.")
 
 
 if __name__ == "__main__":

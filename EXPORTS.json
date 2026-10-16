@@ -84,17 +84,12 @@
     "templates/actions/secret-scan/": { "domain": "global", "compartment": "security", "class": "mechanical" },
     "docs/standards/hosting-mechanics.md": { "domain": "global", "compartment": "deploy", "class": "reference", "swap": "permanent" },
     "plugins/directives-toolkit/skills/update-pages/": { "domain": "global", "compartment": "deploy", "class": "behavioral" },
-    "templates/workflows/pages-monitor.yml": { "domain": "global", "compartment": "deploy", "class": "mechanical" },
-    "templates/workflows/pages-retry.yml": { "domain": "global", "compartment": "deploy", "class": "mechanical" },
     "templates/workflows/pages-deploy.yml": { "domain": "global", "compartment": "deploy", "class": "mechanical" },
     "templates/CLAUDE-template.md": { "domain": "global", "compartment": "starter", "class": "artifact" },
     "directives/git.md": { "domain": "git", "compartment": "lifecycle", "class": "standard", "swap": "permanent" },
     "docs/standards/pr-mechanics.md": { "domain": "git", "compartment": "lifecycle", "class": "reference", "swap": "permanent" },
     "templates/pr-checklist.md": { "domain": "git", "compartment": "lifecycle", "class": "artifact" },
     "plugins/directives-toolkit/commands/commit-chk.md": { "domain": "git", "compartment": "lifecycle", "class": "behavioral" },
-    "templates/workflows/ci-monitor.yml": { "domain": "git", "compartment": "monitors", "class": "mechanical" },
-    "templates/workflows/ci-notify.yml": { "domain": "git", "compartment": "monitors", "class": "mechanical" },
-    "templates/workflows/codex-monitor.yml": { "domain": "git", "compartment": "monitors", "class": "mechanical" },
     "templates/workflows/cron-notify.yml": { "domain": "git", "compartment": "automation", "class": "mechanical" },
     "templates/scripts/notify-email.js": { "domain": "git", "compartment": "automation", "class": "mechanical" },
     "templates/scripts/notify-task.js": { "domain": "git", "compartment": "automation", "class": "mechanical" },
@@ -207,9 +202,8 @@
     },
     "codex-reviews": {
       "vendor": "GitHub",
-      "serves": "git.monitors",
+      "serves": "git.lifecycle",
       "sockets": [
-        "templates/workflows/codex-monitor.yml",
         "directives/git.md",
         "docs/standards/pr-mechanics.md"
       ]
@@ -506,7 +500,7 @@
     "loop": {
       "vendor": "Anthropic",
       "verdict": "rejected",
-      "rationale": "Built-in skill that re-runs a prompt on an interval. git.md -> GitHub API Quota Economy says never poll for CI, deploy, or PR status (webhook wakes + ci-notify instead), and CLAUDE.md -> Notifications forbids arming a timed check-in as a substitute for a subscription. A recurring prompt is the mechanism both rulings exclude.",
+      "rationale": "Built-in skill that re-runs a prompt on an interval. git.md -> GitHub API Quota Economy says never poll for CI, deploy, or PR status (webhook wakes instead), and CLAUDE.md -> Notifications forbids arming a timed check-in as a substitute for a subscription. A recurring prompt is the mechanism both rulings exclude.",
       "stays": "directives/git.md"
     },
     "cron-tools": {

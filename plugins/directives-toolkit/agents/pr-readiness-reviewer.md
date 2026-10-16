@@ -57,7 +57,7 @@ You are the final gate before a pull request or merge. Confirm that the branch i
 
 4. **Reviewer issues**
    - No unresolved critical issues from test verifier, code reviewer, security reviewer, or CI.
-   - **Codex** is judged from its response, never the label — the gate, the reaction
+   - **Codex** is judged from its response — the gate, the reaction
      ladder, the fallback reviewer and the exits are `git.md` → *PR Lifecycle*. With the
      PR number the orchestrator supplies, use `mcp__github__pull_request_read`:
      `get_reviews` (reviewed-commit SHA vs HEAD — by SHA, never timestamp),
@@ -74,15 +74,13 @@ You are the final gate before a pull request or merge. Confirm that the branch i
        (`issue_read` → `get` has no author or timestamp); a missing PR number; unreadable
        reviews/comments. Pending is a correct output, but it **caps Final Status at
        Conditional**.
-     - **Label:** a `codex-flagged` label still present is a blocker — **Conditional** at
-       best, whatever the row says; an absent one proves nothing and never upgrades a row.
      - The ladder and the exits are the **merger's** to apply; this agent has no tool for
-       the reaction endpoint. Its Required Next Step with the label present: request
+       the reaction endpoint. Its Required Next Step on a Flagged row: request
        another review pass — unless the PR records a state `git.md` → *PR Lifecycle*'s **unreachable-review test** admits.
        The two states are an *unavailable* reply still inside its reset window, or a
        request that could not be made or accepted at all — never elapsed silence. With
-       the fallback reviewer's clean review of HEAD also recorded, the next step is
-       removing the label with that evidence; without it the row stays Pending.
+       the fallback reviewer's clean review of HEAD also recorded, the row is Clear on
+       that evidence; without it, Pending.
    - Important issues are fixed or explicitly documented as accepted follow-ups.
 
 5. **PR readiness**

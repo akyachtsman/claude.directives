@@ -16,19 +16,14 @@ So `on:` becomes the key True, `timeout-minutes: 070` a 56-minute bound, and
 on its own and fixed it its own way (#408, #430, #431); this module is the
 one definition they share (audit 2026-10-11, I-24).
 
-A sibling module, not a guard: a script that imports it finds it in its own
-directory (Python puts a script's directory first on sys.path), here in
-templates/scripts/ and downstream in .github/scripts/, where it is installed
-because the callers that run its importers name it (see templates/workflows/
-qa.yml, and /refresh-repo's derivation of a template script's local imports).
+A sibling module, not a guard: a script in .github/scripts/ that imports it
+finds it in its own directory (Python puts a script's directory first on
+sys.path). This repo's own gates use it; nothing downstream does.
 
     loader()                   a SafeLoader class with the core schema
     loader(lenient_ints=True)  the same, plus PyYAML's 1.1-only integer forms
                                (`1_000`, `0b101`, `1:30`) read as integers.
-                               check-job-bounds.py keeps that reading on purpose:
-                               it has no evidence GitHub rejects those spellings,
-                               and a red build over one nobody has observed costs
-                               more than a missed one (owner, 2026-10-11).
+                               Nothing passes it today.
     loader(allow_anchors=False) the same, refusing every anchor and alias: for
                                an action's metadata file (`action.yml`)
     load(stream, ...)          yaml.load with that loader
@@ -53,8 +48,7 @@ parser's EVENTS, never from the text: an `&` or `*` inside a quoted string or a
 block scalar is content, not an anchor. Before this, PyYAML's own reader merged
 `<<` and this one read it as a key, and both accepted an anchored action.yml,
 so the file passed every local check and failed on GitHub in every project
-that copied it. templates/scripts/check-yaml-anchors.py applies these rules to
-every workflow and action file.
+that copied it.
 """
 
 import re

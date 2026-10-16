@@ -105,7 +105,8 @@ KITS
 
 n=0 same=0 stale=0 custom=0 drift=0 modes=0
 for f in .github/workflows/*.yml .github/actions/*/* \
-         .claude/hooks/session-start.sh .github/scripts/*; do
+         .claude/hooks/session-start.sh .github/scripts/* \
+         .github/workflow-ref-required.json .github/ui-suite-env-exempt.json; do
   [ -f "$f" ] || continue
   script=
   case "$f" in
@@ -124,7 +125,14 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     .github/workflows/ci-monitor.yml|.github/workflows/ci-notify.yml|\
     .github/workflows/codex-monitor.yml|.github/workflows/pages-monitor.yml|\
     .github/workflows/pages-retry.yml)
-      echo "RETIRED: $f — upstream deleted this watcher; delete it, and its entry in .github/workflow-ref-required.json if it has one"
+      echo "RETIRED: $f — upstream deleted this watcher; delete it"
+      continue ;;
+    # The qa.yml guards and their inputs, removed 2026-10-16 (#460 step 2).
+    .github/scripts/workflow-ref-guard.py|.github/scripts/check-job-bounds.py|\
+    .github/scripts/check-py-warnings.py|.github/scripts/check-ui-suite-env.py|\
+    .github/scripts/check-yaml-anchors.py|.github/scripts/gh_yaml.py|\
+    .github/workflow-ref-required.json|.github/ui-suite-env-exempt.json)
+      echo "RETIRED: $f — upstream deleted this guard; delete it, and its step in qa.yml if one remains"
       continue ;;
   esac
   t=$(refresh_template_of "$f")

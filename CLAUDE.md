@@ -57,7 +57,6 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
-| `.github/workflow-ref-required.json` | `workflow-ref-guard.py`'s required-watcher list: for each workflow file, the `workflow_run` names it MUST keep watching, so a watcher deleted outright fails CI instead of passing silently. Empty here: this repo runs no `workflow_run` watcher |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 
 ## How it's imported downstream
@@ -188,8 +187,8 @@ node .github/scripts/check-repo-map-ui.js                    # when the map chan
 - Keep the `\x60` in `(?<![\x60\w])`; do NOT reintroduce the flanking rule; line endings are normalised ONCE by `readSource()`.
 
 ⚠️ **RUN THE GATE AFTER `git add`, NOT BEFORE — a NEW file is invisible to it
-until staged.** `check-exports`, `check-py-warnings` and `check-claims --derive`
-all enumerate via `git ls-files`, which does not list untracked paths. So a gate
+until staged.** `check-exports` and `check-claims --derive`
+both enumerate via `git ls-files`, which does not list untracked paths. So a gate
 run on a working tree containing a brand-new file **checks everything except the
 thing you just added**, and reports OK. The #325 measurement: `docs/internal/gate-history.md`.
 Stage first, then gate.

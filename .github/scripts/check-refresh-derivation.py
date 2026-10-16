@@ -116,7 +116,7 @@ path or a dependency loaded any other way is invisible to it.
 #   than copying it, PROP6 2026-09-01;
 
 # Before any import: running the gate must leave no __pycache__/ beside the
-# local modules it imports (cases_lib.py and/or templates/scripts/gh_yaml.py).
+# local modules it imports (cases_lib.py and/or gh_yaml.py).
 import sys
 sys.dont_write_bytecode = True
 
@@ -130,9 +130,8 @@ from pathlib import Path
 
 import yaml
 
-# The shared YAML 1.2 reader (templates/scripts/gh_yaml.py), found from this
+# The shared YAML 1.2 reader (.github/scripts/gh_yaml.py), found from this
 # file, not the cwd, which the cases point at a fixture tree (I-24).
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "templates" / "scripts"))
 import gh_yaml  # noqa: E402
 
 COMMAND = Path("plugins/directives-toolkit/commands/refresh-repo.md")

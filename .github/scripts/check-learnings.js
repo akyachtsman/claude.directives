@@ -40,9 +40,7 @@ const COMPLETE = [{
   key: 'a-terminal-state-watcher-cannot-see-a-hang',
   dirs: ['.github/workflows', 'templates/workflows'],
   text: 'workflow_run',
-  exempt: {
-    'templates/workflows/qa.yml': 'triggers on pull_request/push; names workflow_run only in a comment about the ref guard',
-  },
+  exempt: {},
 }];
 
 let failed = false;

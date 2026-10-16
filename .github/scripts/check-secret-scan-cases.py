@@ -42,7 +42,6 @@ from cases_lib import Cases, bin_path, run, write_tree
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ACTION = bin_path("SECRET_SCAN_BIN",
                   os.path.join(ROOT, "templates", "actions", "secret-scan", "action.yml"))
-sys.path.insert(0, os.path.join(ROOT, "templates", "scripts"))
 import gh_yaml  # noqa: E402  (after the path insert)
 
 

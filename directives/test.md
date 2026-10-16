@@ -64,9 +64,10 @@ and the PR number. Every report goes under `.agent-reports/`.
 1. **`test-verifier`** — tests, lint, syntax, secrets. Wait for it.
 2. **`ui-tester`, at most 3 rounds.** Pass `round: <N> of 3` and, from round 2,
    the previous `.agent-reports/ui-test-report.md`. On a fail with a targeted
-   fix, apply the minimum fix yourself, run `/commit-chk`, push, and confirm the
+   fix, apply the minimum fix yourself, run `/commit-chk`, commit, push, and confirm the
    deploy serves that commit before the next round. After 3 rounds without a
-   pass, or on an escalation, stop the loop and tell the owner. A report whose
+   pass, or on an escalation, stop the loop, tell the owner, and still go on to
+   step 3 so the picture is complete. A report whose
    *Occlusion & Transition Evidence* section is empty did not run that phase:
    count it as a skipped phase, never a pass.
 3. **Reviews, in parallel:** `pr-review-toolkit:code-reviewer` and

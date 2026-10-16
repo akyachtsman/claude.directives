@@ -66,12 +66,16 @@ and the PR number. Every report goes under `.agent-reports/`.
    the previous `.agent-reports/ui-test-report.md`. On a fail with a targeted
    fix, apply the minimum fix yourself, run `/commit-chk`, push, and confirm the
    deploy serves that commit before the next round. After 3 rounds without a
-   pass, or on an escalation, stop the loop and tell the owner.
-3. **Reviews, in parallel:** `pr-review-toolkit:code-reviewer` (the built-in
-   `/code-review` if the plugin is missing) and `pr-review-toolkit:pr-test-analyzer`;
-   plus `/security-review` when the change touches auth, sessions or
-   credentials, tokens or secrets, HTML built from user or API strings,
-   external calls, dependencies, or hosting and CORS config.
+   pass, or on an escalation, stop the loop and tell the owner. A report whose
+   *Occlusion & Transition Evidence* section is empty did not run that phase:
+   count it as a skipped phase, never a pass.
+3. **Reviews, in parallel:** `pr-review-toolkit:code-reviewer` and
+   `pr-review-toolkit:pr-test-analyzer` (if the plugin is missing, the built-in
+   `/code-review` replaces the first and the second is skipped); plus
+   `/security-review` when the change touches auth, sessions or credentials,
+   tokens or secrets, GitHub Actions secrets or environment variables, HTML
+   built from user or API strings, external calls, dependencies, or
+   infrastructure, hosting and CORS config.
 4. **`pr-readiness-reviewer`**, last, after the reviews are collected.
 
 Batch it: run the sequence once over a batch of finished tasks, not per task.

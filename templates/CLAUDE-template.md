@@ -51,7 +51,7 @@ This project's look is its own — established at kickoff via `/design-intake`
 3. Implement changes in [main source file] — or `/sdd-loop plan` then `/sdd-loop implement` to settle the approach and work its task list
 4. Run Required Commands above — all must pass
 5. Run the QA agents per `test.md` → *QA before merge*:
-   `test-verifier` → `ui-tester` → `pr-review-toolkit:code-reviewer` + `/security-review` (if security-relevant) → `pr-readiness-reviewer`
+   `test-verifier` → `ui-tester` → `pr-review-toolkit:code-reviewer` + `pr-review-toolkit:pr-test-analyzer` + `/security-review` (if security-relevant) → `pr-readiness-reviewer`
 6. Mark the draft PR ready once CI is green, then merge per `git.md` → *Conditional Auto-Merge on Green*
 
 ## UI Test Configuration

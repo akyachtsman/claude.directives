@@ -105,6 +105,7 @@
     "directives/design.md": { "domain": "design", "compartment": "method", "class": "standard", "swap": "permanent" },
     "plugins/directives-toolkit/commands/design-intake.md": { "domain": "design", "compartment": "method", "class": "behavioral" },
     "docs/guides/design-tooling.md": { "domain": "design", "compartment": "method", "class": "reference" },
+    "docs/standards/contrast-guardrail.md": { "domain": "design", "compartment": "guards", "class": "reference" },
     "templates/styles/": { "domain": "design", "compartment": "contract", "class": "artifact" },
     "templates/scripts/check-contrast.js": { "domain": "design", "compartment": "guards", "class": "mechanical" },
     "directives/test.md": { "domain": "test", "compartment": "core", "class": "standard", "swap": "permanent" },

@@ -3,7 +3,7 @@
   "claims": [
     {
       "id": "verdict-lookup",
-      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found that narrowed form in nine files while the source said both — this claim's best case, and the reason it is pinned. The phrasings carry their connector ('so check …', 'predictable: check …') rather than the bare instruction: with the bare form, inverting automations.md to 'so never check …' PASSED, because a phrasing is a substring of its own negation. Measured on #341, not imagined. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, automations.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording.",
+      "why": "A clean Codex rerun can arrive as a 👍 reaction or as an INLINE REVIEW-THREAD REPLY, and an inline reply never enters the comment list. A file that says only 'check the comments' sends a session to a gate it cannot clear. Round 35 of #294 found that narrowed form in nine files while the source said both — this claim's best case, and the reason it is pinned. The phrasings carry their connector ('so check …', 'predictable: check …') rather than the bare instruction: with the bare form, inverting automations.md to 'so never check …' PASSED, because a phrasing is a substring of its own negation. Measured on #341, not imagined. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, automations.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording. 2026-10-16 (owner ruling, #460 step 3): the qa-pipeline command was retired, so it left `consumers`.",
       "source": "directives/git.md",
       "phrasings": [
         "predictable: check the comments AND the review threads",
@@ -12,8 +12,7 @@
         "— read the PR's comments AND its review threads"
       ],
       "consumers": [
-        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md"
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
       ],
       "mustNotMatch": [
         "ignore the PR's comments and its review threads",

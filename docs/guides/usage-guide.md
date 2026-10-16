@@ -15,7 +15,7 @@ skills are **not** a committed runtime dependency — they bootstrap fresh from
   into `.claude/`; updates track this repo's `main` automatically.
 
 Toolkit agents: `test-verifier`, `pr-readiness-reviewer`, `ui-tester`, and
-`supabase`; the `/qa-pipeline` command runs the QA ones in order. Code review and security review come from
+`supabase`; the session runs the QA ones in order (`directives/test.md` → *QA before merge*). Code review and security review come from
 Anthropic-official sources instead — `pr-review-toolkit` agents and the
 `security-guidance` plugin / built-in `/security-review` skill (installed by
 the environment setup script, enabled in `.claude/settings.json`).

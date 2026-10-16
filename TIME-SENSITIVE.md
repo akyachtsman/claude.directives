@@ -60,8 +60,8 @@ is added by the pass that finds it.
 | Model aliases the Agent tool accepts, and alias resolution | `global.md` → *Subagent Model Selection* | 2026-10-11 | This session's Agent tool `model` values; code.claude.com/docs/en/sub-agents |
 | How a sub-agent's model is chosen (call, frontmatter, env var, fork) | `global.md` → *Subagent Model Selection* | 2026-10-11 | code.claude.com/docs/en/sub-agents |
 | Agent frontmatter `model:` field | `plugins/directives-toolkit/agents/test-verifier.md` | 2026-10-11 | code.claude.com/docs/en/sub-agents |
-| Sub-agents spawning sub-agents (nesting depth limit) | `plugins/directives-toolkit/commands/qa-pipeline.md` | 2026-10-11 | code.claude.com/docs/en/sub-agents, section "Let subagents spawn their own subagents" |
-| Sub-agent nesting in this cloud environment (`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` is set to 1 in the process environment, in no settings file) | `plugins/directives-toolkit/commands/qa-pipeline.md`; `EXPORTS.json` → `considered.workflow-authoring` | 2026-10-12 | `env` piped to `grep SPAWN_DEPTH` in a top-level web session (the 2026-10-12 reading came from a child session). If the variable is gone or above 1, nesting is back and the `/qa-pipeline` command could be re-judged as an agent |
+| Sub-agents spawning sub-agents (nesting depth limit) | `directives/test.md` → *QA before merge* | 2026-10-11 | code.claude.com/docs/en/sub-agents, section "Let subagents spawn their own subagents" |
+| Sub-agent nesting in this cloud environment (`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` is set to 1 in the process environment, in no settings file) | `directives/test.md` → *QA before merge*; `EXPORTS.json` → `considered.workflow-authoring` | 2026-10-12 | `env` piped to `grep SPAWN_DEPTH` in a top-level web session (the 2026-10-12 reading came from a child session). If the variable is gone or above 1, nesting is back and the QA sequence could run inside one agent |
 
 ## Claude Code & cloud sessions
 | Topic | Source | Last checked | Check |

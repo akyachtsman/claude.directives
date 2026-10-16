@@ -92,7 +92,7 @@ Execute in order:
    **`/sdd-loop specify`**, then proceed phase by phase
    (`specify → plan → implement` — `clarify` folded into `specify`, `tasks` and
    `analyze` into `plan`). `/sdd-loop` owns the phase mechanics and delegates
-   review to the `pr-review-toolkit` reviewers and `/qa-pipeline`; the directives
+   review to the `pr-review-toolkit` reviewers and `test.md` → *QA before merge*; the directives
    are the constitution. Honor the Pre-Push gate (`/commit-chk`) and PR
    lifecycle.
 

@@ -119,15 +119,12 @@ Then execute the plan's `## Tasks` **pipelined, not step-serialized**
 (`global.md` → *Parallel Tasking via Subagents*): implement a task, launch its
 verification, and immediately start the next task whose `depends:` are all
 satisfied — never idle-wait for a suite to finish before beginning independent
-work. **Batch verification**: group completed independent tasks and run
-**`/qa-pipeline`** (test-verifier → ui-tester with its bounded fix loop → code
-review → security review via the built-in `/security-review`, whenever the
-batch meets its trigger conditions → pr-readiness) once over the batch rather
-than once per task. Run it from this session, never from a subagent: it
-launches its steps itself. ⛔ **While it runs, nothing else writes this
-checkout** — its reads, diffs and suite see the live tree. The next tasks keep
-going in an **isolated worktree**, and land after the pipeline is collected; its
-ui-tester fixes are applied here, between its rounds.
+work. **Batch verification**: group completed independent tasks and run the QA
+agents once over the batch, from this session, per `test.md` → *QA before merge*
+(test-verifier → ui-tester with its bounded fix loop → reviews →
+pr-readiness-reviewer).
+⛔ **While they run, nothing else writes this checkout**; the next tasks keep
+going in an **isolated worktree** and land after the reports are collected.
 A failure routes back as the priority — its downstream tasks pause, the rest
 keep going. Loop until every task is done AND every verification round is
 green; the completion bar is unchanged. Honor the Pre-Push gate
@@ -153,7 +150,7 @@ feature sits in the loop and what the next phase is.
   already delegated). Each surviving phase is a genuine hand-off where the human
   supplies intent — which is the only thing a phase boundary is for.
 - This command **owns** WHAT and HOW; it **delegates** review, test and PR
-  machinery to the toolkit's agents and `/qa-pipeline` rather than re-implementing
+  machinery to the toolkit's agents and `test.md` → *QA before merge* rather than re-implementing
   them.
 - Keep WHAT (spec) and HOW (plan) in separate artifacts — never let stack
   decisions leak into `spec.md`. This is the one split that carries the method;

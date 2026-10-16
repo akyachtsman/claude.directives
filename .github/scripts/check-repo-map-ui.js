@@ -147,7 +147,7 @@ const traced = () => page.evaluate(() => ({
 }));
 const sameSet = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
 
-const QA = 'plugins/directives-toolkit/commands/qa-pipeline.md';
+const QA = 'plugins/directives-toolkit/commands/sdd-loop.md';
 await page.click(box(QA));
 await settle();
 {
@@ -155,7 +155,7 @@ await settle();
   if (!t.tracing || !t.panel) fail('clicking a box did not start a trace with its panel');
   else if (!sameSet(new Set(t.nodes), want.nodes)) fail(`trace lit ${t.nodes.length} boxes, the data says ${want.nodes.size}`);
   else if (!sameSet(new Set(t.edges), want.edges)) fail(`trace lit ${t.edges.length} connections, the data says ${want.edges.size}`);
-  else if (t.title !== '/qa-pipeline') fail(`panel shows "${t.title}", expected /qa-pipeline`);
+  else if (t.title !== '/sdd-loop') fail(`panel shows "${t.title}", expected /sdd-loop`);
   else if (t.ev.some(e => !/^\S+\.\w+ — \S/.test(e))) fail('a panel entry has no file — quoted-line evidence');
   else ok(`trace lights ${t.nodes.length} boxes and ${t.edges.length} connections — exactly the data's chain, each with evidence`);
 }
@@ -177,7 +177,7 @@ await page.click('#panel [data-go]');
 await settle();
 {
   const t = await traced();
-  if (t.title === '/qa-pipeline' || !t.title) fail('a panel link did not move the trace');
+  if (t.title === '/sdd-loop' || !t.title) fail('a panel link did not move the trace');
   else ok(`a panel link moves the trace (to ${t.title})`);
 }
 await page.keyboard.press('Escape');
@@ -194,10 +194,10 @@ if ((await traced()).tracing) fail('clicking the traced box again did not clear 
 else ok('clicking the traced box again clears it');
 
 /* ----------------------------------------------------------------- search */
-await page.fill('#search', 'qa-pipeline');
+await page.fill('#search', 'sdd-loop');
 {
   const hits = await page.$$eval('.n.hit', ns => ns.map(n => n.dataset.id));
-  if (!hits.includes(QA)) fail('search for "qa-pipeline" did not mark it');
+  if (!hits.includes(QA)) fail('search for "sdd-loop" did not mark it');
   else ok(`search marks ${hits.length} match(es)`);
 }
 // A file inside a group box is findable: searching for it marks the group
@@ -207,7 +207,7 @@ await page.fill('#search', 'qa-pipeline');
   const hits = await page.$$eval('.n.hit', ns => ns.map(n => n.dataset.id));
   if (!hits.includes('self:ci')) fail(`searching a file inside a group does not mark the group (${hits.join(', ') || 'no hits'})`);
   else ok('a file inside a group box is found through the box');
-  await page.fill('#search', 'qa-pipeline');
+  await page.fill('#search', 'sdd-loop');
 }
 await page.press('#search', 'Enter');
 await settle();
@@ -218,7 +218,7 @@ await settle();
     const w = document.getElementById('wrap').getBoundingClientRect();
     return r.left >= w.left && r.right <= w.right && r.top >= w.top && r.bottom <= w.bottom;
   }, QA);
-  if (t.title !== '/qa-pipeline') fail('Enter in search did not trace the first match');
+  if (t.title !== '/sdd-loop') fail('Enter in search did not trace the first match');
   else if (!inView) fail('the traced search match was not brought into view');
   else ok('Enter traces the first match and brings it into view');
 }
@@ -379,7 +379,7 @@ await page.click('#t_fit');
   await page.focus(box(QA));
   await page.keyboard.press('Enter');
   await settle();
-  if ((await traced()).title !== '/qa-pipeline') fail('Enter on a focused box does not trace it');
+  if ((await traced()).title !== '/sdd-loop') fail('Enter on a focused box does not trace it');
   else ok('a box is keyboard-reachable and Enter traces it');
   await page.keyboard.press('Escape');
 }
@@ -441,11 +441,11 @@ await page.click('#t_fit');
   else ok('at phone width: no sideways scroll, and the panel stays on screen');
   // A search result is brought into view ABOVE the bottom-sheet panel, not
   // centred behind it (Codex, #393).
-  await phone.fill('#search', 'qa-pipeline');
+  await phone.fill('#search', 'sdd-loop');
   await phone.press('#search', 'Enter');
   await phone.waitForTimeout(300);
   const [boxR, panelTop, wrapTop] = await phone.evaluate(() => {
-    const b = document.querySelector('.n[data-id$="commands/qa-pipeline.md"]').getBoundingClientRect();
+    const b = document.querySelector('.n[data-id$="commands/sdd-loop.md"]').getBoundingClientRect();
     return [[b.top, b.bottom], document.getElementById('panel').getBoundingClientRect().top,
       document.getElementById('wrap').getBoundingClientRect().top];
   });

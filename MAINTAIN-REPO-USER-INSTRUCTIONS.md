@@ -56,12 +56,11 @@ Corollaries worth memorizing:
   viewport never instantiated produces no failing test. Nothing in `/refresh-repo`
   looks at it — not Phase 1.5, which does not walk those paths, and not the
   session, which never reads this runbook. What DOES look is CI: the `ui-suite`
-  composite runs `check-ui-viewports.js` on every UI job, and the job's path
-  filter includes `.github/scripts/ui-tests/`, so any edit to the config fires the
-  gate on that same PR. The gate runs only where a live suite runs, so two holes
-  remain and they are yours. The silent one: a repo with no `index.html` sets
-  `ui=false` and skips the local UI job entirely, taking the gate with it and
-  reporting green. The loud one: `qa-response.yml` skips the composite when
+  composite runs `check-ui-viewports.js` on every UI job, and the UI job runs on
+  every trigger, so any edit to the config fires the gate on that same PR. The
+  gate runs only where a live suite runs, so two holes remain and they are yours.
+  The silent one: a repo with no `index.html` and no build skips the local UI job
+  with a notice, taking the gate with it and reporting green. The loud one: `qa-response.yml` skips the composite when
   `APP_URL` is unset — that job goes red on its own `Require APP_URL` step, so you
   will hear about it, but the config still went unread on that run. And the gate
   proves the config declares three width classes; it cannot prove those widths
@@ -71,7 +70,7 @@ Corollaries worth memorizing:
   `templates/scripts/check-ui-viewports.js` propagate TOGETHER.** The composite
   names the script by path, so a project that takes the new composite without the
   script fails every UI job at step resolution — not at test time, where it would
-  at least say why. Same shape as `check-job-bounds.py`'s coupling to `qa.yml`
+  at least say why. Same shape as `check-contrast.js`'s coupling to `qa.yml`
   (`docs/standards/cicd-setup.md` → *Step 1 — Copy workflow templates*, which
   installs it WITH `qa.yml` because `qa.yml` invokes it by path). Disposition
   both files in the same `/refresh-repo` pass, or neither.
@@ -83,19 +82,10 @@ Corollaries worth memorizing:
   (enablement half). Shipping one half leaves projects installed-but-not-enabled
   or enabled-but-not-installed.
 - **A validator and the rule it enforces arrive in the same pull, so first
-  adoption surfaces every drift at once.** `UI_SUITE_FLOOR` lives inside
-  `check-job-bounds.py`: a project that does not carry that script is not checked
-  against the floor at all, so its bounds drift silently and then fail the build
-  on the pull that adopts the script. That is **adoption, not regression** — the
-  repo did nothing wrong on the day it drifted, it finds out on the day it
-  adopts. So adopting a validator for the first time means **auditing and fixing
-  what it now checks IN THE SAME CHANGE**: script and callers together, never
-  script first. `claude.insurance` did exactly that on 2026-08-25 —
-  `check-job-bounds.py` plus both composite callers 40→120 in one change, then
-  the kit, then the conventions. Their 40s were verbatim template adoptions, so
-  two upstream raises (40→60, then 60→120) had reached them as a red check
-  instead of a refresh. That is the Downstream-Finding Loop below failing, not a
-  project drifting.
+  adoption surfaces every drift at once.** That is **adoption, not regression**:
+  adopting a validator for the first time means **auditing and fixing what it
+  now checks IN THE SAME CHANGE** — script and callers together, never script
+  first.
 - **An ad-hoc instruction from an upstream session outranks nothing, and it is
   the one channel with no review.** `/refresh-repo`'s disposition table already
   handles this correctly: `templates/ui-tests/**` is marked *per-project
@@ -128,7 +118,7 @@ Corollaries worth memorizing:
   provenance — `apfp.claude`'s 16.2–17.0min and `claude.trading`'s 30m35s are
   correctly cached in our own bound comments, because they are observations.
   Never cache someone else's THRESHOLD: downstream records "audit
-  `timeout-minutes` against the floor in `check-job-bounds.py` upstream on every
+  `timeout-minutes` against the floor in `templates/actions/ui-suite/action.yml` upstream on every
   refresh", never the number, because a cached `120` is confidently wrong the day
   the floor moves, in a file that reads as authoritative. **Where the config
   format forces the literal** — Actions `timeout-minutes` takes no `${{ }}`, no

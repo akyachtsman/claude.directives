@@ -15,9 +15,8 @@ name: Pages Deploy
 #      site after the deploy.
 #   4. The watcher: add this workflow's exact `name:` ("Pages Deploy") to
 #      qa-live.yml's watch list — ADD, never replace (W2). Rename it and the
-#      watcher follows. Then list it in .github/workflow-ref-required.json, so a
-#      refresh that drops the trigger fails the build instead of going quiet:
-#      "qa-live.yml": ["Pages Deploy"].
+#      watcher follows. Keep it through every template refresh: a dropped
+#      trigger fails nothing, the live gate simply stops firing.
 # Installed before the first page exists (a new project), it publishes nothing
 # until index.html arrives: with no build and no Pages deployment ever, a run
 # skips its Publish job and qa-live.yml skips its suite (it reads the skipped
@@ -29,8 +28,7 @@ name: Pages Deploy
 # build recorded on the `Build:` bullet in the project CLAUDE.md, run from the
 # repo root (`npm ci && npm run build`, say); SITE_DIR is the directory it
 # writes. No build: BUILD_CMD empty and SITE_DIR `.` — the repo root, filtered.
-# Whatever tests or watches the site must act on SITE_DIR, never the repo root,
-# and must count the build inputs as changes (qa.yml BUILD_PATHS).
+# Whatever tests or watches the site must act on SITE_DIR, never the repo root.
 #
 # FILTER. Each deny-list line is a literal path (no glob), removed from the
 # copy. Always dropped, whatever the deny-list says: .git and .github at any depth,

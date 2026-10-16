@@ -187,8 +187,7 @@ jobs:
       - name: Check the shipped Playwright config declares three viewport classes
         run: node templates/scripts/check-ui-viewports.js --tests-dir templates/ui-tests
 
-      # Same reasoning as "Check the cross-reference guard reads YAML correctly"
-      # above: this gate's value is being trusted when it is QUIET, so a regression
+      # This gate's value is being trusted when it is QUIET, so a regression
       # in it is silent by construction. Three static readers already failed here
       # with twelve findings and every failure mode was silent (#282).
       - name: Check the viewport gate itself reads configs correctly

@@ -124,19 +124,11 @@ Execute in order:
    Copy each derived
    `.github/scripts/<f>` from `claude.directives/templates/scripts/<f>`. A missing
    one fails its caller at step resolution, so a failed caller or script fetch
-   stops the bootstrap; never install a caller without what it names. Config
-   lives beside the scripts, never in them: a variable the kit reads that arrives
-   without an input goes in `.github/ui-suite-env-exempt.json` with its reason
-   (`check-ui-suite-env.py`); `check-job-bounds.py` needs none — it is what keeps
-   the ui-suite callers' 120-minute bound from drifting back to a value that
-   cancels healthy runs; `.github/workflow-ref-required.json` lists every
-   watcher the project must not lose: **branch-source** → `{}`;
-   **Actions-source** → the deploy watcher, so a refresh that drops the trigger
-   fails the build: with `pages-deploy.yml`, `{ "qa-live.yml": ["Pages Deploy"] }`
-   (`docs/standards/cicd-setup.md` → 9c-bis); and
+   stops the bootstrap; never install a caller without what it names.
    `check-contrast.js`, the WCAG guardrail `qa.yml` runs against the design
    tokens, reads `styles/tokens.css` or `css/tokens.css` by default — elsewhere,
-   append `--tokens <file>` (repeat it per theme file).
+   append `--tokens <file>` (repeat it per theme file). No script checks job
+   bounds or watcher names: keep them by hand (`docs/standards/cicd-setup.md` → 9c-bis, 9c-ter).
 
    **Composite actions (required by the qa workflows).** Copy
    `claude.directives/templates/actions/<a>/**` → `.github/actions/<a>/**` —
@@ -259,8 +251,6 @@ Execute in order:
      first build onward (the env var: since vitest 5.0.5, npm 10 crashes
      resolving html-validate's optional peers without it)
    - syntax-check the Playwright scripts (`node --check` on each `.js`)
-   - validate every workflow's and action's YAML as GitHub reads it
-     (`python3 .github/scripts/check-yaml-anchors.py`, installed in step 5)
    - run the project's security grep from `global.md`
    - confirm `git status` shows only intended changes
    Fix any failure before pushing.

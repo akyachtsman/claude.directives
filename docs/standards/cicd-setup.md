@@ -71,27 +71,12 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/actions/ui-suite/validate-report-path.py \
   -o .github/actions/ui-suite/validate-report-path.py
 
-# qa.yml's static job runs these six scripts by path, so they install WITH it —
-# without them the job fails at its first missing file. What each one guards is
-# in 9c-bis, 9c-ter and design.md → *Accessibility*.
+# qa.yml's static job runs this script by path, so it installs WITH it —
+# without it the job fails at the missing file. What it guards is in
+# design.md → *Accessibility*.
 mkdir -p .github/scripts
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-contrast.js \
   -o .github/scripts/check-contrast.js
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/workflow-ref-guard.py \
-  -o .github/scripts/workflow-ref-guard.py
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-job-bounds.py \
-  -o .github/scripts/check-job-bounds.py
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-py-warnings.py \
-  -o .github/scripts/check-py-warnings.py
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-suite-env.py \
-  -o .github/scripts/check-ui-suite-env.py
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-yaml-anchors.py \
-  -o .github/scripts/check-yaml-anchors.py
-# Four of them (workflow-ref-guard, check-job-bounds, check-ui-suite-env,
-# check-yaml-anchors) import this sibling, which reads YAML the way GitHub does
-# (1.2, not PyYAML's 1.1, and refusing the anchors and merge keys GitHub refuses).
-curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/gh_yaml.py \
-  -o .github/scripts/gh_yaml.py
 
 # The .js scripts in .github/scripts/ are CommonJS, and this manifest is what
 # says so: without it Node takes their module type from the ROOT package.json,
@@ -299,133 +284,36 @@ through the setup PR (Step 10).
 
 ---
 
-## Step 9 — Install the guards and conditional workflows
+## Step 9 — Hand-kept rules and conditional workflows
 
-### 9c-bis — Workflow cross-reference guard
+### 9c-bis — Workflow cross-references
 
 A `workflow_run` trigger names another workflow's `name:` as a string, and GitHub
 raises **no error** when that name matches nothing — the watcher simply never
-fires. The guard (installed in Step 1) makes a broken cross-reference fail the
-build instead of going quiet. `qa.yml` already invokes it. Populate `.github/workflow-ref-required.json` with
-the watchers this project must not lose — the script is byte-identical in every
-repo, so its second rule is configured here rather than edited into the file:
+fires. No script checks this, so keep it by hand: rename a workflow and every
+watcher of it in the same PR (`docs/standards/automations.md` → *Watcher Rules*),
+and on Actions-source keep `"Pages Deploy"` on `qa-live.yml`'s watch list
+through every template refresh.
 
-```json
-{ "qa-live.yml": ["My Deploy Workflow"] }
-```
-
-An Actions-source project lists its deploy watcher, so the trigger cannot be
-dropped quietly: with `pages-deploy.yml` (Step 9d-bis),
-`"qa-live.yml": ["Pages Deploy"]`.
-
-It reads the workflows with PyYAML, which ships on GitHub's runner images and is
-already what `qa.yml` parses workflow YAML with — no install step. The guard was
-a dependency-free line scanner first; that version had to re-implement YAML and
-kept red-building valid workflows over legal forms it could not read, so a real
-parser is the cheaper of the two. It fails loudly if PyYAML is absent rather than
-skipping, because a guard that cannot read the workflows must never report them
-fine.
-
-⚠️ Its green run means "no dangling reference and no missing required watcher";
-it does **not** prove a trigger still fires. That needs run history. See the
-file's own header.
-
-### 9c-ter — Job bounds guard
+### 9c-ter — Job bounds
 
 An unbounded job runs to GitHub's 6-hour default showing neither pass nor fail,
-and a bound set BELOW the work it bounds is worse: it cancels healthy runs, and
-a cancelled run reads as inconclusive rather than red, so nobody chases it.
-The guard, `check-py-warnings.py`, `check-ui-suite-env.py` and
-`check-yaml-anchors.py` are installed in Step 1.
+and a bound set BELOW the work it bounds cancels healthy runs, which read as
+inconclusive rather than red, so nobody chases them. No script checks bounds;
+keep three rules by hand, per JOB rather than per repo:
 
-`check-ui-suite-env.py` keeps the ui-suite composite's viewport checks on the
-same environment as its Playwright run: the checks import the config, so a
-variable added to the run step alone makes them read a different config from the
-one that runs. It also checks that every `process.env` read in the kit is wired
-from an input. A variable that needs no input goes in
-`.github/ui-suite-env-exempt.json` as `{"NAME": "why it needs none"}`; an entry
-with no reason is refused. Two kinds qualify: a name set outside the composite
-(the runner's `CI` and `GITHUB_*`, or a self-hosted runner image), and a name
-deliberately never set in CI because the code reading it handles it unset (a
-local-sandbox hatch such as a browser-executable override).
-
-`check-yaml-anchors.py` reads every workflow and every `.github/actions/**/action.yml`
-as GitHub reads them and refuses two things PyYAML accepts: an anchor or alias in
-an action's `action.yml` (GitHub's runner refuses them there; a workflow may use
-them) and a merge key (`<<`) anywhere, which GitHub never merges. It needs no
-config. Write the shared values out instead.
-
-`qa.yml` already invokes the job bounds guard. It needs no config file — the
-three rules are the same in every repo:
-
-1. Every job declares `timeout-minutes` (except jobs that `uses:` a reusable
+1. Every job declares `timeout-minutes` (except a job that `uses:` a reusable
    workflow, where GitHub does not accept it).
 2. No bound `>= 360` — GitHub's default IS 360, so declaring it changes nothing
    while reading as protection.
-3. Two browser floors, because the shapes cost differently — but only one of
-   them is a gate:
-   - **ENFORCED** — a job using the **ui-suite** composite needs `>= 120`, since
-     that composite is install + every project in `playwright.config.js` +
-     retries + upload in one sum it cannot subdivide. The composite is read from
-     `uses:`, structured data with one correct answer. **Compliance is per JOB,
-     not per repo.** The floor binds composite CALLERS only, so one repo can sit
-     above it on a job that runs `playwright install` directly and below it on
-     two that `uses:` the composite — same repo, same template lineage
-     (`claude.insurance`, 2026-08-25: `qa.yml` at 60 on the raw-install path,
-     `qa-live.yml` and `qa-response.yml` at 40 on the composite). "Is this repo
-     at the floor?" has no single answer; ask it per job.
-   - **ADVISORY** — a job running `playwright install` directly wants `>= 30`.
-     This prints and never fails the build. Deciding whether a `run:` block
-     invokes playwright means parsing bash, and successive attempts produced
-     roughly as many false positives as findings; an unsound hard gate gets
-     deleted and takes rules 1–2 with it. **A green run is not evidence this
-     floor was met** — read the advisory lines.
+3. A job using the **ui-suite** composite sets `>= 120`; a job running
+   `playwright install` directly wants `>= 30`.
 
-**The 120 is a fleet-wide MINIMUM sized for the slow end, so being far under it
-is expected, not a reason for an exemption.** It is not an estimate of your
-suite; it is the point below which a HEALTHY run gets cancelled — and a cancelled
-run reads as inconclusive rather than red, so nobody chases it. Sized from
-measured numbers at the slow end of the fleet: `claude.trading`'s 30m35s warm
-whole job plus the 21m25s cold browser install, plus a failing profile that
-replaces its healthy scenario with the per-test ceiling and then retries at it. A
-repo whose whole job runs ~3min is ~40x under the floor and still sets it
-(`claude.insurance`, 2026-08-25, who raised rather than argued — a floor with
-per-repo exemptions is not a floor). Set HIGHER where your suite needs it, never
-lower. The number's home is `UI_SUITE_FLOOR` in `check-job-bounds.py`: record the
-pointer, not the value — and where the format forces the literal, as Actions
-`timeout-minutes` does, cache the value and keep the pointer in the comment
-beside it (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*).
-
-Rule 3 is the one worth installing for. It exists because rule 1 passed the
-exact defect it was written for: every broken job DECLARED a bound, and the
-value was the fault. Until this guard shipped downstream, the floor —
-60 at the time, 120 since — was a number in a comment, and three callers had
-already drifted to 40.
-
-The guard scans `.github/workflows`. Nothing else, unless you pass
-`--include-templates` — a flag only claude.directives uses, to also cover the
-workflow templates it ships. Run it plain and it will never look at any directory
-of yours. Same file both sides, nothing to configure, no forked copy to keep in
-sync.
-
-It is also deliberately conservative about rule 3: where it cannot identify a job
-with certainty it does **not** apply a floor. A job that merely mentions
-`playwright install` in a grep, a remote action whose path ends in the same
-segments as the shipped composite, or a bound derived from a `${{ }}` expression
-are all left alone. The reasoning is in the file's header — a guard that
-red-builds a healthy repo gets deleted, taking the real rules with it.
-
-Install it **with** the `qa.yml` update, not after: the workflow names the script
-by path, so an updated `qa.yml` without it fails every run at step resolution. And expect it to have something to say on that first run. A repo that
-has never carried this script has never been checked against the floor, so
-accumulated drift surfaces all at once as a red check on the adopting PR:
-**auditing and raising existing bounds is part of adopting it, in the same
-change** — adoption, not a regression the adoption caused
-(`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*).
-
-Like `workflow-ref-guard.py` it parses with PyYAML (present on GitHub's runner
-images), through its sibling `gh_yaml.py`, and fails loudly if either import is
-missing, rather than skipping.
+The 120 is a fleet-wide MINIMUM sized for the slow end, so being far under it is
+expected, not a reason for an exemption. Set HIGHER where your suite needs it,
+never lower. Its sizing record is the CALLER BOUND section of `templates/actions/ui-suite/action.yml`'s header:
+record that pointer, not the value, and where the format forces the literal, as
+`timeout-minutes` does, keep the pointer in the comment beside it (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Propagation Matrix*).
 
 ### 9d-bis — Pages Deploy (Actions-source only)
 
@@ -444,9 +332,8 @@ header), copies the site minus every `.github/pages-deny.txt` path, publishes it
 retries GitHub's transient publish failure from the same artifact, then asserts
 the root serves 200, each denied path 404, and each path in
 `.github/pages-public.txt` (internal-looking files that must stay public) 200. Its header lists the rest of the
-switch: a watcher named "Pages Deploy" in `qa-live.yml` (add, never replace),
-listed in `.github/workflow-ref-required.json` (Step 9c-bis) as
-`"qa-live.yml": ["Pages Deploy"]`. Installed before the project's first page
+switch: a watcher named "Pages Deploy" in `qa-live.yml` (add, never replace;
+Step 9c-bis). Installed before the project's first page
 exists, it publishes nothing until `index.html` arrives: a run with no build and
 no Pages deployment ever skips its Publish job, and `qa-live.yml` skips its suite.
 
@@ -639,8 +526,7 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 - [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT (Step 9f)
 - [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
 - [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
-- [ ] `.github/scripts/` holds the six scripts `qa.yml`'s static job runs — `check-contrast.js`, `workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`, `check-ui-suite-env.py`, `check-yaml-anchors.py` (Step 1)
-- [ ] `.github/workflow-ref-required.json` present (workflow cross-reference guard)
+- [ ] `.github/scripts/check-contrast.js` present — `qa.yml`'s static job runs it by path (Step 1)
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
 - [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it
 - [ ] `APP_URL` set as repository variable

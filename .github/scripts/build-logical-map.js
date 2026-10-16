@@ -393,7 +393,7 @@ const FLOW = [
   ['/new-repo', '/refresh-repo', 'det', 'derives the scripts to copy with', 'a', 'Deriving the referenced-script set'],
   ['/new-repo', 'check-ui-viewports.js', 'cop', 'copies', 'a', 'The scripts that serve the kit'],
   ['/new-repo', 'browser-ladder.js', 'cop', 'copies', 'a', 'The scripts that serve the kit'],
-  ['cicd-setup.md', 'check-contrast.js', 'cop', 'copies', 'a', 'runs these six scripts by path'],
+  ['cicd-setup.md', 'check-contrast.js', 'cop', 'copies', 'a', 'runs this script by path'],
   ['/new-repo', 'secret-scan', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
   ['/new-repo', 'ui-suite', 'cop', 'copies the whole directory', 'a', 'Composite actions'],
   ['/new-repo', 'ui-tests/', 'cop', 'copies the kit', 'a', 'Install the Playwright kit'],

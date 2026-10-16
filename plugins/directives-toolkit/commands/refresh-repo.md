@@ -21,9 +21,8 @@ staleness note, a hand-off — says exactly that.
 The self-contained mechanisms live in this plugin's `scripts/` and each block
 below runs one; the reasons for each guard are in that file's comments. Run
 every one from the project root. Each prints at least one line whatever the
-result, so no output means it did not run. When this refresh runs one of the
-project's own Python guards locally (`workflow-ref-guard.py`,
-`check-ui-suite-env.py`, …), run it as `PYTHONDONTWRITEBYTECODE=1 python3 …`
+result, so no output means it did not run. When this refresh runs a Python
+script locally, run it as `PYTHONDONTWRITEBYTECODE=1 python3 …`
 in the same Bash call: otherwise the run leaves `__pycache__/` beside the
 scripts, untracked files that ride into the refresh PR.
 
@@ -139,8 +138,13 @@ says keep-and-update. Conflicts are resolved by a person, never written.
 `RETIRED` names a file whose template upstream deleted (`keepalive.yml`, and
 the watcher workflows `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`,
 `pages-monitor.yml` and `pages-retry.yml`): it is a removal finding, never a
-project-specific file to keep. Delete it, with any secret the line names and
-its entry in `.github/workflow-ref-required.json`, in this refresh's PR.
+project-specific file to keep. Delete it, with any secret the line names, in
+this refresh's PR.
+It also prints `RETIRED` for an installed copy of a deleted guard script
+(`workflow-ref-guard.py`, `check-job-bounds.py`, `check-py-warnings.py`,
+`check-ui-suite-env.py`, `check-yaml-anchors.py`), `gh_yaml.py`,
+`.github/workflow-ref-required.json` or `.github/ui-suite-env-exempt.json`:
+delete each, with its step in `qa.yml` if one remains.
 
 **Which files.** Every installed workflow, every file of every installed
 composite, the `SessionStart` hook, and every installed `.github/scripts/<name>`
@@ -378,14 +382,6 @@ names by path is not optional, and skipping it ships a broken reference.
   named by `test.md`). Deriving a path is not installing it: the derivation
   below and this exception must name the same set.
 
-**Pins land together.** Some installed files pin each other's exact shape, and
-taking one without the other turns the project's own CI red:
-`check-ui-suite-env.py` pins the `ui-suite` composite's steps — its upload
-step's action, path list and `if:` among them — so a newer script beside an
-older composite (or the reverse) fails `static-checks`. Install a guard script
-and the file it pins in ONE refresh, never one now and the other later; a
-`refresh_kept` reason on either keeps both (pilots, 2026-10-13).
-
 ### Workflow refresh rules
 
 The `templates/workflows/<wf>.yml` row above defers here.
@@ -395,10 +391,8 @@ The `templates/workflows/<wf>.yml` row above defers here.
   project it IS the deploy, and its filled-in `BUILD_CMD`/`SITE_DIR` make a local
   copy `CUSTOM` by design, so keep those two values when taking a template change
   (the same holds for `qa.yml`'s `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` in a
-  project with a build: resetting them to the shipped empties would skip or
-  mis-serve its UI suite). Make sure `.github/workflow-ref-required.json` lists
-  its watcher (`"qa-live.yml": ["Pages Deploy"]`) — add a missing entry in the
-  same edit, since without it a refresh that drops the trigger passes the guard.
+  project with a build: resetting them to the shipped empties would mis-serve
+  its UI suite). Keep its watcher (`"Pages Deploy"`) on `qa-live.yml`.
 - **`qa-live.yml` on Actions-source** carries the deploy's `name:` added beside
   the template's arms (W2), so it is `CUSTOM` by design: take a template change
   around that name, never drop it.
@@ -424,8 +418,7 @@ bootstrap-stub `notify-task.js` is the worked case). The *Ask first* answer
 decides it, and when that question was skipped because none of the
 scheduled-task files is installed, the workflow stays skipped: nothing here
 says the project has a task. Before declining, confirm it
-is not load-bearing: no `workflow_run` names it, and `workflow-ref-guard` reports
-all required watchers intact without it. Same principle as the carve-out for
+is not load-bearing: no `workflow_run` names it. Same principle as the carve-out for
 `pages-deploy.yml` (absent by design on a branch-source project): **"absent locally" is
 not a fact about the project's intent.** Ask
 what installing it *starts*, not only what it restores.

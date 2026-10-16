@@ -19,89 +19,17 @@ rules (*Refresh-repo history*), which the command keeps only as rules.
 |---|---|
 | `check-claims.js`, `check-claims-cases.js` | each script's header |
 | `check-ui-viewports-cases.js` | that script's header; the viewport gate's design history from the `qa.yml` bullet is in `check-ui-viewports.js`'s own header, which the suite cites (M-46) |
-| `check-ui-suite-env-cases.py`, `check-report-path-cases.py` | each script's header |
-| `check-job-bounds-cases.py`, `check-contrast-cases.js` | each script's header |
+| `check-report-path-cases.py` | that script's header |
+| `check-contrast-cases.js` | that script's header |
 | `check-refresh-derivation.py`, `check-refresh-derivation-cases.py` | each script's header |
 | `check-action-siblings.py`, `check-action-siblings-cases.py` | each script's header |
 | `check-run-quoting.py`, `check-run-quoting-cases.py` | each script's header |
 | `check-browser-ladder-cases.js` | that script's header |
 | `check-links.js`, `check-links-cases.js` | each script's header |
 | `check-exports-cases.js` | that script's header |
-| `check-py-warnings.py` and `check-ui-suite-env.py` (shipped scripts), the ui-tests `npm install` step, the gate as a whole | this file |
-| `check-yaml-anchors.py` (shipped script) | this file; its cases suite, `check-yaml-anchors-cases.py`, carries its own in its header |
+| the ui-tests `npm install` step, the gate as a whole | this file |
 | the `Repo Map UI` suite | `docs/internal/repo-map-ui.md` |
 | `/refresh-repo`'s rules (the command `check-refresh-derivation.py` reads its pattern out of) | this file, *Refresh-repo history* |
-
-## `check-py-warnings.py`
-
-It ships to projects from `templates/scripts/` and runs here from there (its
-`.github/scripts/` twin was dropped on 2026-10-11), so its history lives here
-rather than in its header, where every downstream copy would carry it.
-
-From the Local gate comment: tracked .py compile clean: a `\` in a plain
-docstring is invisible on 3.11, shown on 3.12, FATAL on 3.15 — at which point the
-guard stops running and stops checking.
-
-From the `qa.yml` bullet in *Self-test monitoring*: a clean-compile check over
-every tracked `.py` (`.github/scripts/check-py-warnings.py` — a guard that warns
-at compile time is a guard that stops running on a future interpreter).
-
-## `check-ui-suite-env.py`
-
-It ships to projects from `templates/scripts/` and runs here from there (its
-`.github/scripts/` twin was dropped on 2026-10-11), so its history lives here
-rather than in its header, where every downstream copy would carry it. Moved from the script's header on
-2026-10-08, where it had landed verbatim from `CLAUDE.md` on 2026-09-23.
-
-From CLAUDE.md → Local gate, the comment on `python3 .github/scripts/check-ui-suite-env.py`:
-  the ui-suite composite gives BOTH viewport checks — pre-run and post-run
-  (#335) — the SAME env and cwd as the Playwright run, consecutively: the gate
-  IMPORTS the config, so a thinner env reads a DIFFERENT config (#333 round
-  8). Since #347 round 18 it also pins two variables by NAME (REPORT_PATH,
-  PLAYWRIGHT_JSON_OUTPUT_FILE) — parity is relative, and three steps that all
-  dropped a variable agree perfectly. Round 19: requiring them EQUAL was the
-  same relative mistake one level up (three steps agreeing on `other.json`
-  pass while the stale-report clear and the upload still read the validated
-  output), so both are pinned to the LITERAL `${{
-  steps.report-path.outputs.relative }}`. Round 20: the same mistake a third
-  time, on `working-directory` — three steps moved together satisfied every
-  relative rule while the validator and the stale-report clear still resolved
-  from the input — so each guarded step's cwd is pinned to the literal `${{
-  inputs.tests-dir }}` too. Round 21: the stale-report CLEAR step joined the
-  sequence — it was outside it, so skipping it, making it advisory or changing
-  its `rm` all left the guard green while an uncleared report satisfied the
-  post-run gate. Round 36: the artifact UPLOAD was pinned by four attributes
-  and no execution control, so `continue-on-error: true` on it passed every
-  one of them while an upload failure vanished behind a green job — the
-  round-11 defect, one step outside the sequence round 11 fixed. Pinned by
-  PROPERTY there (absent or `false`), not by absence, since an explicit
-  `false` blocks identically and refusing it would be another
-  form-for-construct false refusal
-
-## `check-yaml-anchors.py`
-
-It ships to projects from `templates/scripts/` and runs here from there, so its
-history lives here rather than in its header, where every downstream copy would
-carry it. Added 2026-10-12 (owner-approved), after audit R8 was declined: the
-ui-suite composite's four identical `env:` blocks could not become one anchor,
-because GitHub's runner reads an `action.yml` with anchors off ("Anchors are not
-currently supported"), workflows only (`TIME-SENSITIVE.md` → GitHub). Nothing here
-would have said so. PyYAML accepts anchors, aliases and merge keys, and every
-local check read YAML through it, so an anchored `action.yml` passed the whole
-gate and would have failed in every project that copied it.
-
-The detection lives in `gh_yaml.py`, from the parser's EVENTS, so every guard
-reading YAML through it shares it: a merge key is refused by every loader, and
-`allow_anchors=False` refuses anchors and aliases. Before this, `gh_yaml.py` read
-`<<` as a literal key and PyYAML's own loader merged it; both passed it. A regex
-over the text was rejected: it refuses an `&` or `*` inside a quoted string or a
-block scalar (`sleep 1 &`, `ls *.txt`), and measured as a mutant it failed both
-twin cases and this repo's own tree.
-
-The guard replaced `qa.yml`'s inline `Validate workflow YAML` step (*Retired
-gates*) and, in projects, the `yaml.safe_load` line in `templates/CLAUDE-template.md`
-and `/new-repo` step 8. `run-local-gate.py` reads a composite's `action.yml` with
-anchors off too, so the local gate refuses what GitHub's runner refuses.
 
 ## The ui-tests `npm install` step
 
@@ -131,7 +59,7 @@ downstream project's CI rather than ours.
 
 | Gate | Retired | Why |
 |---|---|---|
-| The inline `Validate workflow YAML` step in `qa.yml` | 2026-10-12 | It ran `yaml.safe_load` over the workflows and `templates/actions/*/action.yml`, which accepts an anchor in an `action.yml` and a merge key anywhere, both refused by GitHub. Replaced by `check-yaml-anchors.py --include-templates`, which reads the same files and more (an `action.yml` or `action.yaml` at any depth) through `gh_yaml.py` |
+| The inline `Validate workflow YAML` step in `qa.yml` | 2026-10-12 | It ran `yaml.safe_load` over the workflows and `templates/actions/*/action.yml`, which accepts an anchor in an `action.yml` and a merge key anywhere, both refused by GitHub |
 | `check-landing-cards.js` and the landing-page `:root` palette `diff` | 2026-10-08 | The two landing pages (`index.html`, `docs/site/index.html`) were merged into the root page by owner decision; `docs/site/index.html` is now a redirect stub, so the checker had nothing left to sync. Its 2026-08-22 ruling on what it guaranteed went with it. Its single-page assertions were NOT retired: they moved into `check-paths.js`'s third pass — each card is an `<a>` with an `href` of the shape `docs/site/<filename>.html`, closed by `</a>`, the root page has at least one card, and every target is a tracked regular file; the target check widened to every same-site link in every tracked `.html` page, read by a spec tokenizer and resolved as a browser would (Codex on #415). Only the sync half (count, order, attributes, content across two pages) went |
 
 ## Refresh-repo history

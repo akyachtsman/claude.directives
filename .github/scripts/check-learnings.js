@@ -13,9 +13,8 @@
 // COMPLETE below, every workflow file (in the named dirs) whose text CONTAINS the
 // substring must be either listed by that key's latest entry or exempted here
 // with a reason. So adding a watcher turns this red until someone DECIDES —
-// the same shape as workflow-ref-guard.py's REQUIRED list, which gets louder
-// when something breaks. The input stays closed: a directory listing and a
-// substring. It does NOT decide whether a file watches `completed` — that
+// a require-list, which gets louder when something breaks. The input stays
+// closed: a directory listing and a substring. It does NOT decide whether a file watches `completed` — that
 // judgement is the human's, recorded as the listing or the exemption reason.
 // A stale exemption (file gone, or no longer containing the text) also fails.
 // The substring does not prove a file WATCHES workflow_run either — a comment

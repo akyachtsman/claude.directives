@@ -317,7 +317,7 @@ SETTINGS = json.dumps({"permissions": {"allow": ["Bash(ls:*)"]},
                       indent=2) + "\n"
 S_FILES = {
     "templates/workflows/qa.yml": QA_S,
-    "templates/workflows/ci-monitor.yml": "name: CI Monitor\n# v1\n",
+    "templates/workflows/sample-wf.yml": "name: Sample WF\n# v1\n",
     "templates/workflows/cron-notify.yml": CRON,
     "templates/workflows/qa-live.yml": LIVE_S,
     "templates/actions/ui-suite/action.yml": ACTION,
@@ -344,7 +344,7 @@ S_FILES = {
 H_FILES = {
     **S_FILES,
     "templates/workflows/qa.yml": QA_H,
-    "templates/workflows/ci-monitor.yml": "name: CI Monitor\n# v2\n",
+    "templates/workflows/sample-wf.yml": "name: Sample WF\n# v2\n",
     "templates/workflows/qa-live.yml": LIVE_H,
     "templates/workflows/new.yml": "name: New\n# read: ${{ vars.FROM_NEW }}\nenv:\n  X: ${{ vars.FROM_NEW }}\n",
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
@@ -390,7 +390,7 @@ def blob_id(rev, path):
 
 
 # ---- downstream projects ----------------------------------------------------
-INSTALLED_WORKFLOWS = ("qa.yml", "ci-monitor.yml")
+INSTALLED_WORKFLOWS = ("qa.yml", "sample-wf.yml")
 INSTALLED_SCRIPTS = ("check-contrast.js", "check-ui-viewports.js", "package.json")
 
 
@@ -544,51 +544,51 @@ expect("delta: a stamp already at head says so, never silence",
        run(r, "refresh-delta.sh"), 0, f"OK: stamp already at {H}")
 
 # ---- item 2: the stamp keeps Phase 2's verdict through a refusal -------------
-r = project("stamp-refuse", changes={".github/workflows/ci-monitor.yml": S_FILES["templates/workflows/ci-monitor.yml"]})
+r = project("stamp-refuse", changes={".github/workflows/sample-wf.yml": S_FILES["templates/workflows/sample-wf.yml"]})
 run(r, "refresh-delta.sh")
 rc, out = res = run(r, "refresh-stamp.sh")
-expect("stamp: a refused stamp exits non-zero", res, 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+expect("stamp: a refused stamp exits non-zero", res, 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
 check("stamp: a refused stamp keeps Phase 2's verdict (marker, base and delta)",
       all(marker(r, n).is_file() for n in ("classified", "base", "delta")),
       f"markers after a refusal: {[n for n in ('classified', 'base', 'delta') if marker(r, n).is_file()]}")
-m = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
+m = re.search(r"sample-wf\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
 if m:
     # A record without `local` (the pre-#451 shape) binds nothing: still refused.
-    set_kept(r, ".github/workflows/ci-monitor.yml", {"blob": m.group(1), "reason": "a local watch list"})
+    set_kept(r, ".github/workflows/sample-wf.yml", {"blob": m.group(1), "reason": "a local watch list"})
     expect("stamp: a record without a local blob refuses, never inherits the approval (Codex, #451)",
-           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
     # Both blobs bound but a blank reason: drift shows it as needing a reason,
     # so the stamp must not honour it either (Codex, #451).
-    set_kept(r, ".github/workflows/ci-monitor.yml",
+    set_kept(r, ".github/workflows/sample-wf.yml",
              {"blob": m.group(1), "local": m.group(2), "reason": "  \n"})
     expect("stamp: a record with a blank reason refuses, as drift reports it",
-           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
-    set_kept(r, ".github/workflows/ci-monitor.yml",
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
+    set_kept(r, ".github/workflows/sample-wf.yml",
              {"blob": m.group(1), "local": m.group(2), "reason": "a local watch list"})
 res = run(r, "refresh-stamp.sh")
-r2 = project("stamp-local-moved", changes={".github/workflows/ci-monitor.yml": S_FILES["templates/workflows/ci-monitor.yml"]})
+r2 = project("stamp-local-moved", changes={".github/workflows/sample-wf.yml": S_FILES["templates/workflows/sample-wf.yml"]})
 run(r2, "refresh-delta.sh")
 rc2, out2 = run(r2, "refresh-stamp.sh")
-m2 = re.search(r"ci-monitor\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out2)
+m2 = re.search(r"sample-wf\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out2)
 check("stamp: a refusal prints the installed copy's local blob to record", bool(m2), out2)
 if m2:
-    set_kept(r2, ".github/workflows/ci-monitor.yml",
+    set_kept(r2, ".github/workflows/sample-wf.yml",
              {"blob": m2.group(1), "local": m2.group(2), "reason": "a local watch list"})
-    (r2 / ".github/workflows/ci-monitor.yml").write_text(
-        (r2 / ".github/workflows/ci-monitor.yml").read_text() + "# edited after approval\n")
+    (r2 / ".github/workflows/sample-wf.yml").write_text(
+        (r2 / ".github/workflows/sample-wf.yml").read_text() + "# edited after approval\n")
     expect("stamp: a record whose local blob no longer matches the file refuses (Codex, #451)",
-           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
     # The same approval, then only the line endings change, in a project with
     # core.autocrlf on: a filtered hash would map the CRLF file back to the
     # approved blob; the binding is to the bytes on disk (Codex, #451).
-    ci = r2 / ".github/workflows/ci-monitor.yml"
-    approved = S_FILES["templates/workflows/ci-monitor.yml"]
-    set_kept(r2, ".github/workflows/ci-monitor.yml",
+    ci = r2 / ".github/workflows/sample-wf.yml"
+    approved = S_FILES["templates/workflows/sample-wf.yml"]
+    set_kept(r2, ".github/workflows/sample-wf.yml",
              {"blob": m2.group(1), "local": obj_id(approved), "reason": "a local watch list"})
     ci.write_bytes(approved.replace("\n", "\r\n").encode())
     subprocess.run(["git", "-C", str(r2), "config", "core.autocrlf", "true"], check=True)
     expect("stamp: a CRLF rewrite under core.autocrlf no longer matches the approved local blob",
-           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/ci-monitor.yml differs")
+           run(r2, "refresh-stamp.sh"), 1, "UNAPPLIED: .github/workflows/sample-wf.yml differs")
 expect("stamp: the re-run after recording a reason stamps without refresh-delta.sh",
        res, 0, f"stamped: {H}")
 check("stamp: a successful stamp consumes the verdict",
@@ -614,7 +614,7 @@ check("stamp: ...and still consumes the verdict",
 expect("stamp: with the verdict consumed, a third run refuses as NOT classified",
        run(r, "refresh-stamp.sh"), 1, "was NOT classified")
 
-r = project("stamp-fetch-fails", changes={".github/workflows/ci-monitor.yml": S_FILES["templates/workflows/ci-monitor.yml"]})
+r = project("stamp-fetch-fails", changes={".github/workflows/sample-wf.yml": S_FILES["templates/workflows/sample-wf.yml"]})
 run(r, "refresh-delta.sh")
 res = run(r, "refresh-stamp.sh", env=failing("git", "fetch"))
 expect("stamp: an upstream tree that cannot be fetched is exit 2 (could not run), not a refusal (Codex, #449)",
@@ -713,7 +713,7 @@ run(r, "refresh-delta.sh")
 res = run(r, "refresh-drift.sh")
 expect("drift: it reads Phase 2's pin", res, 0, f"pinned: {H} (Phase 2's classified head)")
 expect("drift: a copy equal to the stamp-era template is STALE",
-       res, 0, "STALE: .github/workflows/ci-monitor.yml")
+       res, 0, "STALE: .github/workflows/sample-wf.yml")
 expect("drift: a copy that differs from the stamp-era template too is CUSTOM",
        res, 0, "CUSTOM: .github/workflows/qa.yml")
 expect("drift: a lost executable bit is a MODE line, not DRIFT",
@@ -752,7 +752,7 @@ expect("drift: nothing under .github/scripts/ui-tests/ is listed by this loop (t
 # A kit installed AT .github/scripts (UI_TESTS_DIR, read by kit-dirs.sh): its
 # package.json is a kit file, never compared with templates/scripts/package.json.
 r = project("drift-scripts-kitdir", at=S_FILES, changes={
-    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
+    ".github/workflows/sample-wf.yml": "name: Sample WF\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
     ".github/scripts/package.json": "{}\n",
     ".github/scripts/playwright.config.js": "// config\n",
 })
@@ -765,7 +765,7 @@ expect("drift: a file inside a kit directory kit-dirs.sh names is not compared a
 for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/", ".github/scripts/.",
                               ".github//scripts", ".github/x/../scripts")):
     r = project(f"drift-scripts-kitdir-dot{i}", at=S_FILES, changes={
-        ".github/workflows/ci-monitor.yml": f"name: CI Monitor\nenv:\n  UI_TESTS_DIR: {spelling}\n",
+        ".github/workflows/sample-wf.yml": f"name: Sample WF\nenv:\n  UI_TESTS_DIR: {spelling}\n",
         ".github/scripts/package.json": "{}\n",
         ".github/scripts/playwright.config.js": "// config\n",
     })
@@ -775,7 +775,7 @@ for i, spelling in enumerate(("./.github/scripts", ".//./.github/scripts/", ".gi
 # ...but a kit AT the scripts root does not take the standard scripts with it:
 # a script the kit template does not ship is still compared (Codex, #451).
 r = project("drift-scripts-kitroot", at=S_FILES, scripts=INSTALLED_SCRIPTS + ("lint.py",), changes={
-    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
+    ".github/workflows/sample-wf.yml": "name: Sample WF\nenv:\n  UI_TESTS_DIR: .github/scripts\n",
     ".github/scripts/package.json": "{}\n",
     ".github/scripts/playwright.config.js": "// config\n",
     ".github/scripts/lint.py": "#!/usr/bin/env python3\nprint('lint, replaced locally')\n",
@@ -903,13 +903,21 @@ expect("drift: a key ending in a newline is hashed at its real path, so a matchi
 expect("drift: the three stale records of the drift-kept project are named up front",
        DRIFT_KEPT, 0, "RE-RECORD: 3 refresh_kept file record(s)")
 
+# A watcher upstream retired (2026-10-16, #460) is a removal finding, never a
+# project-specific file to keep: drift names it RETIRED.
+r = project("drift-retired", at=S_FILES, changes={".github/workflows/pages-retry.yml": "name: Pages Deploy Retry\n"})
+run(r, "refresh-delta.sh")
+expect("drift: a retired watcher still installed is RETIRED, not NO-TEMPLATE (#460)",
+       run(r, "refresh-drift.sh"), 0, "RETIRED: .github/workflows/pages-retry.yml — upstream deleted this watcher",
+       absent="NO-TEMPLATE: .github/workflows/pages-retry.yml")
+
 r = project("drift-pin", at=S_FILES, stamp=S)
 marker(r, "classified").write_text(S)
 expect("drift: it reads Phase 2's pin, not main (a copy current AT the pin is not drift)",
        run(r, "refresh-drift.sh"), 0, "0 STALE, 0 CUSTOM, 0 DRIFT", absent="RE-RECORD")
 r = project("drift-nostamp", at=S_FILES, stamp=None)
 expect("drift: with no stamp, stale cannot be told from custom: DRIFT, with the reason",
-       run(r, "refresh-drift.sh"), 0, "DRIFT: .github/workflows/ci-monitor.yml (no stamp")
+       run(r, "refresh-drift.sh"), 0, "DRIFT: .github/workflows/sample-wf.yml (no stamp")
 expect("drift: with no Phase 2 marker it says it fell back to main",
        run(r, "refresh-drift.sh"), 0, "ls-remote main -- no Phase 2 marker")
 
@@ -943,7 +951,7 @@ check("merge: a failed write leaves the file as it was, and no temporary file",
 # map through refresh_kit_rel, and only names templates/ui-tests ships are the
 # kit's, so a workflow beside it keeps its own template (Codex, #451).
 r = project("merge-rootkit", at=S_FILES, changes={
-    ".github/workflows/ci-monitor.yml": "name: CI Monitor\nenv:\n  UI_TESTS_DIR: x/..\n",
+    ".github/workflows/sample-wf.yml": "name: Sample WF\nenv:\n  UI_TESTS_DIR: x/..\n",
     "playwright.config.js": "// config\n// local\n",
     ".github/workflows/qa.yml": DRIFTED[".github/workflows/qa.yml"],
 })
@@ -956,8 +964,8 @@ expect("merge: ...and a workflow beside a root kit still merges against its own 
 ROOT_KIT = {rel[len("templates/ui-tests/"):]: text for rel, text in H_FILES.items()
             if rel.startswith("templates/ui-tests/") and not rel.endswith("package-lock.json")}
 r = project("stamp-rootkit", changes={
-    ".github/workflows/ci-monitor.yml": H_FILES["templates/workflows/ci-monitor.yml"].replace(
-        "name: CI Monitor\n", "name: CI Monitor\nenv:\n  UI_TESTS_DIR: x/..\n", 1),
+    ".github/workflows/sample-wf.yml": H_FILES["templates/workflows/sample-wf.yml"].replace(
+        "name: Sample WF\n", "name: Sample WF\nenv:\n  UI_TESTS_DIR: x/..\n", 1),
     **ROOT_KIT,
     "playwright.config.js": "// config, edited\n",
     **{".github/scripts/ui-tests/" + k: None for k in ROOT_KIT},
@@ -974,7 +982,7 @@ r = project("callers", changes={".github/actions/ui-suite/action.yml": None,
                                 ".github/workflows/mine.yml": "name: Mine\n"})
 res = run(r, "refresh-callers.sh", "templates/workflows/cron-notify.yml", env={"REFRESH_PIN": H})
 want = "\n".join(sorted([
-    "templates/workflows/qa.yml", "templates/workflows/ci-monitor.yml",
+    "templates/workflows/qa.yml", "templates/workflows/sample-wf.yml",
     "templates/workflows/cron-notify.yml", "templates/actions/ui-suite/action.yml",
     *[f"directives/{d}.md" for d in ("global", "git", "design", "test", "data")]]))
 rc, out = res

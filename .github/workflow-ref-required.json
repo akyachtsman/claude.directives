@@ -1,5 +1,1 @@
-{
-  "ci-monitor.yml": ["QA — Directive Validation"],
-  "ci-notify.yml": ["QA — Directive Validation"],
-  "pages-retry.yml": ["pages-build-deployment"]
-}
+{}

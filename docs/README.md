@@ -17,15 +17,15 @@ Referenced by the exported directives and the qa agents.
 
 | File | What it covers |
 |------|----------------|
-| `standards/automations.md` | The agent-session automation standard — email, the watcher rules, CI/Codex/Pages monitors, the Pages auto-retry, the CI-success wake, in-session subscription, cross-session messaging, and the new-session activation checklist |
-| `standards/cicd-setup.md` | Canonical CI/CD install procedure — workflow templates to copy, monitors, secrets/variables, verification checklist |
+| `standards/automations.md` | The agent-session automation standard — email, the watcher rules, in-session subscription, cross-session messaging, and the new-session activation checklist |
+| `standards/cicd-setup.md` | Canonical CI/CD install procedure — workflow templates to copy, secrets/variables, verification checklist |
 | `standards/ci-triage.md` | **Project** CI triage — expected vs real Playwright failures, two-tier CI, when to trigger `qa-live.yml` (this repo's own self-test triage lives in `internal/repo-monitors.md`) |
 | `standards/contrast-guardrail.md` | The limits of the per-project contrast guardrail and every tokens-file shape it refuses — the reference behind `design.md` → *Accessibility*; read on demand |
 | `standards/code-review-standard.md` | Blocking vs non-blocking review criteria and output format |
 | `standards/pr-mechanics.md` | The mechanism and evidence behind `git.md` → *PR Lifecycle* — missed wakes, verdict-gate exits, reading reactions, the reaction ladder, Codex delivery forms, review metering and triggers; read on demand (#299) |
 | `standards/kit-defects.md` | UI-test kit defects that shipped downstream — one entry per bug, each with a mechanical check and the minimal fix; `/refresh-repo` reads it from the upstream head before every kit diff, so it lives here rather than inside the kit a refresh copies (#327) |
 | `standards/session-mechanics.md` | The mechanism and evidence behind session rules in `global.md` — provenance and sinks, parallel-tasking boundaries, wake coverage and the in-flight test, stale recorded SHAs, the scheduling-allowlist history, and the API equivalents for a blocked command; read on demand (#299) |
-| `standards/hosting-mechanics.md` | The mechanism and evidence behind `global.md` → *Hosting & Deployment* — choosing the Pages source, deny-list verification, monitoring after a switch to Actions-source, observers versus re-runners, and the incident behind them; read on demand (#299) |
+| `standards/hosting-mechanics.md` | The mechanism and evidence behind `global.md` → *Hosting & Deployment* — choosing the Pages source, deny-list verification, monitoring after a switch to Actions-source, and the incident behind them; read on demand (#299) |
 | `standards/viewport-classes-history.md` | The evidence behind `test.md`'s three-viewport-classes gate (*UI coverage gates*, fifth gate) — why the config is imported, why both flags, why the verdict is SCHEDULED and how RENDERED was earned, DRIFT not FORGERY, the override routes; read on demand |
 
 ## `guides/` — exported working guidance and setup
@@ -40,7 +40,7 @@ Referenced by the exported directives and the qa agents.
 ## `internal/` — this repo only (not inherited downstream)
 | File | What it covers |
 |------|----------------|
-| `internal/repo-monitors.md` | This repo's own CI and its six watcher workflows (`ci-monitor`, `ci-notify`, `codex-monitor`, `pages-monitor`, `pages-retry`, `watcher-liveness`) **and self-test triage** (the `ci-failure` / `codex-flagged` flow) |
+| `internal/repo-monitors.md` | This repo's own CI (`qa.yml`) **and self-test triage** |
 | `internal/repo-map-ui.md` | How the repo map is built and what the `Repo Map UI` suite covers — the evidence rule, the start-to-finish check, the layout and its invariants, and the measurements behind this repo's sandbox ceiling. Read before changing the map, the generator or the suite |
 | `internal/gate-history.md` | Why the local gate looks like it does — the history `CLAUDE.md`'s *Local gate* no longer carries, and where each script's history now lives (its own header) |
 | `internal/skill-eval-notes.md` | How the auto-skill eval runs and is scored, its baseline, and the worked description-tuning cases behind it |

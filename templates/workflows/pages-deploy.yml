@@ -10,22 +10,19 @@ name: Pages Deploy
 #   1. Settings -> Pages -> Build and deployment -> Source = "GitHub Actions".
 #   2. Fill in BUILD_CMD and SITE_DIR in the build job below.
 #   3. Declare every path that must not be public in .github/pages-deny.txt
-#      (one site-relative path per line; `#` comments and blank lines ignored —
-#      the same file pages-monitor.yml reads). Each one is left out of the
-#      published copy AND asserted 404 on the live site after the deploy.
-#   4. The watchers: add this workflow's exact `name:` ("Pages Deploy") to
-#      qa-live.yml's watch list, and the same name as a new trigger in
-#      pages-monitor.yml (its header has the snippet) — ADD, never replace
-#      (W2). Rename it and both follow. Then list both in
-#      .github/workflow-ref-required.json, so a refresh that drops either
-#      trigger fails the build instead of going quiet:
-#      "qa-live.yml": ["Pages Deploy"], "pages-monitor.yml": ["Pages Deploy"].
-#   5. Delete pages-retry.yml and its REQUIRED entry (W3): the retry lives here.
+#      (one site-relative path per line; `#` comments and blank lines ignored).
+#      Each one is left out of the published copy AND asserted 404 on the live
+#      site after the deploy.
+#   4. The watcher: add this workflow's exact `name:` ("Pages Deploy") to
+#      qa-live.yml's watch list — ADD, never replace (W2). Rename it and the
+#      watcher follows. Then list it in .github/workflow-ref-required.json, so a
+#      refresh that drops the trigger fails the build instead of going quiet:
+#      "qa-live.yml": ["Pages Deploy"].
 # Installed before the first page exists (a new project), it publishes nothing
 # until index.html arrives: with no build and no Pages deployment ever, a run
-# skips its Publish job: pages-monitor.yml reports "nothing published" and
-# qa-live.yml skips its suite (both read the skipped Publish job).
-# Rules and reasoning: docs/standards/automations.md -> Watcher Rules (W2, W3),
+# skips its Publish job and qa-live.yml skips its suite (it reads the skipped
+# Publish job).
+# Rules and reasoning: docs/standards/automations.md -> Watcher Rules (W2),
 # docs/standards/hosting-mechanics.md.
 #
 # BUILD (opt-in only — global.md -> Hosting & Deployment). BUILD_CMD is the
@@ -47,8 +44,7 @@ name: Pages Deploy
 # failed, try again later". The deploy job retries a FAST failure twice from the
 # same artifact, so nothing is rebuilt. A failure after ~8 minutes or more is
 # most likely deploy-pages' own timeout and is not retried: GitHub may still be
-# settling that deployment. A whole-run retry is why pages-retry.yml, which
-# re-runs a WHOLE watched run, does not belong beside this file.
+# settling that deployment.
 #
 # ASSERT. Only once the live site serves this run's pages-deploy-marker.txt (a
 # file of that name in the site is overwritten), so no probe can be answered by
@@ -56,9 +52,7 @@ name: Pages Deploy
 # on two probes 30s apart; each path in .github/pages-public.txt
 # (internal-looking files that must stay public, same format) serves 200.
 # Redirects are not followed; paths are percent-encoded and cache-busted. A
-# failure fails this run, where the bad filter was made. It is NOT a substitute
-# for pages-monitor.yml: a deploy that fails before reaching these steps reports
-# nothing here (hosting-mechanics.md -> Verification versus the monitor). The
+# failure fails this run, where the bad filter was made. The
 # probes are anonymous, so a PRIVATE Pages site (Enterprise Cloud only) reads
 # as down: such a project replaces them with authenticated ones.
 on:
@@ -321,7 +315,7 @@ jobs:
           name: github-pages-${{ github.run_attempt }}
 
   deploy:
-    # pages-monitor.yml reads a run whose "Publish" job was skipped as one that
+    # qa-live.yml reads a run whose "Publish" job was skipped as one that
     # published nothing; keep the name in step with it.
     name: Publish
     needs: build
@@ -341,7 +335,7 @@ jobs:
     steps:
       # A RE-RUN deploys this run's commit again. Once main has moved on, that
       # rolls the live site back to older content, and nothing objects: verify
-      # passes on this run's own marker and the monitor sees a success. A tip
+      # passes on this run's own marker and the run reports success. A tip
       # check cannot close that, since main can move between the check and the
       # publish, so a re-run of this job is refused outright: dispatch a new run
       # on main, which always publishes main's current tip. (Re-running only a

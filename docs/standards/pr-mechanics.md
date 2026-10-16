@@ -12,85 +12,21 @@ explicit section references, since their targets moved.
 
 *Supports:* the rule to arm a check-in for any awaited outcome that can end without emitting a wake, and drop it when that outcome is terminal.
 
-Instances found so far — treat this as evidence that the class is broad, **not
-as a list to check against.** Three rounds of review added one each; a fourth
-is not knowable in advance, which is why the rule is the question — could this outcome end without emitting a wake? (`git.md` → *PR Lifecycle*) — and not
+Instances found so far — treat them as evidence that the class is broad, **not
+as a list to check against.** The next one is not knowable in advance, which is
+why the rule is the question — could this outcome end without emitting a wake? (`git.md` → *PR Lifecycle*) — and not
 this list:
-- **a dispatched run on a PR branch** — seven ways, numbered later in this section;
-- **any run that is CANCELLED**, ordinary `pull_request` CI included.
-  `ci-notify` is gated on `conclusion == 'success'`, so a cancellation emits
-  **no PR wake**. Nor does the `check_suite.completed` wake cover it: that
-  event's own delivery note says *"Cancelled suites, suites with no runs, this
-  App's own suites and legacy commit statuses are not covered"* — so the one
-  mechanism that would otherwise prompt a look at a terminal run is excluded
-  for exactly this conclusion. Do not reason from "a suite completed, so a wake
-  fires"; read what the wake excludes. Be precise about what that does and does not mean:
-  `ci-monitor.yml` may classify it (`cancelled_unsuperseded`) and file the
-  `ci-failure` issue. How much it covers is genuinely intricate — its
-  `workflow_run:` list is read from the default branch and names three
-  workflows in the template and one here, while its `workflow_dispatch` scan
-  ignores that list and sweeps a lookback window — **one `per_page=100` page
-  per status, unpaginated, filtered by time afterwards**, so in a busy repo an
-  older qualifying run falls off the page. A page-bounded backstop, not
-  complete coverage. **Read the file
-  before asserting coverage**; four successive attempts to summarise it here
-  were each wrong in a different direction, which is why this text no longer
-  tries. What matters for THIS rule is unchanged either way: **none of it
-  reaches the session waiting on the PR.** Arm the check-in.
-- **an ordinary successful run whose PR cannot be resolved unambiguously.**
-  Neither dispatched nor cancelled: since `ba1f7ba` both `ci-notify` lookups
-  require **exactly one** match, so two open PRs sharing a head commit make the
-  SHA step ambiguous. That alone is not silence: the branch-plus-owner fallback
-  still runs, and where those PRs sit on *distinct* branches it uniquely
-  resolves the one matching `workflow_run.head_branch` and comments it. Silence
-  needs **both** steps ambiguous or empty — same head AND same branch. (Before
-  `ba1f7ba` the SHA lookup took
-  the first match and one PR got a wrong-PR green — do not go looking for that
-  comment; the shipped notifier no longer emits it.) A `repository_dispatch`
-  run is a live case of this rather than a separate one — it carries the
-  DEFAULT-BRANCH SHA, and if the default branch is the head of exactly one open
-  PR (a `main` → `release` promotion, say) that unrelated PR is commented while
-  the session that
-  triggered the dispatch waits.
+- **any run that is CANCELLED**, ordinary `pull_request` CI included. The
+  `check_suite.completed` wake's own delivery note says *"Cancelled suites,
+  suites with no runs, this App's own suites and legacy commit statuses are not
+  covered"* — so the one mechanism that would otherwise prompt a look at a
+  terminal run is excluded for exactly this conclusion. Do not reason from "a
+  suite completed, so a wake fires"; read what the wake excludes.
+- **a delivery that is lost** — the event fires and never reaches the session;
+  the one `send_later` check-in is the safety net for it.
 
-That refusal is earned, not cautious. Seven ways the dispatched-run wake fails
-to arrive, each verified in the workflow's own source:
-1. the run's workflow is not in `ci-notify.yml`'s `workflows:` list — it watches
-   three **by name**;
-2. `ci-notify.yml` is not yet live on the **default branch**, so it cannot wake
-   the PR that installs it (its header says so);
-3. the list is *read* from the default branch, so a PR that renames a watched
-   workflow and updates the watcher together still fires the OLD name;
-4. `repository_dispatch` runs carry the **default-branch SHA**. Usually that
-   matches no open PR and the run exits silent — a documented limitation
-   (`docs/standards/automations.md` → *Known limitation*). When the default
-   branch IS an open PR's head, it is worse than silent: that unrelated PR is
-   commented and the waiting session still gets nothing;
-5. **both** lookups fetch at most 100 and refuse a full page, since uniqueness
-   cannot be proven from a truncated set — but they are scoped differently and
-   the boundary is **per query, not repo-wide**. The SHA lookup lists open PRs
-   unfiltered, so **100 or more** open PRs silences *it* — the guard is
-   `length >= 100`, and a full page is refused even when it happens to be
-   exhaustive, because a full page cannot prove it was not truncated. The
-   branch fallback filters by `--head`, so its boundary is **100 or more PRs
-   sharing that branch name**. A repo
-   with 500 open PRs on distinct branches still gets its wake from the
-   fallback. (Until `ba1f7ba` the SHA lookup had no `--limit` at all and saw
-   only `gh pr list`'s default 30 — worse than silent, since a truncated page
-   can make an ambiguous SHA look unique.);
-6. **both** lookups require **exactly one** match and stay silent otherwise —
-   no PR, or more than one. Two open PRs can share a head commit (the same tip
-   proposed against `main` and against a release branch), and two same-owner
-   PRs can share a branch name; commenting green on the wrong one is worse than
-   no wake, since it names a base the run never tested. Silence needs **both
-   steps ambiguous or empty** — a shared head commit alone is not enough, since
-   the branch fallback still runs and resolves PRs on distinct branches;
-7. the job is gated on `conclusion == 'success'`, so a **cancelled** run emits
-   nothing — the cancelled-run instance listed at the top of this section, which reaches ordinary PR CI too.
-
-Do not attempt to enumerate your way to a "covered" test. That list grew from
-one item to seven under review, and the eighth is not knowable in advance.
-Compare the costs instead: a check-in armed unnecessarily costs **one wasted
+Do not attempt to enumerate your way to a "covered" test. Compare the costs
+instead: a check-in armed unnecessarily costs **one wasted
 wake**; a check-in withheld on a false promise of coverage costs an agent
 **waiting forever** for a signal that cannot arrive. Those are not close.
 
@@ -111,15 +47,6 @@ why it is the ladder's TRIGGER and never its bar — *unavailable* requires that
 review can be obtained at all, and outage requires that the request could not be
 MADE OR ACCEPTED — never that one was accepted and stayed quiet, which is the
 same silence the unreachable-review test (`git.md` → *PR Lifecycle*) rejects.
-
-## The inline-reply form and the label
-
-*Supports:* a clean inline reply clears the verdict gate but not the `codex-flagged` label.
-
-`codex-monitor` does not watch the inline-reply event, which is why that form
-leaves the label. Requesting another pass works because a clean verdict in the
-COMMENT form names the head and the monitor clears the label itself — observed
-2026-08-27 on #333 at `63bed51`.
 
 ## Reading reactions
 
@@ -203,8 +130,7 @@ COMMENT form names the head and the monitor clears the label itself — observed
 
 - **Why the comments and review threads come first.** A clean verdict can
   arrive as a plain comment naming the reviewed commit — the form that merged
-  #293, and the only one that also clears `codex-flagged` — or as an inline reply
-  in a review thread, which clears the gate but leaves the label. Earlier rounds'
+  #293 — or as an inline reply in a review thread. Earlier rounds'
   reviews, comments and replies are irrelevant — they are history, and history
   is what made the previous wording unsatisfiable. Entering the ladder while a
   SHA-bearing all-clear names the current head means attesting your way past a
@@ -242,18 +168,16 @@ COMMENT form names the head and the monitor clears the label itself — observed
 
 ## Codex delivery forms
 
-*Supports:* a clean verdict can arrive as a comment, an inline reply or a reaction, and `codex-monitor` acts only on the comment.
+*Supports:* a clean verdict can arrive as a comment, an inline reply or a reaction.
 
 - **Observed forms.** Codex's boilerplate says *"If Codex has suggestions, it
   will comment; otherwise it will react with 👍,"* and that reads as *clean ⇒
   reaction only*. **Do not rely on it.** Observed in this repo on 2026-08-23, a
   clean verdict arrived **twice as a plain comment** naming the reviewed commit —
   *"Codex Review: Didn't find any major issues"* at `ecf9a05` and again at
-  `b64ff09` — and the second cleared `codex-flagged` automatically, exactly as the
-  monitor intends. `claude.trading` separately observed the reaction-only form.
+  `b64ff09`. `claude.trading` separately observed the reaction-only form.
   Since 2026-10-15 that comment opens with a hidden `<!-- codex-review-receipt:v1 -->`
-  line before the verdict; the monitor skips leading HTML comments, and a monitor
-  older than that fix never clears on it (#457).
+  line before the verdict (#457).
   Which of the three forms (comment, inline reply, reaction) you get is not
   predictable from here.
 
@@ -261,17 +185,6 @@ COMMENT form names the head and the monitor clears the label itself — observed
   natural escalation is to spend an `@codex review` from the weekly pool, which
   buys nothing because Codex already ran. `claude.trading` lost ~30 minutes to
   exactly this.
-  ⚠️ **Codex has FOUR delivery modes and `codex-monitor` watches two.** It fires
-  on `pull_request_review` and `issue_comment` only, so a 👍 reaction clears
-  nothing — and neither does an **inline review comment**, which is how Codex
-  replies inside a review thread (`pull_request_review_comment`, an event the
-  workflow does not watch; verified against its `on:` block 2026-08-23). Both
-  leave the label sitting there looking like an open concern. The clear path
-  requires an all-clear **comment** matching `"Codex Review: Didn't find any
-  major issues"`. So a clean rerun delivered in either unwatched form leaves the
-  blocker in place with nothing to remove it automatically. An inline reply
-  clears the verdict gate but is not evidence that a comment cannot arrive, so
-  it is not an opening for hand removal on its own.
 
 ## Stale SHAs in wakes and records
 

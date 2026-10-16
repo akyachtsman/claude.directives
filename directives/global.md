@@ -391,8 +391,8 @@ needs restating.
    rather than idling, especially while waiting on CI, a deploy, or a review
    (→ *Parallel Tasking via Subagents*).
 4. **Auto-merge.** Where the work produces a PR, take it through to merged,
-   clearing a `codex-flagged` blocker by **requesting the review pass** rather
-   than removing the label. Take the label off by hand only where `git.md` → *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
+   answering Codex's findings with a fix and a **requested review pass**. Merge
+   without Codex's verdict only where `git.md` → *PR Lifecycle*'s *unreachable-review test* admits it, with the evidence that
    rule requires. Work that produces no PR has nothing to merge — see item 5.
 5. **Keep going until the whole task is done.** Merging is a milestone, not the
    finish line: the task is done when every effect the work was for has
@@ -501,7 +501,7 @@ the goal" is the test for a candidate, never for an authorization.
 - **A launched verification IS the start signal for the next task** (owner
   reinforcement, 2026-07-22). The moment a UI suite, push, PR, CI run or deploy
   is in flight, pick up the next ready task in the SAME turn. Results arrive
-  asynchronously — ci-notify, webhooks, background agents — and route back.
+  asynchronously — webhooks, background agents — and route back.
 - **Failure routing.** A failed verification becomes the priority; tasks
   downstream of it pause; independent tasks keep going. Circuit breakers
   (`test.md` → 3 attempts) unchanged.
@@ -699,18 +699,16 @@ naming what remains open, or "nothing open" — never absent.
   waiting. The result must surface **proactively** — the user never re-prompts
   for an outcome.
 - **How to wait, in order of preference:**
-  1. **Let the event wake you.** CI failures, PR reviews, and merges arrive as
-     webhooks that resume the session — and with `ci-notify.yml` installed
-     (standard scaffold), CI SUCCESS arrives too, as a PR comment. Event wakes
+  1. **Let the event wake you.** CI results (`check_suite.completed`), PR
+     reviews, and merges arrive as webhooks that resume the session. Event wakes
      are the PRIMARY signal for a PR-attached wait: end the turn saying you'll
      report back, and act on the event rather than asking for it — with what
      you started beside it, or what blocks it (→ *Parallel Tasking via Subagents*).
      ⚠️ **Primary is not sole — event-driven does not mean "no scheduler."** A
-     wake only covers what something actually emits. A dispatched run on a PR
-     branch has seven verified ways to emit nothing (`git.md` → *PR Lifecycle*),
-     and a cancelled run emits no PR WAKE, since `ci-notify` fires only on
-     success. What `ci-monitor.yml` does and does not cover:
-     `docs/standards/session-mechanics.md` → *Wake coverage*.
+     wake only covers what something actually emits. A cancelled run emits no
+     PR WAKE, since `check_suite.completed` excludes cancelled suites, and a
+     delivery can be lost (`git.md` → *PR Lifecycle*;
+     `docs/standards/session-mechanics.md` → *Wake coverage*).
      Since ANY run can be cancelled, item 2's in-flight test resolves to *yes*
      for essentially every CI run you wait on — so arm the check-in **alongside**
      the event wake, never instead of it, and drop it when THAT outcome is
@@ -732,7 +730,7 @@ naming what remains open, or "nothing open" — never absent.
        exactly.
      - Settings load at session start, so the allowlist covers the NEXT
        session; a one-time prompt in an already-running session is accepted
-       (→ *Scheduling Tools Never Prompt*). A wait whose outcome `ci-notify.yml`
+       (→ *Scheduling Tools Never Prompt*). A wait whose outcome a PR wake
        reports needs no completion POLLING — the wake carries it — but that is
        not a reason to skip the check-in, which covers the conclusions it does
        NOT report. A wait expected to exceed five minutes also arms the
@@ -1055,31 +1053,19 @@ index.html       ← the app's entry page, written by the first build, not by
 styles/          ← the committed design contract (tokens.css + components.css)
 .github/
   workflows/     ← the standard template set from templates/workflows/ —
-                   7 unconditional:
-    qa.yml, qa-live.yml, qa-response.yml,
-    ci-monitor.yml, ci-notify.yml, codex-monitor.yml, pages-monitor.yml
+                   3 unconditional:
+    qa.yml, qa-live.yml, qa-response.yml
                  ← + cron-notify.yml ONLY when the project has a scheduled
                    task (owner ruling, 2026-10-10). A `schedule:` workflow
                    starts recurring work the moment it lands, so it is added
                    with the task, not before (/new-repo does not install it;
                    docs/standards/cicd-setup.md Step 9f adds it)
-                 ← + pages-retry.yml ONLY on a BRANCH-SOURCE project. On an
-                   Actions-source one it must not be installed (or must be
-                   repointed under W3's idempotent exception) — it watches the
-                   managed build a visibility flip can fire, so installed there
-                   it arms a retry of a rogue unfiltered deploy
-                   (→ *Hosting & Deployment*)
-                 ← + pages-deploy.yml ONLY on an ACTIONS-SOURCE project: the
-                   converse, it is that project's deploy (retry built in)
+                 ← + pages-deploy.yml ONLY on an ACTIONS-SOURCE project: it
+                   is that project's deploy (retry built in)
                  ← keepalive.yml is NOT standard (why: cicd-setup.md → Step 9f)
   scripts/
     ui-tests/
 ```
-
-`codex-monitor.yml` is **required in every repo (owner ruling, 2026-10-07)**: it
-turns a flagged Codex round into the `codex-flagged` merge blocker that
-`git.md` → *PR Lifecycle* gates on, so a repo without it merges past Codex's
-findings unseen.
 
 ## Backend
 - All backend/data rules — provider, connection config, keys, RLS, MCP setup —
@@ -1220,14 +1206,11 @@ client-side Supabase + RLS.
     skips the UI suite, or tests the unbuilt tree. The template does all three
     once its `BUILD_CMD`, `SITE_DIR` and `BUILD_PATHS` are set, the first two
     to the same values as `pages-deploy.yml`.
-  - **Live QA and the monitor:** add the deploy workflow's exact `name:`
+  - **Live QA:** add the deploy workflow's exact `name:`
     ("Pages Deploy" for `pages-deploy.yml`) to `qa-live.yml`'s
-    `workflow_run.workflows`, and a `workflow_run` arm to `pages-monitor.yml`,
-    and list each under its own file in `.github/workflow-ref-required.json`
-    so a later template refresh cannot drop them silently.
-  - **The retry:** delete `pages-retry.yml` and its `REQUIRED` entry (W3's
-    exception is closed to a build), and build the retry into the deploy
-    workflow.
+    `workflow_run.workflows`, and list it under `qa-live.yml` in
+    `.github/workflow-ref-required.json` so a later template refresh cannot
+    drop it silently.
 
   The first project that opts in checks every workflow it ships against the
   rule above and reports any gap upstream. The deploy is
@@ -1242,9 +1225,7 @@ client-side Supabase + RLS.
   need is concrete; never as a setup question. A Tailwind opt-in may compile
   utilities on top of `tokens.css` and `components.css`; replacing those files
   with a utility system is a further owner decision (`design.md` → *Stack*).
-- **Application and UI frameworks stay rejected either way** (below). An
-  opted-in project's deploy is no longer idempotent, so W3's retry exception
-  does not apply to it.
+- **Application and UI frameworks stay rejected either way** (below).
 
 ⚠️ **HOW Pages is sourced is a SECURITY decision, not a convenience one.**
 Branch-source publishes the **whole repository** at the public URL. Choose by
@@ -1279,57 +1260,30 @@ this test, in order:
   `-H "Cache-Control: no-cache"` and a cache-busting query param before
   concluding anything about what is live.
 
-⚠️ **Switching to Actions-source SILENTLY DISABLES the repo's Pages monitoring,
-and that is not optional to handle.** `pages-monitor.yml` triggers on `page_build`
-and `pages-retry.yml` on `workflow_run` of the managed `pages-build-deployment`;
-both fire only for **branch-source** builds, except that a visibility flip can
-still run `pages-build-deployment`, and with it the retry.
-`docs/standards/automations.md` → *Watcher Rules* (W2, W3) carries the table.
-- **The monitor: ADD, never replace.** `pages-monitor.yml` takes a `workflow_run`
-  trigger naming your own deploy workflow (`Pages Deploy` for `pages-deploy.yml`;
-  its file header ships the snippet), and keeps `page_build:`; `qa-live.yml`
-  keeps `pages-build-deployment`, with the same name added. List each watcher
-  under its own file in `.github/workflow-ref-required.json`, so a refresh that
-  drops either trigger fails the build. The new name goes **alongside**: those
-  arms are what see the **legacy managed build**
-  a visibility flip can fire even while Actions-source is configured
-  (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
-- **The retry: do NOT repoint it, by default.** It re-runs the **whole** watched
-  run and would replay your entire build; an Actions-source project builds retry
-  into its own deploy workflow instead (`templates/workflows/pages-deploy.yml`
-  ships it) (`docs/standards/automations.md` → *Automation 4b — Pages Deploy Retry*).
-  W3's one narrow exception stands: a project MAY extend the retry anyway **if
-  its deploy is genuinely idempotent** — no build, no compile, no tests, same
-  commit in and same tree out — provided it records in its own `CLAUDE.md` both
-  that reasoning **and a revisit trigger**, the condition that ends the
-  exception (*"if the deploy ever gains a build or test stage, move the retry
-  inside it"*). Detail: `docs/standards/hosting-mechanics.md` → *Monitoring after a switch to Actions-source*.
-- **DELETE an unrepointed `pages-retry.yml`** and its `REQUIRED` entry, or
-  repoint it under that exception. On the visibility-flip path the name it
-  watches is exactly what fires, so a retry left installed will **re-run the
-  rogue unfiltered deployment**: an unrepointed monitor merely fails to notice,
-  while an unrepointed retry participates. Why:
-  `docs/standards/hosting-mechanics.md` → *Why an unrepointed retry must go*.
-- **A watcher that only OBSERVES can name both sources, and should; one that
-  RE-RUNS what it watches can not** — a second name is a second thing it may
-  replay. This generalises to any watcher you add later
-  (`docs/standards/hosting-mechanics.md` → *Observers versus re-runners*).
+⚠️ **Switching to Actions-source SILENTLY DISABLES the repo's live QA, and that
+is not optional to handle.** `qa-live.yml` watches the managed
+`pages-build-deployment`, which fires only for **branch-source** builds, except
+that a visibility flip can still run it (`docs/standards/automations.md` →
+*Watcher Rules*, W2).
+- **ADD, never replace.** `qa-live.yml` keeps `pages-build-deployment`, with
+  your deploy workflow's name (`Pages Deploy` for `pages-deploy.yml`) added
+  alongside, listed under its file in `.github/workflow-ref-required.json` so a
+  refresh that drops it fails the build. The old arm is what runs when a
+  visibility flip fires the **legacy managed build** even while Actions-source
+  is configured (`docs/standards/hosting-mechanics.md` → *Keep the existing arms*).
+- **A transiently failed deploy is re-run by hand or by the session.**
+  `pages-deploy.yml` retries its own deploy step.
 - ⚠️ **Keeping the arm is NOT detecting the exposure.** A rogue build that
-  republishes the unfiltered tree serves the app as 200 and passes the monitor's
-  default checks. **Declare the forbidden paths in `.github/pages-deny.txt`**
-  (one path per line) and `pages-monitor.yml` asserts each serves 404 on every
-  run. Without that file, a visibility-flip exposure is still caught only by
-  someone looking (`docs/standards/hosting-mechanics.md` → *Arms are not detection*).
+  republishes the unfiltered tree serves the app as 200 and passes live QA. The
+  deny-list 404 assertions run only inside `pages-deploy.yml`, after its own
+  deploy, so **after any visibility flip, check each deny-listed path for a 404
+  by hand** (`docs/standards/hosting-mechanics.md` → *Arms are not detection*).
 
-⚠️ **The post-publish verification is mandatory and is NOT a substitute for the
-monitor — they catch different failures.** Put the 200/404 assertions **inside
-the deploy workflow**, where a bad filter fails the run that produced it, AND
-add the `workflow_run` watcher on `types: [completed]`, which fires on a deploy
-that **failed before reaching its own assertions** — a failure otherwise silent
-(`docs/standards/hosting-mechanics.md` → *Verification versus the monitor*). A
-deploy that hangs and never completes is covered by **neither**; catching that
-needs timeout or staleness monitoring, a third thing — do not overclaim either
-instrument (`docs/standards/hosting-mechanics.md` → *The bound on completed-run watchers*).
+⚠️ **The post-publish verification is mandatory.** Put the 200/404 assertions
+**inside the deploy workflow**, where a bad filter fails the run that produced
+it. A deploy that fails before reaching its own assertions, or hangs and never
+completes, is not caught by them — do not overclaim the instrument
+(`docs/standards/hosting-mechanics.md` → *The bound on completed-run watchers*).
 These rules were written from an incident
 (`docs/standards/hosting-mechanics.md` → *Where these rules came from*).
 

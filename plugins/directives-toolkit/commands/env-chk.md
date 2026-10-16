@@ -15,9 +15,9 @@ verdict. Read-only — do NOT modify files. Execute in order:
    `sleep`/poll process with no live backing (and remind that future waits use
    `send_later`/`ScheduleWakeup`/event-wakeups, never a backgrounded `sleep`; see
    `global.md` → *Async Operations*).
-3. CI & deploy status — Check for any open CI-failure or reviewer-flagged
-   tracking issues/PRs and list them (a broken deploy surfaces here as a
-   `pages-deploy-failure` issue). Run the `directives/git.md` repo-settings
+3. CI & deploy status — List the latest failed CI, deploy and `qa-live.yml`
+   runs on the default branch, and open PRs with unresolved reviewer findings
+   (a broken deploy surfaces here as a failed run). Run the `directives/git.md` repo-settings
    preflight (`git.md` → *Repo-settings preflight (warn once per session)*) —
    all THREE settings: if "Allow auto-merge" or "Automatically delete head
    branches" is off (`allow_auto_merge` / `delete_branch_on_merge` from

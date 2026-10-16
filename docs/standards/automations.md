@@ -21,11 +21,9 @@ Applies to all repos automatically.
 
 ## Watcher Rules — canonical
 
-Every `workflow_run` watcher below (`ci-monitor`, `ci-notify`, `qa-live`,
-`pages-monitor`, `pages-retry`) obeys these three rules. **They are stated here
-and nowhere else.** Each workflow file and setup step carries the ACTION it
-needs and points back here for the reasoning — a rule explained in five places
-is a rule corrected in four (learned the hard way, 2026-08-19).
+The one `workflow_run` watcher in the set, `qa-live`, obeys these rules. **They
+are stated here and nowhere else.** Each workflow file and setup step carries the
+ACTION it needs and points back here for the reasoning.
 
 A watcher that resolves but never fires, or fires and asserts too little, is as
 green as a healthy one — `code-review-standard.md` → *Fail-Open Guards*.
@@ -38,14 +36,6 @@ fire and has silently stopped. One exception, and only one — names GitHub
 itself manages, currently just `pages-build-deployment`. Everything else is
 project-owned.
 
-- `/new-repo` installs the **full standard set**, so `'QA — Static + UI Tests'`,
-  `'QA — UI Tests (live)'` and `'QA — Event-Driven Response'` all resolve in a
-  standard scaffold, and `ci-monitor`/`ci-notify` ship watching all three.
-- A project that deliberately omits `qa-response.yml` must remove
-  `'QA — Event-Driven Response'` from **both** watchers in the same edit. The
-  omission itself is the owner's call: `global.md` → *Repo Structure Standard* lists
-  it as unconditional, so leaving it out is raised first
-  (`global.md` → *A Knowing Deviation Is an Escalation*).
 - Rename a workflow's `name:` and every watcher of it in the **same pull
   request**. A `name:` is also its check name, so a rename can additionally
   break branch-protection required checks.
@@ -59,291 +49,16 @@ runs the project's own workflow: `Pages Deploy` when it is the shipped
 cannot guess. Setting Settings → Pages → Source to "GitHub Actions" makes the
 managed build inert, so a watcher naming only it stops firing with no error —
 and a repo scaffolded on the Actions source from day one gets a watcher that has
-never fired at all, with no "it used to work" phase to notice.
-
-| Watcher | Actions-source Pages |
-|---|---|
-| `qa-live.yml` | **add** your deploy workflow's exact `name:` |
-| `pages-monitor.yml` | **add** a `workflow_run` trigger naming it (header has the snippet) |
-| `pages-retry.yml` | **do not add it** — see W3 |
+never fired at all, with no "it used to work" phase to notice. On Actions-source
+Pages, **add** your deploy workflow's exact `name:` to `qa-live.yml`.
 
 ⚠️ **"Add" is literal, and the existing arm is the load-bearing one.** Keep
-`page_build:` on the monitor and `pages-build-deployment` on `qa-live`; the new
-name goes alongside. Those arms watch the **legacy managed build**, which
-`global.md` → *Hosting & Deployment* documents as still firing on a **repo
+`pages-build-deployment` on `qa-live`; the new name goes alongside. That arm
+watches the **legacy managed build**, which `global.md` → *Hosting & Deployment* documents as still firing on a **repo
 visibility flip even while Actions-source is configured** — unfiltered, and able
 to finish later and republish the whole tree over a filtered copy. A reader who
 *replaces* rather than adds keeps a green-looking watcher and deletes the only
-thing that observes that republish live. This is why the row says "add" rather
-than "point it at your deploy": the wording is doing work.
-
-⚠️ **The monitor/retry split is about RE-RUNNING, not about Pages** — state it
-this way and the table stops needing to be memorised. A watcher that only
-**observes** (monitor, live gate) may name both sources at no cost, because a
-second name is only a second thing it looks at. A watcher that **re-runs** what
-it watches may not, because a second name is a second thing it may replay. Apply
-that test to any watcher added later, rather than copying this table's rows.
-
-### W3 — Retry is source-specific; monitoring is not
-
-Verifying a deploy is not re-running one. `pages-monitor` and `qa-live` may
-watch either source. `pages-retry` may not: it re-runs the whole watched run, so
-pointing it at a project-owned deploy replays that workflow's entire build,
-which this template neither intends nor bounds. Actions-source projects build
-retry into their own deploy workflow instead (Automation 4b);
-`templates/workflows/pages-deploy.yml` is that deploy, retry included.
-
-A project MAY extend it anyway if its deploy is genuinely idempotent — no build,
-no compile, no tests, same commit in and same tree out — but must record that
-reasoning in its own CLAUDE.md, which routes the difference through
-`/refresh-repo`'s documented-customization path rather than being preserved
-silently.
-
-⚠️ **That record must name a REVISIT TRIGGER — the condition that ends the
-exception — not just the reasoning that opened it.** The reasoning is a
-statement about the deploy *today*; the exception survives the change that
-invalidates it unless something says what that change is. An exception with no
-stated end condition is indistinguishable from one nobody thought about, which
-is the failure this rule is actually guarding against.
-
-⚠️ **AND WHEN THE TRIGGER FIRES, DELETE THE WATCHER — DO NOT NARROW IT.**
-Narrowing leaves a file that passes every check and watches a name that can no
-longer fire.
-
-⚠️ **STATE THIS RULE IN BOTH BRANCHES, EVERYWHERE IT APPEARS. "Branch-source
-only" is a one-sided sentence and the exception lives in the half it drops.**
-Every surface that installs, describes or inventories `pages-retry.yml` must
-carry both arms:
-
-> **branch-source** → install it, with its `REQUIRED` entry.
-> **Actions-source** → delete it and drop the `REQUIRED` entry; **or** repoint it
-> under the exception above, **updating** the `REQUIRED` entry to the project's
-> own deploy name rather than dropping it.
-
-This shape is not a style preference. Writing the default and trailing the
-exception as a clause failed **three times inside one pull request** (#317) —
-`global.md`, `new-repo.md`, then `dev-pipeline.md` and this refresh row — each
-time producing an absolute prohibition that overrode a documented exception, and
-each time caught by review rather than by the author. A two-branch statement
-makes an omitted exception a **visibly empty branch** instead of a missing
-sentence nobody can see.
-
-The worked example is a near-miss, kept in that form because the clean version
-teaches less. `apfp.claude` runs this exception deliberately and wrote the
-revisit trigger this rule asked for — *"if `pages.yml` ever gains a build or
-test stage, move the retry INSIDE it and drop `Pages` from `pages-retry.yml` and
-its REQUIRED entry."* Followed literally, that leaves `pages-retry.yml` watching
-**only `pages-build-deployment`**: a GitHub-managed name that still resolves, is
-allow-listed with a justification, passes every static check, and under
-Actions-source never fires again. **The exemplary revisit trigger manufactured
-the exact artifact the rule above forbids.** It should say *delete
-`pages-retry.yml` and its REQUIRED entry*, not *drop a name from it*.
-
-Note what that shares with the defect in `global.md` that occasioned this
-section — "repoint" where the scaffolding said "add". Neither verb is careless;
-both are locally sensible, and both leave a watcher that satisfies its guard and
-observes nothing. The common cause is that **our tooling can check whether a
-name RESOLVES and nothing checks whether a workflow can still FIRE** — the
-limitation `workflow-ref-guard`'s own scope warning states. Any rule written in
-the language of names inherits that blind spot, so a rule about watchers must
-say what happens to the FILE, not only to the names inside it.
-
-⚠️ **After a source switch, an unrepointed `pages-retry.yml` is DEAD, not
-dormant — DELETE it, or repoint it under the exception above.** The template
-watches `pages-build-deployment` by name. That name still *resolves* after the
-switch (GitHub manages it, so W1 and `workflow-ref-guard` both stay green),
-which is why nothing warns you.
-
-⚠️ **The reason is NOT that it goes quiet — that would only be dead weight.**
-Day to day it is inert. But a **repo visibility flip fires the legacy managed
-build even while Actions-source is configured** (`global.md` → *Hosting & Deployment*), publishing the **unfiltered tree** — and that build is exactly what
-this watcher names. A retry left installed will faithfully **re-run a rogue
-unfiltered deploy** on failure, turning a one-off exposure into a retried one.
-So this is **not** the monitor case one file over: an unrepointed monitor fails
-to notice, an unrepointed retry **participates**.
-
-### Known limitation — `ci-notify` and `repository_dispatch`
-
-`ci-notify` comments on the open PR its lookups resolve the run to — head SHA
-first, then head branch plus head-repo owner — and only when exactly one
-candidate survives. A
-`qa-response.yml` run triggered by `repository_dispatch` carries the default
-branch SHA, which normally matches no open PR, so it exits "No open PR" and
-emits no wake. Watching it in `ci-monitor` (failure tracking) works; the success
-wake does not, for that path. Tracked separately — do not "fix" it by removing
-the watcher.
-
----
-
-## Automation 2 — CI Monitor Workflow (infra-resident, event-driven)
-
-**Goal:** File a tracked GitHub issue the moment any watched CI workflow fails —
-no session required, no polling, no Gmail.
-
-**How it works:**
-- **Trigger:** `workflow_run` (types: `completed`) — fires GitHub-side the instant a
-  watched workflow finishes. No session, no commit-hook, no polling timer.
-  Listing CI workflows by name prevents self-recursion.
-- **Manual scan:** `workflow_dispatch` with a `lookback_minutes` input — for testing only.
-- On failure: opens or updates a single deduplicated tracking issue (label `ci-failure`).
-  GitHub automatically emails the issue notification.
-- On no new failures: exits silently.
-- Uses `GITHUB_TOKEN` only — no extra secrets.
-
-**Template:** `templates/workflows/ci-monitor.yml`
-
-**Drop-in:** ships pre-wired to watch all three QA workflows that come with it
-(`qa.yml` → `QA — Static + UI Tests`, `qa-live.yml` → `QA — UI Tests (live)`,
-`qa-response.yml` → `QA — Event-Driven Response`), so copying them verbatim
-needs no edits. Change `workflow_run.workflows` to rename (workflow and every
-watcher in the same PR), to watch an extra workflow, or to REMOVE the name of a
-standard workflow the owner agreed to leave out — see *Watcher Rules* (W1) above.
-Optionally verify with a manual `workflow_dispatch` run.
-
-**To install:** `docs/standards/cicd-setup.md` → Step 9a (that doc is the single
-canonical install procedure; carrying a second copy here is how a correction
-lands in one place and not the other).
-
----
-
-## Automation 3 — Codex Monitor Workflow (infra-resident, event-driven)
-
-**Goal:** Flag Codex PR reviews that contain concerns so they aren't silently merged,
-especially under auto-merge.
-
-**How it works:**
-- Triggers: `pull_request_review` AND `issue_comment`, both filtered to
-  `chatgpt-codex-connector[bot]`. Two triggers because Codex splits its verdicts:
-  flagged rounds arrive as reviews, and an all-clear ("Didn't find any major
-  issues") arrives as a plain issue comment — a monitor listening only for
-  reviews hears the complaint and never the all-clear.
-  ⚠️ **The monitor sees neither a 👍 reaction nor an inline review-thread reply**
-  (`pull_request_review_comment`, which this workflow does not watch), so a clean
-  rerun in either form cannot clear the label. Which form arrives, and what to do
-  when it is one the monitor cannot see: `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
-- On a flagged review (`changes_requested`, or `commented` with inline
-  comments): adds a `codex-flagged` label to the PR.
-- **The label is two-way.** On an all-clear whose named commit matches the PR's
-  current head, the monitor removes the label. The SHA match is load-bearing —
-  the label is a merge blocker, and a delayed all-clear for an older commit must
-  not unblock a head Codex never cleared. A verdict with no SHA, or for a stale
-  SHA, holds the label. (One-way was the original design; it converted "Codex
-  has concerns" into "Codex once had concerns" — permanently red until cleared
-  by hand. Reasoning lives in the workflow's own header.)
-- Does not repost Codex suggestions — Codex already comments inline.
-- Uses `GITHUB_TOKEN` only.
-
-**Template:** `templates/workflows/codex-monitor.yml` — drop-in, no customization needed.
-
-**To install:** `docs/standards/cicd-setup.md` → Step 9b.
-
----
-
-## Automation 4 — Pages Monitor Workflow (infra-resident, event-driven)
-
-**Goal:** Catch a broken GitHub Pages deploy the moment it happens — build errored
-or live URL not serving — with no session required.
-
-**How it works:**
-- Trigger: `page_build` — fires on every **branch-source** Pages build.
-  `workflow_dispatch` allows a manual liveness re-check.
-- ⚠️ **GitHub Actions Pages source: `page_build` goes inert** and this monitor
-  then never runs — silently, which reads as "no deploy problems" when it means
-  "nothing is watching". Add a `workflow_run` trigger naming your own deploy
-  workflow's exact `name:`; the template's header carries the snippet, and the
-  job already normalises the two status vocabularies. Unlike Automation 4b, the
-  monitor DOES apply to both sources — verifying a deploy is not re-running one.
-- Reads the build status from the event and verifies the live URL
-  (`https://<owner>.github.io/<repo>/`) returns 200, with cache-busted retries.
-- **Exposure (optional):** each path listed in `.github/pages-deny.txt` must
-  serve 404 on two probes 30s apart (one 404 can be the previous deploy
-  mid-propagation) — the only thing here that catches a rogue unfiltered
-  republish, which serves 200 and passes the two checks above. No file, or no
-  paths in it = not checked, and the job summary says so. A directory entry is
-  expanded to every file under it as published (the deploy's Pages artifact, or
-  a branch build's source folder), and a list that cannot be read is reported,
-  never guessed; more than 40 URLs after that expansion is reported rather than
-  truncated; the list covers only the paths someone remembered.
-- On a problem: opens/updates a single deduplicated `pages-deploy-failure` tracking
-  issue. A healthy deploy closes it and reports green in the job summary only; a
-  healthy MANUAL run does not close it, since it cannot tell which build is live.
-- The live URL comes from the Pages API (user-site repos and custom domains work),
-  with a generic derivation as fallback — the file is portable to any project as-is.
-- Uses `GITHUB_TOKEN` only.
-
-**Template:** `templates/workflows/pages-monitor.yml` — drop-in for branch-source
-Pages; Actions-source projects add the one `workflow_run` trigger above.
-
-**To install:** `docs/standards/cicd-setup.md` → Step 9c.
-
----
-
-## Automation 4b — Pages Deploy Retry (infra-resident, event-driven)
-
-**Goal:** Auto-heal the transient *"Deployment failed, try again later."* Pages
-publish blip without a session — the failure class that otherwise leaves the site
-on the previous version until someone re-runs the deploy by hand.
-
-**How it works:**
-- Trigger: `workflow_run` on the managed `pages-build-deployment` workflow
-  (branch-source Pages), on completion.
-- On a failed deploy with `run_attempt < 4`: re-runs the whole deploy run. At the
-  ceiling it stops and lets `pages-monitor.yml` (Automation 4) open the tracking issue.
-- Projects deploying Pages via their own GitHub **Actions** source should build the
-  retry into that workflow instead — this template covers the branch source by
-  default. One narrow exception, per *Watcher Rules* → W3: a project MAY point it
-  at its own deploy if that deploy is provably idempotent (no build, no compile,
-  no tests) and records in its own CLAUDE.md both the reasoning **and a revisit
-  trigger** ending the exception. When that trigger fires the watcher is
-  **deleted, not narrowed** (*Watcher Rules* → W3).
-- Uses `GITHUB_TOKEN` only (`actions: write`).
-
-**Template:** `templates/workflows/pages-retry.yml` — drop-in, no customization
-needed. Full detail: `docs/standards/cicd-setup.md` Step 9d.
-
----
-
-## Automation 4c — CI-Success Wake Signal (infra-resident, event-driven)
-
-**Goal:** Let a watching web session wake on CI **success** without polling —
-GitHub delivers failures natively but never green. **Coverage is partial by
-design:** the wake fires only on `conclusion == 'success'`, only for the
-workflows named in the watch list, and only when **either** lookup resolves the
-run to exactly one open PR — the head SHA first, then head branch plus head-repo
-owner as a fallback. A SHA that no longer matches any PR head is therefore not
-outside coverage on its own; the branch step still catches the common case of a
-head that moved while the run was in flight. For any awaited outcome outside
-that set, arm a check-in — that is not polling (`git.md` → *PR Lifecycle*,
-*GitHub API Quota Economy*).
-
-**How it works:**
-- Trigger: `workflow_run` (completed) on the QA workflows shipped in the set.
-- On `conclusion == success`: resolves the run to **exactly one** open PR and
-  posts a one-line "✅ green" comment — the comment webhook wakes the subscribed
-  session. Two steps, each requiring uniqueness: the head SHA first, then the
-  head branch **plus head-repository owner** as a fallback (for a dispatched run
-  or a head that moved mid-flight), which is labelled *matched by branch* because
-  the SHA it names may already be superseded.
-- **Ambiguity exits silent, by design.** Two open PRs can share a head commit —
-  the same tip proposed against `main` and against a release branch is ordinary —
-  and posting to the first of them signals green for a base the run never tested.
-  A reader treating that as a gate signal is reading another PR's result, so each
-  lookup takes a match only when one candidate survives. Note that an ambiguous
-  SHA is not itself silence: the branch fallback still runs and resolves PRs on
-  distinct branches. Silence needs **both steps ambiguous or empty**, and then
-  the waiting session's check-in is what covers it.
-- ⚠️ **Unique is not the same as correct, so a unique match is not a guaranteed
-  wake for YOUR session.** Uniqueness only stops it choosing arbitrarily among
-  duplicates. A `repository_dispatch` run carries the DEFAULT-BRANCH SHA, so when
-  that branch is the head of exactly one open PR (a `main` → `release`
-  promotion), the comment lands on that unrelated PR — the coverage condition
-  above is satisfied and the dispatching session still gets nothing. Arm the
-  check-in whenever the run's SHA is not your PR's head (`git.md` → *PR Lifecycle*).
-- Failures are deliberately NOT commented (delivered natively; `ci-monitor.yml`
-  tracks them repo-side).
-- Uses `GITHUB_TOKEN` only (`pull-requests: write`).
-
-**Template:** `templates/workflows/ci-notify.yml` — drop-in, no customization needed.
+thing that observes that republish live.
 
 ---
 
@@ -351,14 +66,15 @@ that set, arm a check-in — that is not polling (`git.md` → *PR Lifecycle*,
 
 When a Claude Code session opens a PR, it receives that PR's activity for fast
 feedback. The subscription is **harness-side and automatic** — when to subscribe explicitly, and why never to unsubscribe from a PR you are driving: `git.md` → *PR Lifecycle*.
-- Dropping it yourself disables `ci-notify.yml`'s wake (Automation 4c) and
-  leaves a review round with no push signal at all; a scheduled check-in is not
-  a substitute, because a timer cannot know whether anything changed
-- Webhooks don't deliver new pushes or merge-conflict transitions — and deliver
-  CI success only via `ci-notify.yml`'s PR comment (Automation 4c) — so re-check
+- Dropping it yourself leaves CI results and review rounds with no push signal
+  at all; a scheduled check-in is not a substitute, because a timer cannot know
+  whether anything changed
+- CI results arrive as native `check_suite.completed` events; arm one
+  `send_later` check-in as a safety net for a lost delivery
+- Webhooks don't deliver new pushes or merge-conflict transitions, so re-check
   PR state on wake and, if nothing changed, re-arm and emit the heartbeat line
   (`global.md` → *Status Line on Every Stop*); never re-arm silently
-- This is the fast-feedback layer; `ci-monitor.yml` is the always-on backbone
+- Codex's verdict is read directly from the PR (`git.md` → *PR Lifecycle*)
 
 ---
 
@@ -451,12 +167,6 @@ first explained it.
 
 ## Activation Checklist for New Sessions
 
-- [ ] Confirm `ci-monitor.yml` is present and its `workflow_run.workflows` list is correct
-- [ ] Confirm `codex-monitor.yml` is present
-- [ ] Confirm `pages-monitor.yml` is present (any project with a GitHub Pages site)
-- [ ] Confirm `pages-retry.yml` matches the Pages source (W3): **branch-source** → present, with its `REQUIRED` entry. **Actions-source** → absent, with its `REQUIRED` entry dropped; **or** repointed under W3's idempotent exception, with the `REQUIRED` entry updated to the project's own deploy name
-- [ ] Confirm `ci-notify.yml` is present (wakes web sessions on CI green — success only, watched workflows only, unambiguous PR only; Automation 4c)
-- [ ] Check for any open `ci-failure` tracking issues before starting work
 - [ ] Do **not** subscribe to open PRs as a blanket session-start step — subscription is harness-side on open. The one exception stands: a session TAKING OVER a PR it did not open subscribes explicitly (Automation 5)
 - [ ] Read `CLAUDE.md` for full project context
 

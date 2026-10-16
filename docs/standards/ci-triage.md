@@ -1,46 +1,42 @@
 # CI Triage
 
 Triage for **project** CI in any repo using these agents. Three failure surfaces,
-all detected by event-driven infra workflows — no session, no polling:
+all delivered as events — no polling:
 
 | Signal | Source | Surfaces as |
 |---|---|---|
-| A watched workflow failed | `workflow_run` → `ci-monitor.yml` | `ci-failure` tracking issue |
-| Codex raised PR concerns | `pull_request_review` / `issue_comment` → `codex-monitor.yml` | `codex-flagged` PR label (auto-cleared on a SHA-matched all-clear) |
+| A CI run failed | `check_suite.completed` to the session subscribed to the PR; GitHub emails the run's actor | failing CI check on the PR |
+| Codex raised PR concerns | Codex's review on the PR | Codex's verdict (`directives/git.md` → *PR Lifecycle*) |
 | Playwright failure | `qa.yml` / `qa-live.yml` | failing CI check on the PR |
 
-GitHub automatically emails issue comments and label events, so the inbox is
-notified without polling. A watching session is woken by the PR-comment webhook
-(`ci-notify.yml`) on green and natively on failure — never poll (`git.md` → *GitHub API Quota Economy*); a single catch-up read at session start is fine.
+A session subscribed to the PR is woken natively on green and on failure — never poll (`git.md` → *GitHub API Quota Economy*); a single catch-up read at session start is fine.
 
 ⚠️ **"Woken on green" is not universal, and the exceptions need a check-in, not
 a poll** — polling is asking for something that would have arrived anyway. Which
-runs end with no wake, and why even a unique match is not proof: `directives/git.md` → *PR Lifecycle*, with each case in `docs/standards/pr-mechanics.md` → *Wakes that never arrive*.
+runs end with no wake: `directives/git.md` → *PR Lifecycle*, with each case in `docs/standards/pr-mechanics.md` → *Wakes that never arrive*.
 
-> This repo's own `ci-failure` issues come from its **directive-validation**
+> This repo's own CI failures come from its **directive-validation**
 > checks (link / section / path); a downstream project's come from its build /
 > Playwright suite. The triage steps below are the same either way — see
 > `docs/internal/repo-monitors.md` for this repo's specifics.
 
-## `ci-failure` issue is open
+## A CI run failed
 
-1. Read the issue body — each line names the failed workflow, branch, SHA, and run URL
-2. Open the run URL and read the failing step's logs
-3. Diagnose root cause before touching any code
-4. If the failure is in an **internal link** or **required section** check → it's a
+1. Open the failed run (the PR's failing check) and read the failing step's logs
+2. Diagnose root cause before touching any code
+3. If the failure is in an **internal link** or **required section** check → it's a
    repo defect; fix it and push
-5. If the failure is in the **external links** job → it's a sibling repo or rate-limit
+4. If the failure is in the **external links** job → it's a sibling repo or rate-limit
    issue; investigate the URL before suppressing (see `.github/scripts/check-links.js`
    and `.github/workflows/qa.yml` for the split-locality policy)
-6. If the failure recurs 3+ times on the same issue with different fixes → escalate
+5. If the failure recurs 3+ times with different fixes → escalate
 
-## `codex-flagged` label on a PR
+## Codex raised concerns on a PR
 
 1. Open the PR and read Codex's inline comments
 2. Address each suggestion or explicitly note why it's declined
-3. Request a fresh Codex pass (`@codex review`) and let the monitor clear the
-   label; never merge while it is present. The monitor sees only a **comment**
-   naming the current head, so where the verdict lives, and what to do when it
+3. Request a fresh Codex pass (`@codex review`); never merge until a clean
+   verdict names the current head. Where the verdict lives, and what to do when it
    arrives as a 👍 or an inline review-thread reply: `directives/git.md` → *PR Lifecycle*,
    with the delivery forms in `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
 
@@ -52,9 +48,6 @@ and do not edit workflows chasing a bug that isn't there.
 
 ## What not to do
 
-- Do not close a `ci-failure` issue without fixing the underlying failure
-- Do not remove `codex-flagged` by hand as a routine path — request another pass
-  (step 3 of the `codex-flagged` procedure above); hand removal is the last resort, bounded by `directives/git.md` → *PR Lifecycle*
 - Do not re-run a failed workflow repeatedly hoping it passes — diagnose first
 
 ---

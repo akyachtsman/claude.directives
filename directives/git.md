@@ -40,8 +40,8 @@ A `docs/…` path in these directives resolves against claude.directives:
   is woken by unrelated activity on it constantly; treating those as the signal
   drops the fallback while the run is still going, and if it is then cancelled
   nothing reports it. Re-check and re-arm until terminal
-  (`global.md` → *Async Operations*, item 2). This is not a licence to ignore wakes — `ci-notify` usually does
-  comment. It is a refusal to *depend* on one where the outcome may produce none.
+  (`global.md` → *Async Operations*, item 2). This is not a licence to ignore wakes — a `check_suite.completed`
+  wake usually does arrive. It is a refusal to *depend* on one where the outcome may produce none.
 
   **A project may opt out of PR check-ins** by an owner ruling recorded in its own
   `CLAUDE.md` (claude.prop's of 2026-07-21 does). Inside that project the ruling
@@ -52,32 +52,16 @@ A `docs/…` path in these directives resolves against claude.directives:
 
   Known cases — evidence that the class is broad, **not a list to check
   against**:
-  - **a dispatched run on a PR branch** — `ci-notify` has seven verified ways to
-    emit no wake: the workflow is not on its watch list; the watcher is not yet
-    on the default branch; the watch list is read from the default branch, so a
-    rename on the PR fires the old name; a `repository_dispatch` run carries the
-    default-branch SHA; a lookup that fills its 100-PR page refuses it; neither
-    lookup resolves exactly one PR; the run was cancelled;
-  - **any run that is CANCELLED**, ordinary `pull_request` CI included —
-    `ci-notify` fires only on success, and the `check_suite.completed` wake
-    excludes cancelled suites. `ci-monitor.yml` may still file a `ci-failure`
-    issue, but **none of it reaches the session waiting on the PR.** Arm the
-    check-in.
-  - **an ordinary successful run whose PR cannot be resolved unambiguously** —
-    each `ci-notify` lookup (head SHA, then branch plus owner) must match exactly
-    one open PR, and silence needs **both** to fail. A `repository_dispatch`
-    run carries the DEFAULT-BRANCH SHA, and if the default branch is the head of
-    exactly one open PR (a `main` → `release` promotion, say) that unrelated PR
-    is commented while the session that triggered the dispatch waits.
+  - **any run that is CANCELLED**, ordinary `pull_request` CI included — the
+    `check_suite.completed` wake excludes cancelled suites, so **nothing reaches
+    the session waiting on the PR.** Arm the check-in.
+  - **a lost delivery** — a wake the platform never delivers looks exactly like
+    a run still going.
 
   Do not try to enumerate your way to "covered": a check-in armed unnecessarily
   costs **one wasted wake**; one withheld on a false promise of coverage costs an
   agent **waiting forever**. Each case in full, with its evidence:
   `docs/standards/pr-mechanics.md` → *Wakes that never arrive*.
-
-  Read the green it does produce with the caveat the workflow itself attaches: a
-  branch match can name a **superseded** commit, so verify the SHA is still head
-  before treating it as a gate.
 
 ### Readiness and auto-merge
 - A PR-wait is never idle time: the moment the PR's CI is in flight, start the
@@ -90,38 +74,25 @@ A `docs/…` path in these directives resolves against claude.directives:
   surviving stops. If any gate fails, pause and surface it instead of merging.
   Always report the merge result; reporting is not asking.
 
-### Codex review and the `codex-flagged` label
+### Codex review
 - **Codex is the required PR reviewer (owner ruling, 2026-10-07).** This names
   the reviewer; it does not restate the gate. What counts as its verdict, every
   exit included (the reaction ladder, and the fallback reviewer when Codex
   cannot review), is the verdict gate below. Replacing Codex is an owner
   decision.
-- A `codex-flagged` label is a **merge blocker**: triage Codex's review first —
-  apply the fix, then request another review pass (next bullet). Check the PR's
-  labels on GitHub before merging.
-  The `codex-monitor` workflow adds the label on a flagged round and clears it
-  itself on a Codex all-clear **comment** that names the current head SHA — the
-  only form it can act on, and the form that cleared #293. A clean rerun can
-  equally be a 👍 reaction or an inline review-thread reply; the monitor sees
-  neither, and the label then sits with nothing to remove it. Which form arrives
-  is not predictable: check the comments AND the review threads before assuming
-  any of them. A label still present means concerns not yet re-reviewed, a clean
-  round delivered in a form the monitor cannot see, or an all-clear that failed
-  the SHA match — read the PR, never the label alone.
+- **Read Codex's verdict from the PR itself** — its comments, its review
+  threads and its reactions. A clean round can arrive as a comment naming the
+  head SHA, an inline review-thread reply or a 👍 reaction, and which form
+  arrives is not predictable: check the comments AND the review threads before
+  assuming any of them.
 
-### Removing `codex-flagged` by hand
-- **Taking `codex-flagged` off by hand is the last resort — request another
-  review pass and let the monitor clear the label.** Removing it asserts the
-  concern is resolved, which is the author claiming what the reviewer should
-  say; requesting a pass makes Codex say it, in the form the monitor watches.
-
-  **The opening is a TEST — the *unreachable-review test*.** Hand removal is
+### The unreachable-review test
+- **This is the *unreachable-review test*.** Merging without a Codex verdict is
   permitted only where an **observable terminal state**, recorded on the PR,
-  shows that a further request cannot produce a verdict. Record what was
-  requested, when, and what you observed. This same test opens the verdict gate
-  below; one test, so the two cannot drift into disagreeing about which states
-  count. Two states qualify today, and a state not listed still has to satisfy
-  the test — the observable is what makes it an exit rather than a shortcut.
+  shows that a further request cannot produce a verdict. Record what was requested, when, and what you observed.
+  The test opens the verdict gate below to the fallback reviewer. Two states
+  qualify today, and a state not listed still has to satisfy the test — the
+  observable is what makes it an exit rather than a shortcut.
   **Never request a series**: Codex is metered per request from a shared weekly
   pool (below).
   - ***unavailable*** — Codex replied that the allowance is spent. Do not spend
@@ -140,23 +111,15 @@ A `docs/…` path in these directives resolves against claude.directives:
   timestamp — a further pass answered that way leaves nothing new to observe
   (the ladder below records this).
 
-  **So a stuck label with no observable terminal state is not a removal case:
-  the PR stays blocked and you SAY SO** — one line to the owner naming what you
+  **So a silent Codex with no observable terminal state is not an exit: the PR
+  stays blocked and you SAY SO** — one line to the owner naming what you
   requested, when, and what you checked. That is the escape valve and it is
   deliberately a person: a reviewer that has silently stopped answering is not a
   state a session resolves alone. A stalled PR is loud; a PR merged past a review
   in progress is not.
 
-  ⚠️ **All of this is about a label that is THERE.** The reaction ladder below
-  clears the verdict gate; it never clears the label. So on a PR carrying no
-  `codex-flagged` — a first pass that came back clean as a reaction, which the
-  monitor never labels — the ladder is the whole gate and the merge proceeds
-  unattended. The escalation above applies only where a label from an earlier
-  flagged round is still sitting there and no observable terminal state explains
-  it.
-
 ### The verdict gate
-- **Neither a missing label nor an empty review list is proof.** Before merging,
+- **An empty review list is not proof.** Before merging,
   clear the gate against the current head. **On the normal path — some
   SHA-bearing Codex response names HEAD — every check below is NECESSARY and
   only the clean-verdict test is sufficient**: a check that passes narrows what
@@ -168,8 +131,7 @@ A `docs/…` path in these directives resolves against claude.directives:
   when NOTHING from Codex names HEAD; **_unavailable_**, a usage-limit reply
   stated on the PR while still current; and **outage**, a request that could not
   be made or accepted at all. Those two, like any state the test admits, clear
-  it only with the fallback reviewer's clean verdict (below). ⚠️ The ladder clears this gate and NOT the
-  `codex-flagged` label — the label rule above governs that. None of them is a
+  it only with the fallback reviewer's clean verdict (below). None of them is a
   way past a verdict you can READ, and none ever bypasses an adverse verdict that
   exists. **Every exit stays reachable, and none clears the gate silently.**
   What each exit requires: `docs/standards/pr-mechanics.md` → *Exits from the verdict gate*.
@@ -220,9 +182,6 @@ A `docs/…` path in these directives resolves against claude.directives:
     reporting no issues, or a review whose every inline finding has been fixed or
     explicitly dismissed on its thread. A response ends *pending* — it is the
     start of the check, not the end of it.
-    ⚠️ The inline-reply form clears the GATE but not the LABEL — `codex-monitor`
-    does not watch that event, so the last-resort rule above governs the label
-    (`docs/standards/pr-mechanics.md` → *The inline-reply form and the label*).
   - **Check the author — it validates the SOURCE, not the outcome.** Wording and
     a current SHA are both forgeable, so a response that is not the Codex bot's
     own cannot clear the gate. Authorship is necessary and never sufficient: a
@@ -258,13 +217,11 @@ A `docs/…` path in these directives resolves against claude.directives:
   as a comment or inline reply instead, a new 👍 still counts for rung 1. Each rung's conditions and why:
   `docs/standards/pr-mechanics.md` → *The reaction ladder*.
 - **A CLEAN verdict leaves NO REVIEW — but it may still leave a comment.**
-  It arrives in one of the three forms the `codex-flagged` bullet above names,
+  It arrives as a comment, an inline review-thread reply or a 👍 reaction,
   none of them a review, so an empty REVIEW list means nothing on its own. A SHA-bearing
   CLEAN verdict in a comment or a review thread clears the gate normally; a
-  review carrying live findings is a response, not a clearance. A label left
-  by a 👍 or inline-reply rerun follows the last-resort rule above — **do not
-  read the stuck label as unaddressed concerns; read the PR.** Observed forms
-  and the four delivery modes: `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
+  review carrying live findings is a response, not a clearance. Observed forms:
+  `docs/standards/pr-mechanics.md` → *Codex delivery forms*.
 
 ### Threads, inline comments and stale wakes
 - **A `check_suite.completed` wake is a PROMPT TO LOOK, never evidence about the
@@ -284,11 +241,10 @@ A `docs/…` path in these directives resolves against claude.directives:
 - **Unreadable reviews do not clear the gate** — through the MCP that call is
   GraphQL and fails when the pool is empty. In a web session, read the threads
   over REST first (`.../pulls/<n>/ccr/review_threads`, → *GitHub API Quota
-  Economy*); only then wait or surface. Never fall back to the label, which
-  is REST and stays readable at exactly the moment the correct check is
-  blocked. Where the repo's ruleset requires conversation resolution the server
-  refuses that merge for you (→ *Conditional Auto-Merge on Green*) — a backstop
-  against the fall-back, never a licence to stop looking: it is not on in every
+  Economy*); only then wait or surface. Where the repo's ruleset requires
+  conversation resolution the server refuses that merge for you
+  (→ *Conditional Auto-Merge on Green*) — a backstop, never a licence to stop
+  looking: it is not on in every
   repo, and it says nothing about the Codex verdict.
 
 ### When Codex cannot review
@@ -320,8 +276,7 @@ A `docs/…` path in these directives resolves against claude.directives:
     terminal state that shows Codex cannot review (for *unavailable*, the
     reset time its reply named; for an outage, what was observed), the head
     SHA reviewed, and the verdict with what was fixed.
-  - It clears the verdict gate only; the `codex-flagged` label rule above is
-    unchanged. When the allowance returns, the next PR goes back to Codex, and
+  - When the allowance returns, the next PR goes back to Codex, and
     nothing already merged is re-reviewed.
 
 ### Requesting a Codex review
@@ -392,14 +347,7 @@ gates hold — CI green on the head SHA; a **clean** current-head Codex verdict 
 the gate above (a response naming the head is not a verdict, since a review with
 live findings names it too), or the reaction ladder's attestation, or any state
 the *unreachable-review test* admits, recorded on the PR with the fallback
-reviewer's clean verdict (→ *PR Lifecycle*);
-no `codex-flagged` label — request a pass to clear it, or, on a state that test
-admits, remove it with the observable the last-resort rule requires. ⚠️ These two
-are separate gates and the ladder clears only the first. Where no `codex-flagged`
-label is present, the ladder is the whole gate and the merge proceeds unattended. Where one
-from an earlier flagged round IS present, a reaction-only round leaves it, and the
-label rule escalates rather than removing it, so that PR is not mergeable without
-the owner; no unresolved review
+reviewer's clean verdict (→ *PR Lifecycle*); no unresolved review
 threads; diff limited to the
 intended files — squash-merge WITHOUT
 asking, then follow the update-pages flow (watch the Pages build for the merged
@@ -414,16 +362,14 @@ default-branch ruleset ticks *Require conversation resolution before merging*
 (`MAINTAIN-REPO-USER-INSTRUCTIONS.md` → *Branch Protection*), GitHub refuses the
 merge while any review thread is unresolved — every unresolved thread, not just
 the current round's — with no model in the loop. That closes the failure this
-gate kept producing: through the MCP the thread read is GraphQL and fails exactly when the pool
-is empty, while the `codex-flagged` label is REST and stays readable at that same
-moment, so the cheap wrong path was always available precisely when the correct
-one was not. Read it as a backstop, never a delegation:
+gate kept producing: through the MCP the thread read is GraphQL and fails exactly
+when the pool is empty. Read it as a backstop, never a delegation:
 - **Do not assume it is on.** An agent cannot set a repo rule and usually cannot
   read one. Until you have seen this refusal in THIS repo, the thread gate is
   still yours to check by hand — a rule you assumed into existence protects
   nothing.
 - **The other gates stay agent-checked.** CI green on the head SHA, the Codex
-  verdict, the `codex-flagged` label and the diff's file list have no server-side
+  verdict and the diff's file list have no server-side
   rule behind them, and this one says nothing about any of them.
 - **A merge refused as blocked with everything else green is this rule firing**,
   not a transient error and not a broken repo: go resolve the threads. Do not
@@ -545,15 +491,14 @@ results):
   a broken repo, account, or permission problem.
 
 **Rules:**
-- **Never poll** for CI, deploy, or PR status — webhook wakes + `ci-notify`
-  (`global.md` → *Async Operations*). A watching session is woken by success; it
-  does not ask for it.
+- **Never poll** for CI, deploy, or PR status — webhook wakes
+  (`global.md` → *Async Operations*). A watching session is woken by the
+  `check_suite.completed` event; it does not ask for it.
   - **Polling is asking for something that would have arrived anyway.** A
     check-in armed for an outcome that COULD end with no wake path is not
     polling, and this ban does not reach it. Phrased that way on purpose:
     whether a run actually emits one is knowable only once it is terminal. See
-    *PR Lifecycle* on dispatched PR-branch runs, where seven verified failure
-    modes mean the comment may never come.
+    *PR Lifecycle* on cancelled runs, where the wake never comes.
 
     The test is not "is this a PR?", and it is not **"will THIS outcome produce a
     wake?"** either — that one needs the run to be terminal, which is the thing

@@ -13,9 +13,7 @@
       ],
       "consumers": [
         "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        "plugins/directives-toolkit/commands/qa-pipeline.md",
-        ".github/workflows/codex-monitor.yml",
-        "templates/workflows/codex-monitor.yml"
+        "plugins/directives-toolkit/commands/qa-pipeline.md"
       ],
       "mustNotMatch": [
         "ignore the PR's comments and its review threads",
@@ -54,7 +52,8 @@
         "  The two states are an *unavailable* reply still inside its reset window",
         "  - **outage** — the request could not be made or accepted at all",
         "  - outage — the request could not be made or accepted at all: the App is\n    not installed.\n\n  The two states are"
-      ]
+      ],
+      "consumers": []
     },
     {
       "id": "unreachable-review-terminal-states",
@@ -82,7 +81,7 @@
     },
     {
       "id": "unreachable-review-test-name",
-      "why": "#336 defined the *unreachable-review test* — the one condition under which a session may take `codex-flagged` off by hand — and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath. A NAME is undone by a suffix rather than by a clause, so each phrasing pins the character that follows it ('test.', 'test admits', 'test, and') — that boundary is what keeps 'tests', 'tester', 'testing' and 'test-cases' from counting as the name, and the mustNotMatch entries are exactly those four. ⚠️ Pinning the name cannot see the CONTENT of the rule; `unreachable-review-terminal-states` is the entry that does. 2026-09-23 (owner ruling): the non-directive carriers automations.md, ci-triage.md, cicd-setup.md, repo-monitors.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording.",
+      "why": "#336 defined the *unreachable-review test* — the one condition under which a session may take `codex-flagged` off by hand — and then spent three consecutive review rounds being shown a consumer that had dropped it. Round 4: the commit that INTRODUCED the name coined two aliases for it in the same breath. A NAME is undone by a suffix rather than by a clause, so each phrasing pins the character that follows it ('test.', 'test admits', 'test, and') — that boundary is what keeps 'tests', 'tester', 'testing' and 'test-cases' from counting as the name, and the mustNotMatch entries are exactly those four. ⚠️ Pinning the name cannot see the CONTENT of the rule; `unreachable-review-terminal-states` is the entry that does. 2026-09-23 (owner ruling): the non-directive carriers automations.md, ci-triage.md, cicd-setup.md, repo-monitors.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording. 2026-10-16 (owner ruling, #460 step 1): the `codex-flagged` label and its monitor were deleted; the test now names the one condition for merging without a Codex verdict.",
       "source": "directives/git.md",
       "phrasings": [
         "the unreachable-review test.",
@@ -92,9 +91,7 @@
       ],
       "consumers": [
         "directives/global.md",
-        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md",
-        ".github/workflows/codex-monitor.yml",
-        "templates/workflows/codex-monitor.yml"
+        "plugins/directives-toolkit/agents/pr-readiness-reviewer.md"
       ],
       "mustNotMatch": [
         "the last-resort test admits it",
@@ -106,29 +103,6 @@
         "unreachable-review testing admits it",
         "the unreachable-review test-case admits it",
         "the unreachable-review test-run admits it"
-      ]
-    },
-    {
-      "id": "unrepointed-retry-participates",
-      "why": "#299 phase 2 moved the reasoning for global.md's Hosting & Deployment rules into docs/standards/hosting-mechanics.md and condensed the rules to one bullet each, so the rule to DELETE an unrepointed pages-retry.yml now stands in global.md as a single bullet beside a pointer. It is the one Hosting rule whose loss turns a missed alarm into an active harm: a retry still watching pages-build-deployment re-runs the rogue unfiltered deploy a visibility flip fires. A later trim that kept the pointer and dropped the bullet would pass every other check. Each phrasing runs to its sentence terminator; the workflow carriers state it in their header comment with a semicolon, and automations.md without 'merely'/'while', so each carrier's own wording is listed and none contains another.",
-      "source": "directives/global.md",
-      "phrasings": [
-        "an unrepointed monitor merely fails to notice, while an unrepointed retry participates.",
-        "an unrepointed monitor fails to notice, an unrepointed retry participates.",
-        "monitor fails to notice; an unrepointed retry participates."
-      ],
-      "consumers": [
-        "docs/standards/hosting-mechanics.md",
-        "docs/standards/automations.md",
-        ".github/workflows/pages-retry.yml",
-        "templates/workflows/pages-retry.yml"
-      ],
-      "mustNotMatch": [
-        "an unrepointed monitor merely fails to notice, while an unrepointed retry is harmless.",
-        "an unrepointed monitor merely fails to notice, while an unrepointed retry never participates.",
-        "an unrepointed monitor merely fails to notice, while an unrepointed retry participates only on failure.",
-        "an unrepointed monitor fails to notice, an unrepointed retry does not participate.",
-        "monitor fails to notice; an unrepointed retry is inert."
       ]
     },
     {
@@ -154,35 +128,8 @@
       ]
     },
     {
-      "id": "ci-notify-unique-match-is-not-proof",
-      "why": "ci-notify resolves ONE open PR from a head SHA, else branch plus head-repo owner. The WEAK failure (no unique candidate, so it exits silently) is not the dangerous one and is stated separately in every carrier; the dangerous one is that even a UNIQUE match proves nothing, because a repository_dispatch run carries the DEFAULT-BRANCH SHA and can uniquely match an unrelated promotion PR, which then receives the comment. Every phrasing therefore keeps 'unique' behind its article: 'unique' is a SUBSTRING of 'non-unique', so a carrier regressing to the weak case while wearing the strong case's words would otherwise still count. A carrier can state it ANAPHORICALLY, in words no earlier phrasing reached and --derive therefore could not surface (#314): git.md's PR Lifecycle bullet states the consequence ('that unrelated PR is commented while the session that triggered the dispatch waits.'). git.md's neighbouring 'it uniquely resolves the one matching workflow_run.head_branch' is the lookup MECHANISM, not this warning, and is deliberately left untracked rather than pinned under this id — the response-is-not-a-verdict mistake of certifying a neighbouring rule. 2026-09-23 (owner ruling): the non-directive carriers cicd-setup.md, repo-monitors.md, ci-triage.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): the CLAUDE.md and MAINTAIN-REPO-USER-INSTRUCTIONS.md restatements became pointers at git.md and left `consumers`; every phrasing no tracked file still carried was removed, with the two mustNotMatch entries that existed only to constrain them.",
-      "source": "docs/standards/automations.md",
-      "phrasings": [
-        "a unique match is not a guaranteed wake for YOUR session.",
-        ". ⚠️ A UNIQUE MATCH IS NOT PROOF YOUR SESSION WAS WOKEN, EITHER.",
-        "even a unique match is not proof of coverage,",
-        "say) that unrelated PR is commented while the session that triggered the dispatch waits."
-      ],
-      "consumers": [
-        ".github/workflows/ci-notify.yml",
-        "templates/workflows/ci-notify.yml",
-        "plugins/directives-toolkit/commands/new-repo.md",
-        "directives/git.md",
-        "docs/standards/pr-mechanics.md"
-      ],
-      "mustNotMatch": [
-        "a non-unique match is not proof of coverage",
-        "a green run is not a guaranteed wake",
-        "a unique match is proof of coverage",
-        "a unique match is not a guaranteed wake unless the owner confirms it",
-        "If the owner asks, a unique match is not a guaranteed wake",
-        "waits. Only if the owner asks, A unique match is not a guaranteed wake for YOUR session",
-        "say) that unrelated PR is not commented while the session that triggered the dispatch waits."
-      ]
-    },
-    {
       "id": "arm-the-check-in",
-      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in wait-gate.sh, which states the rule twice and whose DELIVERED message is the copy that matters. Its carriers word it differently, which is why there is one phrasing per wording and why #341 abandoned trying to infer the shape. Each lowercase one carries its connector: with a bare 'arm the check-in whenever …', inverting CLAUDE.md to 'Never arm the check-in whenever …' PASSED, because ci-notify's lowercase wording matched inside the negation — one carrier's phrasing covering another carrier's inversion. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording.",
+      "why": "The counterpart to the wake gap above: when a run could end without waking the session, the check-in is what keeps the PR from being abandoned mid-flight. Rounds 37 and 39 of #294 were both this claim failing to reach a consumer — round 39's was in wait-gate.sh, which states the rule twice and whose DELIVERED message is the copy that matters. Its carriers word it differently, which is why there is one phrasing per wording and why #341 abandoned trying to infer the shape. Each lowercase one carries its connector: with a bare 'arm the check-in whenever …', inverting CLAUDE.md to 'Never arm the check-in whenever …' PASSED, because ci-notify's lowercase wording matched inside the negation — one carrier's phrasing covering another carrier's inversion. 2026-09-23 (owner ruling): the non-directive carriers repo-monitors.md, ci-triage.md, cicd-setup.md were collapsed to pointers at `directives/git.md` → PR Lifecycle / `docs/standards/pr-mechanics.md` and dropped from `consumers`, so a restated copy is no longer locked in. 2026-10-12 (owner-approved audit R2/R3): CLAUDE.md's restatement became a pointer at git.md and left `consumers`, and every phrasing no tracked file still carried was removed rather than kept as dead wording. 2026-10-16 (owner ruling, #460 step 1): the watcher workflows were deleted and automations.md's restatement went with them, so it left `consumers`.",
       "source": "directives/git.md",
       "phrasings": [
         "is: arm the check-in, then drop it when THAT OUTCOME is observed terminal",
@@ -195,9 +142,6 @@
       ],
       "consumers": [
         "directives/global.md",
-        "docs/standards/automations.md",
-        ".github/workflows/ci-notify.yml",
-        "templates/workflows/ci-notify.yml",
         "MAINTAIN-REPO-USER-INSTRUCTIONS.md",
         "plugins/directives-toolkit/commands/new-repo.md",
         {

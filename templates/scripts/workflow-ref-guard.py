@@ -85,9 +85,9 @@ except ModuleNotFoundError:
     )
     raise SystemExit(1)
 
-# The shared YAML 1.2 reader, this file's sibling. Inserted explicitly because
-# watcher-liveness.yml loads this file by path, which puts no directory on
-# sys.path.
+# The shared YAML 1.2 reader, this file's sibling. Inserted explicitly so the
+# import does not depend on how this file is loaded: a loader that imports it by
+# path puts no directory on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     import gh_yaml
@@ -135,9 +135,9 @@ ALLOWED_EXTERNAL = {
 # rule that exists on paper and nowhere else.
 #
 # Format: { "qa-live.yml": ["My Deploy Workflow"], ... }
-# Absent file = no required watchers. A fresh repo is not exempt: a branch-source
-# project carries `"pages-retry.yml": ["pages-build-deployment"]` from bootstrap
-# on (docs/standards/automations.md, Watcher Rules W3).
+# Absent file = no required watchers. An Actions-source project lists its deploy
+# watcher from bootstrap on: `"qa-live.yml": ["Pages Deploy"]` with pages-deploy.yml
+# (docs/standards/cicd-setup.md, 9c-bis).
 def _load_required():
     cfg = REPO_ROOT / ".github" / "workflow-ref-required.json"
     if not cfg.exists():

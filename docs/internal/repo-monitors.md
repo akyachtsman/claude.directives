@@ -1,85 +1,20 @@
 # Repo Monitors — this repo's CI
 
-This repo's own infrastructure monitors **and its self-test triage**. For the
-**exported** automation standard that downstream projects inherit (email,
-watcher rules, CI/Codex/Pages monitors, in-session subscription, cross-session
-messaging, test-scenario bootstrap), see `docs/standards/automations.md`; for the exported **project** CI triage,
-see `docs/standards/ci-triage.md`.
+This repo's own CI **and its self-test triage**. For the **exported** automation
+standard that downstream projects inherit, see `docs/standards/automations.md`;
+for the exported **project** CI triage, see `docs/standards/ci-triage.md`.
 
-### Infrastructure Monitors (always on, no session required)
-CI and Codex monitoring runs entirely in GitHub Actions — event-driven, no session
-or commit-hook involved. These must exist and be green before making any changes.
-
-**ci-monitor.yml** — fires when `QA — Directive Validation` completes. On failure,
-opens or updates a deduplicated `ci-failure` tracking issue. Uses only GITHUB_TOKEN.
-
-**ci-notify.yml** — fires when `QA — Directive Validation` completes **green**.
-Comments on the open PR for that run so a watching web session wakes on success
-via the comment webhook (no scheduling-tool polling, no permission prompts). The
-template counterpart, adapted to this repo's workflow name. Its lookup and what it
-does not cover: `docs/standards/automations.md` → Automation 4c; when to arm a
-check-in instead: `git.md` → *PR Lifecycle*.
-
-**codex-monitor.yml** — fires on Codex PR reviews AND Codex issue comments. Adds
-a `codex-flagged` label when Codex raised concerns (changes_requested or
-COMMENTED with inline comments); clears it on an all-clear comment naming the
-PR's current head SHA — observed here clearing #293 and #337 (at `b64ff09`) and
-#333 (at `63bed51`, 2026-08-27). Where to look for the verdict, the forms the
-monitor cannot see, and when hand removal is allowed: `git.md` → *PR Lifecycle*.
-Contract detail: `docs/standards/automations.md` → Automation 3.
-
-**pages-monitor.yml** — fires on every GitHub Pages build (`page_build`). Reads the
-build status from the event, verifies the live URL (`https://<owner>.github.io/<repo>/`)
-returns 200 with cache-busted retries, and on a problem (build errored or site not
-serving) opens/updates a deduplicated `pages-deploy-failure` tracking issue; a healthy
-deploy closes that issue and reports green in the job summary only. This is the
-zero-model counterpart to the `update-pages` skill: the deploy already happens on push
-(branch-source Pages), and this adds the verify + notify layer with no session required.
-The live URL is derived generically, so the file is portable to any project as-is.
-
-**pages-retry.yml** — fires on `workflow_run` completion of the managed
-`pages-build-deployment` workflow. On a failure (typically GitHub's transient
-"Deployment failed, try again later.") it re-runs the whole deploy, bounded by
-`run_attempt` so a genuinely broken deploy cannot loop; after a few tries it stops
-and leaves the tracking issue to `pages-monitor.yml`. It re-runs, never pushes.
-
-See `.github/workflows/ci-monitor.yml`, `.github/workflows/ci-notify.yml`,
-`.github/workflows/codex-monitor.yml`, `.github/workflows/pages-monitor.yml`, and
-`.github/workflows/pages-retry.yml` — the five the checklist below expects.
-
-**watcher-liveness.yml** — ⚠️ **advisory, not a gate, and not one of the five
-above** (#318). Weekly (Monday) and on manual dispatch. `workflow-ref-guard.py`
-proves every `workflow_run` name resolves; this asks whether each watcher still
-FIRES: for every watcher it compares the watched workflow's completed runs in the
-window against the watcher's own `workflow_run` runs, and reports a subject run
-with no watcher run after it — SILENT (none fired) or GAPS (some did not). A
-subject that did not run is QUIET, not a finding, so healthy dormancy stays quiet.
-It reuses the ref guard's own extraction, never fails its job, and says NOT
-CHECKED rather than guessing (branch-filtered watcher, truncated listing, API
-error). Findings go to the job summary and to at most one open
-`watcher-liveness` issue, edited in place; a run with none edits that issue to
-its own table and closes it once every pair was checked. Promotion rule (owner ruling
-2026-09-23, recorded on #318): after 4 consecutive weekly runs with no
-false-alarm SILENT/GAPS verdict, SILENT/GAPS start failing the job; a false alarm
-resets the count and is recorded on #318. QUIET and NOT CHECKED neither count
-toward the four nor reset them.
-
-### Activation Checklist for New Sessions
-- Confirm all seven workflows exist: `qa.yml` (the validation the monitors watch), the five monitors `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and the advisory weekly `watcher-liveness.yml`. `codex-monitor` fires only on Codex review/comment events, `pages-monitor` on `page_build`, `pages-retry` on `workflow_run` completion of `pages-build-deployment`, and `ci-notify` on a watched QA workflow completing green — none has a standing "green" status to check
-- Do not subscribe to open PRs as a session-start step — subscription is harness-side on open. Then leave it alone; the harness drops it at merge (`CLAUDE.md` → *Notifications*, `git.md` → *PR Lifecycle*). Unsubscribing yourself disables `ci-notify.yml`'s wake and leaves a Codex review with no push signal at all
-- See *Self-test triage* below for `ci-failure` / `codex-flagged` handling
-- Check for open `ci-failure` issues before starting new work
+This repo runs one workflow, `qa.yml` (`QA — Directive Validation`). A red run
+reaches a subscribed session as a native PR event, and GitHub emails the run's
+actor.
 
 ---
 
 ## Self-test triage
 
-This repo's `ci-failure` issues come specifically from its **directive-validation**
-CI — the `check-*.js` link / section / path validators in `qa.yml` (a downstream
-project's instead come from its build / Playwright suite). The triage **steps** are
-identical either way, so they aren't duplicated here: follow
-`docs/standards/ci-triage.md` → *`ci-failure` issue is open* / *`codex-flagged` label on a PR*.
-Repo-specific notes:
+A red QA run here comes from this repo's **directive-validation** CI — the
+`check-*.js` link / section / path validators in `qa.yml` (a downstream project's
+instead comes from its build / Playwright suite). Repo-specific notes:
 
 - An `internal link` or `required section` failure is this repo's own defect — fix
   it in the offending directive/doc and push.

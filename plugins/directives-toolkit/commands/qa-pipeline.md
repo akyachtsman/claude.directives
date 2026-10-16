@@ -112,10 +112,8 @@ Run step 4 when the changes touch any of:
 ### CI while it runs
 
 See `docs/standards/ci-triage.md` for expected vs. real failure classification
-and workflow trigger rules. CI monitoring is infra-resident and event-driven,
-not session-scoped: `ci-monitor.yml` fires on `workflow_run` events, and
-`codex-monitor.yml` adds and clears `codex-flagged` from Codex's verdicts.
-What the label does and does not prove is `git.md` → *PR Lifecycle*
+and workflow trigger rules. CI results and Codex verdicts arrive as PR events
+on the session's subscription; how to read a Codex verdict is `git.md` → *PR Lifecycle*
 — read the PR's comments AND its review threads. For a quick CI snapshot, call
 `mcp__github__actions_list` once: report failures and the last success, then
 move on. Session-start steps are in `directives/test.md` → "Session start —

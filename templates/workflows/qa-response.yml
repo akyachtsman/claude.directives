@@ -10,10 +10,6 @@
 #     -d '{"event_type":"manual-qa-trigger"}'
 #
 # Required setup:
-#   - ⚠️ RULE W1 — this workflow is part of the standard set, and ci-monitor.yml
-#     and ci-notify.yml ship watching it. If you OMIT it, remove
-#     'QA — Event-Driven Response' from both lists in the same edit.
-#     Why: docs/standards/automations.md -> Watcher Rules (W1).
 #   - TEST_AUTH_CREDENTIAL / TEST_AUTH_EMAIL repository secrets: set them only
 #     for a login that needs a credential from outside. Which gates need which,
 #     and when to leave both unset: docs/standards/cicd-setup.md -> Step 5.

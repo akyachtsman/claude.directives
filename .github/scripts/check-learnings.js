@@ -41,7 +41,6 @@ const COMPLETE = [{
   dirs: ['.github/workflows', 'templates/workflows'],
   text: 'workflow_run',
   exempt: {
-    '.github/workflows/watcher-liveness.yml': 'triggers on schedule/workflow_dispatch; it READS workflow_run run history via the API and watches nothing',
     'templates/workflows/qa.yml': 'triggers on pull_request/push; names workflow_run only in a comment about the ref guard',
   },
 }];

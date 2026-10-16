@@ -55,9 +55,9 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
-| `.github/workflows/` | This repo's self-test CI (`qa.yml`, `ci-monitor.yml`, `ci-notify.yml`, `codex-monitor.yml`, `pages-monitor.yml`, `pages-retry.yml`, and the advisory weekly `watcher-liveness.yml`) |
+| `.github/workflows/` | This repo's self-test CI (`qa.yml`) |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
-| `.github/workflow-ref-required.json` | `workflow-ref-guard.py`'s required-watcher list: for each workflow file, the `workflow_run` names it MUST keep watching (here `ci-monitor.yml` and `ci-notify.yml` watch QA, `pages-retry.yml` watches `pages-build-deployment`), so a watcher deleted outright fails CI instead of passing silently |
+| `.github/workflow-ref-required.json` | `workflow-ref-guard.py`'s required-watcher list: for each workflow file, the `workflow_run` names it MUST keep watching, so a watcher deleted outright fails CI instead of passing silently. Empty here: this repo runs no `workflow_run` watcher |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 
 ## How it's imported downstream
@@ -71,12 +71,9 @@ check whether it applies to THIS repo too**, in the same PR. Two patterns:
 - **Byte-identical copy**, enforced by `.github/scripts/check-pairs.py` — the
   one list of pairs lives in that script; add a pair there — the template IS the
   live copy.
-- **Adapted with documented divergence** where roles differ (`ci-monitor.yml` /
-  `ci-notify.yml` watch this repo's workflow name; `qa.yml` here is directive
-  validation, not app CI — so the app-shaped pieces like the ui-tests kit and
-  `styles/` contract don't apply). The two watcher pairs are also on
-  `check-pairs.py`'s list, as `ADAPTED`: parsed, they must be equal apart from
-  the watch list and comments.
+- **Adapted with documented divergence** where roles differ (`qa.yml` here is
+  directive validation, not app CI — so the app-shaped pieces like the ui-tests
+  kit and `styles/` contract don't apply).
 `/audit-repo` treats a shipped-downstream-but-applicable-here miss as drift.
 
 ## Branch policy
@@ -134,14 +131,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   interactive Pages artifact, `docs/site/logical-map.html`. What each case covers and why it exists is in
   `docs/internal/repo-map-ui.md`; read that before changing the map, the router,
   or the suite.
-- `ci-monitor.yml` — opens/updates a deduplicated `ci-failure` issue when QA fails.
-- `ci-notify.yml` — comments on the PR when QA goes green, to wake a watching session. When a green run may not wake yours: `git.md` → *PR Lifecycle*.
-- `codex-monitor.yml` — adds/clears the `codex-flagged` label from Codex's verdict comments. The verdict forms it misses, and where to look instead: `git.md` → *PR Lifecycle*.
-- `pages-monitor.yml` — verifies each Pages build is live and opens/updates a `pages-deploy-failure` issue on a problem; `pages-retry.yml` re-runs a transiently failed deploy, bounded.
-- `watcher-liveness.yml` — advisory weekly check that each watcher still fires; not a gate.
-
-Per-workflow detail (canonical) and self-test triage (`ci-failure` / `codex-flagged`):
-`docs/internal/repo-monitors.md`. Exported automation standard and escalation rules:
+A red run reaches a session through its PR subscription, and GitHub emails the
+run's actor; Codex's verdict is read from the PR (`git.md` → *PR Lifecycle*).
+Self-test triage: `docs/internal/repo-monitors.md`. Exported automation standard and escalation rules:
 `docs/standards/automations.md`; exported **project** CI triage: `docs/standards/ci-triage.md`.
 
 ## Toolkit (commands, skills, agents, hooks)

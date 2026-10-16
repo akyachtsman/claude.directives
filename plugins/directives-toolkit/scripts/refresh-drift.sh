@@ -119,6 +119,13 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     .github/workflows/keepalive.yml)
       echo "RETIRED: $f — upstream deleted this template; delete it and its KEEPALIVE_PAT secret (docs/standards/cicd-setup.md → 9f)"
       continue ;;
+    # The watcher workflows, removed 2026-10-16 (#460): native session events
+    # and qa-live.yml now cover what they did.
+    .github/workflows/ci-monitor.yml|.github/workflows/ci-notify.yml|\
+    .github/workflows/codex-monitor.yml|.github/workflows/pages-monitor.yml|\
+    .github/workflows/pages-retry.yml)
+      echo "RETIRED: $f — upstream deleted this watcher; delete it, and its entry in .github/workflow-ref-required.json if it has one"
+      continue ;;
   esac
   t=$(refresh_template_of "$f")
   # Only a path absent from a tree that WAS fetched means "no such template";

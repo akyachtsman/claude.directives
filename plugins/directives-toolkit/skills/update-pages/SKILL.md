@@ -151,12 +151,9 @@ Run in order:
    - **FAILURE:** `❌ Pages build failed for <short-sha> — <run-url>`, with the
      failing step summarized. GitHub's *managed* deploy sometimes fails its publish
      step with a transient **"Deployment failed, try again later."** — a GitHub-side
-     blip, not your change. **Re-run it** to a terminal state before reporting done:
-     automatically if the project ships an auto-retry deploy workflow
-     (`.github/workflows/pages-retry.yml` — watches the managed deploy via
-     `workflow_run` and re-runs on failure, bounded to `run_attempt < 4` so a truly
-     broken deploy can't loop), otherwise re-run manually via the Actions API. A
-     merged-but-failed deploy leaves the site **stale** — that is not "done."
+     blip, not your change. **Re-run it** via the Actions API and watch it to a
+     terminal state before reporting done; after a few failed attempts treat it as
+     broken, not transient. A merged-but-failed deploy leaves the site **stale** — that is not "done."
      On Actions-source, never re-run: dispatch a NEW run of the deploy workflow
      on `main` (step 5). `pages-deploy.yml` refuses a re-run of its publish,
      since an older commit would roll the site back, and the run to recover is

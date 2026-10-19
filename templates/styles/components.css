@@ -136,7 +136,9 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
   display: inline-flex; align-items: center;
   min-height: var(--size-target-min); min-width: var(--size-target-min);   /* a 44px target */
 }
-.table th:has(> .th-sort) { padding-top: 0; padding-bottom: 0; }
+/* A cell holding a 44px control keeps 4px above and below, so controls in
+   neighbouring rows (and the header) stay 8px apart (§ Accessibility, targets). */
+.table th:has(> .th-sort) { padding-top: var(--space-1); padding-bottom: var(--space-1); }
 .th-sort:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
 /* A row's opening control (§6), a link or a button in its name cell: a 44px
    target, not the height of one line of text. */
@@ -145,12 +147,12 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
   min-height: var(--size-target-min); min-width: var(--size-target-min);
   background: none; border: 0; padding: 0; font: inherit; color: var(--color-accent);
 }
-.table td:has(> .row-open) { padding-top: 0; padding-bottom: 0; }
+.table td:has(> .row-open) { padding-top: var(--space-1); padding-bottom: var(--space-1); }
 .row-open:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
 /* A row's own actions (§6): the last cell, right-aligned, icon buttons 8px
    apart; a .menu-btn takes their place at three or more. */
 .row-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-.table td:has(> .row-actions) { width: 1%; white-space: nowrap; padding-top: 0; padding-bottom: 0; }
+.table td:has(> .row-actions) { width: 1%; white-space: nowrap; padding-top: var(--space-1); padding-bottom: var(--space-1); }
 
 /* ── Forms and fields (§12) ───────────────────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: var(--space-1); }

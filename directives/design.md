@@ -452,9 +452,11 @@ Every UI works on desktop, tablet and phone. Design responsive-first:
 Non-negotiable, whatever the palette:
 - **WCAG AA contrast:** normal text ≥ 4.5:1, large text and icons ≥ 3.0:1. Large
   means ≥ 18.66px bold or ≥ 24px; anything smaller needs 4.5.
-- **A control's edge** — a field, a secondary button, a segmented group — is
-  ≥ 3.0:1 against what surrounds it (WCAG 1.4.11): the house components draw
-  every one in `--color-border-input`, never the card border.
+- **A control's edge** is ≥ 3.0:1 against what surrounds it (WCAG 1.4.11)
+  wherever the edge is what shows the control is there: a field, a secondary
+  button, a segmented group, the Add card, an upload box. The house components draw every such
+  edge in `--color-border-input`. `--color-border` is for an edge nothing depends
+  on: a card (its title says what it is), a tag, a pop-over, a divider.
 - Visible keyboard focus on everything pressable: pair `:hover` with
   `:focus-visible`.
 - Honor `prefers-reduced-motion`.

@@ -729,10 +729,23 @@ expect("stamp: the house style is binding, so a project without it refuses the s
        res, 1, "UNAPPLIED: styles/tokens.css is absent but required -- the house style is binding")
 m = re.search(r"tokens\.css is absent but required .* \(blob ([0-9a-f]{40})\) \(local absent\)", out)
 check("stamp: the refusal prints the blob a no-UI project's decline records", bool(m), out)
-if m:
+# components.css did not change from S to H, so no delta lists it: it is
+# required anyway (Codex #469 r8).
+expect("stamp: a house-style file the delta does not list is still required",
+       res, 1, "UNAPPLIED: styles/components.css is absent but required -- the house style is binding")
+m2 = re.search(r"components\.css is absent but required .* \(blob ([0-9a-f]{40})\) \(local absent\)", out)
+if m and m2:
     set_kept(r, "styles/tokens.css", {"blob": m.group(1), "local": "absent", "reason": "no UI in this project"})
-    expect("stamp: a decline of the absent file reads KEPT",
-           run(r, "refresh-stamp.sh"), 0, "KEPT: styles/tokens.css -- no UI in this project")
+    set_kept(r, "styles/components.css", {"blob": m2.group(1), "local": "absent", "reason": "no UI in this project"})
+    expect("stamp: a decline of both absent files reads KEPT",
+           run(r, "refresh-stamp.sh"), 0, "KEPT: styles/components.css -- no UI in this project")
+# Outside any delta: a project stamped at the head that deleted the files, and a
+# first refresh with no stamp (no delta listing at all), both refuse.
+for name, stamp in (("stamp-styles-gone-at-head", H), ("stamp-styles-first", None)):
+    r = project(name, stamp=stamp, changes={"styles/tokens.css": None, "styles/components.css": None})
+    run(r, "refresh-delta.sh")
+    expect(f"stamp: {name}: the house style is required with no delta listing it",
+           run(r, "refresh-stamp.sh"), 1, "UNAPPLIED: styles/tokens.css is absent but required")
 
 # ---- items 5-7: drift at the pin, STALE vs CUSTOM, modes ----------------------
 DRIFTED = {

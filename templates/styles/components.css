@@ -22,6 +22,10 @@ body {
      break-word, not anywhere: it leaves table column sizing alone. */
   overflow-wrap: break-word;
 }
+/* break-word gives a flex item no break points when it sizes, so text that
+   sits in a flex row (a dialog title, a menu action, the Add card, the upload
+   box) breaks anywhere instead and keeps the row inside its box. */
+.menu-item, .card-add, .upload { overflow-wrap: anywhere; }
 /* Form controls take the house font too; browsers give them their own. */
 button, input, select, textarea { font-family: inherit; }
 h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
@@ -225,7 +229,7 @@ dialog.dialog { border: 0; padding: 0; color: inherit; }
 dialog.dialog:not([open]) { display: none; }
 dialog.dialog::backdrop { background: var(--color-backdrop); }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-6); }
-.dialog-title { font-size: var(--font-lg); font-weight: 600; margin: 0; }
+.dialog-title { font-size: var(--font-lg); font-weight: 600; margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .dialog-body { padding: 0 var(--space-6) var(--space-4); overflow: auto; }
 /* Cancel (secondary) on the left, the act on the right, right-aligned. */
 .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border); }

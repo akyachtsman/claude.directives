@@ -40,14 +40,10 @@ Every project starts from the house look: `templates/styles/tokens.css` and
 **reference page** from them, and the remaining pages are built against that
 contract so every page matches page one.
 
-**A project that already exists** moves to the house style by running
-`/design-intake`, never by a rewrite of its screens: it installs the house
-`styles/` and keeps the project's older stylesheets as `legacy-*.css`, loaded
-before the house files so unmigrated screens keep working, and a palette the
-owner ruled for that project keeps its values. A screen that does not yet
-match goes into `DESIGN-GAPS.md` (below) and is brought up to the standard by
-the next change that touches it. Carrying the house style through `/refresh-repo` is a
-separate change (#470).
+**A project that already exists** moves to the house style in a separate
+change (#470), by owner ruling (2026-10-19); until it lands, `/design-intake`
+does not replace an existing project's stylesheets, and a screen that does not
+yet match goes into `DESIGN-GAPS.md` (below).
 
 A project changes its **palette or fonts** (tokens only) only by owner ruling,
 for example a client's brand colour. `/design-intake` then imports that look
@@ -296,8 +292,10 @@ Every screen uses this for anything a person can put away and get back.
 - **Header:** the title on the left, × on the right (`aria-label="Close"`).
 - **Semantics and focus:** a native `<dialog>` opened with `showModal()`, or
   `role="dialog"` with `aria-modal="true"`, labelled by its title
-  (`aria-labelledby`). Opening moves focus into it (the first field, else the
-  primary button), and Tab stays inside it while it is open.
+  (`aria-labelledby`). Opening moves focus into it: the first field; else
+  **Cancel** when the act is red (`.btn-danger`, `.btn-delete`), so Enter never
+  confirms a delete; else the primary button. Tab stays inside it while it is
+  open.
 - **Body:** labelled fields (section 12); it scrolls inside the dialog when tall.
 - **Footer:** right-aligned, **Cancel** (secondary) on the left and the primary
   act on the right. A read-only dialog has one **Close** button.

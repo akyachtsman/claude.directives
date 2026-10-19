@@ -106,12 +106,14 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 .card-title { font-size: var(--font-lg); font-weight: 600; overflow-wrap: anywhere; }
 .card-sub { font-size: var(--font-sm); color: var(--color-text-secondary); }
 /* At most two icon buttons, top-right, Edit then Archive; 3+ become one ⋮ menu.
-   Always visible: never hover-only, so they show on a phone. */
+   Always visible: never hover-only, so they show on a phone. The padding
+   belongs to the actions box, so a press within 8px of an icon button lands
+   on the box, never on the card's open target beneath it (8px between targets). */
 .card-actions {
-  position: absolute; z-index: 1; top: var(--space-2); right: var(--space-2);
+  position: absolute; z-index: 1; top: 0; right: 0; padding: var(--space-2);
   display: flex; gap: var(--space-2);
 }
-.card:has(.card-actions) .card-title { padding-right: calc(2 * var(--size-target-min) + var(--space-2)); }
+.card:has(.card-actions) .card-title { padding-right: calc(2 * var(--size-target-min) + 2 * var(--space-2)); }
 .card-add {
   border-style: dashed; border-color: var(--color-border-input); box-shadow: none; display: flex; align-items: center;
   justify-content: center; gap: var(--space-2); color: var(--color-accent); font-weight: 600;

@@ -72,12 +72,12 @@ Two committed files are the single source of truth for a project's look:
   card with its opening title (`.card-open`) and corner actions, the Add card,
   a table that scrolls inside its own box (its sortable headers' `.th-sort` button and its rows' `.row-open`),
   field and label, checkbox, status pill and tag, empty state, dialog shell,
-  Archived (N) pop-over, upload box, inline message, toast, segmented control,
+  Archived (N) pop-over, the ⋮ menu, upload box, inline message, toast, segmented control,
   section header.
 
 A screen never adds its own button, card, pill or dialog class; a size or layout
 need is a modifier on the shared one. Script behaviour that every page shares
-(the confirmation dialog, the archived pop-over, the empty state, the inline
+(the confirmation dialog, the archived pop-over, the ⋮ menu, the empty state, the inline
 message, the icon set, the table comparator, the segmented control's keys,
 the dialog's focus, the `aria-disabled` guard)
 lives in ONE shared script loaded by every page, never copied into a page.
@@ -196,6 +196,13 @@ permanently or Permanently archive confirmation.
   **top-right corner**, in this fixed order from left to right: **Edit**, then
   **Archive**. With three or more actions, one ⋮ menu in that corner instead.
   Never actions above the card, never hover-only (they must show on a phone).
+- **The ⋮ menu** (`.menu-btn`, `.menu-pop`, `.menu-item`) is a disclosure, not an
+  ARIA menu: a native `<button aria-label="More actions">` with `aria-expanded`
+  and `aria-controls` opens a pop-over of native buttons, one per action, in the
+  same order (Edit, Archive, then the rest). Opening moves focus to the first
+  action and Tab moves through them; Esc or a press outside closes it, and Esc
+  returns focus to ⋮. It stays inside the window by the same shared fit as the
+  Archived (N) pop-over (section 7).
 - **The Add card**, when a grid offers adding, is the LAST card: dashed border,
   `+` and **Add** *thing*.
 - Grids take 3 columns on a laptop (1200px and wider), 2 on a tablet, 1 on a phone
@@ -322,7 +329,8 @@ Every screen uses this for anything a person can put away and get back.
   (history entries).
 - Tabs and segmented choices (Draw / Type, Live / Archived) use one segmented
   control with `role="tablist"` / `role="tab"` / `aria-selected`, the selected
-  one filled. Each tab is a native `<button role="tab">`, never a `<div>` with
+  one filled in the neutral-selection blue (`--color-info-bg`, `--color-info`
+  text; section 14), never the brand accent. Each tab is a native `<button role="tab">`, never a `<div>` with
   the role. Tab reaches the selected tab only (`tabindex="0"`, the others
   `-1`); ← and → move to the previous and next tab and select it, wrapping at
   the ends, and Home and End go to the first and last. Where the tabs switch

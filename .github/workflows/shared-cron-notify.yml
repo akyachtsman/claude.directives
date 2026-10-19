@@ -1,0 +1,146 @@
+# shared-cron-notify.yml — the callable version of
+# templates/workflows/cron-notify.yml (#460 step 4, Phase A): a scheduled job
+# that runs the project's own task script, which emails through
+# notify-email.js. A project with a scheduled task calls it instead of
+# carrying the copy:
+#
+#   name: Scheduled Notification
+#   on:
+#     schedule:
+#       - cron: '0 7 * * *'     # UTC, best-effort; DST notes in the template
+#     workflow_dispatch:
+#       inputs:
+#         force:
+#           description: 'Bypass any in-script time guard (manual run)'
+#           required: false
+#           default: 'false'
+#   permissions:
+#     contents: read
+#   jobs:
+#     run:
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-cron-notify.yml@<tag>
+#       with:
+#         force: ${{ inputs.force == 'true' }}
+#       secrets:
+#         SMTP_PASS: ${{ secrets.SMTP_PASS }}
+#         DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}     # only if the task reads it
+#
+# Secrets go by name, never `secrets: inherit`: why, in shared-qa.yml's header.
+#
+# What stays the project's: the schedule (its `on:`), and the task itself,
+# .github/scripts/notify-task.js (or the `task-script` input), which is
+# project code. What comes from this repo, at the commit this workflow was
+# called at: notify-email.js and the commonjs package.json, staged beside the
+# task script, since the task requires './notify-email.js'. The dependencies
+# install from that package.json with no lockfile and no cache.
+#
+# The task's environment. `env` does not pass into a called workflow, so only
+# the names below reach the task: the email transport the template wires, and
+# the backend pair data.md names (DB_URL as a variable, DB_SERVICE_KEY as a
+# secret). A task that needs anything else keeps the full copy of the
+# template for now.
+#
+# Fix a defect in BOTH this file and the template until the templates become
+# callers (Phase E). How the callable workflows differ from their templates:
+# docs/internal/shared-workflows.md.
+name: Shared Scheduled Notification
+
+on:
+  workflow_call:
+    inputs:
+      task-script:
+        description: The project's task script, run with node from its own directory.
+        type: string
+        default: .github/scripts/notify-task.js
+      force:
+        description: Bypasses any in-script time guard; the task sees FORCE=true. Pass the caller's manual-run input.
+        type: boolean
+        default: false
+    secrets:
+      SMTP_PASS:
+        required: false
+      DB_SERVICE_KEY:
+        required: false
+
+# Least privilege: the job only reads the repo; email goes out via SMTP secrets.
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10            # always cap scheduled jobs so a hang can't run for hours
+    steps:
+      - uses: actions/checkout@v7
+
+      # The shared files at the commit this workflow was called at; why:
+      # shared-qa.yml's header.
+      - name: Resolve the shared files' commit
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ -z "$WF_REPO" ] || [ -z "$WF_SHA" ]; then
+            echo "::error::job.workflow_repository / job.workflow_sha are empty, so the shared files cannot be locked to the called version."
+            exit 1
+          fi
+          echo "Shared files: $WF_REPO@$WF_SHA"
+
+      - name: Fetch the shared files
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .claude-directives
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      # Beside the task, which requires './notify-email.js'. A project's own
+      # copy is replaced for this run, with a notice when it differed.
+      - name: Stage notify-email.js and its package.json
+        id: stage
+        env:
+          TASK: ${{ inputs.task-script }}
+        run: |
+          if [ ! -f "$TASK" ]; then
+            echo "::error::the task script $TASK does not exist; it is the project's own (templates/scripts/notify-task.js is the starting point)."
+            exit 1
+          fi
+          dir=$(dirname -- "$TASK")
+          for f in notify-email.js package.json; do
+            src=".claude-directives/templates/scripts/$f"
+            dst="$dir/$f"
+            if [ -f "$dst" ] && ! cmp -s "$src" "$dst"; then
+              echo "::notice::$dst differs from the shared copy and is replaced for this run."
+            fi
+            cp "$src" "$dst"
+          done
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      - name: Install deps
+        working-directory: ${{ steps.stage.outputs.dir }}
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      # The working directory is the task's own, as in the template: a
+      # project's task body may use paths relative to it.
+      - name: Run task
+        working-directory: ${{ steps.stage.outputs.dir }}
+        env:
+          # --- the backend pair data.md names ---
+          DB_URL: ${{ vars.DB_URL }}
+          DB_SERVICE_KEY: ${{ secrets.DB_SERVICE_KEY }}
+          # --- email transport (consumed by notify-email.js) ---
+          # Host/port/user/from are non-sensitive → Variables; only SMTP_PASS is a secret.
+          ALERT_TO:   ${{ vars.ALERT_TO || vars.SMTP_USER }}   # workflow fallback (script requires ALERT_TO)
+          ALERT_FROM: ${{ vars.ALERT_FROM }}                   # empty → notify-email.js defaults to SMTP_USER
+          SMTP_HOST:  ${{ vars.SMTP_HOST }}
+          SMTP_PORT:  ${{ vars.SMTP_PORT }}
+          SMTP_USER:  ${{ vars.SMTP_USER }}
+          SMTP_PASS:  ${{ secrets.SMTP_PASS }}
+          FORCE:      ${{ inputs.force }}
+          TASK: ${{ inputs.task-script }}
+        run: node "$GITHUB_WORKSPACE/$TASK"

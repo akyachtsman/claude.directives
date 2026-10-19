@@ -444,3 +444,12 @@ jobs:
       tests-dir: .github/shared-qa-fixture/ui-tests
       site-dir: .github/shared-qa-fixture/site
       contrast-args: --tokens templates/styles/tokens.css
+
+  # The same guard for the callable cron workflow: a fixture task that sends
+  # nothing, run the way a project's scheduled caller would run its own.
+  shared-cron-selftest:
+    name: Shared cron self-test
+    uses: ./.github/workflows/shared-cron-notify.yml
+    with:
+      task-script: .github/shared-qa-fixture/cron/notify-task.js
+      force: true

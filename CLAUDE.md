@@ -55,8 +55,8 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
-| `.github/workflows/` | This repo's self-test CI (`qa.yml`), plus the **callable** workflows projects will call instead of copying (`shared-qa.yml`; #460 step 4, piloted in claude.prop only). Those are exported (`EXPORTS.json` → `called-workflows`); how they differ from their templates and what the spike found: `docs/internal/shared-workflows.md` |
-| `.github/shared-qa-fixture/` | The fixture site and Playwright suite that `qa.yml`'s `shared-qa-selftest` job runs `shared-qa.yml` against |
+| `.github/workflows/` | This repo's self-test CI (`qa.yml`), plus the **callable** workflows projects will call instead of copying (`shared-qa.yml`, `shared-qa-live.yml`, `shared-qa-response.yml`, `shared-pages-deploy.yml`, `shared-cron-notify.yml`; #460 step 4, piloted in claude.prop only). Those are exported (`EXPORTS.json` → `called-workflows`); how they differ from their templates and what the spike found: `docs/internal/shared-workflows.md` |
+| `.github/shared-qa-fixture/` | The fixtures `qa.yml`'s self-test jobs run the callable workflows against: a site and Playwright suite for `shared-qa.yml`, a task script for `shared-cron-notify.yml` |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 

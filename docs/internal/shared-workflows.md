@@ -10,6 +10,12 @@ this page does not repeat them.
 | Callable workflow | Template it mirrors |
 |---|---|
 | `.github/workflows/shared-qa.yml` | `templates/workflows/qa.yml` |
+| `.github/workflows/shared-qa-live.yml` | `templates/workflows/qa-live.yml` |
+| `.github/workflows/shared-qa-response.yml` | `templates/workflows/qa-response.yml` |
+| `.github/workflows/shared-pages-deploy.yml` | `templates/workflows/pages-deploy.yml` |
+| `.github/workflows/shared-cron-notify.yml` | `templates/workflows/cron-notify.yml` |
+
+Each file's header carries the caller a project writes for it.
 
 The templates under `templates/workflows/` stay full copies, unchanged, until
 the pilot has proven out (owner, 2026-10-16). Until the templates become
@@ -41,6 +47,24 @@ callers, a defect is fixed in both files.
   A project's own copy is replaced for that run, with a notice when it differed.
   The composite itself is not changed, because projects still copy it.
 
+- **What the caller keeps.** Its `on:` triggers (they name the project's own
+  deploy workflow, schedule or dispatch types), its `permissions` (a called
+  workflow can only narrow them: `actions: read` for `qa-live`'s published
+  lookup; `deployments: read`, `pages: write` and `id-token: write` for the
+  deploy) and, for the deploy, the template's workflow-level `concurrency`.
+  `qa-live`'s concurrency moved onto its suite job, so its caller needs none.
+- **The published lookup reads both job names.** In a caller's run, a called
+  deploy's job shows as `<caller job> / Publish`. `shared-qa-live.yml`
+  matches that form as well as the template's `Publish`; without it, a
+  deploy that published nothing would read as one that did.
+- **The cron task stays the project's.** `notify-task.js` is project code, so
+  `shared-cron-notify.yml` runs the caller's own script and stages only
+  `notify-email.js` and the commonjs `package.json` beside it. The task gets
+  the email transport and the `DB_URL` / `DB_SERVICE_KEY` pair `data.md`
+  names; a task that needs other names keeps the full copy for now.
+- `shared-pages-deploy.yml` fetches nothing from this repo: it runs no shared
+  script.
+
 ## Spike findings (2026-10-19)
 
 1. **`./` paths resolve in the caller's repository.** The `github` context in a
@@ -67,7 +91,7 @@ callers, a defect is fixed in both files.
    therefore an owner step on the Releases page, or a dispatchable release
    workflow in this repo if the owner prefers one.
 
-## The self-test
+## The self-tests
 
 `qa.yml`'s `shared-qa-selftest` job calls `shared-qa.yml` the way a project
 would, with a fixture site and suite under `.github/shared-qa-fixture/`:
@@ -79,6 +103,16 @@ would, with a fixture site and suite under `.github/shared-qa-fixture/`:
   button and checks for errors and horizontal overflow.
 - The contrast step reads `templates/styles/tokens.css`, the starter tokens
   projects copy.
+
+`shared-cron-selftest` calls `shared-cron-notify.yml` with
+`.github/shared-qa-fixture/cron/notify-task.js`, a task that sends nothing:
+it fails unless `notify-email.js` was staged beside it, `nodemailer`
+installed, and the caller's `force` input arrived.
+
+`qa-live`, `qa-response` and the deploy have no self-test here: each needs a
+live site, a dispatch or a Pages deployment this repo does not have. Their
+differences from the templates are the ones listed above, and the pilot runs
+each of them for real.
 
 Because the self-test calls the workflow by local path, it runs in this
 repository and so cannot show item 1 cross-repo. It does prove the rest of the

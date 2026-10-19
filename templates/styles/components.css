@@ -18,14 +18,16 @@ body {
   font: var(--font-base)/1.5 var(--font-sans);
   -webkit-text-size-adjust: 100%;
   /* A long unbroken name (a file name, an id) wraps instead of pushing the page
-     sideways, in every message, toast, banner, dialog and empty state.
-     break-word, not anywhere: it leaves table column sizing alone. */
-  overflow-wrap: break-word;
+     sideways, wherever it sits. anywhere, not break-word: break-word gives a
+     flex item no break points when it sizes, so free text in a flex row (Back,
+     a dialog title, a menu action) would still hold the row open. One rule for
+     the page, so no component has to remember it. */
+  overflow-wrap: anywhere;
 }
-/* break-word gives a flex item no break points when it sizes, so text that
-   sits in a flex row (a dialog title, a menu action, the Add card, the upload
-   box) breaks anywhere instead and keeps the row inside its box. */
-.menu-item, .card-add, .upload { overflow-wrap: anywhere; }
+/* The two places that keep whole words: a table, so its columns size to whole
+   words and a wide one scrolls in its own box (.table-wrap), and the controls
+   with short fixed labels, so a squeezed row never splits a word in a button. */
+.table, .btn, .pill, .tag, .segmented [role="tab"] { overflow-wrap: break-word; }
 /* Form controls take the house font too; browsers give them their own. */
 button, input, select, textarea { font-family: inherit; }
 h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
@@ -113,7 +115,7 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 /* Names wrap; never an ellipsis or a line clamp (§1.6, §5). */
 /* Block, so the corner-actions padding below reserves that region on every
    wrapped line, not only the last one. */
-.card-title { display: block; font-size: var(--font-lg); font-weight: 600; overflow-wrap: anywhere; }
+.card-title { display: block; font-size: var(--font-lg); font-weight: 600; }
 .card-sub { font-size: var(--font-sm); color: var(--color-text-secondary); }
 /* At most two icon buttons, top-right, Edit then Archive; 3+ become one ⋮ menu.
    Always visible: never hover-only, so they show on a phone. The padding
@@ -229,7 +231,7 @@ dialog.dialog { border: 0; padding: 0; color: inherit; }
 dialog.dialog:not([open]) { display: none; }
 dialog.dialog::backdrop { background: var(--color-backdrop); }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-6); }
-.dialog-title { font-size: var(--font-lg); font-weight: 600; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.dialog-title { font-size: var(--font-lg); font-weight: 600; margin: 0; min-width: 0; }
 .dialog-body { padding: 0 var(--space-6) var(--space-4); overflow: auto; }
 /* Cancel (secondary) on the left, the act on the right, right-aligned. */
 .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border); }
@@ -242,7 +244,6 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
   border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-2);
 }
 .archived-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
-.archived-row .name { overflow-wrap: anywhere; } /* the full name, never cut */
 
 /* ── The ⋮ menu (§5): a disclosure of native buttons, placed by the same fit ── */
 .menu-btn { /* a .btn-icon in .card-actions: aria-label="More actions", aria-expanded, aria-controls */ }

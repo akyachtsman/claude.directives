@@ -8,6 +8,18 @@
    dialog, the Archived (N) fit, the empty state, inline messages) lives in ONE
    shared script per project, never per page. */
 
+/* ── Page base: the canvas, text colour and font every page starts from ─────── */
+html { background: var(--color-bg); }
+body {
+  margin: 0; background: var(--color-bg); color: var(--color-text-primary);
+  font: var(--font-base)/1.5 var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
+h1 { font-size: var(--font-2xl); } h2 { font-size: var(--font-xl); } h3 { font-size: var(--font-lg); }
+a { color: var(--color-accent); }
+a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+
 /* ── Buttons (§4): .btn is Secondary; add .btn-primary, .btn-danger or .btn-delete */
 .btn {
   min-height: var(--size-target-min); padding: var(--space-2) var(--space-4);
@@ -59,6 +71,12 @@
   color: var(--color-text-primary); font: inherit;
 }
 .card[role="button"], button.card { cursor: pointer; }
+/* A card WITH actions: the title's button opens the card through an overlay
+   stretched over it; the actions sit above the overlay (never a button inside
+   a button). */
+.card-open { all: unset; cursor: pointer; }
+.card-open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.card-open:focus-visible::after { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 .card:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 /* Names wrap; never an ellipsis or a line clamp (§1.6, §5). */
 .card-title { font-size: var(--font-lg); font-weight: 600; overflow-wrap: anywhere; }
@@ -66,7 +84,7 @@
 /* At most two icon buttons, top-right, Edit then Archive; 3+ become one ⋮ menu.
    Always visible: never hover-only, so they show on a phone. */
 .card-actions {
-  position: absolute; top: var(--space-2); right: var(--space-2);
+  position: absolute; z-index: 1; top: var(--space-2); right: var(--space-2);
   display: flex; gap: var(--space-2);
 }
 .card:has(.card-actions) .card-title { padding-right: calc(2 * var(--size-target-min) + var(--space-2)); }
@@ -76,8 +94,9 @@
 }
 
 /* ── Lists and tables (§6) ────────────────────────────────────────────────── */
-/* Wider than the screen: scrolls inside its own box; the page never scrolls. */
-.table-wrap { overflow: auto; max-width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+/* Wider or taller than the screen: scrolls inside its own box, so the page
+   never scrolls sideways and the sticky header stays visible. */
+.table-wrap { overflow: auto; max-width: 100%; max-height: 70vh; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 .table { width: 100%; border-collapse: collapse; background: var(--color-surface); }
 .table th, .table td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); text-align: left; }
 .table th {

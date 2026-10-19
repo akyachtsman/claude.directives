@@ -56,8 +56,10 @@ Two committed files are the single source of truth for a project's look:
   uses `var(--…)`, never a hardcoded value. A token means what its name says: a
   token named green is green.
 - **`styles/components.css`**: the standard's components, built once and used
-  on every page: buttons (`.btn` plus `.btn-primary`, `.btn-secondary`,
-  `.btn-danger`, `.btn-delete`), card and its corner actions, the Add card,
+  on every page: the page base (canvas, text, font, headings, links), buttons
+  (`.btn` plus `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-delete`),
+  card with its opening title (`.card-open`) and corner actions, the Add card,
+  a table that scrolls inside its own box,
   field and label, checkbox, status pill and tag, empty state, dialog shell,
   Archived (N) pop-over, upload box, inline message, toast, segmented control,
   section header.
@@ -166,8 +168,12 @@ permanently or Permanently archive confirmation.
   that will become pressable says why on hover and press (`title`).
 
 ## 5. Cards and grids
-- **The whole card opens it:** one press anywhere on the card (a `<button>`, or
-  `role="button" tabindex="0"` with Enter and Space opening it).
+- **The whole card opens it:** one press anywhere on the card. A card with no
+  actions of its own may itself be the `<button>`. A card WITH actions is a
+  plain container: its title is the opening `<button>` (or link), stretched over
+  the card with a `::after` overlay, and the action buttons sit above that
+  overlay. Never put a button inside a button, and never let an action's press
+  also open the card.
 - **A card shows the essentials only:** its name, one line of context (type,
   person, date) and its status pill. Everything else is in the opened view.
 - **Card actions** (besides opening): at most two icon buttons in the

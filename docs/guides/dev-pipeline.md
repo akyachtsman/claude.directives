@@ -171,7 +171,7 @@ Every command and skill carries:
 | GitHub ops | GitHub MCP |
 | Backend / data | Supabase MCP + `supabase` agent (per `data.md`) |
 | Browser UI testing | Playwright (kit in `templates/ui-tests/`) / `ui-tester` |
-| Design generation | `frontend-design` skill (primary) + Google Stitch remote MCP — per-project look; see `design.md` / `docs/guides/design-tooling.md` |
+| Design generation | `frontend-design` skill (primary) + Google Stitch remote MCP — screens in the house style (a palette of its own only by owner ruling); see `design.md` / `docs/guides/design-tooling.md` |
 
 ## Deliberate rejects (simplicity discipline)
 
@@ -236,8 +236,8 @@ committed.
 **Graceful when unconfigured:** once installed, `notify-task.js` checks its required SMTP config
 and, if any is missing, emits a GitHub Actions **notice** and exits 0 — a
 not-yet-configured repo surfaces a clear message instead of a cryptic
-scheduled-job crash. (Design is **per-project and generated** — see `design.md`
-and `docs/guides/design-tooling.md`; there is no shared company theme to inherit.)
+scheduled-job crash. (Design is the **house style** every project starts from —
+see `design.md` and `docs/guides/design-tooling.md`; a project's own palette only by owner ruling.)
 
 ## Implementation status
 

@@ -1,0 +1,229 @@
+# shared-qa.yml — the callable version of templates/workflows/qa.yml
+# (#460 step 4, Phase A). A project calls it instead of carrying a copy:
+#
+#   jobs:
+#     qa:
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@<tag>
+#       with:
+#         tests-dir: .github/scripts/ui-tests
+#       secrets: inherit
+#
+# The caller keeps its own `on:` triggers, `permissions` and `concurrency`, and,
+# for a CI-build project, BUILD_PATHS in its top-level `env:` (the toolkit's
+# Pages edit reminder reads it there; this workflow never does).
+#
+# What differs from the copied template, and why: docs/internal/shared-workflows.md.
+# In short:
+#   - Every shared file (the secret-scan and ui-suite composites, the scripts)
+#     comes from THIS repo at the exact commit the caller called
+#     (job.workflow_sha), checked out into .claude-directives/. A `./` path in a
+#     called workflow resolves against the caller's checkout, so nothing here
+#     names .github/actions/ or .github/scripts/ of the caller for a shared file.
+#   - Settings a project edited into its copy (`env:`) are inputs: `env` does
+#     not pass into a called workflow.
+#   - The ui-suite composite reads check-ui-viewports.js (and the commonjs
+#     package.json beside it) from .github/scripts/ by fixed path, so the job
+#     stages those two files there from the shared checkout. A project's own copy
+#     is replaced for the run, with a notice when it differed.
+#
+# Fix a defect in BOTH this file and templates/workflows/qa.yml until the
+# templates become callers (Phase E); the template is still what every project
+# but the pilot runs.
+
+name: Shared QA — Static + UI Tests
+
+on:
+  workflow_call:
+    inputs:
+      tests-dir:
+        description: Directory holding the project's playwright.config.js and package.json (UI_TESTS_DIR in the template).
+        type: string
+        default: .github/scripts/ui-tests
+      build-cmd:
+        description: CI-build opt-in only. Runs from the repo root and writes site-dir; empty means no build (BUILD_CMD in the template).
+        type: string
+        default: ''
+      site-dir:
+        description: The directory served to the suite; '.' is the repo root (SITE_DIR in the template).
+        type: string
+        default: '.'
+      contrast-args:
+        description: Extra arguments for check-contrast.js, e.g. `--tokens css/theme.css`. Split on whitespace.
+        type: string
+        default: ''
+      advisory-run:
+        description: true makes ONLY the Playwright run step advisory. A temporary opt-out for a known open UI failure; flip it back once fixed.
+        type: boolean
+        default: false
+      ui-timeout-minutes:
+        description: The UI job's bound. 120 is the fleet floor for a ui-suite caller; raise it, never lower it.
+        type: number
+        default: 120
+    secrets:
+      TEST_AUTH_CREDENTIAL:
+        required: false
+      TEST_AUTH_EMAIL:
+        required: false
+
+# Least privilege: these jobs only read the repo and run tests. A caller can
+# narrow this further, never widen it.
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Static Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # job.workflow_* are github.com-only. Empty means the version this run
+      # is locked to is unknown, and checkout would silently fall back to the
+      # default branch, so stop instead.
+      - name: Resolve the shared files' commit
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+          WF_REF: ${{ job.workflow_ref }}
+        run: |
+          if [ -z "$WF_REPO" ] || [ -z "$WF_SHA" ]; then
+            echo "::error::job.workflow_repository / job.workflow_sha are empty, so the shared files cannot be locked to the called version."
+            exit 1
+          fi
+          echo "Shared files: $WF_REPO@$WF_SHA (called as $WF_REF)"
+          echo "Shared files: \`$WF_REPO@$WF_SHA\` (called as \`$WF_REF\`)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fetch the shared files
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .claude-directives
+          persist-credentials: false
+
+      # Keep the shared checkout out of the caller's own scans: the secret scan
+      # reads untracked files that are not ignored.
+      - name: Ignore the shared checkout
+        run: echo '/.claude-directives/' >> .git/info/exclude
+
+      - uses: ./.claude-directives/templates/actions/secret-scan
+
+      # WCAG AA check against this project's design tokens: styles/tokens.css or
+      # css/tokens.css by default; elsewhere, pass `--tokens <file>` in
+      # contrast-args. Run from the shared checkout, where the commonjs
+      # package.json beside it applies whatever the project's root declares.
+      - name: Contrast guardrail (WCAG AA)
+        env:
+          CONTRAST_ARGS: ${{ inputs.contrast-args }}
+        run: |
+          read -r -a args <<< "$CONTRAST_ARGS"
+          node .claude-directives/templates/scripts/check-contrast.js "${args[@]}"
+
+  ui-tests:
+    name: UI Tests (local server)
+    needs: [static-checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.ui-timeout-minutes }}
+    env:
+      BUILD_CMD: ${{ inputs.build-cmd }}
+      SITE_DIR: ${{ inputs.site-dir }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve the shared files' commit
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ -z "$WF_REPO" ] || [ -z "$WF_SHA" ]; then
+            echo "::error::job.workflow_repository / job.workflow_sha are empty, so the shared files cannot be locked to the called version."
+            exit 1
+          fi
+          echo "Shared files: $WF_REPO@$WF_SHA"
+
+      - name: Fetch the shared files
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .claude-directives
+          persist-credentials: false
+
+      - name: Ignore the shared checkout
+        run: echo '/.claude-directives/' >> .git/info/exclude
+
+      - name: Stage the scripts the ui-suite composite reads by path
+        run: |
+          mkdir -p .github/scripts
+          for f in check-ui-viewports.js package.json; do
+            src=".claude-directives/templates/scripts/$f"
+            dst=".github/scripts/$f"
+            if [ -f "$dst" ] && ! cmp -s "$src" "$dst"; then
+              echo "::notice::$dst differs from the shared copy and is replaced for this run."
+            fi
+            cp "$src" "$dst"
+          done
+
+      # From here to the composite, the steps are the template's own.
+      - name: Setup Node (build)
+        if: env.BUILD_CMD != ''
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Build
+        if: env.BUILD_CMD != ''
+        run: bash -eo pipefail -c "$BUILD_CMD"
+
+      # Refuses what pages-deploy refuses, so a green PR cannot merge into a red
+      # deploy. The reasoning: templates/workflows/qa.yml, same step.
+      - name: Check the site directory
+        id: site
+        run: |
+          src="${SITE_DIR%/}"; [ -n "$src" ] || src="."
+          if [ -z "$BUILD_CMD" ] && [ ! -f "$src/index.html" ]; then
+            echo "::notice::No index.html yet — skipping the browser suite."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f "$src/index.html" ]; then
+            echo "::error::$src/index.html is missing: nothing for the suite to load."
+            exit 1
+          fi
+          ws=$(realpath -e .)
+          real=$(realpath -e -- "$src")
+          case "$real/" in
+            "$ws"/*) ;;
+            *) echo "::error::SITE_DIR=$SITE_DIR resolves to $real, outside the repository; pages-deploy.yml refuses it."; exit 1 ;;
+          esac
+          links=$(cd "$real" && find . \( -name .git -o -name .github -o -name node_modules -o -name .claude-directives \) -prune -o -type l -printf '%P -> %l\n')
+          if [ -n "$links" ] && { [ -n "$BUILD_CMD" ] || [ -f .github/workflows/pages-deploy.yml ]; }; then
+            echo "::error::symlinks in the site, which pages-deploy.yml refuses; replace them with real files:"
+            printf '%s\n' "$links"
+            exit 1
+          elif [ -n "$links" ]; then
+            echo "::warning::symlinks in the site; pages-deploy.yml (Actions-source) refuses them: $(printf '%s; ' "$links")"
+          fi
+          echo "root=$src" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.claude-directives/templates/actions/ui-suite
+        if: steps.site.outputs.skip != 'true'
+        with:
+          tests-dir: ${{ inputs.tests-dir }}
+          app-url: http://localhost:8080
+          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          test-auth-email: ${{ secrets.TEST_AUTH_EMAIL }}
+          test-auth-ready-selector: ${{ vars.TEST_AUTH_READY_SELECTOR }}
+          test-auth-ready-request: ${{ vars.TEST_AUTH_READY_REQUEST }}
+          test-auth-success-selector: ${{ vars.TEST_AUTH_SUCCESS_SELECTOR }}
+          artifact-name: playwright-results-local
+          app-pages: ${{ vars.APP_PAGES }}
+          start-local-server: 'true'
+          server-root: ${{ steps.site.outputs.root }}
+          advisory-run: ${{ inputs.advisory-run }}

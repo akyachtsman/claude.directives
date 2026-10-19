@@ -1,0 +1,10 @@
+{
+  "name": "shared-qa-fixture-ui-tests",
+  "private": true,
+  "description": "The Playwright suite the shared-qa self-test runs against ../site. Pinned exactly, with a committed lockfile, because the ui-suite composite caches on it.",
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "http-server": "14.1.1"
+  }
+}

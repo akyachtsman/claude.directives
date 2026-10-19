@@ -91,6 +91,9 @@ const GROUPS = {
 {
   const exportedPaths = Object.keys(manifest.paths).filter(k => !k.startsWith('_'));
   const isExported = f => exportedPaths.some(p => p.endsWith('/') ? f.startsWith(p) : f === p);
+  // A callable workflow under .github/workflows/ is exported (#460 step 4):
+  // it is a node of its own, never part of this repo's CI group.
+  GROUPS['self:ci'].files = GROUPS['self:ci'].files.filter(f => !isExported(f));
   const ci = new Set(GROUPS['self:ci'].files);
   const tracked = TRACKED;
   // Order matters only for which line is quoted as evidence: the indexes first.
@@ -120,7 +123,7 @@ const PLACE = {
     'templates/project-test-plan-template.md', 'templates/implementation-summary-template.md',
     `${P}/skills/doc-comp/`],
   pr: [`${P}/commands/commit-chk.md`, `${P}/agents/pr-readiness-reviewer.md`,
-    'templates/pr-checklist.md', 'templates/workflows/qa.yml', 'templates/workflows/qa-response.yml',
+    'templates/pr-checklist.md', 'templates/workflows/qa.yml', '.github/workflows/shared-qa.yml', 'templates/workflows/qa-response.yml',
     'templates/workflows/qa-live.yml', 'templates/ui-tests/', 'templates/actions/secret-scan/', 'templates/actions/ui-suite/',
     'templates/scripts/check-contrast.js', 'docs/standards/contrast-guardrail.md', 'templates/scripts/check-ui-viewports.js',
     'docs/standards/viewport-classes-history.md',
@@ -310,11 +313,13 @@ const delivery = p =>
   p.startsWith('directives/') ? 'inh'
   : p.startsWith('plugins/') || p.startsWith('.claude-plugin/') || p === 'scripts/install-toolkit.sh' ? 'ins'
   : p.startsWith('templates/') ? 'cop'
+  : p.startsWith('.github/workflows/shared-') ? 'cal'
   : 'ref';
 const DELIVERY = {
   inh: 'inherited — raw URL, live at the next session start',
   ins: 'installed — the plugin, refreshed every session by the SessionStart hook',
   cop: 'copied — a snapshot taken at bootstrap (or later, when a condition adds it); resync with /refresh-repo',
+  cal: 'called — a project workflow calls it by `uses:` at a pinned tag; nothing is copied (#460 step 4)',
   ref: 'referenced — read on demand, nothing stored downstream',
   int: 'internal — never leaves this repo',
   ven: 'vendor — owned by someone else; we hold only the wiring',
@@ -364,6 +369,11 @@ const FLOW = [
   // publish
   ['self:ci', 'marketplace.json', 'val', 'validates', 'a', 'JSON.parse(readFileSync'],
   ['self:ci', 'plugin.json', 'val', 'validates', 'a', 'JSON.parse(readFileSync'],
+  ['self:ci', 'shared-qa.yml', 'val', 'self-tests against a fixture site', 'a', 'uses: ./.github/workflows/shared-qa.yml'],
+  ['shared-qa.yml', 'secret-scan', 'run', 'runs at the called commit', 'a', 'uses: ./.claude-directives/templates/actions/secret-scan'],
+  ['shared-qa.yml', 'ui-suite', 'run', 'runs at the called commit', 'a', 'uses: ./.claude-directives/templates/actions/ui-suite'],
+  ['shared-qa.yml', 'check-contrast.js', 'run', 'runs at the called commit', 'a', 'node .claude-directives/templates/scripts/check-contrast.js'],
+  ['shared-qa.yml', 'check-ui-viewports.js', 'run', 'stages for the ui-suite', 'a', 'for f in check-ui-viewports.js'],
   ['self:ops', 'evals/', 'run', 'runs when a skill description changes', 'a', 'run it when a description changes'],
   ['self:ops', 'NEW-REPO-USER-INSTRUCTIONS.md', 'pub', 'publishes the bootstrap guide', 'a', 'Bootstrap guide'],
   ['self:ops', 'ai-first-principles.md', 'pub', 'publishes', 'a', 'AI-first working principles'],
@@ -955,7 +965,7 @@ const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
     --shadow-sm:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
     --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.05);
     --radius:10px; --sans:Inter,'Segoe UI',system-ui,sans-serif;
-    --p-inh:#1F6FEB; --p-ins:#7A4BAF; --p-cop:#B26B00; --p-ref:#6B6860; --p-int:#A03A34; --p-ven:#6D5BD0;
+    --p-inh:#1F6FEB; --p-ins:#7A4BAF; --p-cop:#B26B00; --p-cal:#0E7C7B; --p-ref:#6B6860; --p-int:#A03A34; --p-ven:#6D5BD0;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
@@ -1020,7 +1030,7 @@ ${kindCss}
 
   .pill{flex:none;font:700 8.5px/1 Inter,system-ui,sans-serif;letter-spacing:.05em;
     text-transform:uppercase;color:#fff;border-radius:4px;padding:3px 4.5px}
-  .p-inh{background:var(--p-inh)} .p-ins{background:var(--p-ins)} .p-cop{background:var(--p-cop)}
+  .p-inh{background:var(--p-inh)} .p-ins{background:var(--p-ins)} .p-cop{background:var(--p-cop)} .p-cal{background:var(--p-cal)}
   .p-ref{background:var(--p-ref)} .p-int{background:var(--p-int)} .p-ven{background:var(--p-ven)}
 
   #panel{position:absolute;right:14px;top:14px;bottom:14px;width:360px;z-index:60;

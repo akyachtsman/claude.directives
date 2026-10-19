@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shared QA fixture</title>
+  <link rel="icon" href="data:,">
+  <style>
+    body { margin: 0; padding: 1rem; font-family: system-ui, sans-serif; color: #1a1a1a; background: #fff; }
+    button { font: inherit; padding: 0.5rem 1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Shared QA fixture</h1>
+    <p>The page the shared-qa self-test serves. It exists only for that test.</p>
+    <button type="button" id="check">Mark checked</button>
+    <p role="status" id="state"></p>
+  </main>
+  <script>
+    document.getElementById('check').addEventListener('click', () => {
+      document.getElementById('state').textContent = 'Checked';
+    });
+  </script>
+</body>
+</html>

@@ -25,6 +25,12 @@
         "templates/"
       ]
     },
+    "called-workflows": {
+      "mode": "called from a project's own thin workflow by `uses:` at a pinned tag \u2014 no copy; a change reaches a project when its pin moves (#460 step 4; during the pilot only claude.prop calls them)",
+      "paths": [
+        ".github/workflows/shared-qa.yml"
+      ]
+    },
     "referenced-docs": {
       "mode": "read on demand via links \u2014 no copy, no install",
       "paths": [
@@ -106,6 +112,7 @@
     "directives/test.md": { "domain": "test", "compartment": "core", "class": "standard", "swap": "permanent" },
     "templates/workflows/qa.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/workflows/qa-response.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
+    ".github/workflows/shared-qa.yml": { "domain": "test", "compartment": "static-ci", "class": "mechanical" },
     "templates/actions/ui-suite/": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
     "templates/ui-tests/": { "domain": "test", "compartment": "ui-kit", "class": "mechanical" },
     "docs/standards/kit-defects.md": { "domain": "test", "compartment": "ui-kit", "class": "standard", "swap": "permanent" },

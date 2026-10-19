@@ -42,7 +42,10 @@
   --color-expired:        #6B21A8;  --color-expired-bg: #F3E8FF;
 
   /* type */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Inter where the page loads it (RSO does), else each platform's own UI font.
+     The shared files load no outside font: an outside request breaks offline
+     use and sandboxed test runs, whose console guard fails on it. */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-xs: 12px; --font-sm: 13px; --font-base: 15px; --font-lg: 17px; --font-xl: 20px; --font-2xl: 24px;
 
   /* space */

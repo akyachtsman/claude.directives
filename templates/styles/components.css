@@ -65,8 +65,10 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 /* ── Cards and grids (§5) ─────────────────────────────────────────────────── */
 .grid {
   display: grid; gap: var(--space-4);
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));   /* laptop */
 }
+@media (max-width: 1199px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }   /* tablet */
+@media (max-width: 699px)  { .grid { grid-template-columns: minmax(0, 1fr); } }              /* phone */
 .card {
   position: relative; text-align: left; width: 100%;
   background: var(--color-surface); border: 1px solid var(--color-border);

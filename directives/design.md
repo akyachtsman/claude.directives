@@ -62,6 +62,10 @@ Two committed files are the single source of truth for a project's look:
   (`--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`). Every rule
   uses `var(--…)`, never a hardcoded value. A token means what its name says: a
   token named green is green.
+  The house font is Inter where a project loads it; otherwise `--font-sans`
+  falls back to the platform's own UI font, by design. The shared files load no
+  outside font, because an outside request breaks offline use and sandboxed
+  test runs.
 - **`styles/components.css`**: the standard's components, built once and used
   on every page: the page base (canvas, text, font, headings, links), buttons
   (`.btn` plus `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-delete`),
@@ -189,7 +193,8 @@ permanently or Permanently archive confirmation.
   Never actions above the card, never hover-only (they must show on a phone).
 - **The Add card**, when a grid offers adding, is the LAST card: dashed border,
   `+` and **Add** *thing*.
-- Grids auto-fill their columns: 3 on a laptop, 2 on a tablet, 1 on a phone.
+- Grids take 3 columns on a laptop (1200px and wider), 2 on a tablet, 1 on a phone
+  (below 700px). `.grid` sets exactly these.
 - **Names wrap; they are never cut with "…"** or a line clamp. A picture preview
   inside a card may be clipped; its name may not.
 - Things of one kind (every document, every form) use ONE card design across the

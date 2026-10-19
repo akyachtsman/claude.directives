@@ -235,17 +235,20 @@ Intake — Multiple Asks at Once*): the ledger is the reply's final block, this
 is its final line. It goes at the very end, after the summary and the suggested
 next step, never at the top.
 
-**When nothing is running, the final line is ONE all-caps stop word, alone on
-its own line** (owner ruling, 2026-10-19):
-- **DONE** — finished: nothing in flight, no CI, no background agents, no
-  scheduled check-ins.
-- **MERGED** — the change is merged AND verified live at the deployed URL (safe
-  to test), and nothing is running.
-- **QUESTION** — blocked on the owner's answer; the question sits directly
-  above the stop word.
+**The final line is ONE all-caps word, alone on its own line** (owner rulings,
+2026-10-19):
+- **WORKING** — work is still in progress: CI, a deploy, a background agent, a
+  scheduled check-in, or the next step of the task.
+- **DONE** — finished: nothing in flight.
+- **MERGED** — a PR was merged, its deploy is verified live at the deployed URL
+  (safe to test), and nothing is running. Merged with the deploy still building
+  or unverified is WORKING.
+- **QUESTION** — the owner must answer before the work goes on; the question
+  sits directly above the word.
 
-**A message without one of these words at the end means work is still going.**
-Its final line is then a status phrase naming what is running:
+When more than one applies, **QUESTION wins over MERGED, and MERGED over DONE**.
+
+**Above a WORKING line, one status phrase names what is running:**
 - **"Waiting for CI"** — tests running; the session resumes itself on the
   result. Never the whole story: say what you started, or what blocks what you
   did not (→ *Parallel Tasking via Subagents*).
@@ -256,7 +259,7 @@ The grammar of a status phrase: a short status phrase, optionally a parenthetica
 elapsed time ("Waiting for CI (PR #845) — 12m elapsed"), optionally pending
 items after a colon ("Waiting for CI: PR #845 → merge → deploy-verify").
 Intermediate states name themselves the same way ("Merged" while the deploy
-builds). A stop with no status line is a directive violation. A command whose
+builds). A stop with no final word is a directive violation. A command whose
 definition fixes its own closing line or block keeps it — the status line
 follows it as the message's true final line; command formats end the body,
 never the message.

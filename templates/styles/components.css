@@ -268,7 +268,9 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
   padding: var(--space-6); text-align: center; color: var(--color-text-secondary);
   border: 2px dashed var(--color-border-input); border-radius: var(--radius-md); background: var(--color-surface);
 }
-.upload.is-over { border-color: var(--color-accent); background: var(--color-accent-light); }
+/* While a file is over the box, its words go text-primary: the one pair checked on
+   accent-light (design.md -> Accessibility), as on a menu item's hover. */
+.upload.is-over { border-color: var(--color-accent); background: var(--color-accent-light); color: var(--color-text-primary); }
 .upload .upload-limits { font-size: var(--font-sm); }
 .upload img { max-height: 160px; border-radius: var(--radius-sm); } /* the chosen photo's thumbnail (§13) */
 

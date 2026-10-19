@@ -53,8 +53,9 @@ text.
   accent-coloured text below 18.66px bold / 24px regular: the guardrail holds
   accent/surface only to the 3.0 large-text floor (`design.md` → *Accessibility*).
 - Check each status-pill pair (`--color-success` on `--color-success-bg`, and
-  the rest) and `--color-on-danger` on `--color-danger` and
-  `--color-danger-hover` by hand at 4.5:1: the guardrail does not list them.
+  the rest), `--color-on-danger` on `--color-danger` and
+  `--color-danger-hover`, and `--color-text-primary` on `--color-accent-light`
+  by hand at 4.5:1: the guardrail does not list them.
 - **Present the reference page for sign-off** (deploy to Pages or attach a
   screenshot) — this is the look-gate. Don't build out until the user approves the
   look; the look is cheapest to fix on one page.

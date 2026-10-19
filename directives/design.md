@@ -500,8 +500,9 @@ The per-project contrast guardrail (`templates/scripts/check-contrast.js`, run i
 CI against `styles/tokens.css`) is **a floor, not a coverage report**: it measures
 a hand-written list of token pairs, so a token used in a different role passes
 while rendering wrong. It does not measure the status-pill pairs of section 14
-or `--color-on-danger` on `--color-danger` and `--color-danger-hover`; check
-those by hand at 4.5:1 whenever one of those tokens changes. Read its pair list against
+or `--color-on-danger` on `--color-danger` and `--color-danger-hover`, or
+`--color-text-primary` on `--color-accent-light` (the hover and drag-over fill,
+the only text that fill carries); check those by hand at 4.5:1 whenever one of those tokens changes. Read its pair list against
 your own token roles. A themed project gives **each theme its own complete
 tokens file** and lists every one. Its limits and every file shape it refuses:
 `docs/standards/contrast-guardrail.md`.

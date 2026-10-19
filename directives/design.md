@@ -217,7 +217,8 @@ permanently or Permanently archive confirmation.
   opening link (or button), `.row-open`, a 44px target that keyboard users
   reach with Tab. A press
   elsewhere on the row may open it too, but extra actions sit at the row's
-  right end (a ⋮ menu when more than one), and an action's press never opens
+  right end, as on a card: at most two icon buttons (Edit, then Archive), and
+  one ⋮ menu instead when there are three or more. An action's press never opens
   the row. Never give the `<tr>` itself a button or link role.
 - **Sortable columns:** a native `<button>` inside each sortable header cell
   sorts it, so the keyboard reaches it; it shows " ▲" or " ▼" after a space, and

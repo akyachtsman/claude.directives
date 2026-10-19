@@ -230,7 +230,7 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
 
 /* ── The ⋮ menu (§5): a disclosure of native buttons, placed by the same fit ── */
 .menu-btn { /* a .btn-icon in .card-actions: aria-label="More actions", aria-expanded, aria-controls */ }
-.menu-pop { width: min(240px, 94vw); display: flex; flex-direction: column; }
+.menu-pop { width: min(240px, 94vw); display: flex; flex-direction: column; gap: var(--space-2); } /* 8px between targets */
 .menu-pop[hidden] { display: none; }
 .menu-item {
   display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--size-target-min);

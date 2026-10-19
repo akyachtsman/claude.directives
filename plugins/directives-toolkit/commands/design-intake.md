@@ -49,13 +49,10 @@ text.
 - **Then read its pair list against the roles this project actually gives its
   tokens.** It measures assumed roles, so a token used the other way round — an
   accent that is small text, a danger colour that is a background — passes
-  vacuously and the green looks identical to a real one. Also check by hand any
-  accent-coloured text below 18.66px bold / 24px regular: the guardrail holds
-  accent/surface only to the 3.0 large-text floor (`design.md` → *Accessibility*).
-- Check each status-pill pair (`--color-success` on `--color-success-bg`, and
-  the rest), `--color-on-danger` on `--color-danger` and
-  `--color-danger-hover`, and `--color-text-primary` on `--color-accent-light`
-  by hand at 4.5:1: the guardrail does not list them.
+  vacuously and the green looks identical to a real one.
+- Check by hand, at 4.5:1, every pair on the list in `design.md` →
+  *Accessibility*: the text pairs the house components draw that the guardrail
+  does not measure.
 - **Present the reference page for sign-off** (deploy to Pages or attach a
   screenshot) — this is the look-gate. Don't build out until the user approves the
   look; the look is cheapest to fix on one page.

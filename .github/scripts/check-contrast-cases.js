@@ -66,6 +66,15 @@ const BASE = `:root {
 }
 `;
 const plus = (extra) => BASE + extra;
+// Every mutation goes through swap(), which refuses a target the fixture no
+// longer contains: a String.replace() that matches nothing returns the input
+// unchanged, so the case would run the unmutated palette and pass for the wrong
+// reason. It did once (#469): a token added after --color-on-accent turned the
+// trailing-semicolon case into a copy of the baseline.
+const swap = (src, from, to) => {
+  if (!src.includes(from)) throw new Error(`fixture mutation matched nothing: ${JSON.stringify(from)}`);
+  return src.replace(from, to);
+};
 
 // A second, genuinely dark palette for the multi-candidate cases: each theme
 // file is measured on its own, so a themed project's second file must carry a
@@ -162,7 +171,7 @@ const CASES = [
   // regex required one, this token would go missing and the run would fail as
   // "not evaluable" — a red build on valid CSS.
   ['a measured token whose declaration omits the trailing semicolon',
-    { 'styles/tokens.css': BASE.replace('  --color-on-accent:      #FFFFFF;\n}', '  --color-on-accent: #FFFFFF }') },
+    { 'styles/tokens.css': swap(BASE, '  --color-border-input:   #858B96;\n}', '  --color-border-input: #858B96 }') },
     0, OK9],
 
   // The other side of that terminator class. A semicolon missing MID-block is
@@ -172,7 +181,7 @@ const CASES = [
   // alternative reading of the same input — quietly measuring one token fewer —
   // is the vacuous green this whole file is about.
   ['a semicolon missing MID-block fails loudly rather than passing',
-    { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: #C0392B') },
+    { 'styles/tokens.css': swap(BASE, '--color-danger:         #C0392B;', '--color-danger: #C0392B') },
     1, 'pairs were evaluable'],
 
   // …and its unreadable twin: the same missing semicolon on a NON-hex override
@@ -309,7 +318,7 @@ const CASES = [
     { 'styles/tokens.css': plus(':root { --color-accent: #1565C0 !important; }\n') }, 0, OK9],
 
   ['a sole !important declaration is still evaluable',
-    { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: #C0392B !important;') },
+    { 'styles/tokens.css': swap(BASE, '--color-danger:         #C0392B;', '--color-danger: #C0392B !important;') },
     0, OK9],
 
   // ── A CUSTOM PROPERTY'S VALUE MAY NOT CONTAIN A BLOCK ─────────────────────
@@ -336,7 +345,7 @@ const CASES = [
   // printed `OK — 9/9`, exit 0, on a file where CSS applies nothing at all.
   // This is the case that killed the argument; it must never print OK again.
   ['a dropped unknown:{} block must not supply the whole palette',
-    { 'styles/tokens.css': '.e { unknown: {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}; }\n' },
+    { 'styles/tokens.css': '.e { unknown: {\n' + swap(BASE, ':root {\n', '').replace('\n}\n', '\n') + '}; }\n' },
     1, ROOT],
 
   ['a brace-valued ORDINARY property refuses at the declaration',
@@ -347,7 +356,7 @@ const CASES = [
   // but the ASCII-only `--` test did not recognise it, so the brace refusal was
   // bypassed and the block's contents were read as live.
   ['a non-ASCII custom property name cannot bypass the brace refusal',
-    { 'styles/tokens.css': ':root { --\u00e9: {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}; }\n' },
+    { 'styles/tokens.css': ':root { --\u00e9: {\n' + swap(BASE, ':root {\n', '').replace('\n}\n', '\n') + '}; }\n' },
     1, BLOCK],
 
   // ── #337 round 7: CSS whitespace is not JavaScript's ──────────────────────
@@ -362,7 +371,7 @@ const CASES = [
   // one that must not change — not as evidence for cssTrim, which the name case
   // above carries.
   ['a non-breaking space beside !important leaves the value unreadable, loudly',
-    { 'styles/tokens.css': BASE.replace('--color-accent:         #1565C0;', '--color-accent: #1565C0 !important\u00a0;') },
+    { 'styles/tokens.css': swap(BASE, '--color-accent:         #1565C0;', '--color-accent: #1565C0 !important\u00a0;') },
     1, 'pairs were evaluable'],
 
   // ── #337 round 7: a non-ASCII name character before url() ─────────────────
@@ -402,7 +411,7 @@ const CASES = [
     1, ROOT],
 
   ['…including when the prelude carries tokens before the brace',
-    { 'styles/tokens.css': '.e { unknown: !important {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '} }\n' },
+    { 'styles/tokens.css': '.e { unknown: !important {\n' + swap(BASE, ':root {\n', '').replace('\n}\n', '\n') + '} }\n' },
     1, ROOT],
 
   // The must-NOT-over-refuse twins. A block with no measured token is unaffected
@@ -436,7 +445,7 @@ const CASES = [
   // CSS has no declaration list there and discards them, but every `;` reached
   // flush(), so a file with nine bare declarations recorded a complete palette.
   ['measured tokens declared outside any rule are refused',
-    { 'styles/tokens.css': BASE.replace(':root {\n', '').replace('\n}\n', '\n') },
+    { 'styles/tokens.css': swap(BASE, ':root {\n', '').replace('\n}\n', '\n') },
     1, ROOT],
 
   // ── #337 round 8: canon() undid the CSS trim ──────────────────────────────
@@ -622,7 +631,7 @@ const CASES = [
   // the pair above would hold with the second file read and never checked.
   ['a failing second theme fails the run',
     { 'styles/light.css': BASE,
-      'styles/dark.css': DARK.replace('--color-text-secondary: #B7BEC9;', '--color-text-secondary: #3A404C;'),
+      'styles/dark.css': swap(DARK, '--color-text-secondary: #B7BEC9;', '--color-text-secondary: #3A404C;'),
       __candidates: ['styles/light.css', 'styles/dark.css'] },
     1, 'check-contrast: FAIL — fix'],
 
@@ -651,7 +660,7 @@ const CASES = [
   // exist to prove the answer is now one rule, not four: none of them is
   // classified, all of them fail at the declaration.
   ['a leading-hyphen property name cannot supply a palette',
-    { 'styles/tokens.css': '.e { -foo: !important {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '} }\n' },
+    { 'styles/tokens.css': '.e { -foo: !important {\n' + swap(BASE, ':root {\n', '').replace('\n}\n', '\n') + '} }\n' },
     1, ROOT],
 
   ['a conditional media query cannot supply a palette (@media print)',
@@ -665,7 +674,7 @@ const CASES = [
     { 'styles/tokens.css': '@media\u0000 {\n' + BASE + '}\n' }, 1, ATRULE],
 
   ['an invalid pseudo-class cannot supply a palette',
-    { 'styles/tokens.css': '.e:definitely-not-a-pseudo {\n' + BASE.replace(':root {\n', '').replace('\n}\n', '\n') + '}\n' },
+    { 'styles/tokens.css': '.e:definitely-not-a-pseudo {\n' + swap(BASE, ':root {\n', '').replace('\n}\n', '\n') + '}\n' },
     1, ROOT],
 
   // The must-NOT-over-refuse twin, and the one that keeps the rule honest: an
@@ -774,34 +783,34 @@ const CASES = [
 
   // ── Pre-existing branches, pinned so the new code cannot swallow them ─────
   ['a measured token declared only in non-hex form is not evaluable',
-    { 'styles/tokens.css': BASE.replace('--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },
+    { 'styles/tokens.css': swap(BASE, '--color-danger:         #C0392B;', '--color-danger: rgb(192 57 43);') },
     1, 'pairs were evaluable'],
 
   // #328: an UNDECLARED token is what a literal in its role leaves behind
   // (`.btn { color: #fff }` over a token background), and a bare "7/9" invites
   // an exception that hides it. The failure must name the pattern.
   ['an undeclared measured token names the hard-coded-colour cause (#328)',
-    { 'styles/tokens.css': BASE.replace('  --color-on-accent:      #FFFFFF;\n', '') },
+    { 'styles/tokens.css': swap(BASE, '  --color-on-accent:      #FFFFFF;\n', '') },
     1, 'A hard-coded colour over a token background cannot be scored'],
 
   ['a malformed hex fails loudly rather than being skipped',
-    { 'styles/tokens.css': BASE.replace('--color-accent:         #1565C0;', '--color-accent: #1565C0F;') },
+    { 'styles/tokens.css': swap(BASE, '--color-accent:         #1565C0;', '--color-accent: #1565C0F;') },
     1, 'invalid hex value'],
 
   ['a translucent token is refused, not composited',
-    { 'styles/tokens.css': BASE.replace('--color-on-accent:      #FFFFFF;', '--color-on-accent: #FFFFFF00;') },
+    { 'styles/tokens.css': swap(BASE, '--color-on-accent:      #FFFFFF;', '--color-on-accent: #FFFFFF00;') },
     1, 'carries an alpha channel'],
 
   ['a real contrast failure still fails',
-    { 'styles/tokens.css': BASE.replace('--color-text-secondary: #5F6573;', '--color-text-secondary: #C9CDD4;') },
+    { 'styles/tokens.css': swap(BASE, '--color-text-secondary: #5F6573;', '--color-text-secondary: #C9CDD4;') },
     1, 'check-contrast: FAIL — fix'],
   // #469: the field edge is measured (WCAG 1.4.11). A pale edge, the old
   // --color-border at about 1.3:1, fails by name; dropping the token fails too.
   ['a field edge too pale to see fails, named for its pair',
-    { 'styles/tokens.css': BASE.replace('--color-border-input:   #858B96;', '--color-border-input:   #DAE2EE;') },
+    { 'styles/tokens.css': swap(BASE, '--color-border-input:   #858B96;', '--color-border-input:   #DAE2EE;') },
     1, 'border-input / surface (field edge)'],
   ['a palette without --color-border-input is not evaluable',
-    { 'styles/tokens.css': BASE.replace('  --color-border-input:   #858B96;\n', '') },
+    { 'styles/tokens.css': swap(BASE, '  --color-border-input:   #858B96;\n', '') },
     1, '--color-border-input'],
 
   // ── #337 round 6: a DIRECTORY symlink ─────────────────────────────────────

@@ -6,8 +6,13 @@
 #       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@<tag>
 #       with:
 #         tests-dir: .github/scripts/ui-tests
-#       secrets: inherit
+#       secrets:
+#         TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+#         TEST_AUTH_EMAIL: ${{ secrets.TEST_AUTH_EMAIL }}
 #
+# Secrets go by NAME, not `secrets: inherit`: GitHub documents `inherit` only
+# for callers in the same organization or enterprise, and the projects live
+# under a personal account (Codex, #467).
 # The caller keeps its own `on:` triggers, `permissions` and `concurrency`, and,
 # for a CI-build project, BUILD_PATHS in its top-level `env:` (the toolkit's
 # Pages edit reminder reads it there; this workflow never does).

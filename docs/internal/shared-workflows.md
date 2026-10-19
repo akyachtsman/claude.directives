@@ -27,9 +27,13 @@ callers, a defect is fixed in both files.
   because a caller's `env` does not pass into a called workflow. `BUILD_PATHS`
   stays in the caller's top-level `env:`: the toolkit's Pages edit reminder
   reads it there, and no workflow does.
-- **Secrets and variables.** The caller passes `secrets: inherit`; the called
-  workflow declares the secrets it reads as optional. `vars.*` needs nothing:
-  a called workflow reads the caller repository's variables.
+- **Secrets and variables.** The called workflow declares the secrets it reads
+  as optional, and the caller passes each by name
+  (`TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}`). Not
+  `secrets: inherit`: GitHub documents it only for callers in the same
+  organization or enterprise, and the projects live under a personal account.
+  `vars.*` needs nothing: a called workflow reads the caller repository's
+  variables.
 - **Two scripts are staged.** The ui-suite composite runs
   `$GITHUB_WORKSPACE/.github/scripts/check-ui-viewports.js` by fixed path, and
   that script needs the commonjs `package.json` beside it. The job copies both

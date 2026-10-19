@@ -38,7 +38,7 @@
 // declares a background and no colour). Neither method subsumes the other. A
 // complete check resolves each element's EFFECTIVE background through the
 // cascade — a different program from this one, and nobody has written it.
-// So: "9/9 OK" means the nine listed pairs passed. Before trusting it, confirm
+// So: "11/11 OK" means the eleven listed pairs passed. Before trusting it, confirm
 // your token roles match the ones assumed below, derive your own pairs from
 // your components.css, and check by hand any text using --color-accent below
 // 18.66px (or below 24px when not bold).
@@ -224,6 +224,11 @@ const pairs = [
   // same AA floor as any other body text.
   ['--color-danger', '--color-surface', AA, 'danger / surface'],
   ['--color-danger', '--color-bg', AA, 'danger / bg'],
+  // A field's edge is how a person finds the field (WCAG 1.4.11, non-text,
+  // 3:1). It sits on the surface inside and on the surface or the page canvas
+  // outside, so both are measured (#469).
+  ['--color-border-input', '--color-surface', AA_LARGE, 'border-input / surface (field edge)'],
+  ['--color-border-input', '--color-bg', AA_LARGE, 'border-input / bg (field edge)'],
 ];
 
 // The measured set, derived from `pairs` so there is no second list of names.

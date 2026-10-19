@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # refresh-drift.sh — /refresh-repo Phase 1.5: compare every installed verbatim
-# drop-in (workflows, composites, the hook, and .github/scripts/* -- see WHICH
-# FILES) with the upstream template, whatever the delta. Run from the project
+# drop-in (workflows, composites, the hook, .github/scripts/* and the house
+# style under styles/ -- see WHICH FILES) with the upstream template, whatever the delta. Run from the project
 # root:  bash "${CLAUDE_PLUGIN_ROOT}/scripts/refresh-drift.sh"
 # How to disposition each line is commands/refresh-repo.md → Phase 1.5.
 #
@@ -27,6 +27,10 @@
 # counts as the kit's only when the kit template ships that name: a kit
 # installed AT .github/scripts shares the directory with the standard scripts,
 # which stay compared (Codex, #451).
+# And the house style: every styles/<name>.css whose template
+# templates/styles/<name>.css exists at the pin (#469). A project's own
+# stylesheet there has no template and is skipped silently, as a script is; a
+# palette its owner ruled reads CUSTOM, quoted from its refresh_kept record.
 #
 # Per file, one of:
 #   STALE: <path>   differs from the pinned template but EQUALS the template at
@@ -105,13 +109,14 @@ KITS
 
 n=0 same=0 stale=0 custom=0 drift=0 modes=0
 for f in .github/workflows/*.yml .github/actions/*/* \
-         .claude/hooks/session-start.sh .github/scripts/* \
+         .claude/hooks/session-start.sh .github/scripts/* styles/*.css \
          .github/workflow-ref-required.json .github/ui-suite-env-exempt.json; do
   [ -f "$f" ] || continue
   script=
   case "$f" in
     .github/scripts/*) in_kit "$f" && continue
                        script=1 ;;
+    styles/*)          script=1 ;;   # a project's own stylesheet: silent too
   esac
   # A template upstream DELETED is absent from the tree too, which would read
   # as a project-specific file and be kept. An installed copy is a removal

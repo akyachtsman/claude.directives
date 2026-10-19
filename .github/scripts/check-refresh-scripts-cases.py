@@ -337,6 +337,8 @@ S_FILES = {
     "templates/ui-tests/package.json": "{}\n",
     "templates/ui-tests/package-lock.json": "{}\n",
     "templates/claude-settings.json": SETTINGS,
+    "templates/styles/tokens.css": ":root { --color-accent: #111111; }\n",
+    "templates/styles/components.css": ".card { display: block; }\n",
     "docs/standards/kit-defects.md": KIT_DEFECTS,
     "docs/guide.md": "a guide\n",
     **{f"directives/{d}.md": f"# {d}\n" for d in ("global", "git", "design", "test", "data")},
@@ -350,6 +352,7 @@ H_FILES = {
     "templates/claude-hooks/session-start.sh": "#!/usr/bin/env bash\necho v2\n",
     "templates/ui-tests/tests/lib/fixtures.js": "// fixtures v2\n",
     "templates/scripts/guard.py": "#!/usr/bin/env python3\nprint('guard v2')\n",
+    "templates/styles/tokens.css": ":root { --color-accent: #222222; }\n",
 }
 EXEC = {"templates/claude-hooks/session-start.sh",
         "templates/scripts/guard.py", "templates/scripts/lint.py"}
@@ -411,6 +414,8 @@ def installed(files, workflows=INSTALLED_WORKFLOWS, scripts=INSTALLED_SCRIPTS):
             local = ".claude/hooks/session-start.sh"
         elif rel == "templates/claude-settings.json":
             local = ".claude/settings.json"
+        elif rel.startswith("templates/styles/"):
+            local = "styles/" + rel[len("templates/styles/"):]
         if local:
             out[local] = (text, rel in EXEC)
     return out
@@ -703,6 +708,25 @@ run(r, "refresh-delta.sh")
 expect("stamp: the kit ROOT is never a one-step decline",
        run(r, "refresh-stamp.sh"), 1, "tests/lib/auth.js is absent but required")
 
+# ---- the house style (#469): a delta in templates/styles/ is verified ---------
+OLD_TOKENS = S_FILES["templates/styles/tokens.css"]
+r = project("stamp-styles", changes={"styles/tokens.css": OLD_TOKENS})
+run(r, "refresh-delta.sh")
+rc, out = res = run(r, "refresh-stamp.sh")
+expect("stamp: a house-style change left unapplied refuses the stamp",
+       res, 1, "UNAPPLIED: styles/tokens.css differs")
+m = re.search(r"tokens\.css differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
+check("stamp: the refusal prints the blobs a ruled palette records", bool(m), out)
+if m:
+    set_kept(r, "styles/tokens.css", {"blob": m.group(1), "local": m.group(2),
+                                      "reason": "the owner ruled this palette"})
+    expect("stamp: a ruled palette recorded in refresh_kept is KEPT and stamps",
+           run(r, "refresh-stamp.sh"), 0, "KEPT: styles/tokens.css -- the owner ruled this palette")
+r = project("stamp-styles-absent", changes={"styles/tokens.css": None, "styles/components.css": None})
+run(r, "refresh-delta.sh")
+expect("stamp: a project without the house style is not compared, and says so",
+       run(r, "refresh-stamp.sh"), 0, "absent locally, not compared: styles/tokens.css")
+
 # ---- items 5-7: drift at the pin, STALE vs CUSTOM, modes ----------------------
 DRIFTED = {
     ".github/workflows/qa.yml": QA_S.replace("# top-1\n", "# top-1 (local)\n"),   # CUSTOM
@@ -718,7 +742,9 @@ expect("drift: a copy that differs from the stamp-era template too is CUSTOM",
        res, 0, "CUSTOM: .github/workflows/qa.yml")
 expect("drift: a lost executable bit is a MODE line, not DRIFT",
        res, 0, "MODE: .claude/hooks/session-start.sh is 100644, the template is 100755")
-expect("drift: the summary counts each class", res, 0, "2 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
+expect("drift: an installed house style equal to the stamp-era template is STALE (#469)",
+       res, 0, "STALE: styles/tokens.css")
+expect("drift: the summary counts each class", res, 0, "3 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
 
 # .github/scripts/* (claude.prop pilot, 2026-10-13: five script templates in
 # the delta were classified by hand). Same classes, same SUMMARY.
@@ -740,7 +766,7 @@ expect("drift: a CUSTOM script with no refresh_kept record is the plain line",
 expect("drift: a script whose exec bit differs from the template's is a MODE line",
        res, 0, "MODE: .github/scripts/lint.py is 100644, the template is 100755")
 expect("drift: the scripts are counted -- unchanged ones as match -- in the same SUMMARY",
-       res, 0, f"SUMMARY: 10 installed file(s) compared at {H} — 5 match, 4 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
+       res, 0, f"SUMMARY: 12 installed file(s) compared at {H} — 6 match, 5 STALE, 1 CUSTOM, 0 DRIFT, 1 MODE")
 expect("drift: an unchanged script gets no line of its own",
        res, 0, "SUMMARY:", absent="check-ui-viewports.js")
 expect("drift: a project-own script with no template is not listed (not even NO-TEMPLATE)",
@@ -786,6 +812,13 @@ expect("drift: with the kit at .github/scripts, a standard script is still compa
        res, 0, "CUSTOM: .github/scripts/lint.py")
 expect("drift: ...while the kit's own package.json stays out of the script loop",
        res, 0, "SUMMARY:", absent=".github/scripts/package.json")
+
+# The house style under styles/ (#469): a project's own stylesheet there has no
+# template and is skipped silently, as a project's own script is.
+r = project("drift-styles-own", changes={"styles/site.css": "body { margin: 0; }\n"})
+run(r, "refresh-delta.sh")
+expect("drift: a project-own stylesheet with no template is not listed",
+       run(r, "refresh-drift.sh"), 0, "SUMMARY:", absent="site.css")
 
 # A CUSTOM file the project already decided on (claude.prop's check-contrast.js)
 # carries its refresh_kept reason, read as refresh-stamp.sh reads it: keyed by

@@ -62,6 +62,7 @@ const BASE = `:root {
   --color-accent-hover:   #114F98;
   --color-danger:         #C0392B;
   --color-on-accent:      #FFFFFF;
+  --color-border-input:   #858B96;
 }
 `;
 const plus = (extra) => BASE + extra;
@@ -79,10 +80,11 @@ const DARK = `:root {
   --color-accent-hover:   #A9CBFA;
   --color-danger:         #F58A7F;
   --color-on-accent:      #10131A;
+  --color-border-input:   #7A8190;
 }
 `;
 
-const OK9 = 'OK — 9/9 assumed pairs meet WCAG AA';
+const OK9 = 'OK — 11/11 assumed pairs meet WCAG AA';
 const DUP = 'a measured token is declared more than once';
 const BLOCK = 'value is a { } block';
 // #337 round 9: the one place a measured token may be declared.
@@ -793,6 +795,14 @@ const CASES = [
   ['a real contrast failure still fails',
     { 'styles/tokens.css': BASE.replace('--color-text-secondary: #5F6573;', '--color-text-secondary: #C9CDD4;') },
     1, 'check-contrast: FAIL — fix'],
+  // #469: the field edge is measured (WCAG 1.4.11). A pale edge, the old
+  // --color-border at about 1.3:1, fails by name; dropping the token fails too.
+  ['a field edge too pale to see fails, named for its pair',
+    { 'styles/tokens.css': BASE.replace('--color-border-input:   #858B96;', '--color-border-input:   #DAE2EE;') },
+    1, 'border-input / surface (field edge)'],
+  ['a palette without --color-border-input is not evaluable',
+    { 'styles/tokens.css': BASE.replace('  --color-border-input:   #858B96;\n', '') },
+    1, '--color-border-input'],
 
   // ── #337 round 6: a DIRECTORY symlink ─────────────────────────────────────
   // Dirent reports a symlink as neither file nor directory. Round 5 patched the

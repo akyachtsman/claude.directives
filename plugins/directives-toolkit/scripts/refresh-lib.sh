@@ -64,6 +64,7 @@ refresh_template_of() {
     .github/actions/*)   printf 'templates/actions/%s\n' "${1#.github/actions/}" ;;
     .github/scripts/*)   printf 'templates/scripts/%s\n' "${1#.github/scripts/}" ;;
     .claude/hooks/*)     printf 'templates/claude-hooks/%s\n' "${1#.claude/hooks/}" ;;
+    styles/*)            printf 'templates/styles/%s\n' "${1#styles/}" ;;
   esac
 }
 

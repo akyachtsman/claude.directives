@@ -189,6 +189,10 @@ KITS
       templates/scripts/*)      p=".github/scripts/${t#templates/scripts/}"; need= ;;   # dependency pass decides absence
       templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}"
                                 need=; [ -f .claude/settings.json ] && need="the settings row runs it" ;;
+      # The house style (design.md), installed at styles/ by /new-repo and
+      # /design-intake. A ruled palette differs from tokens.css for good: it
+      # is recorded once with refresh_kept, and re-asked when either side moves.
+      templates/styles/*)       p="styles/${t#templates/styles/}"; need= ;;
       *) continue ;;   # merged, written once, or not installed: see the table above
     esac
     if [ "$st" = D ]; then

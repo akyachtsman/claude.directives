@@ -46,6 +46,7 @@ Referenced by the exported directives and the qa agents.
 | `internal/skill-eval-notes.md` | How the auto-skill eval runs and is scored, its baseline, and the worked description-tuning cases behind it |
 | `internal/native-parity.md` | This repo's half of the `/audit-repo` native-parity pass — where the verdicts live in `EXPORTS.json`, how the inventory is matched against them, and what counts as a finding |
 | `internal/accepted-residuals.md` | Security trade-offs the owner explicitly accepted, with the reasoning (currently: the scheduling-tool allowlist) |
+| `internal/shared-workflows.md` | The callable workflows projects will use instead of copies (#460 step 4): how each differs from its template, the Phase A spike findings, and what the self-test covers |
 
 ## `site/` — GitHub Pages assets
 | File | What it is |

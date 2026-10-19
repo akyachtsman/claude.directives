@@ -428,3 +428,19 @@ jobs:
 
       - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js
+
+  # #460 step 4: the guard before any shared-workflow tag moves. Calls the
+  # callable qa (.github/workflows/shared-qa.yml) the way a project would,
+  # against a small fixture site and suite, so a change that breaks the shared
+  # plumbing (the shared files fetched at the called commit, the composites
+  # resolving from there, the staged scripts, the local server, the gates) is
+  # red here before any project can pick it up. The contrast step reads the
+  # starter tokens projects copy. What the fixture covers:
+  # docs/internal/shared-workflows.md.
+  shared-qa-selftest:
+    name: Shared QA self-test
+    uses: ./.github/workflows/shared-qa.yml
+    with:
+      tests-dir: .github/shared-qa-fixture/ui-tests
+      site-dir: .github/shared-qa-fixture/site
+      contrast-args: --tokens templates/styles/tokens.css

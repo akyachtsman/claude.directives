@@ -17,6 +17,10 @@ body {
   margin: 0; background: var(--color-bg); color: var(--color-text-primary);
   font: var(--font-base)/1.5 var(--font-sans);
   -webkit-text-size-adjust: 100%;
+  /* A long unbroken name (a file name, an id) wraps instead of pushing the page
+     sideways, in every message, toast, banner, dialog and empty state.
+     break-word, not anywhere: it leaves table column sizing alone. */
+  overflow-wrap: break-word;
 }
 /* Form controls take the house font too; browsers give them their own. */
 button, input, select, textarea { font-family: inherit; }

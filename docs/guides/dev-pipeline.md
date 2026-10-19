@@ -260,7 +260,7 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   job and its scripts are added only when a project has a scheduled task.
   Once installed, the email kit is active, with a config-guard notice in
   `notify-task.js`; its secrets are needed only if the project sends email. See "Complete standard scaffold" above.
-- **Design — per-project generative (done):** the fixed company design system
+- **Design — per-project generative (done; since 2026-10-19 the starter look and the object standards come from the RSO app, `directives/design.md`):** the fixed company design system
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;
   `design.md` is now a thin method, `/design-intake` establishes each project's
   own `styles/tokens.css` + `styles/components.css` via `frontend-design` + Stitch,

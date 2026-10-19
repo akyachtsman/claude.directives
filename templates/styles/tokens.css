@@ -1,19 +1,20 @@
 /* ── tokens.css — this project's brand primitives ───────────────────────────
-   STARTER values (a calm neutral/blue default). Replace at /design-intake with
-   your project's actual look. Everything downstream references var(--…) from
+   STARTER values = the company look (design.md -> Company look, taken from the
+   RSO app, owner ruling 2026-10-19). Keep them unless the project has its own
+   brand; change values at /design-intake, never the token names. Everything downstream references var(--…) from
    here, so re-theming happens by editing this one file. Keep WCAG AA (the CI
    contrast guardrail checks these against each other). */
 :root {
   /* color */
-  --color-bg:             #F5F7FA;
+  --color-bg:             #F5F5F3;
   --color-surface:        #FFFFFF;
-  --color-border:         #DAE2EE;
-  --color-border-hover:   #BFCBDF;
-  --color-text-primary:   #181B22;
-  --color-text-secondary: #5F6573;
-  --color-accent:         #1565C0;
-  --color-accent-hover:   #114F98;
-  --color-accent-light:   #E5EEF8;
+  --color-border:         #E2E0DB;
+  --color-border-hover:   #C8C5BE;
+  --color-text-primary:   #1A1A1A;
+  --color-text-secondary: #6B6860;
+  --color-accent:         #1273E0;  /* RSO #1275E2, one shade darker: white on it is 4.6:1, AA */
+  --color-accent-hover:   #0E5EB5;
+  --color-accent-light:   #E7F1FD;
   --color-danger:         #C0392B;
   /* Foreground for text/icons ON --color-accent. Named rather than hardcoded so
      a dark accent stays legible after a re-theme. */

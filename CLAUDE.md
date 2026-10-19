@@ -26,7 +26,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | Path | Role |
 |------|------|
 | `directives/global.md` | Exported global directive (was global's DIRECTIVE.md) |
-| `directives/design.md` | Exported design **method** — per-project generative (tokens + `/design-intake` + `frontend-design`/Stitch), not a shared theme |
+| `directives/design.md` | Exported design directive — the company look and object standards, taken from the RSO app (owner ruling, 2026-10-19), delivered as starter tokens + `/design-intake` |
 | `directives/git.md` | Exported git/GitHub directive — PR lifecycle, conditional auto-merge, repo-settings preflight |
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |

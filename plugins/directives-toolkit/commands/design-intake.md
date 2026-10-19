@@ -4,9 +4,12 @@ phase: build
 benefits-from: [kickoff]
 ---
 Turn a starting look into this project's reusable **design contract**. Run at
-kickoff (`/kickoff` calls this) or any time to re-theme. Per `design.md`: there's
-no company-wide look — this command creates *this project's* identity and the
-contract that keeps it consistent page-to-page. Browser-only throughout.
+kickoff (`/kickoff` calls this) or any time to re-theme. Per `design.md`: the
+company look and object standards come from the RSO app (owner ruling,
+2026-10-19), so the default is to keep the starter `templates/styles/` as they
+ship. Only a project with a brand of its own imports a look below, and it changes
+token VALUES only; `design.md` → *Object standards* still binds. Browser-only
+throughout.
 
 ## 1. Import a look (pick the simplest that fits)
 - **Image (default, zero setup):** ask the user to attach a screenshot/mockup

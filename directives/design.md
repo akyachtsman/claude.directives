@@ -81,9 +81,9 @@ Two committed files are the single source of truth for a project's look:
 A screen never adds its own button, card, pill or dialog class; a size or layout
 need is a modifier on the shared one. Script behaviour that every page shares
 (the confirmation dialog, the archived pop-over, the empty state, the inline
-message, the icon set, the table comparator) lives in ONE shared script loaded
-by every page, never copied into a page. Every generator is told to **use this
-project's `tokens.css` and `components.css`**, never to invent a parallel
+message, the icon set, the table comparator, the segmented control's keys)
+lives in ONE shared script loaded by every page, never copied into a page.
+Every generator is told to **use this project's `tokens.css` and `components.css`**, never to invent a parallel
 system.
 
 ## Stack
@@ -239,7 +239,8 @@ Every screen uses this for anything a person can put away and get back.
    **The pop-over always stays inside the visible window:** never under a
    sidebar, never past a card's edge. It moves sideways and opens upward where
    the room is, and a long list scrolls inside it. Esc or a press outside closes
-   it. One shared fit does this for every Archived (N) on every page.
+   it, and Esc returns focus to the Archived (N) button. One shared fit does this
+   for every Archived (N) on every page.
 5. **Each archived row:** the item's full name, wrapped and never cut (with when
    and by whom it was archived, if useful), on the left; a secondary
    **Restore** button on the right. Restore needs no confirmation: it puts the
@@ -312,7 +313,11 @@ Every screen uses this for anything a person can put away and get back.
   (history entries).
 - Tabs and segmented choices (Draw / Type, Live / Archived) use one segmented
   control with `role="tablist"` / `role="tab"` / `aria-selected`, the selected
-  one filled.
+  one filled. Each tab is a native `<button role="tab">`, never a `<div>` with
+  the role. Tab reaches the selected tab only (`tabindex="0"`, the others
+  `-1`); ← and → move to the previous and next tab and select it, wrapping at
+  the ends, and Home and End go to the first and last. One shared script gives
+  every segmented control this behaviour.
 
 ## 12. Forms and fields
 - **Labels sit above their field and are always visible.** A placeholder is only

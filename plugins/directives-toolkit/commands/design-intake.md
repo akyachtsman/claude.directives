@@ -13,8 +13,8 @@ Copy `templates/styles/tokens.css` and `templates/styles/components.css` from
 claude.directives into `styles/` unchanged, if `/new-repo` has not already. In a
 project that already has its own stylesheets, stop and say so: moving an
 existing project to the house style is a separate change (#470), by owner
-ruling. A palette the owner ruled keeps its values (1b). Later fixes to the
-house files reach the project through `/refresh-repo`.
+ruling. A palette the owner ruled keeps its values (1b). How later fixes to the
+house files reach a project that has adopted them is part of #470 too.
 The words, icons, components and patterns in `design.md` (sections 1 to 19)
 apply as they are.
 

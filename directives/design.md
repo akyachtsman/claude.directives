@@ -325,8 +325,11 @@ Every screen uses this for anything a person can put away and get back.
   one filled. Each tab is a native `<button role="tab">`, never a `<div>` with
   the role. Tab reaches the selected tab only (`tabindex="0"`, the others
   `-1`); ← and → move to the previous and next tab and select it, wrapping at
-  the ends, and Home and End go to the first and last. One shared script gives
-  every segmented control this behaviour.
+  the ends, and Home and End go to the first and last. Where the tabs switch
+  content, each content area is a `role="tabpanel"` labelled by its tab
+  (`aria-labelledby`), each tab names its panel (`aria-controls`), and only the
+  selected tab's panel is shown (the others carry `hidden`). One shared script
+  gives every segmented control this behaviour.
 
 ## 12. Forms and fields
 - **Labels sit above their field and are always visible.** A placeholder is only

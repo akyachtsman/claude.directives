@@ -98,12 +98,14 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 /* A card WITH actions: the title's button opens the card through an overlay
    stretched over it; the actions sit above the overlay (never a button inside
    a button). */
-.card-open { all: unset; cursor: pointer; }
+.card-open { all: unset; display: block; cursor: pointer; }
 .card-open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
 .card-open:focus-visible::after { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 .card:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 /* Names wrap; never an ellipsis or a line clamp (§1.6, §5). */
-.card-title { font-size: var(--font-lg); font-weight: 600; overflow-wrap: anywhere; }
+/* Block, so the corner-actions padding below reserves that region on every
+   wrapped line, not only the last one. */
+.card-title { display: block; font-size: var(--font-lg); font-weight: 600; overflow-wrap: anywhere; }
 .card-sub { font-size: var(--font-sm); color: var(--color-text-secondary); }
 /* At most two icon buttons, top-right, Edit then Archive; 3+ become one ⋮ menu.
    Always visible: never hover-only, so they show on a phone. The padding
@@ -246,6 +248,7 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
 .menu-item:hover { background: var(--color-accent-light); }
 .menu-item:focus-visible { outline: 3px solid var(--color-accent); outline-offset: -3px; }
 .menu-item.danger { color: var(--color-danger); }
+.menu-item.danger:hover { background: var(--color-danger-bg); } /* the checked danger pair, never accent-light */
 
 /* ── Upload box (§13) ─────────────────────────────────────────────────────── */
 .upload {

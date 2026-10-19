@@ -66,7 +66,7 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
    confirmation, and nowhere else. */
 .btn-delete {
   background: var(--color-danger); border-color: var(--color-danger);
-  color: var(--color-on-accent);
+  color: var(--color-on-danger);
 }
 .btn-delete:hover, .btn-delete:focus-visible {
   background: var(--color-danger-hover); border-color: var(--color-danger-hover);
@@ -147,6 +147,10 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 }
 .table td:has(> .row-open) { padding-top: 0; padding-bottom: 0; }
 .row-open:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* A row's own actions (§6): the last cell, right-aligned, icon buttons 8px
+   apart; a .menu-btn takes their place at three or more. */
+.row-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.table td:has(> .row-actions) { width: 1%; white-space: nowrap; padding-top: 0; padding-bottom: 0; }
 
 /* ── Forms and fields (§12) ───────────────────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -259,7 +263,7 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
   max-width: min(480px, 94vw); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
   background: var(--color-text-primary); color: var(--color-surface); box-shadow: var(--shadow-md);
 }
-.toast.err { background: var(--color-danger); color: var(--color-on-accent); }
+.toast.err { background: var(--color-danger); color: var(--color-on-danger); }
 /* Announcements, maintenance, lockdown: full width, in the flow, never floating. */
 .banner { width: 100%; padding: var(--space-3) var(--space-4); background: var(--color-info-bg); color: var(--color-info); }
 

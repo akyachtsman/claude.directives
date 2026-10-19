@@ -31,6 +31,10 @@
   /* Foreground for text/icons ON --color-accent. Named rather than hardcoded so
      a dark accent stays legible after a re-theme. */
   --color-on-accent:      #FFFFFF;
+  /* Foreground ON --color-danger / --color-danger-hover (the Delete permanently
+     button, an error toast), kept apart from the accent's so a light accent
+     with a dark on-accent never puts dark text on the red fill. */
+  --color-on-danger:      #FFFFFF;
 
   /* status — design.md §14: one meaning per colour, words always in the pill.
      Each pair is pill text on pill background at 11-12px, so each needs 4.5:1.

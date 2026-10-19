@@ -70,7 +70,7 @@ Two committed files are the single source of truth for a project's look:
   its own), buttons
   (`.btn` plus `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-delete`),
   card with its opening title (`.card-open`) and corner actions, the Add card,
-  a table that scrolls inside its own box (its sortable headers' `.th-sort` button and its rows' `.row-open`),
+  a table that scrolls inside its own box (its sortable headers' `.th-sort` button, its rows' `.row-open` and `.row-actions`),
   field and label, checkbox, status pill and tag, empty state, dialog shell,
   Archived (N) pop-over, the ⋮ menu, upload box, inline message, toast, segmented control,
   section header.
@@ -217,8 +217,9 @@ permanently or Permanently archive confirmation.
   opening link (or button), `.row-open`, a 44px target that keyboard users
   reach with Tab. A press
   elsewhere on the row may open it too, but extra actions sit at the row's
-  right end, as on a card: at most two icon buttons (Edit, then Archive), and
-  one ⋮ menu instead when there are three or more. An action's press never opens
+  right end, as on a card, in the row's last cell (`.row-actions`): at most two
+  icon buttons (Edit, then Archive), and one ⋮ menu instead when there are
+  three or more. An action's press never opens
   the row. Never give the `<tr>` itself a button or link role.
 - **Sortable columns:** a native `<button>` inside each sortable header cell
   sorts it, so the keyboard reaches it; it shows " ▲" or " ▼" after a space, and
@@ -498,8 +499,9 @@ Non-negotiable, whatever the palette:
 The per-project contrast guardrail (`templates/scripts/check-contrast.js`, run in
 CI against `styles/tokens.css`) is **a floor, not a coverage report**: it measures
 a hand-written list of token pairs, so a token used in a different role passes
-while rendering wrong. It does not measure the status-pill pairs of section 14;
-check those by hand whenever a status token changes. Read its pair list against
+while rendering wrong. It does not measure the status-pill pairs of section 14
+or `--color-on-danger` on `--color-danger` and `--color-danger-hover`; check
+those by hand at 4.5:1 whenever one of those tokens changes. Read its pair list against
 your own token roles. A themed project gives **each theme its own complete
 tokens file** and lists every one. Its limits and every file shape it refuses:
 `docs/standards/contrast-guardrail.md`.

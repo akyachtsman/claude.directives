@@ -70,7 +70,7 @@ Two committed files are the single source of truth for a project's look:
   on every page: the page base (canvas, text, font, headings, links), buttons
   (`.btn` plus `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-delete`),
   card with its opening title (`.card-open`) and corner actions, the Add card,
-  a table that scrolls inside its own box,
+  a table that scrolls inside its own box (its sortable headers' `.th-sort` button),
   field and label, checkbox, status pill and tag, empty state, dialog shell,
   Archived (N) pop-over, upload box, inline message, toast, segmented control,
   section header.
@@ -206,8 +206,10 @@ permanently or Permanently archive confirmation.
   elsewhere on the row may open it too, but extra actions sit at the row's
   right end (a ⋮ menu when more than one), and an action's press never opens
   the row. Never give the `<tr>` itself a button or link role.
-- **Sortable columns:** press the header; it shows " ▲" or " ▼" after a space and
-  carries `aria-sort`. One shared comparator sorts every table, blanks last.
+- **Sortable columns:** a native `<button>` inside each sortable header cell
+  sorts it, so the keyboard reaches it; it shows " ▲" or " ▼" after a space, and
+  the header cell carries `aria-sort`. One shared comparator sorts every table,
+  blanks last.
 - **A table wider than the screen scrolls inside its own box** with a visible
   scroll bar; the page itself never scrolls sideways.
 - The header row stays visible when the table scrolls vertically.

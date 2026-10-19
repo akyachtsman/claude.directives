@@ -27,12 +27,12 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 .btn {
   min-height: var(--size-target-min); padding: var(--space-2) var(--space-4);
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer;
+  border: 1px solid var(--color-border-input); border-radius: var(--radius-md); cursor: pointer;
   background: var(--color-surface); color: var(--color-text-primary);
   font: 600 var(--font-sm)/1.2 var(--font-sans); text-decoration: none;
   transition: background .15s ease, border-color .15s ease;
 }
-.btn:hover { border-color: var(--color-border-hover); }
+.btn:hover { border-color: var(--color-text-secondary); }
 /* Focus needs its OWN indicator, not the hover state: accent -> accent-hover is a
    ~1.4:1 shift, so a keyboard user cannot tell where focus is (design.md ->
    Accessibility, non-negotiable). Outline sits outside the box, so it also reads
@@ -110,7 +110,12 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 }
 /* A sortable header's control: a native button, so the keyboard reaches it.
    aria-sort stays on the <th>. */
-.th-sort { all: unset; cursor: pointer; font: inherit; color: inherit; }
+.th-sort {
+  all: unset; cursor: pointer; font: inherit; color: inherit;
+  display: inline-flex; align-items: center;
+  min-height: var(--size-target-min); min-width: var(--size-target-min);   /* a 44px target */
+}
+.table th:has(> .th-sort) { padding-top: 0; padding-bottom: 0; }
 .th-sort:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
 
 /* ── Forms and fields (§12) ───────────────────────────────────────────────── */
@@ -208,7 +213,7 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 .banner { width: 100%; padding: var(--space-3) var(--space-4); background: var(--color-info-bg); color: var(--color-info); }
 
 /* ── Segmented control (§11): role="tablist" / role="tab" / aria-selected ──── */
-.segmented { display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 2px; gap: var(--space-2); }
+.segmented { display: inline-flex; border: 1px solid var(--color-border-input); border-radius: var(--radius-md); padding: 2px; gap: var(--space-2); }
 .segmented [role="tab"] {
   min-height: var(--size-target-min); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm);
   background: transparent; color: var(--color-text-primary); font: 600 var(--font-sm) var(--font-sans); cursor: pointer;

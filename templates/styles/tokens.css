@@ -13,7 +13,8 @@
   --color-border-hover:   #C8C5BE;
   /* A field's edge is what tells a person it can be typed in, so it needs 3:1
      against the surface and the page canvas (WCAG 1.4.11; check-contrast.js
-     measures both); --color-border (1.32:1) is for cards. */
+     measures both). Every control's edge uses it -- fields, secondary buttons,
+     segmented controls; --color-border (1.32:1) is for cards and dividers. */
   --color-border-input:   #8C887F;
   --color-text-primary:   #1A1A1A;
   --color-text-secondary: #6B6860;

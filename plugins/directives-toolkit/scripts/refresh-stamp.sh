@@ -189,10 +189,12 @@ KITS
       templates/scripts/*)      p=".github/scripts/${t#templates/scripts/}"; need= ;;   # dependency pass decides absence
       templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}"
                                 need=; [ -f .claude/settings.json ] && need="the settings row runs it" ;;
-      # The house style (design.md), installed at styles/ by /new-repo and
-      # /design-intake. A ruled palette differs from tokens.css for good: it
-      # is recorded once with refresh_kept, and re-asked when either side moves.
-      templates/styles/*)       p="styles/${t#templates/styles/}"; need= ;;
+      # The house style (design.md), installed at styles/ by /new-repo,
+      # /design-intake and Phase 2. It is binding, so absence is unapplied too.
+      # A ruled palette differs from tokens.css for good, and a project with no
+      # UI declines the files (local "absent"): either is recorded once with
+      # refresh_kept, and re-asked when either side moves.
+      templates/styles/*)       p="styles/${t#templates/styles/}"; need="the house style is binding (design.md)" ;;
       *) continue ;;   # merged, written once, or not installed: see the table above
     esac
     if [ "$st" = D ]; then

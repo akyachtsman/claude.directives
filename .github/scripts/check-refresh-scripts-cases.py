@@ -724,8 +724,15 @@ if m:
            run(r, "refresh-stamp.sh"), 0, "KEPT: styles/tokens.css -- the owner ruled this palette")
 r = project("stamp-styles-absent", changes={"styles/tokens.css": None, "styles/components.css": None})
 run(r, "refresh-delta.sh")
-expect("stamp: a project without the house style is not compared, and says so",
-       run(r, "refresh-stamp.sh"), 0, "absent locally, not compared: styles/tokens.css")
+rc, out = res = run(r, "refresh-stamp.sh")
+expect("stamp: the house style is binding, so a project without it refuses the stamp",
+       res, 1, "UNAPPLIED: styles/tokens.css is absent but required -- the house style is binding")
+m = re.search(r"tokens\.css is absent but required .* \(blob ([0-9a-f]{40})\) \(local absent\)", out)
+check("stamp: the refusal prints the blob a no-UI project's decline records", bool(m), out)
+if m:
+    set_kept(r, "styles/tokens.css", {"blob": m.group(1), "local": "absent", "reason": "no UI in this project"})
+    expect("stamp: a decline of the absent file reads KEPT",
+           run(r, "refresh-stamp.sh"), 0, "KEPT: styles/tokens.css -- no UI in this project")
 
 # ---- items 5-7: drift at the pin, STALE vs CUSTOM, modes ----------------------
 DRIFTED = {

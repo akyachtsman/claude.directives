@@ -41,8 +41,9 @@ Every project starts from the house look: `templates/styles/tokens.css` and
 contract so every page matches page one.
 
 **A project that already exists** moves to the house style by `/refresh-repo`,
-never by a rewrite: it diffs the project's `styles/` against the house
-templates and applies approved changes file by file. A palette the owner ruled
+never by a rewrite: it installs the house `styles/` where a project has none,
+and otherwise diffs the project's copy against the house templates and applies
+approved changes file by file. A palette the owner ruled
 for that project keeps its values, while new token names arrive with the house
 values. A screen that does not yet match goes into `DESIGN-GAPS.md` (below) and
 is brought up to the standard by the next change that touches it.
@@ -451,6 +452,9 @@ Every UI works on desktop, tablet and phone. Design responsive-first:
 Non-negotiable, whatever the palette:
 - **WCAG AA contrast:** normal text ≥ 4.5:1, large text and icons ≥ 3.0:1. Large
   means ≥ 18.66px bold or ≥ 24px; anything smaller needs 4.5.
+- **A control's edge** — a field, a secondary button, a segmented group — is
+  ≥ 3.0:1 against what surrounds it (WCAG 1.4.11): the house components draw
+  every one in `--color-border-input`, never the card border.
 - Visible keyboard focus on everything pressable: pair `:hover` with
   `:focus-visible`.
 - Honor `prefers-reduced-motion`.

@@ -11,6 +11,9 @@
   --color-surface:        #FFFFFF;
   --color-border:         #E2E0DB;
   --color-border-hover:   #C8C5BE;
+  /* A field's edge is what tells a person it can be typed in, so it needs 3:1
+     against the surface (WCAG 1.4.11); --color-border (1.32:1) is for cards. */
+  --color-border-input:   #8C887F;
   --color-text-primary:   #1A1A1A;
   --color-text-secondary: #6B6860;
   /* RSO's #1275E2 fails AA twice: white on it is 4.50:1 (just under), and as

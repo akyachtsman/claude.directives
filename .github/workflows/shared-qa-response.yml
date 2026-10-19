@@ -1,0 +1,215 @@
+# shared-qa-response.yml — the callable version of
+# templates/workflows/qa-response.yml (#460 step 4, Phase A): event-driven QA
+# against the live URL, started by repository_dispatch. A project calls it
+# instead of carrying the copy:
+#
+#   name: QA — Event-Driven Response
+#   on:
+#     repository_dispatch:
+#       types: [qa-email-received, test-failure-reported, manual-qa-trigger]
+#     workflow_dispatch:
+#       inputs:
+#         reason:
+#           description: 'Reason for manual trigger'
+#           required: false
+#           default: 'Manual session trigger'
+#   permissions:
+#     contents: read
+#   jobs:
+#     respond:
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa-response.yml@<tag>
+#       with:
+#         tests-dir: .github/scripts/ui-tests
+#       secrets:
+#         TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+#         TEST_AUTH_EMAIL: ${{ secrets.TEST_AUTH_EMAIL }}
+#
+# The caller keeps the triggers. `github.event` here is the caller's, so the
+# trigger log and the revision summary read the dispatch exactly as the
+# template does, and every warning in the template's header (which revision a
+# repository_dispatch tests; never take a ref from client_payload) holds here.
+#
+# Fix a defect in BOTH this file and the template until the templates become
+# callers (Phase E). How the callable workflows differ from their templates:
+# docs/internal/shared-workflows.md.
+name: Shared QA — Event-Driven Response
+
+on:
+  workflow_call:
+    inputs:
+      tests-dir:
+        description: Directory holding the project's playwright.config.js and package.json (UI_TESTS_DIR in the template).
+        type: string
+        default: .github/scripts/ui-tests
+      ui-timeout-minutes:
+        description: The UI job's bound. 120 is the fleet floor for a ui-suite caller; raise it, never lower it.
+        type: number
+        default: 120
+    secrets:
+      TEST_AUTH_CREDENTIAL:
+        required: false
+      TEST_AUTH_EMAIL:
+        required: false
+
+# Least privilege: read the repo and run tests.
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Event data is passed through env, never interpolated directly into the
+      # run: script — a repository_dispatch client_payload is attacker-influenceable,
+      # and inlining `${{ github.event.* }}` into a shell body is a script-injection vector.
+      - name: Log trigger reason
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          echo "Trigger: $EVENT_NAME"
+          echo "Event type: $EVENT_ACTION"
+          echo "Payload: $CLIENT_PAYLOAD"
+
+
+      # The shared files at the commit this workflow was called at; why:
+      # shared-qa.yml's header.
+      - name: Resolve the shared files' commit
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ -z "$WF_REPO" ] || [ -z "$WF_SHA" ]; then
+            echo "::error::job.workflow_repository / job.workflow_sha are empty, so the shared files cannot be locked to the called version."
+            exit 1
+          fi
+          echo "Shared files: $WF_REPO@$WF_SHA"
+
+      - name: Fetch the shared files
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .claude-directives
+          persist-credentials: false
+
+      - name: Ignore the shared checkout
+        run: echo '/.claude-directives/' >> .git/info/exclude
+
+      # Secret scan (composite — single source of truth for the pattern)
+      - uses: ./.claude-directives/templates/actions/secret-scan
+
+  ui-tests:
+    needs: static-checks
+    runs-on: ubuntu-latest
+    # 120 is the fleet FLOOR for a ui-suite caller. Set HIGHER if your suite
+    # needs it, never lower, and raise it BEFORE adding projects. Why 120 (measurements, arithmetic, what it does NOT cover): the
+    # CALLER BOUND section of .github/actions/ui-suite/action.yml's header.
+    timeout-minutes: ${{ inputs.ui-timeout-minutes }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Silence is the defect this names: a dispatch from a feature branch
+      # otherwise reports green while having run main's specs.
+      # Says SELECTED, never "ran" — this step precedes the APP_URL guard and the
+      # suite itself, so on an unset APP_URL nothing executes but the checkout and
+      # a "ran the specs" summary would be false on the failure path.
+      # The default-branch warning is conditional because it is only true for a
+      # repository_dispatch: a workflow_dispatch from a feature branch resolves
+      # github.sha/ref_name to THAT branch, and warning there would contradict the
+      # accurate ref printed one line above and invite discarding a valid run.
+      - name: State which revision was selected
+        env:
+          TESTED_SHA: ${{ github.sha }}
+          TESTED_REF: ${{ github.ref_name }}
+          IS_DISPATCH: ${{ github.event_name == 'repository_dispatch' }}
+        run: |
+          {
+            echo "### Suite revision"
+            echo ""
+            echo "Selected the specs at \`$TESTED_SHA\` on \`$TESTED_REF\`."
+            if [ "$IS_DISPATCH" = "true" ]; then
+              echo ""
+              echo "A \`repository_dispatch\` carries no revision, so this is the default"
+              echo "branch — **not** the branch any session dispatched from. If you expected"
+              echo "a feature branch's specs, they were not selected; use that PR's own"
+              echo "\`qa.yml\` run instead."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Suite revision selected: $TESTED_SHA ($TESTED_REF)"
+
+      # The live URL comes from vars.APP_URL and from nothing else: without it
+      # this workflow names no URL to test against, so it says so once and stops
+      # rather than run the suite. A baseURL default filled in to the kit's
+      # playwright.config.js is NOT read by this gate: a project that relied on
+      # it goes red here until it sets the repository variable (pilots
+      # claude.prop + claude.trading, 2026-10-13).
+      - name: Require APP_URL
+        if: ${{ vars.APP_URL == '' }}
+        run: |
+          echo "::error::APP_URL repository variable is not set — cannot run the live suite."
+          exit 1
+
+      # The shared files at the commit this workflow was called at; why, and
+      # what the staging step is for: shared-qa.yml's header.
+      - name: Resolve the shared files' commit
+        env:
+          WF_REPO: ${{ job.workflow_repository }}
+          WF_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ -z "$WF_REPO" ] || [ -z "$WF_SHA" ]; then
+            echo "::error::job.workflow_repository / job.workflow_sha are empty, so the shared files cannot be locked to the called version."
+            exit 1
+          fi
+          echo "Shared files: $WF_REPO@$WF_SHA"
+
+      - name: Fetch the shared files
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .claude-directives
+          persist-credentials: false
+
+      - name: Ignore the shared checkout
+        run: echo '/.claude-directives/' >> .git/info/exclude
+
+      - name: Stage the scripts the ui-suite composite reads by path
+        run: |
+          mkdir -p .github/scripts
+          for f in check-ui-viewports.js package.json; do
+            src=".claude-directives/templates/scripts/$f"
+            dst=".github/scripts/$f"
+            if [ -f "$dst" ] && ! cmp -s "$src" "$dst"; then
+              echo "::notice::$dst differs from the shared copy and is replaced for this run."
+            fi
+            cp "$src" "$dst"
+          done
+
+      # Blocking, against the live URL.
+      - uses: ./.claude-directives/templates/actions/ui-suite
+        if: ${{ vars.APP_URL != '' }}
+        with:
+          tests-dir: ${{ inputs.tests-dir }}
+          app-url: ${{ vars.APP_URL }}
+          test-auth-credential: ${{ secrets.TEST_AUTH_CREDENTIAL }}
+          test-auth-email: ${{ secrets.TEST_AUTH_EMAIL }}
+          # VARIABLES, not secrets: selectors and a URL substring, and a masked one
+          # is unreadable in a failure message. Empty keeps the windowed answer (#320)
+          # and S2 reading the gate clearing as success (#379).
+          test-auth-ready-selector: ${{ vars.TEST_AUTH_READY_SELECTOR }}
+          test-auth-ready-request: ${{ vars.TEST_AUTH_READY_REQUEST }}
+          test-auth-success-selector: ${{ vars.TEST_AUTH_SUCCESS_SELECTOR }}
+          artifact-name: playwright-results-response-${{ github.run_id }}
+          app-pages: ${{ vars.APP_PAGES }}
+
+      # Results are available in the Actions tab for the active session to read
+      # and act on via the GitHub MCP tools (pull_request_read, get_job_logs, etc.)

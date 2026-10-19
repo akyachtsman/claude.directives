@@ -40,13 +40,13 @@ Every project starts from the house look: `templates/styles/tokens.css` and
 **reference page** from them, and the remaining pages are built against that
 contract so every page matches page one.
 
-**A project that already exists** moves to the house style by `/refresh-repo`,
-never by a rewrite: it installs the house `styles/` where a project has none,
-and otherwise diffs the project's copy against the house templates and applies
-approved changes file by file. A palette the owner ruled
-for that project keeps its values, while new token names arrive with the house
-values. A screen that does not yet match goes into `DESIGN-GAPS.md` (below) and
-is brought up to the standard by the next change that touches it.
+**A project that already exists** moves to the house style by running
+`/design-intake`, never by a rewrite of its screens: it installs the house
+`styles/`, replacing an older copy, and a palette the owner ruled for that
+project keeps its values. A screen that does not yet match goes into
+`DESIGN-GAPS.md` (below) and is brought up to the standard by the next change
+that touches it. Carrying the house style through `/refresh-repo` is a
+separate change (#470).
 
 A project changes its **palette or fonts** (tokens only) only by owner ruling,
 for example a client's brand colour. `/design-intake` then imports that look

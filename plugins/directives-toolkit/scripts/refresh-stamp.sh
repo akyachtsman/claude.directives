@@ -189,9 +189,6 @@ KITS
       templates/scripts/*)      p=".github/scripts/${t#templates/scripts/}"; need= ;;   # dependency pass decides absence
       templates/claude-hooks/*) p=".claude/hooks/${t#templates/claude-hooks/}"
                                 need=; [ -f .claude/settings.json ] && need="the settings row runs it" ;;
-      # The house style: only an upstream DELETION is the delta's; every shipped
-      # file is checked in pass 2b, whatever the delta lists.
-      templates/styles/*)       [ "$st" = D ] || continue; p="styles/${t#templates/styles/}"; need= ;;
       *) continue ;;   # merged, written once, or not installed: see the table above
     esac
     if [ "$st" = D ]; then
@@ -290,22 +287,6 @@ KITS
   done <<DEPS
 $(printf '%s\n' "$deps" | sort -u)
 DEPS
-  # 2b. The house style (design.md), delta or not (Codex, #469). It binds every
-  # project, so each file templates/styles/ ships at the head is required at
-  # styles/: absent or different is unapplied. A delta-only check let a first
-  # refresh (no delta listing) or a project that deleted the files stamp
-  # without them. A ruled palette differs from tokens.css for good, and a
-  # project with no UI declines the files (local "absent"): either is recorded
-  # once with refresh_kept, and re-asked when either side moves.
-  while IFS= read -r t; do
-    [ -n "$t" ] || continue
-    p="styles/${t#templates/styles/}"
-    case "$handled" in *" $p "*) continue ;; esac
-    check "$p" "$t" "the house style is binding (design.md)"
-  done <<STYLES
-$(printf '%s\n' "$shipped" | grep '^templates/styles/'; true)
-STYLES
-
   # The lockfile. It is generated, never shipped, so it is checked for
   # PRESENCE, not compared -- and only where the scheduled-task kit is
   # installed (pilots, 2026-10-13). package.json alone does not need it: the qa

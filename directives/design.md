@@ -71,7 +71,7 @@ Two committed files are the single source of truth for a project's look:
   on every page: the page base (canvas, text, font, headings, links), buttons
   (`.btn` plus `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-delete`),
   card with its opening title (`.card-open`) and corner actions, the Add card,
-  a table that scrolls inside its own box (its sortable headers' `.th-sort` button),
+  a table that scrolls inside its own box (its sortable headers' `.th-sort` button and its rows' `.row-open`),
   field and label, checkbox, status pill and tag, empty state, dialog shell,
   Archived (N) pop-over, upload box, inline message, toast, segmented control,
   section header.
@@ -203,7 +203,8 @@ permanently or Permanently archive confirmation.
 
 ## 6. Lists and tables
 - A row opens its detail page through its name: the name cell holds the
-  opening link (or button), which keyboard users reach with Tab. A press
+  opening link (or button), `.row-open`, a 44px target that keyboard users
+  reach with Tab. A press
   elsewhere on the row may open it too, but extra actions sit at the row's
   right end (a ⋮ menu when more than one), and an action's press never opens
   the row. Never give the `<tr>` itself a button or link role.

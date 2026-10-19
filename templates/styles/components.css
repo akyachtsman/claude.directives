@@ -117,6 +117,15 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 }
 .table th:has(> .th-sort) { padding-top: 0; padding-bottom: 0; }
 .th-sort:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* A row's opening control (§6), a link or a button in its name cell: a 44px
+   target, not the height of one line of text. */
+.row-open {
+  display: inline-flex; align-items: center; cursor: pointer; text-align: left;
+  min-height: var(--size-target-min); min-width: var(--size-target-min);
+  background: none; border: 0; padding: 0; font: inherit; color: var(--color-accent);
+}
+.table td:has(> .row-open) { padding-top: 0; padding-bottom: 0; }
+.row-open:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
 
 /* ── Forms and fields (§12) ───────────────────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -215,7 +224,7 @@ a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 /* ── Segmented control (§11): role="tablist" / role="tab" / aria-selected ──── */
 .segmented { display: inline-flex; border: 1px solid var(--color-border-input); border-radius: var(--radius-md); padding: 2px; gap: var(--space-2); }
 .segmented [role="tab"] {
-  min-height: var(--size-target-min); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm);
+  min-height: var(--size-target-min); min-width: var(--size-target-min); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm);
   background: transparent; color: var(--color-text-primary); font: 600 var(--font-sm) var(--font-sans); cursor: pointer;
 }
 .segmented [role="tab"][aria-selected="true"] { background: var(--color-accent); color: var(--color-on-accent); }

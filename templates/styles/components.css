@@ -28,6 +28,9 @@ body {
    words and a wide one scrolls in its own box (.table-wrap), and the controls
    with short fixed labels, so a squeezed row never splits a word in a button. */
 .table, .btn, .pill, .tag, .segmented [role="tab"] { overflow-wrap: break-word; }
+/* A picture or video never paints wider than its box (a phone photo is
+   thousands of pixels wide), keeping its shape as it shrinks. */
+img, video { max-width: 100%; height: auto; }
 /* Form controls take the house font too; browsers give them their own. */
 button, input, select, textarea { font-family: inherit; }
 h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
@@ -267,6 +270,7 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
 }
 .upload.is-over { border-color: var(--color-accent); background: var(--color-accent-light); }
 .upload .upload-limits { font-size: var(--font-sm); }
+.upload img { max-height: 160px; border-radius: var(--radius-sm); } /* the chosen photo's thumbnail (§13) */
 
 /* ── Messages (§18): errors next to what failed; toasts for success ───────── */
 .inline-msg { font-size: var(--font-sm); margin-top: var(--space-1); color: var(--color-text-secondary); }

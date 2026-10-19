@@ -9,6 +9,9 @@
    shared script per project, never per page. */
 
 /* ── Page base: the canvas, text colour and font every page starts from ─────── */
+/* border-box, so padding and borders stay inside a component's width and a
+   width: 100% card never overflows its grid track on a phone. */
+*, *::before, *::after { box-sizing: border-box; }
 html { background: var(--color-bg); }
 body {
   margin: 0; background: var(--color-bg); color: var(--color-text-primary);

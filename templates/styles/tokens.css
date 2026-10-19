@@ -13,9 +13,11 @@
   --color-border-hover:   #C8C5BE;
   --color-text-primary:   #1A1A1A;
   --color-text-secondary: #6B6860;
-  /* RSO's #1275E2 measures 4.498:1 under white and fails AA by a hair; one step
-     darker is the same blue to the eye and passes. */
-  --color-accent:         #1274E1;
+  /* RSO's #1275E2 fails AA twice: white on it is 4.50:1 (just under), and as
+     link text on the --color-bg canvas it is 4.17:1. #106AD0 is the nearest
+     blue that passes both (white 5.26, on the canvas 4.82, on accent-light
+     4.61). */
+  --color-accent:         #106AD0;
   --color-accent-hover:   #0E5EB5;
   --color-accent-light:   #E7F1FD;
   --color-danger:         #C0392B;

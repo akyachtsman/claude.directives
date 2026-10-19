@@ -11,8 +11,12 @@ it never invents a look. Browser-only throughout.
 ## 1. Adopt the house style (default)
 Copy `templates/styles/tokens.css` and `templates/styles/components.css` from
 claude.directives into `styles/` unchanged, if `/new-repo` has not already. In a
-project that already has its own copies, replace them; a palette the owner
-ruled keeps its values (1b).
+project that already has its own copies, keep its screens working while they
+move over: rename the old files to `styles/legacy-tokens.css` and
+`styles/legacy-components.css` and load them **before** the house files, so a
+name both define takes the house rule and a project-only class keeps its own.
+A screen moved to the house style drops its legacy rules; the legacy files go
+when `DESIGN-GAPS.md` is empty. A palette the owner ruled keeps its values (1b).
 The words, icons, components and patterns in `design.md` (sections 1 to 19)
 apply as they are.
 

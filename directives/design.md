@@ -42,10 +42,11 @@ contract so every page matches page one.
 
 **A project that already exists** moves to the house style by running
 `/design-intake`, never by a rewrite of its screens: it installs the house
-`styles/`, replacing an older copy, and a palette the owner ruled for that
-project keeps its values. A screen that does not yet match goes into
-`DESIGN-GAPS.md` (below) and is brought up to the standard by the next change
-that touches it. Carrying the house style through `/refresh-repo` is a
+`styles/` and keeps the project's older stylesheets as `legacy-*.css`, loaded
+before the house files so unmigrated screens keep working, and a palette the
+owner ruled for that project keeps its values. A screen that does not yet
+match goes into `DESIGN-GAPS.md` (below) and is brought up to the standard by
+the next change that touches it. Carrying the house style through `/refresh-repo` is a
 separate change (#470).
 
 A project changes its **palette or fonts** (tokens only) only by owner ruling,

@@ -18,6 +18,8 @@ body {
   font: var(--font-base)/1.5 var(--font-sans);
   -webkit-text-size-adjust: 100%;
 }
+/* Form controls take the house font too; browsers give them their own. */
+button, input, select, textarea { font-family: inherit; }
 h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
 h1 { font-size: var(--font-2xl); } h2 { font-size: var(--font-xl); } h3 { font-size: var(--font-lg); }
 a { color: var(--color-accent); }
@@ -205,6 +207,8 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 }
 /* A native <dialog> opened with showModal() takes the same shell. */
 dialog.dialog { border: 0; padding: 0; color: inherit; }
+/* .dialog's display: flex would override the browser's hiding of a closed one. */
+dialog.dialog:not([open]) { display: none; }
 dialog.dialog::backdrop { background: var(--color-backdrop); }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-6); }
 .dialog-title { font-size: var(--font-lg); font-weight: 600; margin: 0; }

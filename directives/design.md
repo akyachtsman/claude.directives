@@ -40,6 +40,13 @@ Every project starts from the house look: `templates/styles/tokens.css` and
 **reference page** from them, and the remaining pages are built against that
 contract so every page matches page one.
 
+**A project that already exists** moves to the house style by `/refresh-repo`,
+never by a rewrite: it diffs the project's `styles/` against the house
+templates and applies approved changes file by file. A palette the owner ruled
+for that project keeps its values, while new token names arrive with the house
+values. A screen that does not yet match goes into `DESIGN-GAPS.md` (below) and
+is brought up to the standard by the next change that touches it.
+
 A project changes its **palette or fonts** (tokens only) only by owner ruling,
 for example a client's brand colour. `/design-intake` then imports that look
 from an image or screenshot (default, read by the `frontend-design` skill),
@@ -189,8 +196,11 @@ permanently or Permanently archive confirmation.
   project.
 
 ## 6. Lists and tables
-- A row opens its detail page with one press on the row; extra actions sit at
-  the row's right end (a ⋮ menu when more than one).
+- A row opens its detail page through its name: the name cell holds the
+  opening link (or button), which keyboard users reach with Tab. A press
+  elsewhere on the row may open it too, but extra actions sit at the row's
+  right end (a ⋮ menu when more than one), and an action's press never opens
+  the row. Never give the `<tr>` itself a button or link role.
 - **Sortable columns:** press the header; it shows " ▲" or " ▼" after a space and
   carries `aria-sort`. One shared comparator sorts every table, blanks last.
 - **A table wider than the screen scrolls inside its own box** with a visible

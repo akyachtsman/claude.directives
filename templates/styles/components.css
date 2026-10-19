@@ -22,6 +22,18 @@ h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
 h1 { font-size: var(--font-2xl); } h2 { font-size: var(--font-xl); } h3 { font-size: var(--font-lg); }
 a { color: var(--color-accent); }
 a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+/* An action link standing on its own (Back, Clear filters, any link that does
+   something rather than sits in a sentence) gets the 44px target a link in
+   running text is exempt from. Works on <a> or <button>. */
+.link-action {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  min-height: var(--size-target-min); min-width: var(--size-target-min);
+  background: none; border: 0; padding: 0 var(--space-1);
+  font: 600 var(--font-sm)/1.2 var(--font-sans); color: var(--color-accent);
+  text-decoration: none;
+}
+.link-action:hover { text-decoration: underline; }
+.link-action:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
 
 /* ── Buttons (§4): .btn is Secondary; add .btn-primary, .btn-danger or .btn-delete */
 .btn {

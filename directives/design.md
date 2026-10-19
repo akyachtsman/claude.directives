@@ -68,7 +68,9 @@ Two committed files are the single source of truth for a project's look:
   outside font, because an outside request breaks offline use and sandboxed
   test runs.
 - **`styles/components.css`**: the standard's components, built once and used
-  on every page: the page base (canvas, text, font, headings, links), buttons
+  on every page: the page base (canvas, text, font, headings, links), the
+  action link (`.link-action`, for Back, Clear filters and any link standing on
+  its own), buttons
   (`.btn` plus `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-delete`),
   card with its opening title (`.card-open`) and corner actions, the Add card,
   a table that scrolls inside its own box (its sortable headers' `.th-sort` button and its rows' `.row-open`),
@@ -302,8 +304,9 @@ Every screen uses this for anything a person can put away and get back.
 - **A detail view is its own page** (a person, a document, a report, a
   conversation).
 - **Exactly one Back control per page:** ← at the top-left (in the top bar, or
-  "← *Parent name*" at the top-left of the content). Always ←, never ‹, and
-  never a second Back inside the content.
+  "← *Parent name*" at the top-left of the content), drawn as `.link-action` so
+  it is a 44px target. Always ←, never ‹, and never a second Back inside the
+  content.
 - **Back returns to the exact place the person left:** the same list, the same
   filters, the same scroll position. The phone's own back gesture does the same
   (history entries).
@@ -391,7 +394,7 @@ colour across the whole product, each from its own token pair in `tokens.css`:
 - The search box is `type="search"`, with the magnifying glass, the placeholder
   "Search *things*…" and an `aria-label`, and it filters as you type.
 - Filters: dropdowns with a visible label, or chips for a small fixed set; a
-  **Clear filters** link while any is on.
+  **Clear filters** link (`.link-action`) while any is on.
 - Tables sort by their header (section 6); a card grid that sorts uses a "Sort
   by" dropdown.
 
@@ -445,7 +448,8 @@ Every UI works on desktop, tablet and phone. Design responsive-first:
   hover-only states or controls**; pair every `:hover` with a tap or focus
   equivalent.
 - Targets: tap/click min **44×44px**; checkboxes min **24×24px**; min **8px**
-  between adjacent targets.
+  between adjacent targets. A link inside a sentence is exempt; a link that
+  stands on its own as an action is `.link-action`.
 - Inputs: min **48px** high; input font **never below 16px** (prevents iOS zoom
   on focus).
 

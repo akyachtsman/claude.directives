@@ -69,9 +69,13 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 
 ## Behavior Rules
 - Read CLAUDE.md and every imported directive URL before starting any task
-- Follow design.md's universal craft rules (cross-platform, accessibility,
-  motion, copy); each project's *look* is its own, established via
-  `/design-intake` — there is no shared company theme
+- **Conform to universal UI standards and conventions** (owner ruling,
+  2026-10-19). Use the familiar, widely recognised controls and icons (the
+  standard upload icon and a visible **Choose file** button on every upload
+  area, say) instead of inventing custom designs: a user should know what
+  something does at a glance. `design.md` carries the detail as one house style
+  for every project (words, icons, components, patterns, accessibility); a
+  project's palette changes only by owner ruling, via `/design-intake`
 - Default stack: plain HTML + CSS + vanilla JS with **no build** — what is
   committed is what is served. *Hosting & Deployment* owns this rule and its one
   opt-in (a CI build, per project, with the owner's sign-off). A session's own
@@ -222,24 +226,33 @@ multi-file audits):
 - **Estimate misses get an update, not silence.** Say what's still running and
   the new expectation.
 
-## Status Line on Every Stop (owner ruling, 2026-08-18)
+## Status Line on Every Stop (owner rulings, 2026-08-18 · 2026-10-19)
 Every time a session stops working — end of turn, end of task, blocked, or
-parked — the message's final line is a status line in this vocabulary (the
-four canonical states below, or an intermediate state named the same way), so
-the owner never has to ask whether the session is working or waiting. It sits
-BELOW the ask ledger (→ *Burst Intake — Multiple Asks at Once*): the ledger is
-the reply's final block, this is its final line.
+parked — the message's final line is a status line, so the owner never has to
+ask whether the session is working or waiting. This holds in every surface: a
+project chat, a thread, a terminal. It sits BELOW the ask ledger (→ *Burst
+Intake — Multiple Asks at Once*): the ledger is the reply's final block, this
+is its final line. It goes at the very end, after the summary and the suggested
+next step, never at the top.
 
+**When nothing is running, the final line is ONE all-caps stop word, alone on
+its own line** (owner ruling, 2026-10-19):
+- **DONE** — finished: nothing in flight, no CI, no background agents, no
+  scheduled check-ins.
+- **MERGED** — the change is merged AND verified live at the deployed URL (safe
+  to test), and nothing is running.
+- **QUESTION** — blocked on the owner's answer; the question sits directly
+  above the stop word.
+
+**A message without one of these words at the end means work is still going.**
+Its final line is then a status phrase naming what is running:
 - **"Waiting for CI"** — tests running; the session resumes itself on the
   result. Never the whole story: say what you started, or what blocks what you
   did not (→ *Parallel Tasking via Subagents*).
-- **"Waiting for response"** — blocked on the owner; the question sits
-  directly above the status line.
-- **"Deployed"** — merged AND verified live at the deployed URL; safe to test.
-- **"all done"** — the queue is genuinely empty: nothing in flight, no CI, no
-  background agents, no scheduled check-ins. Reserved for exactly that.
+- Any other intermediate state, named the same way ("Merged" while the deploy
+  builds, "Merged, live unverified").
 
-The grammar: a short status phrase, optionally a parenthetical subject with
+The grammar of a status phrase: a short status phrase, optionally a parenthetical subject with
 elapsed time ("Waiting for CI (PR #845) — 12m elapsed"), optionally pending
 items after a colon ("Waiting for CI: PR #845 → merge → deploy-verify").
 Intermediate states name themselves the same way ("Merged" while the deploy

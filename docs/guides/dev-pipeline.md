@@ -264,5 +264,11 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;
   `design.md` is now a thin method, `/design-intake` establishes each project's
   own `styles/tokens.css` + `styles/components.css` via `frontend-design` + Stitch,
-  and the WCAG guardrail ships per-project. The method is `directives/design.md`;
-  the migration plan, now implemented, is in git history (removed in batch C, R12).
+  and the WCAG guardrail ships per-project. The migration plan, now implemented,
+  is in git history (removed in batch C, R12).
+- **Design — one house style (2026-10-19):** the owner made the RSO project's UI
+  standard the house style for every project. `directives/design.md` now carries
+  its words, icons, components and patterns, and `templates/styles/` carries its
+  palette and components; `/design-intake` adopts them and imports a palette
+  only by owner ruling. Where each project still breaks it: its own
+  `DESIGN-GAPS.md`.

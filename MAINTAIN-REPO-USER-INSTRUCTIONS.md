@@ -361,7 +361,9 @@ Standing rules:
   workflow-file caution.
 - Precedent that this works: the design paradigm was already swapped once
   (fixed shared theme → per-project generative method) by replacing the
-  `design` set, with no other domain touched — its 3-point interface held.
+  `design` set, with no other domain touched — its 3-point interface held. It
+  was swapped back to one house standard (the RSO style, 2026-10-19) the same
+  way.
 
 ## Known Gotchas
 

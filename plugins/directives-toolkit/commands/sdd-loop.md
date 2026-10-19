@@ -23,7 +23,7 @@ specs/<feature-slug>/
   spec.md       ← specify (WHAT & WHY, plus the clarifications it resolved)
   plan.md       ← plan (HOW: stack, architecture, task list, consistency check)
   research.md   ← written by /kickoff (competitive discovery), when run
-  design.md     ← written by /design-intake (visual identity record), when run
+  design.md     ← written by /design-intake (house style, or the palette ruling), when run
 ```
 Derive `<feature-slug>` (kebab-case) from the feature name if omitted. Each
 phase first **reads the prior artifact** and refuses if it's missing — order is
@@ -133,8 +133,8 @@ green; the completion bar is unchanged. Honor the Pre-Push gate
 
 **Polish pass before "done" (elaborate builds).** "Passes tests" is not the finish
 line — the bar is the brief's ambition + reference targets. Before calling the
-feature done, hold it to the project's established look and `design.md`'s universal
-craft: consistent use of `styles/tokens.css`/`components.css`, strong visual
+feature done, hold it to `design.md`'s house standard (every group, sections 1 to 19)
+and its universal craft: consistent use of `styles/tokens.css`/`components.css`, strong visual
 hierarchy, considered empty/loading/success states, accessibility (WCAG AA,
 `:focus-visible`), and tasteful motion (`prefers-reduced-motion` honored) — judged
 against the named references, not "does it function."

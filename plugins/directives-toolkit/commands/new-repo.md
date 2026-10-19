@@ -48,8 +48,8 @@ Execute in order:
    Write it as `CLAUDE.md`, drop the scaffold's HTML comment, fill in the repo
    name and live URL from context (`APP_URL` variable / repo name), and leave
    the [bracketed] sections as placeholders for the human to complete
-   post-merge. The project's **look is established later by `/design-intake`**
-   (per `directives/design.md`) — there is no shared company theme to pick.
+   post-merge. The project's **look is the house style** (`directives/design.md`),
+   set up later by `/design-intake`; a different palette needs an owner ruling.
    Record the deployment target — **GitHub Pages** — on CLAUDE.md's `Stack:`
    bullet, and leave `Build:` at none. The project is a single-page
    `index.html` app on GitHub Pages — the only deployment path
@@ -167,9 +167,9 @@ Execute in order:
    project replaces the task body with its real notification.
 
    **Design starter.** Copy `claude.directives/templates/styles/` (`tokens.css`,
-   `components.css`) into `styles/`. These are neutral starters that pass the
-   contrast guardrail as-is; `/design-intake` replaces them with the project's
-   actual look (per `directives/design.md`).
+   `components.css`) into `styles/`. They are the house style and pass the
+   contrast guardrail as-is; `/design-intake` keeps them, and changes token
+   values only when the owner rules a project palette (per `directives/design.md`).
 
 6. **Gitignore bootstrap-only and secret files.** Do NOT copy or commit agent
    definitions into the project repo. Ensure the project's `.gitignore` contains

@@ -1,40 +1,94 @@
 /* ── components.css — this project's reusable components ─────────────────────
-   STARTER set built on tokens.css. Extend/replace at /design-intake. Every value
-   references var(--…) so re-theming happens in tokens.css alone. Meets the
-   universal craft rules in design.md (iPad sizes, :focus-visible, reduced-motion). */
+   The HOUSE set (design.md, owner rulings 2026-10-19), built on tokens.css. Each
+   block names the design.md section it implements. Every value references
+   var(--…), so re-theming happens in tokens.css alone. A screen never adds its
+   own button, card, pill or dialog class: a size or layout need is a modifier on
+   the shared one. Meets the craft rules in design.md (44px targets,
+   :focus-visible, reduced motion). The behaviour these need (the confirmation
+   dialog, the Archived (N) fit, the empty state, inline messages) lives in ONE
+   shared script per project, never per page. */
 
+/* ── Buttons (§4): .btn is Secondary; add .btn-primary, .btn-danger or .btn-delete */
 .btn {
-  min-height: var(--size-target-min); padding: var(--space-3) var(--space-6);
-  border: none; cursor: pointer;
-  border-radius: var(--radius-md);
-  background: var(--color-accent); color: var(--color-on-accent);
-  font: 500 var(--font-base)/1 var(--font-sans);
-  box-shadow: var(--shadow-sm); transition: all .15s ease;
+  min-height: var(--size-target-min); padding: var(--space-2) var(--space-4);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer;
+  background: var(--color-surface); color: var(--color-text-primary);
+  font: 600 var(--font-sm)/1.2 var(--font-sans); text-decoration: none;
+  transition: background .15s ease, border-color .15s ease;
 }
-.btn:hover { background: var(--color-accent-hover); box-shadow: var(--shadow-md); }
+.btn:hover { border-color: var(--color-border-hover); }
 /* Focus needs its OWN indicator, not the hover state: accent -> accent-hover is a
    ~1.4:1 shift, so a keyboard user cannot tell where focus is (design.md ->
    Accessibility, non-negotiable). Outline sits outside the box, so it also reads
    against whatever surface the button is on. */
-.btn:focus-visible {
-  background: var(--color-accent-hover); box-shadow: var(--shadow-md);
-  outline: 3px solid var(--color-accent); outline-offset: 2px;
+.btn:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+.btn-secondary { /* the same look as .btn; named so markup can say it */ }
+.btn-primary {
+  background: var(--color-accent); border-color: var(--color-accent);
+  color: var(--color-on-accent);
 }
-.btn-secondary {
-  background: var(--color-surface); color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
+.btn-primary:hover, .btn-primary:focus-visible {
+  background: var(--color-accent-hover); border-color: var(--color-accent-hover);
 }
-.btn-secondary:hover { border-color: var(--color-accent); color: var(--color-accent); }
-.btn-secondary:focus-visible {
-  border-color: var(--color-accent); color: var(--color-accent);
-  outline: 3px solid var(--color-accent); outline-offset: 2px;
+.btn-danger { color: var(--color-danger); border-color: var(--color-danger); }
+.btn-danger:hover, .btn-danger:focus-visible { background: var(--color-danger-bg); }
+/* The filled red final button of a Delete permanently / Permanently archive
+   confirmation, and nowhere else. */
+.btn-delete {
+  background: var(--color-danger); border-color: var(--color-danger);
+  color: var(--color-on-accent);
 }
+.btn-delete:hover, .btn-delete:focus-visible {
+  background: var(--color-danger-hover); border-color: var(--color-danger-hover);
+}
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+/* Icon-only: still a 44px target; needs aria-label AND title (§3). */
+.btn-icon { min-width: var(--size-target-min); padding: 0; }
+.btn-icon svg { width: 18px; height: 18px; }
 
+/* ── Cards and grids (§5) ─────────────────────────────────────────────────── */
+.grid {
+  display: grid; gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+}
 .card {
+  position: relative; text-align: left; width: 100%;
   background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: var(--shadow-sm);
+  color: var(--color-text-primary); font: inherit;
+}
+.card[role="button"], button.card { cursor: pointer; }
+.card:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+/* Names wrap; never an ellipsis or a line clamp (§1.6, §5). */
+.card-title { font-size: var(--font-lg); font-weight: 600; overflow-wrap: anywhere; }
+.card-sub { font-size: var(--font-sm); color: var(--color-text-secondary); }
+/* At most two icon buttons, top-right, Edit then Archive; 3+ become one ⋮ menu.
+   Always visible: never hover-only, so they show on a phone. */
+.card-actions {
+  position: absolute; top: var(--space-2); right: var(--space-2);
+  display: flex; gap: var(--space-2);
+}
+.card:has(.card-actions) .card-title { padding-right: calc(2 * var(--size-target-min) + var(--space-2)); }
+.card-add {
+  border-style: dashed; box-shadow: none; display: flex; align-items: center;
+  justify-content: center; gap: var(--space-2); color: var(--color-accent); font-weight: 600;
 }
 
+/* ── Lists and tables (§6) ────────────────────────────────────────────────── */
+/* Wider than the screen: scrolls inside its own box; the page never scrolls. */
+.table-wrap { overflow: auto; max-width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.table { width: 100%; border-collapse: collapse; background: var(--color-surface); }
+.table th, .table td { padding: var(--space-3); border-bottom: 1px solid var(--color-border); text-align: left; }
+.table th {
+  position: sticky; top: 0; background: var(--color-surface);
+  font-size: var(--font-sm); color: var(--color-text-secondary); font-weight: 600;
+}
+
+/* ── Forms and fields (§12) ───────────────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
+.label { font-size: var(--font-sm); font-weight: 600; color: var(--color-text-primary); }
+.label .req { color: var(--color-danger); }
 .input {
   min-height: var(--size-input-min); padding: var(--space-2) var(--space-4);
   font-size: var(--font-input-min); /* never below 16px: prevents iOS zoom on focus */
@@ -42,14 +96,95 @@
   background: var(--color-surface); color: var(--color-text-primary);
 }
 .input:focus-visible { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-accent-light); }
+/* Locked: greyed and not focusable (pair with `disabled`), padlock after the label. */
+.input:disabled { background: var(--color-bg); color: var(--color-text-secondary); cursor: not-allowed; }
 
-/* design.md names checkbox among the five components and sets a 24x24px floor
-   (larger than the browser default, which is ~13px). */
+/* design.md sets a 24x24px floor (larger than the browser default, ~13px). */
 .checkbox {
   width: var(--size-check-min); height: var(--size-check-min);
   accent-color: var(--color-accent); cursor: pointer;
 }
 .checkbox:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+
+/* ── Status pills and tags (§14): words in a pill, one meaning per colour ──── */
+.pill {
+  display: inline-flex; align-items: center; padding: 2px var(--space-2);
+  border-radius: var(--radius-pill); font-size: var(--font-xs); font-weight: 600;
+  background: var(--color-neutral-bg); color: var(--color-neutral);
+}
+.pill-success { background: var(--color-success-bg); color: var(--color-success); }
+.pill-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.pill-danger  { background: var(--color-danger-bg);  color: var(--color-danger); }
+.pill-info    { background: var(--color-info-bg);    color: var(--color-info); }
+.pill-expired { background: var(--color-expired-bg); color: var(--color-expired); }
+/* A kind of thing, not a status: never a status colour. */
+.tag {
+  display: inline-flex; padding: 2px var(--space-2); border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border); font-size: var(--font-xs); color: var(--color-text-secondary);
+}
+
+/* ── Empty states (§15) ───────────────────────────────────────────────────── */
+.empty-state { text-align: center; padding: var(--space-12) var(--space-6); color: var(--color-text-secondary); }
+.empty-state .empty-title { font-size: var(--font-base); font-weight: 700; color: var(--color-text-primary); margin-bottom: 6px; }
+.empty-state .empty-sub { font-size: var(--font-sm); max-width: 360px; margin: 0 auto; line-height: 1.5; }
+.empty-state .empty-act { margin-top: var(--space-4); }
+.empty-state.empty-sm { padding: var(--space-6) var(--space-3); }
+
+/* ── Dialogs (§9, §10): one shell; sized to the window, never a fixed width ── */
+.dialog-backdrop {
+  position: fixed; inset: 0; z-index: var(--z-dialog); background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center; padding: var(--space-4);
+}
+.dialog {
+  width: min(480px, 94vw); max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+}
+.dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4) var(--space-6); }
+.dialog-title { font-size: var(--font-lg); font-weight: 600; margin: 0; }
+.dialog-body { padding: 0 var(--space-6) var(--space-4); overflow: auto; }
+/* Cancel (secondary) on the left, the act on the right, right-aligned. */
+.dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border); }
+
+/* ── Archived (N) pop-over (§7): stays inside the window, long lists scroll ── */
+.archived-btn { /* a .btn: the archive icon, then "Archived (N)"; hidden when N is 0 */ }
+.archived-pop {
+  position: fixed; z-index: var(--z-popover); width: min(360px, 94vw); max-height: min(60vh, 480px);
+  overflow: auto; background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg); padding: var(--space-2);
+}
+.archived-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2); }
+.archived-row .name { overflow-wrap: anywhere; } /* the full name, never cut */
+
+/* ── Upload box (§13) ─────────────────────────────────────────────────────── */
+.upload {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+  padding: var(--space-6); text-align: center; color: var(--color-text-secondary);
+  border: 2px dashed var(--color-border); border-radius: var(--radius-md); background: var(--color-surface);
+}
+.upload.is-over { border-color: var(--color-accent); background: var(--color-accent-light); }
+.upload .upload-limits { font-size: var(--font-sm); }
+
+/* ── Messages (§18): errors next to what failed; toasts for success ───────── */
+.inline-msg { font-size: var(--font-sm); margin-top: var(--space-1); color: var(--color-text-secondary); }
+.inline-msg.err { color: var(--color-danger); } /* set role="alert" with it */
+.inline-msg.ok { color: var(--color-success); }
+.toast {
+  position: fixed; z-index: var(--z-toast); left: 50%; bottom: var(--space-6); transform: translateX(-50%);
+  max-width: min(480px, 94vw); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  background: var(--color-text-primary); color: var(--color-surface); box-shadow: var(--shadow-md);
+}
+.toast.err { background: var(--color-danger); color: var(--color-on-accent); }
+/* Announcements, maintenance, lockdown: full width, in the flow, never floating. */
+.banner { width: 100%; padding: var(--space-3) var(--space-4); background: var(--color-info-bg); color: var(--color-info); }
+
+/* ── Segmented control (§11): role="tablist" / role="tab" / aria-selected ──── */
+.segmented { display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 2px; gap: 2px; }
+.segmented [role="tab"] {
+  min-height: var(--size-target-min); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-text-primary); font: 600 var(--font-sm) var(--font-sans); cursor: pointer;
+}
+.segmented [role="tab"][aria-selected="true"] { background: var(--color-accent); color: var(--color-on-accent); }
+.segmented [role="tab"]:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 
 .section-header {
   font-size: var(--font-sm); font-weight: 600; text-transform: uppercase;
@@ -57,8 +192,8 @@
   border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-2);
 }
 
-/* `transition` alone is not enough: design.md's own reference flashRow() pulse is
-   an @keyframes animation, and smooth scrolling is motion too. */
+/* `transition` alone is not enough: an @keyframes pulse is an animation, and
+   smooth scrolling is motion too. */
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
   html { scroll-behavior: auto !important; }

@@ -1,13 +1,16 @@
 # Design tooling — generators & MCP wiring
 
-How a project establishes and builds its look under the per-project design model
-(`directives/design.md`). Browser-only; no local install required.
+How a project sets up and builds its look under the house design standard
+(`directives/design.md`). Every project starts from the house tokens and
+components; the generators below are for importing a palette when the owner
+rules a project gets its own. Browser-only; no local install required.
 
 ## Generators
 - **`frontend-design` (Anthropic skill)** — the primary author. In-session, no
   server or key; installed by the environment setup script
   (`scripts/install-toolkit.sh`). Steer it explicitly: *"plain semantic HTML/CSS,
-  no framework, reference `styles/tokens.css`."* It reads attached images, so it
+  no framework, reference `styles/tokens.css` and `styles/components.css`, add
+  no new classes."* It reads attached images, so it
   also covers the image-import path.
 - **Google Stitch (optional, visual generator)** — generates UI as HTML/CSS from a
   prompt or image. Wire its **remote** MCP into a Claude Code web session (no
@@ -20,10 +23,11 @@ How a project establishes and builds its look under the per-project design model
   the markup); the official Figma codegen MCP is React/Tailwind-biased.
 
 ## The flow
-`/design-intake` (called by `/kickoff`): **import** a look → **distill** to
-`styles/tokens.css` + `styles/components.css` + a reference page → **look-gate**
+`/design-intake` (called by `/kickoff`): **adopt** the house `styles/tokens.css` +
+`styles/components.css` (or, by owner ruling, **import** a palette into their
+values) → build a reference page → **look-gate**
 (sign off on the reference page) → `/sdd-loop` **builds the rest** against the
-contract. Re-run `/design-intake` any time to re-theme.
+contract. Re-run `/design-intake` to re-theme when the owner rules one.
 
 ## Accessibility guardrail
 `templates/scripts/check-contrast.js` (copied into each project's

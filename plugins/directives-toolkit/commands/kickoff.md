@@ -25,7 +25,7 @@ Execute in order:
    - **Core capabilities** — the key things it does
    - **Ambition & references** — how elaborate should it be, and which 1–2 apps
      should it match in polish/depth? This sets the bar everything downstream is held
-     to, and feeds **`/design-intake`** (the look). **Default when unspecified:
+     to, and sets the polish bar for the house style (`design.md`). **Default when unspecified:
      production-grade, not a skeleton.** Carry this bar into `plan` and `implement` —
      do **not** quietly trim it to a minimal MVP.
    - **Explicit non-goals (MVP)** — what's out of scope for v1
@@ -82,11 +82,13 @@ Execute in order:
    that allows those sites; fetch **public pages only**; respect ToS/robots;
    **synthesize patterns — don't clone** copy, branding, or designs.
 
-5. **Establish the look.** Run **`/design-intake`** — import a reference (a
-   screenshot/mockup, Stitch HTML, or Figma; image is the simplest browser-only
-   path) and distill it into `styles/tokens.css` + `styles/components.css` + an
-   approved reference page (per `directives/design.md`). Get the user's sign-off on
-   the look here, before building out — it's cheapest to fix on one page.
+5. **Establish the look.** Run **`/design-intake`** — it adopts the house
+   `styles/tokens.css` + `styles/components.css` (or, only by owner ruling,
+   imports a palette into them) and builds an approved reference page (per
+   `directives/design.md`: one house style, never an invented one). Research
+   from step 4 raises content and flows, not a new look. Get the user's
+   sign-off on the reference page here, before building out — it's cheapest to
+   fix on one page.
 
 6. **Drive the loop.** Hand the brief (and `research.md` if produced) to
    **`/sdd-loop specify`**, then proceed phase by phase

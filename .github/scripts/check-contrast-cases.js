@@ -62,15 +62,13 @@ const BASE = `:root {
   --color-accent-hover:   #114F98;
   --color-danger:         #C0392B;
   --color-on-accent:      #FFFFFF;
-  --color-border-input:   #858B96;
 }
 `;
 const plus = (extra) => BASE + extra;
 // Every mutation goes through swap(), which refuses a target the fixture no
 // longer contains: a String.replace() that matches nothing returns the input
 // unchanged, so the case would run the unmutated palette and pass for the wrong
-// reason. It did once (#469): a token added after --color-on-accent turned the
-// trailing-semicolon case into a copy of the baseline.
+// reason (#469).
 const swap = (src, from, to) => {
   if (!src.includes(from)) throw new Error(`fixture mutation matched nothing: ${JSON.stringify(from)}`);
   return src.replace(from, to);
@@ -89,11 +87,10 @@ const DARK = `:root {
   --color-accent-hover:   #A9CBFA;
   --color-danger:         #F58A7F;
   --color-on-accent:      #10131A;
-  --color-border-input:   #7A8190;
 }
 `;
 
-const OK9 = 'OK — 11/11 assumed pairs meet WCAG AA';
+const OK9 = 'OK — 9/9 assumed pairs meet WCAG AA';
 const DUP = 'a measured token is declared more than once';
 const BLOCK = 'value is a { } block';
 // #337 round 9: the one place a measured token may be declared.
@@ -171,7 +168,7 @@ const CASES = [
   // regex required one, this token would go missing and the run would fail as
   // "not evaluable" — a red build on valid CSS.
   ['a measured token whose declaration omits the trailing semicolon',
-    { 'styles/tokens.css': swap(BASE, '  --color-border-input:   #858B96;\n}', '  --color-border-input: #858B96 }') },
+    { 'styles/tokens.css': swap(BASE, '  --color-on-accent:      #FFFFFF;\n}', '  --color-on-accent: #FFFFFF }') },
     0, OK9],
 
   // The other side of that terminator class. A semicolon missing MID-block is
@@ -804,14 +801,6 @@ const CASES = [
   ['a real contrast failure still fails',
     { 'styles/tokens.css': swap(BASE, '--color-text-secondary: #5F6573;', '--color-text-secondary: #C9CDD4;') },
     1, 'check-contrast: FAIL — fix'],
-  // #469: the field edge is measured (WCAG 1.4.11). A pale edge, the old
-  // --color-border at about 1.3:1, fails by name; dropping the token fails too.
-  ['a field edge too pale to see fails, named for its pair',
-    { 'styles/tokens.css': swap(BASE, '--color-border-input:   #858B96;', '--color-border-input:   #DAE2EE;') },
-    1, 'border-input / surface (field edge)'],
-  ['a palette without --color-border-input is not evaluable',
-    { 'styles/tokens.css': swap(BASE, '  --color-border-input:   #858B96;\n', '') },
-    1, '--color-border-input'],
 
   // ── #337 round 6: a DIRECTORY symlink ─────────────────────────────────────
   // Dirent reports a symlink as neither file nor directory. Round 5 patched the

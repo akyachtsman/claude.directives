@@ -512,7 +512,10 @@ list, from reading `components.css`:
   upload box while a file is over it;
 - `--color-accent` on `--color-surface` and `--color-bg` below 18.66px bold or
   24px: links, Back, the Add card and a sort header. The guardrail holds
-  accent/surface only to 3.0 and does not measure accent/bg.
+  accent/surface only to 3.0 and does not measure accent/bg;
+- `--color-border-input` on `--color-surface` and `--color-bg`, at 3:1 (a
+  control's edge, above). The guardrail leaves it out so a project still on the
+  older starter `tokens.css`, which has no such token, keeps passing (#470).
 
 A change to `components.css` that draws a new pair adds it to this list in the
 same change. Read the guardrail's pair list against your own token roles. A themed project gives **each theme its own complete

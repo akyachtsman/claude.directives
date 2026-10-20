@@ -28,6 +28,10 @@ body {
    words and a wide one scrolls in its own box (.table-wrap), and the controls
    with short fixed labels, so a squeezed row never splits a word in a button. */
 .table, .btn, .pill, .tag, .segmented [role="tab"] { overflow-wrap: break-word; }
+/* ...and the controls are never wider than their box, so a single word longer
+   than the whole row (a long translation) still splits rather than push the
+   page sideways. */
+.btn, .pill, .tag, .segmented [role="tab"] { max-width: 100%; }
 /* A picture or video never paints wider than its box (a phone photo is
    thousands of pixels wide), keeping its shape as it shrinks. */
 img, video { max-width: 100%; height: auto; }
@@ -181,8 +185,9 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 .field { display: flex; flex-direction: column; gap: var(--space-1); }
 .label { font-size: var(--font-sm); font-weight: 600; color: var(--color-text-primary); }
 .label .req { color: var(--color-danger); }
+/* max-width: a <select> sizes to its longest option, which may be a sentence. */
 .input {
-  min-height: var(--size-input-min); padding: var(--space-2) var(--space-4);
+  max-width: 100%; min-height: var(--size-input-min); padding: var(--space-2) var(--space-4);
   font-size: var(--font-input-min); /* never below 16px: prevents iOS zoom on focus */
   border: 1px solid var(--color-border-input); border-radius: var(--radius-sm);
   background: var(--color-surface); color: var(--color-text-primary);
@@ -195,6 +200,21 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 .input::placeholder { color: var(--color-text-secondary); opacity: 1; }
 /* Locked: greyed and not focusable (pair with `disabled`), padlock after the label. */
 .input:disabled { background: var(--color-bg); color: var(--color-text-secondary); cursor: not-allowed; }
+
+/* ── Search and toolbar (§16): search box, filters, then + Add at the right ── */
+/* Wraps on a phone; the search box takes the row's free width. */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.toolbar-add { margin-left: auto; } /* the + Add button, always last */
+/* A native input cannot hold an icon, so the search box is a wrapper: the
+   magnifying glass (from the icon set, aria-hidden) sits over the input's
+   left padding. Markup: <label class="search"><svg aria-hidden="true">…</svg>
+   <input class="input" type="search" placeholder="Search things…" aria-label="Search things"></label> */
+.search { position: relative; display: flex; flex: 1 1 240px; min-width: 0; max-width: 100%; }
+.search .input { width: 100%; padding-left: calc(var(--space-4) + 18px + var(--space-2)); }
+.search svg {
+  position: absolute; left: var(--space-4); top: 50%; transform: translateY(-50%);
+  width: 18px; height: 18px; color: var(--color-text-secondary); pointer-events: none;
+}
 
 /* design.md sets a 24x24px floor (larger than the browser default, ~13px). */
 .checkbox {
@@ -297,7 +317,8 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
 
 /* ── Segmented control (§11): role="tablist" / role="tab" / aria-selected ──── */
 /* Each tab is a native <button role="tab">; the arrow keys come from the shared script (§11). */
-.segmented { display: inline-flex; border: 1px solid var(--color-border-input); border-radius: var(--radius-md); padding: 2px; gap: var(--space-2); }
+/* More tabs than a phone row holds wrap onto a second line inside the control. */
+.segmented { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--color-border-input); border-radius: var(--radius-md); padding: 2px; gap: var(--space-2); }
 .segmented [role="tab"] {
   min-height: var(--size-target-min); min-width: var(--size-target-min); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-sm);
   background: transparent; color: var(--color-text-primary); font: 600 var(--font-sm) var(--font-sans); cursor: pointer;

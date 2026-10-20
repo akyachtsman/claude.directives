@@ -129,7 +129,9 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
   display: flex; gap: var(--space-2);
 }
 .card:has(.card-actions) .card-title { padding-right: calc(2 * var(--size-target-min) + 2 * var(--space-2)); }
-.card-add {
+/* .card.card-add, not .card-add: it must outrank button.card / a.card's
+   display: block, since the Add card is itself a native button or link. */
+.card.card-add {
   border-style: dashed; border-color: var(--color-border-input); box-shadow: none; display: flex; align-items: center;
   justify-content: center; gap: var(--space-2); color: var(--color-accent); font-weight: 600;
 }

@@ -116,8 +116,6 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 .card-open:focus-visible::after { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 .card:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 /* Names wrap; never an ellipsis or a line clamp (§1.6, §5). */
-/* Block, so the corner-actions padding below reserves that region on every
-   wrapped line, not only the last one. */
 .card-title { display: block; font-size: var(--font-lg); font-weight: 600; }
 .card-sub { font-size: var(--font-sm); color: var(--color-text-secondary); }
 /* At most two icon buttons, top-right, Edit then Archive; 3+ become one ⋮ menu.
@@ -128,7 +126,15 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
   position: absolute; z-index: 1; top: 0; right: 0; padding: var(--space-2);
   display: flex; gap: var(--space-2);
 }
-.card:has(.card-actions) .card-title { padding-right: calc(2 * var(--size-target-min) + 2 * var(--space-2)); }
+/* The corner is reserved by layout, not per element: a float the size of the
+   actions box (less the card's own padding) sits top-right, so every line in
+   the card (title, context, a pill, a row of its own) flows around it. */
+.card:has(.card-actions) { display: flow-root; }
+.card:has(.card-actions)::before {
+  content: ""; float: right;
+  width: calc(2 * var(--size-target-min) + 3 * var(--space-2) - var(--space-6));
+  height: calc(var(--size-target-min) + 2 * var(--space-2) - var(--space-6));
+}
 /* .card.card-add, not .card-add: it must outrank button.card / a.card's
    display: block, since the Add card is itself a native button or link. */
 .card.card-add {

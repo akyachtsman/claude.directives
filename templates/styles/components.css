@@ -35,6 +35,9 @@ body {
 /* A picture or video never paints wider than its box (a phone photo is
    thousands of pixels wide), keeping its shape as it shrinks. */
 img, video { max-width: 100%; height: auto; }
+/* hidden always hides: a component's own display (a flex pop-over, a dialog
+   backdrop) would otherwise override the browser's rule and show it. */
+[hidden] { display: none !important; }
 /* Form controls take the house font too; browsers give them their own. */
 button, input, select, textarea { font-family: inherit; }
 h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
@@ -185,7 +188,9 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
 /* A row's own actions (§6): the last cell, right-aligned, icon buttons 8px
    apart; a .menu-btn takes their place at three or more. */
 .row-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-.table td:has(> .row-actions) { width: 1%; white-space: nowrap; padding-top: var(--space-1); padding-bottom: var(--space-1); }
+/* No nowrap: .row-actions is a non-wrapping flex row already, and nowrap here
+   would reach a ⋮ menu placed inside the cell and stop its labels wrapping. */
+.table td:has(> .row-actions) { width: 1%; padding-top: var(--space-1); padding-bottom: var(--space-1); }
 
 /* ── Forms and fields (§12) ───────────────────────────────────────────────── */
 .field { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -285,7 +290,6 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
 /* ── The ⋮ menu (§5): a disclosure of native buttons, placed by the same fit ── */
 .menu-btn { /* a .btn-icon in .card-actions: aria-label="More actions", aria-expanded, aria-controls */ }
 .menu-pop { width: min(240px, 94vw); display: flex; flex-direction: column; gap: var(--space-2); } /* 8px between targets */
-.menu-pop[hidden] { display: none; }
 .menu-item {
   display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--size-target-min);
   padding: 0 var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent;

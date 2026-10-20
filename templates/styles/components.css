@@ -41,6 +41,11 @@ h1, h2, h3 { line-height: 1.25; margin: 0 0 var(--space-3); }
 h1 { font-size: var(--font-2xl); } h2 { font-size: var(--font-xl); } h3 { font-size: var(--font-lg); }
 a { color: var(--color-accent); }
 a:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+/* The page's content box: the inset the body's margin: 0 removed, 16px on a
+   phone, 24px from a tablet up, centred and capped on a wide screen. A banner
+   (full width) sits outside it. */
+.page { max-width: 1440px; margin: 0 auto; padding: var(--space-4); }
+@media (min-width: 700px) { .page { padding: var(--space-6); } }
 /* An action link standing on its own (Back, Clear filters, any link that does
    something rather than sits in a sentence) gets the 44px target a link in
    running text is exempt from. Works on <a> or <button>. */
@@ -116,7 +121,8 @@ button.card, a.card { cursor: pointer; display: block; text-decoration: none; }
    stretched over it; the actions sit above the overlay (never a button inside
    a button). */
 .card-open { all: unset; display: block; cursor: pointer; }
-.card-open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+/* The card's own radius: .card-open's all: unset leaves it none to inherit. */
+.card-open::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-lg); }
 .card-open:focus-visible::after { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 .card:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
 /* Names wrap; never an ellipsis or a line clamp (§1.6, §5). */

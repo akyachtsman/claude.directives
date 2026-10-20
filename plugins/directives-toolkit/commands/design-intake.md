@@ -35,7 +35,7 @@ colour, whatever the new accent is.
 ## 2. Build the reference page
 One cleaned **reference page** (`index.html` or a representative screen) built
 only from `styles/tokens.css` + `styles/components.css`: semantic, plain
-HTML/CSS, no framework, no new classes. It shows at least the buttons, a card
+HTML/CSS, no framework, no new classes, its content inside `.page`. It shows at least the buttons, a card
 grid with its Add card, a form, a status pill of each colour, an empty state, a
 confirmation dialog and an Archived (N) pop-over, so the look-gate sees the
 whole standard on one page.

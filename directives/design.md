@@ -73,7 +73,8 @@ Two committed files are the single source of truth for a project's look:
   a table that scrolls inside its own box (its sortable headers' `.th-sort` button, its rows' `.row-open` and `.row-actions`),
   field and label, checkbox, status pill and tag, empty state, dialog shell,
   Archived (N) pop-over, the ⋮ menu, upload box, inline message, toast, segmented control,
-  section header, search box and toolbar (`.search`, `.toolbar`, `.toolbar-add`).
+  section header, search box and toolbar (`.search`, `.toolbar`, `.toolbar-add`), and the
+  page's content box (`.page`).
 
 A screen never adds its own button, card, pill or dialog class; a size or layout
 need is a modifier on the shared one. Script behaviour that every page shares

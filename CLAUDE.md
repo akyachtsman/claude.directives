@@ -26,7 +26,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | Path | Role |
 |------|------|
 | `directives/global.md` | Exported global directive (was global's DIRECTIVE.md) |
-| `directives/design.md` | Exported design **method** — per-project generative (tokens + `/design-intake` + `frontend-design`/Stitch), not a shared theme |
+| `directives/design.md` | Exported design **standard** — one house style for every project (owner rulings, 2026-10-19, from the RSO project): words, icons, components and patterns, carried by the `templates/styles/` tokens + components; a palette changes only by owner ruling via `/design-intake` |
 | `directives/git.md` | Exported git/GitHub directive — PR lifecycle, conditional auto-merge, repo-settings preflight |
 | `directives/test.md` | Exported test/QA directive (was test's DIRECTIVE.md) |
 | `directives/data.md` | Exported data/backend directive (backend provider, keys, RLS, MCP config) |
@@ -52,7 +52,7 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
 | `templates/scripts/` | Project scripts — guards, notifiers, the browser ladder, and the `package.json` the notifiers install from — that projects copy into `.github/scripts/`; which ones a project gets is derived from the workflows and directives that name them (`/new-repo`, `/refresh-repo`). `qa.yml` runs the guards straight from this path, so none has a `.github/scripts/` twin here |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
-| `templates/styles/` | Starter design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
+| `templates/styles/` | The house design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`), plus the **callable** workflows projects will call instead of copying (`shared-qa.yml`, `shared-qa-live.yml`, `shared-qa-response.yml`, `shared-pages-deploy.yml`, `shared-cron-notify.yml`; #460 step 4, piloted in claude.prop only). Those are exported (`EXPORTS.json` → `called-workflows`); how they differ from their templates and what the spike found: `docs/internal/shared-workflows.md` |

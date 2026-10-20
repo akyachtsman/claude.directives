@@ -25,10 +25,11 @@ https://raw.githubusercontent.com/akyachtsman/claude.directives/main/directives/
 - **Branch policy:** Develop on a `claude/<name>` feature branch; PRs target `main`
 
 ## Design
-This project's look is its own — established at kickoff via `/design-intake`
-(per `directives/design.md`), not a shared company theme. It lives in:
+This project uses the house style (`directives/design.md`), adopted at kickoff
+via `/design-intake`; a palette or fonts of its own only by owner ruling,
+recorded here with its date. It lives in:
 - `styles/tokens.css` — brand primitives (color, type, spacing, radius, shadow)
-- `styles/components.css` — reusable components
+- `styles/components.css` — the house components
 - **Reference page:** `[set at /design-intake]`
 
 ## Application Architecture

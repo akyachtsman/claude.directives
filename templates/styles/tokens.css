@@ -1,30 +1,61 @@
 /* ── tokens.css — this project's brand primitives ───────────────────────────
-   STARTER values (a calm neutral/blue default). Replace at /design-intake with
-   your project's actual look. Everything downstream references var(--…) from
-   here, so re-theming happens by editing this one file. Keep WCAG AA (the CI
-   contrast guardrail checks these against each other). */
+   The HOUSE look (design.md, owner rulings 2026-10-19): the RSO project's
+   default palette. Keep it unless the owner rules this project gets its own
+   palette or fonts; then /design-intake replaces the values, never the names.
+   Everything downstream references var(--…) from here, so re-theming happens by
+   editing this one file. Keep WCAG AA (the CI contrast guardrail checks the
+   core pairs against each other; the status pairs below are checked by hand). */
 :root {
   /* color */
-  --color-bg:             #F5F7FA;
+  --color-bg:             #F5F5F3;
   --color-surface:        #FFFFFF;
-  --color-border:         #DAE2EE;
-  --color-border-hover:   #BFCBDF;
-  --color-text-primary:   #181B22;
-  --color-text-secondary: #5F6573;
-  --color-accent:         #1565C0;
-  --color-accent-hover:   #114F98;
-  --color-accent-light:   #E5EEF8;
+  --color-border:         #E2E0DB;
+  --color-border-hover:   #C8C5BE;
+  /* A field's edge is what tells a person it can be typed in, so it needs 3:1
+     against the surface and the page canvas (WCAG 1.4.11; checked by hand, design.md
+     -> Accessibility). Every edge that shows a control is there uses it -- fields,
+     secondary buttons, segmented controls, the Add card, the upload box; --color-border
+     (1.32:1) is for edges nothing depends on: cards, tags, pop-overs, dividers. */
+  --color-border-input:   #8C887F;
+  --color-text-primary:   #1A1A1A;
+  --color-text-secondary: #6B6860;
+  /* RSO's #1275E2 fails AA twice: white on it is 4.50:1 (just under), and as
+     link text on the --color-bg canvas it is 4.17:1. #106AD0 is the nearest
+     blue that passes both (white 5.26, on the canvas 4.82, on accent-light
+     4.61). */
+  --color-accent:         #106AD0;
+  --color-accent-hover:   #0E5EB5;
+  --color-accent-light:   #E7F1FD;
   --color-danger:         #C0392B;
+  --color-danger-hover:   #A93226;
   /* Foreground for text/icons ON --color-accent. Named rather than hardcoded so
      a dark accent stays legible after a re-theme. */
   --color-on-accent:      #FFFFFF;
+  /* Foreground ON --color-danger / --color-danger-hover (the Delete permanently
+     button, an error toast), kept apart from the accent's so a light accent
+     with a dark on-accent never puts dark text on the red fill. */
+  --color-on-danger:      #FFFFFF;
+
+  /* status — design.md §14: one meaning per colour, words always in the pill.
+     Each pair is pill text on pill background at 11-12px, so each needs 4.5:1.
+     A token means what its name says: --color-success is green, whatever the
+     accent is. */
+  --color-success:        #166534;  --color-success-bg: #DCFCE7;
+  --color-warning:        #92400E;  --color-warning-bg: #FEF3C7;
+  --color-danger-bg:      #FDECEA;  /* pill text is --color-danger */
+  --color-neutral:        #4B5563;  --color-neutral-bg: #EFEFED;
+  --color-info:           #0E5EB5;  --color-info-bg:    #E7F1FD;
+  --color-expired:        #6B21A8;  --color-expired-bg: #F3E8FF;
 
   /* type */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-sm: 13px; --font-base: 15px; --font-lg: 17px; --font-xl: 20px; --font-2xl: 24px;
+  /* Inter where the page loads it (RSO does), else each platform's own UI font.
+     The shared files load no outside font: an outside request breaks offline
+     use and sandboxed test runs, whose console guard fails on it. */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-xs: 12px; --font-sm: 13px; --font-base: 15px; --font-lg: 17px; --font-xl: 20px; --font-2xl: 24px;
 
   /* space */
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px;
 
   /* target sizes — design.md -> Cross-platform & responsive (touch AND pointer) */
   --size-target-min: 44px;  /* min tap/click target */
@@ -33,9 +64,15 @@
   --font-input-min:  16px;  /* never below 16px: prevents iOS zoom on focus */
 
   /* radius */
-  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+  --radius-sm: 6px; --radius-md: 9px; --radius-lg: 14px; --radius-pill: 999px;
 
   /* shadow */
+  /* the dim layer behind a dialog */
+  --color-backdrop: rgba(0,0,0,.45);
   --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
   --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.18);
+
+  /* layers — design.md §10: one shared scale decides stacking */
+  --z-popover: 100; --z-dialog: 200; --z-toast: 300;
 }

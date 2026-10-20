@@ -168,8 +168,8 @@ Run in order:
    build's `head_sha` + `conclusion` via the Actions API, and confirm the
    intended files are in the published commit's tree with `git show <sha>:<path>`
    — but that proves the build, not what is served, so report the status as
-   **"Merged, live unverified"**, never "Deployed", and say why the page could
-   not be fetched.
+   **"Merged, live unverified"** above a WORKING line, never MERGED, and say
+   why the page could not be fetched.
    A clean/empty-cache render (headless Playwright, incognito, or a `?v=` bust)
    confirms the *new* deploy is served but does **not** reproduce a **returning
    visitor's** cached state — so it can't catch a stale-cache regression on its own

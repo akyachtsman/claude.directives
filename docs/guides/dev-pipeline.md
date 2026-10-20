@@ -93,12 +93,13 @@ every finding must quote the motivating code or be suppressed; split **AUTO-FIX
 vs ASK**.
 
 ### 5 · Build — `/design-intake` + `/sdd-loop` implement *(exists — gated)*
-Where the chosen look becomes a reusable contract and the pages get built.
-`/design-intake` (per `design.md`) imports a look — image / Stitch / Figma, or a
-first direction generated from a few taste questions — distills it to
-`styles/tokens.css` + `styles/components.css` + an approved reference page (the
-**look-gate**: sign off before building out, since the look is cheapest to fix on
-one page), and writes `specs/<slug>/design.md`. `/sdd-loop` then implements the
+Where the house style is adopted and the pages get built.
+`/design-intake` (per `design.md`) copies the house `styles/tokens.css` +
+`styles/components.css` unchanged and builds an approved reference page from
+them (the **look-gate**: sign off before building out, since a mismatch is
+cheapest to fix on one page), and writes `specs/<slug>/design.md`. Only where
+the owner has ruled a palette of the project's own does it import one (image /
+Stitch / Figma) into the tokens' values; the components never change. `/sdd-loop` then implements the
 remaining tasks against that contract so every page matches. Plain semantic
 HTML/CSS with no framework and no build, unless the project's `CLAUDE.md`
 records an approved CI build opt-in (`global.md` → *Hosting & Deployment*); then
@@ -171,7 +172,7 @@ Every command and skill carries:
 | GitHub ops | GitHub MCP |
 | Backend / data | Supabase MCP + `supabase` agent (per `data.md`) |
 | Browser UI testing | Playwright (kit in `templates/ui-tests/`) / `ui-tester` |
-| Design generation | `frontend-design` skill (primary) + Google Stitch remote MCP — per-project look; see `design.md` / `docs/guides/design-tooling.md` |
+| Design generation | `frontend-design` skill (primary) + Google Stitch remote MCP — screens in the house style (a palette of its own only by owner ruling); see `design.md` / `docs/guides/design-tooling.md` |
 
 ## Deliberate rejects (simplicity discipline)
 
@@ -236,8 +237,8 @@ committed.
 **Graceful when unconfigured:** once installed, `notify-task.js` checks its required SMTP config
 and, if any is missing, emits a GitHub Actions **notice** and exits 0 — a
 not-yet-configured repo surfaces a clear message instead of a cryptic
-scheduled-job crash. (Design is **per-project and generated** — see `design.md`
-and `docs/guides/design-tooling.md`; there is no shared company theme to inherit.)
+scheduled-job crash. (Design is the **house style** every project starts from —
+see `design.md` and `docs/guides/design-tooling.md`; a project's own palette only by owner ruling.)
 
 ## Implementation status
 
@@ -260,9 +261,15 @@ and `docs/guides/design-tooling.md`; there is no shared company theme to inherit
   job and its scripts are added only when a project has a scheduled task.
   Once installed, the email kit is active, with a config-guard notice in
   `notify-task.js`; its secrets are needed only if the project sends email. See "Complete standard scaffold" above.
-- **Design — per-project generative (done):** the fixed company design system
+- **Design — per-project generative (done; superseded 2026-10-19 by the entry below):** the fixed company design system
   (10 themes, parity/contrast/theme-contract CI, `design-system.html`) is retired;
   `design.md` is now a thin method, `/design-intake` establishes each project's
   own `styles/tokens.css` + `styles/components.css` via `frontend-design` + Stitch,
-  and the WCAG guardrail ships per-project. The method is `directives/design.md`;
-  the migration plan, now implemented, is in git history (removed in batch C, R12).
+  and the WCAG guardrail ships per-project. The migration plan, now implemented,
+  is in git history (removed in batch C, R12).
+- **Design — one house style (2026-10-19):** the owner made the RSO project's UI
+  standard the house style for every project. `directives/design.md` now carries
+  its words, icons, components and patterns, and `templates/styles/` carries its
+  palette and components; `/design-intake` adopts them and imports a palette
+  only by owner ruling. Where each project still breaks it: its own
+  `DESIGN-GAPS.md`.

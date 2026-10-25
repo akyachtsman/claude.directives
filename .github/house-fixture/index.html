@@ -98,6 +98,20 @@
       <div id="empty-host"></div>
     </section>
 
+    <section aria-labelledby="h-type">
+      <h2 id="h-type">Type-ahead list</h2>
+      <div class="field">
+        <label class="label" for="post-field">Post</label>
+        <textarea class="input" id="post-field" rows="2"></textarea>
+      </div>
+      <div class="list-pop" id="post-list"></div>
+      <div class="field">
+        <label class="label" for="who-field">Send to</label>
+        <input class="input" id="who-field" type="text">
+      </div>
+      <div class="list-pop" id="who-list"></div>
+    </section>
+
     <!-- A page's own dialog markup, opened through House.dialog.open. -->
     <div class="dialog-backdrop" id="form-dialog" hidden>
       <div class="dialog">
@@ -110,6 +124,7 @@
             <label class="label" for="detail-field">Details</label>
             <input class="input" id="detail-field" type="text">
           </div>
+          <div class="list-pop" id="detail-list"></div>
           <button type="button" class="btn" id="nested">Archive details</button>
         </div>
         <div class="dialog-footer">
@@ -185,6 +200,44 @@
         note('menu-confirm:' + await House.confirm({ title: 'Archive Walk-in fridge?', confirm: 'Archive', kind: 'danger' }));
       });
       $('tabs').addEventListener('house:select', e => note('tab:' + e.detail.tab.id));
+      // The page's half of the type-ahead list: it fills the list as the text
+      // changes; House.typeahead does the rest.
+      const fill = (list, head, rows) => list.replaceChildren(...(rows.length && head ? [Object.assign(document.createElement('div'), { className: 'list-head', textContent: head })] : []),
+        ...rows.map(r => {
+          const o = document.createElement('div');
+          o.className = 'list-option';
+          o.id = r.id;
+          o.append(r.name);
+          const h = document.createElement('span');
+          h.className = 'list-hint';
+          h.textContent = r.hint;
+          o.append(h);
+          if (r.disabled) o.setAttribute('aria-disabled', 'true');
+          return o;
+        }));
+      const COMMANDS = Array.from({ length: 30 }, (_, i) => ({ id: 'cmd-' + i, name: '/type' + i, hint: 'what it does' }));
+      const slash = (field, list) => {
+        House.typeahead($(field), $(list));
+        $(field).addEventListener('input', () => {
+          const m = /(?:^|\s)(\/\w*)$/.exec($(field).value);
+          fill($(list), 'Start with a type', m ? COMMANDS.filter(c => c.name.startsWith(m[1])) : []);
+        });
+        $(field).addEventListener('house:pick', e => {
+          note('pick:' + e.detail.option.id);
+          $(field).value = $(field).value.replace(/\/\w*$/, e.detail.option.firstChild.textContent + ' ');
+          fill($(list), '', []);
+        });
+      };
+      slash('post-field', 'post-list');
+      slash('detail-field', 'detail-list');
+      const PEOPLE = ['Ana', 'Arash', 'Avery', 'Ali', 'Amir'].map((name, i) => ({ id: 'who-' + i, name, hint: '', disabled: name === 'Avery' }));
+      House.typeahead($('who-field'), $('who-list'), { autoSelect: false });
+      $('who-field').addEventListener('input', () => {
+        const q = $('who-field').value.toLowerCase();
+        fill($('who-list'), '', q ? PEOPLE.filter(p => p.name.toLowerCase().startsWith(q)) : []);
+      });
+      $('who-field').addEventListener('house:pick', e => note('who:' + e.detail.option.id));
+      $('who-field').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.defaultPrevented) note('who-enter'); });
       window.restoreFails = false;
       window.delays = {};
       const items = Array.from({ length: 30 }, (_, i) => ({ id: i, name: i === 0 ? 'A very long archived name that must wrap inside the pop-over and never be cut short' : 'Archived thing ' + i }));

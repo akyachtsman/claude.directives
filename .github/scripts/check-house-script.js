@@ -658,6 +658,156 @@ async function archivedChecks(p, tag) {
   check((await log(page)).includes('tab:t-arch'), 'house:select reports the change');
 }
 
+/* ------------------------------------------------------ type-ahead list */
+{
+  const state = (field = 'post-field', list = 'post-list') => page.evaluate(([f, l]) => {
+    const fe = document.getElementById(f), le = document.getElementById(l);
+    const act = fe.getAttribute('aria-activedescendant');
+    const opt = act && document.getElementById(act);
+    const lr = le.getBoundingClientRect(), or = opt && opt.getBoundingClientRect();
+    return {
+      open: !le.hidden, expanded: fe.getAttribute('aria-expanded'), active: act, focus: document.activeElement.id,
+      selected: [...le.querySelectorAll('[aria-selected="true"]')].map(o => o.id),
+      options: le.querySelectorAll('[role="option"]').length,
+      inView: !!or && or.top >= lr.top - 1 && or.bottom <= lr.bottom + 1, value: fe.value,
+    };
+  }, [field, list]);
+  await clearLog(page);
+  const roles = await page.evaluate(() => {
+    const f = document.getElementById('post-field'), l = document.getElementById('post-list');
+    return { role: f.getAttribute('role'), auto: f.getAttribute('aria-autocomplete'), controls: f.getAttribute('aria-controls'),
+      expanded: f.getAttribute('aria-expanded'), list: l.getAttribute('role'), hidden: l.hidden };
+  });
+  check(roles.role === 'combobox' && roles.auto === 'list' && roles.controls === 'post-list' && roles.expanded === 'false' && roles.list === 'listbox' && roles.hidden,
+    'type-ahead: the field is a combobox controlling a closed listbox', JSON.stringify(roles));
+  await page.click('#post-field');
+  await page.keyboard.type('Hi /');
+  let s = await state();
+  check(s.open && s.expanded === 'true' && s.options === 30 && s.active === 'cmd-0' && s.selected.join() === 'cmd-0' && s.focus === 'post-field',
+    'type-ahead: typing opens the list under the field, its first choice active, focus kept in the field', JSON.stringify(s));
+  const under = await page.evaluate(() => {
+    const f = document.getElementById('post-field').getBoundingClientRect(), l = document.getElementById('post-list').getBoundingClientRect();
+    return { below: l.top >= f.bottom, minWidth: l.width >= Math.floor(f.width) - 1, lw: Math.round(l.width), fw: Math.round(f.width) };
+  });
+  check(under.below && under.minWidth, 'type-ahead: the list is placed under its field, at least as wide', JSON.stringify(under));
+  await page.keyboard.press('ArrowUp');
+  s = await state();
+  check(s.active === 'cmd-29' && s.selected.join() === 'cmd-29' && s.inView, '↑ from the first choice wraps to the last, scrolled into view inside the list', JSON.stringify(s));
+  await page.keyboard.press('ArrowDown');
+  s = await state();
+  check(s.active === 'cmd-0' && s.inView, '↓ from the last choice wraps to the first', JSON.stringify(s));
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  s = await state();
+  check((await log(page)).join() === 'pick:cmd-3' && !s.open && s.expanded === 'false' && !s.active && s.focus === 'post-field' && s.value === 'Hi /type3 ',
+    'Enter picks the active choice, closes the list and keeps focus in the field (no newline typed)', JSON.stringify(s));
+  await page.keyboard.type('/type1');
+  s = await state();
+  check(s.open && s.options === 11 && s.active === 'cmd-1', 'typing on refilters: the page\'s new rows reopen the list, the first active', JSON.stringify(s));
+  await page.keyboard.press('Escape');
+  s = await state();
+  check(!s.open && s.expanded === 'false' && s.focus === 'post-field', 'Esc closes the list and leaves focus in the field', JSON.stringify(s));
+  await page.keyboard.press('ArrowDown');
+  s = await state();
+  check(!s.open, 'in a textarea a bare ↓ with the list closed is the caret\'s, not the list\'s', JSON.stringify(s));
+  await page.keyboard.press('Alt+ArrowDown');
+  s = await state();
+  check(s.open && s.active === 'cmd-1', 'Alt+↓ reopens a closed list from a textarea', JSON.stringify(s));
+  await page.keyboard.type('2');
+  s = await state();
+  check(s.open && s.options === 1 && s.active === 'cmd-12', 'one match left: one choice, active', JSON.stringify(s));
+  await page.keyboard.type('z');
+  s = await state();
+  check(!s.open && s.expanded === 'false' && !s.active, 'no match: the page empties the list and it closes', JSON.stringify(s));
+  await page.keyboard.press('Enter');
+  s = await state();
+  check(s.value.endsWith('/type12z\n'), 'with the list closed Enter is the field\'s (a newline)', JSON.stringify(s.value));
+  await clearLog(page);
+  await page.keyboard.type('/type2');
+  await page.evaluate(() => { window.blurs = 0; document.getElementById('post-field').addEventListener('blur', () => window.blurs++); });
+  await page.click('#cmd-24');
+  s = await state();
+  const blurs = await page.evaluate(() => window.blurs);
+  check((await log(page)).join() === 'pick:cmd-24' && !s.open && s.focus === 'post-field' && blurs === 0,
+    'a press on a choice picks it and focus never leaves the field (the phone keyboard stays up)', JSON.stringify({ blurs, s }));
+  await page.keyboard.type('/');
+  await page.click('#h-type');
+  s = await state();
+  check(!s.open && s.expanded === 'false', 'a press outside closes the list', JSON.stringify(s));
+  await page.keyboard.press('Tab');
+  await page.fill('#post-field', '');
+  await page.click('#post-field');
+  await page.keyboard.type('/');
+  await page.click('#menu-btn');
+  s = await state();
+  check(!s.open && await page.evaluate(() => !document.getElementById('menu-1').hidden), 'one pop-over at a time: the ⋮ menu closes the list', JSON.stringify(s));
+  await page.keyboard.press('Escape');
+
+  // autoSelect: false — nothing active until ↓, so Enter reaches the field.
+  await clearLog(page);
+  await page.click('#who-field');
+  await page.keyboard.type('a');
+  s = await state('who-field', 'who-list');
+  check(s.open && s.options === 5 && !s.active && !s.selected.length, '{ autoSelect: false }: the list opens with no choice active', JSON.stringify(s));
+  await page.keyboard.press('Enter');
+  check((await log(page)).join() === 'who-enter', '{ autoSelect: false }: Enter with none active reaches the field', (await log(page)).join());
+  await clearLog(page);
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
+  s = await state('who-field', 'who-list');
+  check(s.active === 'who-3', '↓ skips an aria-disabled choice', JSON.stringify(s));
+  await page.click('#who-2', { force: true });
+  s = await state('who-field', 'who-list');
+  check(!(await log(page)).some(l => l.startsWith('who:')) && s.open, 'an aria-disabled choice cannot be picked', JSON.stringify({ log: await log(page), s }));
+  await page.click('#who-field');
+  await page.keyboard.press('Enter');
+  check((await log(page)).includes('who:who-3'), 'Enter picks the choice ↓ made active', (await log(page)).join());
+  await page.keyboard.press('Escape');
+  await page.fill('#who-field', '');
+  await page.keyboard.press('ArrowDown');
+  s = await state('who-field', 'who-list');
+  check(!s.open, '↓ in an empty field opens nothing', JSON.stringify(s));
+  await page.keyboard.type('a');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('ArrowDown');
+  s = await state('who-field', 'who-list');
+  check(s.open && s.active === 'who-0', 'in an <input> ↓ reopens a closed list at its first choice', JSON.stringify(s));
+  await page.keyboard.press('Escape');
+  await page.fill('#who-field', '');
+
+  // Rows already in the list when it binds are options with ids from the start.
+  const pre = await page.evaluate(() => {
+    const f = document.createElement('input'), l = document.createElement('div');
+    f.className = 'input'; f.id = 'pre-field'; l.className = 'list-pop';
+    for (const n of ['One', 'Two']) { const o = document.createElement('div'); o.className = 'list-option'; o.textContent = n; l.append(o); }
+    document.getElementById('h-type').after(f, l);
+    House.typeahead(f, l);
+    f.focus();
+    f.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    const act = f.getAttribute('aria-activedescendant');
+    const o = act && document.getElementById(act);
+    const out = { open: !l.hidden, act, role: o && o.getAttribute('role'), text: o && o.textContent, roles: [...l.children].map(c => c.getAttribute('role')).join() };
+    l.hidden = true; f.remove(); l.remove();
+    return out;
+  });
+  check(pre.open && pre.act && pre.role === 'option' && pre.text === 'One' && pre.roles === 'option,option',
+    'rows already in the list when it binds get option roles and ids, so ↓ names the active one', JSON.stringify(pre));
+
+  // Inside a dialog: Esc closes the list, not the dialog.
+  await clearLog(page);
+  await page.click('#open-form');
+  await page.fill('#detail-field', '');
+  await page.keyboard.type('/');
+  s = await state('detail-field', 'detail-list');
+  check(s.open && s.active === 'cmd-0', 'type-ahead in a dialog opens', JSON.stringify(s));
+  await page.keyboard.press('Escape');
+  s = await state('detail-field', 'detail-list');
+  const dlg = await page.evaluate(() => !document.getElementById('form-dialog').hidden);
+  check(!s.open && dlg && s.focus === 'detail-field', 'in a dialog Esc closes the list first, the dialog stays', JSON.stringify({ s, dlg }));
+  await page.fill('#detail-field', '');
+  await page.click('#form-dialog [data-dialog-close]');
+  await settle(page);
+}
+
 /* ------------------------------------------- inline message, empty state */
 {
   const m = await page.evaluate(() => {
@@ -750,7 +900,34 @@ async function archivedChecks(p, tag) {
     return { top: Math.round(r.top), bottom: Math.round(r.bottom), visible: fake.height };
   });
   check(kb.top >= 0 && kb.bottom <= kb.visible, 'phone: with the keyboard up, a pop-over fits the visual viewport', JSON.stringify(kb));
-  await phone.evaluate(() => { document.getElementById('menu-1').hidden = true; delete window.visualViewport; });
+  // The type-ahead list opened from a field with the keyboard up: the list
+  // fits what is left of the screen and scrolls inside it.
+  await phone.evaluate(() => {
+    document.getElementById('menu-1').hidden = true;
+    const f = document.getElementById('post-field');
+    f.scrollIntoView({ block: 'start' });
+    const r = f.getBoundingClientRect();
+    Object.defineProperty(window, 'visualViewport', { configurable: true,
+      value: { offsetLeft: 0, offsetTop: 0, width: document.documentElement.clientWidth, height: Math.round(r.bottom + 200), addEventListener() {} } });
+  });
+  await phone.click('#post-field');
+  await phone.keyboard.type('/');
+  const ta = await phone.evaluate(() => {
+    const l = document.getElementById('post-list'), r = l.getBoundingClientRect();
+    return { open: !l.hidden, top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right),
+      visible: window.visualViewport.height, vw: document.documentElement.clientWidth, scrolls: l.scrollHeight > l.clientHeight, pageY: Math.round(scrollY) };
+  });
+  check(ta.open && ta.top >= 0 && ta.bottom <= ta.visible && ta.left >= 0 && ta.right <= ta.vw && ta.scrolls,
+    'phone: with the keyboard up, the type-ahead list fits what is left of the screen and scrolls', JSON.stringify(ta));
+  await phone.keyboard.press('ArrowUp');
+  const last = await phone.evaluate(() => {
+    const l = document.getElementById('post-list'), o = document.getElementById('cmd-29');
+    const lr = l.getBoundingClientRect(), or = o.getBoundingClientRect();
+    return { selected: o.getAttribute('aria-selected'), inView: or.top >= lr.top - 1 && or.bottom <= lr.bottom + 1, pageY: Math.round(scrollY) };
+  });
+  check(last.selected === 'true' && last.inView && last.pageY === ta.pageY, 'phone: ↑ to the last choice scrolls the capped list, not the page', JSON.stringify(last));
+  await phone.keyboard.press('Escape');
+  await phone.evaluate(() => { delete window.visualViewport; });
   const wide = await phone.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   check(wide, 'phone: the page never scrolls sideways');
   await phone.close();

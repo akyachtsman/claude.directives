@@ -680,13 +680,17 @@
     const entry = entryOf(el);
     if (entry) finish(entry, value);
   }
+  // keyCode 229 is the composing key event Safari sends after compositionend.
+  const composing = e => e.isComposing || e.keyCode === 229;
   const setBusy = (el, on = true) => { const e = entryOf(el); if (e) e.busy = on; };
   const setDirty = (el, on = true) => { const e = entryOf(el); if (e) e.dirty = on; };
 
   // Esc: an open pop-over first (so a ⋮ inside a dialog closes alone), then the
   // top dialog. Tab: kept inside the top dialog. Window, capture phase, so a
   // native <dialog> never sees an Esc this has already answered.
+  // An Esc that cancels an IME composition is the field's, not the dialog's.
   window.addEventListener('keydown', e => {
+    if (composing(e)) return;
     if (e.key === 'Escape') {
       const pop = openPops[openPops.length - 1];
       if (pop) { e.preventDefault(); pop.hide(true); return; }
@@ -796,7 +800,8 @@
       closeDialog(s.box, input.value);
     };
     act.addEventListener('click', save);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+    // Not while an IME is composing: that Enter picks a candidate, not the name.
+    input.addEventListener('keydown', e => { if (e.key === 'Enter' && !composing(e)) { e.preventDefault(); save(); } });
     const done = openDialog(s.box, { opener });
     // Unsaved typing is a value that differs from the one it opened with.
     s.box.removeEventListener('input', entryOf(s.box).onInput);

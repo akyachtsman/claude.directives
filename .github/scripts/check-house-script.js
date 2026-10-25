@@ -161,6 +161,14 @@ const page = await open({ width: 1280, height: 800 });
   await clearLog(page);
   await page.click('#rename');
   check(await page.evaluate(() => document.activeElement.classList.contains('input')), 'ask() puts focus on its field');
+  // An IME's own Enter and Esc (picking or cancelling a candidate) are the field's.
+  const ime = await page.evaluate(() => {
+    const i = document.activeElement;
+    for (const key of ['Enter', 'Escape']) i.dispatchEvent(new KeyboardEvent('keydown', { key, isComposing: true, bubbles: true, cancelable: true }));
+    return !!document.querySelector('dialog.dialog[open]:not(#native-dialog) .input');
+  });
+  await settle(page);
+  check(ime && !(await log(page)).length, 'an Enter or Esc while an IME is composing neither saves nor closes');
   await page.keyboard.press('Escape');
   await settle(page);
   check((await log(page)).includes('rename:null'), 'Esc on an untouched field answers null');

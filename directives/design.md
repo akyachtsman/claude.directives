@@ -89,7 +89,7 @@ Two committed files are the single source of truth for a project's look:
   card with its opening title (`.card-open`) and corner actions, the Add card,
   a table that scrolls inside its own box (its sortable headers' `.th-sort` button, its rows' `.row-open` and `.row-actions`),
   field and label, checkbox, status pill and tag, empty state, dialog shell,
-  Archived (N) pop-over, the ⋮ menu, upload box, inline message, toast, segmented control,
+  Archived (N) pop-over, the ⋮ menu, the type-ahead list (`.list-pop`), upload box, inline message, toast, segmented control,
   section header, search box and toolbar (`.search`, `.toolbar`, `.toolbar-add`), and the
   page's content box (`.page`).
 
@@ -341,8 +341,8 @@ Every screen uses this for anything a person can put away and get back.
   do nothing.
 - **Returning:** closing puts the person back in the window that opened it, with
   keyboard focus on the button that opened it.
-- **Size:** `width: min(<cap>px, 94vw)` and `max-height: 88vh`, never a fixed
-  pixel width.
+- **Size:** `width: min(<cap>px, 94vw)` and `max-height: 88dvh` (after an
+  `88vh` fallback, → *iPhone and iPad*), never a fixed pixel width.
 - **Stacking:** one dialog at a time where possible; a dialog opened from another
   sits above it, and Esc closes only the top one. Stacking comes from one shared
   scale of layers, not per-dialog z-index values.
@@ -450,7 +450,13 @@ colour across the whole product, each from its own token pair in `tokens.css`:
   "Search *things*…" and an `aria-label`, and it filters as you type. It is the
   shared `.search` wrapper: the icon set's magnifying glass, then the `.input`.
 - Filters: dropdowns with a visible label, or chips for a small fixed set; a
-  **Clear filters** link (`.link-action`) while any is on.
+  **Clear filters** link (`.link-action`) while any is on. A dropdown is a native
+  `<select>`.
+- **Choices that filter as you type** (a /command, an @mention, an autocomplete)
+  are the house type-ahead list: the field is a `role="combobox"`, the list a
+  `.list-pop` (`role="listbox"`) of 44px `.list-option`s under it, a heading in
+  `.list-head`, each option's hint in `.list-hint`. It fits the screen and
+  scrolls by finger (→ *iPhone and iPad*).
 - Tables sort by their header (section 6); a card grid that sorts uses a "Sort
   by" dropdown.
 
@@ -509,6 +515,45 @@ Every UI works on desktop, tablet and phone. Design responsive-first:
 - Inputs: min **48px** high; input font **never below 16px** (prevents iOS zoom
   on focus).
 
+### iPhone and iPad (owner ruling, 2026-10-25)
+*"Make sure all the designs, all the projects are iPhone compatible."* Every
+browser on an iPhone or iPad is Safari's engine, WebKit, and a screen that works
+on a laptop can still fail there. The ruling came from a type-ahead list in a
+composer that was cut off and could not be scrolled by finger. So:
+- **Lists that pop up scroll by finger and fit the screen.** Every pop-over,
+  ⋮ menu, type-ahead list and dialog fits the part of the screen that is
+  showing, and a list longer than that scrolls inside itself by finger. The
+  house components do this: pop-overs are `position: fixed` (no card, sheet or
+  dialog with `overflow: hidden` can cut them off) and placed by the shared fit;
+  their lists and the dialog body scroll with `overscroll-behavior: contain`, so
+  a swipe at the end of a list never moves the page behind it.
+- **Picking from a fixed list is a native `<select>`**: on a phone it opens the
+  phone's own picker, which always fits and scrolls. Choices that filter as you
+  type (a /command, an @mention, an autocomplete) use the house type-ahead list
+  (`.list-pop`, section 16), never a list a screen builds itself.
+- **Heights tied to the screen use `dvh`**, after a `vh` fallback (`max-height:
+  88vh; max-height: 88dvh`). On an iPhone, `vh` measures the screen with the
+  address bar hidden, so a box sized in `vh` alone runs under the bar.
+- **The on-screen keyboard shrinks the screen; the layout does not move.** A
+  pop-over opened from a field is placed inside `window.visualViewport`, the
+  part not under the keyboard, and is placed again when it changes.
+- **Never lock scrolling by cancelling `touchmove`**, and never set
+  `touch-action: none` on anything that scrolls: both stop a finger while a
+  mouse wheel still works, so the bug passes on a laptop. The house stops the
+  page scrolling behind an open dialog with CSS (`overflow: hidden` on the page
+  while one is open).
+- **Clear of the notch and the home bar.** Anything fixed to an edge (a toast,
+  a bottom bar) adds `env(safe-area-inset-*)`, which the house toast and
+  `.page` already do; a page opts in to the full screen with `viewport-fit=cover`.
+- **Never stop zooming.** The viewport meta is `width=device-width,
+  initial-scale=1` (plus `viewport-fit=cover` where wanted), never
+  `maximum-scale=1` or `user-scalable=no`; the 16px input font is what stops the
+  zoom on focus.
+- **Proof:** the UI kit's `iphone` project runs every scenario in WebKit at an
+  iPhone's size, and its DISMISS scenario checks every overlay it opens fits and
+  scrolls (`test.md` → *UI coverage gates*). An overlay opened by typing gets
+  the same check from the project's own scenario.
+
 ## Accessibility
 Non-negotiable, whatever the palette:
 - **WCAG AA contrast:** normal text ≥ 4.5:1, large text and icons ≥ 3.0:1. Large
@@ -537,8 +582,10 @@ list, from reading `components.css`:
   message;
 - `--color-on-danger` on `--color-danger` and `--color-danger-hover`: Delete
   permanently and the error toast;
-- `--color-text-primary` on `--color-accent-light`: a menu item's hover and the
-  upload box while a file is over it;
+- `--color-text-primary` on `--color-accent-light`: a menu item's hover, a
+  type-ahead option's hover or selection, and the upload box while a file is over it;
+- `--color-text-secondary` on `--color-accent-light`: a type-ahead option's hint
+  while the option is hovered or selected (4.87:1 in the house palette);
 - `--color-accent` on `--color-surface` and `--color-bg` below 18.66px bold or
   24px: links, Back, the Add card and a sort header. The guardrail holds
   accent/surface only to 3.0 and does not measure accent/bg;

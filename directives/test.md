@@ -449,6 +449,17 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
   overlay: open it, then dismiss via its close/X/Cancel control AND Escape AND
   the backdrop (where one exists), asserting the container is actually hidden
   after each (DISMISS).
+- **Overlays fit and scroll, on an iPhone too** (owner ruling, 2026-10-25;
+  `design.md` → *iPhone and iPad*). Before its dismissers run, every overlay or
+  pop-over a control opened (a dialog, the ⋮ menu, Archived (N), a type-ahead
+  list, any ARIA menu or listbox) must fit the visible screen and scroll by
+  finger: nothing cut off by `overflow: hidden`, nothing pinned past the screen
+  edge, no `touch-action` or `touchmove` lock, and a scroll that actually moves.
+  DISMISS runs `fitProblems()` (`tests/lib/fit.js`) on each; an overlay opened
+  by TYPING (a /command list, an @mention) is out of its reach, so the project's
+  own scenario opens it and asserts `fitProblems(locator)` is empty. Keep the
+  kit's `iphone` project: it is the only one in WebKit, the engine every iPhone
+  browser uses, and a Chromium phone profile does not stand in for it.
 - **Coverage = controls clicked, not screens visited.** Every interactive control
   is exercised at least once (S3). A screen-level smoke test does not count as
   coverage for that screen's controls.

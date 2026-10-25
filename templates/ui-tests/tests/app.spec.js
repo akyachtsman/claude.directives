@@ -27,6 +27,7 @@ import {
   backControlAll,
   expect,
 } from './lib/fixtures.js';
+import { fitProblems } from './lib/fit.js';
 import {
   AUTH_CREDENTIAL,
   AUTH_EMAIL,
@@ -1045,6 +1046,10 @@ test('ENTRY: every deployed entry point renders without JS errors', async ({ pag
 // container must actually hide after (a) its close/X/Cancel control and
 // (b) Escape — re-opened between checks — and (c) a backdrop click, asserted
 // only when a backdrop element exists (some designs omit it deliberately).
+// FIT rides along, because this is where overlays get opened: before its
+// dismissers run, each overlay or pop-over a trigger opened must fit the visible
+// screen and scroll by finger (fitProblems in lib/fit.js; design.md →
+// iPhone and iPad). It counts in every project; the `iphone` one is WebKit.
 // ─────────────────────────────────────────────────────────────────────────────
 test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page, renderWitness }) => {
   renderWitness();
@@ -1085,11 +1090,15 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
   //     initial call, gate re-presenting         ~193s   split-step (#310)
   //                                              ~234s   at N=8
   //   + 2 nav resets    x ~234s                  = ~468s
-  //   + 27 overlay-path x ~13.8s                 = ~373s
+  //   + 27 overlay-path x ~15.8s                 = ~427s
   //     ------------------------------------------------
-  //     worst assumed mix                        ~1075s
+  //     worst assumed mix                        ~1129s
   //
-  //     initial ~138s + 2 resets x ~60s + 27 x ~13.8s = ~631s  (auth persists)
+  //     initial ~138s + 2 resets x ~60s + 27 x ~15.8s = ~685s  (auth persists)
+  //
+  // The overlay path's ~15.8s is the ~13.8s above plus FIT_MS (2s), the cap on
+  // the one fit check each trigger runs (lib/fit.js). That is its cap; it
+  // usually takes a few frames.
   //
   // ~925s exceeded the previous 900_000, and 1_200_000 covered it.
   // The identifier-first step (#310) then put the N=8 split-step mix at ~1309s
@@ -1133,13 +1142,20 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
   // as a NEW node on every click still reads it as owned.
   const PREOPEN = 'data-uitests-preopen';
   const OWNED = `:is(${OVERLAY}):not([${PREOPEN}])`;
+  // FIT also checks the pop-overs a trigger opens that are not dialogs (the
+  // house ⋮ menu, Archived (N), a type-ahead list, any ARIA menu or listbox).
+  // They are marked with the overlays, so one standing on the page before the
+  // click is not credited to the trigger either.
+  const POPS = '.menu-pop, .archived-pop, .list-pop, [role="menu"], [role="listbox"]';
+  const FITTED = `:is(${OVERLAY}, ${POPS}):not([${PREOPEN}])`;
+  const fitSeen = new Set();
   const markOpenOverlays = async () => {
     // Through locators on both sides, so an overlay inside an open shadow root
     // is marked and unmarked like any other.
     await page.locator(`[${PREOPEN}]`)
       .evaluateAll((els, attr) => { for (const el of els) el.removeAttribute(attr); }, PREOPEN)
       .catch(() => {});
-    await page.locator(OVERLAY).locator('visible=true')
+    await page.locator(`${OVERLAY}, ${POPS}`).locator('visible=true')
       .evaluateAll((els, attr) => { for (const el of els) el.setAttribute(attr, ''); }, PREOPEN)
       .catch(() => {});
   };
@@ -1200,6 +1216,13 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
       }
       await gotoAndAuth(page);
       continue;
+    }
+    // FIT, before any dismisser runs, on what this trigger opened. A problem
+    // already reported for an earlier trigger is not reported again.
+    for (const problem of await fitProblems(page.locator(FITTED))) {
+      if (fitSeen.has(problem)) continue;
+      fitSeen.add(problem);
+      findings.push({ trigger: name, dismisser: 'fit', problem });
     }
     if (!(await overlayVisible())) continue;  // opens no overlay — S3's territory
 

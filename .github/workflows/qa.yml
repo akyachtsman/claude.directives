@@ -409,11 +409,21 @@ jobs:
       - name: Install Playwright (npm)
         run: npm install playwright@1.62.1
 
-      - name: Install Chromium system deps (apt, never cached)
-        run: npx playwright install-deps chromium
+      # WebKit too, for check-fit-cases.js below: the house pop-overs and the
+      # kit's fit check are proven in the engine every iPhone browser uses
+      # (design.md -> iPhone and iPad, 2026-10-25).
+      - name: Install Chromium and WebKit system deps (apt, never cached)
+        run: npx playwright install-deps chromium webkit
 
-      - name: Install Chromium browser (cached above when warm)
-        run: npx playwright install chromium
+      - name: Install Chromium and WebKit browsers (cached above when warm)
+        run: npx playwright install chromium webkit
+
+      # The kit's fit check (templates/ui-tests/tests/lib/fit.js) against the
+      # shipped tokens.css + components.css at phone size, in Chromium and
+      # WebKit: the house pop-overs and dialog fit and scroll, and each way an
+      # overlay fails on an iPhone is caught.
+      - name: Overlay fit cases (Chromium + WebKit)
+        run: node .github/scripts/check-fit-cases.js
 
       # Keep in sync with CLAUDE.md "Local gate": the maps' HTML is validated
       # here on every run (locally it's only needed when a map changed).

@@ -23,7 +23,15 @@
 # (#375); anything else is taken literally and lands on the callers' "named but
 # missing" report, never silently. With no UI_TESTS_DIR set, the default
 # `.github/scripts/ui-tests` counts when it exists.
+#
+# A CALLER of the shared workflows (#460 step 4) has no UI_TESTS_DIR: it passes
+# the kit as the `tests-dir:` input, which is read the same way, from a
+# workflow that calls one (refresh-lib.sh -> refresh_caller_of) and only as a
+# literal: `tests-dir: ${{ env.UI_TESTS_DIR }}` in a full copy is an
+# expression, not a path (claude.prop pilot, 2026-10-25).
 set -u
+# shellcheck source=refresh-lib.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/refresh-lib.sh" 2>/dev/null || refresh_caller_of() { return 1; }
 # canon <path>: the lexical normal form above; an empty value stays empty.
 canon() {
   local seg out= lead=
@@ -45,8 +53,13 @@ canon() {
   set +f
   printf '%s\n' "$lead${out:-.}"
 }
-dirs=$(grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null \
-  | sed -E -e 's/^[[:space:]]*UI_TESTS_DIR:[[:space:]]*//' \
+callers=()
+for w in .github/workflows/*.yml .github/workflows/*.yaml; do
+  refresh_caller_of "$w" >/dev/null && callers+=("$w")
+done
+dirs=$( { grep -hE '^[[:space:]]*UI_TESTS_DIR:' .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
+          [ "${#callers[@]}" -eq 0 ] || grep -hE '^[[:space:]]*tests-dir:' "${callers[@]}" 2>/dev/null | grep -vF '${{'; } \
+  | sed -E -e 's/^[[:space:]]*(UI_TESTS_DIR|tests-dir):[[:space:]]*//' \
            -e '/^"/{s/^"((\\.|[^"\\])*)".*$/\1/;s/\\(["\\])/\1/g;b' -e '}' \
            -e '/^\x27/{s/^\x27((\x27\x27|[^\x27])*)\x27.*$/\1/;s/\x27\x27/\x27/g;b' -e '}' \
            -e 's/[[:space:]]+#.*$//' -e 's/[[:space:]]+$//' | while IFS= read -r d; do canon "$d"; done | sort -u; true)

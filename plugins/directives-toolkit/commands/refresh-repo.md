@@ -119,6 +119,9 @@ Over git transport, at the pinned head. Per file it prints one of:
 - **`MODE`** — the executable bit differs from the template's git mode
   (`100755` / `100644`). Informational, never `DRIFT` on its own; restore the
   bit unless the project records why it differs.
+- **`CALLER`** — a workflow that calls one of this repo's shared workflows
+  instead of carrying the template: never merge or overwrite it. *A project on
+  callers* under Phase 2 says what the refresh does instead.
 - `NO-TEMPLATE`, `CANNOT-VERIFY`, `RETIRED` — below — then the house-style
   lines (*The house style* below) and one `SUMMARY` line.
 - **`RE-RECORD`** — after `SUMMARY`, only when there are any: the count and
@@ -378,8 +381,8 @@ project** — map each to its installed location before dispositioning:
 
 | Upstream path | Installed locally at | Refresh policy |
 |---|---|---|
-| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `CUSTOM` or `DRIFT`**. Batch overwrite covers only files that already match the template (no-ops), `STALE` files (unchanged since the stamp) and files absent locally. ⚠️ Some files carry their own rules — `pages-deploy.yml`, `qa-live.yml` on Actions-source, and the retired workflows: read *Workflow refresh rules* below the table before installing any workflow |
-| `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
+| `templates/workflows/<wf>.yml` | `.github/workflows/<wf>.yml` | Verbatim drop-ins — but **never batch-overwrite a file Phase 1.5 flagged `CUSTOM`, `DRIFT` or `CALLER`**. Batch overwrite covers only files that already match the template (no-ops), `STALE` files (unchanged since the stamp) and files absent locally. ⚠️ Some files carry their own rules — `pages-deploy.yml`, `qa-live.yml` on Actions-source, and the retired workflows: read *Workflow refresh rules* below the table before installing any workflow |
+| `templates/actions/<a>/**` | `.github/actions/<a>/**` | Verbatim drop-ins — the qa workflows reference them as `./.github/actions/*`; install them WITH any qa workflow update (missing composites fail every run at step resolution). Not on a caller: see *A project on callers* below the table. ⚠️ **The whole directory, not just `action.yml`.** A composite can run a SIBLING by path — `ui-suite` opens with `python3 "$GITHUB_ACTION_PATH/validate-report-path.py"` — and the referenced-script derivation below covers `.github/scripts/*`, NOT an action-path sibling, so a YAML-only install leaves the caller naming a file that was never copied and every UI job dies at that step. Same failure as a missing composite, one level in: take every file under `templates/actions/<a>/`, including paths absent locally |
 | `templates/ui-tests/**` | `.github/scripts/ui-tests/**` | Per-project customized — per-file diffs, apply only approved hunks; never touch `package-lock.json`. **This row outranks any message telling you to take the kit wholesale**, including one from an upstream session: a kit file a project extended is invisible to whoever wrote the instruction, and diffing first is what preserves a locally-defined guard the template lacks. **Before diffing, read *Kit defects* below the table** — on every refresh of a project with this path, whether or not the delta touches the kit |
 | `templates/scripts/*` | `.github/scripts/*` | Phase 1.5 has already classified each installed one: take a `STALE` script; diff and confirm a `CUSTOM` or `DRIFT` one — **except any script a workflow, composite action, or exported directive you are installing REFERENCES BY PATH**, which installs WITH it **including when the local path does not yet exist**, exempt from the skip rule below. Same failure as a missing composite: the caller names it by path, so an absent one fails every run at step resolution — a refresh that takes the caller and skips the script it calls installs a red build. ⚠️ **DERIVE this set, do not recall it** — see *Deriving the referenced-script set* below the table. The command does not live in this cell, because a shell pipeline cannot be written inside a markdown table row without escaping the `|`, and an escaped pipe silently changes what it matches. Never hand-list the set here |
 | `templates/claude-settings.json` | `.claude/settings.json` | Plugin-enable block + the `SessionStart` registration — verbatim overwrite OK unless the project added its own keys; then merge, through *Settings writes* (Phase 1.5). Install it WITH the hook row below, never alone |
@@ -406,6 +409,38 @@ skipping it ships a broken reference.
   marker says the files are the house's, so an absent one is installed, never
   skipped. An unmarked project has no such record, and its row is skipped
   whatever exists.
+
+### A project on callers (#460 step 4)
+
+A workflow that calls a shared workflow
+(`uses: akyachtsman/claude.directives/.github/workflows/shared-<name>.yml@<ref>`)
+replaces the template's full copy. Phase 1.5 reports it as `CALLER`. The pilot,
+claude.prop #134, deleted the `secret-scan` and `ui-suite` composites,
+`check-ui-viewports.js` and `package-lock.json` when it moved (2026-10-25). On
+such a project:
+- **Keep each caller.** Never merge the template into it or overwrite it.
+  Record it once in `refresh_kept` with its reason (the pilot's is "pilot of
+  #460 step 4"). Phase 3 compares it whenever the delta lists its template, and
+  the record keeps it until the template or the caller changes.
+- **Do not reinstall what the shared workflow reads from this repo.** The
+  composites and the scripts only the template or a composite names come from
+  claude.directives at the called commit. `refresh-callers.sh` leaves a caller
+  out of the caller set, so *Deriving the referenced-script set* never offers
+  them back. Phase 3 reads each workflow's own text, and a caller names none of
+  them, so their absence never refuses the stamp. A composite in the delta reads
+  `absent locally, not compared`, and the stamp prints one `caller:` line for
+  each caller.
+- **What stays a copy.** The UI-test kit, `CLAUDE.md`, `.claude/settings.json`,
+  the hook and `styles/` stay copies (#460, the owner's target shape). So does
+  every script a directive or the caller itself names:
+  - `browser-ladder.js` and `package.json`, because `test.md` names them for
+    local runs. No workflow reads them, so they still install and compare.
+  - A project's own `check-contrast.js` (and its `package.json`), when the
+    caller runs it, either in a sibling job or through `contrast-script`.
+  - A caller's `tests-dir:` input names its kit, just as `UI_TESTS_DIR` does
+    in a full copy (`kit-dirs.sh`).
+- **Never move a project onto callers.** A refresh only keeps callers a project
+  already has. Moving to callers is the owner's choice for each project (#460).
 
 ### Workflow refresh rules
 

@@ -9,7 +9,14 @@
 # runs as written instead of carrying a placeholder to fill in by hand:
 #   - every .github/workflows/*.yml and .github/actions/*/action.yml installed
 #     here whose template upstream ships at the pinned head (a project's own
-#     workflow has none, and fetching it would fail the derivation);
+#     workflow has none, and fetching it would fail the derivation) -- except a
+#     workflow that CALLS a shared workflow (refresh-lib.sh ->
+#     refresh_caller_of, #460 step 4). The refresh keeps a caller and installs
+#     nothing over it, and the composites and scripts its template reaches
+#     come from claude.directives at run time, so deriving them from the
+#     template would offer back exactly the files the project deleted when it
+#     moved to callers (claude.prop pilot, 2026-10-25). Each one skipped is
+#     named on stderr;
 #   - every composite those reach by `uses: ./.github/actions/<a>`, read from
 #     the UPSTREAM text being installed, transitively -- a new `uses:` line is
 #     exactly what the installed copy does not yet show;
@@ -47,6 +54,10 @@ $1"; }
 queue=
 for w in .github/workflows/*.yml; do
   [ -f "$w" ] || continue
+  if called=$(refresh_caller_of "$w"); then
+    echo "refresh-callers: $w calls $called -- kept, not installed; its template's composites and scripts are not derived" >&2
+    continue
+  fi
   t="templates/workflows/${w#.github/workflows/}"
   ships "$t" && add "$t" && queue="$queue $t"
 done

@@ -454,7 +454,9 @@ jobs:
   # plumbing (the shared files fetched at the called commit, the composites
   # resolving from there, the staged scripts, the local server, the gates) is
   # red here before any project can pick it up. The contrast step reads the
-  # starter tokens projects copy. What the fixture covers:
+  # starter tokens projects copy, through the `contrast-script` input (a
+  # project's own copy, here the shipped one), so the branch a project with its
+  # own pairs takes is the one proved. What the fixture covers:
   # docs/internal/shared-workflows.md.
   shared-qa-selftest:
     name: Shared QA self-test
@@ -463,6 +465,7 @@ jobs:
       tests-dir: .github/shared-qa-fixture/ui-tests
       site-dir: .github/shared-qa-fixture/site
       contrast-args: --tokens templates/styles/tokens.css
+      contrast-script: templates/scripts/check-contrast.js
 
   # The same guard for the callable cron workflow: a fixture task that sends
   # nothing, run the way a project's scheduled caller would run its own.

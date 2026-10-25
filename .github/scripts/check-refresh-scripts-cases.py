@@ -30,7 +30,24 @@ MUTANTS. Each script is swapped by its own variable, copied into a temp
 directory beside the real siblings it sources or runs (the installed layout):
 REFRESH_STAMP_BIN, REFRESH_DELTA_BIN, REFRESH_DRIFT_BIN, REFRESH_MERGE_BIN,
 REFRESH_CALLERS_BIN, REFRESH_BROKEN_REFS_BIN, REFRESH_HOOK_INSTALL_BIN,
-KIT_DEFECTS_BIN, REFRESH_VARS_BIN, REFRESH_LIB_BIN, HOUSE_STYLE_INVENTORY_BIN.
+KIT_DEFECTS_BIN, REFRESH_VARS_BIN, REFRESH_LIB_BIN, HOUSE_STYLE_INVENTORY_BIN,
+KIT_DIRS_BIN.
+
+A PROJECT ON CALLERS (#460 step 4; claude.prop pilot, 2026-10-25). A workflow
+that calls a shared workflow (`uses: akyachtsman/claude.directives/.github/
+workflows/shared-<name>.yml@<ref>`) is reported as CALLER by drift, is left out
+of refresh-callers.sh's set (so the composites and scripts its template
+reaches are never offered back), and names its kit in `tests-dir:`, which
+kit-dirs.sh reads. The stamp prints one `caller:` line each and, as before,
+never requires the deleted composites or check-ui-viewports.js. MEASURED
+against the scripts at f667e89, each swapped in alone: REFRESH_DRIFT_BIN -> the
+CALLER and SUMMARY cases; REFRESH_CALLERS_BIN -> the caller-set case;
+KIT_DIRS_BIN -> the tests-dir case; REFRESH_STAMP_BIN -> the `caller:` line
+case only. The stamp's "nothing deleted is required" cases hold against the
+old stamp too: it already read each workflow's own text, so they pin that
+behaviour rather than prove a fix. REFRESH_LIB_BIN (no refresh_caller_of) ->
+7: every one of the above, plus the older caller-set case, whose output then
+carries the missing function's error.
 
 THE HOUSE STYLE (#470, 2026-10-25). A project marked as on the house style
 (.claude/directive-sync.json -> house_style: true) has styles/components.css
@@ -220,6 +237,7 @@ BINS = {
     "refresh-vars.sh": "REFRESH_VARS_BIN",
     "refresh-lib.sh": "REFRESH_LIB_BIN",
     "house-style-inventory.sh": "HOUSE_STYLE_INVENTORY_BIN",
+    "kit-dirs.sh": "KIT_DIRS_BIN",
 }
 
 CASES = Cases("check-refresh-scripts-cases")
@@ -1325,6 +1343,63 @@ merged = (r / "styles/tokens.css").read_text(encoding="utf-8")
 expect("house merge: tokens.css merges without conflict", res, 0, "MERGED:")
 check("house merge: the new name arrives and the ruled value stays",
       "--color-new: #8C887F;" in merged and "#0E7C6D" in merged and "#106AD0" not in merged, merged)
+
+# ---- a project on callers (#460 step 4) ---------------------------------------
+CALLER_QA = f"""name: QA
+on: [pull_request]
+jobs:
+  project-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - run: node .github/scripts/check-contrast.js
+  qa:
+    needs: [project-checks]
+    uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@{H}
+    with:
+      tests-dir: .github/scripts/ui-tests
+"""
+ON_CALLERS = {".github/workflows/qa.yml": CALLER_QA,
+              ".github/actions/ui-suite/action.yml": None,
+              ".github/actions/ui-suite/validate-report-path.py": None,
+              ".github/scripts/check-ui-viewports.js": None}
+r = project("callers-drift", changes=ON_CALLERS)
+res = run(r, "refresh-drift.sh", env={"REFRESH_PIN": H})
+expect("callers drift: a workflow calling a shared workflow is a CALLER, never CUSTOM",
+       res, 0, f"CALLER: .github/workflows/qa.yml — calls shared-qa.yml@{H}",
+       absent="CUSTOM: .github/workflows/qa.yml")
+expect("callers drift: the SUMMARY counts it", res, 0, "1 CALLER")
+
+r = project("callers-set", changes=ON_CALLERS)
+rc, out = run(r, "refresh-callers.sh", env={"REFRESH_PIN": H})
+got = "\n".join(ln for ln in out.splitlines() if not ln.startswith("refresh-callers:"))
+want = "\n".join(sorted(["templates/workflows/sample-wf.yml",
+                         *[f"directives/{d}.md" for d in ("global", "git", "design", "test", "data")]]))
+check("callers set: a caller and the composite only its template reaches are left out",
+      rc == 0 and got == want, f"exit {rc}; got:\n{out}\nwant:\n{want}")
+check("callers set: the caller left out is named on stderr",
+      "refresh-callers: .github/workflows/qa.yml calls shared-qa.yml@" in out, out)
+
+r = project("callers-stamp", changes=ON_CALLERS)
+run(r, "refresh-delta.sh")
+rc, out = res = run(r, "refresh-stamp.sh")
+expect("callers stamp: each caller is said once", res, 1,
+       "caller: .github/workflows/qa.yml calls shared-qa.yml@")
+check("callers stamp: the deleted composite and check-ui-viewports.js are never required",
+      "check-ui-viewports.js" not in out and "UNAPPLIED: .github/actions/" not in out, out)
+m = re.search(r"UNAPPLIED: \.github/workflows/qa\.yml differs .* \(blob ([0-9a-f]{40})\) \(local ([0-9a-f]{40})\)", out)
+check("callers stamp: the caller is compared when the delta lists its template", bool(m), out)
+if m:
+    set_kept(r, ".github/workflows/qa.yml",
+             {"blob": m.group(1), "local": m.group(2), "reason": "pilot of #460 step 4"})
+    expect("callers stamp: with the caller recorded in refresh_kept, the stamp goes through",
+           run(r, "refresh-stamp.sh"), 0, f"stamped: {H}", absent="check-ui-viewports")
+
+r = project("callers-kit", changes={**ON_CALLERS,
+                                    ".github/workflows/qa.yml": CALLER_QA.replace(".github/scripts/ui-tests", "e2e"),
+                                    ".github/workflows/sample-wf.yml": "name: S\n    with:\n      tests-dir: ${{ env.UI_TESTS_DIR }}\n"})
+rc, out = run(r, "kit-dirs.sh")
+check("kit-dirs: a caller's tests-dir names its kit; a full copy's expression is not a path",
+      rc == 0 and out.strip() == "e2e", f"exit {rc}; got: {out!r}")
 
 shutil.rmtree(WORK, ignore_errors=True)
 sys.exit(CASES.finish(f"{CASES.passed} refresh-script behaviours hold against a fixture upstream."))

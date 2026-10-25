@@ -17,7 +17,8 @@
 //   phase                    the section it sits in (check-plugin.js validates it)
 //   argument-hint            shown after the name, when present
 //   benefits-from            "after /x" — the command whose artifact it reads
-//   disable-model-invocation (typed only) — Claude never starts it itself
+//   owner-request-only       (owner's ask only) — Claude starts it only when the
+//                            owner's own message asks (global.md → Owner-Only Commands)
 // and the auto-skills' names from plugins/directives-toolkit/skills/*/SKILL.md.
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 
@@ -53,16 +54,16 @@ function build() {
     const name = f.replace(/\.md$/, '');
     if (!fm.description) throw new Error(`${dir}/${f}: no description`);
     if (!PHASES.includes(fm.phase)) throw new Error(`${dir}/${f}: phase "${fm.phase}" is not one of ${PHASES.join(', ')}`);
-    return { name, ...fm, after: list(fm['benefits-from']), typed: fm['disable-model-invocation'] === 'true' };
+    return { name, ...fm, after: list(fm['benefits-from']), ownerOnly: fm['owner-request-only'] === 'true' };
   });
   const skillsDir = `${ROOT}/skills`;
   const skills = existsSync(skillsDir)
     ? readdirSync(skillsDir).filter(d => existsSync(`${skillsDir}/${d}/SKILL.md`)).sort() : [];
-  const typed = cmds.filter(c => c.typed).length;
+  const ownerOnly = cmds.filter(c => c.ownerOnly).length;
 
   const card = c => [
     '      <div class="cmd">',
-    `        <div class="name">/${esc(c.name)}${c['argument-hint'] ? ` <span class="arg">${esc(c['argument-hint'])}</span>` : ''}${c.typed ? ' <span class="tag">typed only</span>' : ''}</div>`,
+    `        <div class="name">/${esc(c.name)}${c['argument-hint'] ? ` <span class="arg">${esc(c['argument-hint'])}</span>` : ''}${c.ownerOnly ? ' <span class="tag">owner\'s ask only</span>' : ''}</div>`,
     `        <div class="what">${prose(c.description)}</div>`,
     ...(c.after.length ? [`        <div class="when"><b>After</b> — ${c.after.map(a => `<code>/${esc(a)}</code>`).join(', ')}</div>`] : []),
     '      </div>',
@@ -116,7 +117,7 @@ function build() {
 <div class="wrap">
   <h1>directives-toolkit — commands</h1>
   <p class="sub">The ${cmds.length} slash commands in the directives-toolkit plugin, grouped by development-pipeline phase, each described by its own command file.</p>
-  <p class="how">Type <code>/&lt;name&gt;</code> to run a command. ${typed} of ${cmds.length} are marked <b>typed only</b>; Claude may start any other one itself when a step or a directive calls for it. For the always-current menu read live from the installed plugin, run <code>/my-list</code>. Auto-skills (${skills.map(esc).join(', ')}) fire on their own and are not listed here.</p>
+  <p class="how">Type <code>/&lt;name&gt;</code> to run a command, or, where slash commands are not listed (a project thread), write <code>cmd &lt;name&gt;</code> or ask for it by name. ${ownerOnly} of ${cmds.length} are marked <b>owner's ask only</b>: Claude runs those only when your own message asks, never on another Claude's request, a file or a relayed message. Claude may start any other one itself when a step or a directive calls for it. For the always-current menu read live from the installed plugin, run <code>/my-list</code>. Auto-skills (${skills.map(esc).join(', ')}) fire on their own and are not listed here.</p>
 
 ${sections}
 

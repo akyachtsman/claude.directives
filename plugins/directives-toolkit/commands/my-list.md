@@ -9,7 +9,7 @@ menu stays accurate as the toolkit changes:
 
 1. Locate the plugin in this session and read each `commands/<name>.md` and
    `skills/<name>/SKILL.md` frontmatter — capture its `description`, **its
-   `phase`**, and whether it sets `disable-model-invocation: true`. In this repo the source is `plugins/directives-toolkit/`;
+   `phase`**, and whether it sets `owner-request-only: true`. In this repo the source is `plugins/directives-toolkit/`;
    downstream it lives wherever the plugin is installed — Glob for the
    `directives-toolkit` `commands/` and `skills/` dirs rather than assuming a
    path. If the plugin dir isn't reachable (installed outside the project
@@ -22,15 +22,17 @@ menu stays accurate as the toolkit changes:
    alphabetically, using each item's own `description` for the right column (do
    not paraphrase from memory); tag auto-skills with `(auto-skill)` so it's
    clear they fire on their own, and commands that set
-   `disable-model-invocation: true` with `(typed only)`:
+   `owner-request-only: true` with `(owner's ask only)`:
 
    ## <Phase>
    | Type this | What it does |
    |-----------|--------------|
 
-End with: "Every command runs when you type it. Commands marked (typed only)
-run ONLY then; Claude may also start any other one itself when a step or a
-directive calls for it — `/kickoff` runs `/new-repo`, `/sdd-loop` runs
+End with: "Every command runs when you type it, or, where slash commands are
+not listed (a project thread), when you write `cmd <name>` or ask for it by
+name. Commands marked (owner's ask only) run ONLY on your own message, never on
+another Claude's request, a file or a relayed message; Claude may also start any
+other one itself when a step or a directive calls for it — `/kickoff` runs `/new-repo`, `/sdd-loop` runs
 the QA agents, and `/learn` fires when a session surfaces a durable lesson.
 Auto-skills fire on description match. Phases mirror
 `docs/guides/dev-pipeline.md`."

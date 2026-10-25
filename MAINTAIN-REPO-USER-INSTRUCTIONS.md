@@ -23,7 +23,7 @@ travels determines what YOU must do when it changes:
 |---|---|---|---|---|
 | `directives/*.md` | **Inherited** — fetched live by raw URL | Nothing | Next session start in each repo; mid-session via `/refresh-repo` (Phase 0 re-reads the rules) | `/env-chk` directive-freshness check |
 | `plugins/`, `.claude-plugin/marketplace.json`, `scripts/install-toolkit.sh` | **Installed** — `SessionStart` hook per session; env setup script for the first install | Nothing, for a project carrying `.claude/hooks/session-start.sh`. For a legacy project without it: **edit and save that environment's setup script** — a real change such as a `#` comment line; an unchanged save rebuilds nothing (see Environment Maintenance), or install the hook once via `/refresh-repo` so the step stops recurring | With the hook: the next **new** session. Without it: after that environment's cache rebuilds. Never mid-session either way | `/env-chk` toolkit-attached check |
-| `templates/**` | **Copied** — snapshotted into projects at bootstrap | Run `/refresh-repo` in a session of each project — send it yourself, as the slash command (it is typed only: no agent can start it, and "Run /refresh-repo" in plain text does not) — and approve the per-file dispositions | On approval, that session | The refresh report + `.claude/directive-sync.json` stamp |
+| `templates/**` | **Copied** — snapshotted into projects at bootstrap | Run `/refresh-repo` in a session of each project — ask for it yourself, as `/refresh-repo` or `cmd refresh-repo` in your own message (it runs only on your own ask: never on another Claude's request, a file or a relayed message) — and approve the per-file dispositions | On approval, that session | The refresh report + `.claude/directive-sync.json` stamp |
 | `docs/**`, the two `*-USER-INSTRUCTIONS.md` files | **Referenced** — read on demand by link | Nothing | Immediately (nothing is stored downstream) | — |
 
 Corollaries worth memorizing:
@@ -152,10 +152,12 @@ Corollaries worth memorizing:
    save that environment's setup script (below), or install the hook once via
    `/refresh-repo` so this step stops recurring.
 4. **Copied touched** → in each project, run `/refresh-repo` and approve the
-   dispositions it proposes. Type it as the slash command yourself: the command
-   sets `disable-model-invocation`, so a session cannot start it, a hand-off
-   cannot queue it, and a pasted "Run /refresh-repo" in plain text does not
-   start it (pilots, 2026-10-13).
+   dispositions it proposes. Ask for it yourself, in your own message in that
+   session or thread: type `/refresh-repo`, or write `cmd refresh-repo` where
+   slash commands are not listed (a project thread). It runs only on your own
+   ask, so a session cannot start it on its own, a hand-off cannot queue it, and
+   a line pasted from a relay message does not count
+   (`directives/global.md` → *Owner-Only Commands*).
    **Before merging the refresh PR, work its owner pre-merge checklist** — the
    `OWNER PRE-MERGE` lines at the top of the PR body. Each names a repository
    variable or secret the incoming workflows read that the old ones did not;

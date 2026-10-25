@@ -158,7 +158,10 @@ curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/
 
 The kit's viewport gate ships alongside it. Install it **with** the `ui-suite`
 composite, not after: the composite names it by path, so an updated composite
-without it fails every UI job at step resolution.
+without it fails every UI job at step resolution. A project whose qa workflows
+are **callers** of claude.directives' shared workflows (#460 step 4) skips this
+install and the composites: the shared workflow stages the gate from its own
+checkout at run time (`docs/internal/shared-workflows.md` in claude.directives).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/akyachtsman/claude.directives/main/templates/scripts/check-ui-viewports.js \
@@ -519,16 +522,22 @@ Optional repository variables (the qa workflows pass them through the `ui-suite`
 
 ## Verification Checklist
 
+A project whose qa workflows are **callers** of claude.directives' shared
+workflows (#460 step 4) reads the composite and viewport-gate lines below as
+"absent": the shared workflow reads both from claude.directives at the called
+commit. It keeps `check-contrast.js` only if its caller names it in
+`contrast-script`.
+
 - [ ] `.github/workflows/qa.yml` present and triggering on PRs to `main` and pushes to `main`
 - [ ] `.github/workflows/qa-live.yml` present and triggering after Pages deploy
 - [ ] `.github/workflows/qa-response.yml` present and ready for dispatch — part of the standard set
 - [ ] `.github/workflows/pages-deploy.yml`: **Actions-source** → present, `BUILD_CMD`/`SITE_DIR` filled in (empty and `.` without a build), with `.github/pages-deny.txt` (and `.github/pages-public.txt` if any internal-looking path must stay public); **branch-source** → absent (Step 9d-bis)
 - [ ] `.github/workflows/cron-notify.yml` present if the project has a scheduled task, absent otherwise; `keepalive.yml` ABSENT (Step 9f)
-- [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
-- [ ] `.github/actions/ui-suite/validate-report-path.py` present — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
-- [ ] `.github/scripts/check-contrast.js` present — `qa.yml`'s static job runs it by path (Step 1)
+- [ ] `.github/actions/secret-scan/` and `.github/actions/ui-suite/` present (full copies; absent on a caller) — the qa workflows reference them as `./.github/actions/*` and every run fails at step resolution without them
+- [ ] `.github/actions/ui-suite/validate-report-path.py` present (full copies; absent on a caller) — the composite runs it as `$GITHUB_ACTION_PATH/validate-report-path.py` in its FIRST step, so a ui-suite directory holding only `action.yml` fails every UI job immediately. A composite's siblings install with its YAML, never after it
+- [ ] `.github/scripts/check-contrast.js` present — `qa.yml`'s static job runs it by path (Step 1); on a caller, only when `contrast-script` names it
 - [ ] `.github/scripts/ui-tests/package-lock.json` committed (setup-node cache requires it)
-- [ ] `.github/scripts/check-ui-viewports.js` present — the `ui-suite` composite names it by path and every UI job fails at step resolution without it
+- [ ] `.github/scripts/check-ui-viewports.js` present (full copies; absent on a caller) — the `ui-suite` composite names it by path and every UI job fails at step resolution without it
 - [ ] `APP_URL` set as repository variable
 - [ ] `TEST_AUTH_CREDENTIAL` set as repository secret — or deliberately NOT set, because the app has no login, or because its login ships a working credential in a visible, editable password field and the suite submits what the form holds (directives#312)
 - [ ] `TEST_AUTH_EMAIL` set as repository secret if the app's gate is email+password (directives#304) or identifier-first/split-step (directives#310)

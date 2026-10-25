@@ -610,13 +610,17 @@
          too; confirm / ask / notice always are;
        - closing re-enables the opener and puts focus back on it. */
   const stack = [];
-  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  // The controls Tab stops on, in order: what the browser itself skips is left
+  // out, so the trap's first and last are real Tab stops. That is a control
+  // disabled directly or by a <fieldset disabled>, one inside [hidden] or
+  // [inert], one not rendered or visibility: hidden, and a roving control's
+  // tabindex -1 (House.segmented's unselected tabs).
+  const FOCUSABLE = 'a[href], area[href], button, input:not([type="hidden"]), select, textarea, summary, [contenteditable]:not([contenteditable="false"]), [tabindex]';
   function focusables(root) {
-    return [...root.querySelectorAll(FOCUSABLE)].filter(el => !el.closest('[hidden]') && el.getClientRects().length > 0);
+    return [...root.querySelectorAll(FOCUSABLE)].filter(el => el.tabIndex >= 0
+      && !el.matches(':disabled') && !el.closest('[hidden], [inert]')
+      && el.getClientRects().length > 0 && getComputedStyle(el).visibility === 'visible');
   }
-  // The Tab order only: a roving control (House.segmented) keeps its unselected
-  // tabs at tabindex -1, focusable by script but never a Tab stop.
-  const tabbables = root => focusables(root).filter(el => el.tabIndex >= 0);
   const entryOf = el => stack.find(e => e.el === el || e.box === el || e.backdrop === el);
   const isClose = el => el instanceof Element
     && (el.closest('[data-dialog-close]') || el.closest('.dialog-header button[aria-label="Close"]'));
@@ -727,7 +731,7 @@
     if (e.key !== 'Tab') return;
     const top = stack[stack.length - 1];
     if (!top) return;
-    const f = tabbables(top.box);
+    const f = focusables(top.box);
     if (!f.length) { e.preventDefault(); return; }
     const first = f[0], last = f[f.length - 1];
     const active = document.activeElement;

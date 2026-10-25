@@ -253,6 +253,35 @@ const page = await open({ width: 1280, height: 800 });
   await settle(page);
   await page.evaluate(() => document.getElementById('dlg-seg').remove());
 
+  // Controls a <fieldset disabled> turns off, and one inside [inert], are no
+  // Tab stop either: not first focus, and not the trap's last control.
+  await page.evaluate(() => {
+    const off = () => {
+      const f = document.createElement('fieldset');
+      f.disabled = true; f.className = 'dlg-off';
+      const i = document.createElement('input');
+      i.type = 'text'; i.className = 'input';
+      f.append(i);
+      return f;
+    };
+    document.querySelector('#form-dialog .dialog-body').prepend(off());
+    document.querySelector('#form-dialog .dialog-footer').append(off());
+    const inert = document.createElement('div');
+    inert.inert = true; inert.className = 'dlg-off';
+    inert.innerHTML = '<button type="button" class="btn">Inert</button>';
+    document.querySelector('#form-dialog .dialog-footer').append(inert);
+  });
+  await page.click('#open-form');
+  const offFirst = await focusedId(page);
+  await page.focus('#form-save');
+  await page.keyboard.press('Tab');
+  const offWrap = await page.evaluate(() => ({ inside: !!document.activeElement.closest('#form-dialog'), label: document.activeElement.getAttribute('aria-label') || document.activeElement.id }));
+  check(offFirst === 'detail-field' && offWrap.inside && offWrap.label === 'Close',
+    'controls a disabled fieldset or [inert] turns off are skipped: first focus is the live field, and Tab from the last live control wraps', JSON.stringify({ offFirst, ...offWrap }));
+  await page.click('#form-dialog .dialog-header [aria-label="Close"]');
+  await settle(page);
+  await page.evaluate(() => document.querySelectorAll('#form-dialog .dlg-off').forEach(n => n.remove()));
+
   await clearLog(page);
   await page.click('#open-form');
   await page.evaluate(() => House.dialog.setBusy(document.getElementById('form-dialog')));

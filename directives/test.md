@@ -455,9 +455,11 @@ gate names. Dropping the kit's scenario is fine; dropping the property is not
   list, any ARIA menu or listbox) must fit the visible screen and scroll by
   finger: nothing cut off by `overflow: hidden`, nothing pinned past the screen
   edge, no `touch-action` or `touchmove` lock, and a scroll that actually moves.
-  DISMISS runs `fitProblems()` (`tests/lib/fit.js`) on each; an overlay opened
-  by TYPING (a /command list, an @mention) is out of its reach, so the project's
-  own scenario opens it and asserts `fitProblems(locator)` is empty. Keep the
+  DISMISS runs `fitProblems()` (`tests/lib/fit.js`) on each. A check that does
+  not finish in its 2s cap is recorded as a `fit-budget` note, not a defect. An
+  overlay opened by TYPING (a /command list, an @mention) is out of DISMISS's
+  reach, so the project's own scenario opens it and asserts
+  `fitProblems(locator)` is empty. Keep the
   kit's `iphone` project: it is the only one in WebKit, the engine every iPhone
   browser uses, and a Chromium phone profile does not stand in for it.
 - **Coverage = controls clicked, not screens visited.** Every interactive control

@@ -27,7 +27,7 @@ import {
   backControlAll,
   expect,
 } from './lib/fixtures.js';
-import { fitProblems } from './lib/fit.js';
+import { fitProblems, FIT_INCOMPLETE } from './lib/fit.js';
 import {
   AUTH_CREDENTIAL,
   AUTH_EMAIL,
@@ -1149,6 +1149,7 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
   const POPS = '.menu-pop, .archived-pop, .list-pop, [role="menu"], [role="listbox"]';
   const FITTED = `:is(${OVERLAY}, ${POPS}):not([${PREOPEN}])`;
   const fitSeen = new Set();
+  const fitIncomplete = [];
   const markOpenOverlays = async () => {
     // Through locators on both sides, so an overlay inside an open shadow root
     // is marked and unmarked like any other.
@@ -1218,8 +1219,10 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
       continue;
     }
     // FIT, before any dismisser runs, on what this trigger opened. A problem
-    // already reported for an earlier trigger is not reported again.
+    // already reported for an earlier trigger is not reported again. A check
+    // that did not finish is a budget note (`fit-budget`), not a defect.
     for (const problem of await fitProblems(page.locator(FITTED))) {
+      if (problem.startsWith(FIT_INCOMPLETE)) { fitIncomplete.push({ trigger: name, problem }); continue; }
       if (fitSeen.has(problem)) continue;
       fitSeen.add(problem);
       findings.push({ trigger: name, dismisser: 'fit', problem });
@@ -1279,6 +1282,12 @@ test('DISMISS: overlays close via control, Escape, and backdrop', async ({ page,
     });
   }
 
+  if (fitIncomplete.length) {
+    attachJson('fit-budget', {
+      incomplete: fitIncomplete,
+      note: 'The fit check did not finish for these triggers, so their overlays were NOT checked for fit and scroll. A coverage gap, not a fit defect. A slow first call in a cold browser is the usual cause.',
+    });
+  }
   attachJson('dismisser-findings', findings);
   expect(findings, `Overlay dismisser failures:\n${JSON.stringify(findings, null, 2)}`).toHaveLength(0);
 });

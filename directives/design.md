@@ -463,7 +463,11 @@ colour across the whole product, each from its own token pair in `tokens.css`:
   are the house type-ahead list: the field is a `role="combobox"`, the list a
   `.list-pop` (`role="listbox"`) of 44px `.list-option`s under it, a heading in
   `.list-head`, each option's hint in `.list-hint`. It fits the screen and
-  scrolls by finger (→ *iPhone and iPad*).
+  scrolls by finger (→ *iPhone and iPad*). The house script's
+  `House.typeahead(field, list)` binds it: the page fills the list as the text
+  changes and listens for `house:pick`; the script opens and places it, moves
+  through it with ↓ ↑, picks with Enter or a tap, closes it with Esc or a press
+  outside, and keeps focus (and a phone's keyboard) in the field.
 - Tables sort by their header (section 6); a card grid that sorts uses a "Sort
   by" dropdown.
 

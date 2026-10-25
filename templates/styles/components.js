@@ -28,6 +28,8 @@
                                       own dialog markup (a form, a rename)
      §11  House.segmented(tablist)    roving tabindex, ← → Home End, panels
      §15  House.empty(host, opts)     the empty state
+     §16  House.typeahead(field, list) the type-ahead list: combobox roles, ↓ ↑ Enter
+                                      Esc, a tap; placed by the fit; "house:pick"
      §18  House.message(target, text) the inline message beside what it is about
           House.toast(text)           success toast; { error: true } for a red one
 
@@ -330,6 +332,137 @@
     }, true);
     menus.set(btn, d);
     return d;
+  }
+
+  /* ── §16 The type-ahead list: choices that filter as you type ───────────────
+     House.typeahead(field, list, { autoSelect }) -> { update, close, isOpen, active }
+     field is the <input> or <textarea> typed in; list is its .list-pop. The PAGE
+     owns the words: as the text changes it fills list with .list-option rows
+     (an optional .list-head first) and empties it when nothing matches. This
+     owns the rest. The roles: field a combobox, list a listbox, each row an
+     option. The list opens under the focused field whenever it has choices
+     (placed by the shared fit, so above the iPhone keyboard when below has no
+     room) and closes when it has none. ↓ ↑ move through the choices, wrapping,
+     with the active one kept in view inside the list; Enter or a tap picks one;
+     Esc or a press outside closes it. Focus never leaves the field, so a phone's
+     keyboard stays up, and a finger scrolls the list as any other. A pick
+     closes the list and fires "house:pick" ({ option }) on the field; what it
+     writes into the field is the page's. The first choice is active as the list
+     opens, so Enter takes it; { autoSelect: false } leaves none active until ↓
+     or ↑, and Enter then reaches the field. With the list closed (Esc), ↓
+     reopens it from an <input>, Alt+↓ from a <textarea>, where a bare ↓ moves
+     the caret. Home and End stay the caret's. An option with
+     aria-disabled="true" is skipped and cannot be picked. */
+  const typeaheads = new WeakMap();
+  function typeahead(field, list, { autoSelect = true } = {}) {
+    if (typeaheads.has(field)) return typeaheads.get(field);
+    if (!list.id) list.id = uid('list');
+    list.setAttribute('role', 'listbox');
+    field.setAttribute('role', 'combobox');
+    field.setAttribute('aria-autocomplete', 'list');
+    field.setAttribute('aria-controls', list.id);
+    field.setAttribute('aria-expanded', 'false');
+    list.hidden = true;
+    let current = null;
+    const rows = () => [...list.querySelectorAll('.list-option')];
+    const choices = () => rows().filter(o => !o.hidden && o.getAttribute('aria-disabled') !== 'true');
+    function activate(o) {
+      if (current && current !== o) current.setAttribute('aria-selected', 'false');
+      current = o;
+      if (!o) { field.removeAttribute('aria-activedescendant'); return; }
+      o.setAttribute('aria-selected', 'true');
+      field.setAttribute('aria-activedescendant', o.id);
+      // In view inside the list only: scrollIntoView would move the page too.
+      const top = o.offsetTop, bottom = top + o.offsetHeight;
+      if (top < list.scrollTop) list.scrollTop = top;
+      else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+    }
+    // At least the field's width, never wider than the window (min-width beats
+    // the width the fit sets).
+    const place = () => {
+      list.style.minWidth = `${Math.min(field.getBoundingClientRect().width, visible().w - 2 * GAP)}px`;
+      fit(list, field);
+    };
+    const d = {
+      btn: field, pop: list,
+      isOpen: () => !list.hidden,
+      show() {
+        for (const o of [...openPops]) if (o !== d) o.hide(false);
+        list.hidden = false;
+        field.setAttribute('aria-expanded', 'true');
+        if (!openPops.includes(d)) openPops.push(d);
+        place();
+      },
+      hide(returnFocus) {
+        if (list.hidden) return;
+        list.hidden = true;
+        field.setAttribute('aria-expanded', 'false');
+        activate(null);
+        openPops.splice(openPops.indexOf(d), 1);
+        if (returnFocus && field.isConnected && document.activeElement !== field) field.focus();
+      },
+      // Its field scrolled out of view: the list closes rather than float away.
+      refit() {
+        if (list.hidden) return;
+        const a = field.getBoundingClientRect();
+        const v = visible();
+        if (a.bottom <= v.y || a.top >= v.y + v.h) d.hide(false);
+        else place();
+      },
+    };
+    function update() {
+      for (const o of rows()) {
+        if (!o.id) o.id = uid('option');
+        o.setAttribute('role', 'option');
+        if (o !== current) o.setAttribute('aria-selected', 'false');
+      }
+      const c = choices();
+      if (!c.length || document.activeElement !== field) { d.hide(false); return; }
+      const keep = c.includes(current);
+      if (!keep) list.scrollTop = 0;
+      if (d.isOpen()) place(); else d.show();
+      activate(keep ? current : autoSelect ? c[0] : null);
+    }
+    function pick(o) {
+      d.hide(false);
+      if (document.activeElement !== field) field.focus();
+      field.dispatchEvent(new CustomEvent('house:pick', { bubbles: true, detail: { option: o } }));
+    }
+    // The page refilling the list is what opens, moves and closes it; the
+    // list's own hidden and the roles written above are not.
+    new MutationObserver(ms => { if (ms.some(m => m.type === 'childList' || m.target !== list)) update(); })
+      .observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'aria-disabled'] });
+    field.addEventListener('keydown', e => {
+      if (composing(e)) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const c = choices();
+        const down = e.key === 'ArrowDown';
+        if (!d.isOpen()) {
+          if (!c.length || (field.tagName === 'TEXTAREA' && !e.altKey)) return;
+          e.preventDefault();
+          d.show();
+          activate(down ? c[0] : c[c.length - 1]);
+          return;
+        }
+        e.preventDefault();
+        if (!c.length) return;
+        const i = c.indexOf(current);
+        activate(i < 0 ? c[down ? 0 : c.length - 1] : c[(i + (down ? 1 : -1) + c.length) % c.length]);
+      } else if (e.key === 'Enter' && d.isOpen() && current && !(e.shiftKey || e.altKey || e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        pick(current);
+      }
+    });
+    // A press on a choice keeps focus (and the phone's keyboard) in the field.
+    const optionOf = e => (e.target instanceof Element ? e.target.closest('.list-option') : null);
+    list.addEventListener('mousedown', e => { if (optionOf(e)) e.preventDefault(); });
+    list.addEventListener('click', e => {
+      const o = optionOf(e);
+      if (o && list.contains(o) && choices().includes(o)) pick(o);
+    });
+    const api = Object.freeze({ update, close: () => d.hide(false), isOpen: d.isOpen, active: () => current });
+    typeaheads.set(field, api);
+    return api;
   }
 
   /* ── §7 Archived (N): the one renderer ──────────────────────────────────────
@@ -923,7 +1056,7 @@
 
   window.House = Object.freeze({
     init, icon, icons: Object.freeze(Object.keys(ICONS)), message, toast, busy, fit,
-    menu, archived, compare, sortable, segmented, empty, confirm, ask, notice,
+    menu, typeahead, archived, compare, sortable, segmented, empty, confirm, ask, notice,
     dialog: Object.freeze({ open: openDialog, close: closeDialog, setBusy, setDirty }),
   });
 

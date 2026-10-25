@@ -338,7 +338,8 @@ dialog.dialog::backdrop { background: var(--color-backdrop); }
    instead: on a phone it opens the phone's own picker. Markup: the field has
    role="combobox", aria-expanded, aria-controls and aria-activedescendant;
    <div class="list-pop" role="listbox" id="…"> of <div class="list-option"
-   role="option" id="…">. Placed under its field by the shared fit. */
+   role="option" id="…">. House.typeahead (components.js) writes those roles,
+   places it under its field by the shared fit and runs its keys. */
 .list-pop { display: flex; flex-direction: column; }
 .list-option {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);

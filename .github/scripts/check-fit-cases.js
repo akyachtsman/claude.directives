@@ -5,10 +5,11 @@
 // *Overlays fit and scroll*.
 //
 // Two halves, one page per case, each built from the SHIPPED tokens.css and
-// components.css:
+// components.css (and components.js, where a case says house):
 //   * the house components pass: a long type-ahead list (also one already
-//     scrolled to its end), a long ⋮ menu, a dialog taller than the screen,
-//     an overlay holding visually-hidden text;
+//     scrolled to its end, and two opened by the house script's own
+//     House.typeahead, under a field and above one), a long ⋮ menu, a dialog
+//     taller than the screen, an overlay holding visually-hidden text;
 //   * each way an overlay fails on an iPhone is caught, with the problem it
 //     must name: a sheet that clips its list (the 2026-10-25 board-post list),
 //     a pop-over running off the screen or opened wholly below it, a script
@@ -31,6 +32,8 @@ import { fitProblems, FIT_INCOMPLETE } from '../../templates/ui-tests/tests/lib/
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CSS = ['templates/styles/tokens.css', 'templates/styles/components.css']
   .map(f => readFileSync(resolve(ROOT, f), 'utf8')).join('\n');
+// Inlined, so its header's own <script> example must not end the tag.
+const HOUSE_JS = readFileSync(resolve(ROOT, 'templates/styles/components.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
 const fail = m => { console.error('FAIL: ' + m); process.exitCode = 1; };
 const ok = m => console.log('OK: ' + m);
 
@@ -38,6 +41,17 @@ const rows = (n, cls = 'list-option', role = 'option') => Array.from({ length: n
   (_, i) => `<div class="${cls}" role="${role}" id="o${i}">/type${i}<span class="list-hint">what it does</span></div>`).join('');
 const items = n => Array.from({ length: n }, (_, i) => `<button class="menu-item" type="button">Action ${i}</button>`).join('');
 const paras = n => Array.from({ length: n }, (_, i) => `<p>Paragraph ${i} of a dialog body long enough to need scrolling on a phone.</p>`).join('');
+
+// The house script's own type-ahead list: a field bound by House.typeahead,
+// focused, its list filled with 30 choices; the script opens and places it.
+const typed = at => ({
+  body: `<div class="page" style="padding-top:${at}"><label class="field"><span class="label">Post</span><textarea class="input" id="tf"></textarea></label></div>
+         <div class="list-pop" id="lp"></div>`,
+  script: `House.typeahead(document.getElementById('tf'), document.getElementById('lp'));
+           document.getElementById('tf').focus();
+           document.getElementById('lp').innerHTML = ${JSON.stringify(rows(30))};`,
+  house: true, target: '.list-pop', expect: [],
+});
 
 // Each case: the page body, an optional script, and the problem kinds expected
 // (an empty list: no problem at all). `touch` marks a kind only a touch-enabled
@@ -52,6 +66,8 @@ const CASES = [
     body: `<div class="list-pop" role="listbox" id="lp" style="top:100px;left:12px">${rows(30)}</div>`,
     script: `const l = document.getElementById('lp'); l.scrollTop = l.scrollHeight;`,
     target: '.list-pop', expect: [] },
+  { name: 'House.typeahead list opened from a field at the top', ...typed('0px') },
+  { name: 'House.typeahead list opened from a field at the bottom (it opens above)', ...typed('calc(100vh - 140px)') },
   { name: 'house ⋮ menu, 40 actions',
     body: `<div class="menu-pop" id="mp" style="top:80px;right:12px">${items(40)}</div>`,
     target: '.menu-pop', expect: [] },
@@ -127,7 +143,8 @@ for (const engine of wanted) {
     page.on('pageerror', e => errors.push(e.message));
     await page.setContent(`<!doctype html><html lang="en"><head><meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>
-      <body>${c.body}${c.script ? `<script>${c.script}</script>` : ''}</body></html>`);
+      <body>${c.body}${c.house ? `<script>${HOUSE_JS}</script>` : ''}${c.script ? `<script>${c.script}</script>` : ''}</body></html>`);
+    if (c.house) await page.waitForFunction(() => !document.querySelector('.list-pop').hidden, null, { timeout: CASE_MS });
     const problems = await fitProblems(page.locator(c.target), { timeout: CASE_MS });
     const kinds = [...new Set(problems.map(p => p.split(':')[0]))].sort();
     const want = [...c.expect].sort();

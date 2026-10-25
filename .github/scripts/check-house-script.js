@@ -282,6 +282,47 @@ const page = await open({ width: 1280, height: 800 });
   await settle(page);
   await page.evaluate(() => document.querySelectorAll('#form-dialog .dlg-off').forEach(n => n.remove()));
 
+  // A radio group is one Tab stop: from its checked radio, Tab wraps.
+  await page.evaluate(() => {
+    const g = document.createElement('div');
+    g.className = 'dlg-off';
+    g.innerHTML = ['a', 'b', 'c'].map(v => `<label><input type="radio" name="dlg-r" id="dlg-r-${v}" value="${v}"${v === 'a' ? ' checked' : ''}> ${v}</label>`).join('');
+    document.querySelector('#form-dialog .dialog-footer').append(g);
+  });
+  await page.click('#open-form');
+  await page.focus('#dlg-r-a');
+  await page.keyboard.press('Tab');
+  const radio = await page.evaluate(() => ({ inside: !!document.activeElement.closest('#form-dialog'), label: document.activeElement.getAttribute('aria-label') || document.activeElement.id }));
+  check(radio.inside && radio.label === 'Close', 'a radio group last in a dialog: Tab from its checked radio wraps to the first control', JSON.stringify(radio));
+  // The backstop: a page's stray .focus() outside the open dialog comes back in.
+  const stray = await page.evaluate(() => {
+    const out = document.getElementById('rename');   // live, unlike the disabled opener
+    out.focus();
+    return { inside: !!document.activeElement.closest('#form-dialog'), id: document.activeElement.getAttribute('aria-label') || document.activeElement.id };
+  });
+  check(stray.inside, 'focus sent outside an open dialog is brought back inside it', JSON.stringify(stray));
+  await page.click('#form-dialog .dialog-header [aria-label="Close"]');
+  await settle(page);
+  await page.evaluate(() => document.querySelectorAll('#form-dialog .dlg-off').forEach(n => n.remove()));
+
+  // No field, and the primary act turned off by a fieldset: first focus is the
+  // live Cancel, never the dead primary (which would leave focus outside).
+  const firstLive = await page.evaluate(() => {
+    const d = document.createElement('div');
+    d.className = 'dialog-backdrop'; d.id = 'dlg-noprimary'; d.hidden = true;
+    d.innerHTML = '<div class="dialog"><div class="dialog-body"><p>Nothing to fill in.</p></div><div class="dialog-footer">'
+      + '<button type="button" class="btn btn-secondary" id="np-cancel" data-dialog-close>Cancel</button>'
+      + '<fieldset disabled><button type="button" class="btn btn-primary" id="np-save">Save</button></fieldset></div></div>';
+    document.body.append(d);
+    document.getElementById('open-form').focus();
+    House.dialog.open(d);
+    const id = document.activeElement.id;
+    House.dialog.close(d);
+    d.remove();
+    return id;
+  });
+  check(firstLive === 'np-cancel', 'with its primary act turned off, a dialog puts first focus on a live button', firstLive);
+
   await clearLog(page);
   await page.click('#open-form');
   await page.evaluate(() => House.dialog.setBusy(document.getElementById('form-dialog')));

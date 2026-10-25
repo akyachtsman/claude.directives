@@ -614,12 +614,22 @@
   // out, so the trap's first and last are real Tab stops. That is a control
   // disabled directly or by a <fieldset disabled>, one inside [hidden] or
   // [inert], one not rendered or visibility: hidden, and a roving control's
-  // tabindex -1 (House.segmented's unselected tabs).
+  // tabindex -1 (House.segmented's unselected tabs). A radio group is one stop:
+  // its checked radio, else its first. Should a page still hold a stop this
+  // misses, the focusin guard below brings focus back.
   const FOCUSABLE = 'a[href], area[href], button, input:not([type="hidden"]), select, textarea, summary, [contenteditable]:not([contenteditable="false"]), [tabindex]';
   function focusables(root) {
-    return [...root.querySelectorAll(FOCUSABLE)].filter(el => el.tabIndex >= 0
+    const live = [...root.querySelectorAll(FOCUSABLE)].filter(el => el.tabIndex >= 0
       && !el.matches(':disabled') && !el.closest('[hidden], [inert]')
       && el.getClientRects().length > 0 && getComputedStyle(el).visibility === 'visible');
+    const groups = new Map();
+    for (const el of live) {
+      if (el.type !== 'radio' || !el.name) continue;
+      const key = `${el.form ? 'f' : 'r'}:${el.name}`;
+      const g = groups.get(key);
+      if (!g || (el.checked && !g.checked)) groups.set(key, el);
+    }
+    return live.filter(el => el.type !== 'radio' || !el.name || groups.get(`${el.form ? 'f' : 'r'}:${el.name}`) === el);
   }
   const entryOf = el => stack.find(e => e.el === el || e.box === el || e.backdrop === el);
   const isClose = el => el instanceof Element
@@ -634,7 +644,7 @@
       const cancel = buttons.find(b => !b.matches('.btn-primary, .btn-danger, .btn-delete'));
       if (cancel) return cancel;
     }
-    return box.querySelector('.dialog-footer .btn-primary:not([disabled])')
+    return buttons.find(b => b.matches('.btn-primary'))
       || buttons[buttons.length - 1] || focusables(box)[0] || box;
   }
 
@@ -718,6 +728,7 @@
   // Esc: an open pop-over first (so a ⋮ inside a dialog closes alone), then the
   // top dialog. Tab: kept inside the top dialog. Window, capture phase, so a
   // native <dialog> never sees an Esc this has already answered.
+  let tabBack = false;   // the last Tab's direction, for the focusin backstop below
   // An Esc that cancels an IME composition is the field's, not the dialog's.
   window.addEventListener('keydown', e => {
     if (composing(e)) return;
@@ -738,6 +749,17 @@
     if (!top.box.contains(active)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
     else if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+    tabBack = e.shiftKey;
+  });
+  // The backstop: focus that reaches anything outside the top dialog (a Tab
+  // stop the list above missed, a page's stray .focus()) is put back inside,
+  // at the end it left from.
+  document.addEventListener('focusin', e => {
+    const top = stack[stack.length - 1];
+    if (!top || top.box.contains(e.target)) return;
+    const f = focusables(top.box);
+    const to = f.length ? (tabBack ? f[f.length - 1] : f[0]) : null;
+    if (to) to.focus();
   });
 
   /* ── §9 The shared confirmation dialog: three forms ─────────────────────────

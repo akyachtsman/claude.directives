@@ -60,7 +60,9 @@ already records; otherwise ask once.
 3. Rename each collision to `legacy-<name>` in the project's CSS, HTML, JS and
    tests. Match the whole class token, never a word: `btn` must not catch
    `btn--primary` or `btn-sm`, and `input` or `page` as plain words far
-   outnumber their class uses. Search each name in strings, `className`,
+   outnumber their class uses. Rename its `--` and `__` family with it
+   (`btn--primary` becomes `legacy-btn--primary`), so step 3's search finds
+   every old use. Search each name in strings, `className`,
    `classList`, `querySelector`, `closest`, `matches` and template literals,
    and in data passed into a template (`variant: "btn-secondary"`). A class
    built by joining strings (`'pill ' + kind`) shows up only by reading, so

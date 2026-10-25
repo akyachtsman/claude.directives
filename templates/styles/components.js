@@ -209,6 +209,9 @@
     return { x: 0, y: 0, w: de.clientWidth, h: de.clientHeight };
   }
   function fit(pop, anchor, { align = 'start' } = {}) {
+    // Measuring clears the max-height, which clamps a scrolled list's
+    // scrollTop to the taller box; it is put back once the height is.
+    const scrolled = pop.scrollTop;
     pop.style.maxHeight = '';
     pop.style.width = '';
     pop.style.left = '0px';
@@ -230,11 +233,15 @@
       if (h > room) pop.style.maxHeight = `${room}px`;
       top = a.top - GAP - Math.min(h, room);
     }
+    // An anchor scrolled out of view would carry the pop-over off the window
+    // with it; it is held inside instead (a disclosure closes, below).
+    top = Math.max(v.y + GAP, Math.min(top, v.y + v.h - GAP - pop.offsetHeight));
     let left = align === 'end' ? a.right - w : a.left;
     left = Math.max(v.x + GAP, Math.min(left, v.x + vw - GAP - w));
     pop.style.width = pop.offsetWidth > vw - 2 * GAP ? `${w}px` : '';
     pop.style.left = `${Math.round(left)}px`;
     pop.style.top = `${Math.round(top)}px`;
+    pop.scrollTop = scrolled;
   }
 
   /* ── Disclosures: the Archived (N) pop-over and the ⋮ menu ──────────────────
@@ -268,7 +275,20 @@
         openPops.splice(openPops.indexOf(d), 1);
         if (returnFocus && btn.isConnected && !btn.hidden) btn.focus();
       },
-      refit() { if (!pop.hidden) fit(pop, btn, { align }); },
+      // Its button scrolled out of view: the pop-over closes rather than float
+      // away from it, and focus inside it goes back to the button unscrolled.
+      refit() {
+        if (pop.hidden) return;
+        const a = btn.getBoundingClientRect();
+        const v = visible();
+        if (a.bottom <= v.y || a.top >= v.y + v.h) {
+          const had = pop.contains(document.activeElement);
+          d.hide(false);
+          if (had && btn.isConnected) btn.focus({ preventScroll: true });
+          return;
+        }
+        fit(pop, btn, { align });
+      },
     };
     btn.addEventListener('click', () => (d.isOpen() ? d.hide(false) : d.show()));
     return d;
@@ -280,7 +300,10 @@
   document.addEventListener('focusin', e => {
     for (const d of [...openPops]) if (!inside(d, e.target)) d.hide(false);
   });
-  const refitAll = () => { for (const d of openPops) d.refit(); };
+  // A scroll inside a pop-over (its own long list) moves nothing it is placed by.
+  const refitAll = e => {
+    for (const d of [...openPops]) if (!(e && e.type === 'scroll' && e.target instanceof Node && d.pop.contains(e.target))) d.refit();
+  };
   window.addEventListener('resize', refitAll);
   window.addEventListener('scroll', refitAll, true);
   // The keyboard opening or closing, and a pinch zoom, move only the visual viewport.

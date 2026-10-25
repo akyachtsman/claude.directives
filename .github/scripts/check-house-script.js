@@ -477,6 +477,48 @@ async function archivedChecks(p, tag) {
     'the empty state carries its sentence and its own Add button, as text', JSON.stringify(e));
 }
 
+/* ------------------------------------- a refit while the pop-over is open */
+{
+  // A window short enough that the room on both sides is under the list's CSS
+  // max-height, so fit() caps it and the list scrolls inside that cap.
+  const short = await open({ width: 1280, height: 500 });
+  await short.evaluate(() => {
+    const s = document.createElement('div');
+    s.id = 'spacer'; s.style.height = '2000px';
+    document.body.append(s);
+    document.getElementById('archived-host').scrollIntoView({ block: 'center' });
+  });
+  await short.click('#archived-host .archived-btn');
+  const end = await short.evaluate(async () => {
+    const pop = document.querySelector('#archived-host .archived-pop');
+    pop.scrollTop = pop.scrollHeight;
+    const want = pop.scrollHeight - pop.clientHeight;
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return { capped: !!pop.style.maxHeight, at: Math.round(pop.scrollTop), want: Math.round(want) };
+  });
+  check(end.capped && end.want > 0 && end.at >= end.want - 2, 'scrolling a capped list to its end keeps it there (its own scroll does not refit it)', JSON.stringify(end));
+  const gone = await short.evaluate(async () => {
+    const b = document.querySelector('#archived-host .archived-btn');
+    window.scrollBy(0, b.getBoundingClientRect().bottom + 50);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const pop = document.querySelector('#archived-host .archived-pop');
+    return { hidden: pop.hidden, expanded: b.getAttribute('aria-expanded'), top: Math.round(pop.getBoundingClientRect().top) };
+  });
+  check(gone.hidden && gone.expanded === 'false', 'a pop-over whose button scrolls out of view closes, never floats off the window', JSON.stringify(gone));
+  // House.fit on its own holds the pop-over inside the window, whatever the anchor.
+  const held = await short.evaluate(() => {
+    const b = document.querySelector('#archived-host .archived-btn');
+    const pop = document.querySelector('#archived-host .archived-pop');
+    pop.hidden = false;
+    House.fit(pop, b);
+    const r = pop.getBoundingClientRect();
+    pop.hidden = true;
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), h: innerHeight, anchor: Math.round(b.getBoundingClientRect().bottom) };
+  });
+  check(held.anchor < 0 && held.top >= 0 && held.bottom <= held.h, 'House.fit keeps a pop-over inside the window when its anchor is above it', JSON.stringify(held));
+  await short.close();
+}
+
 /* ------------------------------------------------- phone width: the fit */
 {
   const phone = await open({ width: 390, height: 700 });

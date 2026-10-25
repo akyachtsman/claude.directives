@@ -389,6 +389,51 @@ const page = await open({ width: 1280, height: 800 });
     d.remove();
     return { answer, back, reopened, stays, again };
   });
+  // Busy holds a native dialog's own form shut too: its close button and an
+  // Enter in its field submit nothing until the work is done.
+  const busyForm = await page.evaluate(async () => {
+    const d = document.createElement('dialog');
+    d.className = 'dialog';
+    d.innerHTML = '<form method="dialog"><input class="input" type="text" id="bf-field" aria-label="Name">'
+      + '<div class="dialog-footer"><button class="btn btn-secondary" value="x" id="bf-close" data-dialog-close>Cancel</button></div></form>';
+    document.body.append(d);
+    const done = House.dialog.open(d, { opener: document.getElementById('rename') });
+    House.dialog.setBusy(d);
+    document.getElementById('bf-close').click();
+    document.querySelector('#bf-field').form.requestSubmit();
+    await new Promise(r => setTimeout(r, 50));
+    const held = d.open;
+    House.dialog.setBusy(d, false);
+    document.getElementById('bf-close').click();
+    const answered = await Promise.race([done.then(() => true), new Promise(r => setTimeout(() => r(false), 500))]);
+    d.remove();
+    return { held, closed: !d.open, answered };
+  });
+  // A dialog the page removes while open is let go of: its opener comes back,
+  // Esc reaches the dialog still there, and the removed one opens again.
+  const removed = await page.evaluate(async () => {
+    const d = document.createElement('dialog');
+    d.className = 'dialog';
+    d.innerHTML = '<div class="dialog-footer"><button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button></div>';
+    document.body.append(d);
+    const opener = document.getElementById('rename');
+    let answered = false;
+    House.dialog.open(d, { opener }).then(() => { answered = true; });
+    d.remove();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', bubbles: true }));
+    await new Promise(r => setTimeout(r, 0));
+    const back = !opener.disabled;
+    document.body.append(d);
+    House.dialog.open(d, { opener });
+    const reopened = d.open;
+    House.dialog.close(d);
+    d.remove();
+    return { answered, back, reopened };
+  });
+  check(removed.answered && removed.back && removed.reopened,
+    'a dialog removed while open is let go of: it answers, its opener comes back, and it opens again', JSON.stringify(removed));
+  check(busyForm.held && busyForm.closed && busyForm.answered,
+    'a busy native dialog ignores its own form\'s close button and Enter, then closes once the work is done', JSON.stringify(busyForm));
   check(formClose.answer === 'ok' && formClose.back && formClose.reopened && formClose.stays,
     'a native dialog closed by its own form answers, gives its opener back, and opens again, and a stale close never shuts the new opening', JSON.stringify(formClose));
   check(nested.inner && nested.outer && nested.outerClosedByEsc,

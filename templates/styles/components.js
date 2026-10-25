@@ -658,7 +658,14 @@
       || buttons[buttons.length - 1] || focusables(box)[0] || box;
   }
 
+  // A dialog a page took out of the document while open (no close event comes)
+  // is finished before the stack is used, so its opener comes back and Esc and
+  // Tab go to a dialog that is there.
+  function prune() {
+    for (const e of [...stack]) if (!e.box.isConnected) finish(e, undefined);
+  }
   function openDialog(el, { opener = document.activeElement, initialFocus } = {}) {
+    prune();
     if (entryOf(el)) return entryOf(el).done;
     const native = el.tagName === 'DIALOG';
     const backdrop = native ? null : (el.classList.contains('dialog-backdrop') ? el : el.closest('.dialog-backdrop'));
@@ -702,10 +709,19 @@
     // The close event is queued, so one from an earlier opening can arrive
     // after the page has opened the dialog again: an open dialog ignores it.
     entry.onClose = () => { if (!box.open) finish(entry, box.returnValue); };
+    // ...but not while busy: a <form method="dialog"> submit (its button, or
+    // Enter in a field) would close it behind the busy rule's back.
+    entry.onSubmit = e => {
+      if (entry.busy && e.target.method === 'dialog' && owns(entry, e.target)) e.preventDefault();
+    };
     box.addEventListener('input', entry.onInput);
     (backdrop || box).addEventListener('click', entry.onClick);
     (backdrop || box).addEventListener('mousedown', entry.onDown);
-    if (native) { box.addEventListener('cancel', entry.onCancel); box.addEventListener('close', entry.onClose); }
+    if (native) {
+      box.addEventListener('cancel', entry.onCancel);
+      box.addEventListener('close', entry.onClose);
+      box.addEventListener('submit', entry.onSubmit);
+    }
     stack.push(entry);
     if (native) { if (!box.open) box.showModal(); } else (backdrop || box).hidden = false;
     (initialFocus || initialFocusIn(box)).focus();
@@ -732,6 +748,7 @@
     if (native) {
       box.removeEventListener('cancel', entry.onCancel);
       box.removeEventListener('close', entry.onClose);
+      box.removeEventListener('submit', entry.onSubmit);
       if (box.open) box.close();
     }
     else (backdrop || box).hidden = true;
@@ -755,6 +772,7 @@
   // An Esc that cancels an IME composition is the field's, not the dialog's.
   window.addEventListener('keydown', e => {
     if (composing(e)) return;
+    prune();
     if (e.key === 'Escape') {
       const pop = openPops[openPops.length - 1];
       if (pop) { e.preventDefault(); pop.hide(true); return; }
@@ -778,6 +796,7 @@
   // stop the list above missed, a page's stray .focus()) is put back inside,
   // at the end it left from.
   document.addEventListener('focusin', e => {
+    prune();
     const top = stack[stack.length - 1];
     if (!top || top.box.contains(e.target)) return;
     const f = focusables(top.box);

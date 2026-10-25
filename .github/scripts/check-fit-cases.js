@@ -26,7 +26,7 @@ import { chromium, webkit, devices } from 'playwright';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { fitProblems } from '../../templates/ui-tests/tests/lib/fit.js';
+import { fitProblems, FIT_INCOMPLETE } from '../../templates/ui-tests/tests/lib/fit.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const CSS = ['templates/styles/tokens.css', 'templates/styles/components.css']
@@ -94,6 +94,8 @@ const CASES = [
     target: '.list-pop', expect: ['DOES NOT SCROLL'] },
 ];
 
+const CASE_MS = 20000;
+
 const ENGINES = {
   chromium: { type: chromium, context: { ...devices['Pixel 5'] } },
   webkit: { type: webkit, context: { ...devices['iPhone 12'] } },
@@ -111,6 +113,14 @@ for (const engine of wanted) {
     continue;
   }
   const context = await browser.newContext(spec.context);
+  // Warm the engine before the first case: on 2026-10-25 a cold WebKit in CI
+  // took more than the kit's 2s FIT_MS on its first call and failed a house
+  // case that passes warm. These cases test what the check FINDS, so each also
+  // gets a generous cap; the 2s cap is DISMISS's budget, not a property of fit.
+  const warm = await context.newPage();
+  await warm.setContent('<!doctype html><p>warm</p>');
+  await fitProblems(warm.locator('p'), { timeout: CASE_MS });
+  await warm.close();
   for (const c of CASES) {
     const page = await context.newPage();
     const errors = [];
@@ -118,11 +128,12 @@ for (const engine of wanted) {
     await page.setContent(`<!doctype html><html lang="en"><head><meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}</style></head>
       <body>${c.body}${c.script ? `<script>${c.script}</script>` : ''}</body></html>`);
-    const problems = await fitProblems(page.locator(c.target));
+    const problems = await fitProblems(page.locator(c.target), { timeout: CASE_MS });
     const kinds = [...new Set(problems.map(p => p.split(':')[0]))].sort();
     const want = [...c.expect].sort();
     const tag = `[${engine}] ${c.name}`;
     if (errors.length) fail(`${tag}: page error ${errors[0]}`);
+    else if (problems.some(p => p.startsWith(FIT_INCOMPLETE))) fail(`${tag}: the check did not finish in ${CASE_MS}ms: ${problems.join(' | ')}`);
     else if (JSON.stringify(kinds) !== JSON.stringify(want)) {
       fail(`${tag}: expected ${want.length ? want.join(', ') : 'no problem'}, got ${problems.length ? problems.join(' | ') : 'no problem'}`);
     } else ok(`${tag}: ${want.length ? want.join(', ') : 'fits and scrolls'}`);

@@ -697,10 +697,13 @@
       if (entry.downOutside) e.preventDefault();
     };
     entry.onCancel = e => { e.preventDefault(); request(entry, 'esc'); };
+    // A native dialog the browser closed itself (a <form method="dialog">, a
+    // page's own dialog.close()) is finished the same way, with its returnValue.
+    entry.onClose = () => finish(entry, box.returnValue);
     box.addEventListener('input', entry.onInput);
     (backdrop || box).addEventListener('click', entry.onClick);
     (backdrop || box).addEventListener('mousedown', entry.onDown);
-    if (native) box.addEventListener('cancel', entry.onCancel);
+    if (native) { box.addEventListener('cancel', entry.onCancel); box.addEventListener('close', entry.onClose); }
     stack.push(entry);
     if (native) { if (!box.open) box.showModal(); } else (backdrop || box).hidden = false;
     (initialFocus || initialFocusIn(box)).focus();
@@ -724,7 +727,11 @@
     box.removeEventListener('input', entry.onInput);
     (backdrop || box).removeEventListener('click', entry.onClick);
     (backdrop || box).removeEventListener('mousedown', entry.onDown);
-    if (native) { box.removeEventListener('cancel', entry.onCancel); if (box.open) box.close(); }
+    if (native) {
+      box.removeEventListener('cancel', entry.onCancel);
+      box.removeEventListener('close', entry.onClose);
+      if (box.open) box.close();
+    }
     else (backdrop || box).hidden = true;
     if (entry.reenable) entry.opener.disabled = false;
     if (entry.opener && entry.opener.isConnected) entry.opener.focus();

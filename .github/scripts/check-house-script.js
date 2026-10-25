@@ -364,6 +364,26 @@ const page = await open({ width: 1280, height: 800 });
     wrap.remove();
     return r;
   });
+  // A native dialog the browser closes itself (<form method="dialog">) still
+  // finishes: its promise answers, its opener comes back, and it opens again.
+  const formClose = await page.evaluate(async () => {
+    const d = document.createElement('dialog');
+    d.className = 'dialog';
+    d.innerHTML = '<form method="dialog"><div class="dialog-footer"><button class="btn btn-primary" value="ok" id="fd-ok">OK</button></div></form>';
+    document.body.append(d);
+    const opener = document.getElementById('rename');
+    const first = House.dialog.open(d, { opener });
+    document.getElementById('fd-ok').click();
+    const answer = await Promise.race([first, new Promise(r => setTimeout(() => r('no answer'), 500))]);
+    const back = !opener.disabled;
+    House.dialog.open(d, { opener });
+    const reopened = d.open;
+    House.dialog.close(d);
+    d.remove();
+    return { answer, back, reopened };
+  });
+  check(formClose.answer === 'ok' && formClose.back && formClose.reopened,
+    'a native dialog closed by its own form answers, gives its opener back, and opens again', JSON.stringify(formClose));
   check(nested.inner && nested.outer && nested.outerClosedByEsc,
     'a dialog nested in another\'s markup: its Cancel closes only it, and its typing does not hold the outer one open', JSON.stringify(nested));
 

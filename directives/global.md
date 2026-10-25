@@ -280,6 +280,22 @@ it. A wait whose only signal is a webhook heartbeats when the webhook fires;
 five minutes is the threshold that arms the line, not a polling interval
 (→ *Async Operations*, and `git.md` → *GitHub API Quota Economy*).
 
+## Owner Actions Come as Numbered Steps (owner ruling, 2026-10-25)
+Whenever the owner has to do something — change a setting, cut a release,
+relay a message, approve or merge on GitHub, run a command — the reply gives it
+as a numbered list (1, 2, 3), always, never as a paragraph.
+- **One action per step, in order.** Each step starts with a verb and names
+  exactly where: the page, the button, the field, the value to enter. A link to
+  the exact page goes in the step that opens it.
+- **Say what success looks like** — what the owner should see once the last
+  step worked.
+- **A simple question stays a plain question.** When the owner only has to
+  answer (pick an option, say yes or no), ask it in one sentence, with no steps.
+- **Text to paste stays fenced** (→ *Pasteable Messages Go in Chat, Fenced*):
+  the step says where to paste it, and the fence follows that step.
+- **When the work waits on the steps, they sit directly above the final word,
+  QUESTION** (→ *Status Line on Every Stop*).
+
 ## Handoffs Carry Only What Dies With the Session (owner ruling, 2026-08-05)
 Applies to `/handoff-session` and any summary written for a successor session.
 Apply the test to every line *before* writing it, not as a pass afterwards:

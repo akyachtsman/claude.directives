@@ -230,6 +230,29 @@ const page = await open({ width: 1280, height: 800 });
   check((await log(page)).includes('form:Shelf 3') && await focusedId(page) === 'open-form',
     'House.dialog.close returns its value and focus to the opener');
 
+  // A segmented control last in a dialog: its unselected tabs (tabindex -1)
+  // are no Tab stop, so Tab from the selected one wraps inside the dialog.
+  await page.evaluate(() => {
+    const seg = document.createElement('div');
+    seg.className = 'segmented'; seg.setAttribute('role', 'tablist'); seg.id = 'dlg-seg';
+    for (const n of ['One', 'Two', 'Three']) {
+      const t = document.createElement('button');
+      t.type = 'button'; t.setAttribute('role', 'tab'); t.id = 'dlg-' + n; t.textContent = n;
+      if (n === 'One') t.setAttribute('aria-selected', 'true');
+      seg.append(t);
+    }
+    document.querySelector('#form-dialog .dialog-footer').append(seg);
+    House.segmented(seg);
+  });
+  await page.click('#open-form');
+  await page.focus('#dlg-One');
+  await page.keyboard.press('Tab');
+  const wrapped = await page.evaluate(() => ({ inside: !!document.activeElement.closest('#form-dialog'), label: document.activeElement.getAttribute('aria-label') || document.activeElement.id }));
+  check(wrapped.inside && wrapped.label === 'Close', 'a segmented control last in a dialog: Tab from its selected tab wraps to the first control', JSON.stringify(wrapped));
+  await page.click('#form-dialog .dialog-header [aria-label="Close"]');
+  await settle(page);
+  await page.evaluate(() => document.getElementById('dlg-seg').remove());
+
   await clearLog(page);
   await page.click('#open-form');
   await page.evaluate(() => House.dialog.setBusy(document.getElementById('form-dialog')));

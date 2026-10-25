@@ -614,6 +614,9 @@
   function focusables(root) {
     return [...root.querySelectorAll(FOCUSABLE)].filter(el => !el.closest('[hidden]') && el.getClientRects().length > 0);
   }
+  // The Tab order only: a roving control (House.segmented) keeps its unselected
+  // tabs at tabindex -1, focusable by script but never a Tab stop.
+  const tabbables = root => focusables(root).filter(el => el.tabIndex >= 0);
   const entryOf = el => stack.find(e => e.el === el || e.box === el || e.backdrop === el);
   const isClose = el => el instanceof Element
     && (el.closest('[data-dialog-close]') || el.closest('.dialog-header button[aria-label="Close"]'));
@@ -724,7 +727,7 @@
     if (e.key !== 'Tab') return;
     const top = stack[stack.length - 1];
     if (!top) return;
-    const f = focusables(top.box);
+    const f = tabbables(top.box);
     if (!f.length) { e.preventDefault(); return; }
     const first = f[0], last = f[f.length - 1];
     const active = document.activeElement;

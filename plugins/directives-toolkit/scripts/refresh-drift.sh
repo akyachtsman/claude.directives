@@ -13,7 +13,9 @@
 # cannot.
 #
 # WHICH FILES. Every installed workflow, composite file and the SessionStart
-# hook, and -- since the claude.prop pilot (2026-10-13), where five script
+# hook; on a project marked as on the house style (refresh-lib.sh ->
+# refresh_house_style, #470) styles/components.css too, with styles/tokens.css
+# checked by token name after the loop (TOKENS / MISSING); and -- since the claude.prop pilot (2026-10-13), where five script
 # templates in the delta had to be classified by hand -- every installed
 # .github/scripts/<name> whose template templates/scripts/<name> exists at the
 # pin (package.json included: it is shipped, and refresh-stamp.sh compares it
@@ -47,6 +49,8 @@
 #   MODE: <path>    the executable bit differs from the template's git mode
 #                   (100755 vs 100644). Informational, never DRIFT on its own.
 #   NO-TEMPLATE / CANNOT-VERIFY / RETIRED, as before.
+#   TOKENS: / MISSING: the house style's two files on a marked project (#470);
+#   HOUSE-STYLE: one line on an unmarked one, which compares nothing there.
 # then one SUMMARY line with the counts, and -- only when there are any -- one
 # RE-RECORD line naming every refresh_kept file record (kit files included)
 # whose `local` blob is missing or is not the file's now. Exit 0 when files
@@ -103,10 +107,19 @@ KITS
   return 1
 }
 
+# The house style (#470): on a project marked as on it, styles/components.css is
+# a verbatim drop-in like the rest, so it joins the loop; styles/tokens.css is
+# checked by token NAME after the loop, because its values are the project's.
+house=no
+refresh_house_style && house=yes
+house_cmp=
+[ "$house" = yes ] && house_cmp=styles/components.css
+
 n=0 same=0 stale=0 custom=0 drift=0 modes=0
+# shellcheck disable=SC2086  # $house_cmp is one path or nothing
 for f in .github/workflows/*.yml .github/actions/*/* \
          .claude/hooks/session-start.sh .github/scripts/* \
-         .github/workflow-ref-required.json .github/ui-suite-env-exempt.json; do
+         .github/workflow-ref-required.json .github/ui-suite-env-exempt.json $house_cmp; do
   [ -f "$f" ] || continue
   script=
   case "$f" in
@@ -207,6 +220,33 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     custom=$((custom + 1))
   fi
 done
+# The house style, after the loop (#470). A marked project REQUIRES both files:
+# the marker says they are the house's, so an absent one is a gap to fill, not
+# a piece the project never installed. tokens.css is compared by token name
+# only (refresh-lib.sh -> refresh_token_names): a palette the owner ruled keeps
+# its values, and a name the template added is what a refresh has to bring.
+# An unmarked project gets one line and nothing compared: its stylesheets are
+# its own until it moves (/design-intake), never at refresh time.
+if [ "$house" = yes ]; then
+  [ -f styles/components.css ] \
+    || echo "MISSING: styles/components.css -- this project is on the house style (.claude/directive-sync.json -> house_style), so it is required; install templates/styles/components.css"
+  if ! git -C "$up" cat-file -e "$pin:templates/styles/tokens.css" 2>/dev/null; then
+    echo "NO-TEMPLATE: templates/styles/tokens.css is not shipped at $pin -- styles/tokens.css not compared"
+  elif [ ! -f styles/tokens.css ]; then
+    echo "MISSING: styles/tokens.css -- this project is on the house style, so it is required; install templates/styles/tokens.css, then set any value the owner ruled"
+  else
+    want=$(git -C "$up" cat-file blob "$pin:templates/styles/tokens.css" | refresh_token_names)
+    lacks=$(LC_ALL=C comm -23 <(printf '%s\n' "$want") <(refresh_token_names <styles/tokens.css) | paste -sd ' ' -)
+    total=$(printf '%s\n' "$want" | grep -c .)
+    if [ -z "$lacks" ]; then
+      echo "TOKENS: styles/tokens.css declares all $total house token names at $pin (the values are the project's)"
+    else
+      echo "TOKENS: styles/tokens.css lacks $(wc -w <<<"$lacks" | tr -d ' ') of $total house token names at $pin: $lacks -- add each; refresh-merge.sh styles/tokens.css brings them with the house values, which a ruled palette then sets"
+    fi
+  fi
+else
+  echo "HOUSE-STYLE: not marked (.claude/directive-sync.json -> house_style is not true) -- styles/ not compared; an existing project moves with /design-intake, never at refresh time"
+fi
 rm -rf "$up"
 echo "SUMMARY: $n installed file(s) compared at $pin — $same match, $stale STALE, $custom CUSTOM, $drift DRIFT, $modes MODE"
 # Every refresh_kept FILE record whose `local` blob is missing or no longer the

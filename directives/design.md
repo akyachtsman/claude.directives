@@ -40,10 +40,27 @@ Every project starts from the house look: `templates/styles/tokens.css` and
 **reference page** from them, and the remaining pages are built against that
 contract so every page matches page one.
 
-**A project that already exists** moves to the house style in a separate
-change (#470), by owner ruling (2026-10-19); until it lands, `/design-intake`
-does not replace an existing project's stylesheets, and a screen that does not
-yet match goes into `DESIGN-GAPS.md` (below).
+**A project that already exists** moves to the house style once, by owner
+ruling (2026-10-19), with `/design-intake`'s step 1c, *Move an existing project* (#470),
+never at refresh time. Three steps, each its own change:
+1. **Make room, with no visible change.** Every class the project's own
+   stylesheets define under a house name (`.btn`, `.card`, `.input`, …) is
+   renamed `legacy-<name>` in its CSS, HTML and JS, so the old screens keep
+   their exact look. The house `components.css` goes in at
+   `styles/components.css`, verbatim, loaded before the project's own
+   stylesheets; `styles/tokens.css` declares every house token name; every
+   screen not yet on the house components gets its lines in `DESIGN-GAPS.md`;
+   and the project is marked as on the house style (→ *Tokens & components*).
+   Screenshots of every screen before and after are the proof.
+2. **Move the screens**, one or a few per change: each takes the house
+   components and the patterns below, drops its `legacy-` classes, and deletes
+   its `DESIGN-GAPS.md` lines.
+3. **Finish:** once no `legacy-` class is used, the legacy stylesheet goes, and
+   so does the emptied `DESIGN-GAPS.md`.
+
+Renaming the old classes is what keeps the two sets apart. Swapping the
+stylesheets broke every screen not yet rebuilt, and loading the old files beside
+the house ones let the house rules win every shared name (#469 review).
 
 A project changes its **palette or fonts** (tokens only) only by owner ruling,
 for example a client's brand colour. `/design-intake` then imports that look
@@ -77,7 +94,17 @@ Two committed files are the single source of truth for a project's look:
   page's content box (`.page`).
 
 A screen never adds its own button, card, pill or dialog class; a size or layout
-need is a modifier on the shared one. Script behaviour that every page shares
+need is a modifier on the shared one. **Never edit `styles/components.css`:** it
+is the house file, kept current by `/refresh-repo`. A project's own modifiers and
+layout live in its own stylesheet (`styles/project.css`, say), loaded after it.
+
+**The marker.** `.claude/directive-sync.json` → `"house_style": true` says this
+project's two files are the house's: `components.css` verbatim, and `tokens.css`
+declaring every house token name, with the project's values. `/new-repo`,
+`/design-intake` and the move above write it. On a marked project
+`/refresh-repo` keeps both current (components exactly, tokens by name) and
+requires both, and the contrast guardrail measures every house pair. An unmarked
+project's stylesheets are its own, and nothing compares them. Script behaviour that every page shares
 (the confirmation dialog, the archived pop-over, the ⋮ menu, the empty state, the inline
 message, the icon set, the table comparator, the segmented control's keys,
 the dialog's focus, the `aria-disabled` guard)
@@ -515,9 +542,11 @@ list, from reading `components.css`:
 - `--color-accent` on `--color-surface` and `--color-bg` below 18.66px bold or
   24px: links, Back, the Add card and a sort header. The guardrail holds
   accent/surface only to 3.0 and does not measure accent/bg;
-- `--color-border-input` on `--color-surface` and `--color-bg`, at 3:1 (a
-  control's edge, above). The guardrail leaves it out so a project still on the
-  older starter `tokens.css`, which has no such token, keeps passing (#470).
+
+The control edge, `--color-border-input` on `--color-surface` and `--color-bg`
+at 3:1 (above), is the guardrail's: required on a marked project (the marker
+is under *Tokens & components*), measured wherever the token is declared, and left out only where it is
+not, which is a project still on the older starter `tokens.css` (#470).
 
 A change to `components.css` that draws a new pair adds it to this list in the
 same change. Read the guardrail's pair list against your own token roles. A themed project gives **each theme its own complete

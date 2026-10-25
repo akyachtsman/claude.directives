@@ -64,7 +64,34 @@ refresh_template_of() {
     .github/actions/*)   printf 'templates/actions/%s\n' "${1#.github/actions/}" ;;
     .github/scripts/*)   printf 'templates/scripts/%s\n' "${1#.github/scripts/}" ;;
     .claude/hooks/*)     printf 'templates/claude-hooks/%s\n' "${1#.claude/hooks/}" ;;
+    # The two house-style files only (#470): a project's own stylesheet beside
+    # them (styles/legacy.css, styles/project.css) has no template.
+    styles/tokens.css | styles/components.css) printf 'templates/%s\n' "$1" ;;
   esac
+}
+
+# refresh_house_style: exit 0 when THIS project is on the house style, i.e.
+# .claude/directive-sync.json -> house_style is exactly `true` (#470). The
+# marker means styles/components.css is the house file, verbatim, and
+# styles/tokens.css declares every house token name with the project's values.
+# /new-repo, /design-intake and the existing-project move write it. Anything
+# else (no file, no key, false, "true") is a project not yet moved: its
+# stylesheets are its own, and no refresh compares them, because an older
+# starter tokens.css/components.css looks just like a customised house one.
+refresh_house_style() {
+  jq -e '.house_style == true' .claude/directive-sync.json >/dev/null 2>&1
+}
+
+# refresh_token_names: read CSS on stdin; print every custom-property NAME it
+# declares (`--name:`), sorted, once each. Comments are dropped first, so a
+# commented-out token is not counted as declared; `var(--x)` is a use, not a
+# declaration, and has no colon. This is a name check, never a value check:
+# values are the project's (a palette ruled by the owner), and the contrast
+# guardrail owns what they render as.
+refresh_token_names() {
+  tr '\r\n' '  ' | sed -E 's#/\*[^*]*\*+([^/*][^*]*\*+)*/# #g' \
+    | { grep -oE -- '--[A-Za-z0-9_-]+[[:space:]]*:' || true; } \
+    | sed -E 's/[[:space:]]*:$//' | LC_ALL=C sort -u
 }
 
 # refresh_kit_rel <path> <kit dir>: print <path> relative to the kit and

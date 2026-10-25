@@ -167,7 +167,8 @@ Execute in order:
    project replaces the task body with its real notification.
 
    **Design starter.** Copy `claude.directives/templates/styles/` (`tokens.css`,
-   `components.css`) into `styles/`. They are the house style and pass the
+   `components.css`, `components.js`) into `styles/`. They are the house style
+   (every page loads `styles/components.js`, the shared page script) and pass the
    contrast guardrail as-is; `/design-intake` keeps them, and changes token
    values only when the owner rules a project palette (per `directives/design.md`).
 

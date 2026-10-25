@@ -6,7 +6,7 @@
    the shared one. Meets the craft rules in design.md (44px targets,
    :focus-visible, reduced motion). The behaviour these need (the confirmation
    dialog, the Archived (N) fit, the empty state, inline messages) lives in ONE
-   shared script per project, never per page. */
+   shared script per project, never per page: components.js, beside this file. */
 
 /* ── Page base: the canvas, text colour and font every page starts from ─────── */
 /* border-box, so padding and borders stay inside a component's width and a

@@ -34,8 +34,9 @@ How to use it:
   standard, or says in the PR why not, and deletes the line it fixes.
 
 ## Establishing your project's look
-Every project starts from the house look: `templates/styles/tokens.css` and
-`templates/styles/components.css`, which `/new-repo` copies into `styles/`.
+Every project starts from the house look: `templates/styles/tokens.css`,
+`templates/styles/components.css` and the shared page script
+`templates/styles/components.js`, which `/new-repo` copies into `styles/`.
 `/design-intake` (`/kickoff` calls it) adopts them, builds one approved
 **reference page** from them, and the remaining pages are built against that
 contract so every page matches page one.
@@ -81,7 +82,11 @@ need is a modifier on the shared one. Script behaviour that every page shares
 (the confirmation dialog, the archived pop-over, the ⋮ menu, the empty state, the inline
 message, the icon set, the table comparator, the segmented control's keys,
 the dialog's focus, the `aria-disabled` guard)
-lives in ONE shared script loaded by every page, never copied into a page.
+lives in ONE shared script loaded by every page, never copied into a page:
+**`styles/components.js`**, plain JS with no build, loaded with
+`<script src="styles/components.js" defer>` and called as `House.*` from page
+code that runs on `DOMContentLoaded`. Its header lists what it does, by section.
+A screen that needs one of these behaviours calls it; it never writes its own.
 Every generator is told to **use this project's `tokens.css` and `components.css`**, never to invent a parallel
 system.
 

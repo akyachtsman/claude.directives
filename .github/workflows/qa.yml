@@ -135,7 +135,7 @@ jobs:
           # `|| exit 1`, not `&&`: errexit does not fire on a failure inside an
           # `&&` list, so the loop took the LAST file's status and a syntax error
           # in the spec (checked first) left the step green (audit, 2026-10-06).
-          for f in templates/ui-tests/tests/*.js templates/ui-tests/tests/lib/*.js templates/ui-tests/*.js; do
+          for f in templates/ui-tests/tests/*.js templates/ui-tests/tests/lib/*.js templates/ui-tests/*.js templates/styles/*.js; do
             node --check "$f" || exit 1
             echo "OK: $f"
           done
@@ -424,10 +424,19 @@ jobs:
         # before html-validate runs. It needs none of them to validate a file.
         env:
           npm_config_legacy_peer_deps: 'true'
-        run: npx --yes html-validate@10.17.0 docs/site/logical-map.html   # pinned: a new release could turn this red with no change here. 10.x was chosen while this job ran Node 20 (11.x needs >=22.22); the job is on 22 now, so a move to 11.x is its own change
+        run: npx --yes html-validate@10.17.0 docs/site/logical-map.html .github/house-fixture/index.html   # pinned: a new release could turn this red with no change here. 10.x was chosen while this job ran Node 20 (11.x needs >=22.22); the job is on 22 now, so a move to 11.x is its own change
 
       - name: Repo map UI checks
         run: node .github/scripts/check-repo-map-ui.js
+
+      # The house script every project's pages load (templates/styles/components.js,
+      # #471), driven in the same browser on its fixture page: the dialogs, the
+      # pop-overs and their fit, the ⋮ menu, the table sort, the segmented
+      # control's keys and the aria-disabled guard, by keyboard and pointer, at
+      # laptop and phone width. Here, not in its own job, so it reuses this
+      # job's Chromium instead of installing a second one.
+      - name: House script checks
+        run: node .github/scripts/check-house-script.js
 
   # #460 step 4: the guard before any shared-workflow tag moves. Calls the
   # callable qa (.github/workflows/shared-qa.yml) the way a project would,

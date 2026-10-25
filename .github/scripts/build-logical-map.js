@@ -188,7 +188,7 @@ const ALIASES = {
   [`${P}/scripts/`]: ['push-gate.sh', 'wait-gate.sh', 'pages-edit-gate.sh', 'refresh-stamp.sh', 'derive-scripts.sh', 'kit-dirs.sh', 'session-start-registered.sh', `${P}/scripts`],
   [`${P}/evals/`]: [`${P}/evals`],
   [`${P}/agents/supabase.md`]: ['directives-toolkit:supabase', /(?<![\w.-])supabase(?:\.md)?`? agent/],
-  'templates/styles/': ['templates/styles', 'tokens.css', 'components.css'],
+  'templates/styles/': ['templates/styles', 'tokens.css', 'components.css', 'components.js'],
   'templates/ui-tests/': ['templates/ui-tests', '.github/scripts/ui-tests'],
   // A bare `package.json` is ambiguous (the kit ships one too), so only the
   // installed path names this file: cron-notify.yml, /new-repo and cicd-setup.md
@@ -375,6 +375,7 @@ const FLOW = [
   ['shared-qa.yml', 'check-contrast.js', 'run', 'runs at the called commit', 'a', 'node .claude-directives/templates/scripts/check-contrast.js'],
   ['shared-qa.yml', 'check-ui-viewports.js', 'run', 'stages for the ui-suite', 'a', 'for f in check-ui-viewports.js'],
   ['self:ci', 'shared-cron-notify.yml', 'val', 'self-tests with a fixture task', 'a', 'uses: ./.github/workflows/shared-cron-notify.yml'],
+  ['self:ci', 'styles/', 'val', 'drives the shared page script in a browser', 'a', 'Playwright check for the house script'],
   ['self:ops', 'shared-qa-live.yml', 'pub', 'publishes as a callable workflow', 'a', 'the **callable** workflows'],
   ['self:ops', 'shared-qa-response.yml', 'pub', 'publishes as a callable workflow', 'a', 'the **callable** workflows'],
   ['self:ops', 'shared-pages-deploy.yml', 'pub', 'publishes as a callable workflow', 'a', 'the **callable** workflows'],

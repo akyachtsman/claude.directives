@@ -52,11 +52,12 @@ replacement. Record every native evaluated and declined in `EXPORTS.json` →
 | `templates/ui-tests/` | Playwright test kit projects copy into `.github/scripts/ui-tests/` |
 | `templates/scripts/` | Project scripts — guards, notifiers, the browser ladder, and the `package.json` the notifiers install from — that projects copy into `.github/scripts/`; which ones a project gets is derived from the workflows and directives that name them (`/new-repo`, `/refresh-repo`). `qa.yml` runs the guards straight from this path, so none has a `.github/scripts/` twin here |
 | `templates/claude-settings.json` | Project `.claude/settings.json` template (marketplace + plugin enablement) that `/new-repo` installs into new projects |
-| `templates/styles/` | The house design contract (`tokens.css` + `components.css`) projects copy per `design.md` |
+| `templates/styles/` | The house design contract (`tokens.css` + `components.css`, and `components.js`, the shared page script every page loads) projects copy per `design.md` |
 | `templates/` (top-level md files) | Fill-in artifacts: `templates/CLAUDE-template.md`, `templates/pr-checklist.md`, `templates/project-test-plan-template.md`, `templates/implementation-summary-template.md` |
 | `docs/` | Split by audience: `docs/standards/` (exported standards), `docs/guides/` (exported guidance/setup), `docs/site/` (Pages assets), `docs/internal/` (this repo only), plus legacy-URL redirect stubs at the old docs-root html paths and `docs/site/index.html`; see `docs/README.md` for the index |
 | `.github/workflows/` | This repo's self-test CI (`qa.yml`), plus the **callable** workflows projects will call instead of copying (`shared-qa.yml`, `shared-qa-live.yml`, `shared-qa-response.yml`, `shared-pages-deploy.yml`, `shared-cron-notify.yml`; #460 step 4, piloted in claude.prop only). Those are exported (`EXPORTS.json` → `called-workflows`); how they differ from their templates and what the spike found: `docs/internal/shared-workflows.md` |
 | `.github/shared-qa-fixture/` | The fixtures `qa.yml`'s self-test jobs run the callable workflows against: a site and Playwright suite for `shared-qa.yml`, a task script for `shared-cron-notify.yml` |
+| `.github/house-fixture/` | The page `check-house-script.js` drives: one of each behaviour of `templates/styles/components.js`, loading the shipped house files unchanged |
 | `.github/scripts/` | Validation scripts run by `qa.yml` |
 | `scripts/` | Hosted helper scripts fetched by environments (`install-toolkit.sh` — the one-line env setup-script install, see `NEW-REPO-USER-INSTRUCTIONS.md` Step 0) |
 
@@ -130,7 +131,9 @@ A directive repo must pass its own CI before it can be trusted downstream.
   its own exported UI-testing standard (`test.md` / `templates/ui-tests`) on its
   interactive Pages artifact, `docs/site/logical-map.html`. What each case covers and why it exists is in
   `docs/internal/repo-map-ui.md`; read that before changing the map, the router,
-  or the suite.
+  or the suite. The same job then runs `House script checks`
+  (`check-house-script.js`), which drives the shared page script
+  `templates/styles/components.js` on `.github/house-fixture/index.html`.
 A red run reaches a session through its PR subscription, and GitHub emails the
 run's actor; Codex's verdict is read from the PR (`git.md` → *PR Lifecycle*).
 Self-test triage: `docs/internal/repo-monitors.md`. Exported automation standard and escalation rules:
@@ -176,8 +179,9 @@ re-proved against a mutant names its `*_BIN` variable in its header.
 Not in that job, so run them by hand when they apply:
 ```
 bash -n .claude/hooks/session-start.sh && CLAUDE_CODE_REMOTE=true ./.claude/hooks/session-start.sh   # when the hook changed
-npm_config_legacy_peer_deps=true npx html-validate@10.17.0 docs/site/logical-map.html   # when the map changed (CI runs it every time, same pin and env)
+npm_config_legacy_peer_deps=true npx html-validate@10.17.0 docs/site/logical-map.html .github/house-fixture/index.html   # when the map or the house fixture changed (CI runs it every time, same pin and env)
 node .github/scripts/check-repo-map-ui.js                    # when the map changed; needs `npm i playwright@1.62.1 && npx playwright install chromium` (the version qa.yml pins)
+node .github/scripts/check-house-script.js                   # when templates/styles/components.js or its fixture changed; same Playwright setup
 (cd plugins/directives-toolkit && claude plugin eval --no-publish .)   # when an auto-skill's description changed
 #   sandboxes that ship a pinned Chromium: CHROMIUM_PATH=/path/to/chrome node .github/scripts/check-repo-map-ui.js
 #   after editing EXPORTS.json, the map, or any file a drawn connection quotes, regenerate first: node .github/scripts/build-logical-map.js

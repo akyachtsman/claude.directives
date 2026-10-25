@@ -9,8 +9,9 @@ style for every project (owner rulings, 2026-10-19), so this command adopts it;
 it never invents a look. Browser-only throughout.
 
 ## 1. Adopt the house style (default)
-Copy `templates/styles/tokens.css` and `templates/styles/components.css` from
-claude.directives into `styles/` unchanged, if `/new-repo` has not already. In a
+Copy `templates/styles/tokens.css`, `templates/styles/components.css` and the
+shared page script `templates/styles/components.js` from claude.directives into
+`styles/` unchanged, if `/new-repo` has not already. In a
 project that already has its own stylesheets, stop and say so: moving an
 existing project to the house style is a separate change (#470), by owner
 ruling. A palette the owner ruled keeps its values (1b). How later fixes to the
@@ -34,8 +35,9 @@ colour, whatever the new accent is.
 
 ## 2. Build the reference page
 One cleaned **reference page** (`index.html` or a representative screen) built
-only from `styles/tokens.css` + `styles/components.css`: semantic, plain
-HTML/CSS, no framework, no new classes, its content inside `.page`. It shows at least the buttons, a card
+only from `styles/tokens.css` + `styles/components.css`, with its behaviour
+from `styles/components.js` (`House.*`, never a page's own copy): semantic, plain
+HTML/CSS/JS, no framework, no new classes, its content inside `.page`. It shows at least the buttons, a card
 grid with its Add card, a form, a status pill of each colour, an empty state, a
 confirmation dialog and an Archived (N) pop-over, so the look-gate sees the
 whole standard on one page.
@@ -63,5 +65,5 @@ Record the look decisions (house style, or the ruling behind an imported palette
 then: "Next: `/sdd-loop` — it builds the remaining pages against
 `styles/tokens.css` + `styles/components.css`, so every page matches this one."
 
-Writes: `styles/tokens.css`, `styles/components.css`, the reference page,
+Writes: `styles/tokens.css`, `styles/components.css`, `styles/components.js`, the reference page,
 `specs/<slug>/design.md`.

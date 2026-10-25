@@ -270,6 +270,6 @@ see `design.md` and `docs/guides/design-tooling.md`; a project's own palette onl
 - **Design — one house style (2026-10-19):** the owner made the RSO project's UI
   standard the house style for every project. `directives/design.md` now carries
   its words, icons, components and patterns, and `templates/styles/` carries its
-  palette and components; `/design-intake` adopts them and imports a palette
+  palette, components and shared page script (`components.js`, #471); `/design-intake` adopts them and imports a palette
   only by owner ruling. Where each project still breaks it: its own
   `DESIGN-GAPS.md`.

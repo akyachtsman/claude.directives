@@ -774,6 +774,24 @@ async function archivedChecks(p, tag) {
   await page.keyboard.press('Escape');
   await page.fill('#who-field', '');
 
+  // Rows already in the list when it binds are options with ids from the start.
+  const pre = await page.evaluate(() => {
+    const f = document.createElement('input'), l = document.createElement('div');
+    f.className = 'input'; f.id = 'pre-field'; l.className = 'list-pop';
+    for (const n of ['One', 'Two']) { const o = document.createElement('div'); o.className = 'list-option'; o.textContent = n; l.append(o); }
+    document.getElementById('h-type').after(f, l);
+    House.typeahead(f, l);
+    f.focus();
+    f.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    const act = f.getAttribute('aria-activedescendant');
+    const o = act && document.getElementById(act);
+    const out = { open: !l.hidden, act, role: o && o.getAttribute('role'), text: o && o.textContent, roles: [...l.children].map(c => c.getAttribute('role')).join() };
+    l.hidden = true; f.remove(); l.remove();
+    return out;
+  });
+  check(pre.open && pre.act && pre.role === 'option' && pre.text === 'One' && pre.roles === 'option,option',
+    'rows already in the list when it binds get option roles and ids, so ↓ names the active one', JSON.stringify(pre));
+
   // Inside a dialog: Esc closes the list, not the dialog.
   await clearLog(page);
   await page.click('#open-form');

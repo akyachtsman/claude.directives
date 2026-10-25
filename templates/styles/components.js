@@ -410,12 +410,18 @@
         else place();
       },
     };
-    function update() {
+    // Every row an option with an id, for aria-activedescendant to name: rows
+    // already there when it binds, and each the page adds after.
+    function label() {
       for (const o of rows()) {
         if (!o.id) o.id = uid('option');
         o.setAttribute('role', 'option');
         if (o !== current) o.setAttribute('aria-selected', 'false');
       }
+    }
+    label();
+    function update() {
+      label();
       const c = choices();
       if (!c.length || document.activeElement !== field) { d.hide(false); return; }
       const keep = c.includes(current);

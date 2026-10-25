@@ -15,11 +15,54 @@ this page does not repeat them.
 | `.github/workflows/shared-pages-deploy.yml` | `templates/workflows/pages-deploy.yml` |
 | `.github/workflows/shared-cron-notify.yml` | `templates/workflows/cron-notify.yml` |
 
-Each file's header carries the caller a project writes for it.
+Each file's header carries the caller a project writes for it, pinned
+`@v1` (see *Releases* below).
 
 The templates under `templates/workflows/` stay full copies, unchanged, until
 the pilot has proven out (owner, 2026-10-16). Until the templates become
 callers, a defect is fixed in both files.
+
+## Releases (Phase B, owner, 2026-10-25)
+
+One version covers the whole repo: a release stamps everything on `main` at
+one commit, `v1.0.0` first, then `v1.1.0` after the next batch of fixes. Each
+release is a GitHub release whose notes list what changed since the one
+before, one line per merged PR. Beside the fixed `vX.Y.Z` tags, a moving `v1`
+tag always names the latest `v1` release.
+
+A caller pins one of two ways:
+
+- `@v1`: follows the latest release. This is the default in every header.
+- `@vX.Y.Z`: stays on exactly that release until the project moves it.
+
+An exact commit SHA still works too: claude.prop's callers and the insurance
+pilot pin `55af14e`, and stay there until the owner moves them.
+
+**Cutting a release.** A session cannot create a tag or a release (spike item
+4 below), so `.github/workflows/release.yml` does it with the run's own token,
+and the owner presses it: on the Actions tab, the Release workflow's Run
+workflow button, on `main`.
+
+- `bump` is `minor` for a normal batch, `patch` for a fix-only batch, and
+  `major` for a breaking change to an input or a secret, which starts `v2`
+  and leaves `v1` where it is. The first release is `v1.0.0` whatever the
+  bump.
+- `summary` is an optional line at the top of the notes.
+- `dry-run` shows the version and the notes in the run's summary and
+  publishes nothing.
+
+The run refuses, and publishes nothing, when the ref is not `main`, when
+`QA — Directive Validation` on that commit is missing, running or red (that
+run includes the shared-workflow self-tests), or when the commit is behind
+the latest release. Pressing again on a commit that already is the latest
+release cuts nothing new: it repairs a missing release or `v1` move, so a run
+that failed half way is fixed by pressing again. The version arithmetic and
+the notes are `.github/scripts/release-plan.js`, pinned by
+`release-plan-cases.js` in `qa.yml`.
+
+**Rolling back.** The same button with `rollback-to` set to an earlier release
+(say `v1.1.0`) points `v1` back at it and cuts nothing. The `vX.Y.Z` tags
+never move, and the next release still counts up from the highest one.
 
 ## How a callable workflow differs from its template
 
@@ -122,9 +165,9 @@ across repositories.
    narrow the caller's token, never widen it.
 4. **Tags cannot be cut from a session here.** `git push` of a tag through the
    session's proxy returned HTTP 403, and the GitHub tools available here have
-   no call that creates a tag or release. Cutting `v0.1.0` (Phase B) is
-   therefore an owner step on the Releases page, or a dispatchable release
-   workflow in this repo if the owner prefers one.
+   no call that creates a tag or release. So Phase B became a dispatchable
+   release workflow the owner presses (owner, 2026-10-25), and the pilot's
+   `v0.1.0` pre-release was never cut: see *Releases* above.
 
 ## The self-tests
 

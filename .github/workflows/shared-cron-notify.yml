@@ -18,7 +18,7 @@
 #     contents: read
 #   jobs:
 #     run:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-cron-notify.yml@<tag>
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-cron-notify.yml@v1
 #       with:
 #         force: ${{ inputs.force == 'true' }}
 #       secrets:

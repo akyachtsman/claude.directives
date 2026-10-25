@@ -3,12 +3,16 @@
 #
 #   jobs:
 #     qa:
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@<tag>
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@v1
 #       with:
 #         tests-dir: .github/scripts/ui-tests
 #       secrets:
 #         TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
 #         TEST_AUTH_EMAIL: ${{ secrets.TEST_AUTH_EMAIL }}
+#
+# `@v1` follows the latest release; `@vX.Y.Z` stays on one release. Releases
+# are cut by .github/workflows/release.yml: docs/internal/shared-workflows.md
+# → Releases.
 #
 # A project with checks of its own (a path guard, unit tests, its own contrast
 # pairs) runs them in a SIBLING job of its caller and makes `qa` wait on it, so
@@ -27,7 +31,7 @@
 #         - run: node --test tests/
 #     qa:
 #       needs: [project-checks]
-#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@<tag>
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@v1
 #       ...
 #
 # A project that added contrast pairs to its own .github/scripts/check-contrast.js

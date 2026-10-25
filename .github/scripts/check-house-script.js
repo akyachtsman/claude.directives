@@ -294,6 +294,22 @@ const page = await open({ width: 1280, height: 800 });
   await page.keyboard.press('Tab');
   const radio = await page.evaluate(() => ({ inside: !!document.activeElement.closest('#form-dialog'), label: document.activeElement.getAttribute('aria-label') || document.activeElement.id }));
   check(radio.inside && radio.label === 'Close', 'a radio group last in a dialog: Tab from its checked radio wraps to the first control', JSON.stringify(radio));
+  await page.click('#form-dialog .dialog-header [aria-label="Close"]');
+  await settle(page);
+  await page.evaluate(() => document.querySelectorAll('#form-dialog .dlg-off').forEach(n => n.remove()));
+  // Same-name groups in two forms are two stops: Tab goes from one to the other.
+  await page.evaluate(() => {
+    for (const f of ['x', 'y']) {
+      const form = document.createElement('form');
+      form.className = 'dlg-off';
+      form.innerHTML = ['a', 'b'].map(v => `<label><input type="radio" name="choice" id="dlg-${f}-${v}"${v === 'a' ? ' checked' : ''}> ${v}</label>`).join('');
+      document.querySelector('#form-dialog .dialog-footer').append(form);
+    }
+  });
+  await page.click('#open-form');
+  await page.focus('#dlg-x-a');
+  await page.keyboard.press('Tab');
+  check(await focusedId(page) === 'dlg-y-a', 'same-name radio groups in two forms are two Tab stops', await focusedId(page));
   // The backstop: a page's stray .focus() outside the open dialog comes back in.
   const stray = await page.evaluate(() => {
     const out = document.getElementById('rename');   // live, unlike the disabled opener

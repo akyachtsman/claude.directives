@@ -622,14 +622,18 @@
     const live = [...root.querySelectorAll(FOCUSABLE)].filter(el => el.tabIndex >= 0
       && !el.matches(':disabled') && !el.closest('[hidden], [inert]')
       && el.getClientRects().length > 0 && getComputedStyle(el).visibility === 'visible');
+    // A group is its name within its owning form (or within no form).
     const groups = new Map();
+    const group = el => {
+      if (!groups.has(el.form)) groups.set(el.form, new Map());
+      return groups.get(el.form);
+    };
     for (const el of live) {
       if (el.type !== 'radio' || !el.name) continue;
-      const key = `${el.form ? 'f' : 'r'}:${el.name}`;
-      const g = groups.get(key);
-      if (!g || (el.checked && !g.checked)) groups.set(key, el);
+      const g = group(el), stop = g.get(el.name);
+      if (!stop || (el.checked && !stop.checked)) g.set(el.name, el);
     }
-    return live.filter(el => el.type !== 'radio' || !el.name || groups.get(`${el.form ? 'f' : 'r'}:${el.name}`) === el);
+    return live.filter(el => el.type !== 'radio' || !el.name || group(el).get(el.name) === el);
   }
   const entryOf = el => stack.find(e => e.el === el || e.box === el || e.backdrop === el);
   const isClose = el => el instanceof Element

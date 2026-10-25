@@ -10,6 +10,30 @@
 #         TEST_AUTH_CREDENTIAL: ${{ secrets.TEST_AUTH_CREDENTIAL }}
 #         TEST_AUTH_EMAIL: ${{ secrets.TEST_AUTH_EMAIL }}
 #
+# A project with checks of its own (a path guard, unit tests, its own contrast
+# pairs) runs them in a SIBLING job of its caller and makes `qa` wait on it, so
+# a red project check still stops the suite. This is the slot: the called
+# workflow takes no command to run, because a sibling job keeps the project's
+# own setup (its Node or Python version, its install) in the project's file
+# (claude.prop pilot, 2026-10-25):
+#
+#   jobs:
+#     project-checks:
+#       name: Project Checks
+#       runs-on: ubuntu-latest
+#       timeout-minutes: 5
+#       steps:
+#         - uses: actions/checkout@v7
+#         - run: node --test tests/
+#     qa:
+#       needs: [project-checks]
+#       uses: akyachtsman/claude.directives/.github/workflows/shared-qa.yml@<tag>
+#       ...
+#
+# A project that added contrast pairs to its own .github/scripts/check-contrast.js
+# names that copy in `contrast-script`; without it the shared run checks only
+# the shipped pairs, and says so when it sees a local copy that differs.
+#
 # Secrets go by NAME, not `secrets: inherit`: GitHub documents `inherit` only
 # for callers in the same organization or enterprise, and the projects live
 # under a personal account (Codex, #467).
@@ -54,6 +78,10 @@ on:
         default: '.'
       contrast-args:
         description: Extra arguments for check-contrast.js, e.g. `--tokens css/theme.css`. Split on whitespace.
+        type: string
+        default: ''
+      contrast-script:
+        description: The project's own contrast script, e.g. `.github/scripts/check-contrast.js` with its added pairs, run instead of the shared one. Empty runs the shared copy.
         type: string
         default: ''
       advisory-run:
@@ -118,14 +146,35 @@ jobs:
 
       # WCAG AA check against this project's design tokens: styles/tokens.css or
       # css/tokens.css by default; elsewhere, pass `--tokens <file>` in
-      # contrast-args. Run from the shared checkout, where the commonjs
-      # package.json beside it applies whatever the project's root declares.
+      # contrast-args. The shared copy runs from the shared checkout, where the
+      # commonjs package.json beside it applies whatever the project's root
+      # declares. A project's own copy (contrast-script) runs from the caller's
+      # checkout and needs its own package.json beside it, as in the template.
+      # Without contrast-script, a local .github/scripts/check-contrast.js that
+      # differs from the shared one gets a warning: its added pairs are not
+      # checked by this run (claude.prop pilot, 2026-10-25: 11 pairs checked of
+      # its 13).
       - name: Contrast guardrail (WCAG AA)
         env:
           CONTRAST_ARGS: ${{ inputs.contrast-args }}
+          CONTRAST_SCRIPT: ${{ inputs.contrast-script }}
         run: |
           read -r -a args <<< "$CONTRAST_ARGS"
-          node .claude-directives/templates/scripts/check-contrast.js "${args[@]}"
+          shared=.claude-directives/templates/scripts/check-contrast.js
+          if [ -n "$CONTRAST_SCRIPT" ]; then
+            if [ ! -f "$CONTRAST_SCRIPT" ]; then
+              echo "::error::contrast-script names $CONTRAST_SCRIPT, which is not a file in this repository."
+              exit 1
+            fi
+            echo "Contrast: the project's own $CONTRAST_SCRIPT (contrast-script)" >> "$GITHUB_STEP_SUMMARY"
+            node "$CONTRAST_SCRIPT" "${args[@]}"
+            exit
+          fi
+          local_copy=.github/scripts/check-contrast.js
+          if [ -f "$local_copy" ] && ! cmp -s "$shared" "$local_copy"; then
+            echo "::warning::$local_copy differs from the shared copy, and this run checks only the shared pairs. If it adds pairs of its own, pass contrast-script: $local_copy."
+          fi
+          node "$shared" "${args[@]}"
 
   ui-tests:
     name: UI Tests (local server)

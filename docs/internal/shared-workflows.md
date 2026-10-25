@@ -65,6 +65,41 @@ callers, a defect is fixed in both files.
 - `shared-pages-deploy.yml` fetches nothing from this repo: it runs no shared
   script.
 
+## What a project keeps (claude.prop pilot, 2026-10-25)
+
+The pilot, claude.prop #134 (merged as `c859d91`), pinned its callers to
+`f667e89`. It found four gaps, each fixed here:
+
+1. **Project checks go in a sibling job.** `shared-qa.yml` takes no command to
+   run. A project with checks of its own (prop's are a root-absolute path guard
+   and its Node unit tests) runs them in a sibling job of its caller, and `qa`
+   lists that job in `needs`, so a red project check stops the suite. The
+   project keeps its own setup that way. The `shared-qa.yml` header shows the
+   caller.
+2. **A project's own contrast pairs.** The shared contrast step ran only the
+   shipped `check-contrast.js`, so prop's four added pairs went unchecked (11
+   checked of its 13). Now `contrast-script` names the project's copy, which
+   runs instead of the shared one. Without it, a local
+   `.github/scripts/check-contrast.js` that differs from the shared one gets a
+   warning. The self-test runs the shipped script through that input.
+3. **Some scripts stay copies.** `browser-ladder.js` is not read by any
+   workflow: `test.md` tells sessions to run it locally. So it stays a copy in
+   the project, with the commonjs `package.json` beside it. The same goes for
+   a project's own `check-contrast.js`, which needs that `package.json` too.
+   The step 4 plan had listed `browser-ladder.js` among the scripts that would
+   be read from this repo at run time.
+4. **The refresh on a project with callers.** `/refresh-repo` reports a caller
+   as `CALLER` and never merges or overwrites it. `refresh-callers.sh` leaves
+   callers out, so the deleted composites and scripts are not offered back.
+   The stamp's applied-check never required them, because it reads each
+   workflow's own text; a case now proves that. `kit-dirs.sh` reads a caller's
+   `tests-dir:`. The rules are in `refresh-repo.md` → *A project on callers*.
+
+The pilot ran `qa`, `qa-live` (published lookup and live suite) and
+`qa-response` for real. prop has no `pages-deploy.yml` and no `cron-notify.yml`,
+so `shared-pages-deploy.yml` and `shared-cron-notify.yml` are still unproven
+across repositories.
+
 ## Spike findings (2026-10-19)
 
 1. **`./` paths resolve in the caller's repository.** The `github` context in a
@@ -102,7 +137,9 @@ would, with a fixture site and suite under `.github/shared-qa-fixture/`:
   the viewport gate requires, and one spec that loads the page, clicks the
   button and checks for errors and horizontal overflow.
 - The contrast step reads `templates/styles/tokens.css`, the starter tokens
-  projects copy.
+  projects copy. It runs `templates/scripts/check-contrast.js` through the
+  `contrast-script` input, so the self-test proves the path a project with its
+  own pairs takes.
 
 `shared-cron-selftest` calls `shared-cron-notify.yml` with
 `.github/shared-qa-fixture/cron/notify-task.js`, a task that sends nothing:

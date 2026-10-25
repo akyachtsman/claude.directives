@@ -48,6 +48,10 @@
 #                   stale cannot be told from custom: read the diff.
 #   MODE: <path>    the executable bit differs from the template's git mode
 #                   (100755 vs 100644). Informational, never DRIFT on its own.
+#   CALLER: <path>  a workflow that calls a shared workflow of this repo
+#                   (refresh-lib.sh -> refresh_caller_of, #460 step 4): never
+#                   STALE, CUSTOM or DRIFT, and never merged or overwritten from
+#                   the template. Keep it; the refresh_kept note is CUSTOM's.
 #   NO-TEMPLATE / CANNOT-VERIFY / RETIRED, as before.
 #   TOKENS: / MISSING: the house style's two files on a marked project (#470);
 #   HOUSE-STYLE: one line on an unmarked one, which compares nothing there.
@@ -117,7 +121,47 @@ refresh_house_style && house=yes
 house_cmp=
 [ "$house" = yes ] && house_cmp="styles/components.css styles/components.js"
 
-n=0 same=0 stale=0 custom=0 drift=0 modes=0
+# kept_note <path> <template>: the note a refresh_kept record earns this
+# path, or nothing when none is bound to the template's blob at the pin.
+kept_note() {
+  # A divergence already decided: refresh-stamp.sh's refresh_kept record,
+  # keyed by the local path, bound to the template's blob at the head -- so
+  # one that upstream has since changed is a fresh question again (claude.prop
+  # pilot, 2026-10-13). It is honoured only while it ALSO binds this file's
+  # content: its `local` blob must equal the installed copy's, or a later
+  # edit (or a replaced file) would inherit an old approval and go unreviewed
+  # (Codex, #451). A record without `local` is shown but not honoured, and so
+  # is one without a reason (a non-blank string), which the stamp would not
+  # honour either.
+  local b lb rec rl rest why short
+  b=$(git -C "$up" rev-parse "$pin:$2" 2>/dev/null) || b=
+  lb=$(git hash-object --no-filters -- "$1" 2>/dev/null) || lb=   # raw bytes, as the stamp
+  rec=$(jq -r --arg p "$1" --arg b "$b" \
+    '.refresh_kept[$p] | select(type == "object" and .blob == $b)
+     | (.reason // "" | if type == "string" and test("\\S") then gsub("[\t\n\r]"; " ") else "" end) as $r
+     | [(.local // ""), $r, (if ($r | length) > 60 then $r[0:60] + "..." else $r end)]
+     | @tsv' \
+    .claude/directive-sync.json 2>/dev/null) || rec=
+  [ -n "$rec" ] || return 0
+  # Every line quotes the reason cut to 60 characters (in jq, so never
+  # mid-character): one of claude.prop's ran ~800 and buried the verdict,
+  # first on the warning lines, then, on every refresh, on the line of a
+  # record that binds (pilot, 2026-10-15). The full text is the record's,
+  # one jq away. refresh-stamp.sh's KEPT lines cut the same way.
+  rl=${rec%%$'\t'*} rest=${rec#*$'\t'}
+  why=${rest%%$'\t'*} short=${rest#*$'\t'}
+  if [ -z "$why" ]; then
+    echo " (refresh_kept has a record but no reason -- review it, then re-record it with one)"
+  elif [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
+    echo " (recorded in refresh_kept: $short)"
+  elif [ -n "$rl" ]; then
+    echo " (refresh_kept says \"$short\", but this file changed since it was recorded -- review it again)"
+  else
+    echo " (refresh_kept says \"$short\", but the record binds no local content -- review it, then re-record with its local blob)"
+  fi
+}
+
+n=0 same=0 stale=0 custom=0 drift=0 modes=0 callers=0
 # shellcheck disable=SC2086  # $house_cmp is two paths or nothing
 for f in .github/workflows/*.yml .github/actions/*/* \
          .claude/hooks/session-start.sh .github/scripts/* \
@@ -170,6 +214,13 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     echo "MODE: $f is $lmode, the template is $tmode (informational, not DRIFT$note)"
     modes=$((modes + 1))
   fi
+  # A caller is the project's by design, so it is not classified against the
+  # template at all: a 3-way merge would pull the full copy back over it.
+  if called=$(refresh_caller_of "$f"); then
+    echo "CALLER: $f$(kept_note "$f" "$t") — calls $called; keep it, never merge or overwrite it from $t (#460 step 4; record it in refresh_kept)"
+    callers=$((callers + 1))
+    continue
+  fi
   if git -C "$up" cat-file blob "$pin:$t" 2>/dev/null | cmp -s - "$f"; then
     same=$((same + 1))
   elif [ -n "$why_no_base" ]; then
@@ -182,43 +233,7 @@ for f in .github/workflows/*.yml .github/actions/*/* \
     echo "STALE: $f — equals the template at the stamp; only upstream moved, take the template"
     stale=$((stale + 1))
   else
-    # A divergence already decided: refresh-stamp.sh's refresh_kept record,
-    # keyed by the local path, bound to the template's blob at the head -- so
-    # one that upstream has since changed is a fresh question again (claude.prop
-    # pilot, 2026-10-13). It is honoured only while it ALSO binds this file's
-    # content: its `local` blob must equal the installed copy's, or a later
-    # edit (or a replaced file) would inherit an old approval and go unreviewed
-    # (Codex, #451). A record without `local` is shown but not honoured, and so
-    # is one without a reason (a non-blank string), which the stamp would not
-    # honour either.
-    b=$(git -C "$up" rev-parse "$pin:$t" 2>/dev/null) || b=
-    lb=$(git hash-object --no-filters -- "$f" 2>/dev/null) || lb=   # raw bytes, as the stamp
-    rec=$(jq -r --arg p "$f" --arg b "$b" \
-      '.refresh_kept[$p] | select(type == "object" and .blob == $b)
-       | (.reason // "" | if type == "string" and test("\\S") then gsub("[\t\n\r]"; " ") else "" end) as $r
-       | [(.local // ""), $r, (if ($r | length) > 60 then $r[0:60] + "..." else $r end)]
-       | @tsv' \
-      .claude/directive-sync.json 2>/dev/null) || rec=
-    kept=
-    if [ -n "$rec" ]; then
-      # Every line quotes the reason cut to 60 characters (in jq, so never
-      # mid-character): one of claude.prop's ran ~800 and buried the verdict,
-      # first on the warning lines, then, on every refresh, on the line of a
-      # record that binds (pilot, 2026-10-15). The full text is the record's,
-      # one jq away. refresh-stamp.sh's KEPT lines cut the same way.
-      rl=${rec%%$'\t'*} rest=${rec#*$'\t'}
-      why=${rest%%$'\t'*} short=${rest#*$'\t'}
-      if [ -z "$why" ]; then
-        kept=" (refresh_kept has a record but no reason -- review it, then re-record it with one)"
-      elif [ -n "$rl" ] && [ "$rl" = "$lb" ]; then
-        kept=" (recorded in refresh_kept: $short)"
-      elif [ -n "$rl" ]; then
-        kept=" (refresh_kept says \"$short\", but this file changed since it was recorded -- review it again)"
-      else
-        kept=" (refresh_kept says \"$short\", but the record binds no local content -- review it, then re-record with its local blob)"
-      fi
-    fi
-    echo "CUSTOM: $f$kept — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
+    echo "CUSTOM: $f$(kept_note "$f" "$t") — differs from the template at the stamp too: a local edit; 3-way: refresh-merge.sh $f"
     custom=$((custom + 1))
   fi
 done
@@ -254,7 +269,7 @@ else
   echo "HOUSE-STYLE: not marked (.claude/directive-sync.json -> house_style is not true) -- styles/ not compared; an existing project moves with /design-intake, never at refresh time"
 fi
 rm -rf "$up"
-echo "SUMMARY: $n installed file(s) compared at $pin — $same match, $stale STALE, $custom CUSTOM, $drift DRIFT, $modes MODE"
+echo "SUMMARY: $n installed file(s) compared at $pin — $same match, $stale STALE, $custom CUSTOM, $drift DRIFT, $modes MODE$( [ "$callers" -gt 0 ] && printf ', %s CALLER' "$callers")"
 # Every refresh_kept FILE record whose `local` blob is missing or no longer the
 # file's, kit files included: the CUSTOM lines above reach only the files this
 # loop compares, so a kit record first surfaced as a stamp refusal (claude.prop

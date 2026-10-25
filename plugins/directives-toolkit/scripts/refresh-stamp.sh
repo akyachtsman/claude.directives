@@ -192,6 +192,18 @@ if [ "$tree" = yes ]; then
   # The kit's installed location, from the SAME file Kit defects runs.
   kit_dirs=$(bash "$(dirname "${BASH_SOURCE[0]}")/kit-dirs.sh")
 
+  # Callers of the shared workflows (#460 step 4), said once. Nothing below
+  # needs a special case for them: the dependency pass reads each installed
+  # workflow's OWN text, and a caller names no composite and none of the
+  # scripts its template needs, so the composites and scripts a project
+  # deleted when it moved to callers are never required (claude.prop pilot,
+  # 2026-10-25). The caller itself is compared like any workflow when the
+  # delta lists its template: a refresh_kept record keeps it.
+  for w in .github/workflows/*.yml .github/workflows/*.yaml; do
+    called=$(refresh_caller_of "$w") || continue
+    echo "caller: $w calls $called -- the composites and scripts its template needs come from claude.directives at run time, so their absence here is not required"
+  done
+
   # 1. Every path the delta lists.
   while IFS=$(printf '\t') read -r st t; do
     [ -n "${t:-}" ] || continue

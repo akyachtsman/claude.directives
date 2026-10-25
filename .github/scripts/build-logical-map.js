@@ -372,7 +372,7 @@ const FLOW = [
   ['self:ci', 'shared-qa.yml', 'val', 'self-tests against a fixture site', 'a', 'uses: ./.github/workflows/shared-qa.yml'],
   ['shared-qa.yml', 'secret-scan', 'run', 'runs at the called commit', 'a', 'uses: ./.claude-directives/templates/actions/secret-scan'],
   ['shared-qa.yml', 'ui-suite', 'run', 'runs at the called commit', 'a', 'uses: ./.claude-directives/templates/actions/ui-suite'],
-  ['shared-qa.yml', 'check-contrast.js', 'run', 'runs at the called commit', 'a', 'node .claude-directives/templates/scripts/check-contrast.js'],
+  ['shared-qa.yml', 'check-contrast.js', 'run', 'runs at the called commit', 'a', 'shared=.claude-directives/templates/scripts/check-contrast.js'],
   ['shared-qa.yml', 'check-ui-viewports.js', 'run', 'stages for the ui-suite', 'a', 'for f in check-ui-viewports.js'],
   ['self:ci', 'shared-cron-notify.yml', 'val', 'self-tests with a fixture task', 'a', 'uses: ./.github/workflows/shared-cron-notify.yml'],
   ['self:ci', 'styles/', 'val', 'drives the shared page script in a browser', 'a', 'Playwright check for the house script'],

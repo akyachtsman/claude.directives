@@ -71,6 +71,24 @@ refresh_template_of() {
   esac
 }
 
+# refresh_caller_of <workflow file>: print `shared-<name>.yml@<ref>` and
+# succeed when the file is a CALLER of this repo's shared workflows (#460 step
+# 4): a job line `uses: akyachtsman/claude.directives/.github/workflows/
+# shared-<name>.yml@<ref>`. Only a `uses:` key counts, so a comment naming the
+# path does not. A caller's composites and scripts come from this repo at run
+# time, never from the project, so a refresh keeps the caller (a refresh_kept
+# record), never merges or overwrites it, and never asks for the composites or
+# scripts only its template needs (claude.prop pilot, 2026-10-25).
+refresh_caller_of() {
+  [ -f "$1" ] || return 1
+  local re hit
+  re="^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]*[\"']?akyachtsman/claude\.directives/\.github/workflows/(shared-[A-Za-z0-9_.-]+\.ya?ml@[A-Za-z0-9_./-]+).*"
+  # The first match only, and no pipe: sed quits there (`head` would SIGPIPE it).
+  hit=$(sed -nE "\#$re#{s##\2#p;q;}" "$1" 2>/dev/null) || hit=
+  [ -n "$hit" ] || return 1
+  printf '%s\n' "$hit"
+}
+
 # refresh_house_style: exit 0 when THIS project is on the house style, i.e.
 # .claude/directive-sync.json -> house_style is exactly `true` (#470). The
 # marker means styles/components.css and styles/components.js (the shared page
